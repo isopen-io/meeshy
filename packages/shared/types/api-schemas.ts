@@ -1297,6 +1297,51 @@ export const conversationMinimalSchema = {
     },
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
     unreadCount: { type: 'number', nullable: true, description: 'Unread count' },
+    // Le pont ✦ (G-123, tasks/lentille-implementation-contract.md §3.2).
+    // ABSENT — jamais `null`, jamais un objet vide — quand `unreadCount === 0`
+    // ou que le serveur n'a rien à annoncer : un client ancien qui ignore ce
+    // champ ne voit rien de nouveau. `fast-json-stringify` STRIPPE tout champ
+    // non déclaré ici (même piège historique que `customName`/`reaction`), donc
+    // sans cette entrée le mapper aurait beau poser `bridge`, la route
+    // l'aurait renvoyé absent du fil.
+    bridge: {
+      type: 'object',
+      description: 'Pont ✦ précalculé serveur sur les messages non lus (ABSENT si unreadCount === 0)',
+      properties: {
+        kind: { type: 'string', enum: ['agent', 'fallback'], description: 'Étage : agent (phrase) ou fallback (données)' },
+        unreadCount: { type: 'number', description: 'Compteur autoritatif — dupliqué ici pour que le pont se lise seul' },
+        suggestedMode: { type: 'string', enum: ['focal', 'resume'], description: 'Décision d’orchestrateur précalculée (A6)' },
+        isComplete: { type: 'boolean', description: 'ABSENT = complet ; false si la fenêtre calculée est plus petite que unreadCount' },
+        data: {
+          type: 'object',
+          description: 'Étage déterministe (kind === fallback) — données, formatées par le client',
+          properties: {
+            authors: { type: 'array', items: { type: 'string' }, description: 'Deux auteurs nommés au plus' },
+            extraAuthorCount: { type: 'number', description: 'Le "+N" au-delà des deux auteurs nommés' },
+            messageCount: { type: 'number', description: 'Nombre de messages non lus couverts par le pont' },
+            mediaCounts: {
+              type: 'object',
+              description: 'Décompte des pièces jointes par famille',
+              properties: {
+                images: { type: 'number' },
+                audio: { type: 'number' },
+                files: { type: 'number' }
+              }
+            }
+          }
+        },
+        text: { type: 'string', description: 'Étage agent (kind === agent) — phrase déjà traduite dans la langue du lecteur' },
+        translations: {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          description: 'Paire Prisme du texte agent — mêmes règles que lastMessageTranslations'
+        },
+        originalLanguage: { type: 'string', description: 'Langue d’origine du texte agent' }
+      }
+    },
+    // Horloge du curseur de lecture — voyage À CÔTÉ du pont (le contrat gelé
+    // §3.2 ne le porte pas). ABSENT sans curseur, jamais fabriqué (REV-4).
+    lastReadAt: { type: 'string', format: 'date-time', description: 'Dernière lecture connue du lecteur pour cette conversation (ABSENT si inconnue)' },
     members: {
       type: 'array',
       items: conversationParticipantMinimalSchema,

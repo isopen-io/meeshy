@@ -87,8 +87,10 @@ const mockShareLink = {
   allowAnonymousMessages: true,
   allowAnonymousFiles: false,
   allowAnonymousImages: false,
+  requireAccount: false,
   requireEmail: false,
   requireNickname: false,
+  requireBirthday: false,
   conversation: {
     id: CONV_ID,
     title: 'Test Conversation',
@@ -187,7 +189,7 @@ describe('GET /links/:identifier — authenticated member of conversation', () =
   });
 });
 
-describe('GET /links/:identifier — authenticated non-member', () => {
+describe('GET /links/:identifier — authenticated non-member, allowViewHistory=true', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     mockFindShareLinkByIdentifier.mockResolvedValue(mockShareLink);
@@ -198,9 +200,146 @@ describe('GET /links/:identifier — authenticated non-member', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when authenticated user is not a member', async () => {
+  // Un membre connecté qui ouvre un lien de partage doit voir le MÊME aperçu
+  // qu'un visiteur déconnecté — sinon être identifié punit : /chat/:linkId
+  // rendrait 403 pour un utilisateur connecté là où la navigation privée
+  // affiche la conversation. L'aperçu est ensuite doublé de la modale
+  // « Rejoindre » côté web.
+  it('returns 200 preview when the share link allows history', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data.userType).toBe('anonymous');
+    expect(data.redirectTo).toBeUndefined();
+    expect(data.currentUser.id).toBe('other-user-id');
+  });
+});
+
+describe('GET /links/:identifier — authenticated non-member, allowViewHistory=false', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue({ ...mockShareLink, allowViewHistory: false });
+    app = await buildApp({
+      isAuthenticated: true, isAnonymous: false,
+      user: { id: 'other-user-id', username: 'bob', firstName: 'Bob', lastName: 'Jones', displayName: 'Bob', systemLanguage: 'en' },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 when the share link forbids history', async () => {
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('GET /links/:identifier — identity payloads survive serialization', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue({
+      ...mockShareLink,
+      conversation: {
+        ...mockShareLink.conversation,
+        participants: [
+          ...mockShareLink.conversation.participants,
+          // Forme RÉELLE d'un participant anonyme : l'identité vit dans
+          // `anonymousSession.profile`, les droits dans `permissions` — le
+          // modèle Prisma `Participant` ne porte NI username NI firstName.
+          {
+            id: 'part-2', type: 'anonymous', userId: null, isActive: true, role: 'member',
+            joinedAt: new Date(), displayName: 'Guest One', avatar: null,
+            language: 'es', isOnline: true, lastActiveAt: new Date(), user: null,
+            permissions: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+            anonymousSession: {
+              profile: { firstName: 'Guest', lastName: 'One', username: 'guest', email: null, birthday: null },
+            },
+          },
+        ],
+      },
+    });
+    app = await buildApp({
+      isAuthenticated: false, isAnonymous: true,
+      anonymousParticipant: {
+        shareLinkId: '507f1f77bcf86cd799439099',
+        id: 'anon-part-1', username: 'guest', firstName: 'Guest', lastName: 'One',
+        language: 'es', canSendMessages: true, canSendFiles: false, canSendImages: false,
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  // `currentUser`, `members` et `anonymousParticipants` étaient déclarés comme
+  // des objets SANS `properties` : fast-json-stringify les réduisait à `{}`.
+  // La vue partagée lit l'identité et la liste des participants dans ces trois
+  // champs — sans elles, /chat/:linkId ne sait pas qui parle.
+  it('returns the identity of the current anonymous participant', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.currentUser).toMatchObject({
+      id: 'anon-part-1',
+      username: 'guest',
+      isMeeshyer: false,
+      permissions: { canSendMessages: true, canSendFiles: false, canSendImages: false },
+    });
+  });
+
+  it('returns member identities', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    const [member] = res.json().data.members;
+    expect(member).toMatchObject({ role: 'member' });
+    expect(member.user).toMatchObject({ id: USER_ID, username: 'alice', displayName: 'Alice' });
+  });
+
+  it('returns anonymous participant identities', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    const [participant] = res.json().data.anonymousParticipants;
+    expect(participant).toMatchObject({
+      id: 'part-2',
+      username: 'guest',
+      firstName: 'Guest',
+      lastName: 'One',
+      displayName: 'Guest One',
+      language: 'es',
+      isOnline: true,
+      canSendMessages: true,
+      canSendFiles: false,
+      canSendImages: true,
+    });
+  });
+
+  it('never leaks the anonymous session envelope', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.payload).not.toContain('sessionTokenHash');
+    expect(res.payload).not.toContain('deviceFingerprint');
+    expect(res.json().data.anonymousParticipants[0].anonymousSession).toBeUndefined();
+  });
+});
+
+describe('GET /links/:identifier — join requirements exposed to the client', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue({
+      ...mockShareLink,
+      requireAccount: true,
+      requireEmail: true,
+      requireNickname: true,
+      requireBirthday: true,
+    });
+    app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
+  });
+  afterAll(async () => { await app.close(); });
+
+  // La modale de jonction rendue par /chat/:linkId lit ces quatre drapeaux pour
+  // décider quels champs afficher. Ils étaient absents du schéma de réponse,
+  // donc retirés par la sérialisation Fastify.
+  it('returns requireAccount and requireBirthday alongside the other requirements', async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.link).toMatchObject({
+      requireAccount: true,
+      requireEmail: true,
+      requireNickname: true,
+      requireBirthday: true,
+    });
   });
 });
 

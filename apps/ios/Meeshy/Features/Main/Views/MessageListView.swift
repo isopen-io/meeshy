@@ -434,8 +434,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Swipe-to-forward on a bubble. Argument is the swiped message id.
     var onSwipeForward: ((String) -> Void)?
     /// Long-press on a bubble — opens the contextual options menu for that
-    /// message (reply, forward, react, copy, delete, …).
-    var onLongPress: ((String) -> Void)?
+    /// message (reply, forward, react, copy, delete, …). Le second paramètre
+    /// est l'aperçu Focal (pixels de la cellule vivante), `nil` en bulles.
+    var onLongPress: ((String, FocalLongPressPreview?) -> Void)?
     /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
     /// construit par `ConversationView` (là où toutes les actions sont déjà
     /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le

@@ -108,18 +108,45 @@ final class FocalRowMetricsTests: XCTestCase {
         }
     }
 
-    func test_rowFiles_thatIndent_referenceFocalMetricsTextIndent() throws {
+    /// **Recalibré — déplacé par `0c619a98` (« la magnification ne change plus
+    /// la hauteur de la cellule — fin des sauts au défilement »), l'invariant
+    /// est inchangé : tout retrait vient d'une cote NOMMÉE, jamais d'un
+    /// littéral.**
+    ///
+    /// Ce commit a rendu le retrait de `FocalRow` CONSTANT. Le raisonnement
+    /// est le même que pour le « 15 → 16 » abandonné juste à côté : le retrait
+    /// fixe la largeur disponible, donc le retour à la ligne, donc la hauteur ;
+    /// le faire varier avec l'élection faisait changer la cellule de taille au
+    /// basculement, et toute la liste sautait. La valeur retenue pour TOUTES
+    /// les rangées est celle de l'élue — `FocalMetrics.Focus.textIndent`
+    /// (`avatarSize + 7` = 41), la seule qui laisse la place à la pastille de
+    /// 34 que l'en-tête réserve désormais en permanence.
+    ///
+    /// `FocalRow` a donc changé de COTE, pas de discipline : les deux sont
+    /// nommées dans `FocalMetrics`, aucune n'est un littéral. Le témoin
+    /// attend maintenant la cote propre à chaque fichier plutôt qu'une seule
+    /// pour tous — c'est plus strict que l'ancienne rédaction, qui aurait
+    /// accepté n'importe lequel des deux retraits n'importe où.
+    func test_rowFiles_thatIndent_referenceTheirNamedIndentCote() throws {
         // Seuls les fichiers qui posent RÉELLEMENT un retrait sous l'avatar
-        // (texte/citation/média/méta) le font via la cote partagée.
+        // (texte/citation/média/méta) le font via une cote partagée.
         // `FocalIdentityHeader` (l'avatar LUI-MÊME définit le retrait des
         // rangées suivantes, il ne s'indente pas sous lui-même) et
         // `FocalConversationStartRow` (rangée centrée) en sont exclus.
-        let indentedFiles = ["FocalRow.swift", "FocalMetaRow.swift", "FocalAttachmentBlock.swift", "FocalQuotedReplyView.swift"]
-        for fileName in indentedFiles {
+        let indentedFiles = [
+            // Retrait CONSTANT au gabarit de l'élue depuis `0c619a98` : la
+            // pastille de 34 est réservée en permanence.
+            "FocalRow.swift": "FocalMetrics.Focus.textIndent",
+            // Rangées satellites : toujours alignées sur la pastille de 22.
+            "FocalMetaRow.swift": "FocalMetrics.Text.indent",
+            "FocalAttachmentBlock.swift": "FocalMetrics.Text.indent",
+            "FocalQuotedReplyView.swift": "FocalMetrics.Text.indent",
+        ]
+        for (fileName, cote) in indentedFiles {
             let stripped = AppSourceGuard.stripComments(try source(fileName))
             XCTAssertTrue(
-                stripped.contains("FocalMetrics.Text.indent"),
-                "\(fileName) doit poser son retrait via FocalMetrics.Text.indent"
+                stripped.contains(cote),
+                "\(fileName) doit poser son retrait via \(cote) — une cote NOMMÉE de FocalMetrics, jamais un littéral (garde R15)."
             )
         }
     }

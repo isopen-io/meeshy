@@ -140,6 +140,13 @@ class StoryViewerViewModel @Inject constructor(
     private val _state = MutableStateFlow(StoryViewerUiState())
     val state: StateFlow<StoryViewerUiState> = _state.asStateFlow()
 
+    /**
+     * The slide currently on screen — owns membership of the post room (`ROOMS.post`). Held
+     * outside [_state] since it is a subscription cursor, not something the UI renders. Mirrors
+     * iOS `StoryViewerView.transitionPostRoom` / Android `ReelsViewModel.setCurrentReel`.
+     */
+    private var currentRoomStoryId: String? = null
+
     init {
         load()
         observeReactionDeltas()
@@ -200,6 +207,13 @@ class StoryViewerViewModel @Inject constructor(
                 _state.update { it.copy(isLoading = false) }
             }
         }
+    }
+
+    /** Leaves the post room the viewer was sitting in, so a closed viewer stops receiving its events. */
+    override fun onCleared() {
+        currentRoomStoryId?.let { socialSocket.leavePostRoom(it) }
+        currentRoomStoryId = null
+        super.onCleared()
     }
 
     fun advance() {
@@ -290,8 +304,22 @@ class StoryViewerViewModel @Inject constructor(
     private fun reactionStateFor(slide: StorySlideView): StoryReactionState =
         reactionStates[slide.id] ?: StoryReactionState(count = slide.reactionCount)
 
+    /**
+     * Moves the post-room subscription with the slide on screen — leave the one scrolled away
+     * from, join the one landed on. Idempotent (re-passing the same id, including `null`, is a
+     * no-op) and blank-safe (a dismissed/empty viewer simply leaves without joining another),
+     * mirroring [me.meeshy.app.reels.ReelsViewModel.setCurrentReel].
+     */
+    private fun transitionPostRoom(nextId: String?) {
+        if (nextId == currentRoomStoryId) return
+        currentRoomStoryId?.let { socialSocket.leavePostRoom(it) }
+        currentRoomStoryId = nextId
+        nextId?.let { socialSocket.joinPostRoom(it) }
+    }
+
     private fun emit() {
         val currentId = playback.currentSlide?.id
+        transitionPostRoom(currentId)
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()

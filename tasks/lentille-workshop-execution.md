@@ -318,9 +318,178 @@ recalculée à façon par une plateforme.
 
 ---
 
+## 7bis. Amendement R2 — deux axes qui se PARCOURENT, des branches qui vivent et meurent (décision produit 2026-08-17)
+
+L'amendement R décrivait une **mise en page** à deux axes (« le temps verticalement, les couloirs
+horizontalement »). La directive du 2026-08-17 en fait une **navigation** : la Rivière est retenue
+comme « possibilité d'interface sur les conversations à plusieurs permettant une navigation
+horizontale ET verticale, où les interlocuteurs ont leurs branches qui apparaissent et disparaissent
+selon les interactions ». Deux ajouts, aucun retrait.
+
+**A. Le cycle de vie d'une branche.** Une branche n'est plus une ligne courant d'un bord à l'autre :
+c'est une **suite de segments**. Elle NAÎT à la première interaction de son propriétaire, COURT tant
+que la conversation l'entretient, MEURT `silenceWindowMs` après sa dernière interaction (défaut
+`RIVER_LANE_SILENCE_WINDOW_MS` = 30 min), et RENAÎT plus tard **dans la même colonne**. Trois règles
+la gouvernent :
+1. **Interagir = parler, ou se voir répondre.** Une réponse fait REPARAÎTRE la branche de la
+   personne visée (nœud `addressed`, sans bulle à elle) : « on vit tant qu'on parle — ou qu'on vous
+   parle ». Sans cette règle, le connecteur de réponse (§7) atterrirait sur une ligne éteinte. Les
+   réactions rejoindront cette liste par l'ENTRÉE de la loi le jour où les clients les portent —
+   jamais par une seconde loi.
+2. **Un segment survit à ses propres bulles.** Il court jusqu'au dernier rang encore contenu dans la
+   fenêtre qui suit la dernière interaction de son propriétaire. C'est ce qui donne à la rivière sa
+   LARGEUR : plusieurs lignes courent côte à côte pendant un même instant, puis s'éteignent l'une
+   après l'autre. Sans cette règle, une branche ne serait qu'un point par message.
+3. **La colonne est RÉSERVÉE à vie.** Le lecteur tient la colonne 0 (« la rive » — le pas latéral
+   part toujours de chez lui) ; les autres prennent leur colonne par ordre de naissance. Une branche
+   morte GARDE sa colonne, une naissance n'en déplace aucune : sinon la rivière tremblerait
+   latéralement à chaque arrivée. `isOpen` distingue « segment éteint ici » (estompage à dessiner)
+   de « segment encore vivant au bas de la fenêtre » (on ne sait pas encore — aucun estompage).
+
+**B. Les deux axes se parcourent** (`resolveRiverStep`, un pas, trois verdicts `moved`/`edge`/`empty`) :
+- **horizontal** (`left`/`right`) : la branche VIVANTE suivante à cette hauteur, les mortes
+  **enjambées** (une branche éteinte n'est pas navigable). L'atterrissage se fait sur la bulle la plus
+  proche **du segment vivant** — donc jamais hors de l'instant en cours ; à égale distance, la plus
+  ANCIENNE (traverser ne fait jamais sauter le lecteur en avant dans un temps qu'il n'a pas lu). Un
+  segment reparu sans bulle garde la hauteur d'où l'on vient.
+- **vertical** (`up`/`down`) : la bulle suivante **de la même personne**, par-dessus la mort de sa
+  branche. C'est le « Suivre Mia » que le procès demandait de prouver
+  (`docs/design/2026-08-15-conversation-modes-verdict.html`) : la trajectoire d'une personne à
+  travers ses disparitions, ce que Focal ne sait pas raconter.
+- Bord d'axe ⇒ `edge`, curseur INCHANGÉ (la peau y colle son rebond). Rivière vide ou colonne
+  inexistante ⇒ `empty` : la loi rend le curseur reçu plutôt que d'en inventer un.
+
+**Ce qui ne change pas** : l'éligibilité (≥ 5 actifs, jamais en `direct`), le drapeau `riviere_mode`
+(défaut OFF), le Prisme, l'ordre du DOM/VoiceOver **strictement chronologique** (`geometry.bubbles`
+EST cet ordre — les traits restent décoratifs), et reduce-motion (aucun tracé animé : une branche
+apparaît/disparaît alors sans transition).
+
+**Livré (2026-08-17)** — R-130 étendu par cet amendement, en avance sur la porte V5 car la loi est
+pure et sans consommateur runtime (aucun drapeau touché, aucune vue montée) :
+- `packages/shared/utils/river-lanes.ts` — `resolveRiverLanes`, `resolveRiverLivingLanes`,
+  `resolveRiverStep`, `RIVER_LANE_SILENCE_WINDOW_MS`. Zéro pixel, zéro `Date.now()`.
+- `packages/shared/fixtures/reading-modes/river-lanes.vectors.json` (14 cas) et
+  `river-step.vectors.json` (14 cas) — générées en EXÉCUTANT la loi (C-023).
+- Suites : `__tests__/river-lanes.test.ts` (34 cas de comportement),
+  `__tests__/vectors/river-lanes.vectors.test.ts`, `__tests__/vectors/river-step.vectors.test.ts`
+  (vecteurs + témoins de couverture, leçon 257).
+
+**Reste à faire, inchangé dans son découpage** : R-131 (tokens `river` — à poser AVEC son premier
+consommateur, sinon `lentille-tokens-consumption-gate` passe au rouge : « token déclaré ⇒ token
+consommé »), R-132 (miroir Swift rejouant ces deux fichiers de vecteurs), R-133/R-134 (peaux iOS et
+web — la navigation à deux axes leur ajoute le geste de balayage horizontal et le suivi de branche),
+R-135, R-136. Aucun de ces livrables ne recalcule la géométrie : ils multiplient les rangs et les
+colonnes par leurs tokens.
+
+---
+
+## 7ter. Amendement R3 — la bulle porte tout, l'en-tête nomme la ligne, l'axe a des bornes (décision produit 2026-08-17)
+
+Trois directives, reçues après la première maquette navigable, et qui portent toutes sur ce que le
+lecteur VOIT — pas sur ce que la loi calcule. Deux d'entre elles ont pourtant besoin de la loi, parce
+qu'elles ne se décident pas par plateforme.
+
+**A. Le message en ENTIER, l'identité AU-DESSUS.** « Le message doit être affiché en complet dans sa
+bulle, et le nom de l'auteur avec son logo au-dessus. » La première forme rendait un rectangle de
+taille fixe avec un texte tronqué : on lisait la rivière, pas la conversation. Conséquences :
+1. **La hauteur d'un rang n'est plus une constante** — c'est celle de son texte, MESURÉE par la peau.
+   Aucune loi n'en connaît la valeur (elle n'a jamais servi de pixel) ; la maquette pose désormais des
+   cellules HTML et mesure le rendu réel avant de tracer les branches.
+2. **L'anatomie de la bulle est celle de la rangée plate du Fil**, aux cotes du token GELÉ `thread.*` :
+   pastille `22`, nom `13/800`, heure `12/600`, texte `15/1.42`, texte aligné sous le NOM (l'esprit de
+   `thread.line2.indentPx`). C'est la réponse à « pas trop éloigné de ce qui se passe sur iOS » : la
+   Rivière n'invente pas une seconde anatomie de message, elle réutilise celle qui existe.
+3. **`RiverBubble.isFirstInGroup`** entre dans la loi, avec la règle d'iOS mot pour mot (l'expéditeur
+   du rang précédent change, ou le jour calendaire change —
+   `MessageListViewController.isFirstInGroup`). Une suite de groupe ne répète ni le visage ni le nom
+   et garde son heure en base, comme `FocalMetaRow`. La frontière du jour se lit dans le calendrier du
+   LECTEUR : `dayBoundaryOffsetMinutes` (défaut `0` = UTC) — une loi pure ne peut pas embarquer une
+   base de fuseaux, et l'enjeu est un en-tête en plus ou en moins, jamais un contenu.
+4. **La citation d'une réponse reste sur UNE ligne tronquée** (`FocalQuotedReplyView`, `.lineLimit(1)`).
+   « Le message en entier » vaut pour LE message, jamais pour la copie d'un autre.
+
+**B. L'en-tête nomme la ligne qu'on lit** (`resolveRiverLaneHeaders`). « Les noms en tête doivent
+refléter les auteurs de la ligne — fading et apparition du nom correspondant à la ligne affichée
+pendant le scroll vertical. » Un couloir ne porte donc pas un nom fixe : il porte celui de la voix qui
+l'occupe **à la hauteur où l'on lit**. La loi rend `{laneIndex, laneId, colorSeed, isViewer, alpha}`
+pour une hauteur de lecture qui peut être **fractionnaire** — la peau la calcule depuis son
+défilement, avec la MÊME bande de focus que le reste de la Lentille (`FOCUS_BAND_OFFSET`,
+`electFocusRow`), jamais une seconde loi de défilement. Une seule rampe (`RIVER_HEADER_FADE_RANKS` = 2
+rangs), et c'est la donnée qui décide de la forme du fondu :
+- occupations qui se **touchent** ⇒ **fondu croisé**, les deux noms coexistent brièvement à opacité
+  réduite (c'est un relais : il n'y a aucun silence à rendre entre elles) ;
+- occupations séparées par du **vide** (branche morte, d'autres parlent, elle renaît) ⇒ sur les rangs
+  du vide, la colonne **ne nomme personne**. Nommer une branche éteinte mentirait sur une présence,
+  exactement comme une pastille grise sur un avatar hors ligne (`user-presence.ts`, qui ne la dessine
+  pas). Aucune entrée d'opacité nulle n'est servie.
+- une occupation encore **ouverte** ne s'estompe pas DANS la fenêtre (on ne sait pas encore si elle
+  meurt) ; au-delà du dernier rang, elle s'éteint avec la fenêtre — hors fenêtre, il n'y a rien à
+  nommer.
+
+**C. Sept couloirs, trois voix — sinon on sérialise.** « On limite à 7 utilisateurs en horizontal et 3
+minimum, sinon on sérialise en vertical. » `resolveRiverLanes` rend désormais un VERDICT DE FORME :
+`layout: 'lanes' | 'serialized'` + `serializationReason: 'belowMinimum' | 'aboveMaximum' | null`.
+- `RIVER_MIN_VOICES` = 3. Une **voix** est quelqu'un qu'on a entendu : au moins une bulle (une branche
+  qui n'existe que pour recevoir une réponse ne compte pas — sinon deux personnes qui se répondent
+  feraient trois voix). En dessous, l'axe horizontal ne raconte rien que l'alternance ne dise déjà.
+- `RIVER_MAX_LANES` = 7. Plafond de couloirs **simultanés**, pas de participants.
+- **Amende la règle A.3 de §7bis** (« la colonne est RÉSERVÉE à vie ») : elle le reste **tant que la
+  rivière tient dans sa largeur**. Au-delà de sept voix, les colonnes se **PARTAGENT** entre voix qui
+  ne parlent jamais ensemble (coloration gloutonne d'intervalles ; deux couloirs peuvent porter le même
+  `laneIndex`, et `resolveRiverLaneAt(geometry, laneIndex, rank)` dit qui l'occupe à une hauteur
+  donnée). Le partage est un **recours**, jamais une optimisation qu'on applique parce qu'elle est
+  possible : à sept voix ou moins, chacune garde sa colonne, morte ou vivante, et la rivière ne
+  tremble pas. La rive (colonne 0) reste au lecteur SEUL quand il a une branche.
+- C'est le partage qui rend B **nécessaire** et non décoratif : une colonne qui change de main doit
+  dire de qui elle est, à la hauteur où on la lit.
+- Une voix qui ne trouve aucune colonne ⇒ `aboveMaximum`. Au-delà de sept, un couloir serait plus
+  étroit que le texte qu'il porte : on préfère un fil honnête à une rivière illisible.
+- **Sérialisée, la géométrie n'a plus qu'une colonne** : tous les `laneIndex` valent `0` (couloirs,
+  bulles, connecteurs). Le verdict est STRUCTUREL, pas consultatif — une peau ne peut pas dessiner un
+  axe que la loi vient de retirer. `resolveRiverStep` s'y adapte : `left`/`right` ⇒ `edge` (il n'y a
+  plus d'axe horizontal), `up`/`down` ⇒ le message suivant **quel qu'en soit l'auteur** (sans branche
+  pour la porter, suivre une personne n'a plus de support visuel : l'axe vertical redevient le temps).
+- **Ce n'est PAS l'éligibilité.** `resolveCapabilities` (≥ 5 participants actifs, jamais en `direct`)
+  décide si le mode s'OFFRE au catalogue ; ce verdict-ci décide de la forme que prend la fenêtre
+  affichée — une conversation à dix participants dont deux seulement ont parlé ce matin se lit
+  sérialisée, sans quitter le mode.
+
+**Livré (2026-08-17)** — R-130 étendu, toujours sans consommateur runtime :
+- `packages/shared/utils/river-lanes.ts` — `RIVER_MAX_LANES`, `RIVER_MIN_VOICES`,
+  `RIVER_HEADER_FADE_RANKS`, `resolveRiverLaneAt`, `resolveRiverLaneHeaders`, verdict de forme et
+  `isFirstInGroup`. Toujours zéro pixel, zéro `Date.now()`.
+- Fixtures régénérées en EXÉCUTANT la loi : `river-lanes.vectors.json` (21 cas),
+  `river-step.vectors.json` (19 cas), `river-headers.vectors.json` (13 cas, **nouveau**).
+- Suites : `__tests__/river-lanes.test.ts` (64 cas), les trois suites de vecteurs et leurs témoins de
+  couverture (partage de colonne, deux causes de sérialisation, deux natures de rangée, trois régimes
+  de fondu).
+- Maquette normative `docs/design/2026-08-17-riviere-navigation.html` — refondue : bulles HTML à
+  hauteur mesurée, en-tête d'identité, en-tête de couloirs fondu au défilement, jauge de largeur
+  d'axe, et la borne basse rendue par la loi (même conversation réduite à deux voix ⇒ sérialisée).
+
+**Tension assumée, à trancher par les peaux** : une bulle qui rend tout son texte a besoin d'environ
+`300 px` de couloir ; sept couloirs font donc ~`2 100 px`. Sur un téléphone, la Rivière défile
+horizontalement (la maquette le fait déjà, en suivant le curseur sur les deux axes) — et c'est
+précisément pourquoi la loi plafonne à sept. R-133/R-134 devront décider si une largeur plus étroite
+appelle une borne plus basse **par plateforme** (`maxLanes` est un paramètre d'entrée, pas une
+constante réécrite) ; aucune peau ne doit tronquer le texte pour gagner une colonne.
+
+**Reste à faire** : inchangé (R-131 tokens `river`, R-132 miroir Swift — qui rejoue désormais TROIS
+fichiers de vecteurs —, R-133/R-134 peaux, R-135, R-136).
+
+---
+
 ## 8. Suivi d'avancement
 
 Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
+
+**Régime de tronc vivant (directive 2026-08-16)** : `main` reçoit en continu des améliorations
+externes du mode Focal (sous-arbre `Features/Main/Focal/`, autres agents). Discipline de
+synchronisation : `git pull --rebase origin main` avant chaque lot, rejouer les gardes source
+contre les sources rebasées (réplique Python du normalisateur, faute de toolchain local), et
+le run de vérité reste la page de DÉTAIL du dernier run complet sur `main` — les pushes plus
+récents annulent les précédents (cancel-in-progress) sans perte de signal, chaque nouveau run
+contenant les commits des runs annulés.
 
 | Vague | État | Commit de clôture | CI |
 |---|---|---|---|
@@ -328,10 +497,39 @@ Renseigné par Fable à chaque clôture de vague. `✅` = mergé + CI vert.
 | V1 + P0 | ✅ livrée — 22 tâches, PR P0 = #3030 ; C-031 sur branche (dépend de la loi partagée, suivra en P1) | (courant) | bun vert local, macOS en cours |
 | V2 | ✅ 12/12 livrées — 5 miroirs Swift (89 vecteurs rejoués du bundle), providers TS+Swift, métriques, drapeaux, tokens CSS ; gel S1 prononcé ; main mergé. **REV-2 rendu** : 1 blocker (LocalBridgeProvider TS lisait `window.unreadCount` au lieu du `input.unreadCount` autoritatif du protocole — corrigé, tests discriminants jumeaux TS+Swift) + réserves R1 (substitution TS ajoutée), R3 (formatMediaSegment Swift aligné `count > 0`), R2/R4/R5/R6 tracées pour V3+. Exécution croisée : shared 1955 verts, web 899 verts, XCTest 11 suites Lentille vertes (run 31887931317), sdk-tests 7235/7236 (garde CollapsibleHeader réparé 8b30ec4f0) | 037a739d2 | **gel S1 CONFIRMÉ** — CI+iOS+SDK Tests verts sur 037a739d2 (runs 31891087403/306/455) |
 | V3 | ✅ **26/26 livrées** — deux worktrees ⊥ mergés (`feat/focal-ios-v3` → `feat/lentille-ios-v3`, zéro conflit, zéro édition pbxproj — le CI régénère). Lentille : greffe `groupConversations` (OFF bit-à-bit), sticky `Section/pinnedViews` + inset `CollapsibleHeaderMetrics`, identités `lentille.*` non-droppables/non-repliables, pilule sur `scrollOffsetRelay` (900 ms par la loi), rail fusionné avec « moi », rang plat + pont ✦ (`==` 13 clauses), squelette muxé, perspective `.visualEffect` (inerte iOS 16 — cible 16.0, écart contrat accepté), élection par le relais existant (choix Opus vs `onScrollGeometryChange`, à confirmer REV-3), focus card + encoche + menu (Rivière grisée seuils vivants) + peek sur les DEUX chemins (I-067ter). Focal : WS-1→11 amendés — préférence locale (protocole renommé `FocalReadingModePreferenceStoring`, collision M-048 évitée), pilule jour·heure, `FocalMetrics` (miroir `thread.*`, créé sur trou de parité), blocs riches + `FocalRow` (+flou/vue-unique F-083bis ; +F05/F06/F10/F11/F15 et contraste AA 0,55 vérifié WCAG F-083ter), `FocalScrollPass` géométrie inversée (bande 140±45 : **le miroir gelé fait foi**, le 150/95 du contrat Focal §4.3 est un erratum), 6 sites montés sous drapeau, coquille + Aa, digest/Résumé Vivant/agent stub (C1/C2/C3 tenus). **Réserves REV-2 soldées** (mapping recette §5) : R2 = passes compositor + gardes source ; R4 = `LentilleRowPrismeTests` règle 3 ; R5 = signal unique réutilisé, pipelines intacts (gardes debounce/registres) ; R6 = pilule 899/901 + stickers I-064. **En marge, `main` réparé** : les 17 échecs XCTest hérités (appels ×11, répertoire ×4, l10n ×2) corrigés — run #47 vert, suite complète — après ajout d'annotations d'échec lisibles au workflow (S-003 durci : garde R15 en jetons, commentaires exclus). i18n : 59 clés V3 au catalogue (7 locales). **Notes REV-3** : 7 tests F-090 volontairement rouges devenus verts à re-prouver au CI ; 4ᵉ enregistrement `.conversationStart` non traité ; réactions par-image hors périmètre grille ; raison Rivière indiscriminée en `direct` (amendement S1 candidat, WL-106 aussi concerné) ; constante partagée `openMyStories` (4 sites littéraux) ; unités `lingerMs` à clarifier dans une suite gelée ; matrice réelle = 15 lignes F (pas 16) | (clôture) | **vert** — après fixes #42 (17 hérités, run #47) et #72 (10 V3, run #73→#75), suite complète verte au run #87 sur d2d402a0 |
-| **PORTE V1** | ✅ **PRONONCÉE** (2026-08-16) — REV-3 (Opus) avait rendu 4 blockers, tous soldés (V3bis c91a8713 + fb48da80, V3ter 47f9556b) : **B1** garde d'ensemble matrice ARMÉE (`describe.skip` retiré, 32/32 id déclarés == couverts, 8 gaps rangée réels fermés par V3ter avant merge) ; **B2** magasin de préférence UNIFIÉ (`LocalReadingModePreferenceStore` supprimé — exception M-048 autorisée — adapter scopé `meeshy_readmode_<scope>_<id>`, round-trip prouvé) ; **B3** raison Rivière trifurquée `neverEligible/belowThreshold/eligible` + `activeParticipantCount` nullable — **AMENDEMENT S1 documenté** (capabilities.vectors.json 18 cas créé, orchestrator.vectors.json +21, miroirs TS+Swift) ; **B4** suite `AccentVectorTests` créée (24 vecteurs) — et elle a PRIS : `shiftHue` Swift divergeait du domicile TS d'un canal (frontière de troncature `demo-ar`, aller-retour UIColor) → formules pures miroir bit à bit (d2d402a0), vecteurs gelés et test INTACTS. Erratums de clôture : repère `Line2.font` 10→11 (11ᵉ = badge live-call V3ter L13, investiguée) ; CI rendue lisible au lecteur distant (annotations publiques échecs XCTest + erreurs de compilation ; `set +e` — le `bash -e` du runner tuait le bloc d'annotations, run #79). **Réserves tracées** → REV-4/V5 : R-a `safeAreaInset` inconditionnel (iOS) ; R-b garde d'ensemble des tokens manquante ; R-c substituts jamais injectés — pont invisible drapeau ON (→ G-124) ; R-d rangée `.conversationStart` non montée ; R-e drapeau `agent_grammar` orphelin ; R-f double famille catalogue/i18n des modes (unification V4) ; R-g cadence d'élection vs 60 Hz du contrat ; R-h lectures de magasin sous OFF ; R-i perspective inerte iOS 16 (cible 16.0, écart contrat accepté) ; R-j littéraux `openMyStories` ×4. **Preuves device-only reportées** : gestes réels, Instruments < 1 ms/frame, planche 25 cas | d2d402a0 | **vert** — run #87 (31948057810), suite complète, 0 échec |
-| V4 | **en cours** — 13 tâches livrées (WL-100..108, WF-110..113) sur `feat/lentille-web-v4` (worktree), 625 suites / 12 750 tests web + 1 986 shared verts en local, `main` propagé sans conflit ; **REV-4 (PORTE V2) à lancer**. Réserves candidates déjà connues : contraste « Toi » `#6366F1` = 4,47:1 sur blanc (littéral contrat §WS-4, verrouillé par test non masqué) ; prévision d'encoche sans `lastReadAt` au payload web (annonce Résumé vs Focal) ; carte de focus DANS le wrapper de perspective (iOS : overlay hors défilement) ; `check-law-literals.sh` aveugle aux blocs `/* */` (6 fichiers préexistants, durcissement S-003 à arbitrer) ; L11 interprété (teinte WL-102 sous la carte) ; `FocalBridgeRow` construit non monté (C2, aucune source de pont web — cohérent R-c) | — | — |
-| V5 | bloquée par PORTE V2 | — | — |
+| **PORTE V1** | ✅ **PRONONCÉE** (2026-08-16) — REV-3 (Opus) avait rendu 4 blockers, tous soldés (V3bis c91a8713 + fb48da80, V3ter 47f9556b) : **B1** garde d'ensemble matrice ARMÉE (`describe.skip` retiré, 32/32 id déclarés == couverts, 8 gaps rangée réels fermés par V3ter avant merge) ; **B2** magasin de préférence UNIFIÉ (`LocalReadingModePreferenceStore` supprimé — exception M-048 autorisée — adapter scopé `meeshy_readmode_<scope>_<id>`, round-trip prouvé) ; **B3** raison Rivière trifurquée `neverEligible/belowThreshold/eligible` + `activeParticipantCount` nullable — **AMENDEMENT S1 documenté** (capabilities.vectors.json 18 cas créé, orchestrator.vectors.json +21, miroirs TS+Swift) ; **B4** suite `AccentVectorTests` créée (24 vecteurs) — et elle a PRIS : `shiftHue` Swift divergeait du domicile TS d'un canal (frontière de troncature `demo-ar`, aller-retour UIColor) → formules pures miroir bit à bit (d2d402a0), vecteurs gelés et test INTACTS. Erratums de clôture : repère `Line2.font` 10→11 (11ᵉ = badge live-call V3ter L13, investiguée) ; CI rendue lisible au lecteur distant (annotations publiques échecs XCTest + erreurs de compilation ; `set +e` — le `bash -e` du runner tuait le bloc d'annotations, run #79). **Réserves tracées** → REV-4/V5 : R-a `safeAreaInset` inconditionnel (**CLOSE 2026-08-16** — `LentilleStickyHeaderInsetModifier` conditionnel, OFF ⇒ zéro modificateur monté, gardes source) ; R-b garde d'ensemble des tokens (**CLOSE** — `lentille-tokens-consumption-gate.test.ts` déclarés ⇒ consommés, 3 exclusions datées) ; R-c substituts jamais injectés — pont invisible drapeau ON (→ G-124, V5) ; R-d rangée `.conversationStart` (**CLOSE** — 4ᵉ enregistrement `FocalConversationStartRow`, gating `usesPerspective && hasReachedOldest`) ; R-e drapeau `agent_grammar` orphelin (→ G-126, V5) ; R-f double famille catalogue/i18n des modes (web, en pause) ; R-g cadence d'élection vs 60 Hz du contrat (**CLOSE 2026-08-16 — conforme**, cf. la sous-section R-g plus bas) ; R-h lectures de magasin sous OFF (**LEVÉE** par REV-4) ; R-i perspective inerte iOS 16 (cible 16.0, écart contrat accepté) ; R-j littéraux `openMyStories` ×4 (**CLOSE** — constante partagée `Notification.Name.openMyStories`, domicile `RootView.swift`, 4 sites migrés, garde zéro-littéral). **Solde : 6 réserves closes/levées, R-c + R-e portées par la V5 gateway, R-f par la reprise web, R-i acceptée.** **Preuves device-only reportées** : gestes réels, Instruments < 1 ms/frame, planche 25 cas | d2d402a0 | **vert** — run #87 (31948057810), suite complète, 0 échec |
+| V4 | **livrée, PORTE V2 NON PRONONÇABLE (REV-4 rendue 2026-08-16), chantier web EN PAUSE sur décision produit — iOS d'abord.** 13 tâches livrées (WL-100..108, WF-110..113) sur `feat/lentille-web-v4` (worktree, non poussée), 626 suites / 12 767 tests web + shared verts en local. **REV-4 (Opus, lecture seule)** : 5 blockers, tous « du câblage, pas de la conception » — **B1** la passe de perspective + l'élection ne démarrent JAMAIS en prod (ordre des effets React : le hook lit `scrollContainerRef` AVANT l'effet qui le peuple ; StrictMode de `next dev` masquait le défaut, les tests peuplaient la ref à la main) ; **B2** drapeau ON ⇒ pagination (sentinelle IntersectionObserver) et branches vides perdues — le Mount remplace `renderContent` en bloc (L17 sans jeton web) ; **B3** drapeau ON ⇒ les 6 actions historiques du ⋮ de rang (épingler, sourdine, archiver…) inatteignables (L07 sans jeton web) ; **B4** `check-law-literals.sh` ROUGE sur la branche — 10 littéraux en docstrings `/* */` de 6 fichiers TOUS créés par V4 (la mention antérieure « préexistants » sur cette ligne était FAUSSE — vert sur main ; issue : durcir S-003 au strip des blocs OU reformuler) ; **B5** garde d'ensemble de matrice non déterministe (scan repo synchrone sous testTimeout 5 s — rouge à froid 11 s, vert à chaud). Réserves : R4-1 pendant Lentille de `behaviour-matrix-parity` manquant (10 id L ni classés ni justifiés — le filet qui aurait attrapé B2/B3) ; R4-2 L16 aria-label nombre nu / L08 tags non implémentés (tokens morts) ; R4-3 L02 brouillon tout-destructive (1 ligne) ; R4-6 memo LentilleRow annulé par onClick littéral ; R4-5 vecteurs partagés jamais rejoués à travers la frontière `dist/` ; R4-9 pont invisible = miroir R-c (G-124). Arbitrages rendus : contraste « Toi » → amender §WS-4 des DEUX côtés (≥ 4,5:1, le test basculera exprès) ; prévision d'encoche sans `lastReadAt` → MASQUER (« AUTO » nu — une absence ne se convertit jamais en affirmation), levée G-123 ; carte dans wrapper (isolation:isolate, zéro relayout par construction) ACCEPTÉE ; casse encoche + `modes.bubbles` défensif ACCEPTÉS. Validé re-prouvé : Prisme chemin EXACT partagé, OFF bit-à-bit + boundary, R-h LEVÉE, a11y statique, reduce-motion conforme amendement, 1 rAF/surface, tokens sans littéral exécutable. **Reprise (V4bis)** : B4/B5 → B2/B3 → B1+R4-6 → R4-1 → REV-4bis | (worktree) | web local vert ; CI quality serait rouge (B4) |
+| **I-075 + V3quater** | ✅ **livrées, mergées sur main** (2026-08-16) — **I-075, programme bêta** (3 décisions produit successives) : `BetaFeaturesPreference` (clé `meeshy.pref.beta_features_enabled`, **ABSENCE ⇒ TRUE**, env `MEESHY_FLAG_BETA_FEATURES` prime) ; cascade `LentilleFeatureFlag.readingModes` env → clé explicite → bêta (bêta ON ⇒ tap normal = orchestrateur AUTO, défaut `.focal`, jamais `.bubbles` ; `lentille_list` inchangé OFF) ; « Focal (bêta) » au long-press (listing + morePanel) via `ReadingModeController.init(forcedMode:)` + `Router.pendingForcedReadingMode` (éphémère, zéro écriture magasin) ; section « Bêta » dans Réglages ; i18n ×7 locales ; 7 suites de tests. **V3quater, soldage des réserves Porte V1** : R-a/R-b/R-d/R-g/R-j closes + R-h levée (détail dans la ligne PORTE V1). Recalibrage post-merge de 3 gardes source écrites sans toolchain (leçon run #99 : parseur de branche `else`, garde comptant sa propre déclaration, témoin V3 déplacé par R-a) | 72f2504a → a59c326e | **vert** — run #100 (31957691661), suite complète, 0 échec |
+| V5 | bloquée par PORTE V2 (web) — **volet gateway ouvrable côté iOS-first** : G-120..124 (préférence serveur, pont ✦ dans le payload, `lastReadAt`, compteur de participants) — ce qui rend le pont visible (R-c), la Rivière auto-éligible et la prévision d'encoche honnête | — | — |
 | V6 | bloquée par REV-5 | — | — |
+
+### Réserve R-g — « cadence d'élection vs 60 Hz du contrat » : **CONFORME**, close le 2026-08-16
+
+**Ce que le contrat exige, mot pour mot** (LWS-8, `tasks/lentille-implementation-contract.md`) :
+
+> « Élection de la focus card : `onScrollGeometryChange` (iOS 18+) ; repli iOS 17 par `PreferenceKey` throttlée à 60 Hz. Bande : `bottom − 140 ± 45`. »
+
+C'est la **seule** mention de cadence attachée à l'élection dans tout le contrat. Le §4.2 (« Élection de la focus card ») ne parle que de bande, de gagnant et d'hystérésis ; le §4.3 ne cote aucune fréquence. Le « 60 Hz » n'est donc pas un objectif de fraîcheur posé sur l'élection en général : c'est le **plafond de travail** attaché à la branche de repli iOS 17.
+
+**Ce que la lecture du chemin complet établit.** La note de clôture V3 pose « élection par le relais existant (choix Opus **vs** `onScrollGeometryChange`) ». Ce « vs » est une **fausse opposition** : `ScrollOffsetRelay` n'est pas une alternative à l'API que le contrat nomme, il en est le consommateur. Maillon par maillon :
+
+| # | Maillon | Fichier | Cadence |
+|---|---|---|---|
+| 1 | `onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y }` (iOS 18+) — **l'API du contrat** ; `GeometryReader` + `ScrollOffsetPreferenceKey` → `.onPreferenceChange` (iOS 16–17) — **le repli du contrat** | `MeeshyUI/Navigation/ScrollOffsetTracking.swift`, `MeeshyUI/Primitives/MeeshyRefreshableScroll.swift` | par frame |
+| 2 | `onScrollOffsetChange?(offset)` — première instruction des deux closures | `MeeshyRefreshableScroll.swift:96-107` | synchrone |
+| 3 | `scrollOffsetRelay.offset = offset` — première instruction du callback, **avant** le `guard !isSearching` | `ConversationListView.swift:1316` | synchrone |
+| 4 | `willSet { objectWillChange.send() }` — publie **chaque** écriture | `ScrollOffsetRelay.swift:46-48` | synchrone |
+| 5 | `.adaptiveOnChange(of: relay.offset)` → `electFromScroll` → `FocalFocusCurve.electFocusRow` | `LentilleFocusElectionHost.swift:59-80` | 1 tick = 1 élection |
+
+**Aucun debounce, aucun throttle, aucun `asyncAfter`, aucun `Timer` sur la longueur de la chaîne** (vérifié fichier par fichier). Le debounce de 16 ms cité au §4.4 est celui du pipeline `CombineLatest4` de `groupConversations` — un chemin de **données**, sans rapport avec l'offset. Le throttle de 0,15 s de `ConversationListView` porte sur `isScrollingDown` (barre du bas), et il est situé **après** l'écriture du relais : il ne peut pas retarder l'élection.
+
+**Cadence effective : celle de la passe d'affichage** — la même, par construction, que la perspective `.visualEffect` (I-069), et les deux lisent la même `LentilleFocusBand`. Chiffré : le retard maximal de l'élection vaut `vitesse × période`, soit **33 pt à 60 Hz** et **17 pt à 120 Hz** pour un balayage franc à 2 000 pt/s — sous l'hystérésis du miroir (45 pt), donc sous le seuil qui ferait changer d'élu. Rejoué en test, la carte descend **rang par rang, sans en sauter aucun**, aux deux fréquences. Une fenêtre de 100 ms, à la même vitesse, la priverait de 15 rangs sur 24 (retard de 200 pt, soit plus de trois rangs).
+
+**Écart mineur documenté, accepté.** Le contrat écrit « `PreferenceKey` **throttlée à 60 Hz** » ; aucun limiteur explicite n'existe — `.onPreferenceChange` émet une fois par passe de layout. Sur un appareil ProMotion, la branche iOS 16–17 émet donc jusqu'à 120 fois par seconde là où le contrat en budgétait 60. **La direction de l'écart va vers plus de fraîcheur, jamais moins** : la promesse tenue à l'utilisateur est intacte, seul le budget de travail est dépassé — et sur une branche d'OS résiduelle. Ajouter un limiteur réel coûterait une horloge sur un chemin que le §4.2 veut fonction du seul défilement. **Non corrigé, à revoir si Instruments montre un coût réel sur iOS 17 ProMotion.**
+
+**Ce qui a été ajouté** (`LentilleFocusElectionCadenceTests.swift`) : les gardes existantes (`FocusCardElectionTests`, `ScrollPillStateTests`, `LentilleChromeSourceGuardTests`) regardent toutes vers le **bas** — elles interdisent à la peau d'ajouter un second observateur. **Aucune ne regardait vers le haut.** Rien n'empêchait qu'un debounce apparaisse dans `ScrollOffsetTracking.swift` ou `MeeshyRefreshableScroll.swift` pour de bonnes raisons locales (lisser le header, économiser la batterie) et dégrade au passage, silencieusement et d'un seul coup, l'élection de la focus card, la pilule de section et le header. La suite fige les cinq maillons **et** chiffre ce qu'une fenêtre coûterait, avec son témoin de discrimination.
+
+**Reste device-only** : la sensation réelle du geste, le rendu à 120 Hz ProMotion, la preuve Instruments « < 1 ms/frame » (critère R2), et l'ordonnancement intra-frame — si SwiftUI met à jour l'overlay d'élection avant les `GeometryReader` des rangs sur une frame donnée, l'élection lit le registre de la frame précédente, soit **au pire une frame** (17 ms à 60 Hz, 8 ms à 120 Hz) de retard supplémentaire. Borné, invisible à l'œil, et non observable hors device.
 
 ---
 

@@ -221,6 +221,23 @@ final class Router: ObservableObject {
     /// à false par `ConversationView` à l'ouverture.
     @Published var pendingOpenSearch: Bool = false
 
+    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
+    /// (bêta) » du menu d'appui long de la liste (gardé par
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
+    /// amendement produit 2026-08-16, ex-drapeau caché `focalDevPreview`).
+    /// Consommé + remis à `nil` par le site d'appel de
+    /// `ConversationView(forcedReadingMode:)` à l'ouverture — MÊME patron que
+    /// `pendingReplyContext`/`pendingOpenSearch` ci-dessus : une propriété
+    /// `Router` en mémoire, JAMAIS `UserDefaults`, JAMAIS la préférence
+    /// collante (`ReadingModePreferenceStore`). Allumer `reading_modes`
+    /// globalement laisserait le mode AUTO de l'orchestrateur re-décider la
+    /// vue de TOUTES LES AUTRES conversations — ce que ce chantier interdit
+    /// explicitement (§0 workshop, design imposé point 1). Type
+    /// `ReadingModeOrchestrator.ConversationReadingMode` — le type RENDU, pas
+    /// `ReadingModePreference` (les mots du menu) : cette propriété force une
+    /// DÉCISION, elle n'exprime pas un choix utilisateur mémorisable.
+    @Published var pendingForcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode?
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
         pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id

@@ -82,5 +82,15 @@ export function useInfiniteConversationsQuery(options: UseInfiniteConversationsO
     // (Trigger 2), qui porte aussi la relecture complète 1×/24 h dont ce refetch
     // était jusqu'ici le seul substitut.
     refetchOnWindowFocus: false,
+    // Jumelle de la dérogation ci-dessus, sur l'AUTRE déclencheur global
+    // (`refetchOnReconnect: 'always'`). Elle avait été omise : le refetch
+    // destructeur décrit juste au-dessus restait donc armé sur un déclencheur
+    // bien plus ordinaire qu'un retour d'onglet — toute transition réseau du
+    // NAVIGATEUR (sortie de tunnel, bascule Wi-Fi/4G, réveil de machine).
+    // `useConversationsDeltaSync` (Trigger 1) couvre STRICTEMENT plus : il part
+    // du front `false → true` de la socket, donc aussi des coupures que
+    // `navigator.onLine` ne voit pas (redémarrage gateway, drop de load
+    // balancer, échec d'upgrade de transport).
+    refetchOnReconnect: false,
   });
 }

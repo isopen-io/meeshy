@@ -5,6 +5,26 @@ import UIKit
 /// F-084 (WS-5) — la carte de focus et le flash d'atterrissage (contrat §4.6,
 /// §4.7). Un `UICollectionViewCell` nu suffit : la décoration ne connaît que
 /// `contentView.layer`.
+///
+/// **Recalibrage — essai visuel, déplacé par `16844104` (« coupe le cadre de
+/// focus derrière un interrupteur »).** Ce commit a posé
+/// `drawsFocusCard = false` : `update(isFocused: true)` sort désormais par la
+/// garde avant d'avoir créé le moindre `CALayer`, et les trois témoins de
+/// §4.6 dénonçaient l'absence d'une couche que la production ne pose plus.
+///
+/// L'invariant est INCHANGÉ : les cotes du token `thread.focusCard`,
+/// l'insertion à l'index 0 DERRIÈRE le contenu hébergé, le layer réutilisé
+/// par cellule (`NSMapTable` à clés faibles) et le masquage-sans-destruction
+/// sont tous encore écrits — seulement inatteignables par le chemin par
+/// défaut tant que dure l'essai. Un essai visuel suspend un RENDU, il
+/// n'amende aucune cote ; laisser ces quatre-là sans témoin le temps qu'il
+/// dure, c'est se préparer à rétablir le cadre sans filet.
+///
+/// Les témoins les éprouvent donc sur une décoration dont l'interrupteur est
+/// OUVERT (`FocalFocusDecoration(drawsFocusCard: true)`), et un témoin NEUF
+/// — `test_switchOff_drawsNoCardAtAll` — couvre la position d'essai
+/// elle-même. La suite prouve maintenant les DEUX positions de
+/// l'interrupteur là où elle n'en prouvait qu'une.
 @MainActor
 final class FocalFocusDecorationTests: XCTestCase {
 
@@ -13,7 +33,7 @@ final class FocalFocusDecorationTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
-        decoration = FocalFocusDecoration()
+        decoration = FocalFocusDecoration(drawsFocusCard: true)
         cell = UICollectionViewCell(frame: CGRect(x: 0, y: 0, width: 390, height: 120))
         cell.layoutIfNeeded()
     }
@@ -37,8 +57,17 @@ final class FocalFocusDecorationTests: XCTestCase {
         )
         XCTAssertTrue(card.superlayer === cell.contentView.layer,
                       "la carte doit vivre dans cell.contentView.layer (§4.6)")
-        XCTAssertEqual(cell.contentView.layer.sublayers?.first, card,
-                       "la carte doit être insérée à l'index 0 — DERRIÈRE le contenu SwiftUI, jamais par-dessus")
+        // Depuis `85cf1ec4` la carte n'est plus SEULE derrière le contenu :
+        // un halo (`focal.focus.halo`, débord d'accent dilué) vit encore
+        // DESSOUS — index 0 au halo, index 1 à la carte (doc
+        // `haloLayer(for:)` : « Le halo vit SOUS la carte »). L'invariant
+        // §4.6 est inchangé : la décoration ENTIÈRE reste derrière le
+        // contenu SwiftUI hébergé, jamais par-dessus.
+        let sublayers = cell.contentView.layer.sublayers ?? []
+        XCTAssertEqual(sublayers.first?.name, "focal.focus.halo",
+                       "le halo doit occuper l'index 0 — tout au fond, même sous la carte")
+        XCTAssertEqual(sublayers.dropFirst().first, card,
+                       "la carte doit vivre juste au-dessus du halo (index 1) — DERRIÈRE le contenu SwiftUI, jamais par-dessus")
         XCTAssertEqual(card.cornerRadius, FocalMetrics.FocusCard.radius,
                        "rayon de la carte = FocalMetrics.FocusCard.radius (token thread.focusCard.radius), jamais un littéral")
         XCTAssertEqual(card.borderWidth, FocalMetrics.FocusCard.ringSize,
@@ -87,6 +116,52 @@ final class FocalFocusDecorationTests: XCTestCase {
                        "FocalFocusDecoration.update(isFocused: false) doit masquer la carte")
     }
 
+    /// **La position d'ESSAI de l'interrupteur (`16844104`), son propre
+    /// témoin.** Avec `drawsFocusCard: false` — la valeur que porte la
+    /// production — une rangée ÉLUE ne doit se voir poser NI carte, NI halo,
+    /// NI aucun autre layer de décoration : « rien n'est dessiné » est la
+    /// demande, pas « quelque chose de transparent est dessiné ». Un layer
+    /// posé puis mis à `opacity = 0` coûterait une allocation par cellule
+    /// élue pour un résultat invisible.
+    ///
+    /// Ce témoin est le pendant des trois ci-dessus : ensemble ils gèlent les
+    /// deux positions, si bien que rétablir le cadre (repasser la constante à
+    /// `true`) fera tomber CELUI-CI et seulement lui — un signal, pas une
+    /// surprise.
+    func test_switchOff_drawsNoCardAtAll() {
+        let dark = FocalFocusDecoration(drawsFocusCard: false)
+
+        dark.update(cell: cell, isFocused: true, accentHex: accent, isDark: false)
+
+        XCTAssertNil(
+            dark.cardLayer(attachedTo: cell),
+            "interrupteur fermé (`drawsFocusCard: false`) : même ÉLUE, la cellule ne doit se voir créer aucun layer de carte — l'essai visuel demande qu'on ne dessine RIEN, pas qu'on dessine du transparent"
+        )
+        // Nommément, plutôt que par « la cellule n'a aucun sous-layer » : ce
+        // que la décoration doit s'interdire, ce sont SES layers à elle. Une
+        // couche interne qu'UIKit poserait un jour sur `contentView` ne dit
+        // rien de cet interdit et ne doit pas faire rougir ce témoin.
+        XCTAssertTrue(
+            (cell.contentView.layer.sublayers ?? []).allSatisfy { ($0.name ?? "").hasPrefix("focal.focus.") == false },
+            "interrupteur fermé : aucun layer de décoration `focal.focus.*` (carte, halo) ne doit être posé sur la cellule élue"
+        )
+    }
+
+    /// Le flash d'atterrissage (§4.7) est d'une AUTRE nature — un signal
+    /// transitoire de recherche, pas le cadre de la rangée élue. L'essai
+    /// visuel ne le touche pas, et ce témoin l'épingle : couper le cadre ne
+    /// doit jamais couper le flash par ricochet.
+    func test_switchOff_stillFlashesOnLanding() throws {
+        let dark = FocalFocusDecoration(drawsFocusCard: false)
+
+        dark.flash(cell: cell, accentHex: accent, strong: false)
+
+        XCTAssertNotNil(
+            dark.flashLayer(attachedTo: cell),
+            "interrupteur fermé : le flash d'atterrissage (§4.7) reste actif — il ne dépend pas du cadre de focus (doc de `drawsFocusCard` : « Ne touche PAS le flash »)"
+        )
+    }
+
     /// Une cellule jamais focalisée ne doit pas se voir créer de layer : sur
     /// 12 cellules visibles, une seule porte la carte.
     func test_update_neverFocused_createsNoLayerAtAll() {
@@ -108,8 +183,8 @@ final class FocalFocusDecorationTests: XCTestCase {
         XCTAssertNil(decoration.flashLayer(attachedTo: cell),
                      "FocalFocusDecoration.clear doit retirer le layer de flash")
         XCTAssertTrue(
-            (cell.contentView.layer.sublayers ?? []).allSatisfy { $0.name != "focal.focus.card" && $0.name != "focal.focus.flash" },
-            "aucun layer de décoration ne doit survivre à clear(_:)"
+            (cell.contentView.layer.sublayers ?? []).allSatisfy { ($0.name ?? "").hasPrefix("focal.focus.") == false },
+            "aucun layer de décoration `focal.focus.*` (carte, halo, flash) ne doit survivre à clear(_:)"
         )
     }
 

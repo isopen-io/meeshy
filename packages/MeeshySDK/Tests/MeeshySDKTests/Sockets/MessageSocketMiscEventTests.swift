@@ -304,6 +304,64 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.lastMessageTranslations, .replaced(["fr": "Bonjour"]))
     }
 
+    // Le MÊME tri-état, appliqué au champ qui NOMME le message. La clé nulle y
+    // dit « ce lecteur n'a plus aucun message visible ici » — l'état d'un
+    // lecteur qui vient de masquer pour lui le dernier qui lui restait. Sans la
+    // distinction, ce payload (dont TOUT le groupe vaut `null`) se lit comme un
+    // renommage : rien ne s'applique, et la ligne garde l'aperçu de ce qui vient
+    // de disparaître.
+
+    func test_conversationUpdatedEvent_absentLastMessageIdKey_isUnchanged() throws {
+        let json = """
+        {
+            "conversationId": "conv4",
+            "title": "Renamed",
+            "updatedAt": "2026-08-16T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessage, .unchanged)
+        XCTAssertNil(event.lastMessageIdValue)
+    }
+
+    func test_conversationUpdatedEvent_nullLastMessageId_isReplacedWithNothing() throws {
+        let json = """
+        {
+            "conversationId": "conv4",
+            "lastMessageAt": null,
+            "lastMessageId": null,
+            "lastMessagePreview": null,
+            "lastMessageTranslations": null,
+            "senderId": null,
+            "updatedBy": {"id": "u1"},
+            "updatedAt": "2026-08-16T11:00:00.000Z",
+            "previewRecalculated": true
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessage, .replaced(nil),
+                       "an explicit null says there is no visible message left — it is a value, not an absence")
+        XCTAssertNil(event.lastMessageAt)
+        XCTAssertTrue(event.previewRecalculated)
+    }
+
+    func test_conversationUpdatedEvent_lastMessageId_isReplacedWithIt() throws {
+        let json = """
+        {
+            "conversationId": "conv4",
+            "lastMessageId": "msg-7",
+            "lastMessagePreview": "Hello",
+            "updatedAt": "2026-08-16T11:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.lastMessage, .replaced("msg-7"))
+        XCTAssertEqual(event.lastMessageIdValue, "msg-7")
+    }
+
     func test_conversationUpdatedEvent_minimalFields() throws {
         let json = """
         {
@@ -670,5 +728,51 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertNil(try decoder.decode(ParticipantJoinedEvent.self, from: joined).memberCount)
         XCTAssertNil(try decoder.decode(ParticipantLeftEvent.self, from: left).memberCount)
         XCTAssertNil(try decoder.decode(ParticipantUnbannedEvent.self, from: unbanned).memberCount)
+    }
+
+    // MARK: - MessageHiddenForMeEvent
+
+    func test_messageHiddenForMeEvent_decodesBatchAcrossConversations() throws {
+        let json = """
+        {
+            "userId": "u1",
+            "messages": [
+                {"messageId": "m1", "conversationId": "c1"},
+                {"messageId": "m2", "conversationId": "c2"}
+            ],
+            "hiddenAt": "2026-08-16T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageHiddenForMeEvent.self, from: json)
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.messages, [
+            PersonalMessageVisibilityRef(messageId: "m1", conversationId: "c1"),
+            PersonalMessageVisibilityRef(messageId: "m2", conversationId: "c2"),
+        ])
+        XCTAssertEqual(event.hiddenAt, "2026-08-16T10:00:00.000Z")
+    }
+
+    /// La route unitaire émet une liste d'UN élément — les clients n'ont qu'une
+    /// forme à traiter, jamais deux.
+    func test_messageHiddenForMeEvent_singleMessageIsStillAList() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1"}], "hiddenAt": "2026-08-16T10:00:00.000Z"}
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(try decoder.decode(MessageHiddenForMeEvent.self, from: json).messages.count, 1)
+    }
+
+    /// `hiddenAt` n'arbitre rien (le masquage est un fait par-lecteur, sans
+    /// concurrence à départager) : son absence ne doit pas faire échouer le
+    /// décodage et perdre le retrait.
+    func test_messageHiddenForMeEvent_absentHiddenAt_decodesAsNil() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1"}]}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageHiddenForMeEvent.self, from: json)
+        XCTAssertNil(event.hiddenAt)
+        XCTAssertEqual(event.messages.first?.messageId, "m1")
     }
 }

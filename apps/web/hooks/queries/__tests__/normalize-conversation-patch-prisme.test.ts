@@ -17,7 +17,8 @@
  * que le doc-comment du normaliseur reproche déjà aux dates.
  */
 
-import { normalizeConversationPatch } from '../use-socket-cache-sync';
+import { mergeConversationUpdate, normalizeConversationPatch } from '../use-socket-cache-sync';
+import type { Conversation } from '@meeshy/shared/types';
 
 describe('normalizeConversationPatch — Prisme de la ligne de liste', () => {
   it('carries the reader-scoped translations map into the patch', () => {
@@ -72,5 +73,62 @@ describe('normalizeConversationPatch — Prisme de la ligne de liste', () => {
 
     expect('lastMessageTranslations' in patch).toBe(false);
     expect('lastMessageOriginalLanguage' in patch).toBe(false);
+  });
+
+  // « Ce lecteur n'a plus AUCUN message visible ici » — il vient de masquer POUR
+  // LUI le dernier qui lui restait. Le serveur envoie tout le groupe à `null`.
+  //
+  // La ligne rend `conversation.lastMessage` (l'objet), pas `lastMessagePreview` :
+  // périmer le second sans le premier laissait le texte affiché intact, et la
+  // ligne montrait indéfiniment ce que le lecteur venait de masquer.
+  describe('quand le serveur dit qu il ne reste aucun message visible', () => {
+    // La décision vit désormais dans `mergeConversationUpdate` : distinguer
+    // « plus aucun message visible » de « un AUTRE message » demande de savoir
+    // lequel la ligne décrit déjà, que le normaliseur ne voit pas. Le geste
+    // épinglé ici est le même — c'est l'objet que la ligne rend qui est vidé,
+    // pas seulement l'aperçu scalaire que personne ne lit.
+    it('voids the object the row actually renders', () => {
+      const merged = mergeConversationUpdate(
+        { id: 'c1', lastMessage: { id: 'msg-only', content: 'le seul message' } } as unknown as Conversation,
+        {
+          lastMessageAt: null,
+          lastMessageId: null,
+          lastMessagePreview: null,
+          lastMessageTranslations: null,
+          previewRecalculated: true,
+        }
+      );
+
+      expect(merged.lastMessage).toBeUndefined();
+    });
+
+    // Le rang de la ligne survit : `lastMessageAt: null` ne parse pas en date et
+    // reste donc écarté par le normaliseur — un masquage PERSONNEL ne déplace
+    // pas une conversation dans la liste de son lecteur.
+    it('keeps the row where it is', () => {
+      const patch = normalizeConversationPatch({ lastMessageAt: null, lastMessageId: null });
+
+      expect('lastMessageAt' in patch).toBe(false);
+    });
+
+    // Contre-épreuve : un id PLEIN nomme un message bien réel. Vider la ligne
+    // là-dessus serait le défaut symétrique, sur le chemin le plus fréquenté.
+    it('leaves the row alone when the id names a real message', () => {
+      const patch = normalizeConversationPatch({ lastMessageId: 'msg-7' });
+
+      expect('lastMessage' in patch).toBe(false);
+      // L'id est un SIGNAL, pas une donnée du cache : `Conversation` (web) ne le
+      // déclare pas et personne ne le lit. Le recopier n'ajoutait qu'un champ
+      // fantôme sur chaque ligne. C'est la FUSION qui le lit désormais — ce
+      // qu'elle en fait est épinglé dans `merge-conversation-update.test.ts`.
+      expect('lastMessageId' in patch).toBe(false);
+    });
+
+    // Et un renommage n'emporte pas la clé du tout.
+    it('leaves the row alone when the event never mentions the last message', () => {
+      const patch = normalizeConversationPatch({ title: 'Renamed' });
+
+      expect('lastMessage' in patch).toBe(false);
+    });
   });
 });

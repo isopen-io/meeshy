@@ -55,7 +55,13 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
     }
 
     func test_applyingConversationUpdate_renameKeepsOrderAndUserState() {
-        var pinned = TestFactories.makeConversation(id: "c1", title: "Alpha",
+        // `.group` et non le `.direct` par défaut du fixture : le titre d'un DM
+        // n'est pas celui de la base, et `merging` ignore désormais un `title`
+        // qui le viserait (cf. `ConversationStoreTests`
+        // `test_merging_directConversation_neverTakesTheRawTitle`). Le sujet ici
+        // est l'ORDRE et le `userState`, pas la garde — d'où une conversation
+        // qui accepte d'être renommée.
+        var pinned = TestFactories.makeConversation(id: "c1", type: .group, title: "Alpha",
                                                     lastMessageAt: Date(timeIntervalSince1970: 100))
         pinned.userState.isPinned = true
         let other = TestFactories.makeConversation(id: "c2", title: "Zulu",
@@ -68,6 +74,25 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertEqual(merged?.map(\.id), ["c1", "c2"], "un rename ne doit pas réordonner la liste")
         XCTAssertEqual(merged?.first?.title, "Renommée")
         XCTAssertEqual(merged?.first?.userState.isPinned, true, "le userState local doit survivre au merge")
+    }
+
+    /// La garde « le titre d'un DM n'est pas celui de la base » vaut AUSSI sur
+    /// ce chemin — et c'est lui qui portait la conséquence durable. L'écran
+    /// (`ConversationListViewModel`) refuse ce titre depuis le 2026-07-04, mais
+    /// `applyingConversationUpdate` écrit le CACHE DISQUE et rediffuse la liste
+    /// via `conversationsDidChange` : le nom greffé revenait à l'écran par
+    /// derrière, et survivait au redémarrage. Ce témoin épingle la délégation à
+    /// `ConversationStore.merging` plutôt que de la supposer.
+    func test_applyingConversationUpdate_directConversation_doesNotPersistTheRawTitle() {
+        let dm = TestFactories.makeConversation(id: "dm-1", type: .direct, title: "Sandra Raveloson")
+
+        XCTAssertNil(
+            ConversationSyncEngine.applyingConversationUpdate(
+                ConversationUpdatedStoreEvent(conversationId: "dm-1", title: "Sany"),
+                to: [dm]
+            ),
+            "aucune écriture cache : le seul champ du payload ne s'applique pas à un DM"
+        )
     }
 
     func test_applyingConversationUpdate_newerLastMessageAt_resortsList() {
@@ -93,7 +118,7 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
             ConversationUpdatedStoreEvent(
                 conversationId: "c1",
                 lastMessageAt: Date(timeIntervalSince1970: 100),
-                lastMessageId: "m-old",
+                lastMessage: .replaced("m-old"),
                 lastMessagePreview: "périmé"
             ),
             to: [current]
@@ -102,12 +127,40 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         XCTAssertNil(merged, "un lastMessageAt périmé ne doit rien écrire — ni horodatage, ni aperçu")
     }
 
+    /// Ce qui rend le défaut DURABLE : `applyingConversationUpdate` délègue sa
+    /// règle par ligne à `ConversationStore.merging` précisément pour que la
+    /// liste PERSISTÉE et le store RAM ne puissent jamais diverger. L'épingle
+    /// perdue au passage du pont était donc écrite — sans épingle — dans le
+    /// cache disque, où elle survivait au redémarrage : au prochain départ à
+    /// froid, la ligne d'un message position-seule est servie vide (aperçu vide
+    /// par construction, épingle effacée) jusqu'à ce qu'un
+    /// `GET /conversations` la répare.
+    func test_applyingConversationUpdate_positionMessage_persistsItsPin() {
+        var current = TestFactories.makeConversation(id: "c1", lastMessageAt: Date(timeIntervalSince1970: 100))
+        current.lastMessageId = "m-texte"
+        current.lastMessagePreview = "salut"
+
+        let merged = ConversationSyncEngine.applyingConversationUpdate(
+            ConversationUpdatedStoreEvent(
+                conversationId: "c1",
+                lastMessageAt: Date(timeIntervalSince1970: 300),
+                lastMessage: .replaced("m-position"),
+                lastMessagePreview: "",
+                location: SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+            ),
+            to: [current]
+        )
+
+        XCTAssertEqual(merged?.first?.lastMessageLocation?.name, "Tour Eiffel",
+                       "la liste persistée doit porter l'épingle, sinon le départ à froid sert une ligne vide")
+    }
+
     // MARK: - conversation:updated relayed to disk
 
     func test_conversationUpdatedRelay_persistsRenameIntoTheCachedList() async throws {
         let (engine, socket, cache) = try makeEngine()
         try await cache.conversations.save(
-            [TestFactories.makeConversation(id: "c-rename", title: "Avant")], for: "list"
+            [TestFactories.makeConversation(id: "c-rename", type: .group, title: "Avant")], for: "list"
         )
         await engine.startSocketRelay()
 
@@ -256,6 +309,75 @@ final class ConversationSyncEngineRealtimePersistenceTests: XCTestCase {
         } }
         XCTAssertTrue(added)
         XCTAssertTrue(removed)
+    }
+
+    // MARK: - La ligne de liste après une édition
+    //
+    // Les onze champs `lastMessage*` décrivent UN message (cf.
+    // `LastMessageFacet`). Le chemin ci-dessous en réécrivait une PARTIE alors
+    // que la carte du Prisme ne décrivait plus le texte affiché.
+
+    /// Une édition garde le MÊME message — les drapeaux et l'auteur restent
+    /// donc justes. Ce qui ne l'est plus, c'est la traduction : elle décrit le
+    /// texte D'AVANT, et le serveur remet d'ailleurs `Message.translations` à
+    /// `null` dans la même écriture que le nouveau contenu. Ne réécrire que
+    /// `lastMessagePreview` laissait le résolveur servir l'ancienne phrase.
+    func test_messageEditedRelay_dropsTheTranslationCardOfThePreEditText() async throws {
+        let (engine, socket, cache) = try makeEngine()
+
+        var row = TestFactories.makeConversation(id: "c1")
+        row.lastMessageId = "m1"
+        row.lastMessagePreview = "Hello"
+        row.lastMessageTranslations = ["fr": "Bonjour"]
+        row.lastMessageOriginalLanguage = "en"
+        try await cache.conversations.save([row], for: "list")
+        await engine.startSocketRelay()
+
+        socket.messageEdited.send(TestFactories.makeAPIMessage(
+            id: "m1", conversationId: "c1", content: "Hello again"
+        ))
+
+        let refreshed = await waitUntil {
+            await cache.conversations.load(for: "list").snapshot()?.first?.lastMessagePreview == "Hello again"
+        }
+        XCTAssertTrue(refreshed)
+
+        let afterEdit = await cache.conversations.load(for: "list").snapshot()
+        let updated = try XCTUnwrap(afterEdit?.first)
+        XCTAssertNil(updated.lastMessageTranslations, "la carte traduisait le texte d'avant")
+        XCTAssertEqual(
+            updated.resolvedLastMessagePreview(preferredLanguages: ["fr"]), "Hello again",
+            "un lecteur francophone lisait « Bonjour » sur un message devenu « Hello again »"
+        )
+    }
+
+    /// Contre-épreuve : une édition qui ne vise PAS le dernier message ne doit
+    /// toucher à rien — surtout pas à la carte du Prisme, qui décrit toujours
+    /// correctement le dernier message, lui inchangé.
+    func test_messageEditedRelay_olderMessage_leavesTheRowUntouched() async throws {
+        let (engine, socket, cache) = try makeEngine()
+
+        var row = TestFactories.makeConversation(id: "c1")
+        row.lastMessageId = "m-last"
+        row.lastMessagePreview = "Hello"
+        row.lastMessageTranslations = ["fr": "Bonjour"]
+        row.lastMessageOriginalLanguage = "en"
+        try await cache.conversations.save([row], for: "list")
+        await engine.startSocketRelay()
+
+        socket.messageEdited.send(TestFactories.makeAPIMessage(
+            id: "m-older", conversationId: "c1", content: "corrigé"
+        ))
+
+        // Laisser le relais s'exécuter : c'est l'ABSENCE de changement qu'on mesure.
+        let mutated = await waitUntil(timeout: 0.5) {
+            await cache.conversations.load(for: "list").snapshot()?.first?.lastMessagePreview != "Hello"
+        }
+        XCTAssertFalse(mutated, "éditer un message ancien ne réécrit pas la ligne")
+
+        let afterOlderEdit = await cache.conversations.load(for: "list").snapshot()
+        let untouched = try XCTUnwrap(afterOlderEdit?.first)
+        XCTAssertEqual(untouched.lastMessageTranslations, ["fr": "Bonjour"])
     }
 
     func test_messageConsumedRelay_forwardsViewOnceCountToTheCanonicalStore() async throws {

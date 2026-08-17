@@ -236,3 +236,91 @@ OUVERTE ; le trou est précisément l'app fermée, que seul le rattrapage voit).
 
 **Cons**: reste la borne d'origine — une conversation HARD-supprimée en base ne laisse de trace dans
 aucun des deux canaux, et attend toujours la réconciliation complète.
+
+## 2026-08-16: `conversation:updated` — la ligne de liste adopte le message que le payload NOMME
+
+**Décision**: le patch socket de la liste passe par `mergeConversationUpdate(conversation, raw)`,
+qui décide de `conversation.lastMessage` à partir de l'IDENTITÉ portée par `lastMessageId` :
+absente ⇒ ne rien toucher ; nulle ⇒ vider la ligne ; égale à celle du cache ⇒ réécrire le TEXTE et
+rien d'autre ; différente ⇒ composer un message NEUTRE depuis le seul payload. Les cinq champs du
+groupe d'aperçu (`lastMessageId`, `lastMessagePreview`, `senderId`, `location`,
+`previewRecalculated`) sont CONSOMMÉS par cette fusion et n'entrent plus dans le cache.
+
+**Pourquoi**: la ligne rend l'objet `conversation.lastMessage`, mais la carte du Prisme
+(`lastMessageTranslations`) vit au niveau CONVERSATION — le gateway l'y pose, sa forme compacte
+`{ langue: aperçu }` n'étant pas celle de `Message.translations`. Les deux moitiés de la ligne
+étaient donc écrites par des chemins différents, et sur les deux chemins où le payload nomme un
+AUTRE message — masquage personnel, suppression pour tous d'une conversation non ouverte — seule la
+carte était mise à jour. Le résolveur PRÉFÉRANT la traduction à l'aperçu brut, la ligne rendait le
+texte du remplaçant sous l'auteur, l'heure et la vignette du message parti.
+
+**Trois points de conception**:
+- **Neutre, pas hérité.** Le payload ne porte ni l'objet `sender` ni les pièces jointes ; les
+  conserver EST le mélange qu'on ferme. Une ligne incomplète (pas de préfixe d'auteur —
+  `getSenderName` rend `null` sans `sender`) se corrige au prochain `GET /conversations` ; une ligne
+  fausse ne se corrige jamais, rien ne signalant l'incohérence.
+- **La borne fait le correctif.** Identité INCHANGÉE ⇒ on ne touche qu'au texte. C'est le chemin le
+  plus fréquenté du service : `message:new` pose l'objet complet dans la room de conversation et le
+  `conversation:updated` jumeau arrive juste derrière avec le même id. Sans cette borne, chaque
+  message reçu dépouillerait sa propre ligne.
+- **Pas d'horodatage lisible ⇒ on ne compose rien.** La ligne rend `lastMessage.createdAt` ; une
+  date fabriquée y afficherait « Invalid Date ». Le cas ne se produit pas en nominal (les deux
+  émetteurs portent toujours `lastMessageAt` avec un id plein) — la garde borne le dégradé.
+
+**Alternatives rejetées**: faire lire `lastMessagePreview` à la ligne en repli de l'objet (déplace la
+décision dans le rendu et laisse deux sources de vérité pour un même texte) ; porter sur le fil les
+six champs manquants (pastille, drapeaux éphémères, nom d'auteur) — chiffré au cycle 52 : la
+jointure `attachments` tomberait sur le chemin du fan-out des traductions, le plus chaud du service.
+
+**Cons**: entre l'événement et la prochaine synchro, une ligne dont l'identité vient de changer perd
+son préfixe d'auteur et sa pastille de pièce jointe. C'est le compromis assumé — jumeau de
+`LastMessageFacet` côté iOS.
+
+## 2026-08-17: La carte du Prisme est périmée par l'écrivain qui change le message de la ligne
+
+**Décision**: tout écrivain LOCAL du cache qui installe un message sur la ligne de liste passe par
+`withPreviewMessage({ conversation, message, textChanged? })`, qui périme dans la MÊME écriture la
+carte du Prisme (`lastMessageTranslations` / `lastMessageOriginalLanguage`) dès que le message
+installé n'est plus celui que la ligne décrivait.
+
+**Pourquoi**: la décision du 2026-08-16 a fermé le mélange sur le chemin du fan-out SERVEUR. Elle
+laissait intacts les SIX écrivains locaux du même affichage (`message:new` et sa branche `fetched`,
+`message:edited`, `message:deleted`, `link:message:new`, et le `handleNewMessage` de
+`use-conversations-v2` — un SECOND écouteur du même événement sur le MÊME cache) : tous réécrivaient
+l'objet `lastMessage`, aucun ne touchait la carte, et `resolveLastMessagePreview` PRÉFÈRE la carte au
+contenu brut. Cinq de ces chemins ont un `conversation:updated` jumeau qui rattrape — mélange
+transitoire.
+**`link:message:new` n'en a pas, délibérément** (`broadcastLinkMessage` refuse la lecture DB par
+message de lien), et la ligne y restait durablement fausse : le texte traduit de l'avant-dernier
+message sous l'auteur et l'horodatage du dernier.
+
+**Quatre points de conception**:
+- **L'identité décide, jamais le contenu.** Même id ⇒ la carte reste vraie, on la garde. C'est ce
+  no-op qui rend le correctif indifférent à l'ORDRE d'arrivée de `message:new` et de son jumeau —
+  le gateway garantit que les deux portent la même carte, résolue depuis le même message.
+- **La règle n'est sûre que si TOUS les écrivains y passent.** Deux écouteurs du même `message:new`
+  écrivent dans le même cache sans ordre garanti ; un écrivain qui garderait un
+  `{ ...conv, lastMessage }` ferait ratifier sa carte périmée par le voisin, dont la règle d'identité
+  ne verrait plus qu'un no-op. C'est une propriété du FICHIER, pas d'une valeur : un témoin de source
+  verrouille `use-conversations-v2.ts`.
+- **La règle n'est sûre que si TOUS les écrivains y passent.** Deux écouteurs du même `message:new`
+  écrivent dans le même cache sans ordre garanti ; un écrivain qui garderait un
+  `{ ...conv, lastMessage }` ferait ratifier sa carte périmée par le voisin, dont la règle d'identité
+  ne verrait plus qu'un no-op. C'est une propriété du FICHIER, pas d'une valeur : un témoin de source
+  verrouille `use-conversations-v2.ts`.
+- **`textChanged` est déclaré par l'écrivain, pas déduit.** Une édition garde le même id tout en
+  remettant `Message.translations` à `null` côté serveur ; seul le handler d'édition le sait.
+- **Périmer, pas recomposer.** Dériver la carte de `message.translations` dupliquerait dans le
+  client les quatre exclusions de `buildLastMessagePreviewTranslations` et le plafond de 300 points
+  de code. Périmer rend la ligne dans la langue d'origine — ce qui EST la règle #1 du Prisme.
+
+**Alternatives rejetées**: émettre `conversation:updated` sur le chemin `link:message:new` (referme
+le trou au prix exact que le gateway refuse — une lecture DB par message de lien — alors que le
+client peut tenir la cohérence sans elle) ; poser `lastMessageAt` / `updatedAt` dans le geste commun
+(les six appelants n'en font pas le même usage ; l'édition n'en pose aucun et `link:message:new`
+dérive le sien d'un payload non typé).
+
+**Cons**: entre l'écriture locale et le prochain `conversation:updated`, une ligne dont l'identité
+vient de changer s'affiche dans la langue d'origine plutôt que traduite. Assumé : c'est la règle #1
+du Prisme, pas un dégradé — et sur le chemin des liens partagés, c'est le seul état correct
+atteignable sans lecture serveur.

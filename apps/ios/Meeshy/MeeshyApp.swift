@@ -666,7 +666,39 @@ struct MeeshyApp: App {
                         // UserCategoryStore. Idempotent (re-wires cleanly) and
                         // the 6 publishers live on the socket singleton, so a
                         // single activation after login survives reconnects.
-                        ConversationStoreSocketBridge.shared.activate()
+                        //
+                        // `onReadingModePreferenceChanged` — G-124, volet
+                        // « préférence serveur » de P7. Le SDK relaie la
+                        // valeur BRUTE reçue sur `user:preferences-updated`
+                        // (scope conversation) ; ici, et ici seulement, elle
+                        // devient un `ReadingModePreference` typé et atterrit
+                        // dans le MÊME magasin scopé que les trois autres
+                        // points d'entrée (encoche liste, sous-menu, fil
+                        // ouvert — `LentilleReadingModePreferenceCenter`,
+                        // `Lentille/Mode/LentilleReadingModeContext.swift`) :
+                        // ce n'est PAS un second canal, c'est une quatrième
+                        // écriture dans le magasin optimiste existant, qui
+                        // devient cache devant ce canal serveur (contrat
+                        // LWS-2bis, en-tête de `ReadingModePreferenceStoring`).
+                        // Gate sur le MÊME drapeau que ces trois surfaces —
+                        // écrire sous drapeau OFF n'aurait aucun lecteur, mais
+                        // couper la garde ferait dépendre R19 d'une future
+                        // purge plutôt que d'un simple gate au point d'écriture.
+                        // Une valeur brute hors des 5 cas gelés (`rawValue:`
+                        // échoue) est ignorée — jamais une préférence
+                        // fabriquée depuis une chaîne inconnue.
+                        ConversationStoreSocketBridge.shared.activate(
+                            onReadingModePreferenceChanged: { conversationId, rawReadingMode in
+                                guard LentilleFeatureFlag.isReadingModesEnabled,
+                                      let value = ReadingModePreference(rawValue: rawReadingMode)
+                                else { return }
+                                Task {
+                                    await LentilleReadingModePreferenceCenter.shared.set(
+                                        conversationId: conversationId, value: value, optimistic: false
+                                    )
+                                }
+                            }
+                        )
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationToastManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()

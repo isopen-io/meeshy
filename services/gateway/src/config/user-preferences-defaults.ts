@@ -74,6 +74,8 @@ export interface ConversationPreferencesDefaults {
   orderInCategory: number | null;
   customName: string | null;
   reaction: string | null;
+  /** `ReadingModePreference` (`@meeshy/shared/types/reading-modes`) : `auto` rend la main à l'orchestrateur. */
+  readingMode: string;
 }
 
 export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults = {
@@ -88,6 +90,7 @@ export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults 
   orderInCategory: null,
   customName: null,
   reaction: null,
+  readingMode: 'auto',
 };
 
 // ========== COMMUNITY PREFERENCES DEFAULTS ==========

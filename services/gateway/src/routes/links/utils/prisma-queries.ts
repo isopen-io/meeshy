@@ -44,10 +44,15 @@ export const shareLinkIncludeStructure = {
           avatar: true,
           language: true,
           isOnline: true,
+          isActive: true,
           role: true,
           joinedAt: true,
           userId: true,
           permissions: true,
+          // `profile` UNIQUEMENT : `anonymousSession.session` porte le hash du
+          // jeton, l'IP et l'empreinte appareil — jamais exposables sur une
+          // route consultable sans authentification.
+          anonymousSession: { select: { profile: true } },
           user: {
             select: {
               id: true,

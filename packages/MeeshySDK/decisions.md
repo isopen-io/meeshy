@@ -1,5 +1,12 @@
 # Decisions - packages/MeeshySDK (Swift SDK)
 
+## 2026-08-16 : Le groupe d'aperçu se lit en TRI-ÉTAT, et son vidage est un geste unique
+**Statut**: Accepté
+**Contexte**: `conversation:updated` sert quatre variantes de payload par trois émetteurs. Une mise à jour de métadonnées (renommage, avatar) n'emporte **aucune** clé `lastMessage*` ; les deux chemins message-driven les portent toutes pleines ; `emitConversationPreviewUpdate` les porte pleines sur un recalcul, et **toutes nulles** quand le lecteur n'a plus aucun message visible (masquage personnel du dernier restant). Lu en `Optional`, ce dernier cas est indistinguable du premier : chaque `if let` jette le payload, et la ligne garde définitivement l'aperçu de ce que le lecteur vient de masquer. Le cycle 46 bis avait déjà tri-étaté `lastMessageTranslations` pour cette raison exacte — donc ce seul champ s'appliquait, vidant la traduction et laissant l'aperçu brut : la ligne basculait de « Bonjour » à « Hello », le masquage EXPOSANT l'original.
+**Decision**: `LastMessageIdentity` (`.unchanged` = clé absente / `.replaced(String?)`, `nil` = plus aucun message visible) remplace `String?` sur `ConversationUpdatedEvent` et `ConversationUpdatedStoreEvent`, décodé par `container.contains(.lastMessageId)`. **L'identité porte le fait pour tout le groupe** : c'est le seul champ dont la nullité veut dire « aucun » et non « inconnu » — `lastMessageAt: null` décrit tout aussi bien un renommage. Le vidage est un geste unique, `MeeshyConversation.clearLastMessage()`, qui remet **onze** champs à zéro (texte, id, Prisme, pièces jointes, expéditeur, position, drapeaux éphémères) et rend `false` s'il n'y avait rien à vider. `lastMessageAt` n'est PAS touché : il porte le rang de la ligne, donnée globale (`Conversation.lastMessageAt`, non nullable en base) qu'un masquage personnel ne change pour personne.
+**Alternatives rejetées**: rendre `lastMessageAt` optionnel sur le domaine (rayon d'action sur tri, `renderFingerprint`, décodage REST et schéma GRDB, pour un état que le serveur ne met jamais en cause) ; conditionner le vidage à `previewRecalculated` (le tri-état EST déjà le discriminant — seul l'émetteur qui recalcule produit cette forme — et le second verrou ferait ignorer un payload qui dit explicitement « plus rien ») ; ajouter un booléen `lastMessageCleared` à côté du `String?` (deux représentations d'un même fait, celle que le dépôt proscrit) ; vider champ par champ chez chaque consommateur (un vidage PARTIEL laisse « Message expiré » ou une épingle décrire un message que le lecteur ne voit plus, et se lit comme un bug là où l'absence de vidage se lisait comme un retard).
+**Cons**: trois surfaces client doivent connaître le tri-état (décodage, `ConversationStore.merging` — donc RAM et cache disque —, `ConversationListViewModel` app), et le pont `mapConversationUpdated` peut l'aplatir sans qu'aucun autre témoin ne rougisse : d'où son témoin de bout en bout. Un gateway antérieur qui n'enverrait jamais la clé retombe sur `.unchanged`, soit exactement l'ancienne règle. Le fait qu'une conversation puisse n'avoir aucun dernier message était déjà rendable (`resolvedLastMessagePreview` → `nil`, `ThemedConversationRow` teste `!isEmpty`) : aucune forme nouvelle n'a dû être introduite.
+
 ## 2026-08-10: Prisme de l'aperçu — deux chemins, une seule convention de clés
 **Statut**: Accepté
 **Contexte**: `MeeshyConversation.resolvedLastMessagePreview(preferredLanguages:)` et ses douze témoins existent depuis longtemps ; le champ qu'ils lisent (`lastMessageTranslations`) valait `nil` par le chemin REST, faute de champ dans `APIConversation` et de production côté gateway. La doc du champ annonçait le câblage au futur et renvoyait à un contournement applicatif (`ConversationListViewModel.attachLastMessageTranslations`) qui n'existe nulle part. Le gateway expédie désormais `lastMessageTranslations` et `lastMessageOriginalLanguage`.
@@ -326,3 +333,87 @@ après une reconstruction stérile est invisible de l'extérieur autrement (pas 
 publié qui change). Et les deux gestionnaires portent maintenant deux copies de
 `scheduleReconnectWithBackoff` : la politique est partagée par `SocketReconnectBackoff`, le câblage
 ne l'est pas, comme pour `suspendTransport` et `handleConnectionEstablished` avant eux.
+
+## Le groupe d'aperçu est atomique, y compris quand le payload n'en porte qu'une part
+
+**Contexte**: les onze champs `lastMessage*` de `MeeshyConversation` décrivent UN seul message.
+`LastMessageFacet` rend leur écriture atomique pour les chemins qui TRANSPORTENT le message
+(`message:new`, accusé d'envoi, remplacement local après suppression). Restait la famille de
+chemins qui n'en portent qu'une part : `conversation:updated` recalculé par le serveur
+(`emitConversationPreviewUpdate`) nomme un AUTRE message — suppression pour tous du dernier
+message, masquage personnel avec un plus ancien encore visible — et n'en donne que l'identité,
+l'horodatage, le texte et le Prisme. Six champs (auteur, pièces jointes et leur compte, `blurred`,
+`viewOnce`, expiration) ne voyagent sur AUCUN `conversation:updated` : le serveur ne les lit pas.
+
+**Décision**: `MeeshyConversation.adoptLastMessage(id:)` — l'identité change ⇒ tout ce qui DÉCRIT
+le message est remis à neutre, et l'appelant repose aussitôt ce que le payload porte vraiment.
+L'identité inchangée est un no-op : c'est l'ÉDITION et la TRADUCTION, où l'auteur, les pièces
+jointes et les drapeaux restent vrais. `lastMessageAt` n'entre pas dans le geste — il porte le
+RANG de la ligne, tenu par les règles de monotonie de l'appelant et par `previewRecalculated`.
+
+L'arbitrage est celui de `LastMessageFacet.bumped`, appliqué à une deuxième famille de chemins :
+**une ligne momentanément dépouillée est corrigée à la synchro suivante ; une ligne FAUSSE ne
+l'est jamais**, parce que rien ne signale l'incohérence — l'aperçu du message supprimé n'est faux
+qu'à l'écran, et le client n'a aucun moyen local de s'en apercevoir.
+
+**Alternatives rejetées**:
+- *Faire porter les six champs par le serveur.* Il faudrait joindre `attachments` dans
+  `PREVIEW_MESSAGE_SELECT`, donc payer la jointure sur le chemin qu'emprunte le fan-out des
+  TRADUCTIONS — le plus fréquenté des trois appelants — pour un cas qui ne survient qu'aux deux
+  chemins où l'identité change. Et cela ne fermerait que les émetteurs d'aujourd'hui : la règle
+  client, elle, vaut pour le quatrième émetteur que personne n'a encore écrit.
+- *Ne remettre à neutre que les six champs absents du payload.* Le texte et la carte du Prisme
+  sont dans le même cas dès qu'un payload les tait ; les exclure du geste rouvrirait le défaut
+  sous sa forme subtile (un texte ancien non attribué, et pire, une traduction ancienne que le
+  résolveur PRÉFÈRE à l'aperçu). Le geste couvre donc les onze, et l'appelant repose.
+- *Unifier les deux implémentations de la fusion (`ConversationStore.merging` et
+  `ConversationListViewModel`).* Toujours pas mûre, pour la raison établie au cycle 51 : les deux
+  sites lisent deux TYPES d'événement différents reliés par un mapping manuel. Le geste central
+  sur le MODÈLE est ce qui rend leur divergence inoffensive sur ce point précis — les deux
+  appellent la même fonction.
+
+**Cons**: après une suppression pour tous, la ligne perd momentanément la vignette et le nom de
+l'expéditeur du remplaçant, que le serveur ne dit pas — jusqu'au prochain `GET /conversations`.
+C'est l'arbitrage assumé ci-dessus. Et `adoptLastMessage` est un troisième geste sur le même
+groupe (avec `applyLastMessage` et `clearLastMessage`) : trois portes pour un invariant, là où
+une seule serait plus sûre — mais les trois décrivent trois faits distincts (« voici le message »,
+« voici son identité seule », « il n'y en a plus »), et les confondre ferait mentir la deuxième.
+
+## 2026-08-16 : Le masquage PERSONNEL se purge, il ne se met pas en pierre tombale
+
+**Context**: le gateway diffuse `message:hidden-for-me` dans la room de l'UTILISATEUR pour que
+ses autres appareils convergent (`personalMessageVisibilitySync.ts`, contrat en quatre points).
+iOS n'avait aucun abonné : un message masqué depuis le web restait affiché dans le fil pour toute
+la session, pendant que la ligne de liste, elle, était corrigée par le `conversation:updated`
+jumeau. Le canal doit exister parce qu'un filtre de LECTURE (`personalHistoryFilter`) ne rétrécit
+que ce qu'une NOUVELLE requête renvoie : il n'a aucune prise sur une ligne que le client détient
+déjà.
+
+**Decision**: brancher le canal sur un geste de persistance DISTINCT de la suppression —
+`MessagePersistenceActor.purgeMessages(ids:)`, qui retire la ligne et ses tables filles au lieu
+d'écrire un `deletedAt`. Résolution par `localId` OU `serverId`, comme `markDeleted`. Un
+rafraîchissement `messageStoreShouldRefresh` PAR conversation touchée.
+
+**Pourquoi PAS `markDeleted`** : le web route bien `hidden-for-me` vers son chemin de suppression,
+mais parce que ce chemin FILTRE le message hors du cache. iOS, lui, pose une pierre tombale (« ce
+message a été supprimé »), juste pour une suppression POUR TOUS et fausse ici : le message reste
+VIVANT pour les autres participants. Et elle serait DURABLE — le serveur ne renverra plus jamais
+ce message à ce lecteur, donc aucune relecture n'effacerait la pierre. On aurait échangé une bulle
+fantôme contre une tombstone à vie.
+
+**Alternatives rejetées**:
+- *Réutiliser `messageDeleted` en re-émettant N événements*, comme le web réutilise ses
+  `deleteListeners`. Séduisant par symétrie, faux par sémantique (ci-dessus).
+- *Marquer la ligne d'un drapeau « masquée » plutôt que la supprimer.* Un troisième état sur le
+  même champ, pour une donnée que rien ne relira jamais : le serveur a déjà tranché, et la ligne
+  ne peut revenir que par une relecture REST qui la réinsère.
+- *Un consommateur global plutôt que per-conversation.* Reporté : le handler par conversation
+  ferme le défaut VISIBLE (le fil ouvert), et les autres fils se réparent au prochain chargement
+  REST, déjà filtré côté serveur.
+
+**Cons**: `ConversationSocketHandler` n'existe que si une conversation est ouverte — un masquage
+reçu sur l'écran de liste ne purge rien localement, et le rendu cache-first peut montrer la ligne
+périmée une fraction de seconde au prochain ouvrage. `message:restored-for-me` reste sans abonné
+iOS : une APPARITION ne peut pas s'écrire comme une tombstone inversée, l'appareil qui a purgé la
+ligne n'en détient plus le contenu. Les deux sont documentés (§7-8 de
+`tasks/realtime-sync-audit-2026-08-16-cycle54.md`).

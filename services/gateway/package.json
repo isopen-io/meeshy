@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.26.3",
+  "version": "1.27.0",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "main": "dist/src/server.js",
@@ -55,7 +55,7 @@
     "jsonwebtoken": "^9.0.3",
     "libphonenumber-js": "^1.13.9",
     "music-metadata": "^11.12.3",
-    "nice-grpc": "^2.1.16",
+    "nice-grpc": "^2.1.17",
     "pdf-parse": "^2.4.5",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",

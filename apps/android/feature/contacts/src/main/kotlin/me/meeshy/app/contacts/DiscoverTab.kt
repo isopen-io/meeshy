@@ -11,10 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -28,6 +31,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -57,6 +64,14 @@ fun DiscoverTab(
     LaunchedEffect(Unit) { viewModel.loadSuggestions() }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        EmailInviteCard(
+            emailText = state.emailText,
+            isSending = state.isSendingInvite,
+            errorMessage = state.inviteErrorMessage,
+            onEmailTextChanged = viewModel::onEmailTextChanged,
+            onSend = viewModel::sendEmailInvitation,
+        )
+
         OutlinedTextField(
             value = state.query,
             onValueChange = viewModel::onQueryChanged,
@@ -81,6 +96,67 @@ fun DiscoverTab(
                 pendingIds = state.pendingActionIds,
                 onConnect = viewModel::connect,
                 onAccept = viewModel::acceptReceived,
+            )
+        }
+    }
+}
+
+/**
+ * Port of iOS `DiscoverTab.emailInviteCard` — invite by email. Feedback is
+ * implicit (field clears + button disables on success) since Android has no
+ * toast/snackbar infrastructure yet; a network failure surfaces inline.
+ */
+@Composable
+private fun EmailInviteCard(
+    emailText: String,
+    isSending: Boolean,
+    errorMessage: String?,
+    onEmailTextChanged: (String) -> Unit,
+    onSend: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Email, contentDescription = null, modifier = Modifier.width(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.contacts_discover_email_title),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = emailText,
+                onValueChange = onEmailTextChanged,
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.contacts_discover_email_placeholder)) },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrectEnabled = false,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(10.dp))
+            val sendAccessibilityLabel = stringResource(R.string.contacts_discover_email_send_a11y)
+            Button(
+                onClick = onSend,
+                enabled = emailText.isNotEmpty() && !isSending,
+                modifier = Modifier.semantics { contentDescription = sendAccessibilityLabel },
+            ) {
+                Text(stringResource(R.string.contacts_discover_email_send))
+            }
+        }
+        errorMessage?.let {
+            Text(
+                text = stringResource(R.string.contacts_discover_email_error),
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyPalette.Error,
+                modifier = Modifier.padding(top = 6.dp),
             )
         }
     }

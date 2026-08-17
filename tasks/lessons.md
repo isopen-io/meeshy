@@ -8805,3 +8805,1064 @@ lisible. *Deux sites qui rendent le même objet ne sont pas équivalents si l'un
 passe par le contrat et l'autre par l'implémentation : le second casse au
 premier renommage interne, sans erreur de compilation et sans appelant à
 corriger — il se contente de ne plus rien émettre.*
+
+## Leçon 207 — un fanout groupé PAR VARIANTE qui cible la room entière fuite une variante par destinataire (2026-08-16, routine calling, cycle 135)
+
+**Le constat.** `translateAndEmitSegment` calculait `targetLanguages` comme un `Set` PLAT — l'union
+des langues demandées par tous les auditeurs d'un appel de groupe — puis diffusait CHAQUE langue à
+`socket.to(ROOMS.call(callId))`, la room entière. Avec 2 langues distinctes en vol, chaque auditeur
+recevait les DEUX traductions, pas seulement la sienne. *Aplatir un ensemble de variantes avant de
+les émettre efface l'information qui aurait permis de les adresser correctement : le `Set` savait
+qu'il fallait traduire en anglais ET en espagnol, mais plus lequel des deux auditeurs voulait
+lequel.* La correction n'est pas d'ajouter un filtre en aval — c'est de ne jamais perdre
+l'association pendant la collecte : `Map<variante, destinataires[]>` au lieu de `Set<variante>`.
+
+**Le silence contient une seconde bogue amplifiée par la première.** Les hooks web consommateurs
+(`use-call-captions`, `use-call-transcript-journal`) ne filtraient PAS non plus par
+`targetLanguage` — une omission qui ne fait aucun dégât tant que le serveur route déjà juste, et
+qui se révèle nuisible seulement une fois combinée au bug de fanout. *Deux défauts qui s'annulent
+en apparence (le serveur sur-diffuse, le client ne filtre pas, donc "ça marche" en apparence pour
+un appel à 2 langues où il n'y a qu'un seul auditeur) ne sont pas un système sûr — ils sont deux
+absences de garde qui attendent un troisième participant pour se révéler.* Le fix root-cause côté
+serveur suffit ici parce qu'il restaure l'invariant que les deux clients supposaient déjà vrai
+(« je ne reçois que ma langue ») — mais l'absence de filtre défensif côté client reste une dette,
+pas une preuve d'absence de risque.
+
+**Le double qui rend le bug invisible en test.** Toutes les suites existantes (`makeSocket()`
+standard) ne modélisaient qu'UN SEUL auditeur — `socket.to()` mocké pour retourner le même
+`{emit: roomEmit}` quel que soit l'argument, donc rien ne distingue `ROOMS.call(id)` de
+`ROOMS.user(id)` dans les assertions. *Un double qui ignore l'argument d'une méthode de ciblage ne
+peut jamais révéler un bug DANS le ciblage — il faut un scénario à 2+ destinataires distincts avec
+un double qui ENREGISTRE l'argument (`makeRoomAwareSocket` : accumule les rooms adressées, une
+émission par appel chaîné `.to().to()...emit()`) pour que l'assertion ait quelque chose à
+distinguer.* Le premier réflexe (« les tests existants passent, donc le fanout est sûrement bon »)
+aurait laissé le bug entier derrière une suite verte.
+## Leçon 208 — un tri-état résout une classe de problèmes, pas un champ : le voisin qu'on a laissé en `Optional` reste faux (2026-08-16, routine temps réel, cycle 49)
+
+**Le fait.** Le cycle 46 bis a introduit `LastMessagePreviewTranslations`
+(`.unchanged` / `.replaced([:])`) pour un motif énoncé en toutes lettres dans son
+doc-comment : `Optional` confond « la clé était ABSENTE du payload » et « la clé
+valait `null` », et les deux demandent des actions opposées. Le raisonnement était
+juste, le correctif aussi — et il a été appliqué à **un** champ.
+
+Deux cycles plus tard, le même payload, le champ d'à côté. `lastMessageId` est
+resté `String?`, donc le client ne pouvait pas entendre « ce lecteur n'a plus
+AUCUN message visible ici ». Pire que « rien ne s'applique » : le champ DÉJÀ
+tri-étaté s'appliquait, lui. La carte du Prisme se vidait, l'aperçu brut restait,
+et la ligne passait de **« Bonjour »** à **« Hello »** — le correctif partiel
+avait transformé une ligne périmée en une ligne qui **expose l'original** du
+message que le lecteur venait de masquer.
+
+**La règle.** *Quand un tri-état est introduit pour lever une ambiguïté de
+protocole, l'ambiguïté n'est pas propre au champ : elle est propre au PAYLOAD.
+Le geste n'est pas terminé tant que les champs voisins qui voyagent dans le même
+groupe n'ont pas été instruits — même s'ils n'ont pas encore de symptôme.*
+
+**Le tell, disponible au moment du premier correctif.** Il ne demandait aucune
+connaissance du défaut suivant, juste une lecture du payload qu'on est en train
+de corriger : `messagePayloadFor(null)` était visible à l'écran, trois lignes
+au-dessus du champ traité, produisant `lastMessageAt: null`, `lastMessageId:
+null`, `senderId: null`. *Un émetteur qui sait produire un groupe entièrement nul
+a besoin d'un tri-état par groupe, pas par champ.* Le cycle 46 bis l'a d'ailleurs
+VU — sa section « piste suivante » le décrit exactement — et l'a laissé pour plus
+tard. Ce n'était pas une omission, c'était un découpage ; mais le découpage a
+laissé pendant deux cycles un état où le vidage partiel était **actif**, et un
+vidage partiel ment plus fort qu'une absence de vidage.
+
+**Corollaire, sur le CHOIX du champ porteur.** Un seul des quatre champs du
+groupe pouvait porter le fait, et pas parce qu'il était plus pratique :
+`lastMessageAt: null` décrit tout aussi bien un renommage, qui n'emporte aucune
+clé `lastMessage*`. Seul `lastMessageId` a une nullité qui veut dire « aucun » et
+non « inconnu » — il NOMME ce dont la ligne parle. *Quand un groupe entier doit
+passer d'un état à un autre, chercher le champ qui porte l'IDENTITÉ du groupe,
+pas celui qu'on lit en premier.*
+
+**Corollaire, sur le vidage.** Le geste central (`clearLastMessage`) remet onze
+champs à zéro, dont trois qui alimentent le libellé « Message expiré » / « Vue
+unique ». *Un vidage partiel se lit comme un bug ; une absence de vidage se lit
+au moins comme un retard.* Trois sites savaient déjà vider — deux le faisaient à
+la main, incomplètement. Centraliser a été ce qui les a fait apparaître.
+
+## Leçon 209 — une validation qui COMBLE ne peut pas servir à décider ce qui a été demandé (2026-08-16, routine temps réel, cycle 49)
+
+### 1. Le fait
+
+`ZodObject.partial()` enveloppe chaque champ dans `optional()` mais ne lui retire
+pas son `default()`. Parser un corps partiel contre un schéma défaillé rend le
+schéma ENTIER :
+
+```ts
+const S = z.object({ a: z.boolean().default(true), b: z.boolean().default(true) });
+S.partial().parse({ b: false });   // → { a: true, b: false }, PAS { b: false }
+```
+
+Toute fusion `{ ...existant, ...validé }` est alors inerte : le second terme
+couvre le premier de bout en bout. `PATCH /me/preferences/:catégorie` écrivait
+13 à 33 clés par défaut pour un corps VIDE, sur les sept catégories.
+
+### 2. Pourquoi c'est invisible
+
+Le symptôme ne ressemble pas à sa cause. L'appelant envoie un champ, le serveur
+en écrit trente — mais chaque valeur écrite est **légitime** prise isolément :
+c'est le défaut du schéma, pas une valeur inventée. Une revue de code lit
+`{ ...existant, ...validé }` et voit une fusion ; rien à cet endroit ne dit que
+`validé` est complet.
+
+Et le test qui aurait dû l'attraper ne le pouvait pas : le schéma du double
+(`NotifSchema`) n'avait **aucun** `default()`, donc `partial()` s'y comportait
+comme on l'imagine. Le double était plus simple que le réel exactement là où le
+réel était piégeux.
+
+### 3. La règle
+
+**Une couche qui COMBLE ne peut pas, ensuite, servir à décider ce qui a été
+demandé.** Défauts, coercions, valeurs de repli : chacun rend indiscernables
+« l'appelant a dit ceci » et « nous avons supposé cela ». Après coup, `{ a: true }`
+a la même forme dans les deux cas.
+
+L'intention se lit donc à la SOURCE — ici le corps de la requête — et jamais dans
+la sortie d'un validateur qui a le droit d'inventer. Garder la validation
+(types, énumérations, bornes, clés inconnues écartées) ; ne lui demander que
+ce qu'elle sait : la conformité, pas la provenance.
+
+Test à s'appliquer : « si je retire cette couche, la valeur change-t-elle ? »
+Si oui, sa sortie ne peut pas répondre à « qu'est-ce qui a été envoyé ? ».
+
+### 4. Le corollaire — un double plus simple que le réel
+
+Cinquième cycle consécutif où un double ne modélise qu'un état du rangement.
+Ici, quatre suites n'avaient pas de `userPreference` du tout, et le schéma de
+test n'avait pas de `default()`.
+
+Un double qui SIMPLIFIE le collaborateur ne teste pas moins : il teste **autre
+chose**, et le fait en vert. Quand le comportement sous test dépend d'une
+propriété du collaborateur (« ce schéma a des défauts », « cette ligne peut ne
+pas exister », « cette table a deux rangements »), le double doit porter cette
+propriété — sinon le témoin atteste d'un monde qui n'existe pas.
+
+### 5. La contre-épreuve à écrire
+
+Le correctif « ne garder que les clés du corps » a une variante fausse et
+tentante : « ignorer les valeurs égales au défaut ». Elle passe tous les témoins
+naïfs et casse le cas où l'utilisateur RÉTABLIT explicitement un réglage à sa
+valeur par défaut.
+
+Le témoin qui les sépare — « une valeur envoyée qui COÏNCIDE avec le défaut est
+bien appliquée » — a été écrit pour cette raison. Quand deux correctifs
+plausibles ne se distinguent que sur un cas, ce cas EST le témoin.
+
+## Leçon 210 — un nettoyage keyé « par appel » qui a commencé keyé « par un seul occupant » reste par-appel pour toujours, sauf audit explicite (2026-08-16, routine calling, cycle 137)
+
+**Le constat.** Le buffer de signalisation §4.6 (`bufferedOffers`) est keyé PAR DESTINATAIRE
+(`${callId}:${to}`) depuis sa création — le commentaire d'origine dit noir sur blanc qu'une offre
+bufferisée pour un destinataire et une réponse bufferisée pour un AUTRE destinataire du même appel
+doivent coexister. Mais son NETTOYAGE, sur les trois chemins « ce participant part »
+(`call:leave`, `call:force-leave`, `call:end` traité comme un leave), balayait tout le `callId` —
+tous les destinataires, pas seulement celui qui part. Ça a tenu tant que « un participant part » et
+« l'appel se termine » étaient le MÊME événement (appel 1:1, seule forme qui existait quand §4.6 a
+été écrit). Le keyage a changé pour anticiper le multi-destinataire ; le nettoyage, lui, n'a jamais
+été relu à cette lumière — et rien dans le typage ne force cette relecture : `clearBufferedOffer(callId: string)`
+compile très bien, qu'il balaie un seul occupant ou dix.
+
+**Le commentaire qui contredit son propre code, sans que personne ne s'en aperçoive.** La branche
+`call:end`-traitée-comme-leave porte un commentaire DATÉ DU MÊME JOUR affirmant explicitement
+« group call continues for other participants » — et appelle `clearBufferedOffer(callId)` (balayage
+total) deux lignes plus bas. Le commentaire décrit le nouveau monde (le groupe continue) ; l'appel
+qu'il documente appartient encore à l'ancien (un seul occupant). Personne n'a menti : la personne
+qui a écrit ce commentaire raisonnait juste sur la PARTIE du comportement qu'elle venait de changer
+(qui reçoit quel broadcast), pas sur un appel de nettoyage hérité, déjà présent, qui n'avait pas
+besoin d'être touché pour que ses propres tests passent.
+
+**Le test qui codifiait le bug comme une spec.** `CallEventsHandler-force-leave.test.ts` avait un
+test nommé « clears any buffered offer for the force-left call » qui bufferisait une entrée pour un
+destinataire ARBITRAIRE (`some-recipient`, sans lien avec l'utilisateur testé) et affirmait qu'elle
+disparaissait après le force-leave d'un AUTRE utilisateur — l'exact comportement bogué, écrit et
+vert. *Un test « clear » qui n'affirme que « l'entrée cible a disparu » ne peut jamais détecter un
+nettoyage trop large : il faut TOUJOURS une seconde assertion, sur une entrée SŒUR qui ne devrait
+PAS disparaître, pour que « trop large » ait quelque chose à casser.* Sans ce second témoin, balayer
+toute la Map et balayer une seule clé produisent EXACTEMENT le même vert.
+
+**La règle.** Dès qu'une structure passe d'un keyage « un seul par scope » (`callId` → une entrée)
+à un keyage « plusieurs par scope » (`callId:destinataire` → N entrées), CHAQUE nettoyage existant
+qui itère sur ce scope doit être ré-audité — pas seulement les nouveaux call sites. Le signal à
+chercher : une fonction de nettoyage dont le nom porte le nom du SCOPE PARENT (`clearBufferedOffer(callId)`)
+alors que la structure qu'elle nettoie est maintenant keyée sur un ENFANT de ce scope
+(`callId:destinataire`) — le nom ment par omission sur ce qu'elle balaie réellement. Et tout test
+« ça se nettoie » écrit contre une telle fonction doit inclure un occupant frère qui survit, sinon
+il ne teste que la moitié du contrat.
+
+## Leçon 211 — un correctif atomique ferme la branche qu'on regardait, pas les autres branches du même `if` (2026-08-16, routine temps réel, cycle 52)
+
+**Ce que j'ai trouvé.** `LastMessageFacet` a été créée pour rendre impossible
+une classe de défauts nommée dans son propre en-tête : « un chemin temps réel
+qui pose le texte et l'horodatage sans toucher au reste laisse la ligne décrire
+un MÉLANGE de deux messages ». Le défaut refermé au cycle 52 est **exactement
+ce paragraphe**, vivant à deux mètres — dans la branche `else` du MÊME `if` dont
+la branche `if` avait été fermée par la facette.
+
+Le témoin qui couvrait la branche fermée (`test_bumpToTop_resetsStaleCompanionFields`)
+énonce même toute la règle dans son commentaire, en deux temps (P1 : l'auteur,
+les pièces jointes, les drapeaux ; P2 : le texte et le Prisme, ajoutés après
+qu'une première correction incomplète eut « régressé le bug vers une forme plus
+subtile »). Tout était su. Rien ne l'appliquait à côté.
+
+**Pourquoi la branche voisine est passée entre les mailles.** Elle n'a pas été
+écrite pour ce cas : elle traitait les mises à jour de MÉTADONNÉES (renommage,
+avatar), où aucun message n'est nommé et où la question ne se pose pas. Le
+chemin recalculé (`previewRecalculated`) est venu s'y greffer plus tard, en
+héritant d'une application champ par champ qui était correcte pour son
+occupant d'origine.
+
+**La règle.** Quand un correctif introduit un geste ATOMIQUE pour un groupe de
+champs, la question à poser n'est pas « ai-je corrigé l'appelant ? » mais
+**« quels sont TOUS les écrivains de ce groupe ? »**. Un `grep` sur le champ le
+plus caractéristique du groupe (ici `lastMessageId =`) coûte trente secondes et
+répond exactement. Il a livré, au cycle 52, un **troisième** site que personne
+ne cherchait — `recomputeLastMessagePreviewAfterDeletion`, qui écrivait quatre
+champs à la main alors qu'il tenait le message tout entier, et dont la branche
+jumelle avait été corrigée trois cycles plus tôt.
+
+**Le corollaire qui borne le geste.** Un geste « remet à neutre » doit avoir une
+condition d'inaction explicite, et c'est elle qui décide s'il est un correctif
+ou une régression. Ici : l'identité inchangée (édition, traduction) ⇒ no-op,
+parce que le payload tait ces champs **parce qu'ils n'ont pas changé**, pas
+parce qu'ils ont disparu. Le témoin de la contre-épreuve — « éditer une légende
+ne retire pas la photo qu'elle légende » — vaut autant que celui du défaut : sans
+lui, le correctif dépouille la ligne à chaque frappe.
+
+**Généralisation.** « Silence du payload » a deux lectures — *inchangé* et
+*inconnu* — et seule l'IDENTITÉ de l'objet décrit permet de les séparer. Même
+objet ⇒ inchangé ⇒ conserver. Autre objet ⇒ inconnu ⇒ remettre à neutre. C'est
+le même raisonnement que le tri-état de la leçon 208, un cran plus haut : là il
+fallait distinguer absence et nullité D'UN champ, ici il faut distinguer ce
+qu'un champ absent dit selon que l'objet décrit a changé ou non.
+
+## Leçon 212 — une règle portée sur un client n'est portée sur aucun autre, et le client indemne « par structure » ne l'est que sur le chemin qu'on a regardé (2026-08-16, routine temps réel, cycle 53)
+
+### 1. Le fait
+
+Le cycle 52 corrige, côté iOS, la ligne de liste qui décrivait un mélange de
+deux messages. Il inspecte le web dans son §6 et conclut :
+
+> **Web** : il est indemne pour une raison **structurelle**, et c'est la
+> comparaison la plus instructive de ce cycle : sa ligne porte le dernier
+> message comme un OBJET, pas comme douze champs frères. Le remplacer s'écrit
+> `{ ...conv, lastMessage: replacement }` — il n'y a rien à oublier,
+> l'atomicité vient du modèle.
+
+Le raisonnement est juste. La conclusion est fausse — pas parce que l'analyse
+s'est trompée, mais parce qu'elle a répondu à une autre question que celle
+qu'elle croyait poser : elle a examiné le chemin de recalcul LOCAL
+(`advanceConversationPreviewOnDelete`), qui écrit bien l'objet entier, et pas le
+chemin du fan-out SERVEUR (`conversation:updated`), qui écrivait des champs
+scalaires frères que la ligne ne lit pas.
+
+Le web portait donc le MÊME défaut, sur le chemin d'à côté, et sous une forme
+plus retorse : ses deux moitiés — l'objet `lastMessage` et la carte du Prisme,
+scalaire — sont mises à jour par des chemins DIFFÉRENTS. L'atomicité venait bien
+du modèle pour l'une, et pas du tout pour l'autre.
+
+### 2. Pourquoi c'est invisible
+
+Parce que « ce client range la donnée autrement » est une vraie explication, et
+qu'une vraie explication clôt l'enquête. Elle donne le sentiment d'avoir compris
+le mécanisme, ce qui est le meilleur moyen d'arrêter de chercher.
+
+Et parce que le champ qui trahissait le mélange n'appartient pas à l'objet : la
+carte du Prisme vit au niveau CONVERSATION, pas au niveau message — le gateway
+l'y pose parce que sa forme compacte `{ langue: aperçu }` n'est pas celle de
+`Message.translations`. Un audit qui vérifie « l'objet est-il écrit
+atomiquement ? » ne peut pas voir un champ qui n'est pas dans l'objet.
+
+### 3. La règle
+
+**Quand un cycle déclare une surface indemne, la déclaration doit nommer le
+CHEMIN, pas le client.** « Le web est indemne » n'est pas une conclusion
+vérifiable ; « le recalcul local du web écrit l'objet entier » l'est — et laisse
+visible ce qu'elle ne couvre pas.
+
+La question de suivi tient en une ligne, et elle est mécanique : *quels sont
+TOUS les écrivains de ce que la ligne AFFICHE ?* Pas les écrivains du champ, pas
+les écrivains de l'objet : les écrivains de l'affichage. Ici la réponse était
+trois — le recalcul local, le handler d'édition, et le fan-out serveur — et
+seuls les deux premiers avaient été regardés.
+
+### 4. Le corollaire — le mélange se cache à la jointure de deux modèles
+
+Un défaut de cohérence ne vit pas dans un champ, il vit **entre** deux champs
+qui doivent décrire le même objet. Il est donc structurellement invisible aux
+audits qui parcourent les champs un par un, et il se loge de préférence là où
+deux rangements se rencontrent : un objet d'un côté, des scalaires frères de
+l'autre ; un cache mis à jour par un événement, un autre par un événement
+différent.
+
+La question qui le trouve n'est pas « ce champ est-il juste ? » mais **« ces
+deux champs peuvent-ils décrire deux objets différents, et si oui, lequel gagne
+à l'écran ? »**. Ici le perdant était l'objet et le gagnant le scalaire, parce
+que le résolveur du Prisme PRÉFÈRE la traduction à l'aperçu brut — un témoin
+posé sur la donnée serait passé au vert, seul un témoin posé sur le TEXTE
+AFFICHÉ pouvait voir le défaut.
+
+### 5. La contre-épreuve à écrire
+
+Toute règle « remets à neutre ce dont l'événement ne parle pas » a besoin de son
+témoin symétrique sur le chemin le PLUS FRÉQUENTÉ, pas seulement sur le chemin
+défectueux. Ici : `message:new` pose l'objet complet, le `conversation:updated`
+jumeau arrive juste derrière avec le même id — sans témoin, le correctif
+effacerait la signature et la pastille de CHAQUE message reçu. Le témoin du
+défaut prouve que le correctif agit ; celui-ci prouve qu'il s'abstient.
+
+## Leçon 213 — l'affirmation « ce site reste correct par construction » d'une vague antérieure doit être re-tracée, jamais héritée (2026-08-16, routine calling, cycle 138)
+
+**Le constat.** La Vague 137 a fixé 3 des 6 sites d'appel à `clearBufferedOffer` (balayage total
+sur `callId`) pour un nettoyage scopé par destinataire, et a explicitement classé les 3 autres
+comme « corrects par construction » dans sa section Non-fait-volontairement — dont, mot pour mot,
+« purge d'une offre bufferisée dont l'émetteur s'est avéré parti au moment du replay `call:join` ».
+Cette classification n'était appuyée par AUCUNE trace de code dans le texte de la Vague 137 — une
+affirmation de clôture, pas une preuve. Le site en question était en réalité affecté du MÊME bug
+que les 3 corrigés : `call:join` retrouve l'offre bufferisée pour LE JOINER (une seule clé connue
+avec certitude via `bufferedOfferFor`), découvre que son émetteur est parti, puis droppait via
+`clearBufferedOffer(callId)` — un balayage total qui embarque toute offre SŒUR d'un tiers sans
+rapport.
+
+**Pourquoi cette classification a été acceptée sans preuve.** La Vague 137 avait déjà produit trois
+fixes réels dans le même cycle ; le quatrième candidat ressemblait, en lecture rapide, à un site
+« terminal » légitime (un nettoyage après une négociation avortée) plutôt qu'à un nettoyage
+« participant part ». La frontière entre « ce site sweepe correctement TOUT le call » et « ce site
+ne devrait nettoyer QU'une clé qu'il vient de prouver stale » ne se lit pas dans le NOM de la
+fonction appelée ni dans le commentaire qui l'entoure — elle se lit dans la question : *combien de
+clés le code vient-il de démontrer périmées avant cet appel ?* Ici : exactement une
+(`bufferedOfferFor` a renvoyé UNE entrée, pour UN destinataire). Un balayage total est un sur-dosage
+chaque fois que la réponse est « moins que tout le scope parent ».
+
+**La règle.** Quand une vague de routine liste des sites « laissés intacts, corrects par
+construction » dans sa section Non-fait-volontairement, cette classification est une HYPOTHÈSE non
+vérifiée jusqu'à preuve du contraire, pas un fait acquis pour les vagues suivantes — au même titre
+que n'importe quelle description du fichier historique (cf. règle méthodologique déjà en vigueur :
+« ne pas faire confiance aux descriptions du todo, toujours auditer le code actuel »). Un audit de
+routine qui rencontre une telle liste doit retracer AU MOINS un des candidats non retenus avant de
+chercher un bug entièrement nouveau ailleurs — c'est souvent là que se trouve le prochain correctif
+chirurgical légitime, avec le contexte et le patron de fix déjà entièrement établis par la vague
+précédente.
+
+## Leçon 214 — un correctif nommé dans un journal ne prouve que le site qu'il a touché, jamais le champ qu'il a nommé (2026-08-17, routine realtime, cycle 54)
+
+**Le constat.** Le cycle 50 a « corrigé `location` » sur le chemin
+`conversation:updated`. Les cycles 51, 52 et 53 ont hérité de cette phrase, et
+le cycle 53 est même allé plus loin : il a écrit, en léguant sa piste n°3, que
+`ConversationUpdatedEvent` et `ConversationUpdatedStoreEvent` sont « reliés par
+un mapping manuel de quinze lignes » et que **« c'est ce mapping qui a laissé
+tomber `location` au cycle 50 »**. La phrase nommait le mécanisme, le fichier et
+le champ. Elle a été relue trois cycles de suite sans que personne n'aille
+vérifier si le mapping avait changé. Il n'avait pas changé : le cycle 50 avait
+réparé le consommateur APP (`ConversationListViewModel`), et le SDK n'a jamais
+reçu l'épingle — ni dans son store RAM, ni dans le cache disque que la même
+fusion écrit.
+
+**Pourquoi l'inertie a tenu si longtemps.** Parce qu'un journal qui dit « le
+champ X a été corrigé » se lit spontanément comme « le champ X est correct
+partout », alors qu'il n'atteste que du site touché. Le piège est plus fort ici
+que dans la leçon 213 : là-bas, une vague affirmait sans preuve qu'un site
+restait correct, et l'absence de preuve était visible. Ici, la preuve ÉTAIT
+faite — un vrai défaut, un vrai correctif, un vrai témoin — et c'est justement
+sa qualité qui a dispensé les cycles suivants d'y revenir. **Une piste léguée
+avec son diagnostic complet a l'air d'une piste déjà résolue.**
+
+**Le corollaire technique.** Quand deux consommateurs appliquent le même
+événement (ici : le ViewModel de l'app et la fusion du SDK — quatrième cycle
+consécutif à devoir corriger aux deux endroits, le cycle 52 le notait déjà),
+corriger l'un ne dit RIEN de l'autre. Et le consommateur oublié est
+systématiquement le moins visible : celui qui n'a pas d'écran. Ici c'était le
+SDK, dont la fusion écrit aussi le cache disque — donc le défaut y était plus
+grave qu'à l'endroit corrigé, puisqu'il survivait au redémarrage.
+
+**La règle.** Un audit qui rencontre, dans un journal ou une piste léguée, la
+mention « le champ X a été corrigé au cycle N » doit **re-tracer le champ X sur
+TOUS ses consommateurs avant de chercher un défaut ailleurs** — et la mention
+est un signal de priorité, pas de clôture : elle prouve que ce champ a déjà
+démontré sa capacité à se perdre. Le test qui tranche n'est pas « ce site a-t-il
+été corrigé ? » mais **« combien de sites appliquent cet événement, et lequel a
+été touché ? »**. Compter les consommateurs coûte un grep ; hériter d'une
+correction coûte trois cycles.
+
+**La contre-épreuve à écrire.** Un témoin qui protège un champ ne protège QUE ce
+champ. Le pont du SDK portait déjà, deux lignes au-dessus du champ perdu, un
+témoin dont le commentaire énonce exactement le défaut en cause — « un drapeau
+décodé mais jamais transmis serait exactement aussi inerte qu'un drapeau
+absent ». La phrase était juste, le témoin était vert, et le champ voisin
+tombait quand même. Quand un témoin doit énoncer une règle de CLASSE (« tout
+champ décodé doit être transmis »), le fixer sur un seul champ le réduit à un
+témoin d'instance : c'est un témoin d'exhaustivité qu'il faut, ou la
+suppression du mapping manuel qui rend la classe possible.
+
+## Leçon 215 — une leçon qui pose une question de suivi n'est pas finie tant que la question n'a pas été posée à TOUS les sites (2026-08-17, routine messagerie, cycle 54-bis)
+
+**Le constat.** La leçon 212, écrite au cycle 53, se termine par une question
+explicitement qualifiée de mécanique : *quels sont TOUS les écrivains de ce que
+la ligne AFFICHE ?* Le cycle 53 y a répondu — pour le seul chemin qu'il
+corrigeait, le fan-out serveur. Il a même chiffré la réponse (« ici la réponse
+était trois ») en la bornant, sans le dire, aux écrivains de l'événement qu'il
+instruisait. Le cycle 54 a repris la même question sur le même fichier et trouvé
+**cinq** écrivains locaux supplémentaires, tous porteurs du même défaut, dont un
+— `link:message:new` — que **rien** ne rattrapait, le gateway ayant délibérément
+renoncé à lui envoyer le jumeau qui corrige les quatre autres.
+
+**Pourquoi la question n'avait pas été reposée.** Parce qu'une leçon se lit comme
+un compte rendu de ce qui a été corrigé, pas comme un outil à réappliquer. Elle
+finit par une règle, et une règle donne le sentiment que le travail est fait :
+elle protège l'AVENIR. Or une question mécanique posée à la fin d'un cycle est
+aussi une dette sur le PASSÉ — tous les sites auxquels elle n'a pas encore été
+posée. Le cycle 53 a fermé un chemin et écrit la règle qui l'aurait évité ; il
+n'a pas énuméré les chemins voisins auxquels la même règle s'appliquait déjà.
+
+**L'aggravant, et il est structurel.** La question « qui écrit ce que l'écran
+affiche ? » n'a pas de réponse locale : elle se pose sur un FICHIER, voire sur un
+écran, jamais sur la fonction qu'on vient de corriger. Un cycle qui l'instruit
+depuis le site du défaut la répond donc toujours trop étroitement — non par
+négligence, mais parce que le site du défaut est le mauvais point de vue pour
+elle. Elle demande de partir du RENDU (`ConversationItem` lit deux champs) et de
+remonter vers les écrivains, pas de partir d'un écrivain et de regarder ce qu'il
+touche.
+
+**La règle.** Quand un cycle produit une leçon dont l'énoncé contient une
+question mécanique, la question devient un ITEM DE BACKLOG à part entière, pas
+une morale de fin de texte. Le cycle suivant la repose — depuis le point de vue
+qu'elle exige, pas depuis celui du défaut d'origine — et **énumère**, avant de
+chercher un défaut nouveau ailleurs. Corollaire opérationnel : une réponse à une
+telle question doit toujours être écrite comme un TABLEAU de sites avec la
+colonne du critère, jamais comme un nombre en prose. « La réponse était trois »
+ne se vérifie pas ; cinq lignes avec « écrit l'objet / écrit la carte » se
+vérifient, et laissent voir ce qu'elles ne couvrent pas.
+
+**Le corollaire — un commentaire qui justifie une ABSENCE d'événement est un site
+de la même classe.** `broadcastLinkMessage` explique ne pas émettre
+`conversation:updated` parce que « the clients already applied it ». La phrase
+nomme une DONNÉE (l'aperçu) et un CLIENT, pas un CHEMIN et un AFFICHAGE — exactement
+le défaut de formulation que la leçon 212 avait déjà relevé sur « le web est
+indemne ». Toute justification d'une absence de fan-out doit donc être relue avec
+la même question : *applied ce que, exactement, et est-ce tout ce que l'écran
+lit ?* Ici, la réponse était « l'objet, oui ; la carte du Prisme, non » — et c'est
+sur ce chemin-là, le seul sans filet, que le défaut était durable au lieu d'être
+transitoire.
+
+## Leçon 216 — un champ qui voyage sans être déclaré ne repose que sur la lecture du code voisin, et c'est la forme de parité qui échoue (2026-08-17, routine temps réel, cycle 54 bis)
+
+### 1. Ce qui s'est passé
+
+`location` voyageait sur `conversation:updated` depuis trois émetteurs, sans
+figurer nulle part dans le type de l'événement : une index signature de fin
+(`readonly [key: string]: unknown`) le laissait passer. Un émetteur sur trois
+l'avait perdu — celui qui sert REST, ZMQ et les agents — alors qu'il calculait
+déjà le lieu **vingt lignes plus haut, dans la même fonction**, pour le hisser
+sur `message:new`.
+
+Le même champ était perdu une seconde fois, indépendamment, par un mapping
+manuel de quinze lignes entre deux types jumeaux : décodé d'un côté, jamais
+recopié de l'autre.
+
+### 2. Pourquoi ni l'un ni l'autre ne se voyait
+
+Parce que dans les deux cas **l'absence a exactement la forme du silence**. Une
+clé non déclarée qui manque ne fait échouer aucun compilateur ; une ligne de
+recopie qui n'existe pas ne se distingue pas d'une ligne qu'on n'a pas eu besoin
+d'écrire. Il n'existait aucun endroit d'où l'on pouvait dire « il en manque
+un » — ni le type, ni un test, ni une relecture.
+
+Un champ optionnel toléré par une index signature n'est pas un champ « souple » :
+c'est un champ dont **la parité entre émetteurs repose sur la lecture du code
+voisin**. C'est-à-dire sur rien.
+
+### 3. La règle
+
+**Un champ que plusieurs émetteurs doivent porter à l'identique doit être
+DÉCLARÉ, même si le transport l'accepte sans.** L'index signature existe pour
+les champs qu'un seul émetteur pose (un renommage, un réglage) ; elle ne doit
+jamais couvrir un membre d'un GROUPE que tous doivent servir de la même façon.
+
+Et la déclaration doit porter **la règle du silence**, pas seulement le type.
+Ici : *clé absente = « ce message n'a pas de lieu »*, jamais « je n'en parle
+pas » — sans quoi le corollaire opposable (« un émetteur qui porte
+`lastMessageId` porte le lieu du message qu'il nomme, ou aucun ») ne se déduit
+d'aucune signature.
+
+### 4. Le corollaire — un geste de remise à neutre transforme une omission en perte
+
+`adoptLastMessage` remet à neutre TOUT ce qui décrit le message dès que
+l'identité change. C'est la bonne règle, et elle rend le défaut PIRE : sans
+elle, le champ non transmis restait simplement périmé ; avec elle, il est
+activement effacé et jamais reposé.
+
+Donc : **toute primitive « remets à neutre, l'appelant repose ce que le payload
+porte » crée une obligation sur chacun de ses appelants**, et cette obligation
+n'est vérifiée par personne. Ajouter un champ au geste de remise à neutre sans
+l'ajouter au chemin qui le repose est une régression silencieuse — c'est
+exactement ce qui s'est produit ici.
+
+### 5. Le signal qu'on aurait dû lire plus tôt
+
+Trois fois le même défaut au même endroit : `location` au cycle 50, la garde du
+titre d'un DM au cycle 51, `location` de nouveau au cycle 54. Toujours parce que
+**deux fusions distinctes appliquent le même événement** — celle de l'écran et
+celle du store, qui écrit le cache disque.
+
+Quand un défaut revient une TROISIÈME fois au même point de couture, le
+correctif du champ n'est plus le travail : c'est la couture.
+
+### 6. Le corollaire de méthode — deux instances de la même routine
+
+Ce cycle a été instruit DEUX fois en parallèle, et la seconde (#3122) a fusionné
+la première. Les deux avaient trouvé les deux mêmes trous, écrit six témoins
+chacune, et nommé leur journal du même nom de fichier.
+
+Ce qui a survécu de la branche perdante n'est pas son code — identique, donc
+jetable — mais **la seule chose que l'autre n'avait pas faite** : déclarer le
+champ dans le contrat, pour que la parité entre émetteurs cesse de dépendre de
+la lecture du code voisin.
+
+D'où la règle de reprise : quand une autre branche a livré le même correctif,
+ne pas rejouer le diff. **Diffuser les deux et ne garder que le delta** — la
+part qui répond à « pourquoi ça recommencera » plutôt qu'à « qu'est-ce qui est
+cassé ». Repousser du code déjà présent n'ajoute qu'un conflit ; repousser la
+garde manquante ajoute une fin à la série.
+## Leçon 217 — un événement qui PORTE une charge et un écouteur qui n'en prend pas : le rangement fait passer la perte pour un traitement (2026-08-17, routine messagerie, cycle 55)
+
+**Le constat.** `PreferencesSyncService` abonnait cinq événements à un même
+écouteur `() => void` — quatre événements de catégorie, plus
+`user:preferences-reordered`. Les quatre premiers ne portent rien que le
+consommateur lise ; le cinquième porte `updates[]`, c'est-à-dire **l'ordre de la
+liste, que rien d'autre n'annonce**. Il était jeté à l'entrée, avant d'atteindre
+un consommateur. Un glisser-déposer fait sur un autre appareil n'atteignait
+jamais l'onglet ouvert, et la liste tournant sur `staleTime: Infinity`, l'ordre
+restait faux indéfiniment.
+
+**Pourquoi cela ne se voit pas.** Le rangement produit exactement l'apparence du
+traitement : l'événement EST abonné, le seau EXISTE, une invalidation PART. Rien
+ne ressemble à un trou. Un abonnement muet se remarque ; un abonnement qui fait
+quelque chose de proche mais pas la bonne chose ne se remarque pas — et il
+n'existe aucun type qui l'interdise, puisqu'en TypeScript un `(data: T) => void`
+est légalement satisfait par un `() => void`. **La règle : un événement qui
+déclare une charge utile doit avoir sa PROPRE sortie, typée par cette charge.
+Le regroupement d'événements est légitime seulement entre événements qui ne
+portent rien.**
+
+**Le second défaut, et il se cachait derrière le premier.** Le même seau
+invalidait `queryKeys.preferences.categories()` — une clé React Query **sans
+aucun observateur en production** (son hook n'est importé que par le baril et par
+son propre test), alors que la liste rend ses catégories depuis le store Zustand,
+dont l'action de rechargement n'avait elle non plus aucun appelant. Deux moitiés
+d'un même geste, chacune inerte, se donnant mutuellement l'air d'être branchées.
+C'est le motif « une dizaine d'écrivains, zéro lecteur » que `apps/web/CLAUDE.md`
+documente déjà pour la forme plate de la liste de conversations, réapparu sur
+l'axe des préférences : **invalider n'est pas rafraîchir tant qu'on n'a pas
+nommé le composant monté qui relit.**
+
+**La question de suivi, et elle est mécanique** (au sens de la leçon 215) : *pour
+chaque critère que l'écran trie ou groupe, où vit-il, et quel écrivain temps réel
+l'atteint VRAIMENT ?* Elle se pose colonne par colonne, en tableau, depuis le
+rendu — jamais depuis l'événement. Un cycle qui instruit un ÉVÉNEMENT y répond
+pour lui seul et laisse ses voisins intacts avec l'air d'être couverts : c'est
+exactement ce qui est arrivé au correctif de l'épinglage, qui a branché
+`user:preferences-updated` sans voir que cinq autres événements écrivaient la
+même vue.
+
+**Le corollaire de vérification.** Avant de déclarer qu'un événement « est
+traité », suivre sa charge utile jusqu'au composant MONTÉ qui la relit. Le
+suivi s'arrête à un `() => void`, à une clé de cache sans observateur, ou à une
+action de store sans appelant — trois formes de la même impasse, et aucune ne
+produit d'erreur.
+## Leçon 215 — un champ nommé `participantId` peut désigner DEUX clés Prisma différentes selon l'événement qui le porte ; le nom seul ne prouve jamais l'espace d'identité (2026-08-17, routine calling, cycle 140)
+
+**Le constat.** Les Vagues 132/133 avaient documenté et fermé la confusion `userId` vs.
+`participantId` (`CallParticipant.participantId`, FK vers `Participant.id`) pour
+`call:quality-alert`/`call:screen-capture-alert`/`call:participant-left`. La Vague 140 a trouvé un
+quatrième site, `call:media-toggled`, où le même champ **littéralement nommé `participantId`**
+porte une valeur d'un troisième espace d'identité : côté serveur, `resolveActiveCallParticipantId`
+renvoie la FK `CallParticipant.participantId` ; côté client, `call-store.ts`'s `updateParticipant`
+ne matche que `CallParticipant.id` — la clé primaire de la ligne de participation elle-même, une
+troisième valeur, disjointe des deux premières. Par comparaison, `call:participant-left`'s propre
+`participantId` porte, lui, exactement cette clé primaire (`participation.id`) — le nom du champ
+est donc **identique sur les deux événements, mais leur valeur vit dans deux tables Prisma
+différentes** (`CallParticipant.id` vs. `CallParticipant.participantId`), et rien dans le type
+TypeScript ni le nom ne le distingue.
+
+**Pourquoi c'est resté invisible aux Vagues 132/133.** Ces vagues avaient scopé leur audit aux
+émetteurs passant par `resolveActiveCallParticipantId`/`resolveActiveCallParticipant` ET vérifié
+la cohérence `userId`/`participantId` — mais elles n'ont jamais énuméré CHAQUE consommateur CLIENT
+de CHAQUE champ nommé `participantId`, ni vérifié que le champ CIBLE (ici, `p.id` dans
+`call-store.ts`) est bien dans le MÊME espace que le champ SOURCE de l'événement. Un audit qui
+vérifie « le champ `userId` est-il présent et cohérent » peut rester aveugle à un mismatch qui ne
+porte même pas sur `userId` — il porte sur `participantId` lui-même, dont deux définitions
+légitimement différentes coexistent dans la codebase (le PK d'une ligne de participation CE call,
+et la FK vers la ligne de participation de la conversation).
+
+**Le tell, à nouveau.** Un test existant (`call-store.test.ts:409-422`) codifiait
+`updateParticipant('participant-1', …)` comme correct contre un fixture dont `.id === 'participant-1'`
+— une coïncidence de nommage entre la string de test et le champ `.id`, exactement le même type de
+faux témoin que Vague 132 avait trouvé (`userId` et l'id d'alerte partageant la même string dans le
+fixture). **Aucun test ne reliait le payload RÉEL du gateway au store** — le grep
+`media-toggled`/`handleMediaToggle` sur tous les tests web ne retournait aucun résultat avant cette
+vague : le câblage socket→store pour l'indicateur mute/caméra distant n'avait jamais été testé
+bout-en-bout.
+
+**La règle.** Deux champs qui portent le MÊME NOM sur deux événements Socket.IO différents ne
+portent pas nécessairement la MÊME clé Prisma — vérifier, pour chaque émetteur, quelle colonne
+alimente réellement la valeur (grep la ligne d'assignation côté serveur), puis, pour chaque
+consommateur, quel champ du modèle CLIENT il matche (grep le predicate de recherche/mise à jour),
+et confirmer que les deux désignent la MÊME table.ID — jamais déduire l'équivalence du nom du champ
+JSON seul. Le corollaire de la Leçon 213 s'applique en miroir ici : une déclaration de conformité
+antérieure (« ce champ suit le contrat `userId`/`participantId` établi ») doit être retracée
+émetteur par émetteur, jamais héritée d'un événement voisin qui portait le même nom de champ pour
+une valeur différente.
+
+## Leçon 218 — quand le SERVEUR délègue sa cohérence au client, la promesse doit être vérifiée chez le client (2026-08-17, routine messagerie, cycle 56)
+
+**Le constat.** `ReactionHandler` (gateway) justifie cinq de ses chemins
+dégradés par la même phrase — « peers reconcile on the next reaction:sync ».
+Diffusion qui échoue après écriture, agrégation dégradée, retrait non annoncé :
+à chaque fois, le serveur choisit délibérément de ne pas se rattraper lui-même
+et délègue au sync suivant. Côté web, ce sync partait **une seule fois, au
+montage**, sur une requête en `staleTime: Infinity` : pour un fil resté ouvert,
+« le prochain sync » n'existait pas. Et quand le montage précédait la poignée de
+main du socket — ce qui est le cas courant — la requête se résolvait en
+**succès vide**, mémorisant « ce message n'a aucune réaction » comme une vérité
+fraîche, sans qu'une seule demande soit partie.
+
+**La règle.** Un commentaire serveur qui délègue un rattrapage au client est une
+DETTE, pas une garantie. Chaque fois qu'un chemin serveur se déclare
+best-effort « parce que le client resynchronisera », il faut aller nommer le
+composant monté qui resynchronise, et à quel signal. S'il n'y en a pas, le
+best-effort n'est pas dégradé : il est **perdant**, et la perte est silencieuse
+et permanente. C'est la leçon 217 vue depuis l'autre bout du fil — non plus « où
+va cette charge utile ? » mais « qui tient la promesse que ce commentaire a
+faite ? ».
+
+**Le corollaire sur les états vides.** Une requête qui ne peut pas interroger le
+serveur ne doit jamais RÉSOUDRE ; elle doit ÉCHOUER. Un `resolve({ items: [] })`
+sur canal absent est indiscernable d'un « le serveur dit : rien », et sous
+`staleTime: Infinity` il devient définitif. L'absence de canal se signale comme
+un échec — et l'échec correspondant ne se réessaie pas au compteur : c'est le
+RETOUR DE LA CONNEXION qui doit relancer la demande, pas un `retry: n`.
+
+**Le camouflage, et il est nouveau.** Le mis-routage voisin — `reaction:sync`,
+un INSTANTANÉ, versé dans le seau de `reaction:added`, qui lit un DELTA — était
+épinglé par un témoin vert nommé `forwards reaction:sync events to reactionAdded
+listeners (full reconciliation)`. Un test qui décrit le défaut avec le
+vocabulaire de l'intention est plus solide qu'une absence de test : il fait
+lire « c'est voulu » là où il faudrait lire « les deux charges n'ont aucun champ
+commun ». **Quand un témoin porte un nom qui justifie plutôt qu'il ne décrit,
+relire la charge utile des deux côtés avant de lui faire confiance.**
+
+**Le garde qui en sort, et il est exprimable.** Un écouteur socket posé sur un
+nom que le contrat ne définit plus devient `socket.on(undefined, handler)` — un
+abonnement muet que rien ne déclenche et qu'aucun type ne refuse. Le témoin de
+`presence.service.test.ts` l'interdit désormais explicitement
+(`expect(subscribed).not.toContain(undefined)`), ce qui attrape le mis-routage
+sous ses DEUX formes : par la constante si elle existe, par `undefined` si elle
+a été retirée.
+
+## Leçon 219 — appliquer une règle jusque-là inerte change la question à poser au site qui l'ÉCRIT (2026-08-17, routine messagerie, cycle 56)
+
+**Le fait.** Le cycle 31 a découvert que `isAnnouncementChannel` n'était appliqué
+par personne, et l'a câblé — correctement, au point de convergence des trois
+transports d'envoi. Le cycle 56 a trouvé que l'initiateur d'un tête-à-tête
+pouvait poser ce drapeau sur son DM et **faire taire son pair définitivement**,
+sans recours possible pour la victime.
+
+Le code qui écrit le drapeau n'a pas changé entre les deux cycles. Ce qui a
+changé, c'est qu'il est devenu **effectif**.
+
+**La règle.** Câbler une garde jusque-là inerte, c'est transformer chaque champ
+qu'elle lit en champ de SÉCURITÉ. Le même cycle doit donc reposer, sur chaque
+site qui ÉCRIT ce champ, une question qui n'avait pas d'objet la veille :
+*qui peut le poser, et sur quoi ?* Un champ cosmétique et un champ appliqué ne se
+gardent pas pareil, et l'écrivain ne s'aperçoit de rien — sa signature, son
+schéma et ses tests sont identiques de part et d'autre du câblage.
+
+**La forme du défaut.** La garde d'écriture ne filtrait que sur le RÔLE de
+l'appelant, jamais sur le TYPE du conteneur. Or `POST /conversations` crée un DM
+avec deux rôles distincts — `creator` pour qui a ouvert le fil, `member` pour
+l'autre — et cette asymétrie nomme un **ordre d'arrivée**, pas une hiérarchie.
+Le corollaire est plus large que ce cycle : **un rôle n'est une autorité que
+dans un conteneur qui a une hiérarchie.** Un tête-à-tête n'a pas
+d'administrateur, et le `creator` d'un DM n'est le supérieur de personne.
+
+**L'indice qui était déjà dans le fichier.** La règle contenait
+`if (conversation.type === 'global') return 0` — donc elle connaissait la
+catégorie « conteneur sans hiérarchie d'écriture ». Elle n'en connaissait qu'un
+membre, et le plus exotique des deux. **Une énumération à un seul élément est un
+aveu : quelque chose a été catégorisé sans que la catégorie soit balayée.** La
+question à lui poser n'est pas « ce cas est-il juste ? » (il l'était) mais
+« quels sont les AUTRES membres de cette catégorie ? ».
+
+**Deux gestes, et ils ne se subsument pas.** Corriger la règle guérit les
+conteneurs DÉJÀ empoisonnés en base, dont aucune route ne rendra jamais compte.
+Corriger la route empêche l'écriture ET l'événement temps réel qui annoncerait
+aux clients un drapeau que plus rien n'applique. Livrer l'un sans l'autre laisse
+soit des victimes existantes, soit un événement qui MENT sur l'état du conteneur.
+
+**Le symptôme repéré n'était pas le défaut.** La piste disait « `PUT
+/conversations/:id` accepte de renommer un DM ». Le renommage est le champ le
+plus INOFFENSIF du corps — web résout le nom du pair pour un `direct` et n'a
+jamais lu `conversation.title`. On avait vu la moitié visible d'un corps de
+requête dont la moitié invisible était l'attaque. **Quand une piste nomme un
+champ, l'instruire c'est instruire les SEPT AUTRES du même corps** — au moins
+assez pour savoir lequel est appliqué par une garde.
+
+**La question de suivi, mécanique** (au sens de la leçon 215) : *pour chaque
+réglage de CONTENEUR appliqué par une garde, quels TYPES de conteneur peuvent
+légitimement le porter, et quel écrivain vérifie ce type ?* Elle se pose en
+tableau, une ligne par écrivain, en partant de la garde qui APPLIQUE et en
+remontant. Les préférences de communauté et les droits de lien de partage ne
+l'ont jamais reçue.
+
+## Leçon 220 — un effet qui « fait comme `cleanup()` » doit vider EXACTEMENT les mêmes refs que `cleanup()`, sauf exception nommée et justifiée (2026-08-17, routine calling, cycle 141)
+
+**Le constat.** `use-webrtc-p2p.ts` a DEUX resets globaux de l'état de connexion : `cleanup()`
+(fin d'appel/unmount, vide 11 refs/states) et l'effet `userId`-change (promotion anonyme→
+authentifié, refresh de session, vide seulement 6 des 11 — ferme bien tous les `WebRTCService`
+comme `cleanup()`, mais oublie `connectedPeersRef`, `stalledPeersRef`, `isReconnecting` et
+`reconnectAttemptRef`, les 4 refs dédiées au signal de reconnexion mid-call). Le miroir SCOPÉ par
+participant, `removeParticipant`, avait déjà reçu ce même correctif pour ces 4 refs — documenté par
+son propre commentaire (« Audit web-calls 2026-08-15 ») — mais l'effet `userId`-change, qui fait le
+même genre de reset pour TOUS les participants à la fois, n'avait jamais reçu le traitement
+symétrique alors qu'il partage la même exposition.
+
+**Le tell.** Un commentaire qui décrit un geste comme « recreate/reset like X » (ici : « Recreate
+WebRTC services when userId changes », visuellement un mini-`cleanup()`) sans énumérer explicitement
+CHAQUE ref que X vide est une promesse non vérifiée. Le nombre de refs vidées par les DEUX sites
+doit être compté et comparé — pas seulement leur intention lue.
+
+**La règle.** Quand un second site du code affirme « je fais le même genre de nettoyage que le site
+A » (par un commentaire, un nom de fonction, ou simplement la ressemblance du code), lister TOUTES
+les refs/states que A vide, puis vérifier UNE PAR UNE leur présence au site B. Une absence n'est
+acceptable que si elle est justifiée par une différence de scope réelle — jamais silencieuse. Ici,
+`negotiationIdsRef` est l'exception légitime : `cleanup()` le vide parce que l'appel est VRAIMENT
+fini, alors que l'effet `userId`-change ne doit PAS le vider parce que l'appel CONTINUE et que le
+pair distant a déjà mémorisé notre high-water mark de négociation — le vider ferait paraître notre
+prochain signal plus ancien que ce qu'il a déjà vu, et le pair le droppperait comme périmé (le même
+bug documenté à la Leçon sur l'interop iOS, `negotiationIdsRef`'s propre commentaire de
+déclaration). Une exception délibérée et documentée n'est pas un oubli ; une absence non expliquée
+l'est toujours.
+
+**Le corollaire des Vagues 137-139.** C'est la même classe de défaut que
+`clearBufferedOffer`/`clearBufferedOfferFor` (nettoyer un scope trop LARGE) vue depuis l'angle
+inverse : ici, ce n'est pas la CIBLE du nettoyage qui est trop large, c'est sa COUVERTURE qui est
+trop étroite. Les deux bugs naissent du même geste manqué — énumérer chaque état dérivé qu'un
+"reset" doit couvrir, plutôt que faire confiance à la ressemblance de surface entre deux sites qui
+prétendent faire la même chose.
+
+## Leçon 221 — un rattrapage posé par ÉLÉMENT dépense un budget compté par UTILISATEUR (2026-08-17, routine messagerie, cycle 57)
+
+**Le constat.** Le cycle 56 a mis en service la réconciliation des réactions au
+retour de la connexion. Elle est posée dans `useReactionsQuery`, donc **par
+bulle** ; le franchissement injoignable → joignable réveille toutes les bulles
+montées **dans le même tick**, et le serveur compte ces demandes **par
+utilisateur** (`REACTION_SYNC`, 120/60 s). Un fil de 40 bulles dépense 40
+demandes par battement de connexion — sur une connexion qui bat, c'est-à-dire
+exactement le scénario pour lequel la réconciliation existe. Au-delà du plafond
+le serveur refuse, et le refus était traité comme une panne : chaque bulle
+refusée repartait une seconde fois, dans la fenêtre qui venait de la refuser.
+
+Le cycle 56 avait écrit le chiffre — « une demande par bulle montée au
+franchissement, sous la même limite (120 req/60 s) » — et l'avait assimilé au
+volume de l'ouverture d'un fil. L'assimilation est fausse sur un point : **une
+ouverture de fil est rare, un franchissement de connexion se répète.** Le
+volume n'était pas faux à l'instant, il était faux dans le temps.
+
+**Trois règles.**
+
+1. **Quand on livre un rattrapage, écrire son volume ET sa FRÉQUENCE.** « N
+   demandes » ne dit rien : « N demandes × F franchissements par minute, contre
+   un budget de B par minute » se compare. Le cycle 56 avait le N et le B, et le
+   défaut tient entièrement dans le F qui manquait.
+
+2. **Un déclencheur PARTAGÉ (socket, focus, réseau) réveille tous ses abonnés
+   dans le même tick.** Si chaque abonné émet, la rafale vaut le nombre
+   d'abonnés — qu'aucun d'eux ne connaît. Aucun ne peut décider seul d'attendre :
+   il faut un tour d'émission au niveau du MODULE, pas une temporisation par
+   abonné (qui ne fait que déplacer la rafale).
+
+3. **Un REFUS n'est pas une PANNE, et se réessaie encore moins.** Un budget
+   épuisé est une réponse du serveur : la fenêtre n'a pas bougé entre deux
+   tentatives immédiates, donc la seconde est refusée comme la première — en
+   ayant coûté une demande de plus. La distinction doit voyager dans un littéral
+   PARTAGÉ (`RATE_LIMIT_REFUSAL_MESSAGE`), jamais dans une prose que chaque
+   client re-devine.
+
+**Corollaire, sur le nombre lui-même.** Dès qu'un client se cadence sur un
+plafond serveur, ce plafond a traversé la frontière : il devient une donnée
+partagée (`REACTION_SYNC_BUDGET` dans `@meeshy/shared`), pas un nombre recopié
+des deux côtés. Un client qui devine le plafond le devine faux au premier
+ajustement — et il le devinera faux SILENCIEUSEMENT, puisque le symptôme est un
+rattrapage qui se refuse tout seul.
+
+**Corollaire de méthode.** Le meilleur terrain de chasse d'un cycle est la
+livraison du cycle PRÉCÉDENT : elle est récente, son intention est écrite, et
+ses propres notes contiennent les chiffres qu'il faut confronter. Ce cycle n'a
+rien trouvé en balayant le contrat ; il a trouvé en relisant le §3.1 du cycle 56.
+
+## Leçon 222 — une correction posée sur UNE socket n'est pas une correction du dépôt ; et un double de socket qui ne change pas d'identité fait passer les témoins de reconnexion à VIDE (2026-08-17, routine messagerie, cycle 58)
+
+**Le fait.** Le web a deux sockets Socket.IO. Les deux durcissements du couloir
+des messages — jeton du handshake résolu à chaque tentative, `reconnect_failed`
+rendu à une boucle manuelle — n'avaient jamais traversé vers la socket des
+notifications. Chacun y était pourtant documenté par un commentaire qui DÉCRIT
+la panne qu'il supprime. Troisième occurrence de cette forme dans le dépôt.
+
+**Trois règles.**
+
+1. **Quand on corrige un transport, compter combien le dépôt en a.** La question
+   n'est pas « ai-je corrigé le bug ? » mais « combien de sites portent la même
+   construction ? ». Un `grep` sur l'option fautive (`auth: {`,
+   `reconnectionAttempts`) l'aurait rendu en une commande, à n'importe lequel
+   des trois cycles concernés. Le commentaire qui explique la correction est le
+   meilleur point de départ : il nomme la panne, donc il nomme quoi chercher
+   ailleurs.
+
+2. **Un compteur ÉCRIT et jamais LU ne protège rien — il empêche de voir qu'il
+   ne protège rien.** `reconnectAttempts++` donnait au fichier l'apparence
+   d'une gestion de tentatives qui n'existait pas ; c'est probablement ce qui a
+   fait passer les relectures précédentes. Un champ dont aucune lecture n'existe
+   se retire, il ne se garde pas « au cas où ».
+
+3. **Rendre le transport ne suffit pas : il faut rendre ce que la coupure a
+   coûté.** Une reprise « évidente » aurait reconstruit la socket via
+   `disconnect()` et aurait été VERTE sur « la socket revient » tout en
+   détruisant le rattrapage — `hasConnectedBefore` remis à false (donc plus de
+   `desync('reconnect')`) et curseur `_seq` effacé. D'où la séparation du
+   démontage TECHNIQUE et du reset SÉMANTIQUE : toute fonction de reconnexion
+   doit dire explicitement ce qu'elle préserve, pas seulement ce qu'elle jette.
+
+**Corollaire de méthode, sur les témoins.** Deux témoins de ce cycle étaient
+VERTS avant le correctif : ils émettaient sur `currentSocketMock`, c'est-à-dire
+sur la socket d'ORIGINE, puisque aucune neuve n'était construite. Ils
+mesuraient une socket vivante, ce qui n'a jamais été en doute. **Tout témoin de
+reconnexion doit d'abord prouver l'IDENTITÉ du double** (`expect(socket).not
+.toBe(dead)`) avant d'observer quoi que ce soit dessus ; sans cette assertion,
+un double qui ne se renouvelle pas rend le témoin tautologique. C'est la
+deuxième fois en trois cycles — la règle est désormais écrite.
+
+**Corollaire sur les gardes.** Une garde qu'aucune mutation ne fait rougir est
+soit inatteignable, soit non spécifiée. Ce cycle a vérifié laquelle (elle était
+inatteignable, la vraie protection vivant ailleurs et sa mutation étant rouge)
+et l'a RETIRÉE, plutôt que de lui écrire un témoin qui n'aurait mesuré que le
+double.
+## Leçon 221 — un canal que le serveur diffuse n'a pas d'écouteur par construction, et le chercher « par son nom » rend un tableau faux (2026-08-16, routine temps réel, cycle 54)
+
+*(Numérotée 213 à l'écriture, puis 219, puis 221 — deux collisions successives à la fusion — une leçon 213 de la
+routine calling, cycle 138, avait atterri sur `main` entre-temps. La collision
+est la conséquence normale de routines parallèles qui ajoutent à la fin du même
+fichier : c'est la DERNIÈRE arrivée qui cède, jamais celle déjà référencée par
+d'autres journaux.)*
+
+### 1. Le fait
+
+`services/gateway/src/services/personalMessageVisibilitySync.ts` a été écrit pour
+fermer un défaut précis, et son en-tête le dit :
+
+> nothing was broadcast, so the hiding only ever reached the device that issued
+> the request […] Every OTHER device of the same user kept showing the message
+> indefinitely.
+
+Le module a été écrit, l'événement diffusé, le web branché. **iOS n'a jamais eu
+d'abonné.** L'état que le module décrit comme corrigé était l'état exact d'iOS,
+quatorze cycles plus tard.
+
+### 2. Pourquoi ça survit à des audits successifs
+
+Parce qu'un canal sans écouteur ne casse rien qui se voie. Il n'y a ni erreur,
+ni log, ni test rouge : l'émetteur émet, personne n'écoute, et la seule trace est
+un écran qui n'a pas bougé. Aucun des deux côtés n'est faux **isolément** — c'est
+le RACCORD qui manque, et le raccord n'a de fichier nulle part.
+
+Pire : ici la moitié VOISINE de l'écran était juste. La ligne de liste était bien
+corrigée par le `conversation:updated` jumeau, donc la contradiction s'affichait
+franchement (l'aperçu annonçait un message, le fil en montrait un autre) sans
+qu'aucune des deux moitiés paraisse en tort.
+
+### 3. La règle
+
+**Un contrat serveur qui nomme « les clients » au pluriel doit être vérifié
+client par client, à l'écrivain près.** La question mécanique est : *quels
+consommateurs cet événement a-t-il, et un par plateforme ?* Pas « le canal
+existe-t-il », pas « le web l'honore-t-il ».
+
+### 4. Le piège de méthode — deux formes d'abonnement, un seul grep
+
+Le premier passage de ce cycle a produit un tableau FAUX, et il faut savoir
+pourquoi. Les deux clients ne s'abonnent pas de la même façon :
+
+- web : `socket.on(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, …)` — par la CONSTANTE.
+- iOS : `socket.on("message:hidden-for-me") { … }` — par le LITTÉRAL.
+
+Chercher le littéral rend « web = 0 » (faux) et « iOS = 0 » (juste). Chercher la
+constante rend l'inverse. **Un diff de couverture d'événements qui ne cherche
+qu'une forme conclura toujours à une lacune du mauvais côté** — et c'est ce qui a
+failli faire abandonner la piste. Les deux formes se cherchent séparément, et le
+tableau ne vaut qu'une fois les deux croisées.
+
+### 5. Le corollaire — porter un canal ne veut pas dire porter le GESTE
+
+`hidden-for-me` route naturellement vers le chemin de suppression existant, et
+le web le fait explicitement pour ne pas écrire deux retraits qui dériveraient.
+La transposition à iOS est fausse, et pour une raison qui ne se voit pas dans
+l'événement : les deux clients n'écrivent pas la même chose sur une suppression.
+Le web FILTRE la ligne hors du cache ; iOS pose une PIERRE TOMBALE. Le même
+routage produit donc un vide d'un côté et un « ce message a été supprimé » de
+l'autre — durable, puisque le serveur ne renverra plus jamais ce message à ce
+lecteur.
+
+**Avant de router un événement neuf vers un chemin existant, lire ce que ce
+chemin ÉCRIT, pas ce qu'il s'appelle.** Le nom du handler décrit l'événement
+qu'il consommait ; l'écriture décrit ce que l'utilisateur verra.
+
+## Leçon 223 — un garde-fou qui CRASHE n'est pas indisponible, il est désarmé (2026-08-17, livraison /chat partagé)
+
+**Ce que j'ai fait de travers.** J'ai rapporté « ESLint est cassé à l'échelle du
+dépôt (`Converting circular structure to JSON`, ESLint 10 contre config héritée),
+hors périmètre » et je suis passé à autre chose. C'était une abdication déguisée
+en constat : je nommais correctement le symptôme, puis j'en tirais la conclusion
+la plus confortable — que ce n'était pas mon affaire.
+
+**Le diagnostic tenait en trois questions.** Aucune ne demandait plus de dix
+minutes :
+
+1. *Qui exporte quoi ?* `eslint-config-next@16` ship des configs **plates**
+   (`Linter.Config[]`, cf. `dist/index.d.ts`). Les passer à `FlatCompat.extends()`
+   — le pont eslintrc → flat — fait valider un objet plat par le validateur
+   eslintrc, qui `JSON.stringify` la config pour formater ses erreurs et bute sur
+   le cycle `plugins.react → configs → plugins`. Le message parlait de JSON parce
+   que la panne était dans le FORMATEUR D'ERREUR, pas dans la config.
+2. *Qui supporte quoi ?* `eslint-plugin-react@7.37.5` — dernière version publiée,
+   dépendance DURE de `eslint-config-next` — appelle encore
+   `context.getFilename()`, retiré en ESLint 10, et plafonne son peer à `^9.7`.
+   ESLint 10 est donc simplement inutilisable avec la stack Next : le `"eslint":
+   "^10.8.0"` du `package.json` ÉTAIT le bug.
+3. *Qui gardait la porte ?* `continue-on-error: true` sur l'étape Lint de la CI.
+   Personne ne l'a vu tomber.
+
+**La leçon.** Un outil de qualité qui plante n'est pas « momentanément
+indisponible » : il est **désarmé**, et le code dérive derrière. La mesure une
+fois ESLint relancé : **3 756 erreurs**, dont **2 631 `no-explicit-any`** — contre
+la règle explicite « No `any` types - ever » du CLAUDE.md. Rien de tout cela
+n'était visible tant que le linter mourait avant de lire la première ligne.
+
+**Le corollaire qui m'a coûté deux erreurs de plus.** En reportant la règle
+`no-restricted-imports` de l'ancien `.eslintrc.local.json` (mort depuis ESLint 9,
+qui n'ouvre plus le format eslintrc), j'ai gardé ses `patterns` — dont la
+sémantique est **gitignore** : `@/components/ui` couvre aussi
+`@/components/ui/**`. La règle interdisait donc exactement l'import direct que
+son propre message recommande. `paths` matche le spécificateur EXACT, c'est-à-dire
+le fichier barrel lui-même. **Une règle inerte depuis longtemps n'a jamais été
+éprouvée : la réactiver, c'est la relire, pas la recopier.** Même famille que la
+leçon 219.
+
+Et une fois la règle vivante, elle a immédiatement trouvé deux vrais défauts dans
+mon propre code du jour : un `eslint-disable-next-line
+react-hooks/exhaustive-deps` devenu mensonger (les dépendances étaient
+exhaustives depuis que j'avais sorti `t` du corps de l'effet) et un `useMemo` qui
+dépendait de champs non déclarés. Les deux corrigés en supprimant le contournement,
+jamais en élargissant le silence.
+
+**Règle pour la prochaine fois.** Devant un gate cassé : ne jamais écrire « hors
+périmètre » sans avoir répondu aux trois questions ci-dessus. Le coût du
+diagnostic est presque toujours inférieur au coût de ce que le gate laissait
+passer pendant son sommeil. Et quand la conclusion est un pin de version, elle
+s'accompagne d'un `ignore` Dependabot MOTIVÉ — sinon le prochain bump automatique
+rendort le gate.
+
+## Leçon 224 — une note de conception qui déclare une règle « impossible » nomme un ÉTAT à chercher, pas un fait à croire (2026-08-17, routine messagerie, cycle 57 bis)
+
+**Le constat.** `conversationWriteAdmission` portait en tête, dans sa section « ce que ce module
+ne fait pas », la phrase qui a protégé une fonctionnalité morte pendant deux cycles :
+
+> `Conversation.slowModeSeconds` est de la même famille (un réglage de conteneur que personne
+> n'applique) mais demande un état « dernier envoi par personne » qui n'existe nulle part : c'est
+> un limiteur de débit, pas une admission.
+
+Les deux moitiés sont fausses, et différemment. L'état existe — c'est la table `Message`, dont
+l'index `[senderId, conversationId]` porte EXACTEMENT cette question. Et la seconde moitié oppose
+deux catégories qui n'en font qu'une : « cet envoi passe-t-il maintenant ? » est une admission dont
+la réponse dépend du temps, et le module en portait déjà une du même genre (l'état terminal dépend
+de `closedAt`).
+
+**Le tell.** La phrase cherchait un COMPTEUR — une colonne dénormalisée, avec son écrivain, son
+invalidation, sa dérive — et concluait « n'existe nulle part » en ne le trouvant pas. Le mot qui
+trahit est **« un état »** : il fait entendre une structure à CONSTRUIRE là où la question portait
+sur une information à LIRE. Un journal d'événements répond déjà à toutes les questions de la forme
+« quand, pour la dernière fois, X a-t-il fait Y ? », autoritairement et sans écrivain à tenir.
+
+**Pourquoi ça survit.** Une note de conception qui ferme une question ne se relit pas comme une
+hypothèse. Les cycles 31 et 56-bis ont tous deux LU cette phrase — 56-bis la cite même dans ses
+« écartés délibérément » — et l'ont reçue comme un constat d'inventaire. C'est la forme la plus
+discrète de dette : pas un oubli (qu'un recensement trouve), pas un TODO (qu'une recherche trouve),
+mais une affirmation soignée, dans un fichier soigné, écrite par quelqu'un qui venait de faire le
+travail juste à côté. Son autorité vient du voisinage.
+
+**La règle.** Une note qui déclare une règle hors de portée pour cause d'état manquant doit nommer
+la LECTURE qu'elle a essayée et qui n'a pas suffi, jamais seulement l'état qu'elle a cherché. « Il
+faudrait un compteur `lastSentAt` par participant, que personne n'écrit » est vérifiable et
+réfutable ; « demande un état qui n'existe nulle part » ne l'est pas, et c'est ce qui la fait
+traverser les cycles intacte. Réciproquement, en lisant une telle note : avant de la croire,
+demander **quelle table journalise déjà l'événement dont on veut la date ?** — la réponse est
+presque toujours celle des lignes qu'on écrit de toute façon.
+
+**Le corollaire de forme, découvert en chemin.** Quand la question de temps se pose à une REQUÊTE,
+borner la fenêtre dans le `where` (`createdAt > now - fenêtre`) plutôt qu'après le tri fait
+d'une pierre trois coups : l'ensemble trié devient minuscule (aucun index neuf), l'existence d'une
+ligne DEVIENT la décision, et l'arithmétique qui suit ne fait plus que chiffrer — donc un
+`if (restant > 0)` posé après coup est le même calcul une seconde fois, et une branche qu'aucun
+état de la base ne peut atteindre. C'est le trou de COUVERTURE qui a nommé cette redondance : une
+ligne non couverte sur un module à 100 % est plus souvent du code inatteignable qu'un témoin
+manquant. Cf. `tasks/realtime-sync-audit-2026-08-17-cycle57-bis.md` §3.1.
+
+**Le voisinage.** Miroir exact de la leçon 219 (« appliquer une règle jusque-là inerte change la
+question à poser au site qui l'ÉCRIT »), vue depuis l'autre bout : là, un cycle avait armé un champ
+sans regarder son écrivain ; ici, un cycle avait DÉSARMÉ une question en écrivant que son état
+n'existait pas. Et parent de la leçon 214 (« un correctif nommé dans un journal ne prouve que le
+site qu'il a touché ») : dans les deux cas, c'est une PROSE de dépôt — journal ou en-tête — qui a
+été prise pour une preuve.
+
+## Leçon 225 — deux réglages symétriques, une seule dérogation : chercher la JUMELLE avant de croire la règle appliquée (2026-08-17, routine messaging, cycle 59)
+
+`useInfiniteConversationsQuery` portait `refetchOnWindowFocus: false` avec un
+commentaire de huit lignes qui énumérait précisément les trois dommages d'un refetch
+d'infinite (N requêtes, écritures socket écrasées, ligne dupliquée à la frontière sous
+pagination par OFFSET). Il ne portait pas `refetchOnReconnect: false` — et le
+QueryClient global tourne en `'always'` sur les DEUX. Le dommage restait donc armé,
+sur un déclencheur plus fréquent que celui qui avait été fermé.
+
+Le fichier NOMMAIT `refetchOnReconnect` dix lignes plus haut, pour expliquer qu'il ne
+couvre pas les coupures de socket — sans que personne remarque qu'il était toujours
+actif à faire du mal. **Un réglage cité dans un commentaire pour son insuffisance
+n'est pas un réglage désactivé.** Quand un filet de sécurité existe en paire
+(focus/reconnect, mount/reconnect, add/remove), une dérogation posée sur un seul
+membre est le défaut, pas la correction.
+
+### Le corollaire qui compte : un témoin VERT au-dessus d'un défaut vivant
+
+Le même déclencheur utilisateur (`window.online`) portait un SECOND chemin
+destructeur, dans un autre fichier : un hook qui invalidait `['conversations']`,
+préfixe de `['conversations','infinite']`. Corriger l'un des deux ne changeait RIEN à
+la panne visible — et le témoin qui garde le premier passe au vert, parce qu'il ne
+monte pas le hook du second.
+
+**Règle : quand deux chemins pendent au même déclencheur, prouver les deux ROUGES
+séparément avant de toucher au code.** Ici, un témoin jetable isolant le second (le
+premier déjà neutralisé) a montré la page rejouée quand même. Sans cette mesure,
+j'aurais livré une dérogation, un témoin vert, et une panne intacte. C'est la
+troisième forme en trois cycles du même piège (cycle 58 §4.2, cycle 74 §1) : la
+question à se poser n'est jamais « mon témoin passe-t-il ? » mais « **que verrait le
+porteur si mon témoin passait et que le défaut restait ?** ».
+
+### Et : un défaut déjà écrit dans le dépôt, classé trop bas
+
+`docs/bandwidth-analysis/01-socketio.md` portait ce défaut en MOYENNE-15, bon fichier,
+bonnes lignes — classé « gaspillage de bande passante, 100 KB ». Le préfixe de clé n'y
+était pas relevé, donc ni le rejeu de TOUTES les pages, ni la ligne dupliquée. Sa
+correction recommandée était littéralement ce qu'un autre module implémentait déjà.
+**Un audit qui nomme un défaut dans le mauvais registre de gravité l'enterre plus
+sûrement qu'un audit qui l'oublie** : l'entrée existe, donc personne ne la rouvre.
+Devant une entrée d'audit ancienne, recalculer la sévérité depuis le code avant de la
+croire.
+

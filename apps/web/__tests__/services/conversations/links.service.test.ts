@@ -251,7 +251,7 @@ describe('LinksService', () => {
   // ── createConversationWithLink ────────────────────────────────────────────
 
   describe('createConversationWithLink', () => {
-    it('returns the join URL from the API response', async () => {
+    it('returns the canonical share URL from the API response', async () => {
       mockApi.post.mockResolvedValue({
         data: { success: true, data: { linkId: 'link-456', conversationId: 'conv-new', shareLink: null } },
       } as any);
@@ -259,7 +259,9 @@ describe('LinksService', () => {
       const result = await svc.createConversationWithLink({ name: 'My Link' });
 
       expect(mockApi.post).toHaveBeenCalledWith('/api/links', expect.objectContaining({ name: 'My Link' }));
-      expect(result).toContain('/join/link-456');
+      // `/chat/:linkId` est l'URL canonique du partage — `/join/:linkId` est
+      // redirigé en 308 et ne doit plus être FABRIQUÉ.
+      expect(result).toContain('/chat/link-456');
     });
 
     it('uses default values when linkData is not provided', async () => {
@@ -293,7 +295,7 @@ describe('LinksService', () => {
 
       const result = await svc.createConversationWithLink();
 
-      expect(result).toBe('https://app.meeshy.io/join/link-789');
+      expect(result).toBe('https://app.meeshy.io/chat/link-789');
       process.env.NEXT_PUBLIC_FRONTEND_URL = original;
     });
 

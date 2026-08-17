@@ -81,11 +81,32 @@ final class ConversationTopChromeFadeTests: XCTestCase {
             return XCTFail("MessageListView introuvable dans ConversationView")
         }
         let listBlock = String(source[listStart.lowerBound..<listEnd.lowerBound])
+
+        // Recalibré — déplacé par `050e15f4` (« le fil court jusqu'au bord bas
+        // physique »), l'invariant est inchangé : la liste ignore la safe area
+        // du CONTENEUR sur le bord HAUT. Ce commit a étendu l'ignorance au bord
+        // BAS (`edges: .top` → `edges: [.top, .bottom]`) pour la raison
+        // symétrique, constatée sur device : borné à la safe area basse, le
+        // représentable coupait les messages ~34 pt AVANT le bord physique —
+        // visible dès que le chrome s'escamote. Chercher `edges: .top`
+        // LITTÉRALEMENT décrivait la liste de bords d'hier, pas la propriété.
+        // On lit donc l'argument `edges:` et on exige qu'il CONTIENNE `.top` :
+        // reste faux si le bord haut disparaît, reste vrai que le bord bas
+        // l'accompagne ou non.
+        guard let edgesStart = listBlock.range(of: "ignoresSafeArea(.container, edges:"),
+              let edgesEnd = listBlock.range(of: ")", range: edgesStart.upperBound..<listBlock.endIndex) else {
+            return XCTFail(
+                "Le flux de messages n'appelle plus `ignoresSafeArea(.container, edges:)` — sans lui, la " +
+                "bande status bar / Dynamic Island ne montre que le fond, une couleur unie jusqu'au bord."
+            )
+        }
+        let edges = listBlock[edgesStart.upperBound..<edgesEnd.lowerBound]
         XCTAssertTrue(
-            listBlock.contains("ignoresSafeArea(.container, edges: .top)"),
+            edges.contains(".top"),
             "Le flux de messages doit s'étendre sous la safe area haute pour que " +
             "les bulles traversent la zone status bar / Dynamic Island — sans ça " +
-            "cette bande ne montre que le fond, une couleur unie jusqu'au bord."
+            "cette bande ne montre que le fond, une couleur unie jusqu'au bord. " +
+            "Bords déclarés : `\(edges.trimmingCharacters(in: .whitespacesAndNewlines))`."
         )
         XCTAssertTrue(
             listBlock.contains("topInset: previewMode ? 0 : DeviceLayout.safeAreaTop"),

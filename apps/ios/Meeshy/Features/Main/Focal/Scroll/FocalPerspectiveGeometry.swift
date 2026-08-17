@@ -185,14 +185,35 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
         let tx: CGFloat
         switch horizontalAnchor {
         case .leading:
-            tx = (isRightToLeft ? 1 : -1) * (cellSize.width / 2) * shrink
+            // Pivot horizontal à `18 %` de la largeur — PAS au bord gauche.
+            //
+            // La maquette de référence l'écrit littéralement
+            // (`docs/design/2026-08-15-conversation-modes-verdict.html` :
+            // `transform-origin: "18% bottom"`). `anchorPoint` restant au
+            // centre (0,5) — il n'est JAMAIS touché, cf. écart #2 ci-dessus —
+            // la compensation vaut `(0,5 − 0,18)` de la largeur, et non
+            // `0,5` : ancrer à `0,5` fait pivoter autour du bord GAUCHE
+            // (0 %), et la rangée s'effondre vers l'extrême bord au lieu de
+            // se contracter vers sa colonne d'avatar, qui doit rester en
+            // place.
+            let pivot = FocalFocusCurve.threadHorizontalPivot
+            tx = (isRightToLeft ? 1 : -1) * (cellSize.width * (0.5 - pivot)) * shrink
         case .center:
             tx = 0
         }
 
         return FocalCellTransform(
             scale: scale,
-            alpha: min(alphaCeiling, curve.alpha),
+            // AUCUN fondu de distance — décision produit 2026-08-16
+            // (« enlever l'effet transparent sur les bulles »), constatée sur
+            // device en mode sombre : l'estompage rendait le haut du fil
+            // illisible. Écart ASSUMÉ avec la maquette de référence
+            // (`opacity = 1 − 0.78·f`) : la profondeur est portée par
+            // l'ÉCHELLE seule. Le plafond reste — il porte un état d'envoi
+            // (optimiste 0,7, §4.4), pas un effet de perspective ; la courbe
+            // gelée continue de calculer son alpha, il n'est simplement plus
+            // consommé ici.
+            alpha: alphaCeiling,
             translation: CGSize(width: tx, height: ty)
         )
     }
@@ -252,6 +273,47 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
             - firstRowHeight / 2
         let ceiling = max(0, viewportHeight * headInsetMaxRatio)
         return min(max(0, needed), ceiling)
+    }
+
+    // MARK: - §4.7bis — Atterrissage d'élection (zone d'activation sans conflit)
+
+    /// `contentOffset.y` qui pose le bord BAS visuel du message élu à
+    /// `gap` points au-dessus du haut du composeur — ou `nil` si l'élu est
+    /// déjà au clair (ou si le clamp rend le déplacement nul).
+    ///
+    /// C'est la règle « plus du tout en conflit avec la zone de saisie » :
+    /// à l'arrêt du geste, un élu dont le bas passe sous le composeur est
+    /// ramené entièrement au-dessus, contrôles de bord compris. Pendant le
+    /// défilement le conflit n'existe pas (le chrome est escamoté) ; cette
+    /// correction ne joue qu'à la pose.
+    ///
+    /// Géométrie inversée : le bord bas VISUEL de la cellule est son
+    /// `frame.minY` de CONTENU. `visualBottom = H − (minY − offset)` ; on
+    /// veut `visualBottom = H − bottomClearance − gap`, d'où
+    /// `offset = minY − bottomClearance − gap`. Le résultat est borné à la
+    /// plage réellement défilable (mêmes bornes que `landingContentOffsetY`) —
+    /// au bas du fil, le clamp rend le déplacement nul et on ne bouge pas.
+    ///
+    /// `cellMinY` doit venir des `layoutAttributes` (boîte de LAYOUT), jamais
+    /// de `cell.frame`, qui intègre le transform de perspective.
+    func settleContentOffsetY(
+        cellMinY: CGFloat,
+        currentOffsetY: CGFloat,
+        viewportHeight: CGFloat,
+        bottomClearance: CGFloat,
+        headClearance: CGFloat,
+        contentHeight: CGFloat,
+        gap: CGFloat
+    ) -> CGFloat? {
+        let visualBottom = viewportHeight - (cellMinY - currentOffsetY)
+        let readableBottom = viewportHeight - bottomClearance
+        guard visualBottom > readableBottom - gap else { return nil }
+
+        let target = cellMinY - bottomClearance - gap
+        let minOffset = -bottomClearance
+        let maxOffset = max(minOffset, contentHeight - viewportHeight + headClearance)
+        let clamped = min(max(target, minOffset), maxOffset)
+        return abs(clamped - currentOffsetY) > 0.5 ? clamped : nil
     }
 
     // MARK: - §4.7 — Atterrissage dans la bande

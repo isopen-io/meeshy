@@ -33,6 +33,36 @@ struct FocalRow: View {
 
     private var content: BubbleContent { input.content }
 
+    /// Retrait CONSTANT — il ne suit plus la pastille.
+    ///
+    /// Même raison que `textSize` : le retrait fixe la largeur disponible,
+    /// donc le retour à la ligne, donc la hauteur. Le faire varier avec le
+    /// focus faisait changer la cellule de taille au basculement d'élection,
+    /// et la liste sautait. Le retrait de l'élue (41) est retenu pour TOUTES
+    /// les rangées : c'est celui qui laisse la place à la pastille de 34, que
+    /// l'en-tête réserve désormais en permanence.
+    private var indent: CGFloat {
+        FocalMetrics.Focus.textIndent
+    }
+
+    /// **Le « 15 → 16 » de §4.6 est ABANDONNÉ, et c'est un choix.**
+    ///
+    /// Grossir le texte de l'élue relance le calcul de retour à la ligne :
+    /// un paragraphe de quatre lignes en 15 peut en faire cinq en 16, et la
+    /// cellule change de hauteur. Comme la reconfiguration a lieu à l'ARRÊT
+    /// du défilement, ce changement de hauteur déplaçait tout ce qui était à
+    /// l'écran — filmé au simulateur, un saut par arrêt de geste.
+    ///
+    /// Le contrat écrivait cet écart quand la rangée élue n'avait rien
+    /// d'autre pour se distinguer. Elle a maintenant sa pastille de 34, son
+    /// nom agrandi, sa date complète, sa barre de contrôles — et surtout
+    /// l'échelle pleine que le pass de perspective lui donne pendant qu'il
+    /// réduit ses voisines. Un point de corps de plus ne vaut pas un
+    /// défilement saccadé.
+    private var textSize: CGFloat {
+        FocalMetrics.Text.size
+    }
+
     var body: some View {
         Group {
             switch content.kind {
@@ -93,6 +123,8 @@ struct FocalRow: View {
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
+                    isFocused: input.isFocused,
+                    sentAt: input.sentAt,
                     // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
                     // décision finale (précalculée par le mux qui construit
                     // `FocalRowInput`, contrat §3.6) — cette rangée ne relit
@@ -127,7 +159,25 @@ struct FocalRow: View {
             visualBlock
             audioBlock
             textOrEmojiBlock
-            reactionsSection
+            // Hors focus, les réactions gardent leur place habituelle sous le
+            // contenu. En focus, elles MIGRENT dans la barre de base, où elles
+            // ouvrent la rangée « posé → (+) → à poser » : deux jeux de
+            // pilules à l'écran pour le même message se contrediraient.
+            //
+            // `.hidden()` et non un `if` : la HAUTEUR doit rester identique
+            // dans les deux états. C'était le dernier canal de hauteur
+            // dépendant de l'élection (les autres — pastille, indent, barre —
+            // ont tous une réserve constante) : démonter la rangée faisait
+            // varier la cellule de ~27 pt au basculement d'élu, et la
+            // reconfiguration d'arrêt (§4.6) faisait sauter toute la liste.
+            // `.hidden()` préserve l'espace de layout, coupe le rendu ET les
+            // touches — la réserve est EXACTE par construction, quel que soit
+            // le nombre de pilules.
+            if input.isFocused {
+                reactionsSection.hidden()
+            } else {
+                reactionsSection
+            }
 
             if !input.isFirstInGroup {
                 FocalMetaRow(
@@ -135,12 +185,17 @@ struct FocalRow: View {
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
+                    indent: indent,
+                    isFocused: input.isFocused,
+                    sentAt: input.sentAt,
                     // F-083ter (F10) — « modifié » visible en rangée de suite.
                     editedAt: content.editedAt,
                     isEditSaving: content.isEditSaving,
                     hasEditHistory: content.hasEditHistory
                 )
             }
+
+            focusControlBar
         }
         // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
         // contenu » — même overlay que le chemin bulle
@@ -205,7 +260,83 @@ struct FocalRow: View {
                 onShowReactions: actions.onShowReactions
             )
             .equatable()
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, indent)
+        }
+    }
+
+    // MARK: - §4.6 — les contrôles de la rangée élue
+
+    /// Barre de contrôles de l'élue, assise sur le bord bas de la carte.
+    ///
+    /// Ne se monte QUE pour l'élue : `@ViewBuilder` + `if` (jamais un
+    /// ternaire ni un `.opacity(0)`), pour qu'une rangée ordinaire
+    /// n'instancie même pas la vue — la même discipline que le mux de
+    /// cellule de l'hôte.
+    /// **La barre occupe une hauteur RÉSERVÉE, focus ou pas.**
+    ///
+    /// La faire apparaître seulement sur l'élue ajoutait ~30 pt à une cellule
+    /// et les retirait à une autre au moment précis où l'élection bascule —
+    /// c'est-à-dire à l'arrêt du défilement, quand `reconfigureFocusTypography
+    /// AtScrollStop` reconfigure les deux. La taille de contenu changeait et
+    /// la liste sautait sous le doigt.
+    ///
+    /// Le créneau est donc toujours là ; seul son CONTENU dépend du focus.
+    /// La rangée garde une hauteur identique dans les deux états, et plus
+    /// aucune reconfiguration ne peut déplacer le contenu à l'écran.
+    ///
+    /// Le coût est réel — cette réserve s'ajoute à chaque rangée — et c'est
+    /// un arbitrage assumé : un défilement fluide vaut mieux qu'une densité
+    /// maximale. C'est la première chose à réexaminer si le fil paraît trop
+    /// aéré ; la sortie propre serait de sortir la barre du layout de la
+    /// cellule (un overlay flottant ancré par l'hôte au rectangle de l'élue),
+    /// ce qui rendrait la réserve inutile.
+    private var focusControlBar: some View {
+        Group {
+            if input.isFocused {
+                focusControlBarContent
+            } else {
+                Color.clear
+            }
+        }
+        .frame(height: FocalFocusControlBar.rowHeight)
+    }
+
+    @ViewBuilder
+    private var focusControlBarContent: some View {
+        Group {
+            FocalFocusControlBar(
+                messageId: content.messageId,
+                accentHex: input.accentHex,
+                isDark: input.isDark,
+                reactions: content.reactions,
+                isMe: content.isMe,
+                availableFlags: content.translation?.availableFlags ?? [],
+                activeFlagCode: input.secondaryLangCode,
+                onToggleReaction: { emoji in actions.onToggleReaction?(emoji) },
+                onOpenReactPicker: { actions.onOpenReactPicker?(content.messageId) },
+                onShowReactions: { actions.onShowReactions?(content.messageId) },
+                onFlagTap: { code in
+                    // Même règle que la bulle : re-taper la langue ouverte la
+                    // referme. La décision vit dans
+                    // `BubbleLanguageFlagController` côté bulle ; ici la
+                    // rangée ne porte AUCUN état de langue (contrainte dure
+                    // §WS-4), elle renvoie la cible et le ViewModel tranche.
+                    actions.onSetSecondaryLanguage?(
+                        content.messageId,
+                        code == input.secondaryLangCode ? nil : code
+                    )
+                },
+                onMore: { actions.onMore?(input.localId) }
+            )
+            .equatable()
+            .padding(.leading, indent)
+            // SANS débord : quand le cadre est réactivé
+            // (`FocalFocusDecoration.drawsFocusCard`), il fait le tour de la
+            // rangée ET de cette barre d'un seul trait continu. Un `offset`
+            // la ferait chevaucher l'anneau et couperait le trait en deux.
+            // Aucun padding vertical non plus — la hauteur du créneau est
+            // fixée par le `frame` de `focusControlBar`, l'ajouter ici
+            // rendrait la réserve et le contenu incohérents.
         }
     }
 
@@ -248,7 +379,9 @@ struct FocalRow: View {
                 onRequestTranslation: actions.onRequestTranslation,
                 onShowTranslationDetail: actions.onShowTranslationDetail,
                 onReplyTap: actions.onReplyTap,
-                onStoryReplyTap: actions.onStoryReplyTap
+                onStoryReplyTap: actions.onStoryReplyTap,
+                audioQueueTailProvider: actions.audioQueueTailProvider,
+                onTapConsentNotice: actions.onTapConsentNotice
             )
         }
     }
@@ -274,7 +407,7 @@ struct FocalRow: View {
         Text(content.text?.raw ?? "")
             .font(MeeshyFont.relative(content.text?.emojiFontSize ?? FocalMetrics.Text.size))
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.leading, FocalMetrics.Text.indent)
+            .padding(.leading, indent)
     }
 
     /// `BubbleExpandableText` (§1.3, lu jamais modifié) résout déjà `15`pt
@@ -301,14 +434,15 @@ struct FocalRow: View {
                 hashtagTint: MeeshyColors.hashtagColor(isDark: input.isDark),
                 linkTint: Color(hex: input.accentHex),
                 isDark: input.isDark,
-                trackedLinks: content.text?.trackedLinks ?? [:]
+                trackedLinks: content.text?.trackedLinks ?? [:],
+                fontSize: textSize
             )
             .equatable()
-            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
+            .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))
 
             translationChip
         }
-        .padding(.leading, FocalMetrics.Text.indent)
+        .padding(.leading, indent)
     }
 
     /// « Apparition du chip 🌐 en méta » (F06) quand le texte affiché EST

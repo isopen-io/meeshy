@@ -1028,10 +1028,13 @@ export class CallEventsHandler {
   }
 
   /**
-   * §4.6 — drop every buffered signal for a call (negotiation complete or
-   * terminated). Entries are keyed `${callId}:${to}` (one per recipient, see
-   * `bufferOffer`), so — like `clearQualityDegradedStreaks` — this sweeps all
-   * matching keys rather than a single one.
+   * §4.6 — drop EVERY buffered signal for a call. Entries are keyed
+   * `${callId}:${to}` (one per recipient, see `bufferOffer`), so this sweeps
+   * all matching keys rather than a single one — correct ONLY when the call
+   * itself is ending for EVERYONE (every recipient's slot is equally moot).
+   * A per-participant leave on a call that CONTINUES for others must use
+   * `clearBufferedOfferFor` instead — see its doc comment for the group-call
+   * bug this split fixes.
    */
   private clearBufferedOffer(callId: string): void {
     const prefix = `${callId}:`;
@@ -1039,6 +1042,38 @@ export class CallEventsHandler {
       if (key.startsWith(prefix)) {
         this.bufferedOffers.delete(key);
       }
+    }
+  }
+
+  /**
+   * Drop only the buffered signal slot(s) addressed to ONE specific
+   * participant — by both identity spaces, since `signal.to` (and therefore
+   * the map key) may be keyed by either a `User.id` or a `Participant.id`
+   * depending on which the sender resolved (mirrors `bufferedOfferFor`'s own
+   * dual-key lookup).
+   *
+   * Group-call bug this fixes (calling-stack audit 2026-08-16, extended
+   * Vague 138): the buffer is deliberately per-RECIPIENT (`bufferOffer`'s
+   * own doc comment — an offer buffered for one participant and another
+   * buffered for a second participant on the SAME call are independent
+   * slots). But several call sites used to clear via `clearBufferedOffer`
+   * (whole-call sweep) whenever only ONE recipient's slot was actually known
+   * to be moot — regardless of whether the call was ending for everyone or
+   * continuing for the rest. Correct for a 1:1 call (the only shape that
+   * existed when §4.6 was written), but wrong the moment a GROUP call
+   * continues past that one recipient: e.g. participant D leaving (or D's
+   * own stale buffered offer, sender long gone, being dropped on D's
+   * `call:join`) wiped a still-pending buffered offer meant for a totally
+   * unrelated, still-active participant C (e.g. C's socket hadn't (re)joined
+   * the call room yet), permanently starving C's mesh connection to whoever
+   * sent it — `bufferedOfferFor` would find nothing on C's eventual
+   * `call:join` and never replay it. Used by: `call:leave`, `call:force-leave`,
+   * `call:end` (group-continues branch), and `call:join`'s stale-sender drop.
+   */
+  private clearBufferedOfferFor(callId: string, ...participantIdentities: readonly (string | null | undefined)[]): void {
+    for (const id of participantIdentities) {
+      if (!id) continue;
+      this.bufferedOffers.delete(`${callId}:${id}`);
     }
   }
 
@@ -1486,8 +1521,8 @@ export class CallEventsHandler {
       // `participantId` (Participant.id ObjectId), NOT userId. Passing
       // userId here matched nothing and the toggle silently failed.
       // Resolve to the real participantId before calling the service.
-      const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-      if (!participantId) {
+      const resolved = await this.resolveActiveCallParticipant(userId, data.callId);
+      if (!resolved) {
         socket.emit(CALL_EVENTS.ERROR, {
           code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
           message: 'You are not a participant in this call',
@@ -1495,6 +1530,7 @@ export class CallEventsHandler {
         } as CallError);
         return;
       }
+      const { participantId } = resolved;
       await this.callService.updateParticipantMedia(
         data.callId,
         participantId,
@@ -1507,9 +1543,19 @@ export class CallEventsHandler {
       // iOS treats any received call:media-toggled as the REMOTE peer's state
       // (drives the muted indicator / avatar placeholder). `socket.to`
       // excludes the sender; `io.to` would include it.
+      //
+      // Vague 140 — `participantId` alone (CallParticipant.participantId, the
+      // FK to Participant.id) never matches a web roster entry's `.id`
+      // (CallParticipant.id, its own PK) NOR its `.userId`/`.participantId`
+      // lookup fields (the latter is never populated client-side) for a
+      // registered peer — `updateParticipant` silently no-op'd on every
+      // remote mute/camera toggle, leaving the peer's indicator permanently
+      // stale. Include `userId`, same fix/rationale as `call:quality-alert`/
+      // `call:screen-capture-alert` (Vague 132).
       const toggleEvent: CallMediaToggleEvent = {
         callId: data.callId,
         participantId,
+        userId: resolved.userId,
         mediaType,
         enabled: data.enabled
       };
@@ -1794,14 +1840,21 @@ export class CallEventsHandler {
     // > deviceLocale > 'fr') — same resolver as resolveNotificationLangs above.
     // Reading only `systemLanguage` here used to strand any listener who
     // configured a regional/custom language instead into a hardcoded 'fr'.
-    const targetLanguages: string[] = [
-      ...new Set<string>(
-        activeParticipants
-          .filter(p => p.participant.userId !== speaker.userId)
-          .map(p => resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined }))
-          .filter((lang): lang is string => typeof lang === 'string' && lang !== data.segment.language)
-      )
-    ];
+    //
+    // Grouped BY target language, listener userIds and all — the per-language
+    // relay below must reach ONLY the listeners who resolved to that language,
+    // never the whole call room (see `emitTranslatedSegmentTo`).
+    const listenersByLanguage = new Map<string, string[]>();
+    for (const p of activeParticipants) {
+      const userId = p.participant.userId;
+      if (userId === speaker.userId) continue;
+      const lang = resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined });
+      if (typeof lang !== 'string' || lang === data.segment.language) continue;
+      const listeners = listenersByLanguage.get(lang);
+      if (listeners) listeners.push(userId);
+      else listenersByLanguage.set(lang, [userId]);
+    }
+    const targetLanguages: string[] = [...listenersByLanguage.keys()];
 
     if (targetLanguages.length === 0) {
       socket.to(ROOMS.call(data.callId)).emit(
@@ -1838,6 +1891,7 @@ export class CallEventsHandler {
 
     await Promise.allSettled(
       targetLanguages.map(async (targetLanguage) => {
+        const listeners = listenersByLanguage.get(targetLanguage) ?? [];
         try {
           const taskId = await zmqClient.translateText(
             data.segment.text,
@@ -1853,10 +1907,7 @@ export class CallEventsHandler {
             const TIMEOUT_MS = 10_000;
             const timer = setTimeout(() => {
               zmqClient.off(scopedEvent, onResult);
-              socket.to(ROOMS.call(data.callId)).emit(
-                CALL_EVENTS.TRANSLATED_SEGMENT,
-                this.buildTranslatedSegment(data, speaker, targetLanguage)
-              );
+              this.emitTranslatedSegmentTo(socket, listeners, this.buildTranslatedSegment(data, speaker, targetLanguage));
               resolve();
             }, TIMEOUT_MS);
             timer.unref?.();
@@ -1866,8 +1917,8 @@ export class CallEventsHandler {
               clearTimeout(timer);
               zmqClient.off(scopedEvent, onResult);
               this.persistTranslation(persistedTranscriptionId, targetLanguage, event.result.translatedText);
-              socket.to(ROOMS.call(data.callId)).emit(
-                CALL_EVENTS.TRANSLATED_SEGMENT,
+              this.emitTranslatedSegmentTo(
+                socket, listeners,
                 this.buildTranslatedSegment(data, speaker, targetLanguage, event.result.translatedText)
               );
               resolve();
@@ -1876,13 +1927,35 @@ export class CallEventsHandler {
           });
         } catch (err) {
           logger.warn('Call transcription translation failed, relaying original', { callId: data.callId, targetLanguage, err });
-          socket.to(ROOMS.call(data.callId)).emit(
-            CALL_EVENTS.TRANSLATED_SEGMENT,
-            this.buildTranslatedSegment(data, speaker, targetLanguage)
-          );
+          this.emitTranslatedSegmentTo(socket, listeners, this.buildTranslatedSegment(data, speaker, targetLanguage));
         }
       })
     );
+  }
+
+  /**
+   * Broadcast one translated segment to exactly the listeners who resolved
+   * to `targetLanguage` — never the whole call room. `translateAndEmitSegment`
+   * used to relay every target language's translation to `ROOMS.call(callId)`
+   * wholesale: in a 3+-language group call every peer received EVERY
+   * language's caption event, and the client-side journal merge
+   * (`upsertCallTranscriptEntry`, keyed on speaker+timing — not
+   * `targetLanguage`) let whichever language arrived last silently overwrite
+   * the others, so the reader's own Prisme language was not guaranteed to
+   * win. Chained `.to()` calls (never a loop of separate `.emit()`s) so a
+   * listener sitting in more than one addressed room still receives the
+   * event exactly once.
+   */
+  private emitTranslatedSegmentTo(
+    socket: Socket,
+    userIds: readonly string[],
+    payload: CallTranslatedSegmentEvent
+  ): void {
+    if (userIds.length === 0) return;
+    const [first, ...rest] = userIds;
+    rest
+      .reduce((broadcast, userId) => broadcast.to(ROOMS.user(userId)), socket.to(ROOMS.user(first)))
+      .emit(CALL_EVENTS.TRANSLATED_SEGMENT, payload);
   }
 
   /**
@@ -2689,7 +2762,18 @@ export class CallEventsHandler {
               type: replayOffer.signal.type
             });
           } else {
-            this.clearBufferedOffer(data.callId);
+            // Vague 138 — scoped to THIS joiner's own stale slot, mirroring
+            // `clearBufferedOfferFor`'s doc comment (the group-call bug it
+            // fixed for call:leave/call:force-leave/call:end). This branch
+            // used to call whole-call `clearBufferedOffer(data.callId)`: we
+            // only just proved ONE recipient's slot (this joiner's) is stale
+            // because ITS sender left, but a call-wide sweep also discards
+            // every OTHER still-active recipient's unrelated pending offer on
+            // the SAME call (e.g. a slow third participant who hasn't
+            // (re)joined the room yet) — permanently starving their mesh
+            // connection to whoever sent it, the exact same failure mode
+            // `clearBufferedOfferFor` was introduced to prevent.
+            this.clearBufferedOfferFor(data.callId, userId, joinerParticipantId);
             logger.info('📦 [CALL] Buffered offer sender no longer active — dropped', {
               callId: data.callId,
               type: replayOffer.signal.type
@@ -2819,8 +2903,15 @@ export class CallEventsHandler {
 
         // Phase 1 fix P2 — caller cancel or callee reject ends ringing
         this.callService.clearRingingTimeout(data.callId);
-        // §4.6 — drop any buffered offer for this call (a participant left).
-        this.clearBufferedOffer(data.callId);
+        // §4.6 — drop only THIS leaver's own buffered slot (calling-stack
+        // audit 2026-08-16 — see clearBufferedOfferFor's doc comment). A
+        // group call keeps running for whoever remains; a sibling pair's
+        // still-pending buffered offer (e.g. a slow joiner not yet in the
+        // room) must survive this one participant's leave. The rare case
+        // where this leave actually ends the call for everyone self-heals
+        // via the periodic TTL sweep (60s) — see the constructor's own
+        // comment on that sweep.
+        this.clearBufferedOfferFor(data.callId, userId, leaveParticipantId);
 
         // Prepare event data BEFORE leaving room
         const leftEvent: CallParticipantLeftEvent = {
@@ -3051,8 +3142,10 @@ export class CallEventsHandler {
               // still-armed ringing timer or buffered offer for this callId
               // lingers in memory until its own unrelated sweep/timeout,
               // instead of being released the moment the leave is known.
+              // Leaver-scoped (calling-stack audit 2026-08-16), same fix as
+              // `call:leave` — see `clearBufferedOfferFor`'s doc comment.
               this.callService.clearRingingTimeout(call.id);
-              this.clearBufferedOffer(call.id);
+              this.clearBufferedOfferFor(call.id, userId, cleanupParticipantId);
 
               // Broadcast participant left event
               const leftEvent: CallParticipantLeftEvent = {
@@ -3365,8 +3458,26 @@ export class CallEventsHandler {
         if (data.signal.type === 'answer') {
           // Phase 1 fix P2 — answer signal transitions ringing → active
           this.callService.clearRingingTimeout(data.callId);
-          // §4.6 — negotiation complete, the buffered offer is no longer needed.
-          this.clearBufferedOffer(data.callId);
+          // §4.6 — negotiation between the answerer (userId) and the offerer
+          // (targetUserId) is complete, so any buffered offer left over on
+          // EITHER of their own two slots is now stale. Vague 139 — this used
+          // to call whole-call `clearBufferedOffer(data.callId)`, the exact
+          // same over-clear bug fixed for call:leave/call:force-leave/
+          // call:end/call:join (Vague 137/138): the buffer is keyed strictly
+          // per RECIPIENT (`bufferOffer`'s doc comment), so a THIRD, unrelated
+          // participant's own still-pending buffered offer on the SAME call
+          // (e.g. their socket hasn't (re)joined the room yet) has nothing to
+          // do with THIS pair's negotiation finishing and must survive it —
+          // a call-wide sweep here silently starves that third participant's
+          // mesh connection, `bufferedOfferFor` finding nothing left to
+          // replay on their own eventual `call:join`.
+          this.clearBufferedOfferFor(
+            data.callId,
+            userId,
+            senderParticipant.participantId,
+            targetUserId,
+            targetParticipant.participantId
+          );
           // `callSession` was read (line ~2302) BEFORE this update — its
           // `answeredAt` is the true pre-update value, so this correctly
           // identifies the FIRST answer (never a later renegotiation answer,
@@ -3638,7 +3749,12 @@ export class CallEventsHandler {
         if (willContinueAsGroupLeave && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
           this.invalidateSignalSession(data.callId);
           this.callService.clearRingingTimeout(data.callId);
-          this.clearBufferedOffer(data.callId);
+          // Leaver-scoped (calling-stack audit 2026-08-16) — mirrors
+          // `call:leave`'s own fix (see `clearBufferedOfferFor`'s doc
+          // comment): the call continues for the other participants, whose
+          // own buffered offers (e.g. a slow joiner not yet in the room)
+          // must survive this one participant hanging up on themselves.
+          this.clearBufferedOfferFor(data.callId, userId, endParticipantId);
           await socket.leave(ROOMS.call(data.callId));
           ack?.({ success: true });
           logger.info('✅ Socket: call:end treated as a leave — group call continues for other participants', {

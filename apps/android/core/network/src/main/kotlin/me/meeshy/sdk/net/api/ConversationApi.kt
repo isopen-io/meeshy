@@ -4,11 +4,13 @@ import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -30,6 +32,17 @@ data class ConversationPreferencesUpdate(
     val reaction: String? = null,
     val tags: List<String>? = null,
 )
+
+/**
+ * Body of `PATCH /conversations/{id}/participants/{userId}/role`. The gateway
+ * enumerates `admin | moderator | member` and lowercases whatever it receives.
+ */
+@Serializable
+data class ParticipantRoleUpdate(val role: String)
+
+/** Body of `POST /conversations/{id}/participants` (add a member). */
+@Serializable
+data class AddParticipantRequest(val userId: String)
 
 interface ConversationApi {
     @GET("conversations")
@@ -102,4 +115,70 @@ interface ConversationApi {
      */
     @DELETE("conversations/{id}")
     suspend fun deleteForAll(@Path("id") id: String): ApiResponse<Unit>
+
+    /**
+     * One cursor page of the conversation's member roster (gateway
+     * `routes/conversations/participants.ts`). Deliberately NOT typed as
+     * [ApiResponse]: this route answers with a root-level cursor `pagination`
+     * object (`nextCursor`/`hasMore`/`totalCount`) that the shared envelope's
+     * offset-shaped [me.meeshy.sdk.model.Pagination] cannot express — the gateway's
+     * own comment records that migrating it would be a breaking change for iOS and
+     * web alike.
+     *
+     * [search] filters server-side on `displayName` (case-insensitive contains).
+     */
+    @GET("conversations/{id}/participants")
+    suspend fun participants(
+        @Path("id") id: String,
+        @Query("search") search: String? = null,
+        @Query("limit") limit: Int? = null,
+        @Query("cursor") cursor: String? = null,
+    ): PaginatedParticipantsResponse
+
+    /**
+     * Promotes or demotes a member (gateway "requires creator or admin role",
+     * enforced server-side — the client only gates the affordance via
+     * [me.meeshy.sdk.model.MemberModeration]). The role travels lowercase; use
+     * [me.meeshy.sdk.model.MemberRole.wireValue] rather than hand-writing it.
+     */
+    @PATCH("conversations/{id}/participants/{userId}/role")
+    suspend fun updateParticipantRole(
+        @Path("id") id: String,
+        @Path("userId") userId: String,
+        @Body body: ParticipantRoleUpdate,
+    ): ApiResponse<Unit>
+
+    /**
+     * Removes a member from the conversation (gateway "requires admin/moderator
+     * role or self-removal"). Self-removal goes through [leave] instead, which is
+     * the affordance the UI offers for oneself.
+     */
+    @DELETE("conversations/{id}/participants/{userId}")
+    suspend fun removeParticipant(
+        @Path("id") id: String,
+        @Path("userId") userId: String,
+    ): ApiResponse<Unit>
+
+    /**
+     * Adds a member to the conversation (gateway "requires admin/moderator role" —
+     * the client only gates the affordance, the server remains the authority).
+     * Mirror of iOS `AddParticipantSheet.addParticipant`.
+     */
+    @POST("conversations/{id}/participants")
+    suspend fun addParticipant(
+        @Path("id") id: String,
+        @Body body: AddParticipantRequest,
+    ): ApiResponse<Unit>
+
+    /**
+     * Bans a member from the conversation — server-enforced (the client only gates the
+     * affordance via [me.meeshy.sdk.model.MemberModeration.canBan]). Mirror of iOS
+     * `ConversationService.banParticipant` (`packages/MeeshySDK`), itself the only iOS
+     * surface that wires ban — `PATCH`, no body, path params only.
+     */
+    @PATCH("conversations/{id}/participants/{userId}/ban")
+    suspend fun banParticipant(
+        @Path("id") id: String,
+        @Path("userId") userId: String,
+    ): ApiResponse<Unit>
 }

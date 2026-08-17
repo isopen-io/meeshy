@@ -2089,6 +2089,25 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
+        // Same guard as `answerCall()` — on THIS path the acceptance came from
+        // CallKit's system UI (lock screen, Dynamic Island, CarPlay, AirPods),
+        // so nothing could be requested upstream either. Without it, a call
+        // answered via CallKit with the microphone denied/revoked connects
+        // silently muted: no toast, no Settings redirect, no hangup — the
+        // caller just talks into silence. Routed through `failCall()` rather
+        // than `endCall()`/`endCallInternal()` directly because a
+        // `CXAnswerCallAction` is already held (`holdPendingAnswerAction`) and
+        // must be resolved via `settlePendingAnswerAction`, which `failCall()`
+        // reaches through `endCallInternal`.
+        guard MediaPermissionState.microphone.isUsable else {
+            Logger.calls.warning("[CALL] CallKit answer refused: microphone permission missing — ending call")
+            FeedbackToastManager.shared.showError(
+                MediaPermissionCoordinator.deniedMessage(for: .microphone)
+            ) { MediaPermissionCoordinator.openSettings() }
+            failCall("Microphone permission missing")
+            return
+        }
+
         analyticsNegotiationStartDate = Date()
         callState = .connecting
 
@@ -3798,7 +3817,20 @@ final class CallManager: ObservableObject {
     /// `activeCallUUID` is still set — the wrapper sites for local/remote ends
     /// (endCall, handleRemoteEnd, …) keep doing their own CallKit teardown with
     /// end-specific reasons.
+    ///
+    /// Audit 2026-07-08 — guard `callState.isActive` like its sibling paths
+    /// (`endCall`, `handleRemoteEnd`). Several async call sites (SDP
+    /// offer/answer handling, the participant-joined offer) only check
+    /// `currentCallId == callId` for liveness, and `currentCallId` stays
+    /// populated for ~1.5s after a local hangup (the "settle window"). Without
+    /// this guard, hanging up right as an SDP exchange is in flight lets that
+    /// in-flight failure call `failCall()` on an already-ended call, and
+    /// `endCallInternal(.failed(...))` overwrites the real end reason
+    /// (`.local`/`.missed`/`.rejected`) in the UI, the UserDefaults snapshot,
+    /// and — because the gateway's last-write-wins on the call-history
+    /// snapshot — the call history too.
     private func failCall(_ reasonMessage: String) {
+        guard callState.isActive else { return }
         if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
         }

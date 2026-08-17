@@ -44,6 +44,14 @@ import { emitToConversationParticipants } from '../../socketio/emitToConversatio
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
+import {
+  ConversationBridgeService,
+  type BridgeOrchestratorInput
+} from '../../services/ConversationBridgeService';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
+import { resolveCapabilities } from '@meeshy/shared/utils/reading-modes';
+import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy/shared/types/reading-modes';
+import type { ConversationType } from '@meeshy/shared/types/conversation';
 
 const logger = enhancedLogger.child({ module: 'conversations/core' });
 
@@ -118,7 +126,13 @@ export const conversationUserPreferencesSelect = {
   tags: true,
   categoryId: true,
   reaction: true,
-  customName: true
+  customName: true,
+  // Choix collant du mode de lecture (G-121). Lu SERVEUR-side pour l'entrée
+  // d'orchestrateur du pont ✦ (G-123, workshop A6) — pas déclaré dans le
+  // schema wire, donc strippé de la réponse comme `clearHistoryBefore` :
+  // aucun client ne lit `readingMode` via CETTE route, `GET
+  // /user-preferences/conversations/:id` reste l'unique surface qui l'expose.
+  readingMode: true
 } as const;
 
 /**
@@ -619,6 +633,11 @@ export function registerCoreRoutes(
       // Only fall back to a batch query for large groups where the current user wasn't in top 5.
       const currentUserRoleMap = new Map<string, string>();
       const currentUserJoinedAtMap = new Map<string, Date | null>();
+      // Participant.id du LECTEUR par conversation — G-123 : c'est la clé qui
+      // relie une conversation à son curseur de lecture (`lastOpenedAt` de
+      // l'orchestrateur, voir plus bas). Repose sur la même résolution que les
+      // deux maps ci-dessus (top-5 + repli batché) : aucune requête de plus.
+      const currentUserParticipantIdMap = new Map<string, string>();
       const convsMissingCurrentUser: string[] = [];
 
       if (userId) {
@@ -627,6 +646,7 @@ export function registerCoreRoutes(
           if (found) {
             currentUserRoleMap.set(conv.id, found.role);
             currentUserJoinedAtMap.set(conv.id, found.joinedAt);
+            currentUserParticipantIdMap.set(conv.id, found.id);
           } else {
             convsMissingCurrentUser.push(conv.id);
           }
@@ -634,11 +654,12 @@ export function registerCoreRoutes(
         if (convsMissingCurrentUser.length > 0) {
           const remaining = await prisma.participant.findMany({
             where: { conversationId: { in: convsMissingCurrentUser }, userId, isActive: true },
-            select: { conversationId: true, role: true, joinedAt: true }
+            select: { id: true, conversationId: true, role: true, joinedAt: true }
           });
           for (const p of remaining) {
             currentUserRoleMap.set(p.conversationId, p.role);
             currentUserJoinedAtMap.set(p.conversationId, p.joinedAt);
+            currentUserParticipantIdMap.set(p.conversationId, p.id);
           }
         }
       }
@@ -718,9 +739,119 @@ export function registerCoreRoutes(
           })
         : [];
 
+      // ── Le pont ✦ (G-123) ──────────────────────────────────────────────
+      // Attaché DANS cette passe, jamais dans une passe séparée : `buildBridgeData`
+      // a besoin d'`unreadCountMap`, qui vient d'être calculé ci-dessus — le
+      // pont se calcule donc APRÈS, mais sans requête additionnelle PAR
+      // CONVERSATION (`ConversationBridgeService` reste à 5 requêtes
+      // constantes, cf. son fichier). `unreadCount === 0` est filtré avant
+      // même d'entrer dans la passe : ces conversations ne coûtent rien et
+      // n'auront jamais de pont (contrat gelé §3.2, LWS-4).
+      const bridgeCandidates = conversations
+        .map((conversation) => ({
+          conversationId: conversation.id,
+          unreadCount: unreadCountMap.get(conversation.id) || 0
+        }))
+        .filter((candidate) => candidate.unreadCount > 0);
+
+      let bridgeByConversation = new Map<string, { bridge: ConversationBridge; lastReadAt?: Date }>();
+
+      if (bridgeCandidates.length > 0) {
+        try {
+          // A6 — `orchestratorInputs` porte l'entrée RÉELLE de l'orchestrateur
+          // pour que `suggestedMode` soit la vraie décision de
+          // `resolveOrchestratorDecision`, pas sa branche par défaut :
+          //   - `stickyChoice`  : `UserConversationPreferences.readingMode`,
+          //     déjà chargé par `userPreferences` (G-121) — ZÉRO requête de plus ;
+          //   - `lastOpenedAt`  : le curseur de lecture du VIEWER, en UNE
+          //     lecture batchée sur les participants déjà résolus
+          //     (`currentUserParticipantIdMap`, top-5 + repli) — jamais une
+          //     par conversation ;
+          //   - `capabilities`  : `resolveCapabilities` (loi partagée), avec
+          //     `activeParticipantCount: null` — aucune définition serveur
+          //     honnête d'« actif » n'existe (jamais `0`, un chiffre fabriqué) ;
+          //   - `isFlagEnabled: true` : la Lentille est un drapeau CLIENT
+          //     (UserDefaults / ProcessInfo), le serveur n'en connaît pas
+          //     l'état par requête — précalculer en supposant le drapeau actif
+          //     est sans risque, un client drapeau-éteint ignore `bridge`
+          //     entièrement.
+          //
+          // Une conversation dont le participant du lecteur n'a pas pu être
+          // résolu (anonyme, ou repli manqué) est ABSENTE d'`orchestratorInputs` :
+          // `lastOpenedAt: null` affirmerait « jamais ouverte », une donnée que
+          // l'absence de résolution ne permet pas de connaître honnêtement.
+          // Le service retombe alors sur sa branche par défaut pour CETTE
+          // conversation — dégradation prévue, jamais une fabrication.
+          const bridgeConvIds = new Set(bridgeCandidates.map((c) => c.conversationId));
+          const viewerParticipantIds = [...currentUserParticipantIdMap.entries()]
+            .filter(([convId]) => bridgeConvIds.has(convId))
+            .map(([, participantId]) => participantId);
+
+          const lastOpenedAtByConversation = new Map<string, Date | null>();
+          if (viewerParticipantIds.length > 0) {
+            const participantToConversation = new Map(
+              [...currentUserParticipantIdMap.entries()].map(([convId, participantId]) => [participantId, convId])
+            );
+            const cursors = await prisma.conversationReadCursor.findMany({
+              where: { participantId: { in: viewerParticipantIds } },
+              select: { participantId: true, lastReadAt: true }
+            });
+            for (const cursor of cursors) {
+              const convId = participantToConversation.get(cursor.participantId);
+              if (convId) lastOpenedAtByConversation.set(convId, cursor.lastReadAt ?? null);
+            }
+          }
+
+          const now = new Date();
+          const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
+          const orchestratorInputs = new Map<string, BridgeOrchestratorInput>();
+
+          for (const conversation of conversations) {
+            if (!bridgeConvIds.has(conversation.id)) continue;
+            if (!currentUserParticipantIdMap.has(conversation.id)) continue;
+
+            const prefs = (conversation as any).userPreferences?.[0];
+            const parsedPreference = ReadingModePreferenceSchema.safeParse(prefs?.readingMode);
+            const stickyChoice: ReadingModePreference = parsedPreference.success
+              ? parsedPreference.data
+              : 'auto';
+
+            const capabilities = resolveCapabilities({
+              identity: { isAnonymous: isAnonymousViewer },
+              isFlagEnabled: true,
+              conversationType: conversation.type as ConversationType,
+              // G-123 : aucun décompte serveur honnête d'« actif » — JAMAIS 0.
+              activeParticipantCount: null
+            });
+
+            orchestratorInputs.set(conversation.id, {
+              lastOpenedAt: lastOpenedAtByConversation.get(conversation.id) ?? null,
+              now,
+              stickyChoice,
+              capabilities,
+              isFlagEnabled: true
+            });
+          }
+
+          const bridgeService = new ConversationBridgeService(prisma);
+          bridgeByConversation = await bridgeService.buildBridgeData({
+            viewerId: userId,
+            candidates: bridgeCandidates,
+            orchestratorInputs
+          });
+        } catch (error) {
+          // Posture d'échec identique à celle du service : le pont est un
+          // confort, la liste est le produit. Aucune ligne n'affiche un pont
+          // faux ; toutes perdent seulement leur pont.
+          logger.warn('bridge attach failed for conversation list, serving no bridge', { error });
+          bridgeByConversation = new Map();
+        }
+      }
+
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
+        const bridgeEntry = bridgeByConversation.get(conversation.id);
 
         // Merge presence override. firstName/lastName now come directly from m.user
         // (participant select was extended in iter-8 — no separate memberUsers query needed).
@@ -840,6 +971,13 @@ export function registerCoreRoutes(
             };
           })(),
           unreadCount,
+          // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —
+          // quand `unreadCount === 0` ou que la passe n'a rien à annoncer
+          // (contrat gelé §3.2). `lastReadAt` voyage À CÔTÉ du pont et reste
+          // ABSENT sans curseur (arbitrage REV-4 : une absence ne s'affirme
+          // jamais).
+          ...(bridgeEntry ? { bridge: bridgeEntry.bridge } : {}),
+          ...(bridgeEntry?.lastReadAt ? { lastReadAt: bridgeEntry.lastReadAt } : {}),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
           currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null
         };
@@ -1488,12 +1626,19 @@ export function registerCoreRoutes(
       const userId = authRequest.authContext.userId;
 
       // Vérifier les permissions d'administration
+      // Le `select` ramène le TYPE du conteneur par la relation que cette
+      // requête d'appartenance charge déjà — la garde du tête-à-tête ci-dessous
+      // en dépend, et aucune requête de plus n'est émise pour l'obtenir.
       const membership = await prisma.participant.findFirst({
         where: {
           conversationId: id,
           userId: userId,
           role: { in: ['creator', 'admin', 'moderator'] },
           isActive: true
+        },
+        select: {
+          role: true,
+          conversation: { select: { type: true } }
         }
       });
 
@@ -1511,6 +1656,29 @@ export function registerCoreRoutes(
             slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
           return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
         }
+      }
+
+      // Le rang d'écriture, le canal d'annonces et le mode lent décrivent la
+      // POLICE d'un conteneur À HIÉRARCHIE. Un tête-à-tête n'en a pas : ses
+      // rôles `creator`/`member` nomment qui a ouvert le fil, pas une autorité
+      // sur l'autre partie (cf. WRITE_HIERARCHY_FREE_TYPES dans
+      // `conversationWriteAdmission`). Les laisser passer permettait à
+      // l'initiateur de faire TAIRE son pair, refusé ensuite à chaque envoi,
+      // et sans recours : ce même PUT lui répond 403 puisqu'il est `member`.
+      //
+      // Le filtre ne porte QUE sur ces trois champs. `autoTranslateEnabled`,
+      // `title`, `description`, `avatar` et `banner` ne décrivent aucune
+      // hiérarchie et restent modifiables sur un tête-à-tête.
+      //
+      // Un type inconnu reste permissif — idiome documenté du module
+      // d'admission. Ce n'est pas un trou : la garde qui protège réellement le
+      // pair est la règle d'admission, qui lit le type sur la ligne AUTORITAIRE
+      // de conversation. Ici on empêche l'écriture d'un réglage sans effet, et
+      // l'événement `conversation:updated` qui l'annoncerait aux clients.
+      if (membership?.conversation?.type === 'direct' &&
+          (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
+           slowModeSeconds !== undefined)) {
+        return sendForbidden(reply, 'Un tête-à-tête n\'a pas de hiérarchie d\'écriture : ces réglages ne s\'y appliquent pas');
       }
 
       const updatedConversation = await prisma.conversation.update({

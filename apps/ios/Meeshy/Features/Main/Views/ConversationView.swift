@@ -34,6 +34,10 @@ struct ConversationActiveMember: Identifiable { // internal for cross-file exten
 
 struct ConversationOverlayState {
     var overlayMessage: Message? = nil
+    /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
+    /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
+    /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
+    var overlayFocalPreview: FocalLongPressPreview? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
@@ -256,6 +260,18 @@ struct ConversationView: View {
     /// couvre déjà le flux authentifié normal, dupliquer la bannière ici
     /// l'afficherait deux fois.
     var showsOwnConnectionBanner: Bool = false
+    /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant : item « Focal (bêta) » du
+    /// menu d'appui long de la liste (gardé par
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
+    /// amendement produit 2026-08-16). `nil` (défaut) ⇒
+    /// `init` bit-à-bit identique à avant ce lot — SEUL le site d'appel qui
+    /// lit `router.pendingForcedReadingMode` (RootView/iPadRootView) passe une
+    /// valeur non-`nil`. Transmis tel quel à
+    /// `ReadingModeController.init(forcedMode:)` : court-circuite la décision
+    /// D'OUVERTURE sans dupliquer ni relâcher la loi gelée
+    /// `ReadingModeOrchestrator.resolveOrchestratorDecision` — voir la
+    /// docstring de `ReadingModeController.forcedMode`.
+    var forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -508,13 +524,14 @@ struct ConversationView: View {
 
     // MARK: - Init
 
-    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil) {
+    init(conversation: Conversation?, replyContext: ReplyContext? = nil, anonymousSession: AnonymousSessionContext? = nil, previewMode: Bool = false, showsOwnConnectionBanner: Bool = false, onOpenFullConversation: (() -> Void)? = nil, forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil) {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
         self.previewMode = previewMode
         self.showsOwnConnectionBanner = showsOwnConnectionBanner
         self.onOpenFullConversation = onOpenFullConversation
+        self.forcedReadingMode = forcedReadingMode
         let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
@@ -550,7 +567,8 @@ struct ConversationView: View {
             scope: identity.scope,
             unreadCount: conversation?.userState.unreadCount ?? 0,
             capabilities: capabilities,
-            isFlagEnabled: isFlagEnabled
+            isFlagEnabled: isFlagEnabled,
+            forcedMode: forcedReadingMode
         ))
         // Même `capabilities` locale que ci-dessus — pas de seconde résolution
         // (§WS-7 travail 5, arbitrage F-086bis) : le catalogue de la feuille
@@ -1315,7 +1333,11 @@ struct ConversationView: View {
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
-                bottomInset: composerHeight + 16,
+                // Le représentable court désormais jusqu'au bord BAS physique
+                // (`ignoresSafeArea` bas, cf. plus bas) : la bande safe area
+                // qu'il traverse s'ajoute à la réserve du composeur pour que
+                // le repos du fil ne bouge pas d'un point.
+                bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                 // 0 en preview : la vue y est hébergée dans une `.sheet` à
                 // détentes, dont le bord haut est déjà sous la status bar —
                 // réserver la bande îlot y décalerait le flux dans le vide.
@@ -1443,7 +1465,7 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     composerState.forwardMessage = msg
                 },
-                onLongPress: { messageId in
+                onLongPress: { messageId, focalPreview in
                     // Preserve l'overlay menu existant (MessageOverlayMenu panel).
                     // L'infrastructure frame-tracking + LayoutEngine reste en place
                     // et sera utilisée ensuite pour lifter la bulle dans le flow
@@ -1457,6 +1479,10 @@ struct ConversationView: View {
                     if msg.callSummary != nil {
                         overlayState.callDetailMessage = msg
                     } else if msg.messageSource != .system {
+                        // Focal : l'aperçu élevé = pixels de la cellule vivante
+                        // (aucun second chemin de rendu). Bulles : nil → le
+                        // ThemedMessageBubble historique de l'overlay.
+                        overlayState.overlayFocalPreview = focalPreview
                         overlayState.overlayMessage = msg
                         overlayState.showOverlayMenu = true
                     }
@@ -1555,7 +1581,16 @@ struct ConversationView: View {
             // inset (`applyTopInset`), le contenu ne fait qu'y transiter au
             // défilement. Le header flottant, lui, reste dans la safe area
             // (zIndex 100, au-dessus).
-            .ignoresSafeArea(.container, edges: .top)
+            //
+            // MÊME règle au bord BAS (retour user 2026-08-16, capture device) :
+            // borné à la safe area basse, le représentable coupait les
+            // messages ~34 pt AVANT le bord physique — visible dès que le
+            // chrome s'escamote au défilement (Focal) : le fil doit sortir de
+            // l'écran par le bord, exactement comme en haut. La réserve du
+            // composeur est portée par `bottomInset` (le contrôleur la
+            // compose dans `contentInset.top`), compensée de
+            // `safeAreaBottom` au site d'appel — le repos est inchangé.
+            .ignoresSafeArea(.container, edges: [.top, .bottom])
 
             // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
             // cellule du flux de messages, rendue en dernier par
@@ -1631,7 +1666,7 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            if !scrollState.isNearBottom || viewModel.isSearchingQuotedMessage {
+            if (!scrollState.isNearBottom || viewModel.isSearchingQuotedMessage) && !hidesComposerChromeForScroll {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
                     .zIndex(60)
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
@@ -1680,6 +1715,12 @@ struct ConversationView: View {
                 )
             }
             .zIndex(50)
+            // Chrome escamoté pendant le défilement Focal : pur `opacity` —
+            // le composeur garde sa hauteur mesurée (aucun inset ne bouge,
+            // donc aucun re-scaling du fil), il ne fait que s'effacer. Les
+            // touches passent au fil pendant l'escamotage.
+            .opacity(hidesComposerChromeForScroll ? 0 : 1)
+            .allowsHitTesting(!hidesComposerChromeForScroll)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
@@ -1748,6 +1789,74 @@ struct ConversationView: View {
         isScrollingList && !isSearchOpen
     }
 
+    /// **En Focal, c'est le header ENTIER qui s'efface** — retour, avatar,
+    /// titre, recherche, appel et bascule de vue compris — là où le mode
+    /// bulles n'efface que sa grappe de boutons d'action.
+    ///
+    /// La raison est le mode lui-même : Focal met le message regardé au
+    /// centre et lui donne ses propres contrôles, sur le bord de sa carte
+    /// (`FocalFocusControlBar`). Garder au-dessus une barre d'outils
+    /// concurrente pendant qu'on lit contredit toute l'intention.
+    ///
+    /// **Toujours une porte de sortie** : le header revient dès l'ARRÊT du
+    /// défilement (ce n'est pas un masquage permanent), et le geste de retour
+    /// natif iOS reste actif en toutes circonstances. Une recherche ouverte
+    /// échappe à la règle, comme pour les boutons d'action — sa barre est un
+    /// champ de saisie qui doit rester joignable pendant qu'on fait défiler
+    /// les résultats.
+    static func hidesEntireHeader(
+        usesFlatRow: Bool,
+        isScrollingList: Bool,
+        isSearchOpen: Bool
+    ) -> Bool {
+        usesFlatRow && hidesHeaderActions(isScrollingList: isScrollingList, isSearchOpen: isSearchOpen)
+    }
+
+    private var hidesEntireHeaderForScroll: Bool {
+        Self.hidesEntireHeader(
+            usesFlatRow: readingModeController.mode.usesFlatRow,
+            isScrollingList: scrollState.isScrollingActiveList,
+            isSearchOpen: headerState.showSearch
+        )
+    }
+
+    /// **En Focal, le défilement escamote TOUT le chrome** — composeur et
+    /// bouton de retour au bas compris, en plus du header (`hidesEntireHeader`)
+    /// et de la pilule de jour (côté hôte, `MessageDayStickyState.isSuppressed`).
+    /// Le fil occupe l'écran entier le temps du mouvement ; tout revient dès
+    /// la pose — après l'atterrissage d'élection (§4.7bis), qui garantit que
+    /// l'élu n'est plus jamais recouvert par la zone de saisie.
+    ///
+    /// Une saisie ACTIVE échappe à la règle : panneau emoji ouvert ou
+    /// suggestions de mention affichées, le composeur est l'outil en main —
+    /// on ne retire pas l'outil en main. Pur `opacity` : aucun inset ne
+    /// bouge, donc aucune re-mise à l'échelle du fil.
+    static func hidesComposerChrome(
+        usesFlatRow: Bool,
+        isScrollingList: Bool,
+        isSearchOpen: Bool,
+        isEmojiPanelOpen: Bool,
+        hasMentionSuggestions: Bool
+    ) -> Bool {
+        hidesEntireHeader(
+            usesFlatRow: usesFlatRow,
+            isScrollingList: isScrollingList,
+            isSearchOpen: isSearchOpen
+        )
+            && !isEmojiPanelOpen
+            && !hasMentionSuggestions
+    }
+
+    private var hidesComposerChromeForScroll: Bool {
+        Self.hidesComposerChrome(
+            usesFlatRow: readingModeController.mode.usesFlatRow,
+            isScrollingList: scrollState.isScrollingActiveList,
+            isSearchOpen: headerState.showSearch,
+            isEmojiPanelOpen: composerState.showTextEmojiPicker,
+            hasMentionSuggestions: viewModel.activeMentionQuery != nil
+        )
+    }
+
     private var hidesHeaderActionsForScroll: Bool {
         Self.hidesHeaderActions(
             isScrollingList: scrollState.isScrollingActiveList,
@@ -1769,6 +1878,12 @@ struct ConversationView: View {
                 AnyView(anonymousHeaderBar)
             } else if isTyping {
                 AnyView(typingHeaderBar)
+            } else if hidesEntireHeaderForScroll {
+                // Focal + défilement : le header entier s'efface (loi
+                // `hidesEntireHeader`). `EmptyView` plutôt qu'une opacité
+                // nulle — un header transparent continuerait d'intercepter
+                // les touches au-dessus des messages.
+                AnyView(EmptyView())
             } else {
                 expandedHeaderBand
             }
@@ -1788,6 +1903,7 @@ struct ConversationView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: composerState.showOptions)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTyping)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: headerState.showSearch)
+        .animation(.easeOut(duration: FocalMetrics.HiddenChrome.easeOut), value: hidesEntireHeaderForScroll)
     }
 
     private var typingHeaderBar: some View {
@@ -2057,7 +2173,12 @@ struct ConversationView: View {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
-                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
+                // Focal : la frame vient de la capture du contrôleur (le
+                // frame-tracker ne suit que les bulles) ; l'aperçu élevé est
+                // alors l'image de la cellule vivante.
+                messageBubbleFrame: overlayState.overlayFocalPreview?.frameInWindow
+                    ?? frameTracker.frame(for: msg.id) ?? .zero,
+                focalPreviewImage: overlayState.overlayFocalPreview?.image,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,

@@ -20,7 +20,11 @@ import type {
   ReactionSync,
   ReactionUpdateEvent
 } from '@meeshy/shared/types/reaction';
-import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import {
+  CLIENT_EVENTS,
+  RATE_LIMIT_REFUSAL_MESSAGE,
+  REACTION_SYNC_BUDGET,
+} from '@meeshy/shared/types/socketio-events';
 import { useI18n } from '@/hooks/useI18n';
 
 // Étendre les query keys pour les réactions
@@ -45,13 +49,95 @@ interface ReactionState {
   userReactions: string[];
 }
 
+/**
+ * Un socket absent n'est PAS une réponse. Distinguée des autres échecs parce
+ * qu'elle ne se réessaie pas : tant que la connexion n'est pas revenue, la
+ * n-ième tentative échouera exactement comme la première. C'est le retour de la
+ * connexion — pas un compteur — qui relance la demande (cf. l'effet de
+ * réconciliation dans `useReactionsQuery`).
+ */
+class ReactionSocketUnavailableError extends Error {
+  constructor() {
+    super('Socket not connected');
+    this.name = 'ReactionSocketUnavailableError';
+  }
+}
+
+/**
+ * Un budget épuisé n'est PAS une panne : le serveur a répondu « pas
+ * maintenant ». Distinguée pour la même raison que la classe ci-dessus, et avec
+ * la même conséquence — pas de réessai. La fenêtre du serveur n'a pas bougé
+ * entre deux tentatives immédiates : la seconde est refusée comme la première,
+ * et elle a coûté une demande de plus dans une fenêtre déjà pleine. C'est le
+ * TOUR d'émission (ci-dessous) qui traverse l'épuisement, pas un compteur de
+ * réessais.
+ */
+class ReactionSyncRateLimitedError extends Error {
+  constructor() {
+    super(RATE_LIMIT_REFUSAL_MESSAGE);
+    this.name = 'ReactionSyncRateLimitedError';
+  }
+}
+
+const isSocketReachable = (): boolean => Boolean(meeshySocketIOService.getSocket()?.connected);
+
+/**
+ * L'écart minimal entre deux demandes de réconciliation, dérivé du budget que
+ * le SERVEUR publie — jamais choisi ici.
+ *
+ * `REACTION_SYNC_BUDGET` autorise `maxRequests` demandes par `windowMs` et par
+ * utilisateur ; une demande toutes les `windowMs / maxRequests` millisecondes
+ * est donc, par construction, le débit le plus rapide qui ne peut pas épuiser
+ * la fenêtre.
+ */
+export const RECONCILE_SPACING_MS =
+  REACTION_SYNC_BUDGET.windowMs / REACTION_SYNC_BUDGET.maxRequests;
+
+/**
+ * Le tour d'émission d'UNE rafale de réconciliation.
+ *
+ * La réconciliation est posée par BULLE : un fil monté en compte autant que de
+ * bulles rendues, et le franchissement injoignable → joignable les réveille
+ * toutes dans le même tick. Chacune ignore combien de voisines partagent son
+ * budget, donc aucune ne peut décider seule d'attendre — d'où ce compteur
+ * partagé, qui n'existe que le temps de la rafale.
+ *
+ * Le compteur se remet à zéro en microtâche : tous les abonnés d'un même
+ * franchissement sont notifiés SYNCHRONEMENT par `emitStatusChange`, donc ils
+ * ont tous pris leur créneau quand la microtâche s'exécute. Le franchissement
+ * suivant repart de zéro, et une bulle seule à l'écran part toujours
+ * immédiatement.
+ */
+let burstSlot = 0;
+let burstResetScheduled = false;
+
+function nextBurstDelayMs(): number {
+  const delay = burstSlot * RECONCILE_SPACING_MS;
+  burstSlot += 1;
+  if (!burstResetScheduled) {
+    burstResetScheduled = true;
+    queueMicrotask(() => {
+      burstSlot = 0;
+      burstResetScheduled = false;
+    });
+  }
+  return delay;
+}
+
 // Fonction pour récupérer les réactions via Socket.IO
 async function fetchReactions(messageId: string): Promise<ReactionState> {
   return new Promise((resolve, reject) => {
     const socket = meeshySocketIOService.getSocket();
     if (!socket?.connected) {
-      // Retourner un état vide si pas connecté
-      resolve({ reactions: [], userReactions: [] });
+      // Surtout PAS `resolve({ reactions: [], userReactions: [] })`. Cette
+      // requête tourne en `staleTime: Infinity` : un état vide résolu est
+      // mémorisé comme une vérité fraîche et plus rien ne le relit. Le montage
+      // d'un fil précède couramment la poignée de main du socket — la bulle
+      // restait alors sans réaction pour toute la vie du composant, sans qu'un
+      // seul `reaction:request-sync` soit jamais parti. Une absence de canal se
+      // signale comme un échec ; elle ne se raconte pas comme une absence de
+      // réaction.
+      reject(new ReactionSocketUnavailableError());
       return;
     }
 
@@ -71,6 +157,8 @@ async function fetchReactions(messageId: string): Promise<ReactionState> {
             reactions: syncData.reactions as ReactionAggregation[],
             userReactions: syncData.userReactions as string[],
           });
+        } else if (response.error === RATE_LIMIT_REFUSAL_MESSAGE) {
+          reject(new ReactionSyncRateLimitedError());
         } else {
           reject(new Error(response.error || 'Failed to fetch reactions'));
         }
@@ -196,12 +284,75 @@ export function useReactionsQuery({
     queryFn: () => fetchReactions(messageId),
     enabled: enabled && !!messageId && isPersisted,
     staleTime: Infinity, // Socket.IO gère les mises à jour
-    retry: 1,
+    // Les deux refus que rien ne rend réessayables : un canal absent et un
+    // budget épuisé. Dans les deux cas la n-ième tentative immédiate échoue
+    // exactement comme la première — et pour le budget elle CREUSE l'échec, en
+    // dépensant une demande de plus dans la fenêtre qui vient de le refuser.
+    retry: (failureCount, error) =>
+      error instanceof ReactionSocketUnavailableError ||
+      error instanceof ReactionSyncRateLimitedError
+        ? false
+        : failureCount < 1,
     initialData, // Utiliser reactionSummary pour affichage instantané
   });
 
   const reactions = data?.reactions ?? [];
   const userReactions = data?.userReactions ?? [];
+
+  // La réconciliation que le gateway ANNONCE, et que personne ne faisait.
+  //
+  // `ReactionHandler` documente cinq fois son rattrapage par la même phrase —
+  // « peers reconcile on the next reaction:sync » : diffusion best-effort qui
+  // échoue, agrégation dégradée, retrait non annoncé. L'argument de cohérence
+  // du serveur repose donc entièrement sur un sync CLIENT ultérieur.
+  //
+  // Il n'y en avait aucun. `reaction:request-sync` ne partait qu'au montage de
+  // la requête, qui tourne en `staleTime: Infinity` : pour un fil resté ouvert,
+  // « le prochain sync » n'arrivait jamais. Tout ce que la coupure a manqué —
+  // les `reaction:added`/`reaction:removed` émis pendant l'absence, qui ne sont
+  // pas rejoués — restait absent de la bulle indéfiniment.
+  //
+  // On s'abonne donc au retour de la connexion, et à lui seul : un changement
+  // d'état qui ne franchit pas la frontière injoignable → joignable ne
+  // redemande rien. Le volume est celui, déjà admis, du montage du fil — une
+  // demande par bulle montée, sous la même limite `REACTION_SYNC` du gateway.
+  //
+  // La demande ne part pas dans le tick du franchissement, mais dans le CRÉNEAU
+  // que `nextBurstDelayMs` lui attribue : le réveil est collectif, le budget
+  // aussi, et une rafale de N bulles émise d'un seul coup épuise exactement le
+  // plafond dont la réconciliation dépend — elle se ferait refuser pour avoir
+  // été trop pressée. Une bulle seule garde le créneau 0, donc part tout de
+  // suite. Le minuteur meurt avec le composant : une bulle sortie de l'écran ne
+  // dépense pas un budget pour un observateur qui n'est plus là.
+  useEffect(() => {
+    if (!enabled || !messageId || !isPersisted) return;
+
+    let wasReachable = isSocketReachable();
+    let burstTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsubscribe = meeshySocketIOService.onStatusChange(() => {
+      const reachable = isSocketReachable();
+      if (reachable === wasReachable) return;
+      wasReachable = reachable;
+      if (!reachable) return;
+
+      const delay = nextBurstDelayMs();
+      if (delay === 0) {
+        refetch();
+        return;
+      }
+      if (burstTimer) clearTimeout(burstTimer);
+      burstTimer = setTimeout(() => {
+        burstTimer = null;
+        refetch();
+      }, delay);
+    });
+
+    return () => {
+      if (burstTimer) clearTimeout(burstTimer);
+      unsubscribe();
+    };
+  }, [enabled, messageId, isPersisted, refetch]);
 
   // Mutation pour ajouter une réaction
   const addMutation = useMutation({

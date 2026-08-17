@@ -2103,6 +2103,13 @@ model UserConversationPreferences {
   /// Emoji reaction on conversation
   reaction String?
 
+  /// Reading-mode preference the user chose for this conversation
+  /// (`ReadingModePreference`, packages/shared/types/reading-modes.ts):
+  /// auto|focal|script|resume|riviere. `auto` hands control back to the
+  /// orchestrator. Validated as an enum in the PUT route, not here — never a
+  /// key/value store entry (E9).
+  readingMode String @default("auto")
+
   /// Monotonic version for optimistic-concurrency resolution between
   /// client optimistic updates and socket-broadcast events. Server
   /// increments on every successful upsert; clients drop incoming

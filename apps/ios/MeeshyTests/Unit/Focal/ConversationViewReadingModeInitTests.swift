@@ -5,9 +5,21 @@ import MeeshySDK
 /// F-086 (WS-7) — l'orchestrateur décide dans `ConversationView.init` (A6),
 /// UNE SEULE FOIS. Ce fichier prouve la partie TESTABLE SANS toucher
 /// `UserDefaults.standard` : `readingModeConversationType(for:)` (mapping
-/// pur, nouveau) et le câblage flag-OFF (l'état par défaut réel du process
-/// de test — `LentilleFeatureFlag.readingModes` vaut `OFF` tant que rien ne
-/// l'a activé, ni `UserDefaults.standard`, ni `MEESHY_FLAG_READING_MODES`).
+/// pur, nouveau).
+///
+/// **RE-PREUVE (I-075, second amendement 2026-08-16)** : la note historique
+/// « `LentilleFeatureFlag.readingModes` vaut `OFF` tant que rien ne l'a
+/// activé » N'EST PLUS VRAIE. Le drapeau cascade désormais vers
+/// `BetaFeaturesPreference` (défaut ON) quand sa propre clé n'a jamais été
+/// posée — sur le vrai domaine (`UserDefaults.standard` + le vrai
+/// `ProcessInfo`), aucun des deux n'a jamais été écrit par ce process de
+/// test, donc `MeeshyFeatureFlags.isReadingModesEnabled` (non injectable) y
+/// vaut RÉELLEMENT `true` maintenant — voir `LentilleFlagGateTests`
+/// (matrice complète) et `FeatureFlagGateTests
+/// .test_isReadingModesEnabled_injectable_defaultsToTrue_viaBetaCascade`
+/// pour la preuve injectable équivalente. Sans conséquence pour CE fichier :
+/// aucun test ci-dessous ne construit `ConversationView` (raison détaillée
+/// plus bas), donc rien ici ne dépendait de la valeur réelle du drapeau.
 ///
 /// **Ce que cette suite NE reprouve PAS** : la décision « 4 branches + choix
 /// collant qui PRIME + drapeau OFF » est la loi GELÉE

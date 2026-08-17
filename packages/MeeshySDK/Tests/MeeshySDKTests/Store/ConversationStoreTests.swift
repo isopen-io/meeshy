@@ -113,6 +113,24 @@ final class ConversationStoreTests: XCTestCase {
         )
     }
 
+    /// Jumeau RENOMMABLE de `makeConv`. Le type par défaut du fixture est
+    /// `.direct` — choix hérité, sans rapport avec les tests qui l'utilisent —
+    /// et le titre d'un DM n'est PAS celui de la base (`merging` l'ignore
+    /// désormais, cf. `test_merging_directConversation_neverTakesTheRawTitle`).
+    /// Tout test dont le sujet est « une métadonnée s'applique » doit donc
+    /// partir d'ici, pas de `makeConv`.
+    private func makeGroupConv(id: String = "conv-1", version: Int = 5) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id,
+            identifier: id,
+            type: .group,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(version: version)
+        )
+    }
+
     // MARK: - Hydration
 
     func test_hydrate_seedsConversationAndPublishesList() async {
@@ -650,7 +668,7 @@ final class ConversationStoreTests: XCTestCase {
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
             lastMessageAt: older,
-            lastMessageId: "msg-stale",
+            lastMessage: .replaced("msg-stale"),
             lastMessagePreview: "stale preview"
         ))
 
@@ -687,7 +705,7 @@ final class ConversationStoreTests: XCTestCase {
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
             lastMessageAt: previous,
-            lastMessageId: "msg-previous",
+            lastMessage: .replaced("msg-previous"),
             lastMessagePreview: "celui d avant",
             previewRecalculated: true
         ))
@@ -717,7 +735,7 @@ final class ConversationStoreTests: XCTestCase {
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
             lastMessageAt: Date(timeIntervalSince1970: 1_699_000_000),
-            lastMessageId: "msg-previous",
+            lastMessage: .replaced("msg-previous"),
             lastMessagePreview: "celui d avant"
         ))
 
@@ -745,7 +763,7 @@ final class ConversationStoreTests: XCTestCase {
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
             lastMessageAt: Date(timeIntervalSince1970: 1_699_000_000),
-            lastMessageId: "msg-previous",
+            lastMessage: .replaced("msg-previous"),
             lastMessagePreview: "celui d avant",
             lastMessageTranslations: .replaced(["fr": "celui d avant"]),
             lastMessageOriginalLanguage: "en",
@@ -781,7 +799,7 @@ final class ConversationStoreTests: XCTestCase {
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
             lastMessageAt: t0,
-            lastMessageId: "msg-1",
+            lastMessage: .replaced("msg-1"),
             lastMessagePreview: "Hello (edited)"
         ))
 
@@ -840,7 +858,7 @@ final class ConversationStoreTests: XCTestCase {
     // alors que rien du dernier message n'a changé.
     func test_applyConversationUpdated_unchangedTranslations_leavesPrismAlone() async {
         let (store, _, _, _) = makeStore()
-        var conv = makeConv(id: "conv-1")
+        var conv = makeGroupConv(id: "conv-1")
         conv.lastMessageTranslations = ["fr": "Bonjour"]
         conv.lastMessageOriginalLanguage = "en"
         await store.hydrate(conv)
@@ -880,7 +898,7 @@ final class ConversationStoreTests: XCTestCase {
     func test_applyConversationUpdated_staleLastMessageAt_unrelatedFieldsStillApplied() async {
         let (store, _, _, _) = makeStore()
         let t0 = Date(timeIntervalSince1970: 1_700_000_000)
-        var conv = makeConv(id: "conv-1")
+        var conv = makeGroupConv(id: "conv-1")
         conv.lastMessageAt = t0
         await store.hydrate(conv)
 
@@ -902,7 +920,7 @@ final class ConversationStoreTests: XCTestCase {
 
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
-            lastMessageId: "msg-99",
+            lastMessage: .replaced("msg-99"),
             lastMessagePreview: "Hello world"
         ))
 
@@ -911,9 +929,382 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(after.lastMessagePreview, "Hello world")
     }
 
+    // MARK: - « Ce lecteur n'a plus AUCUN message visible ici »
+    //
+    // Un cran au-delà du recul autorisé par `previewRecalculated` : le lecteur
+    // masque POUR LUI (suppression pour soi, purge d'historique) le dernier
+    // message qui lui restait. Le serveur n'a plus de remplaçant à servir et
+    // envoie tout le groupe d'aperçu à `null`.
+    //
+    // Lu à travers des `Optional`, ce payload ne dit RIEN : chaque `if let` le
+    // jette, et la ligne garde l'aperçu de ce qui vient de disparaître —
+    // définitivement, puisque plus rien ne bougera dans cette conversation pour
+    // le remplacer. D'où le tri-état `LastMessageIdentity`, seul champ du
+    // groupe dont l'ABSENCE et la NULLITÉ se distinguent sur le fil.
+
+    /// Le fond du sujet : le texte s'en va, et il s'en va ENTIÈREMENT.
+    func test_applyConversationUpdated_clearedLastMessage_voidsTheWholePreviewGroup() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageId = "msg-only"
+        conv.lastMessagePreview = "le seul message"
+        conv.lastMessageTranslations = ["fr": "le seul message"]
+        conv.lastMessageOriginalLanguage = "en"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 1_800_000_000)
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: nil,
+            lastMessage: .replaced(nil),
+            lastMessagePreview: nil,
+            lastMessageTranslations: .replaced([:]),
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertNil(after.lastMessageId)
+        XCTAssertNil(after.lastMessagePreview)
+        XCTAssertNil(after.lastMessageTranslations)
+        XCTAssertNil(after.lastMessageOriginalLanguage)
+        XCTAssertNil(after.lastMessageSenderName)
+        XCTAssertTrue(after.lastMessageAttachments.isEmpty)
+        XCTAssertEqual(after.lastMessageAttachmentCount, 0)
+        XCTAssertNil(after.lastMessageLocation)
+        // Le libellé composé par `lastMessageSummaryKind` vit dans ces trois
+        // drapeaux : les laisser ferait dire « Message expiré » à une ligne qui
+        // n'a plus de message du tout.
+        XCTAssertFalse(after.lastMessageIsBlurred)
+        XCTAssertFalse(after.lastMessageIsViewOnce)
+        XCTAssertNil(after.lastMessageExpiresAt)
+        XCTAssertNil(after.resolvedLastMessagePreview(preferredLanguages: ["fr", "en"]),
+                     "la ligne ne doit plus rien avoir à rendre, dans aucune langue du prisme")
+    }
+
+    /// Le rang de la ligne survit au vidage. `Conversation.lastMessageAt` est
+    /// une donnée GLOBALE, non nullable en base, qu'un masquage PERSONNEL ne
+    /// change pour personne : un `GET /conversations` juste après rendrait la
+    /// valeur conservée ici. La reculer ferait plonger la ligne au fond de la
+    /// liste jusqu'à la synchro suivante, qui la remonterait.
+    func test_applyConversationUpdated_clearedLastMessage_keepsTheRowsRank() async {
+        let (store, _, _, _) = makeStore()
+        let t0 = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = t0
+        conv.lastMessageId = "msg-only"
+        conv.lastMessagePreview = "le seul message"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessage: .replaced(nil),
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageAt, t0)
+        XCTAssertNil(after.lastMessagePreview)
+    }
+
+    // MARK: - Nommer un AUTRE message, c'est cesser de décrire le précédent
+    //
+    // Un cran EN DEÇÀ du vidage : le serveur a bien un remplaçant à servir
+    // (suppression pour tous du dernier message, masquage personnel avec un
+    // message plus ancien encore visible). Le payload nomme donc un autre
+    // message — mais `emitConversationPreviewUpdate` ne lit ni les pièces
+    // jointes, ni l'expéditeur, ni les drapeaux éphémères : six des onze champs
+    // du groupe d'aperçu ne voyagent sur AUCUN `conversation:updated`.
+    // Appliqués champ par champ, ces payloads laissaient la ligne décrire un
+    // MÉLANGE de deux messages, que rien ne venait ensuite corriger.
+
+    /// Le fond du sujet : le texte du remplaçant s'installe, et TOUT ce qui
+    /// décrivait le message supprimé s'en va avec lui.
+    func test_applyConversationUpdated_replacingTheLastMessage_stopsDescribingThePreviousOne() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_100)
+        conv.lastMessageId = "msg-supprime"
+        conv.lastMessagePreview = "regarde ça"
+        conv.lastMessageTranslations = ["fr": "regarde ça"]
+        conv.lastMessageOriginalLanguage = "en"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageLocation = SharedPlace(latitude: 48.85, longitude: 2.29, name: "Tour Eiffel")
+        conv.lastMessageIsBlurred = true
+        conv.lastMessageIsViewOnce = true
+        conv.lastMessageExpiresAt = Date(timeIntervalSince1970: 1_800_000_000)
+        await store.hydrate(conv)
+
+        // Ce que le serveur envoie vraiment après un « supprimer pour tous » :
+        // l'identité du message PRÉCÉDENT, son texte, son Prisme, et rien d'autre.
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            lastMessage: .replaced("msg-precedent"),
+            lastMessagePreview: "salut",
+            lastMessageTranslations: .replaced([:]),
+            previewRecalculated: true
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageId, "msg-precedent")
+        XCTAssertEqual(after.lastMessagePreview, "salut")
+        XCTAssertNil(after.lastMessageSenderName,
+                     "« Windie : salut » attribuerait au remplaçant l'auteur du message supprimé")
+        XCTAssertTrue(after.lastMessageAttachments.isEmpty,
+                      "la vignette d'une photo supprimée ne doit pas légender le texte qui la remplace")
+        XCTAssertEqual(after.lastMessageAttachmentCount, 0)
+        XCTAssertNil(after.lastMessageLocation)
+        XCTAssertFalse(after.lastMessageIsBlurred)
+        XCTAssertFalse(after.lastMessageIsViewOnce,
+                       "« Vue unique » collé sur un texte neuf est le symptôme le plus visible du mélange")
+        XCTAssertNil(after.lastMessageExpiresAt,
+                     "l'expiration de l'ancien ferait dire « Message expiré » à un message bien vivant")
+        XCTAssertNil(after.lastMessageTranslations)
+        XCTAssertEqual(after.resolvedLastMessagePreview(preferredLanguages: ["fr", "en"]), "salut",
+                       "la carte du message supprimé ne doit plus pouvoir gagner : le résolveur la PRÉFÈRE à l'aperçu")
+    }
+
+    /// Le défaut jumeau du précédent, et son exact contraire : le remplaçant
+    /// EST un message position-seule.
+    ///
+    /// `adoptLastMessage` remet l'épingle à neutre — c'est son contrat — à
+    /// charge pour l'appelant de reposer aussitôt ce que le payload porte
+    /// VRAIMENT. Le payload porte la position depuis le cycle 50 (les trois
+    /// émetteurs la hissent depuis `metadata.location` du message qu'ils
+    /// nomment), mais le mapping manuel du pont ne la transmettait pas et la
+    /// fusion ne la reposait donc jamais.
+    ///
+    /// Ce que ça rendait : un message position-seule a un `content` vide, donc
+    /// un `lastMessagePreview` vide par construction. Sans l'épingle, il ne
+    /// reste RIEN — la ligne est littéralement blanche, et VoiceOver n'annonce
+    /// que l'horodatage (cf. la branche `.standard` de `ThemedConversationRow`,
+    /// qui se rabat sur `lastMessageLocation` précisément quand l'aperçu est
+    /// vide).
+    func test_applyConversationUpdated_replacementIsAPositionMessage_carriesItsPin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = Date(timeIntervalSince1970: 1_700_000_000)
+        conv.lastMessageId = "msg-texte"
+        conv.lastMessagePreview = "salut"
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_100),
+            lastMessage: .replaced("msg-position"),
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessageId, "msg-position")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel",
+                       "l'aperçu d'un message position-seule est VIDE : sans son épingle, la ligne n'affiche plus rien du tout")
+    }
+
+    /// La borne du geste ci-dessus : un événement qui ne NOMME aucun message ne
+    /// parle pas de l'épingle non plus.
+    ///
+    /// C'est le chemin des métadonnées (renommage, avatar, mode lent), et il
+    /// ne porte jamais `location`. Écrire l'épingle hors de la branche
+    /// d'identité effacerait donc celle du dernier message à chaque renommage —
+    /// même classe de défaut que celui qu'on ferme, par la porte opposée.
+    func test_applyConversationUpdated_renameDoesNotTouchThePin() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeGroupConv(id: "conv-1")
+        conv.lastMessageId = "msg-position"
+        conv.lastMessageLocation = SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            title: "Nouveau titre"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.title, "Nouveau titre")
+        XCTAssertEqual(after.lastMessageLocation?.name, "Tour Eiffel",
+                       "un renommage ne dit rien du dernier message — il ne doit pas lui retirer son épingle")
+    }
+
+    /// La contre-épreuve qui borne le geste, et sans laquelle il serait
+    /// destructeur : une ÉDITION et une TRADUCTION nomment le MÊME message.
+    /// Ses pièces jointes, son auteur et ses drapeaux restent vrais — le
+    /// payload les tait parce qu'ils n'ont pas changé, pas parce qu'ils ont
+    /// disparu.
+    func test_applyConversationUpdated_editingTheSameMessage_keepsItsDescription() async {
+        let (store, _, _, _) = makeStore()
+        let sameInstant = Date(timeIntervalSince1970: 1_700_000_000)
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageAt = sameInstant
+        conv.lastMessageId = "msg-1"
+        conv.lastMessagePreview = "avant"
+        conv.lastMessageSenderName = "Windie"
+        conv.lastMessageAttachments = [MeeshyMessageAttachment(id: "att-1")]
+        conv.lastMessageAttachmentCount = 1
+        conv.lastMessageIsViewOnce = true
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessageAt: sameInstant,
+            lastMessage: .replaced("msg-1"),
+            lastMessagePreview: "après",
+            lastMessageTranslations: .replaced([:])
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.lastMessagePreview, "après")
+        XCTAssertEqual(after.lastMessageSenderName, "Windie",
+                       "éditer une légende ne change pas l'auteur du message")
+        XCTAssertEqual(after.lastMessageAttachments.count, 1,
+                       "éditer une légende ne retire pas la photo qu'elle légende")
+        XCTAssertEqual(after.lastMessageAttachmentCount, 1)
+        XCTAssertTrue(after.lastMessageIsViewOnce)
+    }
+
+    /// Le Prisme du remplaçant doit atteindre la ligne. Le geste remet la carte
+    /// à neutre AVANT que le payload ne repose la sienne : inverser les deux
+    /// rendrait l'aperçu brut là où une traduction était disponible.
+    func test_merging_replacingTheLastMessage_installsTheIncomingPrism() throws {
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageId = "msg-supprime"
+        conv.lastMessagePreview = "look at this"
+        conv.lastMessageTranslations = ["fr": "regarde ça"]
+        conv.lastMessageOriginalLanguage = "en"
+
+        let merged = try XCTUnwrap(ConversationStore.merging(conv, with: ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessage: .replaced("msg-precedent"),
+            lastMessagePreview: "hello",
+            lastMessageTranslations: .replaced(["fr": "bonjour"]),
+            lastMessageOriginalLanguage: "en",
+            previewRecalculated: true
+        )))
+
+        XCTAssertEqual(merged.lastMessageTranslations, ["fr": "bonjour"])
+        XCTAssertEqual(merged.resolvedLastMessagePreview(preferredLanguages: ["fr"]), "bonjour",
+                       "Prisme ['fr'], remplaçant anglais traduit ⇒ « bonjour », jamais « regarde ça »")
+    }
+
+    /// Contre-épreuve indispensable : un renommage n'emporte AUCUNE clé
+    /// `lastMessage*`. Confondre son silence avec un vidage effacerait l'aperçu
+    /// de toutes les lignes à chaque changement de titre ou d'avatar — le
+    /// défaut symétrique, et bien plus visible que celui qu'on ferme ici.
+    func test_applyConversationUpdated_metadataOnly_leavesThePreviewGroupAlone() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeGroupConv(id: "conv-1")
+        conv.lastMessageId = "msg-only"
+        conv.lastMessagePreview = "le seul message"
+        conv.lastMessageTranslations = ["fr": "le seul message"]
+        await store.hydrate(conv)
+
+        await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            title: "Renamed"
+        ))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.title, "Renamed")
+        XCTAssertEqual(after.lastMessageId, "msg-only")
+        XCTAssertEqual(after.lastMessagePreview, "le seul message")
+        XCTAssertEqual(after.lastMessageTranslations, ["fr": "le seul message"])
+    }
+
+    /// Un doublon d'événement ne republie pas la ligne : `merging` rend `nil`
+    /// quand il n'y avait déjà plus rien à vider. Sans cette borne, chaque
+    /// re-livraison d'un vidage traverserait le store, le cache disque et le
+    /// rendu pour n'y rien changer.
+    func test_merging_clearedLastMessage_twice_secondIsANoop() {
+        var conv = makeConv(id: "conv-1")
+        conv.lastMessageId = "msg-only"
+        conv.lastMessagePreview = "le seul message"
+
+        let cleared = ConversationUpdatedStoreEvent(
+            conversationId: "conv-1",
+            lastMessage: .replaced(nil),
+            previewRecalculated: true
+        )
+
+        let first = ConversationStore.merging(conv, with: cleared)
+        XCTAssertNotNil(first, "le premier vidage change bien quelque chose")
+        XCTAssertNil(ConversationStore.merging(first!, with: cleared),
+                     "le second n'a plus rien à vider — il ne doit pas republier la ligne")
+    }
+
+    // MARK: - `title` sur un DM — le titre de la base n'est pas celui de la ligne
+
+    /// Le titre client d'un DM est le nom du participant d'en face
+    /// (`APIConversation.toConversation` écarte explicitement le titre de la
+    /// base). Le payload socket porte le titre BRUT : le greffer remplace le nom
+    /// affiché par un libellé que personne ne voit ailleurs.
+    ///
+    /// `ConversationListViewModel` garde ce cas depuis le 2026-07-04. Cette
+    /// copie-ci ne le gardait pas — et c'est elle qui écrit le CACHE DISQUE via
+    /// `ConversationSyncEngine.applyingConversationUpdate`, donc celle qui
+    /// gagnait : le cache réécrit rediffuse la liste à l'écran, et le nom greffé
+    /// survivait au redémarrage.
+    func test_merging_directConversation_neverTakesTheRawTitle() {
+        var conv = makeConv(id: "conv-1")
+        conv.title = "Sandra Raveloson"
+
+        let merged = ConversationStore.merging(
+            conv,
+            with: ConversationUpdatedStoreEvent(conversationId: "conv-1", title: "Sany")
+        )
+
+        XCTAssertNil(
+            merged,
+            "un renommage seul ne change RIEN sur un DM — la ligne ne doit même pas être republiée"
+        )
+    }
+
+    /// Contre-épreuve indispensable : la garde vise le TITRE d'un DM, pas les
+    /// métadonnées d'un DM en général. Un avatar de groupe partagé, un mode
+    /// lent, une bannière continuent de s'appliquer — sinon on remplacerait un
+    /// nom écrasé par un DM entièrement sourd aux métadonnées.
+    func test_merging_directConversation_stillTakesEveryOtherMetadataField() throws {
+        var conv = makeConv(id: "conv-1")
+        conv.title = "Sandra Raveloson"
+
+        let merged = try XCTUnwrap(ConversationStore.merging(
+            conv,
+            with: ConversationUpdatedStoreEvent(
+                conversationId: "conv-1",
+                title: "Sany",
+                avatar: "https://cdn.meeshy.me/a.jpg",
+                slowModeSeconds: 12
+            )
+        ))
+
+        XCTAssertEqual(merged.title, "Sandra Raveloson", "le nom du participant survit au payload")
+        XCTAssertEqual(merged.avatar, "https://cdn.meeshy.me/a.jpg")
+        XCTAssertEqual(merged.slowModeSeconds, 12)
+    }
+
+    /// L'autre moitié de la garde : une conversation RENOMMABLE prend bien son
+    /// titre. Sans ce témoin, poser `conv.type != .direct` à l'envers — ou
+    /// supprimer la branche — passerait au vert.
+    func test_merging_groupConversation_takesTheIncomingTitle() {
+        let merged = ConversationStore.merging(
+            makeGroupConv(id: "conv-1"),
+            with: ConversationUpdatedStoreEvent(conversationId: "conv-1", title: "Équipe Produit")
+        )
+
+        XCTAssertEqual(merged?.title, "Équipe Produit")
+    }
+
     func test_applyConversationUpdated_titleAndAvatar_applied() async {
         let (store, _, _, _) = makeStore()
-        await store.hydrate(makeConv(id: "conv-1"))
+        await store.hydrate(makeGroupConv(id: "conv-1"))
 
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",
@@ -941,7 +1332,7 @@ final class ConversationStoreTests: XCTestCase {
 
     func test_applyConversationUpdated_allNilFields_doesNotMutateExistingState() async {
         let (store, _, _, _) = makeStore()
-        await store.hydrate(makeConv(id: "conv-1"))
+        await store.hydrate(makeGroupConv(id: "conv-1"))
         // Establish a known title.
         await store.applyConversationUpdated(ConversationUpdatedStoreEvent(
             conversationId: "conv-1",

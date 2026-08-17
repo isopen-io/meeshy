@@ -1696,11 +1696,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
 - [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
       `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
-      (2026-08-12, slice `conversation-list-live-presence`), UI rendering deliberately deferred**.
-      Confirmed a real, categorical gap: `ApiConversation.participants` carries no `isOnline`/
-      `lastActiveAt` fields at all (unlike the Contacts roster, which at least had stale REST data
-      to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the chat header
-      had ZERO presence indication, not even a frozen one. New `ApiConversation.
+      (2026-08-12, slice `conversation-list-live-presence`)**; **row dot shipped 2026-08-17** (slice
+      `conversation-list-presence-dot`). Confirmed a real, categorical gap: `ApiConversation.participants`
+      carries no `isOnline`/`lastActiveAt` fields at all (unlike the Contacts roster, which at least had
+      stale REST data to overlay onto — cf. `presence-live-contacts-overlay`), so conversation rows/the
+      chat header had ZERO presence indication, not even a frozen one. New `ApiConversation.
       otherParticipantUserId(currentUserId)` (`:sdk-core/theme`, refactored out of the existing
       `otherParticipantName` alongside a shared private `otherParticipant` lookup — a behavior-
       preserving refactor, `displayTitle`'s own pre-existing tests re-ran green unchanged) resolves
@@ -1708,13 +1708,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ContactsListViewModel`'s identical pattern verbatim) collects the SAME corrected
       `MessageSocketManager.userStatus`/`.presenceSnapshot` flows into
       `ConversationListUiState.presenceByUserId`, exposing `presenceStateFor(conversation,
-      nowEpochMillis): PresenceState?`. **UI wiring (the actual dot on `ConversationRow`/the chat
-      header) is NOT done this run** — `ConversationRow`/`ConversationRowContent` are deeply
-      parameterized across 2+ Composable layers plus their top-level call site, a materially larger
-      change than the ViewModel-side plumbing; scoped out to keep this slice right-sized, mirroring
-      the `chat-composer-prefill-draft` → `widget-quick-reply` foundation-then-consumer split. +9
-      tests (4 `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the
-      direct-type gate and the snapshot merge.
+      nowEpochMillis): PresenceState?` (already gated to direct-only via `otherParticipantUserId`
+      returning `null` for group/community/channel/bot). **Row dot wiring** threads `presence:
+      PresenceState?` through `ConversationRow` → `ConversationRowContent` into the existing
+      `MeeshyAvatar`'s own `presence` parameter — `MeeshyAvatar` (`:sdk-ui`) already RENDERS the dot
+      overlay when given a non-null `PresenceState` (shipped with the avatar atom itself, just never
+      fed a live value from the conversation list, exactly the same "missing wire, not missing UI atom"
+      shape as the earlier `contacts-mood-emoji-presence` slice). Pure Compose glue — no new logic to
+      test (`TDD-COVERAGE.md`'s documented exemption: `@Composable` param threading is out of the JVM
+      gate; the testable decision, `presenceStateFor`, already has its 5 dedicated `ConversationListViewModelTest`
+      cases from the foundation slice). **Chat header dot remains open** — a separate call site, not
+      attempted this run. +9 tests carried over unchanged from the foundation slice (4 `ConversationAccentTest`,
+      5 `ConversationListViewModelTest`), mutation-proven on the direct-type gate and the snapshot merge.
 - [x] Story tray + per-conversation story rings — `StoryTray` (ring gradient si non-vu, gris sinon,
       badge sur sa propre story) wired as the conversation list's `header` (`MeeshyApp.kt`).
       Re-verified 2026-08-15 — already fully documented under the `:feature:stories` bullet above
@@ -2673,8 +2678,74 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       MessageActionMenu 5, ReportMessageForm 11, ChatViewModel 7, plus the updated basic-menu order);
       mutation-checked (dropping the `!isOutgoing` gate killed exactly the 3 outgoing-message tests).
 - [ ] Conversation info sheet: hero/direct headers; members / media / stats / options tabs
-- [ ] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list
-- [ ] Member moderation: promote/demote, expel, ban, add member
+- [~] Paginated member list (infinite scroll + search); shared-media grid; pinned-messages list —
+      **member list shipped 2026-08-16** (slice `conversation-members-roster`, port of iOS
+      `ParticipantsView`): a group-only header action opens a members bottom sheet with cursor
+      pagination, server-side search (`?search=` filters `displayName` case-insensitively) and
+      role badges. Pure `MemberRoster` (`:core:model`) accumulates pages, **deduplicates ids
+      repeated across pages** (cursor pagination over a roster mutating underneath legitimately
+      repeats a row) and normalises `hasMore && nextCursor != null` — a server answering
+      `hasMore: true, nextCursor: null` would otherwise re-request page one forever; **both holes
+      are open in the iOS reference**. `PaginatedParticipant.displayLabel` ports iOS's
+      `name` fallback chain. Shared-media grid and pinned-messages list are already live
+      (`ConversationMediaGallery`, `PinnedMessagesSheet`) — box stays `[~]` only because this line
+      bundles three surfaces and all three should be re-verified together before checking it.
+- [~] Member moderation: promote/demote, expel, ban, add member — **promote/demote/expel shipped
+      2026-08-16** (slice `conversation-members-roster`) via a per-row overflow menu inside the
+      members sheet. Pure `MemberModeration` (`:core:model`) is the SSOT for which affordance a
+      viewer may see: `canRemove` (never self, never the creator, admin+ removes anyone,
+      moderator removes plain members only) and `roleActions` (creator moves anyone between
+      member/moderator/admin; a conversation admin does the same except on a peer admin;
+      moderators and members get nothing) — a faithful port of `ParticipantsView.
+      canRemoveParticipant` + `contextMenuItems`, mirroring the gateway's own checks in
+      `routes/conversations/participants.ts` so no control is offered that would come back 403.
+      Both actions are **optimistic with rollback** on refusal (iOS applies only after the server
+      answers). Real-time: `participant:role-updated` / `conversation:participant-left` /
+      `conversation:participant-banned` were listened for in `MessageSocketManager` but had **no
+      consumer** before this slice — the sheet is now that consumer, so a moderation action taken
+      on another device or by another moderator lands without a refetch. **Add member shipped
+      2026-08-16** (slice `add-participant-sheet`) — a nested `AddParticipantSheet` (Android port
+      of iOS's own `AddParticipantSheet`), opened from a new "+" icon in the members sheet header,
+      gated on `viewerRole.hasMinimumRole(MODERATOR)` (mirror of iOS `canManageMembers = isAdmin
+      || isModerator`, itself matching the gateway's own `['creator','admin','moderator']` check
+      in `routes/conversations/participants.ts`). New `POST /conversations/{id}/participants`
+      wired (`ConversationApi.addParticipant`/`ConversationRepository.addParticipant`) — the
+      client only gates the affordance, the server remains the authority. `AddParticipantViewModel`
+      reuses the exact debounced-search shape already established by `NewConversationViewModel`
+      (300 ms, 2-char floor, `UserRepository.searchUsers`) but adds no multi-select: each row's
+      "Add" button fires immediately, tracked per-user (`isAdding`/`isMember`) so a repeat tap
+      mid-flight is a no-op and a refusal rolls the row back to offering the button again with the
+      server's error surfaced. `existingMemberIds` passed in from the already-loaded roster so a
+      current member never gets an enabled "Add" button; `onAdded` refreshes the roster sheet
+      behind it, mirroring iOS's own callback. +8 tests (`ConversationRepositoryTest` ×2 for the
+      new endpoint, `AddParticipantViewModelTest` ×6 for debounce/floor/member-flagging/add/
+      refusal-rollback/in-flight-dedup). **Ban shipped 2026-08-16** (slice
+      `conversation-member-ban`) — re-proved before assuming "iOS does not wire it": `ban` IS
+      wired, just not in `ParticipantsView` (the screen `ConversationMembersSheet` otherwise
+      mirrors) — it lives in a SECOND, parallel iOS member-management surface,
+      `MemberManagementSection` (embedded in the conversation-settings sheet, reached via
+      `ConversationInfoSheet` → "Conversation info sheet" §C, itself still open below), calling
+      `ConversationSettingsViewModel.banParticipant` (`packages/MeeshySDK`). Android already
+      unified both iOS screens into one `ConversationMembersSheet`, so ban was added there as a
+      fourth row action alongside promote/demote/remove rather than waiting on the larger,
+      still-open settings-sheet port. New `MemberModeration.canBan` — **stricter than
+      `canRemove`**, ported from iOS's own guard (`currentUserRole > targetRole &&
+      currentUserRole.hasMinimumRole(.admin)`): an admin may remove ANY non-creator member but
+      may only BAN a strictly lower-ranked one — an admin cannot ban a peer admin, unlike
+      removal. New `PATCH /conversations/{id}/participants/{userId}/ban` wired
+      (`ConversationApi.banParticipant`/`ConversationRepository.banParticipant`, no body — mirror
+      of iOS `ConversationService.banParticipant`). `ConversationMembersViewModel.banMember`
+      reuses the exact optimistic-with-rollback shape as `removeMember` (banning drops the row
+      from the active roster immediately, same visible effect), with its own confirmation dialog
+      (Android's `removeMember` already confirms before firing — iOS's `MemberManagementSection`
+      does NOT show a confirmation for either expel or ban, an iOS gap not worth reproducing over
+      the already-safer Android convention). +6 tests (`MemberModerationTest` ×5 for the stricter
+      rank gate, `ConversationMembersViewModelTest` ×3 for optimistic drop/rollback/role gating).
+      **Still open: unban** — the SDK method (`ConversationService.unbanParticipant`) exists and
+      is fully wired, but has genuinely ZERO iOS UI anywhere (no banned-members list screen at
+      all) — confirmed by exhaustive grep, not assumed. Not a "port iOS→Android" candidate until
+      iOS itself grows a reference UI; noted here rather than silently dropped. Box stays
+      unchecked until it lands.
 - [x] Conversation moderation: write-role, announcement mode, slow mode, auto-translate — **admin
       settings editor** landed (slice `conversation-settings-form`), completing the item on top of the
       earlier **slow-mode composer enforcement** (`chat-slow-mode-cooldown`) and **attachment gating**
@@ -3757,10 +3828,105 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       300 ms-debounced `mentionSearch.search(query)` for the active fragment [`MentionComposer.shouldQueryRemote`
       gates it, a fresh keystroke or a selection cancels the in-flight lookup], excludes the signed-in user,
       and folds the results below the local roster via the pure `applyRemote` [local-first, stale-fragment
-      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done**;
+      dropped]; a failed lookup degrades to the local roster. +6 `PostCommentsViewModelTest`) **done** +
+      **viewer-initiated comment delete** (slice `feed-comment-delete`, 2026-08-17 — the viewer can now
+      delete their own comments/replies from the open thread, not just observe a live `comment:deleted`
+      from elsewhere. Found via the "ready backend, never wired to UI" heuristic (fifth this session):
+      `PostRepository.deleteComment(postId, commentId)` was fully implemented, unlike its already-wired
+      siblings `likeComment`/`unlikeComment`. Mirror of iOS `FeedCommentsSheet.deleteHandler`/`deleteComment`
+      — gated to `comment.author.id == currentUserId` [`CommentPresentation.isOwn`, new field derived in
+      `CommentProjection.build(currentUserId:)`], optimistic removal, full rollback on failure, no
+      confirmation dialog [same as iOS's destructive-role menu item — fires on tap]. `PostCommentsViewModel
+      .deleteComment(commentId)` deliberately **reuses the exact `onCommentDeleted` transition already
+      wired to the socket path** [snapshot `thread`/`replies` → apply the same removal → confirm or restore
+      both snapshots on failure] rather than duplicating the removal logic. New `CommentDeleteButton`
+      [trash icon, visible only when `isOwn`] wired once in `CommentRow`, covering both top-level and reply
+      rows through `ReplyThread`'s existing reuse of that composable. +9 tests [`CommentProjectionTest` ×2:
+      isOwn true/false by author id; `PostCommentsViewModelTest` ×6: top-level delete, reply delete +
+      parent count decrement, rollback + error on failure, and the three inert guards — blank postId, blank
+      commentId, unknown comment id]) **done** + **reply @-mention auto-prefill** (slice
+      `reply-mention-prefill`, 2026-08-17 — replying to a comment that is *itself* a reply now
+      prefills `@username ` into the composer, port of iOS `FeedCommentsSheet.beginReply(to:)`:
+      flat 2-level threading reparents the new reply to the root comment, so without the mention
+      the addressed person is never notified — only the thread's root author would be. New pure
+      `ReplyMentionPrefill.apply(currentText, previousMention, replyToParentId, authorUsername)`
+      [`:feature:feed`] — injects only when `replyToParentId` is non-blank [the target comment is
+      a reply, not top-level] and the author has a username; strips the exact previously-injected
+      prefix when retargeting to a different reply [idempotent re-tap, no double prefix; an
+      edited-away prefix is left alone, mirroring iOS's `hasPrefix` guard]. `beginReply` now tracks
+      `prefilledMention` and calls the helper right after positioning `composer.value`. Replying to
+      a top-level comment, or canceling a reply [`cancelReply`], never touches the draft — matches
+      iOS, which also leaves `composerText` untouched on cancel. +8 `ReplyMentionPrefillTest`
+      [pure] + 3 `PostCommentsViewModelTest` [prefill on reply-to-reply, no prefill on top-level,
+      retargeting replaces the previous prefill]) **done**;
       effects/blur still open
-- [ ] Post / comment pin-unpin; repost / quote-repost / share; report
-- [ ] Post view + dwell-time tracking; batched impression tracking
+- [~] Post / comment pin-unpin; repost / quote-repost / share; report — **post pin shipped
+      2026-08-17** (slice `feed-pin-own-post`). Re-proof found `PostRepository.pinPost`/
+      `unpinPost` (`POST`/`DELETE /posts/{id}/pin`) already fully implemented and TESTED at the
+      repository level, with ZERO call sites anywhere in `apps/android` — ready backend, never
+      wired to a screen. Confirmed against the iOS reference (`PostService.pinPost`/`unpinPost`,
+      `packages/MeeshySDK/Sources/MeeshySDK/Services/PostService.swift`) that iOS itself only
+      ever calls `pinPost` — `unpinPost` has **zero call sites in the iOS app too** (`onPin` is
+      gated `isOwnPost ? {...} : nil` in `ProfileUserPostsList.swift`/`PostDetailViewModel.swift`,
+      exactly like `onDelete`, with no matching `onUnpin`). Ported faithfully: `PostAction.Pin`
+      added to the existing pure `PostActionMenu` (own-post-only, ordered right before Delete),
+      `FeedViewModel.pinPost(postId)` mirrors the established `repost()`/`deletePost()` shape
+      (call → `postRepository.refresh()` on success to pick up the server's `isPinned`, surface
+      `errorMessage` on failure). `unpinPost` deliberately left unwired — no UI reference on
+      either platform to port. +5 tests (`PostActionMenuTest` ×3: own-post ordering now includes
+      `Pin`, someone-else's post never offers it; `FeedViewModelTest` ×2: delegates + refreshes
+      on success, surfaces error without refreshing on failure). EN/FR/ES/PT strings.
+      **Still open**: comment pin-unpin (separate surface, not investigated this slice);
+      quote-repost's own composer UI (the `isQuote`/`content` params already exist on
+      `PostRepository.repost`, but `FeedScreen`'s current `onRepost` always calls the SIMPLE
+      repost path — a quote-with-commentary UI, if one exists at all, wasn't confirmed).
+- [~] Post view + dwell-time tracking; batched impression tracking — **batched impression
+      tracking shipped 2026-08-17** (slice `feed-impression-batching`). Re-proved before coding:
+      `PostApi.recordImpressions`/`PostRepository.recordImpressions(postIds, source)`
+      (`POST /posts/impressions/batch`) already existed end-to-end, tested, just never called by
+      any UI. New `ImpressionBatcher` (`:sdk-core`) — a faithful port of iOS's own
+      `ImpressionBatcher.swift` debounce/flush/retry core: an impression is counted per
+      APPEARANCE (never deduped — matches the gateway's own batch semantics), `record(postId)`
+      appends and (re)schedules a 3s debounce flush, `flushNow()`/`flushNowAsync()` sends
+      immediately, a failed send reinserts the batch at the front for the next flush to retry.
+      One instance per surface (`FeedViewModel` owns a `source = "feed"` instance directly, not a
+      Hilt singleton — mirrors iOS's per-view `@StateObject` lifetime) with its OWN
+      `SupervisorJob`+`Dispatchers.IO` scope, deliberately NOT `viewModelScope`: an
+      `onCleared()`-triggered flush would otherwise race `viewModelScope`'s own teardown
+      (cancelled right after `onCleared()` returns) and likely get dropped. Wired into
+      `FeedScreen`'s existing `items(state.posts, key = { it.id })` block via a sibling
+      `LaunchedEffect(post.id) { viewModel.trackImpression(post.id) }`, alongside the
+      already-existing `loadMoreIfNeeded` effect. +9 tests (`ImpressionBatcherTest`): debounced
+      flush fires after the delay; doesn't fire early; groups records within the window into one
+      batch; repeat appearances aren't deduped; a blank id is a no-op; `flushNow`
+      sends+cancels the pending timer; `flushNow` on an empty batch is inert; `flushNowAsync`
+      sends without being awaited; a failed flush keeps the batch for the next retry.
+      **Deliberately narrower than iOS's own three safety nets**: the debounced auto-flush and
+      an explicit `flushNow`/`flushNowAsync` are ported; iOS's OTHER two nets —
+      app-backgrounding flush (`willResignActive`/`didEnterBackground`) and kill-survival
+      persistence (UserDefaults, replayed on relaunch) — are NOT, Android has no equivalent
+      wiring point yet for either. **Still fully open: dwell-time tracking** — iOS's own
+      `EngagementTracker`/`TrackEngagementModifier` is a materially bigger, separate system
+      (durable SQLite outbox, session begin/pause/resume with a "topmost owns the clock" rule for
+      overlays, `minDwellMs`/`minWatchMs` qualification thresholds, its own
+      `POST /posts/engagement/batch` endpoint) — not attempted here, left as its own future slice.
+      **Post view recording + author-only reach stats shipped 2026-08-17** (slice
+      `post-detail-reach-stats`) — `PostRepository.viewPost(postId)` (`POST /posts/{id}/view`) was
+      fully implemented, tested, and unwired, same gap pattern as impression batching but a
+      genuinely distinct endpoint [confirmed by reading both: `viewPost` records a single
+      deduplicated per-viewer view, `recordImpressions` is the separate batched engagement metric
+      already shipped — no overlap, both real iOS network calls fired independently]. Mirror of
+      iOS `PostDetailView`'s `.task { try? await PostService.shared.viewPost(...) }`: fires once
+      per detail-view session regardless of whether the post fetch itself succeeds, failure
+      silently ignored. Paired with the visible half of the feature — iOS's `PostReachFormatter`
+      author-only "@pseudo · views · impressions" line (`PostDetailView.authorRevealView`) — since
+      wiring the write with nothing to show for it would be a dead end. New pure
+      `PostReachFormatter` (`compact()` 1.2k/3.4M formatting, `components()` gated on `isAuthor`)
+      + `FeedPostPresentation.viewCount`/`impressionCount`/`isAuthor`/`authorUsername` [new
+      `ApiPost.impressionCount` field alongside the pre-existing `viewCount`] + a `PostReachLine`
+      composable in `PostDetailScreen`, rendered only for the post's own author. +14 tests
+      (`PostReachFormatterTest` ×6, `FeedPostBuilderTest` ×5, `PostDetailViewModelTest` ×3: view
+      fires once, blank postId never records, a failed record doesn't disturb the loaded post).
 - [~] Feed post detail with text/media/repost, translation flags, threaded comments — **detail screen
       done** (slice `feed-post-detail-screen`, 2026-07-17): tapping a **non-reel** feed post (previously a
       dead-end — the card only routed reels) now opens a full-screen `PostDetailScreen`. `PostDetailViewModel`
@@ -3900,7 +4066,75 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `BookmarksViewModel` (cursor paging, optimistic un-bookmark with rollback, skeleton-on-cold,
       pull-to-refresh); `PostRepository.getBookmarksPage` carries the pagination watermark; reached
       from the feed top-bar bookmark action → `Routes.SAVED_POSTS` (slice `feed-bookmarks-screen`, 2026-07-17)
-- [ ] Post-detail room real-time subscriptions
+- [x] Post-detail room real-time subscriptions — closed 2026-08-16 (slice `post-detail-realtime-room`).
+      Android had ZERO `post:join`/`post:leave` anywhere (`grep` exhaustive), even though
+      `PostDetailViewModel` already listened to `comment:added`/`comment:deleted` for its comment-
+      count badge — it worked only by the incidental fallback the gateway's `SocialEventsHandler`
+      dual-broadcasts comments to (`ROOMS.post`+friend-feed-rooms per its own test name), which
+      reaches a friend's activity but never a non-friend's, nor `post:liked`/`post:unliked` (those
+      target `ROOMS.post` EXCLUSIVELY — `PostReactionHandler.ts`, no feed-room fallback). Added
+      `SocialSocketManager.joinPostRoom`/`.leavePostRoom` (mirrors iOS `SocialSocketManager`,
+      `socketManager.emit("post:join"/"post:leave", {postId})` — same `emit`-JSONObject pattern as
+      `CallSignalManager`'s existing `call:join`/`call:leave`). `PostDetailViewModel` now joins on
+      init (guarded on a non-blank route id) and leaves on `onCleared()`; the existing per-field
+      `liveCommentCount` overlay generalised into a `LiveOverlay(commentCount, likeCount, isLiked)`
+      so a live `post:liked`/`post:unliked` resyncs the like count and — only when `event.userId`
+      is the viewer's own id — the `isLiked` flag, mirroring `FeedViewModel`/`FeedRealtimeReducer
+      .like`'s established `mine: Boolean?` semantics (`null` = another user's action, count-only).
+      Scoped to `PostDetailScreen` only this slice — iOS also joins the same room from
+      `ReelsViewModel`/`StoryViewerView`/`FeedCommentsSheet`; those are real, separate follow-ups
+      (documented, not silently dropped), each with its own screen/lifecycle to wire. +9 tests
+      (`SocialSocketManagerTest` ×2 for join/leave; `PostDetailViewModelTest` ×7 for the join call,
+      the blank-route no-op, viewer-own like/unlike, another-user's-like count-only, cross-post
+      isolation, and refresh dropping the overlay).
+- [x] Reel-viewer room real-time subscriptions — closed 2026-08-16 (slice `reels-realtime-room`),
+      the first of the three follow-ups the line above deliberately deferred. `ReelsViewModel` had
+      NO realtime handling of any kind: it never joined a post room, and its like counter only ever
+      moved through `toggleLike`'s own optimistic arithmetic. That gap bites hardest precisely here
+      — `getReels` ranks by *affinity* and serves reels from authors the viewer does not follow, so
+      the friend-feed-room fallback that half-saved post detail does not exist for a reel; the
+      gateway's own `commentBroadcastRooms` doc comment even names the « reel viewer » as the
+      intended occupant of `ROOMS.post`. `ReelsViewModel.setCurrentReel(reelId)` now moves the
+      subscription with the pager (leave the reel scrolled away from, join the one landed on —
+      mirror of iOS `ReelsViewModel.currentId`'s `didSet`), idempotent and blank-safe, with
+      `onCleared()` leaving the last room. `post:liked`/`post:unliked` resync the named reel's
+      `likeCount` to the gateway's ABSOLUTE count (healing optimistic drift) and move `isLiked`
+      only for the viewer's own id — the same `mine: Boolean?` convention as post detail and the
+      feed. `ReelsScreen` drives it from `snapshotFlow { pagerState.currentPage }` keyed on the
+      reel *ids* (structural equality) rather than on `state.reels`, which is a fresh list on every
+      optimistic like. +12 tests — the reels module's first test file (join on settle, leave-then-
+      join on page change, no re-join on re-settle, blank/null id never joins, null after a join
+      still leaves, viewer-own like/unlike, another user's like count-only, optimistic-drift
+      healing, cross-reel isolation, out-of-thread inertness, negative-count clamp, anonymous
+      viewer). **Still open** (the remaining two of the three): `StoryViewerViewModel` and the feed
+      comments sheet, each with its own current-item lifecycle.
+- [x] Feed-comments-sheet room real-time subscription — closed 2026-08-16 (slice
+      `feed-comments-realtime-room`), the second of the three follow-ups deferred above.
+      `PostCommentsViewModel` (Android's take on iOS `FeedCommentsSheet`, presented full-screen over
+      the feed/reels/post-detail comment thread) already listened to `comment:added`/`comment:deleted`/
+      `commentReactionAdded`/`commentReactionRemoved` but never joined the post room itself — the same
+      "modeled the listener, never opened the door" gap as the other two rooms. Re-proved against iOS:
+      `FeedCommentsSheet.onAppear`/`.onDisappear` call `SocialSocketManager.shared.joinPostRoom`/
+      `.leavePostRoom(postId: post.id)` (lines 704/724) — Android's `observeRealtime()` now calls
+      `socialSocket.joinPostRoom(postId)` (guarded on the existing blank-route check) and a new
+      `onCleared()` leaves it, mirroring `PostDetailViewModel`'s precedent exactly. No live post-like
+      overlay needed here (unlike post detail/reels) — the sheet is presented over a surface that
+      already tracks its own like state; only the room join/leave was missing. +2 tests (join on open,
+      blank route never joins). **Still open** (the last of the three): `StoryViewerViewModel`.
+- [x] Story-viewer room real-time subscription — closed 2026-08-16 (slice `story-viewer-realtime-room`),
+      the last of the three room-join follow-ups `post-detail-realtime-room` named. `StoryViewerViewModel`
+      had no `joinPostRoom`/`leavePostRoom` anywhere (`grep` exhaustive). Unlike the plain open/close of
+      the feed-comments sheet, this one needed the slide-to-slide transition shape: iOS
+      `StoryViewerView.transitionPostRoom(from:to:)` (lines 1188-1195) leaves the old story's room and
+      joins the new one on every slide change, plus an initial join/final leave on `.onAppear`/
+      `.onDisappear` (lines 569/600) — mirror of Android's own `ReelsViewModel.setCurrentReel`. New
+      `transitionPostRoom(nextId: String?)` is called from `emit()` — the ViewModel's single "state
+      changed" checkpoint, already recomputing `currentId = playback.currentSlide?.id` on every call —
+      so the join/leave transition fires exactly when the displayed slide actually changes, and is a
+      no-op (idempotent) for every other reason `emit()` runs (a reaction, an image-resolved callback,
+      a language-override toggle). `onCleared()` leaves the last room, same shape as `PostDetailViewModel`/
+      `ReelsViewModel`. +3 tests (initial join, leave-old/join-new on `advance()`, no re-join/re-leave on
+      an unrelated emit). **All three deferred room-join follow-ups now closed.**
 - [~] Repost / quote embed cell in the feed — the reposted/quoted post rendered as an
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
@@ -3966,7 +4200,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       offline-draft recovery (iOS `recoverUnsentStatus`) are also tracked follow-ups.
 - [x] Status composer: emoji grid, 122-char text, visibility (public/community/friends/private) — `status-composer`
       (except/only audience picker deferred, tracked above)
-- [ ] Mood status create, react, delete; 21h expiry + viewer tracking
+- [x] Mood status create, react, delete; 21h expiry + viewer tracking — **all five clauses now
+      verified shipped** (last gap closed by slice `status-view-tracking`, 2026-08-17): create/react/
+      delete via `StatusRepository.create`/`.react`/`.delete` wired through `StatusesViewModel.setStatus`/
+      `.react`/`.clearStatus`; 21h expiry via `MoodStatusExpiry.remaining(expiresAt:)` consumed in
+      `StatusBarPresentation`; **viewer tracking** was the last unchecked clause — found via the "ready
+      backend, never wired to UI" heuristic's own iOS-reading step: `StatusViewModel.swift`'s doc
+      comment states plainly "un mood EST un post… la barre de moods était le seul contenu du produit
+      dont la portée restait à zéro" [a mood carries `impressionCount`/`viewCount` like any post, but
+      no Android surface fed either]. Reused BOTH building blocks already shipped this session for
+      regular posts rather than inventing anything new: the pill's on-screen appearance now calls
+      `StatusesViewModel.trackImpression(statusId)` → the same `ImpressionBatcher` class
+      (`source = "status"`, mirror of iOS's own `ImpressionBatcher(source: "status", ...)`) used by
+      the feed; opening a status's popover (a single per-viewer-deduplicated VIEW, distinct from the
+      batched impression) now calls `markStatusViewed(statusId)` → `PostRepository.viewPost`, the
+      exact fire-and-forget shape of `PostDetailViewModel.recordView` from the previous slice. Wired
+      in `StatusBarView.kt`'s existing `StatusBarCell.Pill` branch only — `StatusBarCell.MyStatus`
+      (the viewer's own pill in their own bar) is a SEPARATE branch already, so it's naturally excluded
+      exactly as iOS excludes `viewModel.myStatus` from its own tracking filter, with zero extra gating
+      code needed. `impressionBatcher.flushNowAsync()` on `onCleared()`, mirroring `FeedViewModel`'s own
+      established pattern. +3 tests (`StatusesViewModelTest`: view recorded once, blank id inert, a
+      failed record doesn't disturb the loaded bar) — `trackImpression`'s own debounce/batch logic is
+      already fully covered by `ImpressionBatcherTest`, so no duplicate ViewModel-level test, matching
+      the precedent set by `FeedViewModel.trackImpression` (also untested at the VM level for the same
+      reason).
 - [x] Status thought-bubble popover on avatar tap with republish action — **republish landed** (slice
       `status-popover-republish`, 2026-07-19): the `Popup` popover already rendered emoji + author + text + `via` +
       `MoodStatusExpiry` countdown (`status-bar-compose`); this slice adds the **Republish** affordance — shown only
@@ -4576,7 +4833,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Surpasses iOS (online-only
       send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
       `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
-- [ ] Invite by email; invite by SMS; import phone contacts
+- [~] Invite by email; invite by SMS; import phone contacts — **email invite shipped**
+      (slice `discover-email-invite`, 2026-08-17). Found via the "ready backend, never wired
+      to UI" heuristic: `FriendRepository.sendEmailInvitation(email) → NetworkResult<EmailInvitationResponse>`
+      was fully implemented and tested at repository level with zero call sites anywhere in
+      `apps/android`. Port of iOS `DiscoverViewModel.sendEmailInvitation`/`DiscoverTab.emailInviteCard`
+      (`Features/Contacts/`, not the conversation-scoped `InviteFriendsSheet.swift` an earlier
+      search wrongly settled on). `DiscoverUiState` gained `emailText`/`isSendingInvite`/
+      `inviteErrorMessage`; `DiscoverViewModel.onEmailTextChanged`/`sendEmailInvitation` trim +
+      guard-non-empty + in-flight guard, mirroring iOS's `emailText`/`isSendingInvite` flow
+      exactly. New `EmailInviteCard` composable in `DiscoverTab.kt` (icon + title, `TextField` +
+      `Button`, `Button` disabled when `emailText.isEmpty() || isSendingInvite`) sits above the
+      search field, matching iOS's `inviteSection` position at the top of Discover. **Narrower
+      than iOS by design**: no toast — Android's Discover module has zero toast/snackbar
+      infrastructure (confirmed via exhaustive grep across `apps/android/feature`), so success
+      feedback is implicit (field clears + button disables) and failure surfaces as an inline
+      `Text` next to the card via the new `inviteErrorMessage` field — deliberately NOT the
+      existing `errorMessage` field, which drives a full-screen `ErrorState` wrong for a
+      transient invite failure. **Still open**: SMS invite, import phone contacts — no Android
+      SMS-compose or contacts-permission surface exists yet; left for a future slice. +4 tests
+      (`DiscoverViewModelTest`: trimmed send + field clear on success, blank address never hits
+      the network, error surfaces + address kept for retry, second concurrent call is a no-op).
+      Strings ×5 across EN/FR/ES/PT.
 - [x] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
       (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`
@@ -5093,10 +5371,86 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
       contacts, groups, calls, translations, system)
-- [ ] Notification list — stale-while-revalidate cache + real-time socket updates, paginated, unread-only filter
+- [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
+      `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
+      (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
+      `title`/`subtitle`/`_seq` fields, silently dropped by `Json.ignoreUnknownKeys` — no separate
+      wire type needed) and exposes it as `SharedFlow<ApiNotification>`, mirroring iOS
+      `MessageSocketManager.notificationReceived`. `NotificationsViewModel` collects it and
+      prepends the fresh row live (dedup by id — a REST-list race or a duplicate delivery is a
+      no-op), bumping `unreadCount` only when the incoming notification isn't already read. +4
+      tests (`MessageSocketManagerNotificationTest`: payload decode; `NotificationsViewModelTest`
+      ×3: prepend+bump, already-read doesn't bump, duplicate id is a no-op).
+      **Stale-while-revalidate cache shipped 2026-08-17** (slice
+      `notification-cache-first-stream`). Re-proved before coding: `CachePolicy.Notifications`
+      already existed (`freshFor` 60s, `keepFor` 24h) with ZERO usages anywhere — the constant had
+      been anticipated but never wired. `NotificationRepository.notificationsStream()` mirrors
+      `PostRepository.feedStream()`'s exact shape (in-memory L1 `MutableStateFlow` cache,
+      `CacheResult.Empty`/`Fresh`/`Stale`/`Syncing`, background revalidate on staleness) —
+      `NotificationsViewModel` is now a thin projector of this stream plus a new
+      `unreadCountStream: StateFlow<Int>` (also repository-owned, sourced from the previously
+      dormant `NotificationApi.unreadCount()` REST call — the earlier slice's own note "unreadCount
+      was never even populated from the server" is now fixed as a natural consequence of this
+      refactor, not a separate add-on). `markAsRead`/`markAllAsRead` moved INTO the repository as
+      optimistic cache mutations (mirrors `PostRepository.toggleLike`'s rollback-on-failure
+      pattern) — necessary for correctness once the ViewModel stopped holding its own copy of the
+      list: without this, a live socket arrival re-triggering the shared stream would have
+      silently reverted an optimistic local mark-as-read back to unread. `prependLive` (used by the
+      real-time socket handler) now lives on the repository too, for the same reason. +10 tests
+      (`NotificationRepositoryTest`) + rewritten `NotificationsViewModelTest` (9 tests, now
+      exercising the ViewModel's actual remaining job — projecting `CacheResult` variants and
+      delegating writes — since dedup/rollback behaviour moved to and is tested at the repository
+      layer). **Pagination shipped 2026-08-17** (slice `notifications-pagination`) — re-proved
+      against the real iOS reference (`NotificationListViewModel.swift`) rather than the checklist
+      wording, which surfaced that iOS's `unreadOnly` published property is genuinely DEAD CODE:
+      `refreshFromAPI`/`loadMore` both hardcode `unreadOnly: false` in the actual request, and the
+      real "Non lues" filter is 100% CLIENT-SIDE (`filteredNotifications` filters the already-fetched
+      list) as ONE of 11 category chips (all/unread/messages/reactions/mentions/social/contacts/
+      groups/calls/translations/system) — a materially bigger UI feature than "wire the server
+      param", correctly split off and left unattempted. **Only pagination was ported this run**:
+      `NotificationRepository.loadMore()` (new `pagedApiCall` — preserves `pagination.hasMore`,
+      unlike the plain `apiCall` `list()`/`revalidateNotifications` used before — dedupe by id,
+      no-op before the first page loads or once the server reports no further page, cache/`hasMore`
+      left untouched on failure so the next scroll retries) + `hasMoreStream: StateFlow<Boolean>`.
+      `NotificationsViewModel.loadMore()` mirrors the re-entrancy-guarded shape already established
+      by `StatusesViewModel.loadMoreIfNeeded`/`PostCommentsViewModel.loadMore`. UI: `NotificationsScreen`'s
+      `LazyColumn` fires `loadMore()` on the last row's appearance (mirror of iOS's trailing
+      `ProgressView().onAppear`), showing a spinner while `isLoadingMore`. +9 tests
+      (`NotificationRepositoryTest` ×6: append/dedupe/hasMore-false/no-op-before-first-page/
+      no-op-when-exhausted/failure-leaves-state-untouched; `NotificationsViewModelTest` ×3:
+      delegates-when-available/inert-when-exhausted/concurrent-call-guard). **Still open: the
+      11-category client-side filter bar** (including "Non lues") — a separate, larger UI feature,
+      not attempted this run.
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
-- [ ] In-app real-time notification toast
+- [~] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
+      epic, not a one-shot**: iOS's reference (`NotificationToastManager.swift` +
+      `NotificationToastView.swift`) needs (1) the real-time data feed — **shipped**, (2) an
+      orchestrator with 2s APN/socket dedup, 7s auto-dismiss timer, and suppression when the
+      arriving notification's `conversationId`/`postId` matches the currently-open
+      conversation/post, and (3) UI mount + tap-to-navigate — the presentational atom already
+      exists (`MeeshyNotificationToast` in `:sdk-ui`'s `MeeshyToast.kt`, unused) but nothing
+      calls it.
+      **Sub-slice (2), PURE decision core only, shipped 2026-08-17** (slice
+      `notification-toast-policy`): `NotificationToastPolicy.decide(notification,
+      activeConversationId, activePostId, isDuplicateDelivery, preferences, now) →
+      NotificationToastDecision` (`:core:model`) — a genuine EXTRACTION from iOS's own impure
+      guard-chain (iOS has no isolated pure version of this logic to port 1:1) covering:
+      suppress-if-active-conversation-or-post (wins over everything else), dedup (the "was this
+      id already shown in the last 2s" boolean is precomputed by the caller — inherently
+      stateful, not this pure function's job), then push-enabled + DND-window gating (both reuse
+      already-existing pure predicates, `UserNotificationPreferences.pushEnabled`/
+      `DndWindow.isActive`). +8 tests. **Deliberately narrower than iOS's own gate**: the
+      PER-TYPE toggle check (iOS `isTypeEnabled`, an 80-case switch over `MeeshyNotificationType`)
+      is NOT ported — Android has no raw-wire-type→toggle resolver to reuse
+      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum);
+      building one is real, separate work, left open rather than invented under this slice's
+      budget. Until then every type passes once push+DND clear.
+      **Still open**: the STATEFUL wiring (dedup-window bookkeeping, the 7s dismiss timer, a
+      Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks
+      called from `ChatViewModel`/post-detail lifecycle — Android has no equivalent to iOS's
+      `ConversationSocketHandler.init`/`deinit` today), the per-type toggle resolver noted
+      above, and sub-slice (3) (UI mount + navigation).
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
@@ -5185,7 +5539,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## N. Search
 - [ ] Global search (messages, conversations, users) with recent searches + query highlighting
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
-- [ ] User search (paginated)
+- [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
+      itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,
+      backing the "new conversation" picker) but was a dead-but-half-wired gap exactly like
+      `customName`/`reaction`/`tags` before their own slices: `UserRepository.searchUsers` already
+      accepted `limit`/`offset` parameters, and the gateway's `GET /users/search` already computed
+      `pagination.hasMore` (`offset + resultCount < total`), but the ViewModel only ever fetched
+      page one and never exposed a "load more" trigger — the shared `pagedApiCall` helper
+      (`PagedResult<T>` — preserves the envelope's `pagination` block that plain `apiCall` discards)
+      already existed for exactly this purpose but had zero callers. Added
+      `UserRepository.searchUsersPaged` (a new, additive method — NOT a signature change to
+      `searchUsers`, which three other call sites depend on: `SuggestionsRepository`,
+      `MentionSearch`, `DiscoverViewModel`, none of which need pagination). `NewConversationViewModel
+      .loadMoreIfNeeded(userId)` mirrors `CallHistoryViewModel.loadMoreIfNeeded`'s exact shape
+      (idempotent threshold guard called per-row during composition, `LOAD_MORE_THRESHOLD = 5`) —
+      an established in-repo pattern, not a new one. +7 tests
+      (`UserRepositoryTest` ×2, `NewConversationViewModelTest` ×5 incl. append/no-op-far-from-end/
+      no-op-no-more-data).
 
 ## O. Links
 - [ ] Links hub (share / tracking / community / affiliate) with quick-create
@@ -5241,7 +5611,47 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] UTM tracking links: create, list, toggle, delete; aggregate + per-link click stats
       (geo/device/browser breakdown, click timeline), QR generation
 - [ ] Affiliate / referral links: create, copy, share, delete, dashboard stats
-- [ ] Generic in-app share picker / Android Share-Sheet receiver (text/url/image/message/story → conversation)
+- [~] Generic in-app share picker / Android Share-Sheet receiver (text/url/image/message/story →
+      conversation) — **lot 1 (text/URL) shipped 2026-08-17** (slice `share-target-text-url`),
+      Android's counterpart to iOS's own `MeeshyShareExtension`, scoped identically to iOS's own
+      documented lot 1 ("Portée lot 1 : texte + URL" — `apps/ios/CLAUDE.md`). New
+      `ShareTargetActivity` (`:app`, `android:excludeFromRecents`) registers an `ACTION_SEND`
+      intent-filter for `text/plain` (a shared URL arrives as `EXTRA_TEXT` too, so one MIME type
+      covers both). Unlike iOS's extension — a separate process needing its own App Group session
+      read and a dedicated offline-relay queue (`ShareSender`/`SharePendingSendConsumer`) — this
+      runs in the SAME process as the rest of Meeshy, so `ShareTargetViewModel` reuses the app's
+      own `SessionRepository` and `MessageRepository.sendOptimistic` (already durably queued
+      through the existing outbox on a failed send) directly: no new relay machinery needed. The
+      conversation picker reuses `ForwardTargets` — the exact pure SSOT `ChatViewModel`'s own
+      forward-picker sheet already uses — rather than a second filtering rule. Unlike forwarding
+      (multi-target), a share picks exactly ONE conversation and finishes, matching platform
+      share-sheet convention. +7 tests (`ShareTargetViewModelTest`: picker populates from the
+      cache-first conversation stream, query filters by title, a successful send marks the target
+      sent and finishes, a second target while one send is in flight is a no-op, blank shared text
+      never hits the network, no signed-in user never hits the network, a failed send surfaces the
+      error and clears the sending flag without finishing).
+      **lot 2 (image/video attachments) shipped 2026-08-17** (slice
+      `share-target-media-attachments`). The previous entry's own "needs the TUS upload pipeline"
+      note was RE-PROVED and did not hold: `ChatViewModel.sendFileAttachment` — the existing chat
+      composer's own attachment path — already enqueues through `MediaUploadQueue` with a `null`
+      `TusUploadContext`, which uploads via `MediaRepository`/`POST /attachments/upload`; TUS on
+      Android is scoped to post/story/status/comment media only, never message attachments (`grep`
+      confirmed zero overlap). `ShareTargetActivity`'s manifest gained two more `ACTION_SEND`
+      intent-filters (`image/*`, `video/*`); the Uri is read off the main thread
+      (`Dispatchers.IO`) via the exact same `readPickedAttachment` helper the chat composer's own
+      picker already used (flipped `private` → `internal` in `ChatScreen.kt` to share it, no
+      duplicate glue), then threaded through `ShareTargetViewModel.loadAttachment(bytes, fileName,
+      declaredMimeType)` → `MediaUploadQueue.enqueue` → `MessageRepository.sendOptimistic` with the
+      resolved `messageType`/`attachmentUploadCmids`/`attachments`, mirroring
+      `sendFileAttachment`'s own send shape exactly. +4 tests: upload+send carries the correct
+      `messageType`/`attachmentUploadCmids`; an attachment with blank shared text still sends
+      (only "nothing at all" is inert now); mime resolves from the file extension when the
+      platform declares none; empty bytes are a no-op. **Still open: `ACTION_SEND_MULTIPLE`**
+      (sharing several images/videos from a gallery multi-select at once) — deliberately deferred,
+      not investigated in detail; a single-item share (the overwhelmingly common case) is fully
+      covered by lots 1+2. The "message/story" part of this checklist line's own parenthetical
+      refers to Meeshy-internal share/forward targets, not this external-receiver item — already
+      tracked separately (§C "forwarded" indicators, §E "Story actions: forward/send").
 
 ## P. Media (viewers & editors)
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive
@@ -5301,8 +5711,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of *this repo's* decoder (`p=(r+g)/2−b`, `q=r−g`) so encode∘decode round-trips. **Surpasses** the
       reference's unguarded inputs: rejects a non-positive / over-100 side and a buffer shorter than
       `w·h·4` (`IllegalArgumentException` vs reading past the buffer into `NaN` garbage). +13 tests (hand-derived
-      header bytes, solid-colour/gradient/alpha round-trips through `decode`, orientation, guards). App-side
-      raster→`Bitmap` wrap + Coil placeholder wiring + slide-level generation (encode → upload) still pending.
+      header bytes, solid-colour/gradient/alpha round-trips through `decode`, orientation, guards).
+      — **First Coil placeholder wired 2026-08-16** (slice `feed-thumbhash-placeholder`) — both the encoder
+      AND the decoder had **zero call sites anywhere in the app** (exhaustive grep) despite being fully
+      ported and tested for over a month; `ApiPostMedia.thumbHash`/`FeedPostImage` never even carried the
+      field through the feed projection. Added `ThumbHash.decodeBase64(String?): ThumbHashImage?` (`:core:model`,
+      pure — base64-decode + malformed/blank/too-short guard, never throws) and
+      `rememberThumbHashPainter(base64): Painter?` (`:sdk-ui`, the one Android-`Bitmap`-touching piece,
+      UI glue) wired into `FeedScreen`'s `PostImageGrid`/`CollageTile` `AsyncImage`s as the Coil
+      `placeholder`. **Scoped to feed post images only** — avatars, message attachments, and story slides
+      (iOS's `CachedAsyncImage`/`MeeshyAvatar`/`StorySlideRenderer` all consume ThumbHash already) remain
+      real, separate follow-ups, not silently dropped. Slide-level **generation** (encode → upload during
+      story composition) is the OTHER open half, tracked by its own checklist line below (§ story composer)
+      — genuinely different scope (write path vs. read path). +4 tests (`ThumbHash.decodeBase64` round-trip,
+      null/blank, malformed base64, too-short; `FeedPostBuilder` carries `thumbHash` through the projection).
 
 ## Q. Cross-cutting infrastructure
 - [x] App icon — launcher icon (`app-launcher-icon`, 2026-08-10). Was **entirely absent**:

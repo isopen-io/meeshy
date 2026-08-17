@@ -7,7 +7,25 @@ import MeeshySDK
 @MainActor
 class ConversationListViewModel: ObservableObject {
     @Published var conversations: [Conversation] = [] {
-        didSet { _convIdIndex = nil }
+        didSet {
+            _convIdIndex = nil
+            // G-124 — point de composition de `GatewayBridgeProvider`
+            // (`ConversationBridgeProviding`, LWS-2bis/M-048, `Lentille/Core/
+            // GatewayBridgeProvider.swift`). `didSet` est le SEUL endroit où
+            // convergent le chargement REST initial (`setConversations`) et
+            // les rechargements déclenchés par le socket
+            // (`observeSync` → `reloadFromCache` → `setConversations`, sur
+            // `conversationsDidChange` — lui-même émis par
+            // `ConversationSyncEngine.handleUnreadUpdated`, qui recopie déjà
+            // `event.bridge` sur la conversation en cache) : « alimenté par
+            // la liste + le socket », exactement ce que demande l'en-tête du
+            // provider. Derrière le drapeau (R19, câblage OFF ⇒ zéro effet
+            // mesurable) — même garde que `groupConversations` (§4.4, seul
+            // point de greffe voisin de ce fichier).
+            if LentilleFeatureFlag.isLentilleListEnabled {
+                gatewayBridgeProvider.noteBridges(from: conversations)
+            }
+        }
     }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
@@ -128,6 +146,18 @@ class ConversationListViewModel: ObservableObject {
     private let pageLimit = 100
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
+
+    /// Registre du pont ✦ gateway (G-124) — voir le commentaire du `didSet`
+    /// de `conversations` ci-dessus pour l'alimentation, et l'en-tête de
+    /// `GatewayBridgeProvider.swift` pour le contrat complet. Pas encore lu
+    /// par un rang : `LentilleConversationRow` lit `conversation.bridge`
+    /// directement (même donnée, posée par le SDK — voir son commentaire),
+    /// donc ce registre n'est consommateur d'AUCUN call site aujourd'hui —
+    /// même posture que `LocalLiveCallProvider` (câblé, pas encore branché à
+    /// un site d'appel). `let`, pas injecté : c'est un registre pur, aucune
+    /// dépendance externe à substituer en test (contrairement à `syncEngine`
+    /// ci-dessus).
+    let gatewayBridgeProvider = GatewayBridgeProvider()
 
     // O(1) conversation lookup by ID
     private var _convIdIndex: [String: Int]?
@@ -1011,7 +1041,11 @@ class ConversationListViewModel: ObservableObject {
                     self.bumpToTop(
                         conversationId: event.conversationId,
                         facet: LastMessageFacet(
-                            id: event.lastMessageId,
+                            // `…IdValue` : cette branche décrit un message NEUF
+                            // (`newLastAt` a AVANCÉ), donc « clé absente » et
+                            // « plus aucun message » y sont hors sujet — un
+                            // vidage n'avance jamais d'horodatage.
+                            id: event.lastMessageIdValue,
                             preview: event.lastMessagePreview,
                             senderName: resolvedSenderName,
                             at: newLastAt,
@@ -1023,9 +1057,40 @@ class ConversationListViewModel: ObservableObject {
                             location: event.location
                         )
                     )
+                } else if case .replaced(.none) = event.lastMessage {
+                    // « Plus AUCUN message visible ici » : le lecteur vient de
+                    // masquer POUR LUI le dernier qui lui restait. Tout le
+                    // groupe d'aperçu arrive à `null`, et les `if let` de la
+                    // branche suivante le jetteraient champ par champ — la
+                    // ligne garderait l'aperçu de ce qui vient de disparaître,
+                    // et pour toujours : plus rien ne bougera dans cette
+                    // conversation pour le faire remplacer.
+                    //
+                    // Le vidage passe par le geste CENTRAL du modèle : la ligne
+                    // dit plus que son texte (pièce jointe, expéditeur, épingle
+                    // de position, « Message expiré »), et n'en effacer qu'une
+                    // partie laisserait le reste décrire le message masqué.
+                    //
+                    // `lastMessageAt` reste en place — voir `clearLastMessage` :
+                    // c'est le rang GLOBAL de la ligne, qu'un masquage personnel
+                    // ne change pour personne.
+                    if self.conversations[index].clearLastMessage() {
+                        self.schedulePersist()
+                    }
                 } else {
-                    if let msgId = event.lastMessageId {
-                        self.conversations[index].lastMessageId = msgId
+                    if case .replaced(.some(let msgId)) = event.lastMessage {
+                        // Nommer un AUTRE message, c'est cesser de décrire le
+                        // précédent. Ce payload-ci ne porte que l'identité, le
+                        // texte et le Prisme — jamais l'auteur, les pièces
+                        // jointes ni les drapeaux éphémères, que
+                        // `emitConversationPreviewUpdate` ne lit même pas. Sans
+                        // ce geste, une suppression pour tous du dernier
+                        // message laissait la ligne rendre l'aperçu du
+                        // remplaçant sous la vignette, l'auteur et le « Vue
+                        // unique » du message supprimé. Muet quand l'identité
+                        // ne change pas : à l'édition et à la traduction, ces
+                        // champs restent vrais.
+                        self.conversations[index].adoptLastMessage(id: msgId)
                         // Écrite AVEC l'id (chemin message-driven) et jamais
                         // seule : `nil` efface la pastille du message précédent
                         // quand un texte le remplace au même horodatage.

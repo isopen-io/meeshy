@@ -28,6 +28,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.status.StatusBarCache
@@ -58,6 +59,7 @@ class StatusesViewModelTest {
     }
 
     private val repository: StatusRepository = mockk(relaxed = true)
+    private val postRepository: PostRepository = mockk(relaxed = true)
     private val session: SessionRepository = mockk(relaxed = true)
     private val diskCache: StatusBarCacheRepository = mockk(relaxed = true)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
@@ -98,7 +100,7 @@ class StatusesViewModelTest {
         every { socialSocket.statusDeleted } returns statusDeletedFlow
         every { socialSocket.statusReacted } returns statusReactedFlow
         every { socialSocket.statusUnreacted } returns statusUnreactedFlow
-        return StatusesViewModel(repository, session, cache, diskCache, socialSocket)
+        return StatusesViewModel(repository, postRepository, session, cache, diskCache, socialSocket)
     }
 
     @Test
@@ -766,5 +768,40 @@ class StatusesViewModelTest {
 
         assertThat(vm.state.value.statuses.first { it.id == "a" }.reactionSummary)
             .containsExactly("❤️", 1)
+    }
+
+    // --- View recording (a mood IS a post — opening its popover is a single, per-viewer
+    // deduplicated view; mirror of iOS StatusViewModel.markStatusViewed / PostService.viewPost)
+
+    @Test
+    fun `markStatusViewed records a view exactly once`() = runTest {
+        coEvery { postRepository.viewPost("a") } returns NetworkResult.Success(Unit)
+        val vm = viewModel()
+
+        vm.markStatusViewed("a")
+
+        coVerify(exactly = 1) { postRepository.viewPost("a") }
+    }
+
+    @Test
+    fun `markStatusViewed is inert for a blank statusId`() = runTest {
+        val vm = viewModel()
+
+        vm.markStatusViewed("  ")
+
+        coVerify(exactly = 0) { postRepository.viewPost(any()) }
+    }
+
+    @Test
+    fun `a failed view record does not disturb the loaded bar`() = runTest {
+        coEvery { repository.list(StatusFeedMode.FRIENDS, null, any()) } returns
+            page(entry("a"), hasMore = false)
+        coEvery { postRepository.viewPost("a") } returns NetworkResult.Failure(ApiError(message = "offline"))
+        val vm = viewModel()
+
+        vm.markStatusViewed("a")
+
+        assertThat(vm.state.value.statuses.map { it.id }).containsExactly("a")
+        assertThat(vm.state.value.errorMessage).isNull()
     }
 }

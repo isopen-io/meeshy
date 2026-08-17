@@ -51,6 +51,7 @@ import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
+import { ConversationBridgeService } from '../services/ConversationBridgeService';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -182,6 +183,9 @@ export class MeeshySocketIOManager {
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
   private readStatusService!: MessageReadStatusService;
+  // Le pont ✦ (G-123) — même discipline que `readStatusService` : une seule
+  // instance, sans état, réutilisée par les trois transports d'envoi.
+  private bridgeService!: ConversationBridgeService;
 
   private authHandler!: AuthHandler;
   private messageHandler!: MessageHandler;
@@ -369,6 +373,7 @@ export class MeeshySocketIOManager {
     const reactionService = new ReactionService(prisma);
     this.readStatusService = new MessageReadStatusService(prisma);
     const readStatusService = this.readStatusService;
+    this.bridgeService = new ConversationBridgeService(prisma);
 
     this.messageHandler = new MessageHandler({
       io: this.io,
@@ -836,6 +841,7 @@ export class MeeshySocketIOManager {
       io: this.io,
       prisma: this.prisma,
       readStatusService: this.readStatusService,
+      bridgeService: this.bridgeService,
       conversationId: params.conversationId,
       senderId: params.senderId,
       onError: (error) => logger.warn('unread count update failed (link message)', { error }),
@@ -2521,6 +2527,22 @@ export class MeeshySocketIOManager {
             lastMessageId: message.id,
             // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
             // avec le reste de la paire, sous le même plafond qu'elle.
+            // Un message position-seule a un `content` vide, donc un aperçu
+            // vide : `location` est alors la SEULE chose dont la ligne de liste
+            // dispose pour composer son libellé. Hissée ici comme les deux
+            // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
+            // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
+            // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
+            // laissait la ligne littéralement blanche.
+            //
+            // Clé ABSENTE quand le message n'a pas de position, jamais présente
+            // à `null` : les clients écrivent `location` AVEC l'identité du
+            // message, donc une clé nulle sur le chemin le plus fréquenté du
+            // service effacerait une épingle correcte à chaque message texte.
+            ...((): Record<string, unknown> => {
+              const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+              return place ? { location: place } : {};
+            })(),
             senderId: message.senderId,
             updatedAt: new Date().toISOString()
           };
@@ -2551,6 +2573,7 @@ export class MeeshySocketIOManager {
             io: this.io,
             prisma: this.prisma,
             readStatusService: this.readStatusService,
+            bridgeService: this.bridgeService,
             conversationId: normalizedId,
             senderId,
             participants: allParticipants,

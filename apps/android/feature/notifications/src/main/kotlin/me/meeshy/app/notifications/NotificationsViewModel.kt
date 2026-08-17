@@ -9,9 +9,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiNotification
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
+import me.meeshy.sdk.socket.MessageSocketManager
 import javax.inject.Inject
 
 data class NotificationsUiState(
@@ -19,66 +20,129 @@ data class NotificationsUiState(
     val unreadCount: Int = 0,
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
+    val isLoadingMore: Boolean = false,
+    val hasMore: Boolean = false,
     val errorMessage: String? = null,
 )
 
+/**
+ * Cache-first (ARCHITECTURE.md §4, feature-parity §M): [NotificationRepository.notificationsStream]
+ * and [NotificationRepository.unreadCountStream] are the single source of truth — this ViewModel
+ * only projects them into [NotificationsUiState], it never holds a second copy of the list.
+ * `markAsRead`/`markAllRead`/a live socket arrival ([observeRealtime]) all mutate the SAME
+ * repository-owned cache, so every consumer of the stream (a pull-to-refresh, another screen)
+ * stays in sync without a manual merge here.
+ */
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
+    private val messageSocketManager: MessageSocketManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsUiState())
     val state: StateFlow<NotificationsUiState> = _state.asStateFlow()
 
     init {
-        load()
+        observeNotifications()
+        observeUnreadCount()
+        observeHasMore()
+        observeRealtime()
     }
 
-    fun load() {
-        _state.update { it.copy(isLoading = it.notifications.isEmpty(), isSyncing = true) }
+    private fun observeNotifications() {
         viewModelScope.launch {
-            try {
-                when (val result = notificationRepository.list()) {
-                    is NetworkResult.Success -> _state.update {
-                        it.copy(
-                            notifications = result.data,
+            notificationRepository.notificationsStream(
+                onSyncError = { error -> _state.update { it.copy(isSyncing = false, errorMessage = error.message) } },
+            ).collect { result ->
+                _state.update {
+                    when (result) {
+                        is CacheResult.Empty -> it.copy(isLoading = true, isSyncing = true)
+                        is CacheResult.Fresh -> it.copy(notifications = result.value, isLoading = false, isSyncing = false)
+                        is CacheResult.Stale -> it.copy(notifications = result.value, isLoading = false, isSyncing = true)
+                        is CacheResult.Syncing -> it.copy(
+                            notifications = result.value ?: it.notifications,
                             isLoading = false,
-                            isSyncing = false,
+                            isSyncing = true,
                         )
                     }
-                    is NetworkResult.Failure -> _state.update {
-                        it.copy(isLoading = false, isSyncing = false, errorMessage = result.error.message)
-                    }
                 }
+            }
+        }
+    }
+
+    private fun observeUnreadCount() {
+        viewModelScope.launch {
+            notificationRepository.unreadCountStream.collect { count ->
+                _state.update { it.copy(unreadCount = count) }
+            }
+        }
+    }
+
+    private fun observeHasMore() {
+        viewModelScope.launch {
+            notificationRepository.hasMoreStream.collect { hasMore ->
+                _state.update { it.copy(hasMore = hasMore) }
+            }
+        }
+    }
+
+    /**
+     * A `notification:new` arriving while this screen is alive/backing the badge is prepended
+     * live into the shared repository cache — an already-known id (REST list beat the socket, or
+     * a duplicate delivery) is a no-op rather than a second row (see
+     * [NotificationRepository.prependLive]). Mirrors iOS `NotificationCoordinator`'s optimistic
+     * unread increment, minus the toast/dedup-window machinery (feature-parity §M — the toast
+     * itself is a separate, not-yet-scoped slice; this is real-time DATA only).
+     */
+    private fun observeRealtime() {
+        viewModelScope.launch {
+            messageSocketManager.notificationReceived.collect { notification ->
+                notificationRepository.prependLive(notification)
+            }
+        }
+    }
+
+    /** Forces a revalidation regardless of freshness — the pull-to-refresh entry point. */
+    fun load() {
+        viewModelScope.launch {
+            try {
+                notificationRepository.refresh()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(isLoading = false, isSyncing = false, errorMessage = e.message) }
+                _state.update { it.copy(isSyncing = false, errorMessage = e.message) }
+            }
+        }
+    }
+
+    /**
+     * Infinite scroll: fetch the page after the currently loaded notifications. Re-entrancy
+     * guarded so a fast double-scroll never fires two overlapping fetches, and inert once the
+     * repository reports no further page — mirror of iOS `NotificationListViewModel.loadMore`.
+     * A failed page is silent (the repository leaves its cache/`hasMoreStream` untouched, so the
+     * next scroll simply retries).
+     */
+    fun loadMore() {
+        if (_state.value.isLoadingMore || !_state.value.hasMore) return
+        _state.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            try {
+                notificationRepository.loadMore()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Silent: the next scroll re-triggers the fetch.
+            } finally {
+                _state.update { it.copy(isLoadingMore = false) }
             }
         }
     }
 
     fun markAsRead(notificationId: String) {
-        viewModelScope.launch {
-            notificationRepository.markAsRead(notificationId)
-            _state.update { s ->
-                s.copy(notifications = s.notifications.map {
-                    if (it.id == notificationId) it.copy(state = it.state.copy(isRead = true))
-                    else it
-                })
-            }
-        }
+        viewModelScope.launch { notificationRepository.markAsRead(notificationId) }
     }
 
     fun markAllRead() {
-        viewModelScope.launch {
-            notificationRepository.markAllAsRead()
-            _state.update { s ->
-                s.copy(
-                    notifications = s.notifications.map { it.copy(state = it.state.copy(isRead = true)) },
-                    unreadCount = 0,
-                )
-            }
-        }
+        viewModelScope.launch { notificationRepository.markAllAsRead() }
     }
 }

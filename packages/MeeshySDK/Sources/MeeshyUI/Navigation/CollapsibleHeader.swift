@@ -11,12 +11,18 @@ public enum CollapsibleHeaderMetrics {
     /// Marge horizontale de la rangée de la barre.
     nonisolated public static var barHorizontalPadding: CGFloat { 12 }
 
-    /// Gouttière des chromes RONDS, partagée avec les boutons flottants
-    /// (`FreeFloatingButtonsContainer.minEdgePadding`). Un disque n'occupe pas
-    /// son carré : sa marge optique se mesure au point le plus proche du bord,
-    /// pas à un cadre. À la marge de texte (16 pt) il affleure — c'est la
-    /// gouttière du chrome flottant, jamais signalée, qui fait foi.
-    nonisolated public static var roundChromeEdgeGutter: CGFloat { 20 }
+    /// Gouttière des chromes RONDS du header. Un disque n'occupe pas son
+    /// carré : sa marge optique se mesure au point le plus proche du bord,
+    /// pas à un cadre. À la marge de texte (16 pt) il affleure. Alignée à
+    /// l'origine sur celle des boutons flottants isolés
+    /// (`FreeFloatingButtonsContainer.minEdgePadding` = 20 pt), mais un
+    /// troisième signalement (2026-08-16, (+) de la liste de conversation)
+    /// a montré que 20 pt ne suffit pas pour la PAIRE de disques que
+    /// `AdaptiveGlassContainer` fond en un seul halo `GlassEffectContainer`
+    /// (iOS 26) — le reflet spéculaire du groupe déborde visuellement le
+    /// frame de layout, réduisant l'écart perçu. Portée désormais PROPRE au
+    /// header (ne touche plus les boutons flottants isolés, jamais signalés).
+    nonisolated public static var roundChromeEdgeGutter: CGFloat { 28 }
 
     /// Marge SUPPLÉMENTAIRE réservée aux boutons d'action, à droite. S'ajoute
     /// à `barHorizontalPadding` pour atteindre `roundChromeEdgeGutter` : à

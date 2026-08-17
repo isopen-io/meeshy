@@ -54,6 +54,23 @@ nonisolated enum FocalPassConstants {
     /// « opacité arbitraire » au lieu de « plafond neutre ».
     static let opaqueAlphaCeiling: CGFloat = 1
 
+    /// **Plancher d'opacité des rangées VOISINES.**
+    ///
+    /// `FocalFocusCurve.threadAlphaDecay` vaut `0.82` : à la distance
+    /// maximale, la courbe rend `1 − 0.82 = 0,18`. Les deux ou trois messages
+    /// qui encadrent l'élu s'effaçaient donc presque entièrement — or ils
+    /// restent le CONTEXTE de ce qu'on lit, et le mode Focal ne demande pas
+    /// qu'on les perde de vue : il demande qu'ils passent au second plan.
+    ///
+    /// Posé en PLANCHER plutôt qu'en réécriture de `threadAlphaDecay` : la
+    /// courbe est un miroir GELÉ (M-043), partagé avec la Lentille. Un
+    /// plancher borne son résultat sans toucher sa pente, donc sans déplacer
+    /// l'élection ni l'échelle — seule la lisibilité des voisins change.
+    ///
+    /// TODO CONTRACTUEL : `thread.focusBand.neighbourAlphaFloor` absent du
+    /// token, comme les cinq autres valeurs de ce fichier.
+    static let neighbourAlphaFloor: CGFloat = 0.58
+
     // MARK: - Bande de focus (§4.3)
 
     /// Marge minimale entre la ligne de focus et le haut du composeur, dans
@@ -89,6 +106,21 @@ nonisolated enum FocalPassConstants {
     ///
     /// TODO CONTRACTUEL : `thread.focusBand.landingTolerance` absent du token.
     static let landingTolerance: CGFloat = 8
+
+    // MARK: - Atterrissage d'élection (§4.7bis — zone d'activation sans conflit)
+
+    /// Dégagement entre le bord BAS visuel du message élu et le haut du
+    /// composeur, une fois le défilement posé. C'est la définition de la
+    /// zone d'activation demandée : « plus du tout en conflit avec la zone
+    /// de saisie » — l'élu atterrit ENTIER au-dessus du composeur, ses
+    /// contrôles de bord compris.
+    ///
+    /// Sémantiquement distinct de `bandGap` (position de la LIGNE de focus)
+    /// et de `landingTolerance` (tolérance de mesure §WS-6) : celui-ci borne
+    /// un BORD de cellule, pas un centre.
+    ///
+    /// TODO CONTRACTUEL : `thread.focusBand.settleGap` absent du token.
+    static let settleGap: CGFloat = 12
 
     // MARK: - Flash d'atterrissage (§4.7)
 

@@ -133,11 +133,23 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
     func test_mergeSegments_skipsUnreadableSegmentsInsteadOfFailingEntirely() throws {
         let fn = try mergeSegmentsBody()
         XCTAssertTrue(
-            fn.contains("guard let duration = try? await asset.load(.duration), duration.isValid, duration > .zero else { continue }"),
+            fn.contains("duration = try await asset.load(.duration)"),
+            "Loading a segment's duration must be attempted with a real `try`, " +
+            "not a silently-swallowing `try?` — a genuine failure is worth a log."
+        )
+        XCTAssertTrue(
+            fn.contains("guard duration.isValid, duration > .zero else { continue }"),
             "A segment whose duration can't be loaded (e.g. a URL that no " +
             "longer resolves to a real file) must be skipped with `continue`, " +
             "not abort the whole merge — the surviving segments still deserve " +
             "a best-effort stitched result."
+        )
+        let catchBlock = try body(from: "duration = try await asset.load(.duration)", to: "guard duration.isValid", in: fn)
+        XCTAssertTrue(
+            catchBlock.contains("continue"),
+            "The catch branch for a failed duration load must itself `continue` " +
+            "to the next segment — the same fail-soft guarantee `try?` used to " +
+            "provide silently, now with a diagnostic log alongside it."
         )
     }
 
@@ -164,19 +176,28 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
     func test_mergeSegments_toleratesSegmentsWithoutAudioTrack() throws {
         let fn = try mergeSegmentsBody()
         XCTAssertTrue(
-            fn.contains("if let assetAudioTrack = try? await asset.loadTracks(withMediaType: .audio).first"),
+            fn.contains("if let assetAudioTrack = try await asset.loadTracks(withMediaType: .audio).first"),
             "L'insertion de la piste audio doit être conditionnelle — un segment " +
             "filmé sans micro autorisé n'a pas de piste audio et ne doit pas " +
-            "faire échouer le merge."
+            "faire échouer le merge. `try` (pas `try?`) car l'appel est désormais " +
+            "protégé par un `do/catch` qui journalise un VRAI échec, distinct " +
+            "de l'absence de piste (qui ne lève rien, juste .first == nil)."
         )
         XCTAssertTrue(
-            fn.contains("if let assetVideoTrack = try? await asset.loadTracks(withMediaType: .video).first"),
+            fn.contains("if let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first"),
             "Même tolérance côté vidéo : une piste manquante saute, elle n'annule pas le merge."
         )
         XCTAssertFalse(
             fn.contains("guard let assetAudioTrack"),
             "Un `guard` sur la piste audio abandonnerait la capture entière d'un " +
             "enregistrement muet — exactement le cas d'un refus micro."
+        )
+        XCTAssertFalse(
+            fn.contains("try?"),
+            "Chaque erreur possible de mergeSegments doit maintenant être " +
+            "journalisée via Logger.media plutôt qu'avalée silencieusement par " +
+            "`try?` — le comportement de repli (continue / piste sautée) reste " +
+            "identique, seule la trace de diagnostic est nouvelle."
         )
     }
 

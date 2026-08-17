@@ -29,6 +29,27 @@
  * la fenêtre de janvier reste honoré — le perdre rouvrirait en silence la fuite
  * que ce module ferme.
  *
+ * ## Les routes lisent d'ici, elles aussi
+ *
+ * Ce module ne sert pas que les portes de diffusion : `/me/preferences` et
+ * `/me/preferences/privacy` en dépendent par `resolveStoredPrivacyPreferences`.
+ * Tant qu'elles lisaient le seul document, l'écran affichait « tout visible »
+ * pendant que le serveur taisait — et, pire, le `PATCH` reconstruisait sa base
+ * sur ce même défaut : toucher un réglage sans rapport réécrivait l'opt-out de
+ * janvier à `true`. Un consentement détruit par un geste qui ne le visait pas.
+ *
+ * Une donnée, un résolveur : ce que l'écran montre est ce que les portes
+ * obéissent, par construction et non par recopie.
+ *
+ * ## Et le rangement hérité finit par disparaître
+ *
+ * `retireLegacyPrivacyRows` est appelé après chaque écriture de la catégorie.
+ * Une fois un document posé, `fromJsonDocument` le fait gagner et plus aucun
+ * lecteur vivant n'atteint ces lignes : les garder ne conserverait qu'un
+ * fantôme. Il n'est PAS que de l'hygiène — sans lui, « réinitialiser » remet le
+ * document à `null`, la lecture redescend sur janvier, et la remise à zéro ne
+ * remet rien à zéro tout en n'étant plus visible nulle part.
+ *
  * Les deux lectures sont SÉQUENTIELLES, non parallèles. Les paralléliser
  * gagnerait un aller-retour sur les lots mixtes, au prix d'interroger le
  * rangement hérité pour TOUT LE MONDE, à demeure. Séquentiel, le second appel
@@ -108,12 +129,29 @@ export async function loadStoredPrivacyPreferences(
   const withoutDocument = wanted.filter((userId) => !resolved.has(userId));
   if (withoutDocument.length === 0) return resolved;
 
-  const legacyRows = await prisma.userPreference.findMany({
-    where: { userId: { in: withoutDocument }, key: { in: LEGACY_DB_KEYS } },
+  const legacy = await loadLegacyPrivacyRows(prisma, withoutDocument);
+  for (const [userId, stored] of legacy) resolved.set(userId, stored);
+
+  return resolved;
+}
+
+/**
+ * Les seules lignes de janvier, sans le document — le second temps de la
+ * résolution, isolé pour que la lecture d'un seul utilisateur le réemprunte
+ * plutôt que de le réécrire.
+ */
+async function loadLegacyPrivacyRows(
+  prisma: PrismaClient,
+  userIds: ReadonlyArray<string>
+): Promise<Map<string, StoredPrivacyPreferences>> {
+  const resolved = new Map<string, StoredPrivacyPreferences>();
+
+  const rows = await prisma.userPreference.findMany({
+    where: { userId: { in: [...userIds] }, key: { in: LEGACY_DB_KEYS } },
     select: { userId: true, key: true, value: true },
   });
 
-  for (const row of legacyRows) {
+  for (const row of rows) {
     const dtoKey = PRIVACY_KEY_REVERSE_MAPPING[row.key];
     if (!dtoKey) continue;
 
@@ -123,4 +161,55 @@ export async function loadStoredPrivacyPreferences(
   }
 
   return resolved;
+}
+
+/**
+ * Ce que le serveur tient pour STOCKÉ chez un utilisateur, à l'usage des routes.
+ *
+ * Diffère de `loadStoredPrivacyPreferences` sur un point : celui-ci ne modélise
+ * que les huit clés que les portes de diffusion consultent, tandis que l'écran
+ * en sert seize. Le document brut est donc superposé au résultat du résolveur —
+ * il gagne partout où il parle, ce qui reproduit exactement la règle des portes
+ * pour les huit, et préserve `encryptionPreference` et consorts pour le reste.
+ *
+ * NON mémoïsé, à dessein. Le cache des portes (`privacy-cache`) tolère cinq
+ * minutes de retard parce qu'une écriture le purge ; un écran de réglages, lui,
+ * n'a pas le droit d'afficher une valeur qu'un AUTRE processus vient de
+ * changer — ce serait le défaut qu'on referme, sous un autre nom.
+ */
+export async function resolveStoredPrivacyPreferences(
+  prisma: PrismaClient,
+  userId: string
+): Promise<Record<string, unknown>> {
+  const row = await prisma.userPreferences.findUnique({
+    where: { userId },
+    select: { privacy: true },
+  });
+
+  const document =
+    row?.privacy && typeof row.privacy === 'object' && !Array.isArray(row.privacy)
+      ? (row.privacy as Record<string, unknown>)
+      : {};
+
+  if (fromJsonDocument(row?.privacy)) return document;
+
+  const legacy = await loadLegacyPrivacyRows(prisma, [userId]);
+
+  return { ...(legacy.get(userId) ?? {}), ...document };
+}
+
+/**
+ * Retire les lignes de janvier d'un utilisateur — voir l'en-tête du module.
+ *
+ * Ne touche QUE les huit clés de confidentialité : la table `UserPreference`
+ * porte aussi le suivi d'affiliation (`AffiliateTrackingService`), qui n'a
+ * rien à voir avec un réglage de confidentialité.
+ */
+export async function retireLegacyPrivacyRows(
+  prisma: PrismaClient,
+  userId: string
+): Promise<void> {
+  await prisma.userPreference.deleteMany({
+    where: { userId, key: { in: LEGACY_DB_KEYS } },
+  });
 }

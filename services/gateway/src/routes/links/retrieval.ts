@@ -11,7 +11,10 @@ import { findShareLinkByIdentifier, getConversationMessages, countConversationMe
 import { formatMessageWithUnifiedSender } from './utils/message-formatters';
 import {
   conversationSummarySchema,
-  messageSchema
+  messageSchema,
+  linkCurrentUserSchema,
+  linkMemberSchema,
+  linkAnonymousParticipantSchema
 } from './types';
 
 export async function registerRetrievalRoutes(fastify: FastifyInstance) {
@@ -76,8 +79,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
                     allowAnonymousMessages: { type: 'boolean' },
                     allowAnonymousFiles: { type: 'boolean' },
                     allowAnonymousImages: { type: 'boolean' },
+                    requireAccount: { type: 'boolean' },
                     requireEmail: { type: 'boolean' },
                     requireNickname: { type: 'boolean' },
+                    requireBirthday: { type: 'boolean' },
                     expiresAt: { type: 'string', format: 'date-time', nullable: true },
                     isActive: { type: 'boolean' }
                   }
@@ -95,9 +100,9 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
                     hasMore: { type: 'boolean' }
                   }
                 },
-                members: { type: 'array', items: { type: 'object' } },
-                anonymousParticipants: { type: 'array', items: { type: 'object' } },
-                currentUser: { type: 'object', nullable: true, description: 'Current user information with permissions' }
+                members: { type: 'array', items: linkMemberSchema },
+                anonymousParticipants: { type: 'array', items: linkAnonymousParticipantSchema },
+                currentUser: { ...linkCurrentUserSchema, nullable: true, description: 'Current user information with permissions' }
               }
             }
           }
@@ -127,6 +132,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
+      // Aperçu public : la règle de repli, valable pour tout appelant qui n'est
+      // ni membre ni participant anonyme de CE lien.
+      const canPreview = shareLink.isActive && shareLink.allowViewHistory;
+
       // Vérifier les permissions d'accès
       let hasAccess = false;
 
@@ -137,12 +146,16 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           const isMember = shareLink.conversation.participants.filter(p => p.type === "user").some(
             member => member.userId === hybridRequest.user.id && member.isActive
           );
-          hasAccess = isMember;
+          // Un compte connecté qui n'est pas encore membre voit le MÊME aperçu
+          // qu'un visiteur déconnecté : être identifié ne doit jamais donner
+          // moins d'accès que la navigation privée. Le client enchaîne sur la
+          // modale « Rejoindre ».
+          hasAccess = isMember || canPreview;
         }
       } else if (hybridRequest.isAnonymous && hybridRequest.anonymousParticipant) {
         hasAccess = hybridRequest.anonymousParticipant.shareLinkId === shareLink.id;
       } else {
-        hasAccess = shareLink.isActive && shareLink.allowViewHistory;
+        hasAccess = canPreview;
       }
 
       if (!hasAccess) {
@@ -230,8 +243,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
             allowAnonymousMessages: shareLink.allowAnonymousMessages,
             allowAnonymousFiles: shareLink.allowAnonymousFiles,
             allowAnonymousImages: shareLink.allowAnonymousImages,
+            requireAccount: shareLink.requireAccount,
             requireEmail: shareLink.requireEmail,
             requireNickname: shareLink.requireNickname,
+            requireBirthday: shareLink.requireBirthday,
             expiresAt: shareLink.expiresAt?.toISOString() || null,
             isActive: shareLink.isActive
           },
@@ -258,18 +273,26 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
               lastActiveAt: member.joinedAt
             }
           })),
+          // L'identité d'un participant anonyme vit dans
+          // `anonymousSession.profile` et ses droits dans `permissions` : le
+          // modèle Prisma `Participant` ne porte ni `username` ni `firstName`,
+          // et surtout pas de `canSend*` à plat. Le reste de l'enveloppe
+          // `anonymousSession` (hash de jeton, IP, empreinte appareil) ne sort
+          // JAMAIS de la gateway — d'où le `select` restreint à `profile`.
           anonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").map(participant => ({
             id: participant.id,
-            username: participant.username,
-            firstName: participant.firstName,
-            lastName: participant.lastName,
+            username: participant.anonymousSession?.profile?.username ?? null,
+            firstName: participant.anonymousSession?.profile?.firstName ?? null,
+            lastName: participant.anonymousSession?.profile?.lastName ?? null,
+            displayName: participant.displayName,
+            avatar: participant.avatar,
             language: participant.language,
             isOnline: participant.isOnline,
             lastActiveAt: participant.joinedAt,
             joinedAt: participant.joinedAt,
-            canSendMessages: participant.canSendMessages,
-            canSendFiles: participant.canSendFiles,
-            canSendImages: participant.canSendImages
+            canSendMessages: participant.permissions?.canSendMessages ?? false,
+            canSendFiles: participant.permissions?.canSendFiles ?? false,
+            canSendImages: participant.permissions?.canSendImages ?? false
           })),
           currentUser
         });

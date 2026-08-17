@@ -23,6 +23,8 @@ data class NewConversationUiState(
     val selected: List<SelectableUser> = emptyList(),
     val groupTitle: String = "",
     val isSearching: Boolean = false,
+    val hasMore: Boolean = false,
+    val isLoadingMore: Boolean = false,
     val isCreating: Boolean = false,
     val errorMessage: String? = null,
     val createdConversationId: String? = null,
@@ -50,6 +52,9 @@ class NewConversationViewModel @Inject constructor(
 
     private val queryFlow = MutableStateFlow("")
     private val selectedById = LinkedHashMap<String, SelectableUser>()
+    private var rawResults: List<me.meeshy.sdk.net.api.UserSearchResult> = emptyList()
+    private var currentQuery: String = ""
+    private var nextOffset: Int = 0
 
     init {
         viewModelScope.launch {
@@ -107,17 +112,27 @@ class NewConversationViewModel @Inject constructor(
 
     private suspend fun runSearch(query: String) {
         val trimmed = query.trim()
+        currentQuery = trimmed
+        rawResults = emptyList()
+        nextOffset = 0
         if (trimmed.length < MIN_QUERY_LENGTH) {
-            _state.update { it.copy(results = projectedRows(emptyList()), isSearching = false) }
+            _state.update { it.copy(results = emptyList(), isSearching = false, hasMore = false) }
             return
         }
-        _state.update { it.copy(isSearching = true) }
+        _state.update { it.copy(isSearching = true, hasMore = false) }
         try {
-            when (val result = userRepository.searchUsers(trimmed)) {
-                is NetworkResult.Success ->
+            when (val result = userRepository.searchUsersPaged(trimmed, offset = 0)) {
+                is NetworkResult.Success -> {
+                    rawResults = result.data.data
+                    nextOffset = rawResults.size
                     _state.update {
-                        it.copy(results = projectedRows(result.data), isSearching = false)
+                        it.copy(
+                            results = projectedRows(rawResults),
+                            isSearching = false,
+                            hasMore = result.data.pagination?.hasMore == true,
+                        )
                     }
+                }
                 is NetworkResult.Failure ->
                     _state.update { it.copy(isSearching = false, errorMessage = result.error.message) }
             }
@@ -125,6 +140,46 @@ class NewConversationViewModel @Inject constructor(
             throw e
         } catch (e: Exception) {
             _state.update { it.copy(isSearching = false, errorMessage = e.message) }
+        }
+    }
+
+    /**
+     * Infinite-scroll trigger (parity iOS `NewConversationView`'s `.onAppear`
+     * pagination) — mirrors `CallHistoryViewModel.loadMoreIfNeeded`'s shape.
+     * Called from composition once per visible row; a plain, idempotent guard
+     * so calling it on every row of every recomposition is safe — it only
+     * ever launches a fetch when [userId] is within [LOAD_MORE_THRESHOLD] of
+     * the end of the current list AND a next page is known to exist.
+     */
+    fun loadMoreIfNeeded(userId: String) {
+        val current = _state.value
+        val index = current.results.indexOfFirst { it.id == userId }
+        if (index < 0 || index < current.results.size - LOAD_MORE_THRESHOLD) return
+        if (!current.hasMore || current.isLoadingMore) return
+
+        _state.update { it.copy(isLoadingMore = true) }
+        viewModelScope.launch {
+            try {
+                when (val result = userRepository.searchUsersPaged(currentQuery, offset = nextOffset)) {
+                    is NetworkResult.Success -> {
+                        rawResults = rawResults + result.data.data
+                        nextOffset += result.data.data.size
+                        _state.update {
+                            it.copy(
+                                results = projectedRows(rawResults),
+                                hasMore = result.data.pagination?.hasMore == true,
+                                isLoadingMore = false,
+                            )
+                        }
+                    }
+                    is NetworkResult.Failure ->
+                        _state.update { it.copy(isLoadingMore = false, errorMessage = result.error.message) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(isLoadingMore = false, errorMessage = e.message) }
+            }
         }
     }
 
@@ -144,5 +199,6 @@ class NewConversationViewModel @Inject constructor(
     companion object {
         private const val SEARCH_DEBOUNCE_MS = 300L
         private const val MIN_QUERY_LENGTH = 2
+        private const val LOAD_MORE_THRESHOLD = 5
     }
 }

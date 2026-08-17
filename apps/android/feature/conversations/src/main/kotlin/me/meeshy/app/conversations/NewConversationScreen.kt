@@ -135,6 +135,14 @@ fun NewConversationScreen(
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.results, key = { it.id }) { user ->
                         UserRow(user = user, onClick = { viewModel.toggleSelection(user.id) })
+                        viewModel.loadMoreIfNeeded(user.id)
+                    }
+                    if (state.isLoadingMore) {
+                        item {
+                            Box(modifier = Modifier.fillMaxWidth().padding(MeeshySpacing.md)) {
+                                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center).size(24.dp))
+                            }
+                        }
                     }
                 }
                 if (state.isSearching && state.results.isEmpty()) {

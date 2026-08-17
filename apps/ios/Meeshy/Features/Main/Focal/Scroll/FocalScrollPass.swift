@@ -160,6 +160,20 @@ final class FocalScrollPass {
 
     private(set) var focusedLocalId: String?
 
+    /// Élection ÉPINGLÉE pendant l'atterrissage d'élection (§4.7bis).
+    ///
+    /// Le nudge de pose déplace la liste pour dégager l'élu du composeur —
+    /// parfois de plus que l'hystérésis (un message haut se dégage de
+    /// `h/2` points). Sans épingle, le déplacement ferait élire le voisin
+    /// du dessous à mi-animation, et la magnification §4.6 atterrirait sur
+    /// un AUTRE message que celui qu'on vient de dégager. L'épingle fige
+    /// l'élection le temps du nudge ; le doigt qui reprend la main la lève
+    /// (l'hôte la pose et la retire, jamais le pass lui-même).
+    ///
+    /// Si l'épinglé quitte l'écran (recyclage pendant l'animation), l'élection
+    /// normale reprend — une épingle sur un fantôme n'immobilise rien.
+    var pinnedFocusLocalId: String?
+
     // Tampons RÉUTILISÉS d'une passe à l'autre (`removeAll(keepingCapacity:)`)
     // — le critère §7 « le pass de scroll n'alloue pas » ne tolère pas un
     // tableau neuf par frame.
@@ -258,18 +272,28 @@ final class FocalScrollPass {
                 )
             )
 
-            guard let localId = descriptor.localId else {
-                // §4.8 : jour / typing / début de conversation — identité, jamais d'échelle.
-                write(.identity, to: cell)
-                continue
-            }
-
             let visual = geometry.visualMidY(
                 contentMidY: cell.center.y,
                 contentOffsetY: offsetY,
                 viewportHeight: viewport
             )
-            candidates.append(FocalFocusCurve.RowCandidate(id: localId, midY: visual))
+
+            // Séparateur de jour, frappe, début de conversation : ils SUIVENT
+            // la perspective comme tout le reste, mais ne concourent jamais à
+            // l'élection.
+            //
+            // La maquette de référence est explicite — son sélecteur balaie
+            // `.msg, .daysep, .pont, .agent` et n'élit que parmi `.msg`
+            // (`docs/design/2026-08-15-conversation-modes-verdict.html`,
+            // `perspective(scr)`). L'ancienne règle §4.8 les remettait à
+            // l'identité : sur l'enregistrement d'écran, les pastilles de date
+            // flottaient donc en taille et opacité pleines PAR-DESSUS un texte
+            // réduit à 60 %, et deux d'entre elles se chevauchaient au même
+            // endroit. Une graduation qui s'arrête aux messages n'est pas une
+            // graduation : l'œil lit la profondeur sur la scène entière.
+            if let localId = descriptor.localId {
+                candidates.append(FocalFocusCurve.RowCandidate(id: localId, midY: visual))
+            }
 
             write(
                 transform(
@@ -284,16 +308,24 @@ final class FocalScrollPass {
             )
         }
 
-        focusedLocalId = geometry.electFocus(
-            candidates: candidates,
-            focusY: focusY,
-            current: focusedLocalId
-        )
+        if let pinned = pinnedFocusLocalId, candidates.contains(where: { $0.id == pinned }) {
+            // §4.7bis — l'atterrissage déplace la liste, pas le choix du lecteur.
+            focusedLocalId = pinned
+        } else {
+            focusedLocalId = geometry.electFocus(
+                candidates: candidates,
+                focusY: focusY,
+                current: focusedLocalId
+            )
+        }
 
         for entry in pending {
             decoration.update(
                 cell: entry.cell,
-                isFocused: entry.allowsFocusCard && entry.localId != nil && entry.localId == focusedLocalId,
+                isFocused: entry.allowsFocusCard
+                    && entry.localId != nil
+                    && entry.localId == focusedLocalId
+                    && isFullyVisible(entry.cell, in: collectionView),
                 accentHex: accentHex,
                 isDark: isDark
             )
@@ -302,6 +334,54 @@ final class FocalScrollPass {
         pending.removeAll(keepingCapacity: true)
 
         return focusedLocalId
+    }
+
+    /// La cellule tient-elle ENTIÈREMENT dans la zone lisible ?
+    ///
+    /// « N'encadrer le message que lorsqu'il est entièrement visible » : une
+    /// carte dont le bord bas passe sous le composeur (ou dont le bord haut
+    /// sort par le haut) dessine un cadre ouvert, et pire, coupe la barre de
+    /// contrôles qui vit sur ce bord — les emojis deviennent inatteignables
+    /// alors qu'ils sont la raison d'être de la carte.
+    ///
+    /// La zone lisible n'est PAS `bounds` : la liste est inversée, donc
+    /// `contentInset.top` borne le côté COMPOSEUR (bas visuel) et
+    /// `contentInset.bottom` le côté header. `frame` intègre le transform de
+    /// perspective déjà posé — c'est voulu ici : on teste ce que l'œil voit,
+    /// pas la boîte de layout.
+    ///
+    /// Le message reste ÉLU dans tous les cas (le focus pilote la
+    /// magnification du contenu, qui elle n'a rien à voir avec le cadre) :
+    /// seule la DÉCORATION est suspendue. Un message partiellement visible
+    /// n'en devient pas moins manipulable.
+    func isFullyVisible(_ cell: UICollectionViewCell, in collectionView: UICollectionView) -> Bool {
+        let viewport = collectionView.bounds.height
+        guard viewport > 0 else { return false }
+        let offsetY = collectionView.contentOffset.y
+
+        // La MÊME conversion que tout le reste du pass — `visualY = H −
+        // (contentY − contentOffset.y)`, §4.2 — appliquée aux deux bords de
+        // la cellule. L'inversion échange les extrémités : le `maxY` de
+        // contenu devient le HAUT visuel.
+        //
+        // Deux repères faux ont précédé celui-ci, tous deux constatés au
+        // simulateur (la carte ne s'affichait jamais) :
+        // 1. comparer `cell.frame` décalé de `−contentOffset.y` à une fenêtre
+        //    dérivée de `bounds` — dont l'origine EST déjà `contentOffset` ;
+        // 2. rétrécir `bounds` par `contentInset` — or `contentInset.bottom`
+        //    porte ici le `headInset` de §4.5, une réserve de DÉFILEMENT de
+        //    plusieurs centaines de points, pas une occlusion de chrome :
+        //    la fenêtre devenait plus petite que n'importe quelle cellule.
+        let visualTop = viewport - (cell.frame.maxY - offsetY)
+        let visualBottom = viewport - (cell.frame.minY - offsetY)
+
+        // Seul le composeur occulte réellement, et sa garde est déjà nommée :
+        // `contentInset.top` est ce que la géométrie appelle son
+        // `bottomClearance` (cf. `focusY(viewportHeight:bottomClearance:)`).
+        // Le haut de l'écran n'occulte rien en Focal — le header s'efface
+        // pendant le défilement.
+        let readableBottom = viewport - collectionView.contentInset.top
+        return visualTop >= 0 && visualBottom <= readableBottom
     }
 
     // MARK: - Site 2 — la cellule entrante seule
@@ -321,12 +401,6 @@ final class FocalScrollPass {
 
         let viewport = collectionView.bounds.height
         guard viewport > 0 else { return }
-
-        guard let localId = descriptor.localId else {
-            write(.identity, to: cell)
-            decoration.update(cell: cell, isFocused: false, accentHex: accentHex, isDark: isDark)
-            return
-        }
 
         let focusY = geometry.focusY(
             viewportHeight: viewport,
@@ -352,7 +426,10 @@ final class FocalScrollPass {
 
         decoration.update(
             cell: cell,
-            isFocused: descriptor.allowsFocusCard && localId == focusedLocalId,
+            isFocused: descriptor.allowsFocusCard
+                && descriptor.localId != nil
+                && descriptor.localId == focusedLocalId
+                && isFullyVisible(cell, in: collectionView),
             accentHex: accentHex,
             isDark: isDark
         )
@@ -366,8 +443,7 @@ final class FocalScrollPass {
     /// `MessageListViewController`, donc aucun `prepareForReuse` ne peut le
     /// faire à notre place.
     func reset(_ cell: UICollectionViewCell) {
-        cell.layer.transform = CATransform3DIdentity
-        cell.alpha = 1
+        write(.identity, to: cell)
         decoration.clear(cell)
     }
 
@@ -376,6 +452,7 @@ final class FocalScrollPass {
             reset(cell)
         }
         focusedLocalId = nil
+        pinnedFocusLocalId = nil
     }
 
     // MARK: - Site 6 — changement de mode de lecture
@@ -479,7 +556,19 @@ final class FocalScrollPass {
     /// exprimée dans l'espace de CONTENU.
     ///
     /// `anchorPoint` n'est JAMAIS touché (§4.3, écart #2).
+    ///
+    /// **La consigne est CONFIÉE à la cellule quand celle-ci sait la reposer.**
+    /// `FocalPerspectiveCell` la réécrit après chaque `apply(_:)` de layout —
+    /// seul moyen de survivre à l'effacement décrit dans la doc d'`apply`, que
+    /// les six sites d'appel ne peuvent pas rattraper (l'effacement suit la
+    /// re-mesure, pas un événement). L'écriture directe reste le repli pour
+    /// toute cellule d'un autre type : le pass n'exige aucune sous-classe pour
+    /// fonctionner, elle ne fait que le rendre STABLE.
     private func write(_ transform: FocalCellTransform, to cell: UICollectionViewCell) {
+        if let perspectiveCell = cell as? FocalPerspectiveCell {
+            perspectiveCell.writeFocalTransform(transform)
+            return
+        }
         var matrix = CATransform3DMakeScale(transform.scale, transform.scale, 1)
         matrix.m41 = transform.translation.width
         matrix.m42 = transform.translation.height

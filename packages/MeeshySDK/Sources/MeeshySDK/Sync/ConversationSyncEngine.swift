@@ -1287,6 +1287,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// is that row's `lastMessageId`. No-op otherwise (editing an older message
     /// leaves the preview untouched). Fires `_conversationsDidChange` only when a
     /// row actually changed.
+    ///
+    /// Une édition garde le MÊME message : l'auteur, les pièces jointes et les
+    /// drapeaux éphémères restent vrais, et ce chemin n'y touche pas. Seule la
+    /// carte du Prisme devient fausse — elle traduit le texte remplacé — et
+    /// c'est celle que le résolveur préfère.
     private func refreshLastMessagePreviewIfEdited(
         conversationId: String, messageId: String, newContent: String
     ) async {
@@ -1296,6 +1301,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 updated[idx].lastMessagePreview = newContent.meeshyPreviewTruncated
+                // La carte du Prisme traduisait le texte D'AVANT. Le résolveur
+                // (`resolvedLastMessagePreview`) la PRÉFÈRE à l'aperçu brut :
+                // la garder ici réécrivait le texte visible… pour personne, le
+                // lecteur servi par une traduction continuant de lire la phrase
+                // pré-édition. Le serveur fait le même geste dans la même
+                // écriture — `routes/messages.ts` remet `Message.translations`
+                // à `null` avec le nouveau contenu, et `emitConversationPreview
+                // Update` l'annonce par `.replaced([:])`.
+                //
+                // `lastMessageOriginalLanguage` reste : le message n'a pas
+                // changé d'identité, et sans carte le résolveur ne le consulte
+                // plus. Le prochain `conversation:updated` reposera les deux.
+                updated[idx].lastMessageTranslations = nil
             }
             return updated
         }
@@ -1319,18 +1337,30 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
                 if let newLast {
-                    updated[idx].lastMessagePreview = newLast.content.meeshyPreviewTruncated
-                    updated[idx].lastMessageId = newLast.id
-                    if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
-                        updated[idx].lastMessageSenderName = name
-                    }
-                    updated[idx].lastMessageAt = newLast.createdAt
+                    // Le survivant est ici TOUT ENTIER : la facette s'écrit donc
+                    // en bloc, plutôt que quatre champs à la main. Les sept
+                    // autres décrivaient encore le message SUPPRIMÉ — sa
+                    // vignette, son « Vue unique », son expiration, sa carte de
+                    // traductions (que le résolveur PRÉFÈRE à l'aperçu, donc la
+                    // ligne rendait le texte traduit du disparu). Même défaut
+                    // que celui du chemin reçu, découvert localement.
+                    updated[idx].applyLastMessage(LastMessageFacet(
+                        message: newLast,
+                        preview: newLast.content
+                    ))
                 } else {
                     // The deleted message was the conversation's ONLY message — there
                     // is no survivor to surface. Clear the stale preview so the list
                     // row stops showing the deleted message's text (displayed ≠ real).
-                    updated[idx].lastMessagePreview = ""
-                    updated[idx].lastMessageId = nil
+                    //
+                    // Même geste que celui qu'applique `ConversationStore.merging`
+                    // quand le SERVEUR annonce « plus aucun message visible »
+                    // (`LastMessageIdentity.replaced(nil)`) : c'est le même fait,
+                    // découvert localement au lieu d'être reçu. Le vidage à la main
+                    // qui vivait ici ne touchait que le texte et l'id, laissant la
+                    // pastille de pièce jointe, l'épingle de position et le libellé
+                    // « Message expiré » décrire le message supprimé.
+                    updated[idx].clearLastMessage()
                 }
             }
             return updated
@@ -1425,6 +1455,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
                 updated[idx].userState.unreadCount = effectiveUnread
+                // G-124 — le pont ✦ voyage sur CE même événement (G-123,
+                // `ConversationUnreadUpdatedEventData.bridge`, payload optionnel).
+                // Avant ce lot, seul `unreadCount` était appliqué : un pont reçu
+                // par socket restait invisible jusqu'au prochain rechargement REST
+                // complet (`fullSync`/`syncSinceLastCheckpoint`) — le trou exact
+                // que R-c dénonçait (« pont invisible drapeau ON »). `event.bridge`
+                // remplace TOUJOURS l'ancien, y compris `nil` : le serveur omet le
+                // champ précisément quand `unreadCount == 0` ou qu'il n'a rien à
+                // annoncer (contrat §3.2) — garder un pont périmé serait une
+                // affirmation fabriquée, l'inverse de la règle du fichier.
+                updated[idx].bridge = event.bridge
             }
             return updated
         }

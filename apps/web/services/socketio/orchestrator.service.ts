@@ -794,6 +794,12 @@ export class SocketIOOrchestrator {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 
+  onPreferencesReordered(
+    listener: (data: import('@meeshy/shared/types/socketio-events').UserPreferencesReorderedEventData) => void,
+  ): UnsubscribeFn {
+    return this.preferencesSyncService.onPreferencesReordered(listener);
+  }
+
   onCategoryChanged(listener: () => void): UnsubscribeFn {
     return this.preferencesSyncService.onCategoryChanged(listener);
   }

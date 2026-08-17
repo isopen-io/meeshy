@@ -6,8 +6,18 @@ import { toast } from 'sonner';
 import { MessageSquare } from 'lucide-react';
 import { BubbleMessage } from './BubbleMessage';
 import { FailedMessageBar } from '@/components/messages/FailedMessageBar';
+import { DateSticker } from '@/components/conversations/reading/DateSticker';
 import { messageTranslationService } from '@/services/message-translation.service';
 import { useI18n } from '@/hooks/useI18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { formatDayLabel } from '@/utils/date-format';
+import {
+  useFocalScroller,
+  FOCAL_ROW_ATTRIBUTE,
+  FOCAL_SCALE_ATTRIBUTE,
+} from '@/hooks/conversations/use-focal-scroller';
+import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib/conversations/reading-mode';
+import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
 
 interface MessagesDisplayProps {
@@ -43,6 +53,8 @@ interface MessagesDisplayProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
+  /** Lentille de lecture — `focal` par défaut (verdict vol. 3). */
+  readingMode?: ReadingMode;
 }
 
 export const MessagesDisplay = memo(function MessagesDisplay({
@@ -73,11 +85,27 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   containerRef,
   onLoadMore,
   hasMore = false,
-  isLoadingMore = false
+  isLoadingMore = false,
+  readingMode = DEFAULT_READING_MODE
 }: MessagesDisplayProps) {
 
   // Hook pour les traductions
   const { t } = useI18n('bubbleStream');
+  const { t: tConversations } = useI18n('conversations');
+  const locale = useCurrentInterfaceLanguage();
+
+  const isFlat = isFlatReadingMode(readingMode);
+
+  // Ref de repli STABLE : passer un `{ current: null }` fraîchement construit à
+  // chaque rendu ferait retomber l'effet du scroller dans une boucle.
+  const fallbackContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // La perspective n'existe qu'en Focal : en Script la MÊME rangée plate est
+  // rendue uniforme (volume 4, bouton `Aa`).
+  useFocalScroller({
+    containerRef: containerRef ?? fallbackContainerRef,
+    enabled: readingMode === 'focal' && Boolean(containerRef),
+  });
 
   // États pour contrôler l'affichage des messages depuis le parent
   const [messageDisplayStates, setMessageDisplayStates] = useState<Record<string, {
@@ -305,6 +333,35 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     });
   }, [displayMessages, userLanguage]);
 
+  /**
+   * Le « data sticker » de catégorisation : un libellé de jour collant en tête
+   * de chaque journée. Le repère est le message PRÉCÉDENT dans l'ordre de
+   * rendu — ce qui reste juste que la liste soit ancienne-en-haut ou
+   * récente-en-haut (`reverseOrder`).
+   */
+  const dayLabelAt = useCallback(
+    (index: number): string | null => {
+      const message = displayMessages[index];
+      if (!message?.createdAt) return null;
+
+      const createdAt = message.createdAt as unknown as string | Date;
+      const previous = index > 0 ? displayMessages[index - 1] : null;
+      if (!previous?.createdAt) {
+        return formatDayLabel(createdAt, { t: tConversations, locale });
+      }
+
+      const previousCreatedAt = previous.createdAt as unknown as string | Date;
+      const sameDay =
+        calendarDayDiff(
+          new Date(createdAt).getTime(),
+          new Date(previousCreatedAt).getTime()
+        ) === 0;
+
+      return sameDay ? null : formatDayLabel(createdAt, { t: tConversations, locale });
+    },
+    [displayMessages, tConversations, locale]
+  );
+
   const useVirtual = Boolean(containerRef);
 
   const virtualizer = useVirtualizer({
@@ -383,31 +440,42 @@ export const MessagesDisplay = memo(function MessagesDisplay({
           const tempId = (message as unknown as Record<string, unknown>)._tempId as string | undefined;
           const isSending = localStatus === 'sending';
           const isFailed = localStatus === 'failed';
+          const dayLabel = dayLabelAt(index);
           return (
-            <div key={message.id} className={isSending || isFailed ? 'opacity-70' : undefined}>
-              <BubbleMessage
-                message={message as unknown}
-                currentUser={currentUser}
-                userLanguage={userLanguage}
-                usedLanguages={usedLanguages}
-                onForceTranslation={handleForceTranslation}
-                onEditMessage={onEditMessage}
-                onDeleteMessage={onDeleteMessage}
-                onReplyMessage={onReplyMessage}
-                onNavigateToMessage={onNavigateToMessage}
-                onImageClick={onImageClick}
-                onLanguageSwitch={handleLanguageSwitch}
-                currentDisplayLanguage={state.currentDisplayLanguage}
-                isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
-                translationError={state.translationError}
-                conversationType={conversationType}
-                userRole={userRole}
-                conversationId={conversationId}
-                isAnonymous={isAnonymous}
-                currentAnonymousUserId={currentAnonymousUserId}
-                isFirstInGroup={isFirstInGroup}
-                isLastInGroup={isLastInGroup}
-              />
+            <div
+              key={message.id}
+              className={isSending || isFailed ? 'opacity-70' : undefined}
+              {...(isFlat ? { [FOCAL_ROW_ATTRIBUTE]: message.id } : {})}
+            >
+              {/* Le sticker reste HORS de l'élément transformé : une
+                  `transform` crée un bloc conteneur et casserait `sticky`. */}
+              {dayLabel && <DateSticker label={dayLabel} />}
+              <div {...(isFlat ? { [FOCAL_SCALE_ATTRIBUTE]: 'true' } : {})}>
+                <BubbleMessage
+                  message={message as unknown}
+                  readingMode={readingMode}
+                  currentUser={currentUser}
+                  userLanguage={userLanguage}
+                  usedLanguages={usedLanguages}
+                  onForceTranslation={handleForceTranslation}
+                  onEditMessage={onEditMessage}
+                  onDeleteMessage={onDeleteMessage}
+                  onReplyMessage={onReplyMessage}
+                  onNavigateToMessage={onNavigateToMessage}
+                  onImageClick={onImageClick}
+                  onLanguageSwitch={handleLanguageSwitch}
+                  currentDisplayLanguage={state.currentDisplayLanguage}
+                  isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
+                  translationError={state.translationError}
+                  conversationType={conversationType}
+                  userRole={userRole}
+                  conversationId={conversationId}
+                  isAnonymous={isAnonymous}
+                  currentAnonymousUserId={currentAnonymousUserId}
+                  isFirstInGroup={isFirstInGroup}
+                  isLastInGroup={isLastInGroup}
+                />
+              </div>
               {isFailed && tempId && onRetryMessage && onCancelMessage && (
                 <FailedMessageBar
                   tempId={tempId}
@@ -456,36 +524,42 @@ export const MessagesDisplay = memo(function MessagesDisplay({
           const tempId = (message as unknown as Record<string, unknown>)._tempId as string | undefined;
           const isSending = localStatus === 'sending';
           const isFailed = localStatus === 'failed';
+          const dayLabel = dayLabelAt(virtualRow.index);
           return (
             <div
               key={message.id}
               data-index={virtualRow.index}
               ref={virtualizer.measureElement}
               className={isSending || isFailed ? 'opacity-70' : undefined}
+              {...(isFlat ? { [FOCAL_ROW_ATTRIBUTE]: message.id } : {})}
             >
-              <BubbleMessage
-                message={message as unknown}
-                currentUser={currentUser}
-                userLanguage={userLanguage}
-                usedLanguages={usedLanguages}
-                onForceTranslation={handleForceTranslation}
-                onEditMessage={onEditMessage}
-                onDeleteMessage={onDeleteMessage}
-                onReplyMessage={onReplyMessage}
-                onNavigateToMessage={onNavigateToMessage}
-                onImageClick={onImageClick}
-                onLanguageSwitch={handleLanguageSwitch}
-                currentDisplayLanguage={state.currentDisplayLanguage}
-                isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
-                translationError={state.translationError}
-                conversationType={conversationType}
-                userRole={userRole}
-                conversationId={conversationId}
-                isAnonymous={isAnonymous}
-                currentAnonymousUserId={currentAnonymousUserId}
-                isFirstInGroup={isFirstInGroup}
-                isLastInGroup={isLastInGroup}
-              />
+              {dayLabel && <DateSticker label={dayLabel} />}
+              <div {...(isFlat ? { [FOCAL_SCALE_ATTRIBUTE]: 'true' } : {})}>
+                <BubbleMessage
+                  message={message as unknown}
+                  readingMode={readingMode}
+                  currentUser={currentUser}
+                  userLanguage={userLanguage}
+                  usedLanguages={usedLanguages}
+                  onForceTranslation={handleForceTranslation}
+                  onEditMessage={onEditMessage}
+                  onDeleteMessage={onDeleteMessage}
+                  onReplyMessage={onReplyMessage}
+                  onNavigateToMessage={onNavigateToMessage}
+                  onImageClick={onImageClick}
+                  onLanguageSwitch={handleLanguageSwitch}
+                  currentDisplayLanguage={state.currentDisplayLanguage}
+                  isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
+                  translationError={state.translationError}
+                  conversationType={conversationType}
+                  userRole={userRole}
+                  conversationId={conversationId}
+                  isAnonymous={isAnonymous}
+                  currentAnonymousUserId={currentAnonymousUserId}
+                  isFirstInGroup={isFirstInGroup}
+                  isLastInGroup={isLastInGroup}
+                />
+              </div>
               {isFailed && tempId && onRetryMessage && onCancelMessage && (
                 <FailedMessageBar
                   tempId={tempId}

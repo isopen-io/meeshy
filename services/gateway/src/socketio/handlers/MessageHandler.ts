@@ -29,6 +29,7 @@ import { transformTranslationsToArray, type MessageTranslationJSON } from '../..
 import { emitConversationPreviewUpdate } from '../emitConversationPreviewUpdate';
 import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from '../emitUnreadCountsToRecipients';
+import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { emitToConversationParticipants, participantUserRoomTargets } from '../emitToConversationParticipants';
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
@@ -142,6 +143,10 @@ export class MessageHandler {
   private agentClient: ZmqAgentClient | null;
   private attachmentService: AttachmentService;
   private readStatusService: MessageReadStatusService;
+  // Le pont ✦ (G-123) — construit depuis `this.prisma`, jamais injecté : les
+  // trois transports d'envoi partagent la même discipline « une instance,
+  // sans état, réutilisée » que `readStatusService`.
+  private bridgeService: ConversationBridgeService;
   private privacyPreferencesService: PrivacyPreferencesService;
   private deliveryQueue: RedisDeliveryQueue | null;
   private mentionService: MentionResolver | null;
@@ -182,6 +187,7 @@ export class MessageHandler {
     this.agentClient = deps.agentClient ?? null;
     this.attachmentService = deps.attachmentService;
     this.readStatusService = deps.readStatusService;
+    this.bridgeService = new ConversationBridgeService(deps.prisma);
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.deliveryQueue = deps.deliveryQueue ?? null;
     this.mentionService = deps.mentionService ?? null;
@@ -1970,6 +1976,7 @@ export class MessageHandler {
       io: this.io,
       prisma: this.prisma,
       readStatusService: this.readStatusService,
+      bridgeService: this.bridgeService,
       conversationId,
       senderId,
       participants: preloadedParticipants,

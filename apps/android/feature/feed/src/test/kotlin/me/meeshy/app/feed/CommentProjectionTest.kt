@@ -193,4 +193,19 @@ class CommentProjectionTest {
         assertThat(p.content).isEqualTo("Hello")
         assertThat(p.languageStrip.single { it.isActive }.code).isEqualTo("en")
     }
+
+    @Test
+    fun build_isOwnWhenAuthorMatchesCurrentUser() {
+        val c = comment(author = ApiAuthor(id = "u1", username = "alice"))
+        assertThat(CommentProjection.build(c, Prefs(), null, currentUserId = "u1").isOwn).isTrue()
+    }
+
+    @Test
+    fun build_isNotOwnWhenAuthorDiffersOrMissing() {
+        val c = comment(author = ApiAuthor(id = "u1", username = "alice"))
+        assertThat(CommentProjection.build(c, Prefs(), null, currentUserId = "u2").isOwn).isFalse()
+        assertThat(CommentProjection.build(c, Prefs(), null, currentUserId = null).isOwn).isFalse()
+        val noAuthor = comment(author = null)
+        assertThat(CommentProjection.build(noAuthor, Prefs(), null, currentUserId = "u1").isOwn).isFalse()
+    }
 }

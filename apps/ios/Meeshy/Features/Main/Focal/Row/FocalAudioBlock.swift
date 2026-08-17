@@ -143,6 +143,8 @@ struct FocalAudioBlock: View, Equatable {
     var onShowTranslationDetail: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
+    var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
+    var onTapConsentNotice: (() -> Void)? = nil
     var onScrollToMessage: ((String) -> Void)? = nil
 
     static func == (lhs: FocalAudioBlock, rhs: FocalAudioBlock) -> Bool {
@@ -213,9 +215,10 @@ struct FocalAudioBlock: View, Equatable {
                 onRequestTranslation: onRequestTranslation,
                 onPlayAudio: onPlayAudio,
                 conversationName: conversationName,
-                audioQueueTailProvider: nil,
+                audioQueueTailProvider: audioQueueTailProvider,
                 parentIsMe: content.isMe,
-                voiceConsentMissing: voiceConsentMissing
+                voiceConsentMissing: voiceConsentMissing,
+                onTapConsentNotice: onTapConsentNotice
             )
         }
     }
@@ -247,8 +250,10 @@ struct FocalAudioBlock: View, Equatable {
                     onStoryReplyTap: onStoryReplyTap,
                     onPlayAudio: onPlayAudio,
                     conversationName: conversationName,
+                    audioQueueTailProvider: audioQueueTailProvider,
                     embedsCaptionInWidget: mode == .hostsCaption,
-                    voiceConsentMissing: voiceConsentMissing
+                    voiceConsentMissing: voiceConsentMissing,
+                    onTapConsentNotice: onTapConsentNotice
                 )
                 .equatable()
             }

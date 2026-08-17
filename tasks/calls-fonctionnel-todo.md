@@ -9057,3 +9057,550 @@ correctif chirurgical neuf. Toolchains iOS/Android toujours hors d'atteinte dans
   code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
   implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ; gaps d'infrastructure
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 135 — `translateAndEmitSegment` broadcast every target language to the WHOLE call room, not just its listeners (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement le candidat laissé de côté par la Vague 134 (« hors gabarit chirurgical de cette
+vague ») — cette session dispose du temps pour l'implémenter correctement. Toolchains iOS/Android
+toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (root cause), aucun edit Swift/Kotlin
+non testable.
+
+- **Root cause** : `translateAndEmitSegment` calculait `targetLanguages` comme un `Set<string>`
+  APLATI (l'union des langues résolues de tous les auditeurs, sans mémoriser QUI voulait QUOI),
+  puis, pour CHAQUE langue cible, diffusait la traduction à `socket.to(ROOMS.call(data.callId))` —
+  la room entière de l'appel. En appel de groupe à 3 langues distinctes (locuteur FR, auditeur EN,
+  auditeur ES), l'auditeur EN recevait donc AUSSI la traduction espagnole (et réciproquement) :
+  deux événements `call:translated-segment` par segment final, l'un dans sa langue, l'autre non.
+  Violation directe du Prisme Linguistique (§ règle 1 de CLAUDE.md — la résolution de langue
+  préférée doit gouverner, jamais un fallback qui expose du contenu dans une langue non voulue).
+- **Scénario de défaillance concret** : les deux hooks web consommateurs de
+  `call:translated-segment` n'ont ni l'un ni l'autre de filtre par `targetLanguage` — un choix
+  délibéré à l'origine (le gateway étant censé ne router QUE la bonne langue à chacun) : (1)
+  `use-call-captions.ts` (overlay 4 lignes) affiche CHAQUE segment reçu tel quel — l'auditeur EN
+  voit clignoter des sous-titres en espagnol qu'il ne comprend pas, entrelacés avec les siens ; (2)
+  `use-call-transcript-journal.ts` fusionne par `callTranscriptEntryKey` (speaker+startMs+endMs,
+  sans composante langue) via `upsertCallTranscriptEntry` (`packages/shared/utils/call-transcript.ts`) —
+  `mergeEntries` régime « final + final » remplace `translatedText`/`targetLanguage` par la valeur
+  ENTRANTE dès qu'elle est définie (`incoming.translatedText ?? existing.translatedText`, pas de
+  garde par langue) : le journal d'appel finit par montrer la traduction dont le paquet est arrivé
+  EN DERNIER sur le réseau — non-déterministe, potentiellement jamais dans la langue Prisme du
+  lecteur. iOS (`CallTranscriptionService.upsertRemoteSegment`/`mergedSegment`, mêmes clés, même
+  sémantique — code jumeau documenté « miroir de mergeEntries ») porte la même absence de filtre
+  côté client ; audité en lecture (Swift non testable ici), non modifié.
+- **Fix** : `translateAndEmitSegment` regroupe désormais les auditeurs actifs (hors locuteur, hors
+  ceux dont la langue résolue égale `data.segment.language`) dans une `Map<targetLanguage,
+  userId[]>` (`listenersByLanguage`) au lieu d'un `Set<string>` plat — `targetLanguages` devient
+  une projection de ses clés, comportement de sélection de langue INCHANGÉ (même résolveur Prisme
+  `resolveUserLanguage`, même exclusion de la langue source). Nouvelle méthode privée
+  `emitTranslatedSegmentTo(socket, userIds, payload)` remplace les 3 sites d'émission internes à la
+  boucle `Promise.allSettled` (succès de traduction, timeout 10 s, échec ZMQ) — elle chaîne
+  `socket.to(ROOMS.user(uid))` pour CHAQUE auditeur de cette langue (jamais `ROOMS.call`), avec le
+  garde Socket.IO standard « chaîner, jamais boucler sur `.emit()` séparés » pour qu'un auditeur ne
+  reçoive jamais deux copies. Les deux AUTRES chemins de diffusion à `ROOMS.call` dans cette
+  fonction sont volontairement INCHANGÉS : `targetLanguages.length === 0` (tous les auditeurs
+  partagent la langue source — la room entière EST le bon destinataire) et `!zmqClient` (ZMQ hors
+  service — repli best-effort déjà assumé comme politique globale, pas un bug de ciblage par
+  langue). `ROOMS.user()` déjà le pattern établi de ce même fichier pour du fanout par utilisateur
+  (`io.in(ROOMS.user(userId)).fetchSockets()` ligne 731, `io.in(ROOMS.user(memberId))` ligne 2327) —
+  aucun nouveau pattern introduit.
+- **Tests** (TDD, RED confirmé contre le code non corrigé — `git stash` du seul fichier source,
+  suite rejouée, `git stash pop`) :
+  `CallEventsHandler-transcription-translation.test.ts` — nouveau groupe « group call, 3+ distinct
+  languages — per-language targeting », 3 cas neufs sur un appel FR (locuteur) / EN / ES à 3
+  langues distinctes : la traduction anglaise atteint EXCLUSIVEMENT `ROOMS.user(EN_LISTENER_ID)`
+  (jamais `ROOMS.call`, jamais la room de l'auditeur ES) ; symétrique pour l'espagnol ; exactement
+  2 émissions au total, aucune vers la room d'appel. RED confirmé : les 3 cas échouaient contre le
+  code non corrigé avec `rooms: ["call:<callId>"]` reçu au lieu de `["user:<listenerId>"]`. Nouveau
+  socket-double `makeRoomAwareSocket()` (accumule les rooms adressées par appel chaîné
+  `.to().to()...emit()`, une seule émission enregistrée par appel — miroir du comportement
+  Socket.IO réel) + `makeMultiLanguageFakeZmqClient()` (taskId dérivé de la langue cible, nécessaire
+  pour désambiguïser `onResult` avec DEUX langues en vol sur le même segment). Suite du fichier :
+  **9/9** verts (+3 net). Sweep gateway `--testPathPatterns="[Cc]all"` : **52 suites / 1216 tests**
+  verts, 0 régression. Sweep `--testPathPatterns="socketio"` (surface complète, pas seulement
+  calls) : **89 suites / 2073 tests** verts, 0 régression. `npx tsc --noEmit` (services/gateway) :
+  diff `git stash`/`stash pop` sur le fichier source + test — **409** erreurs préexistantes
+  identiques avant/après (toutes `Cannot find module '@meeshy/shared/prisma/client'` — client
+  Prisma non généré dans ce sandbox, `binaries.prisma.sh` bloqué par la politique réseau, cf.
+  Leçon 118 ; aucune imputable à ce diff), 0 nouvelle, 0 corrigée.
+- **Non fait volontairement** : `CallSystemMessage.tsx:63` — `canCallBack` sans garde
+  `!isAnonymous` (reconduit tel quel depuis la Vague 134 — toujours latent, aucun scénario de
+  défaillance réel identifié). `mergeEntries`/`upsertRemoteSegment` (web + iOS) ne filtrent
+  toujours PAS explicitement par `targetLanguage` côté client — laissé en l'état car le fix gateway
+  élimine la cause racine (chaque client ne reçoit plus QUE sa propre langue, donc il n'y a plus de
+  second paquet à mal fusionner) ; un filtre défensif côté client resterait pertinent en
+  profondeur-de-défense mais sort du gabarit chirurgical (et le volet iOS n'est pas testable dans
+  ce sandbox). Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ;
+  ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce
+  sandbox ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 136 — the "Missed" call-history filter never matched a group call the current user was bystander to (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallService.ts`/`CallEventsHandler.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-135) mandaté pour trouver un correctif chirurgical neuf.
+Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/
+`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : `CallService.listHistory` construit son `where` Prisma de base avec
+  `status: { in: TERMINAL_STATUSES }` (`ended`/`missed`/`rejected`/`failed`), puis, pour
+  `filter === 'missed'`, ÉCRASAIT ce filtre par `where.status = CallStatus.missed` — la valeur
+  d'ENUM `CallStatus.missed` qu'une timer de sonnerie pose UNIQUEMENT quand personne n'a
+  répondu, call-wide. Or `deriveCallDirection` (`callHistory.ts:85-93`, fixé Vague 105) définit
+  `missed` pour un utilisateur donné de façon plus large : `!(answeredAt && userParticipated)` —
+  c'est-à-dire soit personne n'a répondu, SOIT quelqu'un D'AUTRE a répondu mais CET utilisateur
+  n'a jamais eu sa propre ligne `CallParticipant` (a décliné, ignoré, ou était hors ligne). Ce
+  second cas atteint `CallSession.status: 'ended'` (le call a bien eu lieu pour les autres), jamais
+  `'missed'` — la Vague 105 n'avait corrigé QUE ce que `buildCallHistoryItem` *retourne* (le champ
+  `direction` sous l'onglet « All »), jamais la requête `filter === 'missed'` elle-même, qui restait
+  couplée à l'ancienne sémantique 1:1 (« missed » = personne n'a répondu à qui que ce soit).
+  Au moment de la Vague 105, cet écart était latent : le plafond `MAX_CALL_PARTICIPANTS` limitait
+  les appels de groupe à 2 participants actifs (S1, `tasks/2026-08-13-group-calls-gap-analysis.md`),
+  rendant « quelqu'un d'autre a répondu pendant que moi je n'ai jamais rejoint » un cas de bord
+  étroit. Ce plafond a été levé le 2026-08-13 — tout appel de groupe à 3+ membres où un membre est
+  lent/hors-ligne pendant que les autres discutent normalement produit désormais ce cas.
+- **Scénario de défaillance concret** : conversation de groupe à 4 membres. D est hors ligne/lent
+  et n'obtient jamais de ligne `CallParticipant` pour un appel donné ; A (initiateur), B, C
+  répondent et discutent, puis raccrochent — `CallSession.status` finit à `'ended'`, `answeredAt`
+  posé par B ou C. D ouvre plus tard l'onglet Appels iOS (`CallsTab.swift:33`, filtre `.missed`
+  câblé sur `GET /calls/history?filter=missed` — confirmé) ou une future vue web « appels manqués »
+  bâtie sur le même filtre REST. Sous l'onglet « Tous », l'entrée de D pour cet appel affiche
+  correctement `direction: 'missed'` (Vague 105). Sous l'onglet « Manqués », le même appel est
+  silencieusement absent — `where.status = CallStatus.missed` l'exclut puisque le statut réel de la
+  session est `'ended'`. D ne voit jamais cet appel comme manqué nulle part sauf dans le flux « Tous »,
+  ce qui vide le filtre « Manqués » de son utilité pour tout appel de groupe où quelqu'un d'autre a
+  décroché.
+- **Fix** : `CallService.listHistory`, branche `filter === 'missed'` — ne remplace plus
+  `where.status` (la fenêtre de base `{ in: TERMINAL_STATUSES }` reste intacte ; `missed` en fait
+  déjà partie, aucun conflit) ; ajoute `where.OR` à deux branches, miroir exact de
+  `deriveCallDirection` : `{ status: CallStatus.missed }` (personne n'a répondu) OU
+  `{ answeredAt: { not: null }, participants: { none: { participant: { userId } } } }` (répondu par
+  quelqu'un d'autre, mais aucune ligne `CallParticipant` pour CET utilisateur). La forme nichée
+  `participants: { none: { participant: { userId } } }` réutilise exactement le même pattern de
+  relation déjà présent quelques lignes plus bas dans la même fonction
+  (`callParticipant.findMany({ where: { callSessionId: { in }, participant: { userId } } } })`,
+  `CallService.ts:2345-2348`) — aucun nouveau pattern de requête introduit. Le contrat REST est
+  INCHANGÉ (même query param `filter=missed`, même forme de réponse) — aucun changement route/web/iOS
+  requis.
+- **Tests** (TDD, RED confirmé contre le code non corrigé) :
+  `CallService.listHistory.test.ts` — le test existant du filtre `missed` (qui codifiait l'ancien
+  contrat bogué, `where.status).toBe(CallStatus.missed)`) réécrit pour affirmer que `where.status`
+  reste la fenêtre de base ; 2 cas neufs affirmant les deux branches du `where.OR` (statut `missed`
+  call-wide ; groupe répondu-mais-non-rejoint) ; le test `filter=all` étendu pour affirmer
+  `where.OR` reste `undefined` (aucune fuite du filtre missed vers l'onglet « Tous »). RED confirmé :
+  les 3 cas neufs/modifiés échouaient contre le code non corrigé (`where.status` valait la string
+  `'missed'` au lieu de l'objet `{ in: [...] }` ; `where.OR` valait `undefined`). Suite du fichier :
+  **22/22** verts (+2 net, 1 modifié). Sweep gateway `--testPathPatterns="[Cc]all"` : **52 suites /
+  1218 tests** verts (+2 net, 0 régression). Suite gateway COMPLÈTE (`jest --config=jest.config.json`,
+  toutes suites) : **734 suites / 17 870 tests** verts, 0 régression. `tsc --noEmit`
+  (services/gateway) : 0 erreur (client Prisma généré dans cette session —
+  `npx prisma generate --generator client` a fonctionné cette fois, contrairement aux vagues
+  précédentes bloquées par la politique réseau ; `packages/shared` buildé en amont via
+  `tsc --project tsconfig.json`).
+- **Non fait volontairement** (candidats revus, non retenus) : `CallSystemMessage.tsx:63` —
+  `canCallBack` sans garde `!isAnonymous` (reconduit — toujours latent : le seul rendu
+  `isAnonymous={true}` connu, `bubble-stream-page.tsx:613`, code en dur `conversationType="public"`,
+  qui échoue déjà `conversationSupportsCalls` ; vérifié à nouveau cette vague, aucun nouveau chemin
+  `isAnonymous` + `direct`/`group` identifié). `mergeEntries`/`upsertRemoteSegment` (web + iOS) —
+  toujours sans filtre explicite par `targetLanguage` côté client, toujours différé (le fix Vague 135
+  élimine la cause racine côté serveur). Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; gaps d'infrastructure groupe documentés dans
+  `2026-08-13-group-calls-gap-analysis.md` (dont W4/W5 constatés DÉJÀ résolus par des vagues
+  antérieures lors de cet audit — `aggregateConnectionState`/`aggregateIceConnectionState`
+  (`use-webrtc-p2p.ts`) et `use-peer-connections.ts` qui a remplacé `useActivePeerConnection`).
+
+## Vague 137 — a participant leaving a group call wiped every OTHER participant's buffered §4.6 signaling offer (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-136) mandaté pour trouver un correctif chirurgical neuf.
+Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/
+`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : le mécanisme §4.6 de mise en tampon des offres/réponses SDP
+  (`CallEventsHandler.bufferOffer`/`bufferedOfferFor`) est délibérément keyé PAR DESTINATAIRE
+  (`${callId}:${signal.to}`, doc comment de `bufferOffer` — un offre bufferisée pour un
+  destinataire et une réponse bufferisée pour un AUTRE destinataire sur le MÊME appel doivent
+  coexister sans s'écraser). Mais les trois points d'entrée « ce participant quitte l'appel »
+  (`call:leave`, `call:force-leave`, et la branche `call:end` traitée comme un leave quand le
+  groupe continue) nettoyaient TOUS via `clearBufferedOffer(callId)` — un BALAYAGE DE TOUT L'APPEL
+  qui supprime CHAQUE entrée préfixée par ce `callId`, quel que soit le destinataire. Correct pour
+  un appel 1:1 (la seule forme qui existait quand §4.6 a été écrit — un participant qui part, c'est
+  l'appel entier qui se termine), mais faux dès qu'un appel de GROUPE continue au-delà du départ
+  d'un seul participant (mesh réel depuis la Vague 126) : le départ du participant D supprimait
+  l'offre encore en attente d'un participant C totalement étranger à ce départ (ex. le socket de C
+  n'avait pas encore (re)rejoint la room de l'appel), affamant définitivement la connexion mesh de
+  C — `bufferedOfferFor` ne trouvait plus rien à rejouer à son `call:join` ultérieur. La branche
+  `call:end`-traitée-comme-leave est particulièrement révélatrice : son propre commentaire, daté du
+  MÊME jour (« Group hang-up (calling-stack audit 2026-08-16) — … group call continues for other
+  participants »), documentait explicitement que l'appel continue pour les autres, tout en appelant
+  encore `clearBufferedOffer(data.callId)` sans discrimination deux lignes plus bas — le nettoyage
+  par-appel n'avait jamais été reconsidéré au moment où le keyage par-destinataire, puis la
+  continuation de groupe, ont été introduits.
+- **Scénario de défaillance concret** : appel de groupe A (initiateur) + B + C, mesh réel (Vague
+  126). A crée une offre vers B (livrée directement, B se connecte) ET vers C — mais le socket de C
+  n'a pas encore fini de rejoindre la room (réseau lent, app en arrière-plan), donc l'offre vers C
+  est bufferisée (`${callId}:C`). B raccroche tôt (`call:leave`) ; le groupe continue pour A et C
+  (2 participants actifs restants). Le handler appelait `clearBufferedOffer(data.callId)` —
+  supprimant AUSSI `${callId}:C`, sans aucun rapport avec le départ de B. Quand le socket de C
+  rejoint enfin et appelle `call:join`, `bufferedOfferFor` ne trouve plus rien : l'offre de A n'est
+  jamais rejouée à C, aucune `RTCPeerConnection` A↔C n'est jamais établie pour le reste de l'appel —
+  C reste un spectateur silencieux dans le roster, sans lien média avec A, alors que rien dans SON
+  propre parcours de connexion n'a jamais échoué.
+- **Preuve indépendante** : un test EXISTANT (`CallEventsHandler-force-leave.test.ts`, « clears any
+  buffered offer for the force-left call ») codifiait littéralement l'ancien comportement bogué
+  comme correct — il bufferisait une offre pour un destinataire `some-recipient` totalement
+  arbitraire et affirmait qu'elle disparaissait après le force-leave d'un AUTRE utilisateur,
+  exactement le symptôme décrit ci-dessus.
+- **Fix** : nouvelle méthode `clearBufferedOfferFor(callId, ...participantIdentities)` — supprime
+  UNIQUEMENT le(s) slot(s) adressé(s) au participant donné (les deux espaces d'identité, `userId`
+  ET `participantId`, comme `bufferedOfferFor` le fait déjà en lecture). Les trois sites « ce
+  participant quitte » (`call:leave`, `call:force-leave`, `call:end` groupe-continue) l'utilisent
+  désormais à la place de `clearBufferedOffer`. `clearBufferedOffer` (balayage total) reste
+  INCHANGÉ et continue d'être le bon outil pour les 3 sites restants où l'appel se termine
+  réellement pour TOUT LE MONDE (fin de négociation post-`answer`, sender-parti détecté au replay,
+  branche terminale de `call:end`) — non retouchés, cf. « Non fait volontairement ». Le cas où le
+  leave scopé laisse une entrée résiduelle d'un AUTRE destinataire quand l'appel finit VRAIMENT en
+  même temps (dernier participant d'un appel 1:1, ou dernier membre d'un groupe) s'auto-guérit via
+  le balayage TTL périodique déjà en place (60s, `OFFER_BUFFER_TTL_MS` = 150s) — même filet de
+  sécurité déjà documenté pour les autres chemins d'erreur qui sautent `clearBufferedOffer`.
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, 3 échecs nets contre le
+  code non corrigé, un par site, les cas « nettoie son propre slot » passant trivialement par
+  construction avant comme après) :
+  - `CallEventsHandler-leave-buffered-offer-scope.test.ts` (nouveau fichier, `call:leave`) — 3 cas :
+    nettoie le slot du partant (espace `userId`) ; nettoie aussi son slot dans l'espace
+    `participantId` (FK membership) ; NE nettoie PAS le slot d'un spectateur toujours actif — **3/3**
+    verts.
+  - `CallEventsHandler-force-leave.test.ts` — le test existant qui codifiait le bug réécrit pour
+    affirmer le nettoyage scopé au partant + 1 cas neuf affirmant qu'un slot destinataire non lié
+    survit — **15/15** verts (+1 net, 1 réécrit).
+  - `CallEventsHandler-end.test.ts` — nouveau groupe « group hang-up: buffered-offer cleanup is
+    scoped to the hanger-up, not the whole call », 2 cas neufs (nettoie son propre slot ; NE
+    nettoie PAS le slot d'un spectateur toujours actif) — **46/46** verts (+2 net). Piège de double
+    découvert en écrivant ce cas : `hasOtherActiveParticipants` compare `p.id !== activeParticipant.id`
+    (la clé primaire `CallParticipant.id`, pas la FK `participantId`) — un fixture de test sans champ
+    `.id` distinct par participant fait comparer `undefined !== undefined` (toujours faux), rendant
+    `willContinueAsGroupLeave` silencieusement faux quel que soit le nombre de participants ; corrigé
+    en donnant à chaque participant du fixture un `.id` unique.
+  - Sweep gateway `--testPathPatterns="[Cc]all"` : **53 suites / 1224 tests** verts (+6 net, 0
+    régression). Suite gateway COMPLÈTE (`jest --config=jest.config.json`, toutes suites) :
+    **735 suites / 17 876 tests** verts (+1 suite / +6 tests nets vs. la Vague 136), 0 régression.
+    `npx tsc --noEmit` (services/gateway) : **0 erreur** avant et après (`git stash`/`stash pop` du
+    fichier source — client Prisma généré sans accroc cette session, `packages/shared` buildé en
+    amont via `bun run build`).
+- **Non fait volontairement** : les 3 AUTRES sites d'appel à `clearBufferedOffer` (balayage total)
+  restent inchangés — ce sont les seuls où le call-wide sweep reste correct par construction (fin
+  de négociation `answer` reçue § `call:signal`, purge d'une offre bufferisée dont l'émetteur s'est
+  avéré parti au moment du replay `call:join`, branche terminale `call:end` où l'appel finit
+  vraiment pour tout le monde) — les auditer un par un pour un éventuel raffinement supplémentaire
+  (ex. l'`answer` reçue pourrait en théorie, elle aussi, sur-nettoyer dans un appel de groupe à 3+
+  paires simultanées en cours de négociation) est une piste distincte, plus large, laissée à un
+  prochain cycle plutôt que d'étendre ce correctif chirurgical au-delà des 3 sites « un participant
+  part » vérifiés ici. Reconduits (inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors
+  d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous`
+  (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans
+  filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ;
+  gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 138 — `call:join`'s stale-buffered-offer drop still swept the WHOLE call, the exact bug Vague 137 said this site was immune to (gateway) (2026-08-16)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-137). Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit
+Swift/Kotlin non testable.
+
+- **Root cause** : la Vague 137 a introduit `clearBufferedOfferFor(callId, ...identities)` pour
+  scoper le nettoyage du buffer §4.6 (keyé PAR DESTINATAIRE, `${callId}:${to}`) aux trois sites
+  « ce participant part » (`call:leave`, `call:force-leave`, `call:end` groupe-continue), et sa
+  propre section « Non fait volontairement » affirmait que les 3 AUTRES sites d'appel à
+  `clearBufferedOffer` (balayage total) « restent corrects par construction » — dont, mot pour
+  mot, « purge d'une offre bufferisée dont l'émetteur s'est avéré parti au moment du replay
+  `call:join` ». Cette affirmation n'a jamais été vérifiée par la trace du code : dans `call:join`,
+  quand `bufferedOfferFor(callId, userId, joinerParticipantId)` retrouve l'offre bufferisée pour LE
+  PARTICIPANT QUI REJOINT et que son émetteur s'avère parti entre-temps, le code droppait l'offre
+  via `clearBufferedOffer(data.callId)` — un balayage de TOUT L'APPEL — alors qu'il vient
+  lui-même de prouver PRÉCISÉMENT quelle clé est périmée (celle du joiner). Exactement le même
+  défaut structurel que celui fixé pour les 3 sites « leave » : un nettoyage nommé par le SCOPE
+  PARENT (`callId`) appliqué à une structure keyée par un ENFANT de ce scope
+  (`callId:destinataire`).
+- **Scénario de défaillance concret** : appel de groupe A (initiateur) + B + C, mesh réel (Vague
+  126). A envoie une offre à B (buffered `${callId}:B`, B pas encore dans la room). E (un autre
+  participant déjà connecté, renégociation caméra) envoie une offre à C (buffered `${callId}:C`, C
+  pas encore dans la room non plus). A quitte l'appel — son propre départ est déjà correctement
+  scopé depuis la Vague 137 (`clearBufferedOfferFor(callId, A)`), ne touche ni `${callId}:B` ni
+  `${callId}:C`. B rejoint enfin (`call:join`) : `bufferedOfferFor` retrouve `${callId}:B`, son
+  émetteur A a quitté → branche « sender left » → AVANT ce fix, `clearBufferedOffer(callId)`
+  supprimait AUSSI `${callId}:C`, une offre totalement étrangère au join de B, émise par E qui est
+  toujours actif. Quand C rejoint à son tour, `bufferedOfferFor` ne trouve plus rien : la connexion
+  mesh E↔C n'est jamais établie pour le reste de l'appel, C reste spectateur silencieux vis-à-vis
+  de E — sans qu'aucun événement dans le parcours propre de C n'ait jamais échoué.
+- **Fix** : la branche « sender no longer active » de `call:join` appelle désormais
+  `clearBufferedOfferFor(data.callId, userId, joinerParticipantId)` — exactement les deux espaces
+  d'identité déjà utilisés par le `bufferedOfferFor` qui vient de trouver cette entrée, au lieu du
+  balayage total `clearBufferedOffer(data.callId)`. Doc comment de `clearBufferedOfferFor` étendu
+  pour lister ce 4e site d'appel (`call:leave`, `call:force-leave`, `call:end` groupe-continue,
+  et maintenant le drop stale-sender de `call:join`) et pour ne plus limiter sa description aux
+  seuls sites « participant part » — le vrai invariant est « nettoyer UNE clé déjà identifiée,
+  jamais tout le scope parent ». `clearBufferedOffer` (balayage total) reste INCHANGÉ pour les
+  2 sites restants où il est réellement correct : négociation terminée (`answer` reçue,
+  `call:signal`) et branche terminale `call:end` (l'appel finit vraiment pour tout le monde) — non
+  audités plus avant dans cette vague (cf. « Non fait volontairement »).
+- **Tests** (TDD, RED confirmé contre le code non corrigé — `git stash` du seul fichier source,
+  suite rejouée, `git stash pop`) :
+  `CallEventsHandler-join-stale-sender-buffered-offer-scope.test.ts` (nouveau fichier) — 3 cas :
+  nettoie le slot du joiner (espace `userId`) ; NE nettoie PAS le slot d'un tiers spectateur
+  toujours actif, offre sans rapport (le bug de groupe) ; ne rejoue pas l'offre périmée au socket
+  qui rejoint. RED confirmé : le cas « bystander survit » échouait contre le code non corrigé
+  (`bufferedOffers.has(...)` retournait `false` au lieu de `true`, la Map entière ayant été
+  vidée) ; les 2 autres cas passaient trivialement par construction avant comme après. Suite du
+  fichier : **3/3** verts. Sweep gateway `--testPathPatterns="[Cc]all"` : **54 suites / 1227
+  tests** verts (+1 suite / +3 tests nets vs. la Vague 137, 0 régression). Suite gateway COMPLÈTE
+  (`jest --config=jest.config.json`, toutes suites) : **739 suites / 17 923 tests**
+  verts, 0 échec — 0 régression sur rien de touché par ce diff. Écart vs. la Vague 137
+  (735 suites / 17 876 tests) : +4 suites / +47 tests, entièrement imputable à d'autres routines
+  automatiques non liées ayant tourné sur ce dépôt entre les deux vagues (CLAUDE.md tolère cette
+  dérive — seul compte l'absence de régression sur ce que cette vague touche). `npx tsc --noEmit`
+  (services/gateway) : **0 erreur** avant et après (`git stash`/`stash pop` du fichier source —
+  client Prisma généré cette session via le binaire `prisma@6.19.3` déjà présent dans
+  `node_modules/.bun` après `bun install --ignore-scripts`, `npx prisma generate` ayant résolu la
+  dernière version 7.x incompatible avec le schema au lieu de la version pinnée ; `packages/shared`
+  buildé en amont via `bun run build`).
+- **Non fait volontairement** : les 2 AUTRES sites d'appel à `clearBufferedOffer` (balayage total)
+  restent inchangés — négociation terminée (`answer` reçue, `call:signal`, ligne ~3437) et branche
+  terminale `call:end` (l'appel finit vraiment pour tout le monde). Le premier reste un candidat
+  plausible pour un raffinement futur (un appel de groupe à 3+ paires en négociation simultanée
+  pourrait en théorie souffrir du même sur-nettoyage — une `answer` complétant la négociation
+  A↔B pourrait balayer une offre A↔C ou B↔C encore en attente) mais n'a pas été vérifié par trace
+  de code dans cette vague — seule la piste `call:join` (déjà tracée avec certitude, voir
+  root cause ci-dessus) a été retenue pour rester dans le gabarit chirurgical d'UNE seule vague ;
+  à auditer et fixer dans un prochain cycle avec le même patron (`clearBufferedOfferFor` scopé aux
+  deux parties de la négociation qui vient de se conclure) si un scénario de défaillance concret
+  s'y confirme. Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880
+  lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte
+  dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours
+  latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre
+  `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps
+  d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 139 — call:signal's answer-received cleanup swept the whole call, not just the two participants whose negotiation just finished (gateway) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
+candidat explicitement flaggé par les Vagues 137 et 138 dans leur section « Non fait
+volontairement » — « l'`answer` reçue pourrait en théorie, elle aussi, sur-nettoyer dans un appel
+de groupe à 3+ paires simultanées en cours de négociation » — sans y avoir été retracé jusqu'ici.
+Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (TypeScript
+pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : `call:signal`, branche `data.signal.type === 'answer'` relayée avec succès
+  (target atteint en direct, pas de buffering) — au moment où la négociation entre l'appelant et
+  l'appelé vient de se conclure, le handler appelait `clearBufferedOffer(data.callId)`, le
+  balayage TOTAL de l'appel, en raisonnant « négociation terminée, l'offre bufferisée n'est plus
+  nécessaire ». Ce raisonnement tient pour un appel 1:1 (seule forme qui existait quand §4.6 a été
+  écrit), mais est faux dès qu'un appel de GROUPE a 3+ participants en train de négocier des paires
+  indépendantes en parallèle : le buffer est keyé PAR DESTINATAIRE (`${callId}:${to}`, doc comment
+  de `bufferOffer`), donc l'offre bufferisée d'un TROISIÈME participant totalement étranger à cette
+  paire (ex. son socket n'a pas encore (re)rejoint la room) partage exactement zéro rapport avec
+  CETTE négociation qui vient de se conclure — et un balayage total la supprime quand même. Même
+  classe de bug que les Vagues 137/138 (`call:leave`, `call:force-leave`, `call:end` groupe-continue,
+  `call:join` stale-sender), sur un cinquième site.
+- **Scénario de défaillance concret** : appel de groupe A (initiateur) + B + C, mesh réel
+  (Vague 126). A envoie une offre à B ET une offre à C — le socket de C n'a pas encore fini de
+  rejoindre la room (réseau lent), donc l'offre vers C est bufferisée (`${callId}:C`). B répond
+  immédiatement (`answer` relayé en direct, cible = A) : le handler concluait « négociation
+  terminée » et appelait `clearBufferedOffer(callId)`, supprimant AUSSI `${callId}:C` — sans aucun
+  rapport avec la négociation A↔B. Quand le socket de C rejoint enfin et appelle `call:join`,
+  `bufferedOfferFor` ne trouve plus rien à rejouer : la connexion mesh A↔C ne se forme jamais, C
+  reste spectateur silencieux dans le roster pour le reste de l'appel.
+- **Fix** : le nettoyage post-`answer` utilise désormais `clearBufferedOfferFor(callId, userId,
+  senderParticipant.participantId, targetUserId, targetParticipant.participantId)` — scope la purge
+  aux DEUX identités de la paire dont la négociation vient de se conclure (l'appelant ET l'appelé,
+  dans les deux espaces d'identité `userId`/`participantId`, comme `bufferedOfferFor` le fait déjà en
+  lecture), au lieu du balayage total. Le buffer étant strictement per-recipient (une seule entrée
+  possible par clé, dernier écrivain gagnant — jamais partagée entre plusieurs paires), purger les
+  deux slots de LA paire ne peut jamais toucher le slot d'un tiers. Les 4 autres sites d'appel à
+  `clearBufferedOffer` (balayage total) restent inchangés : les 3 corrigés par les Vagues 137/138
+  utilisent déjà `clearBufferedOfferFor`, et le seul balayage total restant — la branche terminale de
+  `call:end` où l'appel finit VRAIMENT pour tout le monde — reste correct par construction (aucun
+  autre participant ne survit à ce nettoyage).
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production) :
+  `CallEventsHandler-answer-buffered-offer-scope.test.ts` (nouveau fichier) — 3 cas : NE nettoie PAS
+  le slot d'un bystander toujours actif et non lié à cette négociation (RED confirmé : échouait
+  contre le code non corrigé) ; nettoie le slot de l'appelé (espace `userId`) ; nettoie le slot de
+  l'appelant (espace `userId`) — les deux derniers passent trivialement par construction avant comme
+  après (le balayage total les incluait déjà). **3/3** verts après fix.
+  Sweep gateway `--testPathPatterns="[Cc]all"` : **54 suites / 1227 tests** verts (+1 suite/+3 tests
+  nets, 0 régression — ce compte n'inclut pas encore la Vague 138, dont la PR n'était pas fusionnée
+  au moment de cette vague). Suite gateway COMPLÈTE (`jest --config=jest.config.json`, toutes
+  suites) : **739 suites / 17923 tests**, 100% vert. `npx tsc --noEmit` (services/gateway) :
+  **0 erreur**.
+- **Non fait volontairement** : le seul site restant, `call:end` branche terminale (l'appel finit
+  vraiment pour tout le monde), reste intentionnellement un balayage total — correct par
+  construction, aucun survivant à protéger. Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde
+  `!isAnonymous` (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment`
+  (web + iOS) sans filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur,
+  Vague 135) ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 140 — `call:media-toggled`'s remote mute/camera indicator never updates: `participantId` names a THIRD, unmatched ID space (gateway + web) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/**call**`/`components/video-call*/**` + `packages/shared/utils/call-transcript.ts`,
+exclusion explicite des Vagues 1-139). Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé gateway + web (TypeScript pur), aucun
+edit Swift/Kotlin non testable.
+
+- **Root cause** : `handleMediaToggle` (`CallEventsHandler.ts:1473`, corps partagé de
+  `call:toggle-audio`/`call:toggle-video`) résout l'appelant via
+  `resolveActiveCallParticipantId(userId, callId)`, qui renvoie `CallParticipant.participantId` —
+  la FK vers `Participant.id` — et l'inclut tel quel dans le `CallMediaToggleEvent` émis
+  (`participantId`, `video-call.ts:602-607`, sans champ `userId`, contrairement à ses cousins
+  `CallQualityAlertEvent`/`CallScreenCaptureEvent` étendus Vague 132). Côté web,
+  `CallManager.tsx:handleMediaToggle` (avant fix) relayait `event.participantId` verbatim à
+  `call-store.ts`'s `updateParticipant`, qui ne matche QUE `CallParticipant.id` — la clé primaire
+  de la ligne de participation ELLE-MÊME (`call-session-response.ts:67-94`,
+  `toCallParticipantResponse` : `.id = p.id`). Trois espaces d'identité distincts pour un champ
+  nommé `participantId` sur deux événements différents (voir Leçon 214) : `call:participant-left`'s
+  `participantId` porte authentiquement `CallParticipant.id` (le match `p.id` y est donc correct),
+  tandis que `call:media-toggled`'s `participantId` porte la FK `CallParticipant.participantId` —
+  une valeur qui n'égale JAMAIS `CallParticipant.id` pour un appel réel. `updateParticipant` était
+  donc un no-op silencieux et permanent sur son unique site d'appel de production.
+- **Scénario de défaillance concret** : deux (ou plus) utilisateurs en appel web-à-web. B coupe son
+  micro (`call:toggle-audio`, `enabled:false`). Le gateway persiste correctement en DB et émet
+  `call:media-toggled` avec `participantId` = FK de B. Le navigateur de A :
+  `handleMediaToggle` → `updateParticipant(FK-de-B, {isAudioEnabled:false})` → aucune entrée du
+  roster n'a `.id` égal à cette FK → no-op. `VideoStream`/`DraggableParticipantOverlay` de A pour B
+  continuent de lire l'état obsolète du roster — le badge `MicOff`/`VideoOff` n'apparaît jamais. B
+  peut couper/rétablir micro et caméra pour le reste de l'appel sans que A ne le voie jamais,
+  affectant tout appel 1:1 et de groupe web.
+- **Preuve indépendante** : un test existant
+  (`apps/web/__tests__/stores/call-store.test.ts:409-422`) codifiait
+  `updateParticipant('participant-1', …)` comme correct contre un fixture dont `.id === 'participant-1'`
+  — coïncidence de nommage entre la string de test et `.id`, même patron de faux témoin que Vague
+  132. Zéro test (grep `media-toggled`/`handleMediaToggle` sur tous les tests web) ne reliait le
+  payload RÉEL du gateway au store avant cette vague.
+- **Fix** :
+  1. `packages/shared/types/video-call.ts` — `CallMediaToggleEvent` gagne `readonly userId?: string`,
+     miroir de `CallQualityAlertEvent`.
+  2. `CallEventsHandler.ts:handleMediaToggle` — utilise désormais `resolveActiveCallParticipant`
+     (déjà disponible, zéro requête supplémentaire) au lieu de `resolveActiveCallParticipantId`,
+     inclut `userId: resolved.userId` dans l'événement émis à côté de `participantId` (inchangé,
+     toujours utilisé tel quel pour l'écriture DB via `updateParticipantMedia`, qui attend bien la
+     FK).
+  3. `CallManager.tsx:handleMediaToggle` — résout l'identité via `event.userId || event.participantId`
+     (même idiome que `useRemoteCallAlerts`/`VideoCallInterface.tsx`, Vague 132), retrouve l'entrée
+     du roster par `(p.userId || p.participantId) === identity` (même predicate que les lookups
+     d'affichage existants, `VideoCallInterface.tsx:823/866`), puis appelle `updateParticipant`
+     avec le VRAI `.id` de cette entrée. `call-store.ts`'s `updateParticipant`/`removeParticipant`
+     restent INCHANGÉS (toujours keyés `.id` — correct pour `removeParticipant`, dont
+     `call:participant-left`'s `participantId` porte authentiquement cette clé) : la traduction
+     d'identité se fait à la frontière `CallManager.tsx`, pas dans le store générique.
+- **Tests** (TDD, RED confirmé — `git stash` des 3 fichiers de production, suite rejouée,
+  `git stash pop`) :
+  - `CallEventsHandler-media-toggle.test.ts` — 1 cas neuf : le payload diffusé inclut le `userId`
+    de l'appelant à côté de `participantId`. RED confirmé (`payload.userId` valait `undefined`
+    contre le code non corrigé). Suite du fichier : **4/4** verts après fix.
+  - `CallManager.mediaToggleIdentity.test.tsx` (nouveau fichier) — 3 cas : met à jour l'entrée du
+    roster par `userId` quand l'événement en porte un ; retombe sur `participantId` quand
+    l'événement n'a pas de `userId` (invité anonyme, dont le `.userId` du roster égale déjà son
+    `.participantId` par construction de `toCallParticipantResponse`) ; no-op quand aucune entrée
+    du roster ne matche ni l'un ni l'autre (pair inconnu/obsolète). RED confirmé : les 2 premiers
+    cas échouaient contre le code non corrigé (`isAudioEnabled`/`isVideoEnabled` restaient à leur
+    valeur initiale `true`), le 3e passait trivialement par construction avant comme après.
+    **3/3** verts après fix.
+  - Sweep gateway `--testPathPatterns="[Cc]all"` : **55 suites / 1231 tests** verts (+1 suite/+4
+    tests nets, 0 régression). Sweep web `--testPathPatterns="CallManager|call-store"` : **23
+    suites / 152 tests** verts (+1 suite/+3 tests nets, 0 régression). `npx tsc --noEmit`
+    (services/gateway ET apps/web) : **0 erreur** avant et après sur les fichiers touchés
+    (`packages/shared` reconstruit via `bun run build` avant chaque relance ; `bun install
+    --ignore-scripts` a résolu l'échec réseau du postinstall `grpc-tools` cette session ; client
+    Prisma généré via `npx prisma generate --generator client`).
+- **Non fait volontairement** : `call-store.ts`'s `updateParticipant`/`removeParticipant`
+  laissés keyés `.id` (généraliser leur matching à `userId`/`participantId` aurait cassé le
+  contrat existant de `removeParticipant`, correct pour `call:participant-left`, et le test
+  existant de `updateParticipant` dont le fixture ne porte que `.id`) — la traduction d'identité
+  reste la responsabilité du CONSOMMATEUR de l'événement, pas du store générique, cohérent avec le
+  patron déjà établi pour `call:participant-left`/`call:quality-alert`/`call:screen-capture-alert`.
+  Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; runner-up
+  `use-webrtc-p2p.ts:957-983`'s `userId`-change effect clearing refs asymmetrically vs. `cleanup()`
+  (pas de déclencheur production concret tracé cette vague).
+
+## Vague 141 — `use-webrtc-p2p.ts`'s userId-change teardown left `connectedPeersRef`/`stalledPeersRef`/`isReconnecting`/`reconnectAttemptRef` stale, unlike `cleanup()` (web) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
+runner-up explicitement flaggé par la Vague 140 dans sa section « Non fait volontairement » —
+`use-webrtc-p2p.ts:957-983`'s effet de changement de `userId`, dont l'asymétrie avec `cleanup()`
+n'avait pas encore été tracée jusqu'à un scénario de défaillance concret. Toolchains iOS/Android
+toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé web
+(TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : l'effet `useEffect` déclenché à chaque changement de `userId` truthy (promotion
+  anonyme→authentifié, refresh de session) ferme et recrée CHAQUE `WebRTCService` — exactement ce
+  que fait `cleanup()` — mais ne vide que 6 des 11 refs/states que `cleanup()` remet à zéro :
+  absents de l'effet, `connectedPeersRef`, `stalledPeersRef`, `isReconnecting` (state) et
+  `reconnectAttemptRef` (les 4 refs dédiées au signal de reconnexion mid-call, doc comment
+  ligne 146-151). `removeParticipant` — le miroir scopé-par-pair de `cleanup()`, documenté par
+  l'audit du 2026-08-15 — vide déjà ces 4 mêmes refs pour le PARTICIPANT qui part ; l'effet
+  `userId`-change n'avait jamais reçu le même traitement bien qu'il fasse le même genre de reset
+  global pour TOUS les participants.
+- **Scénario de défaillance concret** : un utilisateur en appel dont l'identité `userId` passe d'un
+  id temporaire/anonyme à l'id définitif (ou est corrigée par un refresh de token) APRÈS qu'un pair
+  a déjà atteint ICE `connected` — ou pire, a déjà `stall`é (`disconnected`/`failed`) mid-call,
+  posant `isReconnecting=true` et `stalledPeersRef`/`connectedPeersRef` en conséquence. L'effet se
+  déclenche, ferme le service existant, recrée son état de connexion à zéro (`connectionStatesRef`,
+  `iceConnectionStatesRef`, `connectionState`/`iceConnectionState` remis à `'new'`) — mais
+  `connectedPeersRef` garde l'ancien participant marqué "connecté" et `isReconnecting`/
+  `reconnectAttemptRef` gardent leur valeur d'AVANT le changement d'identité. Deux symptômes
+  indépendants : (1) si l'appel n'était pas en stall, `isReconnecting` reste bloqué à `true` sans
+  qu'aucun renégociation réelle ne le remette jamais à `false` (le service fraîchement recréé n'a
+  pas encore atteint `connected`, donc la branche de récupération, ligne 337-343, ne s'exécute
+  jamais) ; (2) le NOUVEAU service recréé, dont c'est le tout premier cycle ICE, peut atteindre
+  `disconnected` avant tout `connected` initial (blip normal de pré-connexion) — le garde de la
+  ligne 358-361 (`connectedPeersRef.current.has(participantId)`) lit l'entrée PÉRIMÉE comme "était
+  connecté, stall maintenant" et déclenche un faux `isReconnecting=true` + un `call:reconnecting`
+  non mérité émis au serveur, avec un `reconnectAttemptRef` qui continue de compter depuis sa valeur
+  d'avant le changement d'identité au lieu de repartir de 1.
+- **Fix** : `apps/web/hooks/use-webrtc-p2p.ts` — l'effet `userId`-change vide désormais aussi
+  `connectedPeersRef.current.clear()`, `stalledPeersRef.current.clear()`,
+  `setIsReconnecting(false)` et `reconnectAttemptRef.current = 0`, dans le même bloc que le reset
+  déjà présent. `negotiationIdsRef` reste délibérément INTACT — contrairement à `cleanup()` qui le
+  vide (l'appel y est vraiment terminé) : ici l'appel CONTINUE et le pair distant a déjà mémorisé
+  notre high-water mark de négociation envoyé sous l'ancien `userId` ; le remettre à zéro ferait
+  paraître notre prochain signal PLUS ANCIEN que ce que le pair a déjà vu, et le pair le
+  droppperait silencieusement comme périmé — exactement le bug documenté au commentaire de
+  déclaration de `negotiationIdsRef` (ligne 155-163, interop iOS).
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, suite rejouée,
+  `git stash pop`) : 3 cas neufs dans `use-webrtc-p2p.test.tsx`, describe « userId Change Handling »
+  — « clears the reconnecting/stalled state when userId changes mid-call » (RED : `isReconnecting`
+  restait `true` après le changement d'identité) ; « does not report a false "Reconnecting" state
+  for a freshly recreated peer after a userId change » (RED : le tout premier `disconnected` du
+  service recréé déclenchait quand même `isReconnecting=true`) ; « resets the reconnect attempt
+  counter when userId changes mid-call » (RED : `attempt` émis valait `2`, leaké depuis le stall
+  d'avant le changement d'identité, au lieu de `1`). **3/3 rouges confirmés** contre le code non
+  corrigé, **3/3 verts** après fix. Suite du fichier : **65/65** verts (+3 nets, 0 régression).
+  Sweep web `--testPathPatterns="[Cc]all"` : **54 suites / 509 tests** verts, 0 régression.
+  `npx tsc --noEmit` (apps/web) : **0 erreur** sur le fichier touché (le dépôt en porte 1771 par
+  ailleurs, préexistantes, comparées fichier par fichier — même méthode que les vagues
+  précédentes).
+- **Non fait volontairement** : `negotiationIdsRef` non touché par cet effet, pour la raison
+  détaillée ci-dessus (pas un oubli — un choix délibéré, documenté inline). Reconduits (inchangés) :
+  dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non
+  implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; le seul balayage total restant
+  de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
+  construction (Vague 139).

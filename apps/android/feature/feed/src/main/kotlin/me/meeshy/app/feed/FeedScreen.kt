@@ -96,6 +96,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.feature.feed.R
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.media.MediaCollage
+import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.theme.hexColor
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyPalette
@@ -227,6 +228,9 @@ fun FeedScreen(
                         LaunchedEffect(post.id, state.posts.size) {
                             viewModel.loadMoreIfNeeded(post.id)
                         }
+                        LaunchedEffect(post.id) {
+                            viewModel.trackImpression(post.id)
+                        }
                         PostCard(
                             post = post,
                             onLike = { viewModel.toggleLike(post.id) },
@@ -251,6 +255,7 @@ fun FeedScreen(
                             },
                             onCopyLink = { clipboard.setText(AnnotatedString(postShareUrl(post.id))) },
                             onRepost = { viewModel.repost(post.id) },
+                            onPin = { viewModel.pinPost(post.id) },
                             onReport = { reportPostId = post.id },
                             onDelete = { deletePostId = post.id },
                         )
@@ -454,6 +459,7 @@ private fun PostCard(
     onShare: () -> Unit = {},
     onCopyLink: () -> Unit = {},
     onRepost: () -> Unit = {},
+    onPin: () -> Unit = {},
     onReport: () -> Unit = {},
     onDelete: () -> Unit = {},
 ) {
@@ -512,6 +518,7 @@ private fun PostCard(
                     onCopyLink = onCopyLink,
                     onRepost = onRepost,
                     onBookmarkToggle = onBookmark,
+                    onPin = onPin,
                     onReport = onReport,
                     onDelete = onDelete,
                 )
@@ -648,6 +655,7 @@ private fun PostImageGrid(images: List<FeedPostImage>, onImageTap: (Int) -> Unit
             model = image.url,
             contentDescription = stringResource(R.string.feed_image_description),
             contentScale = ContentScale.Crop,
+            placeholder = rememberThumbHashPainter(image.thumbHash),
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(imageAspectRatio(image))
@@ -704,6 +712,7 @@ private fun CollageTile(
             model = image.thumbnailUrl ?: image.url,
             contentDescription = stringResource(R.string.feed_image_description),
             contentScale = ContentScale.Crop,
+            placeholder = rememberThumbHashPainter(image.thumbHash),
             modifier = Modifier.fillMaxSize(),
         )
         if (overflowCount > 0) {
@@ -842,6 +851,7 @@ private fun PostOptionsButton(
     onCopyLink: () -> Unit,
     onRepost: () -> Unit,
     onBookmarkToggle: () -> Unit,
+    onPin: () -> Unit,
     onReport: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -862,6 +872,7 @@ private fun PostOptionsButton(
                     PostAction.Repost -> stringResource(R.string.feed_action_repost) to onRepost
                     PostAction.Bookmark -> stringResource(R.string.feed_action_bookmark) to onBookmarkToggle
                     PostAction.Unbookmark -> stringResource(R.string.feed_action_unbookmark) to onBookmarkToggle
+                    PostAction.Pin -> stringResource(R.string.feed_action_pin) to onPin
                     PostAction.Report -> stringResource(R.string.feed_action_report) to onReport
                     PostAction.Delete -> stringResource(R.string.feed_action_delete) to onDelete
                 }

@@ -13,6 +13,7 @@ import {
   useInfiniteConversationsQuery,
   useConversationQuery,
 } from '@/hooks/queries/use-conversations-query';
+import { withPreviewMessage } from '@/hooks/queries/use-socket-cache-sync';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { useI18n } from '@/hooks/useI18n';
 import { queryKeys } from '@/lib/react-query/query-keys';
@@ -107,8 +108,14 @@ export function useConversationsV2(
             conversations: page.conversations.map((conv: Conversation) =>
               conv.id === message.conversationId
                 ? {
-                    ...conv,
-                    lastMessage: message,
+                    // Sixième écrivain du MÊME cache que `useSocketCacheSync` :
+                    // il doit périmer la carte du Prisme comme les cinq autres.
+                    // Sans cela, l'ordre des deux écouteurs déciderait du texte
+                    // affiché — si celui-ci écrit en premier, le voisin verrait
+                    // une ligne décrivant DÉJÀ le nouveau message et garderait,
+                    // à raison selon sa propre règle, une carte qui décrit
+                    // l'ancien.
+                    ...withPreviewMessage({ conversation: conv, message }),
                     lastMessageAt: message.createdAt,
                     unreadCount:
                       (getSenderUserId(message.sender as Record<string, unknown>) ?? (message.sender as any)?.id) !== currentUserId

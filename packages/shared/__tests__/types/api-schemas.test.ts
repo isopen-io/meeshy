@@ -106,6 +106,41 @@ describe('conversationMinimalSchema — prisme de l’aperçu du dernier message
  * témoin de route ne le verrait pas (il lit l'objet AVANT sérialisation) —
  * exactement le scénario `cursorPagination` documenté dans le schéma lui-même.
  */
+/**
+ * Le pont ✦ (G-123, tasks/lentille-implementation-contract.md §3.2 + A6).
+ *
+ * `fast-json-stringify` retire tout champ non déclaré ici — même piège que
+ * `customName`/`reaction`/`_count` documenté plus haut. Le mapper de
+ * `conversations/core.ts` peut poser `bridge` et `lastReadAt` sur l'objet
+ * intermédiaire ; sans cette déclaration la route les aurait renvoyés
+ * absents du fil malgré tout. Ce test ne peut PAS voir ce trou depuis un
+ * témoin de route qui lit l'objet avant sérialisation — d'où sa place ici,
+ * côté wire, et non côté mapper.
+ */
+describe('conversationMinimalSchema — le pont ✦ (G-123)', () => {
+  const properties = conversationMinimalSchema.properties as Record<
+    string,
+    { type?: string; nullable?: boolean; properties?: Record<string, unknown> }
+  >
+
+  it('déclare bridge, sans quoi Fastify le retire du fil malgré le mapper', () => {
+    expect(properties.bridge).toBeDefined()
+    expect(properties.bridge.type).toBe('object')
+  })
+
+  it('déclare les quatre champs du contrat gelé sur bridge (kind, unreadCount, suggestedMode, data)', () => {
+    const bridgeProperties = properties.bridge.properties as Record<string, unknown>
+    for (const field of ['kind', 'unreadCount', 'suggestedMode', 'isComplete', 'data', 'text', 'translations', 'originalLanguage']) {
+      expect(bridgeProperties).toHaveProperty(field)
+    }
+  })
+
+  it('déclare lastReadAt, qui voyage À CÔTÉ du pont (le contrat gelé §3.2 ne le porte pas)', () => {
+    expect(properties.lastReadAt).toBeDefined()
+    expect(properties.lastReadAt.type).toBe('string')
+  })
+})
+
 describe('conversationListResponseSchema — pierres tombales du delta', () => {
   const properties = conversationListResponseSchema.properties as Record<
     string,

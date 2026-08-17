@@ -6,6 +6,9 @@
 // Import unified Participant types
 import type { ParticipantType } from './participant.js';
 
+// Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
+import type { ConversationBridge } from './conversation-bridge.js';
+
 // Prédicat des marquages de notifications en masse
 import type {
   NotificationDeletedBulkScope,
@@ -175,7 +178,12 @@ export const SERVER_EVENTS = {
   CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
-  REACTION_SYNC: 'reaction:sync',
+  // Pas de `REACTION_SYNC` : l'instantané de réactions voyage dans l'ACK de
+  // `CLIENT_EVENTS.REACTION_REQUEST_SYNC`, jamais en diffusion. Le déclarer ici
+  // affirmait un canal serveur→client sans émetteur, et un client s'y était
+  // abonné en versant l'instantané dans le seau incrémental de
+  // `reaction:added`. Le nom `reaction:sync` ne subsiste que comme étiquette de
+  // journal et préfixe de quota côté gateway.
   ATTACHMENT_REACTION_ADDED: 'attachment:reaction-added',
   ATTACHMENT_REACTION_REMOVED: 'attachment:reaction-removed',
   MENTION_CREATED: 'mention:created',
@@ -553,6 +561,37 @@ export const CLIENT_EVENTS = {
   ADMIN_AGENT_UNSUBSCRIBE: 'admin:agent-unsubscribe',
 } as const;
 
+/**
+ * Budget serveur de `reaction:request-sync`, par utilisateur.
+ *
+ * Publié ICI, et non dans le seul `SOCKET_RATE_LIMITS` de la gateway, parce
+ * qu'un CLIENT en dépend désormais pour se cadencer : la réconciliation des
+ * réactions au retour de la connexion émet une demande par bulle montée, et
+ * une bulle ne peut pas savoir combien de voisines partagent le même budget.
+ * Un client qui devine ce chiffre le devine faux dès que le serveur le change —
+ * exactement la duplication que la règle « single source of truth » interdit.
+ *
+ * La gateway le consomme dans `SOCKET_RATE_LIMITS.REACTION_SYNC`
+ * (`services/gateway/src/utils/socket-rate-limiter.ts`), qui garde son
+ * `keyPrefix` : la clé Redis est une affaire de serveur, le budget non.
+ */
+export const REACTION_SYNC_BUDGET = {
+  maxRequests: 120,
+  windowMs: 60000,
+} as const;
+
+/**
+ * Ce que répond un ACK dont le budget est épuisé.
+ *
+ * Un refus n'est PAS un échec : le serveur a répondu, et il a répondu « pas
+ * maintenant ». Un client doit pouvoir les séparer pour ne pas réessayer
+ * immédiatement une demande dont la fenêtre n'a pas bougé — un réessai
+ * approfondit l'épuisement au lieu de le traverser. La distinction voyage donc
+ * dans un littéral PARTAGÉ, jamais dans une prose que chaque client
+ * re-devinerait.
+ */
+export const RATE_LIMIT_REFUSAL_MESSAGE = 'Rate limit exceeded';
+
 // ===== ÉVÉNEMENTS SOCKET.IO =====
 
 // Types utilitaires pour les constantes
@@ -872,6 +911,14 @@ export interface ConversationOnlineStatsEventData {
 export interface ConversationUnreadUpdatedEventData {
   readonly conversationId: string;
   readonly unreadCount: number;
+  /**
+   * Le pont ✦ recalculé POUR CE destinataire (G-123). OPTIONNEL — un client
+   * qui l'ignore garde son comportement d'avant ; absent quand `unreadCount`
+   * retombe à zéro ou que le serveur n'a rien à annoncer (contrat gelé §3.2).
+   * Le pont est PAR lecteur : deux destinataires du même événement source
+   * (un `message:new`) ne portent jamais le même `bridge`.
+   */
+  readonly bridge?: ConversationBridge;
 }
 
 /**
@@ -1244,6 +1291,8 @@ export interface ConversationPreferencesPayload {
   readonly orderInCategory: number | null;
   readonly customName: string | null;
   readonly reaction: string | null;
+  /** `ReadingModePreference` (`types/reading-modes.ts`) : `auto` rend la main à l'orchestrateur. */
+  readonly readingMode: string;
   readonly deletedForUserAt: string | null;
   readonly clearHistoryBefore: string | null;
 }
@@ -1555,6 +1604,31 @@ export interface ConversationUpdatedEventData {
   readonly lastMessageTranslations?: Readonly<Record<string, string>> | null;
   readonly lastMessageOriginalLanguage?: string | null;
   /**
+   * Lieu partagé du dernier message, hissé depuis `metadata.location` — membre
+   * du MÊME groupe d'aperçu que les trois champs ci-dessus, et soumis à la même
+   * règle de groupe.
+   *
+   * Déclaré ici parce qu'il ne l'était nulle part : l'index signature de fin le
+   * laissait voyager sans contrat, si bien que la parité entre les TROIS
+   * émetteurs de ce groupe (`MessageHandler`, `MeeshySocketIOManager`,
+   * `emitConversationPreviewUpdate`) ne reposait que sur la lecture du code
+   * voisin. Elle a échoué exactement comme ça : le chemin REST/ZMQ l'a omis
+   * pendant que les deux autres le portaient (corrigé par #3122, sans que rien
+   * n'empêche la prochaine récidive — c'est ce que cette déclaration ajoute).
+   *
+   * **Clé ABSENTE = « ce message n'a pas de lieu »**, et non « je n'en parle
+   * pas » : les clients écrivent l'épingle AVEC l'identité du message, si bien
+   * que son absence efface celle du message précédent quand un texte le
+   * remplace. Corollaire opposable à tout nouvel émetteur : **qui porte
+   * `lastMessageId` porte le lieu du message qu'il nomme, ou aucun.**
+   *
+   * Forme non typée, même convention que `MessageRequest.location` : la
+   * validation stricte (bornes des coordonnées, longueur des chaînes) vit dans
+   * `services/gateway/src/services/location/sharedPlace.ts`, et la dupliquer
+   * ici la ferait diverger.
+   */
+  readonly location?: unknown;
+  /**
    * `true` quand le serveur a RECALCULÉ l'aperçu depuis l'état courant de la
    * base, par opposition à une poussée de message (`bump-to-top`) qui ne fait
    * que porter le message qu'on vient d'écrire.
@@ -1660,7 +1734,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
   [SERVER_EVENTS.REACTION_ADDED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_REMOVED]: (data: ReactionUpdateEventData) => void;
-  [SERVER_EVENTS.REACTION_SYNC]: (data: ReactionSyncEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_REACTION_ADDED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED]: (data: AttachmentReactionUpdateEventData) => void;
   [SERVER_EVENTS.CALL_INITIATED]: (data: CallInitiatedEvent) => void;

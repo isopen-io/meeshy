@@ -452,9 +452,16 @@ public actor ConversationStore {
     /// personnel du dernier message visible). Sans cette exception, le groupe
     /// entier était jeté sur ces deux chemins nominaux.
     ///
+    /// Un cran au-delà du recul : `lastMessage == .replaced(nil)` dit qu'il n'y
+    /// a plus AUCUN message visible pour ce lecteur, et vide le groupe entier
+    /// (`MeeshyConversation.clearLastMessage`) au lieu de l'appliquer champ par
+    /// champ — un payload tout en `null` ne survit à aucun `if let`.
+    ///
     /// Fields unrelated to message ordering (e.g. `title`) are still applied
-    /// regardless. No-op for an unknown conversation (the next list refresh
-    /// will catch up).
+    /// regardless — à une exception près, `title` sur une conversation
+    /// `.direct`, dont le titre client n'est pas celui de la base (voir le
+    /// commentaire au point d'application). No-op for an unknown conversation
+    /// (the next list refresh will catch up).
     public func applyConversationUpdated(_ event: ConversationUpdatedStoreEvent) {
         guard let conv = conversations[event.conversationId],
               let merged = Self.merging(conv, with: event) else { return }
@@ -506,21 +513,88 @@ public actor ConversationStore {
         // atterrit derrière un message plus neuf — est déjà tenu côté serveur
         // par la borne `onlyIfLatestIs`, qui abandonne le fan-out.
         if lastMessageIsCurrent || event.previewRecalculated {
-            if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
-            if let v = event.lastMessageId { conv.lastMessageId = v; changed = true }
-            if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
-            // Le Prisme fait partie du MÊME groupe monotone : le résolveur
-            // préfère la traduction à l'aperçu brut, donc poser l'un sans
-            // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
-            // `.replaced([:])` → `nil` : le résolveur doit distinguer « pas de
-            // carte » d'une carte vide (cf. `resolvedLastMessagePreview`).
-            if case .replaced(let map) = event.lastMessageTranslations {
-                conv.lastMessageTranslations = map.isEmpty ? nil : map
-                conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
-                changed = true
+            // « Ce lecteur n'a plus AUCUN message visible ici » — il vient de
+            // masquer POUR LUI le dernier qui lui restait. Le serveur l'énonce
+            // en posant tout le groupe à `null`, et cette branche doit sortir en
+            // premier : lu par les `if let` d'en dessous, ce payload ne dit
+            // RIEN (chaque champ est jeté un par un), et la ligne garde l'aperçu
+            // de ce qui vient de disparaître — définitivement, puisque plus rien
+            // ne bougera dans cette conversation.
+            //
+            // Le fait est porté par l'IDENTITÉ du message et par elle seule :
+            // c'est le seul champ du groupe dont l'ABSENCE (métadonnées) et la
+            // NULLITÉ (plus rien) se distinguent sur le fil. `lastMessageAt`
+            // nul, lui, décrit aussi bien un renommage.
+            if case .replaced(.none) = event.lastMessage {
+                changed = conv.clearLastMessage() || changed
+            } else {
+                if let incoming = event.lastMessageAt { conv.lastMessageAt = incoming; changed = true }
+                // Nommer un AUTRE message, c'est cesser de décrire le
+                // précédent. Le payload recalculé ne porte que l'identité, le
+                // texte et le Prisme : l'auteur, les pièces jointes et les
+                // drapeaux éphémères de l'ancien message survivraient à un
+                // simple `conv.lastMessageId = id`, et la ligne décrirait un
+                // mélange des deux (« Vue unique » sur un texte neuf, la
+                // vignette d'une photo supprimée sous l'aperçu de son
+                // remplaçant). `adoptLastMessage` les remet à neutre — et se
+                // tait quand l'identité ne change pas, c'est-à-dire à l'ÉDITION
+                // et à la TRADUCTION, où ils restent vrais.
+                //
+                // Posé AVANT les champs ci-dessous, qui reposent ce que ce
+                // payload-ci porte vraiment.
+                if case .replaced(.some(let id)) = event.lastMessage {
+                    conv.adoptLastMessage(id: id)
+                    // L'épingle fait partie de ce que `adoptLastMessage` vient
+                    // de remettre à neutre, et c'est le seul de ces champs que
+                    // le payload PORTE vraiment — les trois émetteurs la hissent
+                    // depuis `metadata.location` du message qu'ils nomment. La
+                    // reposer est donc exactement le geste que
+                    // `adoptLastMessage` demande à son appelant ; l'omettre
+                    // laissait une ligne BLANCHE derrière un message
+                    // position-seule, dont l'aperçu est vide par construction.
+                    //
+                    // Écrite AVEC l'identité et jamais seule : `nil` efface
+                    // l'épingle du message précédent quand un texte le remplace.
+                    // Même règle, au même endroit, que le chemin jumeau de
+                    // `ConversationListViewModel` — et c'est le seul point du
+                    // groupe d'aperçu où les deux fusions divergeaient.
+                    conv.lastMessageLocation = event.location
+                    changed = true
+                }
+                if let v = event.lastMessagePreview { conv.lastMessagePreview = v.meeshyPreviewTruncated; changed = true }
+                // Le Prisme fait partie du MÊME groupe monotone : le résolveur
+                // préfère la traduction à l'aperçu brut, donc poser l'un sans
+                // l'autre laisse la ligne rendre l'ANCIEN texte traduit.
+                // `.replaced([:])` → `nil` : le résolveur doit distinguer « pas de
+                // carte » d'une carte vide (cf. `resolvedLastMessagePreview`).
+                if case .replaced(let map) = event.lastMessageTranslations {
+                    conv.lastMessageTranslations = map.isEmpty ? nil : map
+                    conv.lastMessageOriginalLanguage = event.lastMessageOriginalLanguage
+                    changed = true
+                }
             }
         }
-        if let v = event.title { conv.title = v; changed = true }
+        // Un DM ne porte JAMAIS le titre de la base : `APIConversation
+        // .toConversation` l'écarte explicitement et pose à la place le nom du
+        // participant d'en face. Le payload socket, lui, porte le titre BRUT —
+        // `PUT /conversations/:id` n'interdit pas de renommer une conversation
+        // `direct`, et le rôle `creator` que reçoit l'auteur d'un DM à sa
+        // création suffit à passer son contrôle d'accès.
+        //
+        // L'écran porte cette garde depuis le 2026-07-04 (« sandra raveloson »
+        // → « Sany », `ConversationListViewModel`). Elle manquait ICI, et c'est
+        // cette copie-ci qui écrit le CACHE DISQUE (`ConversationSyncEngine
+        // .applyingConversationUpdate` délègue à cette même fonction) : le nom
+        // greffé survivait au redémarrage, et revenait à l'écran avant même
+        // celui-ci, la réécriture du cache rediffusant la liste par
+        // `conversationsDidChange`. La garde de l'écran ne protégeait donc que
+        // le chemin socket direct, pas celui qui la contournait par le cache.
+        //
+        // Miroir exact de `merging(_:withUserUpdate:)` vingt lignes plus bas,
+        // qui dérive DÉJÀ le titre d'un DM du contact d'en face : les deux
+        // règles de fusion de ce fichier disent enfin la même chose du même
+        // champ.
+        if let v = event.title, conv.type != .direct { conv.title = v; changed = true }
         if let v = event.avatar { conv.avatar = v; changed = true }
         if let v = event.description { conv.description = v; changed = true }
         if let v = event.banner { conv.banner = v; changed = true }
@@ -898,7 +972,10 @@ public struct ConversationDeletedEvent: Sendable, Hashable {
 public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public let conversationId: String
     public let lastMessageAt: Date?
-    public let lastMessageId: String?
+    /// Identité du dernier message. Tri-état — voir `LastMessageIdentity` :
+    /// `.unchanged` (clé absente) et `.replaced(nil)` (« plus aucun message
+    /// visible pour ce lecteur ») ne sont pas le même ordre.
+    public let lastMessage: LastMessageIdentity
     public let lastMessagePreview: String?
     /// Prisme de la ligne de liste. Tri-état — voir
     /// `LastMessagePreviewTranslations` : `.unchanged` (clé absente) et
@@ -906,6 +983,15 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     /// ordre, et c'est la seule façon de rendre une édition applicable.
     public let lastMessageTranslations: LastMessagePreviewTranslations
     public let lastMessageOriginalLanguage: String?
+    /// Épingle du dernier message, quand il en porte une. Membre du groupe
+    /// d'aperçu au même titre que le texte et le Prisme : un message
+    /// position-seule a un `lastMessagePreview` VIDE, donc c'est le seul champ
+    /// dont la ligne dispose pour composer son libellé.
+    ///
+    /// Les trois émetteurs du payload la hissent depuis `metadata.location` du
+    /// message NOMMÉ par `lastMessage` — jamais du message précédent. Elle
+    /// s'applique donc avec l'identité, et jamais seule.
+    public let location: SharedPlace?
     /// Le serveur a RECALCULÉ cet aperçu depuis sa base, au lieu de pousser le
     /// message qu'on vient d'écrire. Seul cas où le groupe d'aperçu a le droit
     /// de RECULER dans le temps — voir `merging(_:with:)`.
@@ -922,10 +1008,11 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     public init(
         conversationId: String,
         lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
+        lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false,
         title: String? = nil,
         avatar: String? = nil,
@@ -938,10 +1025,11 @@ public struct ConversationUpdatedStoreEvent: Sendable, Hashable {
     ) {
         self.conversationId = conversationId
         self.lastMessageAt = lastMessageAt
-        self.lastMessageId = lastMessageId
+        self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
+        self.location = location
         self.previewRecalculated = previewRecalculated
         self.title = title
         self.avatar = avatar

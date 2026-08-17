@@ -66,6 +66,7 @@
     "usernameAvailable": "Nome de usuário disponível",
     "suggestedUsername": "Nome de usuário sugerido: {username}",
     "firstNameRequired": "Nome e sobrenome são obrigatórios",
-    "connectionError": "Erro de conexão"
+    "connectionError": "Erro de conexão",
+    "joinConversation": "Juntar-se à conversa"
   }
 }

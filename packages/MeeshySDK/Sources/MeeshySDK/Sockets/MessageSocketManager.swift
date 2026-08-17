@@ -15,6 +15,50 @@ public struct MessageDeletedEvent: Decodable, Sendable {
     }
 }
 
+/// L'ADRESSE d'un message dont la visibilité PERSONNELLE vient de changer.
+///
+/// Le couple, jamais le seul `messageId` : un lot de masquage traverse
+/// plusieurs conversations (« effacer ces 100 »), et le consommateur doit
+/// pouvoir trier les références qui concernent le fil qu'il tient.
+public struct PersonalMessageVisibilityRef: Decodable, Sendable, Equatable {
+    public let messageId: String
+    public let conversationId: String
+
+    public init(messageId: String, conversationId: String) {
+        self.messageId = messageId
+        self.conversationId = conversationId
+    }
+}
+
+/// `message:hidden-for-me` — CE lecteur vient de retirer des messages de SA
+/// vue, depuis un autre de ses appareils.
+///
+/// À ne pas confondre avec `message:deleted`, qui décrit une suppression POUR
+/// TOUS et laisse une pierre tombale (« ce message a été supprimé »). Ici le
+/// message reste vivant pour les autres participants : il doit simplement
+/// DISPARAÎTRE du fil de ce lecteur, sans trace. Les deux gestes n'ont donc pas
+/// la même écriture locale, et réutiliser `markDeleted` afficherait une
+/// tombstone là où l'utilisateur attend le vide.
+///
+/// Une LISTE, pas un id : la route de masquage en lot en accepte cent, et un
+/// événement par message ferait payer cent réconciliations à un seul geste. La
+/// route unitaire émet une liste d'un élément — les clients n'ont qu'une forme
+/// à traiter. Contrat serveur : `services/gateway/src/services/personalMessageVisibilitySync.ts`.
+public struct MessageHiddenForMeEvent: Decodable, Sendable {
+    public let userId: String
+    public let messages: [PersonalMessageVisibilityRef]
+    /// Instant ISO-8601 du masquage. Optionnel côté client : il n'arbitre rien
+    /// (le masquage est un fait par-lecteur, sans concurrence à départager) et
+    /// un serveur plus ancien pourrait ne pas le porter.
+    public let hiddenAt: String?
+
+    public init(userId: String, messages: [PersonalMessageVisibilityRef], hiddenAt: String? = nil) {
+        self.userId = userId
+        self.messages = messages
+        self.hiddenAt = hiddenAt
+    }
+}
+
 public struct MessagePinnedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -109,9 +153,31 @@ public struct TypingEvent: Decodable, Sendable {
 public struct UnreadUpdateEvent: Decodable, Sendable {
     public let conversationId: String
     public let unreadCount: Int
+    /// Le pont ✦ recalculé POUR CE destinataire (G-123, payload optionnel de
+    /// `ConversationUnreadUpdatedEventData`, `packages/shared/types/socketio-events.ts`).
+    /// ABSENT quand le serveur n'a rien à annoncer (typiquement `unreadCount == 0`,
+    /// contrat §3.2) — un client ancien qui ignore le champ garde son comportement
+    /// d'avant.
+    ///
+    /// Décodage TOLÉRANT (`try?`), même patron que `MeeshyConversation.bridge`
+    /// (`CoreModels.swift`) : un pont malformé rend `nil` au lieu de faire
+    /// échouer le décodage de l'événement ENTIER — `conversationId` et
+    /// `unreadCount` restent exploitables sans lui (G-124).
+    public let bridge: ConversationBridge?
 
-    public init(conversationId: String, unreadCount: Int) {
-        self.conversationId = conversationId; self.unreadCount = unreadCount
+    public init(conversationId: String, unreadCount: Int, bridge: ConversationBridge? = nil) {
+        self.conversationId = conversationId; self.unreadCount = unreadCount; self.bridge = bridge
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case conversationId, unreadCount, bridge
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.conversationId = try c.decode(String.self, forKey: .conversationId)
+        self.unreadCount = try c.decode(Int.self, forKey: .unreadCount)
+        self.bridge = try? c.decodeIfPresent(ConversationBridge.self, forKey: .bridge)
     }
 }
 
@@ -171,6 +237,35 @@ public struct UserPreferencesConversationUpdatedSocketEvent: Decodable, Sendable
         public let reaction: String?
         public let deletedForUserAt: Date?
         public let clearHistoryBefore: Date?
+        /// `ReadingModePreference` (raw : `auto|focal|script|resume|riviere`) —
+        /// G-124, champ requis du payload gelé `ConversationPreferencesPayload`
+        /// (`packages/shared/types/socketio-events.ts`, « payload complet »,
+        /// jamais omis par le gateway sur ce scope). Décodé en `String` brute
+        /// ici (pas `ReadingModeOrchestrator.ReadingModePreference` — ce type
+        /// vit dans l'app, `MeeshySDK` ne le connaît pas) ; l'app-level
+        /// consommateur (`ConversationStoreSocketBridge`
+        /// `.onReadingModePreferenceChanged`) fait le `RawRepresentable` sur
+        /// SES 5 cas gelés, une valeur inconnue y rendant simplement `nil`.
+        ///
+        /// Défaut `"auto"` dans l'init memberwise ci-dessous UNIQUEMENT pour
+        /// les call sites de test antérieurs à G-124 (le décodage JSON, lui,
+        /// exige TOUJOURS la clé — le champ n'est pas optionnel sur le fil).
+        public let readingMode: String
+
+        public init(
+            isPinned: Bool, isMuted: Bool, mentionsOnly: Bool, isArchived: Bool,
+            tags: [String], categoryId: String?, orderInCategory: Int?,
+            customName: String?, reaction: String?,
+            deletedForUserAt: Date?, clearHistoryBefore: Date?,
+            readingMode: String = "auto"
+        ) {
+            self.isPinned = isPinned; self.isMuted = isMuted
+            self.mentionsOnly = mentionsOnly; self.isArchived = isArchived
+            self.tags = tags; self.categoryId = categoryId; self.orderInCategory = orderInCategory
+            self.customName = customName; self.reaction = reaction
+            self.deletedForUserAt = deletedForUserAt; self.clearHistoryBefore = clearHistoryBefore
+            self.readingMode = readingMode
+        }
     }
     public let userId: String
     public let conversationId: String
@@ -627,6 +722,30 @@ public enum LastMessagePreviewTranslations: Sendable, Hashable {
     case replaced([String: String])
 }
 
+/// Tri-état de l'IDENTITÉ du dernier message de la ligne de liste, portée par
+/// `conversation:updated`.
+///
+/// Même raison d'être que `LastMessagePreviewTranslations`, appliquée au champ
+/// qui NOMME le message : `Optional` confond « la clé était ABSENTE » (un
+/// renommage, un changement d'avatar — cet événement ne parle pas du dernier
+/// message) et « la clé valait `null` » (le serveur DIT que ce lecteur n'a plus
+/// AUCUN message visible ici).
+///
+/// Le second cas n'est pas théorique : un lecteur qui masque pour lui-même —
+/// suppression pour soi, purge d'historique — le dernier message qui lui restait
+/// vide sa propre vue sans rien changer pour les autres.
+/// `emitConversationPreviewUpdate` lui sert alors un payload dont TOUT le groupe
+/// d'aperçu vaut `null`. Lu à travers des `Optional`, ce payload ne dit rien du
+/// tout : chaque `if let` le jette, et la ligne de liste continue d'afficher
+/// l'aperçu de ce que le lecteur vient de masquer — définitivement, puisque plus
+/// rien ne bougera dans cette conversation.
+public enum LastMessageIdentity: Sendable, Hashable {
+    /// Clé absente : cet événement ne parle pas du dernier message.
+    case unchanged
+    /// Clé présente. `nil` = plus AUCUN message visible pour ce lecteur.
+    case replaced(String?)
+}
+
 public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let conversationId: String
     public let title: String?
@@ -644,10 +763,15 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
     /// etc.) that don't advance lastMessageAt.
     public let lastMessageAt: Date?
-    /// Populated by the message-driven `CONVERSATION_UPDATED` path
-    /// (`MessageHandler.ts`) so the client can update the conversation row's
-    /// preview without a separate fetch.
-    public let lastMessageId: String?
+    /// Le message que cette ligne de liste doit désormais désigner. Tri-état —
+    /// voir `LastMessageIdentity` : `.unchanged` (clé absente) et
+    /// `.replaced(nil)` (« plus aucun message visible ici ») demandent des
+    /// actions opposées, et `String?` les confondait.
+    ///
+    /// Renseigné par le chemin message-driven (`MessageHandler.ts`) pour que le
+    /// client mette à jour l'aperçu sans requête séparée, et par
+    /// `emitConversationPreviewUpdate` sur les recalculs.
+    public let lastMessage: LastMessageIdentity
     public let lastMessagePreview: String?
     /// Prisme de la ligne de liste, résolu par le gateway POUR CE destinataire.
     /// Sans lui, une édition laissait la ligne afficher le texte D'AVANT : le
@@ -709,7 +833,14 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
-        lastMessageId = try container.decodeIfPresent(String.self, forKey: .lastMessageId)
+        // `contains`, comme pour la carte du Prisme juste en dessous et pour la
+        // même raison : c'est la PRÉSENCE de la clé qui sépare « cet événement
+        // ne parle pas du dernier message » de « il n'y en a plus aucun ».
+        if container.contains(.lastMessageId) {
+            lastMessage = .replaced(try container.decodeIfPresent(String.self, forKey: .lastMessageId))
+        } else {
+            lastMessage = .unchanged
+        }
         lastMessagePreview = try container.decodeIfPresent(String.self, forKey: .lastMessagePreview)
         // `contains` et non `decodeIfPresent` : c'est la PRÉSENCE de la clé qui
         // distingue « cet événement ne parle pas d'aperçu » de « la carte est
@@ -740,7 +871,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds: Int? = nil,
         autoTranslateEnabled: Bool? = nil,
         lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
+        lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         lastMessageTranslations: LastMessagePreviewTranslations = .unchanged,
         lastMessageOriginalLanguage: String? = nil,
@@ -760,7 +891,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.slowModeSeconds = slowModeSeconds
         self.autoTranslateEnabled = autoTranslateEnabled
         self.lastMessageAt = lastMessageAt
-        self.lastMessageId = lastMessageId
+        self.lastMessage = lastMessage
         self.lastMessagePreview = lastMessagePreview
         self.lastMessageTranslations = lastMessageTranslations
         self.lastMessageOriginalLanguage = lastMessageOriginalLanguage
@@ -769,6 +900,17 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         self.updatedBy = updatedBy
         self.updatedAt = updatedAt
         self.previewRecalculated = previewRecalculated
+    }
+
+    /// L'id porté, `nil` quand la clé était absente OU nulle.
+    ///
+    /// Réservé aux appelants pour qui les deux se valent — typiquement la
+    /// construction d'une facette décrivant un message NEUF, chemin qu'un
+    /// vidage n'atteint jamais (il n'avance aucun horodatage). Partout où le
+    /// vidage compte, c'est `lastMessage` qu'il faut lire.
+    public var lastMessageIdValue: String? {
+        guard case .replaced(let id) = lastMessage else { return nil }
+        return id
     }
 }
 
@@ -1362,6 +1504,10 @@ public protocol MessageSocketProviding: Sendable {
     var messageReceived: PassthroughSubject<APIMessage, Never> { get }
     var messageEdited: PassthroughSubject<APIMessage, Never> { get }
     var messageDeleted: PassthroughSubject<MessageDeletedEvent, Never> { get }
+    /// `message:hidden-for-me` — le canal de visibilité PERSONNELLE. Dans le
+    /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
+    /// détient qu'un `MessageSocketProviding`.
+    var messageHiddenForMe: PassthroughSubject<MessageHiddenForMeEvent, Never> { get }
     var messagePinned: PassthroughSubject<MessagePinnedEvent, Never> { get }
     var messageUnpinned: PassthroughSubject<MessageUnpinnedEvent, Never> { get }
     var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
@@ -1606,6 +1752,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageReceived = PassthroughSubject<APIMessage, Never>()
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
+    public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
     public let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
 
@@ -3027,6 +3174,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageDeletedEvent.self, from: data) { [weak self] event in
                 self?.messageDeleted.send(event)
+            }
+        }
+
+        // Le canal de visibilité PERSONNELLE. La room est celle de
+        // l'UTILISATEUR, pas du socket : l'appareil qui a émis la requête reçoit
+        // l'événement lui aussi, et le retrait y est idempotent (il a déjà
+        // retiré la bulle en optimiste).
+        socket.on("message:hidden-for-me") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageHiddenForMeEvent.self, from: data) { [weak self] event in
+                self?.messageHiddenForMe.send(event)
             }
         }
 

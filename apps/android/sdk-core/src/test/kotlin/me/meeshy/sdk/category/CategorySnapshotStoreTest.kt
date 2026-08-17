@@ -1,25 +1,19 @@
 package me.meeshy.sdk.category
 
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.google.common.truth.Truth.assertThat
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.testing.TestDataStores
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
-import java.io.File
 
 /**
  * The category-catalogue snapshot persistence seam.
@@ -28,13 +22,9 @@ import java.io.File
  * self-heals from a corrupt stored blob (degrading to a synced-but-empty catalogue,
  * never a perpetual cold cache).
  *
- * `withTimeout(15_000)` on real DataStore-Flow collection (`runBlocking`, real
- * wall-clock time — not `runTest`'s virtual clock): `5_000` flaked repeatedly
- * under CI-runner disk-I/O load (`TimeoutCancellationException`, no relation to
- * the diff under test each time). `15_000` matches the value
- * [me.meeshy.sdk.media.MediaDownloadPreferencesStoreTest]/
- * [me.meeshy.sdk.privacy.PrivacyPreferencesStoreTest] already use without
- * incident — never observed to flake at that threshold in this session.
+ * The durable cases run on [TestDataStores] — an inline, deterministic scheduler — so no
+ * assertion here is bounded by wall-clock time. See that class for why the previous
+ * `Dispatchers.IO` + `withTimeout(15_000)` recipe was retired.
  */
 class CategorySnapshotStoreTest {
 
@@ -43,8 +33,10 @@ class CategorySnapshotStoreTest {
 
     private val json = Json { ignoreUnknownKeys = true }
 
-    private fun newDataStore(scope: CoroutineScope, file: File): DataStore<Preferences> =
-        PreferenceDataStoreFactory.create(scope = scope) { file }
+    private val dataStores = TestDataStores()
+
+    @After
+    fun tearDown() = dataStores.close()
 
     private fun cat(id: String, name: String, order: Int? = null) =
         CategoryOption(id = id, name = name, order = order)
@@ -86,80 +78,71 @@ class CategorySnapshotStoreTest {
     // ── DataStoreCategorySnapshotStore ───────────────────────────────────────
 
     @Test
-    fun dataStore_isColdOnAnEmptyStore() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        try {
-            val store = DataStoreCategorySnapshotStore(newDataStore(scope, tmp.newFile("cold.preferences_pb")), json)
-            assertThat(withTimeout(15_000) { store.observe().first() }).isNull()
-            assertThat(store.lastSyncedAt().first()).isNull()
-        } finally {
-            scope.cancel()
-        }
+    fun dataStore_isColdOnAnEmptyStore() = runTest(dataStores.dispatcher) {
+        val store = DataStoreCategorySnapshotStore(
+            dataStores.preferences(tmp.newFile("cold.preferences_pb")),
+            json,
+        )
+
+        assertThat(store.observe().first()).isNull()
+        assertThat(store.lastSyncedAt().first()).isNull()
     }
 
     @Test
-    fun dataStore_saveRoundTripsSnapshotAndSyncTime() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        try {
-            val store = DataStoreCategorySnapshotStore(newDataStore(scope, tmp.newFile("save.preferences_pb")), json)
-            store.save(listOf(cat("work", "Work", order = 0), cat("fam", "Family", order = 1)), syncedAtMillis = 999L)
+    fun dataStore_saveRoundTripsSnapshotAndSyncTime() = runTest(dataStores.dispatcher) {
+        val store = DataStoreCategorySnapshotStore(
+            dataStores.preferences(tmp.newFile("save.preferences_pb")),
+            json,
+        )
 
-            assertThat(withTimeout(15_000) { store.observe().first() }).containsExactly(
-                cat("work", "Work", order = 0),
-                cat("fam", "Family", order = 1),
-            ).inOrder()
-            assertThat(store.lastSyncedAt().first()).isEqualTo(999L)
-        } finally {
-            scope.cancel()
-        }
+        store.save(listOf(cat("work", "Work", order = 0), cat("fam", "Family", order = 1)), syncedAtMillis = 999L)
+
+        assertThat(store.observe().first()).containsExactly(
+            cat("work", "Work", order = 0),
+            cat("fam", "Family", order = 1),
+        ).inOrder()
+        assertThat(store.lastSyncedAt().first()).isEqualTo(999L)
     }
 
     @Test
-    fun dataStore_syncedButEmptyReadsAsEmptyNotCold() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        try {
-            val store = DataStoreCategorySnapshotStore(newDataStore(scope, tmp.newFile("empty.preferences_pb")), json)
-            store.save(emptyList(), syncedAtMillis = 12L)
+    fun dataStore_syncedButEmptyReadsAsEmptyNotCold() = runTest(dataStores.dispatcher) {
+        val store = DataStoreCategorySnapshotStore(
+            dataStores.preferences(tmp.newFile("empty.preferences_pb")),
+            json,
+        )
 
-            assertThat(withTimeout(15_000) { store.observe().first() }).isEqualTo(emptyList<CategoryOption>())
-            assertThat(store.lastSyncedAt().first()).isEqualTo(12L)
-        } finally {
-            scope.cancel()
-        }
+        store.save(emptyList(), syncedAtMillis = 12L)
+
+        assertThat(store.observe().first()).isEqualTo(emptyList<CategoryOption>())
+        assertThat(store.lastSyncedAt().first()).isEqualTo(12L)
     }
 
     @Test
-    fun dataStore_clearAll_resetsToAColdCache() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        try {
-            val store = DataStoreCategorySnapshotStore(newDataStore(scope, tmp.newFile("clear.preferences_pb")), json)
-            store.save(listOf(cat("work", "Work")), syncedAtMillis = 999L)
+    fun dataStore_clearAll_resetsToAColdCache() = runTest(dataStores.dispatcher) {
+        val store = DataStoreCategorySnapshotStore(
+            dataStores.preferences(tmp.newFile("clear.preferences_pb")),
+            json,
+        )
+        store.save(listOf(cat("work", "Work")), syncedAtMillis = 999L)
 
-            store.clearAll()
+        store.clearAll()
 
-            assertThat(withTimeout(15_000) { store.observe().first() }).isNull()
-            assertThat(store.lastSyncedAt().first()).isNull()
-        } finally {
-            scope.cancel()
-        }
+        assertThat(store.observe().first()).isNull()
+        assertThat(store.lastSyncedAt().first()).isNull()
     }
 
     @Test
-    fun dataStore_corruptSnapshotDegradesToEmptyButStaysSynced() = runBlocking {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        val dataStore = newDataStore(scope, tmp.newFile("corrupt.preferences_pb"))
-        try {
-            dataStore.edit { prefs ->
-                prefs[stringPreferencesKey("categories_snapshot")] = "{not json"
-                prefs[longPreferencesKey("categories_synced_at")] = 34L
-            }
-
-            val store = DataStoreCategorySnapshotStore(dataStore, json)
-            // A stamp is present, so this is a real (empty) catalogue, not a cold cache.
-            assertThat(withTimeout(15_000) { store.observe().first() }).isEqualTo(emptyList<CategoryOption>())
-            assertThat(store.lastSyncedAt().first()).isEqualTo(34L)
-        } finally {
-            scope.cancel()
+    fun dataStore_corruptSnapshotDegradesToEmptyButStaysSynced() = runTest(dataStores.dispatcher) {
+        val dataStore = dataStores.preferences(tmp.newFile("corrupt.preferences_pb"))
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey("categories_snapshot")] = "{not json"
+            prefs[longPreferencesKey("categories_synced_at")] = 34L
         }
+
+        val store = DataStoreCategorySnapshotStore(dataStore, json)
+
+        // A stamp is present, so this is a real (empty) catalogue, not a cold cache.
+        assertThat(store.observe().first()).isEqualTo(emptyList<CategoryOption>())
+        assertThat(store.lastSyncedAt().first()).isEqualTo(34L)
     }
 }

@@ -44,6 +44,13 @@ describe('E2E: Preferences Encryption & Security', () => {
       // y rend `{ count: 0 }` au lieu de lever `P2025`.
       updateMany: jest.fn()
     },
+    // Le SECOND rangement de la confidentialité : lignes clé/valeur héritées
+    // de janvier 2026, lues et retirées par les routes `privacy`
+    // (`services/preferences/privacy-storage`).
+    userPreference: {
+      findMany: jest.fn().mockResolvedValue([]),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 })
+    },
     userConsent: {
       findMany: jest.fn()
     },

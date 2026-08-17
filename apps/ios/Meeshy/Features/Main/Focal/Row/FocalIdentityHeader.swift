@@ -33,6 +33,13 @@ struct FocalIdentityHeader: View, Equatable {
     let timeString: String
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
+    /// Cette rangée est l'élue du pass (§4.6) : pastille et nom agrandis,
+    /// et l'horodatage passe de l'heure seule à « jour · heure ».
+    var isFocused: Bool = false
+    /// Date d'envoi complète, pour l'élue seulement. `nil` ⇒ l'en-tête s'en
+    /// tient à `timeString` (comportement d'avant la magnification, que tous
+    /// les sites d'appel non focalisés obtiennent sans rien passer).
+    var sentAt: Date? = nil
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     /// F-083ter (F10) — voir `editedIndicator`.
@@ -53,6 +60,8 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.timeString == rhs.timeString
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.isDark == rhs.isDark
+            && lhs.isFocused == rhs.isFocused
+            && lhs.sentAt == rhs.sentAt
             && lhs.agentStyle == rhs.agentStyle
             && lhs.editedAt == rhs.editedAt
             && lhs.isEditSaving == rhs.isEditSaving
@@ -106,7 +115,7 @@ struct FocalIdentityHeader: View, Equatable {
             HStack(spacing: 7) {
                 MeeshyAvatar(
                     name: senderDisplayName,
-                    context: .custom(FocalMetrics.Avatar.size),
+                    context: .custom(avatarSize),
                     accentColor: senderColorHex,
                     avatarURL: senderAvatarURL,
                     thumbHash: senderThumbHash,
@@ -116,10 +125,13 @@ struct FocalIdentityHeader: View, Equatable {
                     enablePulse: false,
                     isDark: isDark
                 )
-                .agentAuthoredAvatarRing(agentStyle, diameter: FocalMetrics.Avatar.size)
+                .agentAuthoredAvatarRing(agentStyle, diameter: avatarSize)
 
                 Text(displayName)
-                    .font(FocalMetrics.Name.font)
+                    .font(MeeshyFont.relative(
+                        isFocused ? FocalMetrics.Focus.nameSize : FocalMetrics.Name.size,
+                        weight: FocalMetrics.Name.weight
+                    ))
                     .foregroundColor(nameColor)
                     .lineLimit(1)
 
@@ -140,14 +152,63 @@ struct FocalIdentityHeader: View, Equatable {
 
                 editedIndicator
 
-                Text(timeString)
-                    .font(FocalMetrics.Time.font)
-                    .foregroundColor(metaTint)
+                stamp
             }
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
-        .frame(minHeight: FocalMetrics.Avatar.size)
+        // Hauteur RÉSERVÉE À LA TAILLE FOCALE, focus ou pas.
+        //
+        // Faire varier `minHeight` avec `avatarSize` changeait la hauteur de
+        // la cellule au moment où l'élection bascule. La reconfiguration de
+        // §4.6 se produisant à l'ARRÊT du défilement, l'ancienne élue se
+        // contractait et la nouvelle se dilatait dans la même passe : la
+        // taille de contenu changeait, et tout ce qui était à l'écran sautait.
+        // Filmé au simulateur — un saut par arrêt de geste.
+        //
+        // La pastille grandit toujours (22 → 34) ; c'est le seul CADRE qui ne
+        // bouge plus. La rangée garde donc exactement la même hauteur qu'elle
+        // soit élue ou non, et le défilement ne se réorganise jamais.
+        .frame(minHeight: FocalMetrics.Focus.avatarSize)
+    }
+
+    private var avatarSize: CGFloat {
+        isFocused ? FocalMetrics.Focus.avatarSize : FocalMetrics.Avatar.size
+    }
+
+    /// L'horodatage de tête de groupe — MÊME règle que `FocalMetaRow.stamp`,
+    /// pour que les deux formes de rangée se comportent à l'identique.
+    ///
+    /// - Élue : PERMANENT, « jour · heure ».
+    /// - Sinon : révélé pendant le défilement seulement. Sans cette branche,
+    ///   une tête de groupe gardait son heure en dur pendant qu'une rangée de
+    ///   suite masquait la sienne — deux règles pour la même information.
+    @ViewBuilder
+    private var stamp: some View {
+        if isFocused {
+            SwiftUI.Text(stampString)
+                .font(FocalMetrics.Time.font)
+                .foregroundColor(metaTint)
+                .lineLimit(1)
+        } else {
+            FocalRevealedTime(timeString: timeString, tint: metaTint)
+        }
+    }
+
+    /// « Date et heure de l'envoi visible (même sans scroll) » pour l'élue.
+    ///
+    /// Le jour vient de `MessageDayLabel` et l'heure de `timeString` (déjà
+    /// formatée par `TimeStringCache` en amont) — les deux formateurs
+    /// existants, réutilisés verbatim, exactement comme
+    /// `ScrollTimePillLabelFormatter` le faisait pour la pilule qu'on retire.
+    /// AUCUN `DateFormatter` neuf (contrat §WS-2, règle conservée).
+    ///
+    /// Hors focus, ou faute de date, on retombe sur `timeString` seul : le
+    /// rendu d'avant la magnification, bit-à-bit.
+    private var stampString: String {
+        guard isFocused, let sentAt else { return timeString }
+        let day = MessageDayLabel.label(for: sentAt, now: Date(), calendar: .current, locale: .current)
+        return "\(day) · \(timeString)"
     }
 
     /// F-083ter (F10) — « un message édité affiche « modifié » en 10.5 en

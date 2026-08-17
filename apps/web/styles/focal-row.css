@@ -1,0 +1,101 @@
+/**
+ * Le mode Focal — rangée plate, perspective au défilement, une seule carte.
+ *
+ * Source design : `docs/design/2026-08-15-focal-spec-integration.html` § 3.
+ * Cotes : `styles/lentille-tokens.css` (généré depuis
+ * `packages/shared/design/lentille-tokens.json`) — jamais de valeur en dur ici.
+ *
+ * Contrat de performance : la perspective ne pilote que `transform` et
+ * `opacity`, écrites en JS par `useFocalScroller`. Ce fichier ne déclare AUCUNE
+ * transition sur ces deux propriétés — une transition les ferait courir après
+ * le doigt. Tout le reste (fond, anneau, retrait) est statique.
+ */
+
+.focal-row {
+  padding-top: var(--lentille-thread-row-padding-vertical);
+  padding-bottom: var(--lentille-thread-row-padding-vertical);
+  transform-origin: 16% 100%;
+  will-change: transform, opacity;
+}
+
+.focal-row__avatar {
+  width: var(--lentille-thread-avatar-size);
+  height: var(--lentille-thread-avatar-size);
+  background: var(--conv-accent, hsl(var(--primary)));
+}
+
+.focal-row__name--own {
+  color: var(--conv-accent, hsl(var(--primary)));
+}
+
+/* Le retrait 29 aligne le texte sur le NOM, pas sur l'avatar : c'est ce qui
+   donne la colonne unique du design plat. */
+.focal-row__body {
+  padding-left: var(--lentille-thread-line2-indent);
+}
+
+.focal-row__text {
+  font-size: var(--lentille-thread-line2-size);
+  line-height: var(--lentille-thread-line2-line-height);
+}
+
+.focal-row__meta:empty {
+  display: none;
+}
+
+/* La seule « carte » de tout l'écran : le message au point. */
+.focal-row[data-focal-focused='true'] .focal-row__body {
+  margin: var(--lentille-thread-focus-card-margin-vertical)
+    var(--lentille-thread-focus-card-margin-horizontal);
+  padding: var(--lentille-thread-focus-card-padding-vertical)
+    var(--lentille-thread-focus-card-padding-horizontal);
+  padding-left: calc(
+    var(--lentille-thread-line2-indent) + var(--lentille-thread-focus-card-padding-horizontal)
+  );
+  border-radius: var(--lentille-thread-focus-card-radius);
+  background: var(--focal-card-surface);
+  box-shadow: inset 0 0 0 var(--lentille-thread-focus-card-ring-size)
+    var(--conv-accent, hsl(var(--primary)));
+}
+
+.focal-row[data-focal-focused='true'] .focal-row__text {
+  font-size: calc(var(--lentille-thread-line2-size) + 1px);
+}
+
+/* Tokens de fond du volume 4 — repris d'iOS (ThemeManager.swift), les plus
+   précis : #F8F7FF en clair, #13111C en sombre. */
+:root {
+  --focal-card-surface: #f8f7ff;
+}
+
+.dark {
+  --focal-card-surface: #13111c;
+}
+
+/* Médias nus, radius 16 — aucune bulle autour. */
+.focal-row [data-slot='card'] {
+  background: transparent;
+  border: none;
+}
+
+.focal-row img,
+.focal-row video {
+  border-radius: var(--lentille-thread-media-radius);
+}
+
+/* Citations en filet 2.5 pt à la couleur de la conversation. */
+.focal-row blockquote,
+.focal-row [data-reply-preview] {
+  border-left: var(--lentille-thread-quote-border-size) solid
+    var(--conv-accent, hsl(var(--primary)));
+}
+
+/* La perspective est purement visuelle : qui demande moins de mouvement obtient
+   la liste plate uniforme — exactement la densité Script. */
+@media (prefers-reduced-motion: reduce) {
+  .focal-row {
+    transform: none !important;
+    opacity: 1 !important;
+    will-change: auto;
+  }
+}

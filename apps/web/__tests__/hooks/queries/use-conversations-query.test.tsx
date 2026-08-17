@@ -239,6 +239,54 @@ describe('useInfiniteConversationsQuery', () => {
     focusManager.setFocused(undefined as unknown as boolean);
   });
 
+  /**
+   * Jumelle EXACTE du témoin ci-dessus, sur l'autre déclencheur global.
+   *
+   * La dérogation `refetchOnWindowFocus: false` a été posée seule : le
+   * QueryClient global tourne AUSSI en `refetchOnReconnect: 'always'`, et ce
+   * réglage rejoue les mêmes pages, au même prix, sur un déclencheur bien plus
+   * ordinaire qu'un retour d'onglet — toute transition réseau du NAVIGATEUR
+   * (sortie de tunnel, bascule Wi-Fi/4G, réveil de la machine).
+   *
+   * Le rattrapage après coupure est servi par le delta borné de
+   * `useConversationsDeltaSync` (Trigger 1, front `false → true` de
+   * `isSocketConnected`), qui couvre STRICTEMENT plus : un redémarrage gateway
+   * ou un échec d'upgrade de transport tue la socket sans bouger
+   * `navigator.onLine`, donc sans jamais déclencher ce refetch.
+   *
+   * Le témoin passe par les VRAIS événements `window` — c'est `onlineManager`
+   * de React Query qui les écoute — parce que c'est la forme sous laquelle la
+   * panne atteint un porteur.
+   */
+  it('ne relit PAS ses pages au retour de connexion réseau, malgré le défaut global', async () => {
+    mockGetConversations.mockResolvedValue({
+      ...mockPaginatedResponse,
+      pagination: { limit: 20, offset: 0, total: 40, hasMore: true },
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, staleTime: Infinity, refetchOnReconnect: 'always' },
+      },
+    });
+    const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+      return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+    };
+
+    const { result } = renderHook(() => useInfiniteConversationsQuery({ limit: 20 }), {
+      wrapper,
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    mockGetConversations.mockClear();
+    await act(async () => {
+      window.dispatchEvent(new Event('offline'));
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(mockGetConversations).not.toHaveBeenCalled();
+  });
+
   it('should fetch next page with correct offset', async () => {
     // First page
     mockGetConversations.mockResolvedValueOnce({

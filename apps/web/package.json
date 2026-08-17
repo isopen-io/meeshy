@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web",
-  "version": "1.26.0",
+  "version": "1.27.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3100 --experimental-https",
@@ -8,7 +8,7 @@
     "build": "next build",
     "analyze": "ANALYZE=true npm run build",
     "start": "next start -p 3100 -H 0.0.0.0",
-    "lint": "next lint",
+    "lint": "eslint .",
     "type-check": "tsc --noEmit",
     "test": "jest --maxWorkers=50%",
     "test:watch": "jest --watch",
@@ -112,7 +112,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "autoprefixer": "^10.5.4",
     "dotenv": "^17.2.1",
-    "eslint": "^10.8.0",
+    "eslint": "^9.39.5",
     "eslint-config-next": "16.2.12",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",

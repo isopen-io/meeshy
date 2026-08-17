@@ -66,9 +66,42 @@ const CONVERSATION_DATE_FIELDS = new Set([
 ]);
 
 /**
+ * Le groupe d'APERÇU d'un `conversation:updated` : les champs qui, ENSEMBLE,
+ * décrivent le message que la ligne de liste doit rendre.
+ *
+ * Aucun d'eux n'entre tel quel dans le cache — `Conversation` (web) n'en
+ * déclare aucun, et aucun lecteur ne les interroge. La ligne rend
+ * `conversation.lastMessage`, un OBJET ; c'est `mergeConversationUpdate` qui
+ * les consomme pour le composer. Les recopier en plus n'ajouterait qu'un champ
+ * fantôme par ligne, à chaque message.
+ *
+ * `location` y figure au même titre : elle décrit la position du MESSAGE, et la
+ * ligne web ne rend aucune épingle — la composer dans le message neutre
+ * fabriquerait une donnée que personne ne lit.
+ *
+ * `lastMessageAt` n'en fait délibérément PAS partie : il décrit le RANG de la
+ * conversation dans la liste, `Conversation` le déclare, et le tri le lit.
+ * `lastMessageTranslations` / `lastMessageOriginalLanguage` non plus : le
+ * gateway les pose au niveau conversation parce que la carte compacte
+ * `{ langue: aperçu }` n'a pas la forme de `Message.translations`, et c'est là
+ * que `formatLastMessage` va les chercher.
+ */
+const PREVIEW_GROUP_KEYS = new Set([
+  'lastMessageId',
+  'lastMessagePreview',
+  'senderId',
+  'location',
+  'previewRecalculated',
+]);
+
+/**
  * Turns an untyped `conversation:updated` payload into a patch that matches
  * `Conversation`: date fields are materialised, and an unparseable date is
  * dropped rather than overwriting a valid cached value with garbage.
+ *
+ * Ne décide RIEN du dernier message : cela demande de savoir lequel la ligne
+ * décrit déjà, que seul l'appelant tient. Voir `mergeConversationUpdate`, le
+ * point d'entrée du cache.
  *
  * The final assertion is the trust boundary: the event declares an
  * `[key: string]: unknown` index signature (the gateway spreads whichever
@@ -77,6 +110,7 @@ const CONVERSATION_DATE_FIELDS = new Set([
 export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
+    if (PREVIEW_GROUP_KEYS.has(key)) continue;
     if (key === 'lastMessageTranslations') {
       // `null` est une VALEUR ici, pas une absence : le serveur périme
       // `Message.translations` dans la même écriture qu'une édition, et c'est ce
@@ -99,6 +133,181 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
     if (asDate) patch[key] = asDate;
   }
   return patch as Partial<Conversation>;
+}
+
+/**
+ * Ce que le groupe d'aperçu dit du message que la ligne DÉCRIT — ou rien, quand
+ * l'événement ne parle pas de lui (un renommage) ou n'en dit pas assez.
+ *
+ * `undefined` en `lastMessage` est une DÉCISION (« plus aucun message visible »),
+ * pas une absence : d'où le drapeau plutôt qu'un simple retour nullable.
+ */
+type PreviewedLastMessage =
+  | { readonly decided: false }
+  | { readonly decided: true; readonly lastMessage: Message | undefined };
+
+/**
+ * Le message NEUTRE que le seul groupe d'aperçu permet de composer.
+ *
+ * Ce que le payload ne porte pas — l'expéditeur, les pièces jointes, les
+ * drapeaux éphémères — reste vide plutôt que d'être hérité du message
+ * précédent : une ligne INCOMPLÈTE, que la prochaine synchro complète, plutôt
+ * qu'une ligne FAUSSE, que rien ne corrige. C'est la règle que
+ * `LastMessageFacet` tient côté iOS, pour le même défaut.
+ */
+function neutralLastMessage(
+  raw: Record<string, unknown>,
+  conversationId: string,
+  id: string,
+  createdAt: Date
+): Message {
+  return {
+    id,
+    conversationId,
+    senderId: typeof raw.senderId === 'string' ? raw.senderId : '',
+    content: typeof raw.lastMessagePreview === 'string' ? raw.lastMessagePreview : '',
+    originalLanguage:
+      typeof raw.lastMessageOriginalLanguage === 'string' ? raw.lastMessageOriginalLanguage : '',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    translations: [],
+    createdAt,
+    timestamp: createdAt,
+  };
+}
+
+/**
+ * Quel message la ligne doit décrire après ce `conversation:updated`.
+ *
+ * Trois formes, et une seule d'entre elles était lue jusqu'ici :
+ *
+ * - **la clé est absente** — l'événement ne parle pas du dernier message (un
+ *   renommage, un réglage). Ne rien toucher.
+ * - **`lastMessageId: null`** — la clé PRÉSENTE et nulle est la façon dont le
+ *   serveur dit « ce lecteur n'a plus AUCUN message visible ici » : il vient de
+ *   masquer POUR LUI le dernier qui lui restait. Seul
+ *   `emitConversationPreviewUpdate` produit cette forme.
+ * - **`lastMessageId` plein** — et c'est là que tout se joue : le payload nomme
+ *   soit le message que la ligne décrit DÉJÀ (une édition, une traduction qui
+ *   atterrit), soit un AUTRE (masquage personnel, suppression pour tous). Le
+ *   premier cas ne rend faux que le texte ; le second rend faux TOUT ce que la
+ *   ligne disait.
+ *
+ * L'identité est la seule chose qui les sépare, et le client peut la lire — ce
+ * qu'il ne faisait pas : il appliquait la carte du Prisme du NOUVEAU message
+ * sur l'objet de l'ANCIEN, et la ligne servait un mélange des deux.
+ */
+function previewedLastMessage(
+  raw: Record<string, unknown>,
+  conversationId: string,
+  cached: Message | undefined
+): PreviewedLastMessage {
+  if (!('lastMessageId' in raw)) return { decided: false };
+
+  const id = raw.lastMessageId;
+  if (id === null) return { decided: true, lastMessage: undefined };
+  if (typeof id !== 'string' || id.length === 0) return { decided: false };
+
+  if (cached?.id === id) {
+    // MÊME message : seul son texte a pu changer. L'expéditeur, les pièces
+    // jointes et les drapeaux restent vrais — les jeter serait le défaut
+    // symétrique, et il frapperait le chemin le plus fréquenté, celui de
+    // l'envoi (`message:new` pose l'objet COMPLET, le `conversation:updated`
+    // jumeau arrive juste derrière avec le même id).
+    const preview = raw.lastMessagePreview;
+    if (typeof preview !== 'string' || preview === cached.content) return { decided: false };
+    return { decided: true, lastMessage: { ...cached, content: preview } };
+  }
+
+  // AUTRE message. Sans horodatage lisible on ne compose rien : la ligne rend
+  // `lastMessage.createdAt`, et une date fabriquée y afficherait « Invalid
+  // Date ». Périmée et corrigible vaut mieux qu'affichée cassée — les deux
+  // émetteurs portent toujours ce champ avec un id plein.
+  const createdAt = toDate(raw.lastMessageAt);
+  if (!createdAt) return { decided: false };
+
+  return { decided: true, lastMessage: neutralLastMessage(raw, conversationId, id, createdAt) };
+}
+
+/**
+ * Applique un `conversation:updated` à la conversation qu'il nomme.
+ *
+ * Point d'entrée du cache : la moitié du payload qui décrit la CONVERSATION
+ * passe par `normalizeConversationPatch`, celle qui décrit son dernier MESSAGE
+ * par `previewedLastMessage` — qui, elle, a besoin de savoir quel message la
+ * ligne décrit déjà.
+ */
+export function mergeConversationUpdate(
+  conversation: Conversation,
+  raw: Record<string, unknown>
+): Conversation {
+  const previewed = previewedLastMessage(raw, conversation.id, conversation.lastMessage);
+  const merged = { ...conversation, ...normalizeConversationPatch(raw) };
+  return previewed.decided ? { ...merged, lastMessage: previewed.lastMessage } : merged;
+}
+
+/**
+ * Installe sur la ligne de liste le message qu'elle doit décrire — et périme,
+ * dans la MÊME écriture, la carte du Prisme qui décrivait le précédent.
+ *
+ * La carte (`lastMessageTranslations` / `lastMessageOriginalLanguage`) vit au
+ * niveau CONVERSATION, pas sur le message : le gateway l'y pose parce que sa
+ * forme compacte `{ langue: aperçu }` n'est pas celle de `Message.translations`.
+ * Elle n'est donc PAS emportée par un `{ ...conv, lastMessage }`, et
+ * `formatLastMessage` la PRÉFÈRE à `lastMessage.content` — réécrire l'objet seul
+ * laissait la ligne rendre l'auteur et l'horodatage du nouveau message avec le
+ * TEXTE de l'ancien. C'est le défaut que le cycle 53 a fermé sur le chemin du
+ * fan-out serveur ; ceci le ferme sur les six chemins LOCAUX, dont
+ * `link:message:new`, le seul qui n'ait aucun jumeau serveur pour le rattraper.
+ *
+ * **L'identité décide**, jamais le contenu : quand la ligne décrit déjà ce
+ * message, la carte reste vraie et la garder est le no-op qui borne le
+ * correctif. Sans lui, le `conversation:updated` jumeau qui suit chaque
+ * `message:new` — même id — dépouillerait sa propre ligne du Prisme qu'il vient
+ * d'installer, sur le chemin le plus fréquenté du service.
+ *
+ * `textChanged` est la seule exception, et elle est DÉCLARÉE par l'écrivain :
+ * une édition garde le même id tout en remettant `Message.translations` à `null`
+ * côté serveur, ce que l'identité ne peut pas révéler.
+ *
+ * Ne décide ni du rang de la ligne (`lastMessageAt`) ni de sa date de mise à
+ * jour : les appelants n'en font pas le même usage.
+ *
+ * Le sixième appelant vit dans `hooks/v2/use-conversations-v2.ts` — un SECOND
+ * écouteur du même `message:new`, écrivant dans le MÊME cache. La règle
+ * d'identité n'est sûre que si TOUS les écrivains y passent : sans cela l'ordre
+ * des deux écouteurs déciderait du texte affiché. Un témoin de source le
+ * verrouille.
+ */
+export function withPreviewMessage(params: {
+  conversation: Conversation;
+  message: Message;
+  textChanged?: boolean;
+}): Conversation {
+  const { conversation, message, textChanged = false } = params;
+
+  const stillDescribed = conversation.lastMessage?.id === message.id && !textChanged;
+  if (stillDescribed) return { ...conversation, lastMessage: message };
+
+  const originalLanguage =
+    typeof message.originalLanguage === 'string' && message.originalLanguage !== ''
+      ? message.originalLanguage
+      : undefined;
+
+  return {
+    ...conversation,
+    lastMessage: message,
+    lastMessageTranslations: undefined,
+    lastMessageOriginalLanguage: originalLanguage,
+  };
 }
 
 function updateInfiniteConversationCache(
@@ -130,7 +339,10 @@ function advanceConversationPreviewOnDelete(
 ): void {
   const replace = (conv: Conversation): Conversation =>
     conv.id === conversationId && conv.lastMessage?.id === deletedMessageId
-      ? { ...conv, lastMessage: replacement, lastMessageAt: replacement.createdAt }
+      ? {
+          ...withPreviewMessage({ conversation: conv, message: replacement }),
+          lastMessageAt: replacement.createdAt,
+        }
       : conv;
 
   updateInfiniteConversationCache(queryClient, (convs) => convs.map(replace));
@@ -311,7 +523,11 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         const rest: Conversation[] = [];
         for (const conv of convs) {
           if (conv.id === targetConversationId) {
-            updated = { ...conv, lastMessage: message, lastMessageAt: message.createdAt, updatedAt: message.createdAt };
+            updated = {
+              ...withPreviewMessage({ conversation: conv, message }),
+              lastMessageAt: message.createdAt,
+              updatedAt: message.createdAt,
+            };
           } else {
             rest.push(conv);
           }
@@ -339,8 +555,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
                 // might have inserted while we were awaiting the API.
                 const filtered = convs.filter((c) => c.id !== targetConversationId);
                 const enriched: Conversation = {
-                  ...fetched,
-                  lastMessage: message,
+                  ...withPreviewMessage({ conversation: fetched, message }),
                   lastMessageAt: message.createdAt,
                   updatedAt: message.createdAt,
                 };
@@ -395,7 +610,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
           conv.id === targetConversationId &&
           conv.lastMessage?.id === message.id &&
           !isStaleEdit(conv.lastMessage, message)
-            ? { ...conv, lastMessage: message }
+            ? withPreviewMessage({ conversation: conv, message, textChanged: true })
             : conv
         )
       );
@@ -820,8 +1035,26 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for category CRUD events — invalidate categories cache so sidebar reflects cross-device changes
+    // Les quatre événements de catégorie, et ce que la liste en lit VRAIMENT.
+    //
+    // `queryKeys.preferences.categories()` n'a aucun observateur en production
+    // (`useCategoriesQuery` n'est importé que par ses propres tests) : la
+    // `ConversationList` lit ses catégories dans le store Zustand, via
+    // `useConversationPreferences` → `useConversationCategories`. Invalider une
+    // requête que personne ne monte ne déclenche aucun refetch et ne change rien
+    // à l'écran — la liste des catégories restait donc figée sur l'unique
+    // chargement d'`initialize()`, tant que l'onglet vivait. L'invalidation est
+    // conservée : elle reste juste, et un futur lecteur React Query en
+    // hériterait ; c'est le rafraîchissement du store qui manquait.
     const handleCategoryChanged = () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.preferences.categories() });
+      // `void` DÉTACHE la promesse : le `.catch` est la seule garde qui reste,
+      // et il appartient au site d'appel — que le collaborateur avale ou non ses
+      // propres pannes est sa propriété, pas une garantie d'ici.
+      void useConversationPreferencesStore
+        .getState()
+        .refreshCategories()
+        .catch(() => undefined);
     };
 
     // Handler for message:pending-delivered — queued messages delivered on reconnect.
@@ -966,7 +1199,16 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       updateInfiniteConversationCache(queryClient, (convs) => {
         const idx = convs.findIndex((c) => c.id === linkConvId);
         if (idx === -1) return convs;
-        const updated: Conversation = { ...convs[idx], lastMessage: linkLastMessage, lastMessageAt: linkLastMessageAt };
+        // Le seul des cinq écrivains sans jumeau serveur : `broadcastLinkMessage`
+        // n'émet PAS de `conversation:updated`, délibérément, parce que « le
+        // handler web applique déjà l'aperçu depuis cet événement ». Vrai de
+        // l'objet, faux de la carte du Prisme — d'où une ligne durablement
+        // fausse sur les conversations de lien partagé, que rien ne repassait
+        // corriger.
+        const updated: Conversation = {
+          ...withPreviewMessage({ conversation: convs[idx], message: linkLastMessage }),
+          lastMessageAt: linkLastMessageAt,
+        };
         return [updated, ...convs.filter((_, i) => i !== idx)];
       });
     };
@@ -1037,9 +1279,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
       const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
       if (!updatedId) return;
-      const patch = normalizeConversationPatch(rest);
       updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.map((c) => c.id === updatedId ? { ...c, ...patch } : c)
+        convs.map((c) => c.id === updatedId ? mergeConversationUpdate(c, rest) : c)
       );
     };
 
@@ -1124,6 +1365,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         });
       }
     });
+    // `user:preferences-reordered` — le glisser-déposer d'un autre appareil.
+    //
+    // `orderInCategory` est un critère de tri de la liste au même titre
+    // qu'`isPinned` et `categoryId` (`useConversationSorting` les lit tous les
+    // trois dans la même map du store), et c'est le SEUL que
+    // `user:preferences-updated` n'annonce pas : le gateway émet un événement
+    // par GESTE de réordonnancement, pas un par ligne déplacée. Le store
+    // arbitre sans `version` — l'événement n'en porte pas, délibérément.
+    const unsubscribePreferencesReordered = meeshySocketIOService.onPreferencesReordered((data) => {
+      useConversationPreferencesStore.getState().applyRemoteReorder(data?.updates ?? []);
+    });
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
@@ -1155,6 +1407,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeAudioTranslation?.();
       unsubscribeAttachmentStatus?.();
       unsubscribePreferences?.();
+      unsubscribePreferencesReordered?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();
@@ -1178,26 +1431,26 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   }, [conversationId, enabled, queryClient]);
 }
 
-/**
- * Hook to invalidate queries on reconnect.
- * Note: React Query's refetchOnReconnect: 'always' already handles most cases.
- * This hook provides additional invalidation for socket reconnection.
+/*
+ * RETIRÉ — `useInvalidateOnReconnect` (cycle 59).
+ *
+ * Il écoutait `window.online` et invalidait `['conversations']` +
+ * `['notifications']` en bloc. Deux raisons de le retirer, pas une :
+ *
+ * 1. DESTRUCTEUR. `['conversations']` est un PRÉFIXE de
+ *    `['conversations','infinite']` : sur cette query infinite, active dès que
+ *    la sidebar est montée, l'invalidation rejoue TOUTES les pages chargées et
+ *    remplace le cache — les trois dommages que l'en-tête de
+ *    `use-conversations-delta-sync.ts` détaille, dont la ligne dupliquée à la
+ *    frontière de page (la route pagine par OFFSET sur `lastMessageAt` DESC).
+ * 2. REDONDANT sur ses deux clés. Les conversations sont rattrapées par le
+ *    delta borné de `useConversationsDeltaSync` (Trigger 1, front `false → true`
+ *    de la socket) ; les notifications par `onSyncDesync` du singleton socket →
+ *    `scheduleResync`, plus `refetchOnMount: 'always'` sur la liste.
+ *
+ * Son propre commentaire s'appuyait sur `refetchOnReconnect: 'always'` — lequel
+ * est précisément le second chemin destructeur, désarmé au même cycle sur
+ * `useInfiniteConversationsQuery`. `window.online` ne prouve d'ailleurs aucune
+ * reconnexion de SOCKET : un redémarrage gateway la tue sans bouger
+ * `navigator.onLine`.
  */
-export function useInvalidateOnReconnect() {
-  const queryClient = useQueryClient();
-
-  useEffect(() => {
-    // Listen for online events as a proxy for reconnection
-    const handleOnline = () => {
-      // Invalidate all queries on reconnect to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.notifications.all });
-    };
-
-    window.addEventListener('online', handleOnline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [queryClient]);
-}

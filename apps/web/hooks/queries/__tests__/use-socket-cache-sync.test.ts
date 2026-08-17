@@ -18,6 +18,8 @@ import type { Message, Conversation } from '@/types';
 let capturedMessageListener: ((message: Message) => void) | null = null;
 // Capture the delete listener registered by the hook
 let capturedDeleteListener: ((messageId: string) => void) | null = null;
+// Capture the edit listener — un des cinq écrivains locaux de la ligne de liste
+let capturedEditListener: ((message: Message) => void) | null = null;
 // Capture the translation + audio-translation listeners registered by the hook
 let capturedTranslationListener: ((data: any) => void) | null = null;
 let capturedAudioTranslationListener: ((data: any) => void) | null = null;
@@ -31,6 +33,7 @@ let capturedMessageUnpinnedListener: ((data: any) => void) | null = null;
 let capturedLinkMessageNewListener: ((data: any) => void) | null = null;
 // Capture the preferences listener — `user:preferences-updated` is a three-scope union
 let capturedPreferencesListener: ((data: any) => void) | null = null;
+let capturedPreferencesReorderedListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -38,7 +41,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       capturedMessageListener = listener;
       return () => { capturedMessageListener = null; };
     }),
-    onMessageEdited: jest.fn(() => () => {}),
+    onMessageEdited: jest.fn((listener: (message: Message) => void) => {
+      capturedEditListener = listener;
+      return () => { capturedEditListener = null; };
+    }),
     onMessageDeleted: jest.fn((listener: (messageId: string) => void) => {
       capturedDeleteListener = listener;
       return () => { capturedDeleteListener = null; };
@@ -65,6 +71,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onPreferencesUpdated: jest.fn((listener: (data: any) => void) => {
       capturedPreferencesListener = listener;
       return () => { capturedPreferencesListener = null; };
+    }),
+    onPreferencesReordered: jest.fn((listener: (data: any) => void) => {
+      capturedPreferencesReorderedListener = listener;
+      return () => { capturedPreferencesReorderedListener = null; };
     }),
     onConversationJoined: jest.fn(() => () => {}),
     onConversationLeft: jest.fn(() => () => {}),
@@ -111,9 +121,15 @@ jest.mock('@/stores/auth-store', () => ({
 }));
 
 const applyRemotePreferencesMock = jest.fn();
+const applyRemoteReorderMock = jest.fn();
+const refreshCategoriesMock = jest.fn().mockResolvedValue(undefined);
 jest.mock('@/stores/conversation-preferences-store', () => ({
   useConversationPreferencesStore: {
-    getState: () => ({ applyRemotePreferences: applyRemotePreferencesMock }),
+    getState: () => ({
+      applyRemotePreferences: applyRemotePreferencesMock,
+      applyRemoteReorder: applyRemoteReorderMock,
+      refreshCategories: refreshCategoriesMock,
+    }),
   },
 }));
 
@@ -125,7 +141,8 @@ jest.mock('@meeshy/shared/utils/sender-identity', () => ({
   getSenderUserId: (sender: any) => sender?.userId ?? sender?.id ?? null,
 }));
 
-import { useSocketCacheSync } from '../use-socket-cache-sync';
+import { useSocketCacheSync, mergeConversationUpdate } from '../use-socket-cache-sync';
+import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
 
 function makeMessage(overrides: Partial<Message> & { id: string; conversationId: string }): Message {
   return {
@@ -1062,5 +1079,189 @@ describe('useSocketCacheSync — user:preferences-updated', () => {
     });
 
     expect(applyRemotePreferencesMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Cycle 54 — la carte du Prisme de la ligne de liste, sur les chemins LOCAUX.
+ *
+ * `formatLastMessage` PRÉFÈRE `conversation.lastMessageTranslations` à
+ * `lastMessage.content`. Réécrire l'objet `lastMessage` sans périmer cette carte
+ * — ce que faisaient les cinq écrivains locaux — laissait la ligne rendre le
+ * TEXTE de l'ancien message sous l'auteur et l'horodatage du nouveau.
+ *
+ * Les témoins portent sur le TEXTE AFFICHÉ, pas sur la donnée : un témoin posé
+ * sur `lastMessage.id` serait passé au vert tout du long (leçon 212).
+ */
+describe('useSocketCacheSync — la carte du Prisme suit le message que la ligne décrit', () => {
+  beforeEach(() => {
+    capturedMessageListener = null;
+    capturedDeleteListener = null;
+    capturedEditListener = null;
+    capturedLinkMessageNewListener = null;
+    jest.clearAllMocks();
+  });
+
+  /** Ce que la ligne sert à un lecteur francophone. */
+  function displayedText(conv: Conversation): string | null | undefined {
+    return resolveLastMessagePreview({
+      preview: conv.lastMessage?.content,
+      translations: conv.lastMessageTranslations,
+      originalLanguage: conv.lastMessageOriginalLanguage,
+      preferredLanguages: ['fr'],
+    });
+  }
+
+  const previous = makeMessage({
+    id: 'm-previous',
+    conversationId: 'conv-1',
+    content: 'Good evening',
+    originalLanguage: 'en',
+    createdAt: new Date('2026-08-17T09:00:00Z'),
+  });
+
+  /** L'état nominal d'un `GET /conversations` servi par le Prisme. */
+  function seedTranslatedRow(queryClient: QueryClient, conversationId = 'conv-1') {
+    seedConversations(queryClient, [
+      {
+        id: conversationId,
+        lastMessage: previous,
+        lastMessageAt: previous.createdAt,
+        lastMessageTranslations: { fr: 'Bonsoir' },
+        lastMessageOriginalLanguage: 'en',
+        updatedAt: previous.createdAt,
+      } as any,
+    ]);
+  }
+
+  it('message:new — la ligne rend le nouveau message, pas la traduction du précédent', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedTranslatedRow(queryClient);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedMessageListener!(makeMessage({
+        id: 'm-incoming',
+        conversationId: 'conv-1',
+        content: 'Are we still on for tomorrow?',
+        createdAt: new Date('2026-08-17T10:00:00Z'),
+      }));
+    });
+
+    expect(displayedText(cachedConversations(queryClient)[0])).toBe('Are we still on for tomorrow?');
+  });
+
+  it('link:message:new — même exigence, et c’est le seul chemin que rien ne rattrape', () => {
+    // `broadcastLinkMessage` n'émet PAS de `conversation:updated` jumeau : sur
+    // une conversation de lien partagé, la carte périmée l'était DURABLEMENT.
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedTranslatedRow(queryClient);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedLinkMessageNewListener!({
+        message: {
+          id: 'm-link',
+          conversationId: 'conv-1',
+          senderId: 'guest-1',
+          content: 'Joining from the invite link',
+          originalLanguage: 'en',
+          createdAt: new Date('2026-08-17T10:00:00Z').toISOString(),
+        },
+      });
+    });
+
+    expect(displayedText(cachedConversations(queryClient)[0])).toBe('Joining from the invite link');
+  });
+
+  it('message:edited — la ligne rend le texte édité, jamais la traduction d’avant', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedTranslatedRow(queryClient);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedEditListener!(makeMessage({
+        id: 'm-previous',
+        conversationId: 'conv-1',
+        content: 'Good evening — correction: 9pm',
+        originalLanguage: 'en',
+        createdAt: previous.createdAt,
+        editedAt: new Date('2026-08-17T10:00:00Z'),
+      }));
+    });
+
+    expect(displayedText(cachedConversations(queryClient)[0])).toBe('Good evening — correction: 9pm');
+  });
+
+  it('message:deleted — la ligne rend le remplaçant, pas la traduction du supprimé', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    const survivor = makeMessage({
+      id: 'm-survivor',
+      conversationId: 'conv-1',
+      content: 'See you there',
+      originalLanguage: 'en',
+      createdAt: new Date('2026-08-17T08:00:00Z'),
+    });
+    const doomed = makeMessage({
+      id: 'm-doomed',
+      conversationId: 'conv-1',
+      content: 'Good evening',
+      originalLanguage: 'en',
+      createdAt: new Date('2026-08-17T09:00:00Z'),
+    });
+    queryClient.setQueryData(queryKeys.messages.infinite('conv-1'), {
+      pages: [{ messages: [doomed, survivor], hasMore: false, total: 2 }],
+      pageParams: [1],
+    });
+    seedConversations(queryClient, [
+      {
+        id: 'conv-1',
+        lastMessage: doomed,
+        lastMessageAt: doomed.createdAt,
+        lastMessageTranslations: { fr: 'Bonsoir' },
+        lastMessageOriginalLanguage: 'en',
+        updatedAt: doomed.createdAt,
+      } as any,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedDeleteListener!('m-doomed'); });
+
+    expect(displayedText(cachedConversations(queryClient)[0])).toBe('See you there');
+  });
+
+  it('conversation:updated jumeau — le MÊME message garde son Prisme', () => {
+    // La contre-épreuve sur le chemin le plus fréquenté : `message:new` arrive,
+    // puis le fan-out serveur repose la carte avec le même id. Le second write
+    // ne doit pas dépouiller la ligne de ce que le premier a installé.
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedTranslatedRow(queryClient);
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    const incoming = makeMessage({
+      id: 'm-incoming',
+      conversationId: 'conv-1',
+      content: 'Are we still on for tomorrow?',
+      originalLanguage: 'en',
+      createdAt: new Date('2026-08-17T10:00:00Z'),
+    });
+
+    act(() => { capturedMessageListener!(incoming); });
+
+    // Le jumeau serveur, appliqué comme le fait le cache (mergeConversationUpdate).
+    const withCard = mergeConversationUpdate(cachedConversations(queryClient)[0], {
+      conversationId: 'conv-1',
+      lastMessageId: 'm-incoming',
+      lastMessagePreview: incoming.content,
+      lastMessageTranslations: { fr: 'On est toujours d’accord pour demain ?' },
+      lastMessageOriginalLanguage: 'en',
+    });
+
+    expect(displayedText(withCard)).toBe('On est toujours d’accord pour demain ?');
+
+    // Puis le MÊME message est réécrit localement (re-render, dédup serveur).
+    act(() => { capturedMessageListener!(incoming); });
+
+    expect(cachedConversations(queryClient)[0].lastMessage?.id).toBe('m-incoming');
   });
 });

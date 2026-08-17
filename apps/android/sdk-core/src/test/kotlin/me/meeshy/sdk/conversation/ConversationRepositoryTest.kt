@@ -10,7 +10,17 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.PaginatedParticipant
+import me.meeshy.sdk.model.PaginatedParticipantsPagination
+import me.meeshy.sdk.model.PaginatedParticipantsResponse
+import me.meeshy.sdk.model.UpdateConversationResponse
+import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
+import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxRepository
@@ -21,146 +31,152 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 
-private class FakeConversationApi(
-    var response: ApiResponse<List<ApiConversation>>,
-) : ConversationApi {
-    override suspend fun list(offset: Int?, limit: Int?) = response
-    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
-    override suspend fun create(body: CreateConversationRequest) =
-        ApiResponse<ApiConversation>(success = false)
-    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun updatePreferences(
-        id: String,
-        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
-    ) = ApiResponse(success = true, data = Unit)
-
-    override suspend fun updateSettings(
-        id: String,
-        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
-    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
-
-    override suspend fun leave(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun deleteForAll(id: String) = ApiResponse(success = true, data = Unit)
-}
-
-private class RecordingSettingsApi(
-    private val response: ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>,
-) : ConversationApi {
-    var lastId: String? = null
-    var lastBody: me.meeshy.sdk.model.UpdateConversationSettingsRequest? = null
-
+/**
+ * Every stub answers "not wired" so a test that reaches an endpoint it did not
+ * intend to exercise fails loudly instead of silently succeeding. Each fake below
+ * overrides only the one call it is about — and a new [ConversationApi] method
+ * costs one line here rather than one per fake.
+ */
+private abstract class StubConversationApi : ConversationApi {
     override suspend fun list(offset: Int?, limit: Int?) =
         ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
     override suspend fun create(body: CreateConversationRequest) =
         ApiResponse<ApiConversation>(success = false)
-    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun updatePreferences(
-        id: String,
-        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
-    ) = ApiResponse(success = true, data = Unit)
+    override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun updatePreferences(id: String, body: ConversationPreferencesUpdate) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun updateSettings(id: String, body: UpdateConversationSettingsRequest) =
+        ApiResponse<UpdateConversationResponse>(success = false)
+    override suspend fun leave(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun deleteForMe(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun deleteForAll(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun participants(id: String, search: String?, limit: Int?, cursor: String?) =
+        PaginatedParticipantsResponse(success = false)
+    override suspend fun updateParticipantRole(id: String, userId: String, body: ParticipantRoleUpdate) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun removeParticipant(id: String, userId: String) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun addParticipant(id: String, body: AddParticipantRequest) =
+        ApiResponse<Unit>(success = false)
+    override suspend fun banParticipant(id: String, userId: String) =
+        ApiResponse<Unit>(success = false)
+}
+
+private class FakeConversationApi(
+    var response: ApiResponse<List<ApiConversation>>,
+) : StubConversationApi() {
+    override suspend fun list(offset: Int?, limit: Int?) = response
+}
+
+private class RecordingSettingsApi(
+    private val response: ApiResponse<UpdateConversationResponse>,
+) : StubConversationApi() {
+    var lastId: String? = null
+    var lastBody: UpdateConversationSettingsRequest? = null
+
     override suspend fun updateSettings(
         id: String,
-        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
-    ): ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse> {
+        body: UpdateConversationSettingsRequest,
+    ): ApiResponse<UpdateConversationResponse> {
         lastId = id
         lastBody = body
         return response
     }
-    override suspend fun leave(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun deleteForAll(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingLeaveApi(
     private val response: ApiResponse<Unit>,
-) : ConversationApi {
+) : StubConversationApi() {
     var lastId: String? = null
 
-    override suspend fun list(offset: Int?, limit: Int?) =
-        ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
-    override suspend fun create(body: CreateConversationRequest) =
-        ApiResponse<ApiConversation>(success = false)
-    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun updatePreferences(
-        id: String,
-        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
-    ) = ApiResponse(success = true, data = Unit)
-    override suspend fun updateSettings(
-        id: String,
-        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
-    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
     override suspend fun leave(id: String): ApiResponse<Unit> {
         lastId = id
         return response
     }
-    override suspend fun deleteForMe(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun deleteForAll(id: String) = ApiResponse(success = true, data = Unit)
 }
 
 private class RecordingDeleteForMeApi(
     private val response: ApiResponse<Unit>,
-) : ConversationApi {
+) : StubConversationApi() {
     var lastId: String? = null
 
-    override suspend fun list(offset: Int?, limit: Int?) =
-        ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
-    override suspend fun create(body: CreateConversationRequest) =
-        ApiResponse<ApiConversation>(success = false)
-    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun updatePreferences(
-        id: String,
-        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
-    ) = ApiResponse(success = true, data = Unit)
-    override suspend fun updateSettings(
-        id: String,
-        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
-    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
-    override suspend fun leave(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun deleteForMe(id: String): ApiResponse<Unit> {
         lastId = id
         return response
     }
-    override suspend fun deleteForAll(id: String) = ApiResponse<Unit>(success = false)
 }
 
 private class RecordingDeleteForAllApi(
     private val response: ApiResponse<Unit>,
-) : ConversationApi {
+) : StubConversationApi() {
     var lastId: String? = null
 
-    override suspend fun list(offset: Int?, limit: Int?) =
-        ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
-    override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
-    override suspend fun create(body: CreateConversationRequest) =
-        ApiResponse<ApiConversation>(success = false)
-    override suspend fun markRead(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun markUnread(id: String) = ApiResponse(success = true, data = Unit)
-    override suspend fun updatePreferences(
-        id: String,
-        body: me.meeshy.sdk.net.api.ConversationPreferencesUpdate,
-    ) = ApiResponse(success = true, data = Unit)
-    override suspend fun updateSettings(
-        id: String,
-        body: me.meeshy.sdk.model.UpdateConversationSettingsRequest,
-    ) = ApiResponse<me.meeshy.sdk.model.UpdateConversationResponse>(success = false)
-    override suspend fun leave(id: String) = ApiResponse<Unit>(success = false)
-    override suspend fun deleteForMe(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun deleteForAll(id: String): ApiResponse<Unit> {
         lastId = id
         return response
+    }
+}
+
+private class RecordingParticipantsApi(
+    private val response: PaginatedParticipantsResponse = PaginatedParticipantsResponse(success = true),
+    private val roleResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+    private val removeResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+    private val addResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+    private val banResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit),
+) : StubConversationApi() {
+    var lastId: String? = null
+    var lastSearch: String? = null
+    var lastLimit: Int? = null
+    var lastCursor: String? = null
+    var lastRoleUserId: String? = null
+    var lastRoleBody: ParticipantRoleUpdate? = null
+    var lastRemovedUserId: String? = null
+    var lastAddedUserId: String? = null
+    var lastBannedUserId: String? = null
+
+    override suspend fun participants(
+        id: String,
+        search: String?,
+        limit: Int?,
+        cursor: String?,
+    ): PaginatedParticipantsResponse {
+        lastId = id
+        lastSearch = search
+        lastLimit = limit
+        lastCursor = cursor
+        return response
+    }
+
+    override suspend fun updateParticipantRole(
+        id: String,
+        userId: String,
+        body: ParticipantRoleUpdate,
+    ): ApiResponse<Unit> {
+        lastId = id
+        lastRoleUserId = userId
+        lastRoleBody = body
+        return roleResponse
+    }
+
+    override suspend fun removeParticipant(id: String, userId: String): ApiResponse<Unit> {
+        lastId = id
+        lastRemovedUserId = userId
+        return removeResponse
+    }
+
+    override suspend fun addParticipant(id: String, body: AddParticipantRequest): ApiResponse<Unit> {
+        lastId = id
+        lastAddedUserId = body.userId
+        return addResponse
+    }
+
+    override suspend fun banParticipant(id: String, userId: String): ApiResponse<Unit> {
+        lastId = id
+        lastBannedUserId = userId
+        return banResponse
     }
 }
 
@@ -732,7 +748,7 @@ class ConversationRepositoryTest {
         val api = RecordingSettingsApi(
             ApiResponse(
                 success = true,
-                data = me.meeshy.sdk.model.UpdateConversationResponse(
+                data = UpdateConversationResponse(
                     id = "c1",
                     defaultWriteRole = "admin",
                     slowModeSeconds = 60,
@@ -740,7 +756,7 @@ class ConversationRepositoryTest {
             ),
         )
         val repo = repository(api)
-        val request = me.meeshy.sdk.model.UpdateConversationSettingsRequest(
+        val request = UpdateConversationSettingsRequest(
             defaultWriteRole = "admin",
             slowModeSeconds = 60,
         )
@@ -762,7 +778,7 @@ class ConversationRepositoryTest {
 
         val result = repo.updateSettings(
             "c1",
-            me.meeshy.sdk.model.UpdateConversationSettingsRequest(isAnnouncementChannel = true),
+            UpdateConversationSettingsRequest(isAnnouncementChannel = true),
         )
 
         assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
@@ -833,5 +849,201 @@ class ConversationRepositoryTest {
         assertThat(result).isInstanceOf(me.meeshy.sdk.net.NetworkResult.Failure::class.java)
         assertThat((result as me.meeshy.sdk.net.NetworkResult.Failure).error.message)
             .isEqualTo("Only the creator can do this")
+    }
+
+    @Test
+    fun `participants maps the cursor envelope onto a roster page`() = runTest {
+        val api = RecordingParticipantsApi(
+            PaginatedParticipantsResponse(
+                success = true,
+                data = listOf(
+                    PaginatedParticipant(id = "p1", userId = "u1", displayName = "Ada"),
+                    PaginatedParticipant(id = "p2", userId = "u2", displayName = "Grace"),
+                ),
+                pagination = PaginatedParticipantsPagination(
+                    nextCursor = "p2",
+                    hasMore = true,
+                    totalCount = 42,
+                ),
+            ),
+        )
+        val repo = repository(api)
+
+        val result = repo.participants("c1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+        val page = (result as NetworkResult.Success).data
+        assertThat(page.members.map { it.id }).containsExactly("p1", "p2").inOrder()
+        assertThat(page.nextCursor).isEqualTo("p2")
+        assertThat(page.hasMore).isTrue()
+        assertThat(page.totalCount).isEqualTo(42)
+    }
+
+    @Test
+    fun `participants forwards the id, cursor and default page size`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        repo.participants("c1", cursor = "p9")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastCursor).isEqualTo("p9")
+        assertThat(api.lastLimit).isEqualTo(ConversationRepository.PARTICIPANTS_PAGE_SIZE)
+    }
+
+    @Test
+    fun `a blank search term is not sent as a filter`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        repo.participants("c1", search = "   ")
+
+        assertThat(api.lastSearch).isNull()
+    }
+
+    @Test
+    fun `a real search term is forwarded verbatim`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        repo.participants("c1", search = "ada")
+
+        assertThat(api.lastSearch).isEqualTo("ada")
+    }
+
+    @Test
+    fun `a page with no pagination object is treated as the only page`() = runTest {
+        val api = RecordingParticipantsApi(
+            PaginatedParticipantsResponse(
+                success = true,
+                data = listOf(PaginatedParticipant(id = "p1")),
+                pagination = null,
+            ),
+        )
+        val repo = repository(api)
+
+        val page = (repo.participants("c1") as NetworkResult.Success).data
+
+        assertThat(page.hasMore).isFalse()
+        assertThat(page.nextCursor).isNull()
+    }
+
+    @Test
+    fun `an unsuccessful participants envelope folds into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                PaginatedParticipantsResponse(success = false),
+            ),
+        )
+
+        assertThat(repo.participants("c1")).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun `updateParticipantRole sends the lowercase wire value the gateway enumerates`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        val result = repo.updateParticipantRole("c1", "u1", MemberRole.MODERATOR)
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastRoleUserId).isEqualTo("u1")
+        assertThat(api.lastRoleBody?.role).isEqualTo("moderator")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `updateParticipantRole folds a refused change into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                roleResponse = ApiResponse(success = false, error = "You cannot modify your own role"),
+            ),
+        )
+
+        val result = repo.updateParticipantRole("c1", "u1", MemberRole.ADMIN)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message)
+            .isEqualTo("You cannot modify your own role")
+    }
+
+    @Test
+    fun `removeParticipant forwards the conversation and user ids`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        val result = repo.removeParticipant("c1", "u1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastRemovedUserId).isEqualTo("u1")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `removeParticipant folds a refused removal into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                removeResponse = ApiResponse(success = false, error = "Insufficient rights"),
+            ),
+        )
+
+        val result = repo.removeParticipant("c1", "u1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message).isEqualTo("Insufficient rights")
+    }
+
+    @Test
+    fun `addParticipant forwards the conversation and user ids`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        val result = repo.addParticipant("c1", "u1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastAddedUserId).isEqualTo("u1")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `addParticipant folds a refusal into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                addResponse = ApiResponse(success = false, error = "Only admins and moderators can add participants"),
+            ),
+        )
+
+        val result = repo.addParticipant("c1", "u1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message)
+            .isEqualTo("Only admins and moderators can add participants")
+    }
+
+    @Test
+    fun `banParticipant forwards the conversation and user ids`() = runTest {
+        val api = RecordingParticipantsApi()
+        val repo = repository(api)
+
+        val result = repo.banParticipant("c1", "u1")
+
+        assertThat(api.lastId).isEqualTo("c1")
+        assertThat(api.lastBannedUserId).isEqualTo("u1")
+        assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
+    }
+
+    @Test
+    fun `banParticipant folds a refusal into a Failure`() = runTest {
+        val repo = repository(
+            RecordingParticipantsApi(
+                banResponse = ApiResponse(success = false, error = "Vous ne pouvez pas bannir un participant de rang égal ou supérieur"),
+            ),
+        )
+
+        val result = repo.banParticipant("c1", "u1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat((result as NetworkResult.Failure).error.message)
+            .isEqualTo("Vous ne pouvez pas bannir un participant de rang égal ou supérieur")
     }
 }

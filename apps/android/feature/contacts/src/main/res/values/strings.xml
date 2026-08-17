@@ -30,6 +30,11 @@
     <string name="contacts_discover_pending">Pending</string>
     <string name="contacts_discover_contact">Contact</string>
     <string name="contacts_discover_blocked">Blocked</string>
+    <string name="contacts_discover_email_title">Invite by email</string>
+    <string name="contacts_discover_email_placeholder">Email address</string>
+    <string name="contacts_discover_email_send">Send</string>
+    <string name="contacts_discover_email_send_a11y">Send email invitation</string>
+    <string name="contacts_discover_email_error">Couldn\'t send the invitation</string>
     <string name="contacts_blocked_empty">No blocked users</string>
     <string name="contacts_blocked_error">Couldn\'t load blocked users</string>
     <string name="contacts_blocked_unblock">Unblock</string>

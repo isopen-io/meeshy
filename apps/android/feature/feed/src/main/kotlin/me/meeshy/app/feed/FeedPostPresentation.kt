@@ -17,6 +17,7 @@ data class FeedPostImage(
     val thumbnailUrl: String?,
     val width: Int?,
     val height: Int?,
+    val thumbHash: String?,
 )
 
 /**
@@ -30,6 +31,7 @@ data class FeedPostImage(
 data class FeedPostPresentation(
     val id: String,
     val authorId: String?,
+    val authorUsername: String?,
     val authorName: String?,
     val authorAvatarUrl: String?,
     val createdAtIso: String?,
@@ -48,6 +50,10 @@ data class FeedPostPresentation(
     val isEdited: Boolean,
     val isReel: Boolean,
     val repostEmbed: RepostEmbedPresentation?,
+    val viewCount: Int,
+    val impressionCount: Int,
+    /** True when the signed-in viewer authored this post — gates the author-only reach line. */
+    val isAuthor: Boolean,
 )
 
 object FeedPostBuilder {
@@ -67,6 +73,7 @@ object FeedPostBuilder {
         preferences: LanguageResolver.ContentLanguagePreferences,
         mediaBaseUrl: String?,
         activeLanguageCode: String? = null,
+        currentUserId: String? = null,
     ): FeedPostPresentation {
         val images = post.media
             .orEmpty()
@@ -79,6 +86,7 @@ object FeedPostBuilder {
                     thumbnailUrl = media.thumbnailUrl?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
                     width = media.width,
                     height = media.height,
+                    thumbHash = media.thumbHash,
                 )
             }
         val originalCode = post.originalLanguage.normalizedCode()
@@ -88,6 +96,7 @@ object FeedPostBuilder {
         return FeedPostPresentation(
             id = post.id,
             authorId = post.author?.id,
+            authorUsername = post.author?.username,
             authorName = (post.author?.displayName ?: post.author?.username)
                 ?.takeIf { it.isNotBlank() },
             authorAvatarUrl = post.author?.avatar
@@ -114,6 +123,9 @@ object FeedPostBuilder {
             isEdited = post.isEdited == true,
             isReel = post.type.equals("reel", ignoreCase = true),
             repostEmbed = RepostEmbedBuilder.build(post.repostOf, preferences, mediaBaseUrl),
+            viewCount = post.viewCount ?: 0,
+            impressionCount = post.impressionCount ?: 0,
+            isAuthor = currentUserId != null && post.author?.id == currentUserId,
         )
     }
 

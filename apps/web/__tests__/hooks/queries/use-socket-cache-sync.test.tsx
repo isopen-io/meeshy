@@ -1,5 +1,5 @@
 /**
- * Tests for useSocketCacheSync and useInvalidateOnReconnect hooks
+ * Tests for the useSocketCacheSync hook
  *
  * Tests cover:
  * - Socket.IO event listeners registration
@@ -9,7 +9,6 @@
  * - Cache updates on translation events
  * - Cache updates on unread count changes
  * - Cleanup on unmount
- * - useInvalidateOnReconnect: Query invalidation on reconnect
  */
 
 import { renderHook, act } from '@testing-library/react';
@@ -17,10 +16,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import {
   useSocketCacheSync,
-  useInvalidateOnReconnect,
+
 } from '@/hooks/queries/use-socket-cache-sync';
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
+import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 
 // Store callbacks to trigger them in tests
 let newMessageCallback: ((message: Message) => void) | null = null;
@@ -48,6 +48,7 @@ let messagePinnedCallback: ((data: { messageId: string; conversationId: string; 
 let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string }) => void) | null = null;
 let userUpdatedCallback: ((data: { userId: string; changes: Record<string, unknown> }) => void) | null = null;
 let preferencesUpdatedCallback: ((data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) | null = null;
+let preferencesReorderedCallback: ((data: { userId: string; updates: Array<{ conversationId: string; orderInCategory: number }> }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -66,6 +67,13 @@ jest.mock('@/stores/auth-store', () => ({
 jest.mock('@/services/api.service', () => ({
   apiService: {
     post: jest.fn().mockResolvedValue({}),
+  },
+}));
+
+jest.mock('@/services/user-preferences.service', () => ({
+  userPreferencesService: {
+    getAllPreferences: jest.fn().mockResolvedValue([]),
+    getCategories: jest.fn().mockResolvedValue([]),
   },
 }));
 
@@ -100,6 +108,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onParticipantRoleUpdated: jest.fn(() => jest.fn()),
     onPreferencesUpdated: (callback: (data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) => {
       preferencesUpdatedCallback = callback;
+      return jest.fn();
+    },
+    onPreferencesReordered: (callback: (data: { userId: string; updates: Array<{ conversationId: string; orderInCategory: number }> }) => void) => {
+      preferencesReorderedCallback = callback;
       return jest.fn();
     },
     onConversationJoined: (callback: (data: { conversationId: string; userId: string }) => void) => {
@@ -323,6 +335,7 @@ describe('useSocketCacheSync', () => {
     messageUnpinnedCallback = null;
     userUpdatedCallback = null;
     preferencesUpdatedCallback = null;
+    preferencesReorderedCallback = null;
   });
 
   describe('Event Listener Registration', () => {
@@ -1423,6 +1436,85 @@ describe('useSocketCacheSync', () => {
         expect.objectContaining({ queryKey: ['user-preferences', 'categories'] })
       );
     });
+
+    /**
+     * La liste de conversations lit ses catégories dans le STORE Zustand
+     * (`useConversationPreferences` -> `useConversationCategories`), jamais dans
+     * React Query : `queryKeys.preferences.categories()` n'a aucun observateur
+     * en production. Invalider seul ne changeait donc rien a l'ecran.
+     */
+    it('refreshes the store categories the conversation list actually renders', () => {
+      const { wrapper } = createWrapperWithClient();
+      const refreshSpy = jest.spyOn(
+        useConversationPreferencesStore.getState(),
+        'refreshCategories'
+      );
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        categoryChangedCallback?.();
+      });
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
+      refreshSpy.mockRestore();
+    });
+  });
+
+  describe('Preferences Reordered Handler', () => {
+    it('applies the broadcast order onto the store the list sorts on', () => {
+      const { wrapper } = createWrapperWithClient();
+
+      act(() => {
+        useConversationPreferencesStore.setState({
+          preferencesMap: new Map([
+            [
+              'conv-1',
+              {
+                id: 'pref-1',
+                userId: 'current-user',
+                conversationId: 'conv-1',
+                isPinned: false,
+                isMuted: false,
+                isArchived: false,
+                tags: [],
+                orderInCategory: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ],
+          ]),
+        });
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        preferencesReorderedCallback?.({
+          userId: 'current-user',
+          updates: [{ conversationId: 'conv-1', orderInCategory: 7 }],
+        });
+      });
+
+      expect(
+        useConversationPreferencesStore.getState().preferencesMap.get('conv-1')?.orderInCategory
+      ).toBe(7);
+    });
+
+    it('does not invalidate the categories query — a reorder changes no category', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        preferencesReorderedCallback?.({ userId: 'current-user', updates: [] });
+      });
+
+      expect(invalidateSpy).not.toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ['user-preferences', 'categories'] })
+      );
+    });
   });
 
   describe('User Updated Handler', () => {
@@ -1759,44 +1851,18 @@ describe('useSocketCacheSync', () => {
   });
 });
 
-describe('useInvalidateOnReconnect', () => {
+describe('useSocketCacheSync — suite', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('should invalidate queries on online event', () => {
-    const { wrapper, queryClient } = createWrapperWithClient();
-    const invalidateSpy = jest.spyOn(queryClient, 'invalidateQueries');
+  // Les deux témoins de `useInvalidateOnReconnect` ont été retirés avec le hook
+  // (cycle 59) : ils épinglaient ses appels `invalidateQueries` — c'est-à-dire
+  // exactement le geste destructeur qui a motivé sa suppression. L'invariant
+  // qu'ils prétendaient garder vit désormais dans
+  // `use-conversations-query.test.tsx` (« ne relit PAS ses pages au retour de
+  // connexion réseau »), en termes de COMPORTEMENT observable.
 
-    renderHook(() => useInvalidateOnReconnect(), { wrapper });
-
-    // Simulate online event
-    act(() => {
-      window.dispatchEvent(new Event('online'));
-    });
-
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['conversations'],
-    });
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: ['notifications'],
-    });
-  });
-
-  it('should cleanup event listener on unmount', () => {
-    const { wrapper } = createWrapperWithClient();
-
-    const addEventListenerSpy = jest.spyOn(window, 'addEventListener');
-    const removeEventListenerSpy = jest.spyOn(window, 'removeEventListener');
-
-    const { unmount } = renderHook(() => useInvalidateOnReconnect(), { wrapper });
-
-    expect(addEventListenerSpy).toHaveBeenCalledWith('online', expect.any(Function));
-
-    unmount();
-
-    expect(removeEventListenerSpy).toHaveBeenCalledWith('online', expect.any(Function));
-  });
   // ─── message:restored-for-me ───────────────────────────────────────────────
   //
   // Un message masqué pour moi est revenu en vue depuis un AUTRE de mes

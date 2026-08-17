@@ -400,7 +400,7 @@ En parallèle, `MeeshySocketIOManager._broadcastNewMessage` (lignes 1395–1446)
 
 ---
 
-### MOYENNE-15 — Web : invalidation totale des conversations au `online` event
+### ~~MOYENNE-15~~ — Web : invalidation totale des conversations au `online` event — **RÉSOLU (cycle 59)**
 
 **Fichier :** `apps/web/hooks/queries/use-socket-cache-sync.ts` lignes 590–607
 
@@ -408,9 +408,25 @@ En parallèle, `MeeshySocketIOManager._broadcastNewMessage` (lignes 1395–1446)
 
 **Taille gaspillée :** 100 KB par reconnexion réseau. Sur mobile avec connexion instable : fréquent.
 
-**Sévérité :** MOYENNE
+**Sévérité :** MOYENNE — **relevée à la lecture du cycle 59 : le coût n'était pas la seule
+conséquence.** `queryKeys.conversations.all` est un PRÉFIXE de
+`queryKeys.conversations.infinite()` : l'invalidation ne faisait pas « 1 requête », elle rejouait
+TOUTES les pages chargées d'une query infinite, et la route paginant par OFFSET sur
+`lastMessageAt` DESC, un message arrivé entre deux pages dupliquait une ligne à la frontière et en
+perdait une autre. Un défaut de CORRECTION, pas seulement de bande passante.
 
-**Correction :** N'invalider que les queries marquées `stale` (via `predicateInvalidation`) ou utiliser le timestamp de déconnexion pour ne demander que les changements depuis ce timestamp.
+**Correction (livrée, cycle 59) :** hook supprimé, avec son appel dans `ConversationLayout`. Ses
+deux clés étaient déjà rattrapées, mieux et sans remplacement de cache :
+
+- conversations → `useConversationsDeltaSync` (Trigger 1, front `false → true` de la SOCKET), qui
+  implémente exactement le « timestamp de déconnexion » recommandé ici, sous la forme d'un
+  watermark `updatedSince` déduit du cache ;
+- notifications → `notificationSocketIO.onSyncDesync` → `scheduleResync`, plus
+  `refetchOnMount: 'always'` sur la liste.
+
+Le second chemin destructeur du même déclencheur — `refetchOnReconnect: 'always'` (défaut global du
+QueryClient) resté armé sur `useInfiniteConversationsQuery` — a été désarmé au même cycle. Les deux
+étaient nécessaires : ne corriger que l'un laissait la panne entière.
 
 ---
 

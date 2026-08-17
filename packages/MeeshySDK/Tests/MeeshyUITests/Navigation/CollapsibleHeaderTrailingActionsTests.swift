@@ -28,16 +28,23 @@ final class CollapsibleHeaderTrailingActionsTests: XCTestCase {
     /// la marge d'un TEXTE — ne suffisent pas : le chrome du header est fait de
     /// disques de verre de 40 pt, et un disque affleure là où une ligne de texte
     /// respire encore (retour user 2026-08-15, second signalement). La gouttière
-    /// des ronds est celle du chrome flottant : 20 pt
-    /// (`FreeFloatingButtonsContainer.minEdgePadding`), la seule marge de rond
-    /// que l'utilisateur n'a jamais signalée.
+    /// des ronds fut alignée sur celle du chrome flottant : 20 pt
+    /// (`FreeFloatingButtonsContainer.minEdgePadding`) — mais un TROISIÈME
+    /// signalement (2026-08-16, capture du (+) de la liste de conversation)
+    /// a montré que 20 pt reste insuffisant pour la PAIRE de disques groupés
+    /// par `AdaptiveGlassContainer` en fin de rangée : `GlassEffectContainer`
+    /// (iOS 26) fond visuellement les deux cercles en un halo continu dont le
+    /// reflet spéculaire déborde légèrement du frame de layout — l'écart
+    /// perçu est donc plus petit que l'écart posé. D'où 28 pt, désormais
+    /// PROPRE au header (ne touche plus `FreeFloatingButtonsContainer`, dont
+    /// les cercles isolés n'ont jamais été signalés).
     func test_trailingActionsInset_bringsTheRowMarginToTheRoundChromeGutter() {
         XCTAssertGreaterThan(CollapsibleHeaderMetrics.trailingActionsInset, 0)
         XCTAssertGreaterThanOrEqual(
             CollapsibleHeaderMetrics.barHorizontalPadding + CollapsibleHeaderMetrics.trailingActionsInset,
             CollapsibleHeaderMetrics.roundChromeEdgeGutter
         )
-        XCTAssertEqual(CollapsibleHeaderMetrics.roundChromeEdgeGutter, 20)
+        XCTAssertEqual(CollapsibleHeaderMetrics.roundChromeEdgeGutter, 28)
     }
 
     /// Le défaut RÉSIDUEL du 14/08 : `layoutPriority(2)` fait servir les actions

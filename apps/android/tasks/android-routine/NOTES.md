@@ -560,3 +560,174 @@ Append-only log of gotchas and decisions that save time next run.
   before reaching for a rerun again — `git log -p` on the never-flaky siblings is a cheap, decisive
   check that turns "known flake, keep rerunning" into "known fix, already proven elsewhere in this
   exact codebase."**
+
+- **An orphan model is the cheapest slice-finding signal in this repo, and it is mechanical.**
+  (2026-08-16, `conversation-members-roster`.) The re-proof that killed the prior run's nominated
+  slice ("change email/phone has no UI" — false, `AccountContactViewModel` has shipped) left no
+  candidate, so instead of re-reading `feature-parity.md` notes yet again, the search became: *which
+  `:core:model` types are declared and referenced nowhere?* `PaginatedParticipant` +
+  `PaginatedParticipantsResponse` + `PaginatedParticipantsPagination` came back with zero non-self
+  hits — and each one was a wire contract ported ahead of a screen that never landed. The same probe
+  applied to `MessageSocketManager` (which of the 30 listened events has no collector?) surfaced the
+  same gap from a second angle: `participant:role-updated`, `conversation:participant-left` and
+  `conversation:participant-banned` were all being decoded and discarded. **Generalises: two greps —
+  "declared model with no reference" and "listened socket event with no consumer" — find real,
+  right-sized gaps without trusting a single line of prose in the tracking files, and they
+  cross-validate each other when they point at the same feature. Run both when the "Next slice"
+  pointer goes stale.** Notably this is the *inverse* of the categorical blind spot documented at
+  iteration 19 (whole categories that were never written down): here the category WAS written down,
+  and the code was half-written too — what was missing was anything that made the half-written state
+  visible.
+
+- **When a Retrofit route's envelope genuinely does not fit the shared `ApiResponse<T>`, adapt it in
+  the repository — do not widen the shared envelope.** (2026-08-16, same slice.)
+  `GET /conversations/:id/participants` answers with a root-level *cursor* `pagination`
+  (`nextCursor`/`hasMore`/`totalCount`); the shared `Pagination` is offset-shaped (`total`/`offset`/
+  `limit`) and has no `totalCount`. Adding `totalCount` to the shared type would have leaked one
+  route's shape into every other endpoint's model. The route is typed as its own
+  `PaginatedParticipantsResponse` instead and the repository re-wraps it into an `ApiResponse` inside
+  the `apiCall { }` block — which costs three lines and keeps the whole HttpException/IOException/
+  SerializationException ladder. The gateway's own source comment already records that normalising
+  this route server-side is a coordinated breaking change for iOS and web, so the deviation is
+  permanent and worth absorbing client-side rather than papering over.
+
+- **REOPENED (partially): the DataStore timeout flake survives the 15 s bump.** (2026-08-16, during
+  `conversation-members-roster`'s CI.) The entry above closed `datastore-test-timeout-flake` on the
+  reasoning that the two never-flaky files used `withTimeout(15_000)` while the four flaky ones used
+  `5_000`, and bumped all 19 occurrences to 15 s. That reasoning has now been **falsified by the
+  strongest possible counter-example**: `MediaDownloadPreferencesStoreTest.
+  dataStore_setPreferences_isReflectedInTheFlow` — one of the two files that had *always* been at
+  15 s and had *never* flaked — timed out at 15 s
+  (`kotlinx.coroutines.TimeoutCancellationException`, run 31946819183). So 15 s was never the
+  mechanism; it was a threshold that happened to sit above the observed contention on those runs.
+  **Correction to the earlier lesson: "a sibling already proved this constant" shows a constant is
+  *sufficient so far*, never that it is *correct*.** Evidence it is non-determinism and not a
+  regression: the identical tree passed the same job ~15 min earlier (head `882f80e8`, run
+  31946075339, all 16 checks green); the only delta was a merge of `origin/main` touching neither
+  `:sdk-core`'s media package nor DataStore.
+  **Do NOT reflexively bump to 30 s** — that repeats the move this data point just invalidated and
+  buys, at best, another quiet interval. The real mechanism is that these tests drive a *real*
+  file-backed DataStore over `Dispatchers.IO` under `runBlocking`, so they measure the CI runner's
+  scheduling latency, and this Android job runs concurrently with the whole monorepo matrix. The
+  actual fix is to remove wall-clock time from the assertion — inject the dispatcher/scope into
+  `DataStoreMediaDownloadPreferencesStore` (and its siblings) so the test drives a controlled
+  scheduler, or collect through a deterministic turbine-style helper. That is a genuine refactor of
+  files this slice does not own, so it is **left as a named follow-up**, not smuggled into an
+  unrelated diff. Meanwhile a rerun remains the correct unblock for THIS failure class specifically
+  — it is documented, reproducible-by-contention, and provably orthogonal to the diff under test —
+  but every occurrence should be recorded here rather than silently retried, so the follow-up keeps
+  accumulating evidence instead of resetting to "known flake, keep rerunning".
+
+- **The DataStore flake is NOT "DataStore tests are slow" — it is one specific test shape.**
+  (2026-08-16, second occurrence during `conversation-members-roster`'s CI, run 31948685756.)
+  `NotificationPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` timed out at 15 s,
+  after `MediaDownloadPreferencesStoreTest.dataStore_setPreferences_isReflectedInTheFlow` did the
+  same an hour earlier. **Same method name, two different files** — that is a much sharper signal
+  than the "bump the constant" story, so it is worth stating precisely:
+  - Every `DataStore*Store` exposes `preferences` as
+    `dataStore.data.map { … }.stateIn(scope, SharingStarted.Eagerly, DEFAULT)`.
+  - The flaky test is always the one that constructs the store and **writes immediately**, then
+    asserts via `first { predicate }`: construct → `setPreferences(…)` → `first { … }`. `Eagerly`
+    only *launches* the upstream collection into `scope` (`Dispatchers.IO`); it does not await its
+    first emission, so the write races the reader's start-up. Under runner contention that race
+    widens past any wall-clock bound.
+  - The sibling tests in the very same files have never been reported flaky, and their shapes
+    explain why: `dataStore_defaultsToTheDefaultBlockOnEmptyStore` never writes at all, and
+    `dataStore_hydratesAlreadyPersistedChoiceOnConstruction` writes through a *separate* writer
+    before constructing the reader — neither one races start-up.
+  - The same construct-then-write-immediately shape is present in `ThemeStoreTest`,
+    `PrivacyPreferencesStoreTest`, `MediaDownloadPreferencesStoreTest` and
+    `NotificationPreferencesStoreTest`; `ThemeStoreTest` and `NotificationPreferencesStoreTest` are
+    both on the historical flaky list. The shape is necessary, not sufficient — whether it trips is
+    contention-dependent, which is exactly why raising a timeout only buys a quiet interval.
+  **So the follow-up is now concrete and small**, and no longer "refactor DataStore testing": in
+  these four tests, await the store's first emission before writing (`store.preferences.first()`
+  once, or collect-then-write), which removes the race without touching production code or any
+  timeout. Injecting a scheduler remains the more thorough option but is no longer required to close
+  this. **What must NOT happen is another constant bump** — this entry and the one above it are two
+  independent falsifications of that move.
+
+- **Correction to the entry above — the discriminant is not "writes vs doesn't write", and the fix
+  it proposed would not have worked.** (2026-08-16, third occurrence: `ThemeStoreTest`, run
+  31950584151, two failures at `:87` and `:106`.) The previous entry proposed "await the store's
+  first emission before writing". That is wrong: `preferences`/`themeMode` is a `StateFlow` seeded
+  with a default, so `first()` returns that seed **synchronously** without the upstream ever having
+  run — it would have awaited nothing and fixed nothing. Do not apply it.
+  The correct discriminant, which fits all five observed failures:
+  - Failing assertions are always `first { predicate }` where the predicate can only be satisfied by
+    a **real upstream emission**, so the `stateIn` sharing coroutine must actually get scheduled on
+    `Dispatchers.IO`. Under runner contention it may not, within any wall-clock bound.
+  - The never-failing `dataStore_defaultsToTheDefaultBlockOnEmptyStore` asserts a value **equal to
+    the seeded default**, so its `first()` completes from the seed and never needs the upstream at
+    all. It is structurally immune, not lucky.
+  - `ThemeStoreTest.kt:106` proves test *names* mislead here: it failed inside
+    `dataStore_hydratesAlreadyPersistedChoiceOnConstruction`, but on that test's **setup** line
+    (`writer.setThemeMode(…)` then `first { it == LIGHT }`), not on the hydration assertion it is
+    named for. Always read the failing *line*, not the test name, before theorising about shape.
+  So the only real fix remains removing wall-clock scheduling from these assertions — inject the
+  dispatcher/scope so the test drives a controlled scheduler. **That work is deliberately NOT done
+  here**: this container cannot run Gradle at all (no Android SDK, `dl.google.com` denied), and
+  `ROUTINE.md §CI reality` forbids writing unverified Kotlin on the strength of a build you could
+  not run. Attempting it blind on four files this slice does not own would be exactly that.
+  Meanwhile: `rerun-failed-jobs` is **403 for this token on `android.yml` too** (an earlier entry
+  recorded it working there — that no longer holds), so the only available retry is a fresh push.
+
+- **The DataStore flake is CLOSED at its mechanism — and the three entries above are the record of
+  why every cheaper attempt failed.** (2026-08-16, slice `datastore-test-deterministic-scheduler`.)
+  The chain reads: bump `5_000` → `15_000` (falsified: a file always at 15 s flaked); "await the
+  first emission before writing" (falsified before it shipped: `stateIn` is seeded, so `first()`
+  returns the seed synchronously and awaits nothing); "the discriminant is writes-vs-doesn't-write"
+  (falsified: `ThemeStoreTest:106` failed on a *setup* line inside a test named for hydration).
+  What survived all three is the plainest reading: `first { predicate }` over
+  `stateIn(scope, Eagerly, DEFAULT)` cannot complete until the sharing coroutine is **scheduled**,
+  and `Dispatchers.IO` on a runner hosting the whole monorepo matrix offers no bound on when that
+  happens. A timeout does not bound an unbounded wait; it only names the price of losing the bet.
+  **The fix is `UnconfinedTestDispatcher`** (test-only `me.meeshy.sdk.testing.TestDataStores`):
+  the write actor and the collector run inline on the test thread, so there is no scheduling to
+  starve. All 19 `withTimeout` occurrences deleted; `runTest`'s 60 s net replaces them.
+  Two design points worth keeping, because both are ways this could have gone wrong instead:
+  - **The store scope must not be the `TestScope`.** `TestDataStores.scope` carries its own
+    unparented `SupervisorJob`. The DataStore actor and the `stateIn` collector never complete by
+    construction; as children of the test coroutine they would make `runTest` wait for them at
+    teardown and time out. Off-scope, `runTest` has no relationship to them. (The widely-copied
+    Now-in-Android recipe puts the DataStore *on* the `TestScope` — it gets away with it because
+    nothing there is `stateIn(…, Eagerly)`. Do not copy it verbatim into a codebase that is.)
+  - **Sweep by exposure, not by observed failures.** Eight files drive a real DataStore; only four
+    had ever flaked. The two with no timeout at all (`ConversationDraftStoreTest`,
+    `AnonymousSessionStoreTest`) were the worst of the set, not the best — same exposure, hang
+    instead of failure as the symptom. Fixing only the observed four would have re-enacted the
+    exact inference these three entries falsified: *"never flaked" is a statement about load so
+    far, never about correctness.*
+  If a DataStore test flakes again after this, it is a **new** mechanism — go read the failing
+  line, and do not reach for a constant.
+
+- **A deferred follow-up list left by the previous slice beats a fresh candidate hunt — and it is
+  the routine's own standing instruction.** (2026-08-16, `reels-realtime-room`.) The prior slice
+  (`post-detail-realtime-room`) closed one screen and wrote down, by name, the three iOS call sites
+  it had *not* wired (`ReelsViewModel`, `StoryViewerView`, `FeedCommentsSheet`). Picking the first
+  of those cost zero discovery time and needed no re-proof of *whether* a gap existed — only of
+  *how bad* it was. That re-proof paid off anyway: the gap turned out to be **strictly worse** on
+  the reel viewer than on post detail, for a reason the prior slice could not have known without
+  reading `getReels`. Post detail half-worked by incidental fallback (comments dual-broadcast to
+  friend feed rooms); the reels thread is ranked by **affinity** and deliberately serves non-followed
+  authors, so no friend feed room exists to fall back to. **Generalises: when a slice defers work,
+  name the call sites in `feature-parity.md`. The next run then starts from a proven gap instead of
+  a grep — but still re-proves the *severity*, because deferral notes record what the previous run
+  knew, not what the code says.**
+
+- **The gateway's source comments name their intended clients — read them before porting a room.**
+  (2026-08-16, same slice.) `SocialEventsHandler.commentBroadcastRooms`'s doc comment says outright
+  that `ROOMS.post` is « où se trouvent les viewers du détail / **reel viewer** qui ne sont PAS amis
+  de l'auteur ». That single line is a complete specification of which Android screens owe a
+  `post:join`, and it was already in the tree while three of them were missing it. **Generalises:
+  when wiring a client to a room, grep the gateway for the room constant and read the surrounding
+  prose — the server often already documents the full intended membership, which turns "which
+  screens need this?" from a judgment call into a lookup.**
+
+- **Key a `LaunchedEffect` on identity, not on the state object that carries it.** (2026-08-16,
+  same slice.) The obvious wiring — `LaunchedEffect(pagerState, state.reels) { snapshotFlow { … } }`
+  — restarts on *every* optimistic like, because `updateReel` rebuilds the list and `state.reels` is
+  a new instance each time. Keying on `state.reels.map { it.id }` restarts it exactly when the
+  thread changes, since `List<String>` compares structurally. **Generalises: before keying an effect
+  on a piece of UI state, ask what else mutates that object. Anything driven by an optimistic update
+  is a fresh instance on every user tap.**

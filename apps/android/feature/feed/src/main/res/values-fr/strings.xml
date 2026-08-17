@@ -18,6 +18,7 @@
     <string name="feed_pinned">Épinglé</string>
     <string name="feed_edited">Modifié</string>
     <string name="feed_reel">Réel</string>
+    <string name="feed_post_reach_a11y">Vues et impressions</string>
     <string name="feed_repost_reposted">Republié</string>
     <string name="feed_repost_quoted">Cité</string>
     <string name="feed_repost_story">Story</string>
@@ -42,6 +43,7 @@
     <string name="post_comments_sending">Envoi…</string>
     <string name="post_comments_reply_badge">Réponse</string>
     <string name="post_comments_reply_action">Répondre</string>
+    <string name="post_comments_delete_action">Supprimer le commentaire</string>
     <string name="post_comments_replying_to">Réponse à %1$s</string>
     <string name="post_comments_replying_to_generic">Réponse…</string>
     <string name="post_comments_cancel_reply">Annuler la réponse</string>
@@ -120,6 +122,7 @@
     <string name="feed_action_repost">Reposter</string>
     <string name="feed_action_bookmark">Enregistrer</string>
     <string name="feed_action_unbookmark">Retirer des enregistrés</string>
+    <string name="feed_action_pin">Épingler</string>
     <string name="feed_action_report">Signaler</string>
     <string name="feed_action_delete">Supprimer</string>
     <string name="feed_delete_confirm_title">Supprimer ce post ?</string>

@@ -11,6 +11,8 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
+import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import javax.inject.Inject
 
 data class ReelsUiState(
@@ -22,11 +24,24 @@ data class ReelsUiState(
 @HiltViewModel
 class ReelsViewModel @Inject constructor(
     private val postRepository: PostRepository,
+    private val sessionRepository: SessionRepository,
+    private val socialSocket: SocialSocketManager,
     private val config: MeeshyConfig,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ReelsUiState())
     val state: StateFlow<ReelsUiState> = _state.asStateFlow()
+
+    /**
+     * The reel currently filling the pager — it owns membership of the post room
+     * (`ROOMS.post`). Held outside [_state] because it is a subscription cursor, not
+     * something the UI renders.
+     */
+    private var currentReelId: String? = null
+
+    init {
+        observeRealtime()
+    }
 
     /** Loads the vertical reel thread, optionally anchored at [seed] (a reel touched in the Feed). */
     fun load(seed: String? = null) {
@@ -40,6 +55,65 @@ class ReelsViewModel @Inject constructor(
                     it.copy(isLoading = false, errorMessage = result.error.message)
                 }
             }
+        }
+    }
+
+    /**
+     * The reel that just settled under the pager. Moves the post-room subscription with it —
+     * leave the reel we are scrolling away from, join the one we land on — mirroring iOS
+     * `ReelsViewModel.currentId`'s `didSet`.
+     *
+     * This is what makes the like counter live at all for the reels thread: `getReels` ranks by
+     * affinity and happily serves reels authored by people the viewer does NOT follow, and the
+     * gateway broadcasts `post:liked`/`post:unliked` to the author's + friends' feed rooms **and**
+     * to `ROOMS.post` — a room whose own doc comment names the "reel viewer" as its intended
+     * occupant. Without joining, a non-friend's reel never receives a single like event.
+     *
+     * Idempotent, and safe to call on every settle: re-passing the same id is a no-op, and a blank
+     * or absent id (an empty thread, a page index past the end) simply leaves the current room
+     * without joining another.
+     */
+    fun setCurrentReel(reelId: String?) {
+        val next = reelId?.takeIf { it.isNotBlank() }
+        if (next == currentReelId) return
+        currentReelId?.let { socialSocket.leavePostRoom(it) }
+        currentReelId = next
+        next?.let { socialSocket.joinPostRoom(it) }
+    }
+
+    /** Leaves the post room the pager was sitting in, so a closed viewer stops receiving its events. */
+    override fun onCleared() {
+        currentReelId?.let { socialSocket.leavePostRoom(it) }
+        currentReelId = null
+        super.onCleared()
+    }
+
+    /**
+     * Live like state for any reel in the thread. `likesCount` is the gateway's ABSOLUTE count
+     * after the mutation, so applying it heals whatever drift [toggleLike]'s optimistic arithmetic
+     * left behind. `isLiked` only moves when the event carries the viewer's own id — someone
+     * else's like changes the count, never the heart (the `mine` convention already established by
+     * `PostDetailViewModel` and `FeedViewModel`).
+     */
+    private fun observeRealtime() {
+        viewModelScope.launch {
+            socialSocket.postLiked.collect { event ->
+                applyLiveLike(event.postId, event.likesCount, mine(event.userId, liked = true))
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.postUnliked.collect { event ->
+                applyLiveLike(event.postId, event.likesCount, mine(event.userId, liked = false))
+            }
+        }
+    }
+
+    private fun mine(actorId: String, liked: Boolean): Boolean? =
+        if (actorId == sessionRepository.currentUserId) liked else null
+
+    private fun applyLiveLike(reelId: String, likeCount: Int, liked: Boolean?) {
+        updateReel(reelId) {
+            it.copy(likeCount = likeCount.coerceAtLeast(0), isLiked = liked ?: it.isLiked)
         }
     }
 

@@ -211,10 +211,50 @@ export function formatShortDate(
   });
 }
 
-function formatTime(date: Date, locale: string): string {
+/**
+ * `HH:mm`, 24 h, sans secondes — le format d'heure de toute l'app.
+ *
+ * Exporté pour la tête de groupe `Pseudo · HH:mm` du mode Focal et la pilule de
+ * défilement : le volume 4 impose de reprendre le format d'heure existant
+ * plutôt que d'en inventer un second.
+ */
+export function formatTime(date: Date, locale: string): string {
   return date.toLocaleTimeString(locale, {
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
+}
+
+/**
+ * Libellé de jour du « sticker de date » — repris d'iOS (`MessageDayLabel`) :
+ * « Aujourd'hui » / « Hier » / « Samedi 9 mai » / « 24 décembre 2025 ».
+ *
+ * Volume 4 : le sticker est l'ancre d'habitude du mode Focal ; ses libellés
+ * doivent être EXACTEMENT ceux que l'utilisateur connaît déjà, d'où la reprise
+ * des clés `messageTimestamp.today` / `messageTimestamp.yesterday` du namespace
+ * `conversations` (déjà servies dans les 4 locales).
+ *
+ * Le « maintenant » est injecté pour rester déterministe et testable.
+ */
+export function formatDayLabel(
+  date: Date | string,
+  options: DateFormatOptions & { now?: Date }
+): string {
+  const { t, locale = DEFAULT_LOCALE, now = new Date() } = options;
+  const day = typeof date === 'string' ? new Date(date) : date;
+  const diffDays = calendarDayDiff(day.getTime(), now.getTime());
+
+  if (diffDays <= 0) return t('messageTimestamp.today');
+  if (diffDays === 1) return t('messageTimestamp.yesterday');
+
+  const sameYear = day.getFullYear() === now.getFullYear();
+  const formatted = day.toLocaleDateString(
+    locale,
+    sameYear
+      ? { weekday: 'long', day: 'numeric', month: 'long' }
+      : { day: 'numeric', month: 'long', year: 'numeric' }
+  );
+
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }

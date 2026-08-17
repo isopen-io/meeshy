@@ -20,6 +20,7 @@ import me.meeshy.sdk.model.SharedPlace
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.post.ImpressionBatcher
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
@@ -79,6 +80,23 @@ class FeedViewModel @Inject constructor(
 
     /** The cache-projected posts alone (excludes the realtime head), kept across re-emits. */
     private var latestCachePosts: List<ApiPost> = emptyList()
+
+    /**
+     * Groups impressions before sending them (feature-parity §F). Owns its own scope rather
+     * than [viewModelScope] — see [ImpressionBatcher]'s own doc for why [onCleared]'s flush
+     * would otherwise race the ViewModel's own teardown.
+     */
+    private val impressionBatcher = ImpressionBatcher(source = "feed", postRepository = postRepository)
+
+    /** [postId] just appeared on screen — call once per composition entry. */
+    fun trackImpression(postId: String) {
+        impressionBatcher.record(postId)
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        impressionBatcher.flushNowAsync()
+    }
 
     init {
         viewModelScope.launch {
@@ -287,6 +305,22 @@ class FeedViewModel @Inject constructor(
     fun repost(postId: String) {
         viewModelScope.launch {
             when (val result = postRepository.repost(postId)) {
+                is NetworkResult.Success -> postRepository.refresh()
+                is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
+            }
+        }
+    }
+
+    /**
+     * Epingle un de SES PROPRES posts (feature-parity §F) — port fidele d'iOS
+     * (`PostDetailViewModel.pinPost`/`ProfileUserPostsList.pinPost`), qui n'expose
+     * jamais de contrepartie "unpin" dans son UI ; `PostRepository.unpinPost`
+     * existe côté SDK mais reste sans appelant sur les deux plateformes, donc
+     * pas branche ici. Refresh apres succes pour faire remonter `isPinned`.
+     */
+    fun pinPost(postId: String) {
+        viewModelScope.launch {
+            when (val result = postRepository.pinPost(postId)) {
                 is NetworkResult.Success -> postRepository.refresh()
                 is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
             }

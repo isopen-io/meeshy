@@ -17,12 +17,15 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
+import me.meeshy.sdk.model.SocketPostLikedData
+import me.meeshy.sdk.model.SocketPostUnlikedData
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
@@ -53,6 +56,8 @@ class PostDetailViewModelTest {
     private val socialSocket: SocialSocketManager = mockk(relaxed = true)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
+    private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
+    private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(
@@ -60,12 +65,16 @@ class PostDetailViewModelTest {
         content: String? = "Bonjour",
         translations: Map<String, ApiPostTranslationEntry>? = null,
         commentCount: Int? = null,
+        likeCount: Int? = null,
+        isLikedByMe: Boolean? = null,
     ) = ApiPost(
         id = id,
         content = content,
         translations = translations,
         originalLanguage = "fr",
         commentCount = commentCount,
+        likeCount = likeCount,
+        isLikedByMe = isLikedByMe,
     )
 
     private val bilingual = post(
@@ -96,6 +105,8 @@ class PostDetailViewModelTest {
         every { session.currentUser } returns MutableStateFlow(currentUser)
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
+        every { socialSocket.postLiked } returns postLiked
+        every { socialSocket.postUnliked } returns postUnliked
         val handle = SavedStateHandle(if (postId == null) emptyMap() else mapOf("postId" to postId))
         return PostDetailViewModel(repository, session, socialSocket, config, handle)
     }
@@ -364,5 +375,165 @@ class PostDetailViewModelTest {
         // …then a manual refresh re-establishes the server-authoritative count, dropping the overlay.
         vm.refresh()
         assertThat(vm.state.value.post?.commentCount).isEqualTo(8)
+    }
+
+    @Test
+    fun `loading the post joins its realtime room`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post())
+
+        viewModel()
+
+        coVerify(exactly = 1) { socialSocket.joinPostRoom("p1") }
+    }
+
+    @Test
+    fun `a blank route never joins a realtime room`() = runTest {
+        viewModel(postId = null)
+
+        coVerify(exactly = 0) { socialSocket.joinPostRoom(any()) }
+    }
+
+    @Test
+    fun `a live post-liked from the viewer updates the count and marks isLiked`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(likeCount = 3, isLikedByMe = false))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            val initial = awaitItem()
+            assertThat(initial.post?.likeCount).isEqualTo(3)
+            assertThat(initial.post?.isLiked).isFalse()
+            postLiked.tryEmit(SocketPostLikedData(postId = "p1", userId = "me", likesCount = 4))
+            val updated = awaitItem()
+            assertThat(updated.post?.likeCount).isEqualTo(4)
+            assertThat(updated.post?.isLiked).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a live post-liked from someone else updates only the count`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(likeCount = 3, isLikedByMe = false))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            assertThat(awaitItem().post?.likeCount).isEqualTo(3)
+            postLiked.tryEmit(SocketPostLikedData(postId = "p1", userId = "someone-else", likesCount = 4))
+            val updated = awaitItem()
+            assertThat(updated.post?.likeCount).isEqualTo(4)
+            assertThat(updated.post?.isLiked).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a live post-unliked from the viewer updates the count and clears isLiked`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(likeCount = 4, isLikedByMe = true))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            val initial = awaitItem()
+            assertThat(initial.post?.likeCount).isEqualTo(4)
+            assertThat(initial.post?.isLiked).isTrue()
+            postUnliked.tryEmit(SocketPostUnlikedData(postId = "p1", userId = "me", likesCount = 3))
+            val updated = awaitItem()
+            assertThat(updated.post?.likeCount).isEqualTo(3)
+            assertThat(updated.post?.isLiked).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a live like event for another post never touches this post`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(likeCount = 3))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.likeCount).isEqualTo(3)
+            postLiked.tryEmit(SocketPostLikedData(postId = "other", userId = "x", likesCount = 99))
+            postUnliked.tryEmit(SocketPostUnlikedData(postId = "other", userId = "x", likesCount = 0))
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a refresh replaces the live like overlay with the freshly fetched server truth`() = runTest {
+        coEvery { repository.getPost("p1") } returnsMany listOf(
+            NetworkResult.Success(post(likeCount = 3, isLikedByMe = false)),
+            NetworkResult.Success(post(likeCount = 9, isLikedByMe = true)),
+        )
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            assertThat(awaitItem().post?.likeCount).isEqualTo(3)
+            postLiked.tryEmit(SocketPostLikedData(postId = "p1", userId = "me", likesCount = 4))
+            assertThat(awaitItem().post?.likeCount).isEqualTo(4)
+            cancelAndIgnoreRemainingEvents()
+        }
+
+        vm.refresh()
+        assertThat(vm.state.value.post?.likeCount).isEqualTo(9)
+        assertThat(vm.state.value.post?.isLiked).isTrue()
+    }
+
+    // --- Fire-and-forget view recording (mirror of iOS `.task { try? await viewPost(...) }`) ---
+
+    @Test
+    fun `opening the screen records a view exactly once`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post())
+        coEvery { repository.viewPost("p1") } returns NetworkResult.Success(Unit)
+
+        viewModel()
+
+        coVerify(exactly = 1) { repository.viewPost("p1") }
+    }
+
+    @Test
+    fun `a blank postId never records a view`() = runTest {
+        viewModel(postId = null)
+
+        coVerify(exactly = 0) { repository.viewPost(any()) }
+    }
+
+    @Test
+    fun `a failed view record does not affect the loaded post`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post(content = "Hi"))
+        coEvery { repository.viewPost("p1") } returns NetworkResult.Failure(ApiError(message = "offline"))
+
+        val vm = viewModel()
+
+        vm.state.test {
+            assertThat(awaitItem().post?.content).isEqualTo("Hi")
+        }
+    }
+
+    // --- Author-only reach stats projection (isAuthor) ---
+
+    @Test
+    fun `the post author sees isAuthor true`() = runTest {
+        coEvery { repository.getPost("p1") } returns
+            NetworkResult.Success(post().copy(author = ApiAuthor(id = "me", username = "me")))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            assertThat(awaitItem().post?.isAuthor).isTrue()
+        }
+    }
+
+    @Test
+    fun `a reader who is not the author sees isAuthor false`() = runTest {
+        coEvery { repository.getPost("p1") } returns
+            NetworkResult.Success(post().copy(author = ApiAuthor(id = "someone-else", username = "x")))
+
+        val vm = viewModel(currentUser = user(Prefs()))
+
+        vm.state.test {
+            assertThat(awaitItem().post?.isAuthor).isFalse()
+        }
     }
 }

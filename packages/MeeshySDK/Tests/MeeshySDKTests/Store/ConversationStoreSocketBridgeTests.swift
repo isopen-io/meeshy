@@ -27,6 +27,22 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         )
     }
 
+    /// Jumeau RENOMMABLE : `merging` ignore le `title` d'un payload visant une
+    /// conversation `.direct` (son titre client est le nom du participant, cf.
+    /// `ConversationStoreTests.test_merging_directConversation_neverTakesTheRawTitle`).
+    /// Un test dont le sujet est « le pont transmet bien le renommage » doit
+    /// donc partir d'une conversation qui accepte d'être renommée, sinon il
+    /// mesure la garde au lieu du pont.
+    private func makeGroupConv(id: String) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id, identifier: id, type: .group,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(version: 1)
+        )
+    }
+
     @MainActor
     private struct BridgeEnv {
         let bridge: ConversationStoreSocketBridge
@@ -44,7 +60,10 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         let categoriesReordered = PassthroughSubject<CategoriesReorderedSocketEvent, Never>()
         let didReconnect = PassthroughSubject<Void, Never>()
 
-        init(store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me") {
+        init(
+            store: ConversationStore, categoryStore: UserCategoryStore, currentUserId: String? = "me",
+            onReadingModePreferenceChanged: (@Sendable (String, String) -> Void)? = nil
+        ) {
             bridge = ConversationStoreSocketBridge(
                 store: store,
                 categoryStore: categoryStore,
@@ -63,7 +82,8 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
                 categoryUpdated: categoryUpdated.eraseToAnyPublisher(),
                 categoryDeleted: categoryDeleted.eraseToAnyPublisher(),
                 categoriesReordered: categoriesReordered.eraseToAnyPublisher(),
-                didReconnect: didReconnect.eraseToAnyPublisher()
+                didReconnect: didReconnect.eraseToAnyPublisher(),
+                onReadingModePreferenceChanged: onReadingModePreferenceChanged
             )
         }
     }
@@ -73,12 +93,14 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         version: Int,
         reset: Bool = false,
         isPinned: Bool = false,
-        isMuted: Bool = false
+        isMuted: Bool = false,
+        readingMode: String = "auto"
     ) -> UserPreferencesConversationUpdatedSocketEvent {
         let prefs: UserPreferencesConversationUpdatedSocketEvent.Preferences? = reset ? nil : .init(
             isPinned: isPinned, isMuted: isMuted, mentionsOnly: false, isArchived: false,
             tags: [], categoryId: nil, orderInCategory: nil, customName: nil,
-            reaction: nil, deletedForUserAt: nil, clearHistoryBefore: nil
+            reaction: nil, deletedForUserAt: nil, clearHistoryBefore: nil,
+            readingMode: readingMode
         )
         return UserPreferencesConversationUpdatedSocketEvent(
             userId: "me", conversationId: conversationId, version: version, reset: reset, preferences: prefs
@@ -118,17 +140,19 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
     private func makeConversationUpdatedEvent(
         conversationId: String,
         lastMessageAt: Date? = nil,
-        lastMessageId: String? = nil,
+        lastMessage: LastMessageIdentity = .unchanged,
         lastMessagePreview: String? = nil,
         title: String? = nil,
+        location: SharedPlace? = nil,
         previewRecalculated: Bool = false
     ) -> ConversationUpdatedEvent {
         ConversationUpdatedEvent(
             conversationId: conversationId,
             title: title,
             lastMessageAt: lastMessageAt,
-            lastMessageId: lastMessageId,
+            lastMessage: lastMessage,
             lastMessagePreview: lastMessagePreview,
+            location: location,
             updatedAt: "2024-01-01T00:00:00.000Z",
             previewRecalculated: previewRecalculated
         )
@@ -184,7 +208,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         env.conversationUpdated.send(makeConversationUpdatedEvent(
             conversationId: "c1",
             lastMessageAt: previous,
-            lastMessageId: "msg-previous",
+            lastMessage: .replaced("msg-previous"),
             lastMessagePreview: "celui d avant",
             previewRecalculated: true
         ))
@@ -198,6 +222,37 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         XCTAssertNotEqual(t0, previous)
     }
 
+    /// L'autre moitié du chemin, celle qu'un test de `merging` seul ne peut pas
+    /// voir — et c'est exactement là que l'épingle se perdait.
+    ///
+    /// `ConversationUpdatedEvent` DÉCODE `location` depuis le cycle 50, mais
+    /// `mapConversationUpdated` ne recopie qu'un sous-ensemble des champs
+    /// décodés : le champ arrivait sur le fil, était décodé, puis tombait au
+    /// passage du pont. Aussi inerte qu'un champ absent — même défaut que celui
+    /// que le témoin du drapeau `previewRecalculated` ci-dessus existe pour
+    /// interdire.
+    func test_conversationUpdated_positionMessage_pinCrossesTheBridge() async {
+        let store = makeStore()
+        var c1 = makeConv(id: "c1")  // lastMessageAt = t0
+        c1.lastMessageId = "msg-texte"
+        await store.hydrate(c1)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_002_000),
+            lastMessage: .replaced("msg-position"),
+            lastMessagePreview: "",
+            location: SharedPlace(latitude: 48.858, longitude: 2.294, name: "Tour Eiffel")
+        ))
+
+        let applied = await waitUntil {
+            (await store.conversation(id: "c1"))?.lastMessageLocation?.name == "Tour Eiffel"
+        }
+        XCTAssertTrue(applied,
+                      "le pont doit transmettre location — un champ décodé mais non mappé est inerte")
+    }
+
     func test_conversationUpdated_lastMessageId_andPreview_applied() async {
         let store = makeStore()
         await store.hydrate(makeConv(id: "c1"))
@@ -207,7 +262,7 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         env.conversationUpdated.send(makeConversationUpdatedEvent(
             conversationId: "c1",
             lastMessageAt: newAt,
-            lastMessageId: "msg-99",
+            lastMessage: .replaced("msg-99"),
             lastMessagePreview: "Hello!"
         ))
 
@@ -218,9 +273,34 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
         XCTAssertTrue(applied, "bridge must apply lastMessageId and lastMessagePreview from conversation:updated")
     }
 
+    /// Le tri-état traverse le pont. Un pont qui aplatirait `.replaced(nil)` en
+    /// `nil` rendrait le correctif entièrement inerte sans casser un seul
+    /// témoin de décodage ni de fusion — c'est exactement l'oubli que le
+    /// cycle 46 bis a payé sur `previewRecalculated`.
+    func test_conversationUpdated_clearedLastMessage_reachesTheStore() async {
+        let store = makeStore()
+        var c1 = makeConv(id: "c1")
+        c1.lastMessageId = "msg-only"
+        c1.lastMessagePreview = "le seul message"
+        await store.hydrate(c1)
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.conversationUpdated.send(makeConversationUpdatedEvent(
+            conversationId: "c1",
+            lastMessage: .replaced(nil),
+            previewRecalculated: true
+        ))
+
+        let cleared = await waitUntil {
+            let c = await store.conversation(id: "c1")
+            return c?.lastMessageId == nil && c?.lastMessagePreview == nil
+        }
+        XCTAssertTrue(cleared, "the bridge must forward the cleared tri-state, not flatten it to an absence")
+    }
+
     func test_conversationUpdated_metadataTitle_applied() async {
         let store = makeStore()
-        await store.hydrate(makeConv(id: "c1"))
+        await store.hydrate(makeGroupConv(id: "c1"))
         let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
 
         env.conversationUpdated.send(makeConversationUpdatedEvent(conversationId: "c1", title: "New Group Name"))
@@ -461,6 +541,68 @@ final class ConversationStoreSocketBridgeTests: XCTestCase {
             return s?.isPinned == false && s?.version == 3
         }
         XCTAssertTrue(reset, "reset must restore defaults while preserving the bumped version")
+    }
+
+    // MARK: readingMode relay (G-124)
+    //
+    // `readingMode` n'appartient PAS à `userState`/`RemotePreferencesPayload` —
+    // c'est un canal SÉPARÉ (`onReadingModePreferenceChanged`), volontairement
+    // découplé de `applyRemote`. Ces témoins couvrent ce canal seul ; les
+    // trois au-dessus couvrent déjà `applyRemote` sans y toucher.
+
+    func test_userPreferencesUpdated_relaysReadingModeThroughDedicatedCallback() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        // `SyncBox` et non un `var` capturé : `onReadingModePreferenceChanged`
+        // est `@Sendable`, et sous Swift 6 muter une variable locale depuis une
+        // telle fermeture est une ERREUR de compilation, pas un avertissement.
+        // Le témoin lit d'ailleurs depuis un autre contexte que celui qui écrit
+        // (`waitUntil` boucle pendant que le pont relaie) — la boîte à verrou
+        // est donc la forme juste, pas seulement celle qui compile.
+        let received = SyncBox<[(String, String)]>([])
+        let env = BridgeEnv(
+            store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()),
+            onReadingModePreferenceChanged: { conversationId, readingMode in
+                received.mutate { $0.append((conversationId, readingMode)) }
+            }
+        )
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, readingMode: "script"))
+
+        let relayed = await waitUntil { received.value.contains { $0 == ("c1", "script") } }
+        XCTAssertTrue(relayed, "un readingMode reçu doit atteindre le callback SANS transformation")
+    }
+
+    /// `reset == true` porte `preferences == nil` — rien à relayer, le
+    /// callback ne doit PAS être invoqué (l'app garde sa valeur locale).
+    func test_userPreferencesUpdated_reset_doesNotInvokeReadingModeCallback() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let callCount = SyncBox(0)
+        let env = BridgeEnv(
+            store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()),
+            onReadingModePreferenceChanged: { _, _ in callCount.mutate { $0 += 1 } }
+        )
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, reset: true))
+        // Laisse le temps à un éventuel (mauvais) appel de se produire.
+        _ = await waitUntil(timeout: 0.3) { false }
+
+        XCTAssertEqual(callCount.value, 0, "reset ⇒ preferences nil ⇒ rien à relayer")
+    }
+
+    /// Un appelant qui ne branche rien (`onReadingModePreferenceChanged` par
+    /// défaut `nil`) doit continuer de fonctionner exactement comme avant ce
+    /// lot — `applyRemote` toujours routé, aucun crash sur l'appel optionnel.
+    func test_userPreferencesUpdated_noReadingModeCallback_stillRoutesApplyRemote() async {
+        let store = makeStore()
+        await store.hydrate(makeConv(id: "c1"))
+        let env = BridgeEnv(store: store, categoryStore: UserCategoryStore(service: MockCategoryWriter()))
+
+        env.prefsUpdated.send(makePrefsEvent(conversationId: "c1", version: 2, isPinned: true, readingMode: "resume"))
+
+        let applied = await waitUntil { (await store.conversation(id: "c1"))?.userState.isPinned == true }
+        XCTAssertTrue(applied, "l'absence de callback readingMode ne doit rien changer au chemin existant")
     }
 
     // MARK: read-status:updated

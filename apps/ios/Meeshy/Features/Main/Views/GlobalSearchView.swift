@@ -12,9 +12,12 @@ struct GlobalSearchView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @EnvironmentObject var router: Router
-    @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
+    // Présentée en fullScreenCover : hérite des EnvironmentValues, PAS des
+    // EnvironmentObject. Cf. SocialChromeEnvironment.swift.
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyStoryRingResolver) private var storyRingResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
+    @Environment(\.meeshyStoryViewerPresent) private var presentStoryViewer
     @Environment(\.dismiss) private var dismiss
     @FocusState private var isSearchFieldFocused: Bool
 
@@ -40,8 +43,8 @@ struct GlobalSearchView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
-                moodEmoji: statusViewModel.statusForUser(userId: user.userId ?? "")?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: user.userId ?? ""),
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
@@ -601,17 +604,17 @@ struct GlobalSearchView: View {
                 name: result.displayName ?? result.username,
                 context: .userListItem,
                 avatarURL: result.avatar,
-                storyState: storyViewModel.storyRingState(forUserId: result.id),
-                moodEmoji: statusViewModel.statusForUser(userId: result.id)?.moodEmoji,
+                storyState: storyRingResolver?(result.id) ?? .none,
+                moodEmoji: moodEmojiResolver?(result.id),
                 presenceState: presence,
                 onViewStory: {
-                    storyViewerCoordinator.present(StoryViewerRequest(
+                    presentStoryViewer?(StoryViewerRequest(
                         id: result.id,
                         startAtFirstUnviewed: true,
                         singleGroup: true
                     ))
                 },
-                onMoodTap: statusViewModel.moodTapHandler(for: result.id)
+                onMoodTap: moodTapResolver?(result.id)
             )
 
             VStack(alignment: .leading, spacing: 3) {

@@ -60,6 +60,7 @@ import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
@@ -341,6 +342,7 @@ fun ChatScreen(
     }
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var showConversationSettings by remember { mutableStateOf(false) }
+    var showMembers by remember { mutableStateOf(false) }
     // Window-space frame of each rendered message row, captured during layout for
     // the long-press preview hero (see MessageOverlayPreviewHero). A plain map, not
     // snapshot state: written from onGloballyPositioned without forcing recomposition,
@@ -442,6 +444,14 @@ fun ChatScreen(
                         val peerName = state.conversationTitle.orEmpty()
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
+                        }
+                        if (state.isGroup) {
+                            IconButton(onClick = { showMembers = true }) {
+                                Icon(
+                                    Icons.Filled.Group,
+                                    contentDescription = stringResource(R.string.conversation_members_open),
+                                )
+                            }
                         }
                         // Moderator+ viewers of a group get the admin surfaces: the
                         // share-link creator and the conversation-settings sheet
@@ -793,6 +803,14 @@ fun ChatScreen(
             conversationId = state.conversationId,
             accentColor = accentColor,
             onDismiss = { showConversationSettings = false },
+        )
+    }
+
+    if (showMembers) {
+        ConversationMembersSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { showMembers = false },
         )
     }
 
@@ -2460,8 +2478,12 @@ private fun MentionSuggestionStrip(
     }
 }
 
-/** The bytes + display name + declared content-type read back from a picked content Uri. */
-private data class PickedAttachment(
+/**
+ * The bytes + display name + declared content-type read back from a picked content Uri.
+ * Shared with [me.meeshy.app.chat.ShareTargetScreen] (an inbound `ACTION_SEND` attachment is
+ * read through the exact same content-Uri glue as a locally picked one).
+ */
+internal data class PickedAttachment(
     val bytes: ByteArray,
     val fileName: String,
     val mimeType: String?,
@@ -2474,7 +2496,7 @@ private data class PickedAttachment(
  * the composer silently ignores the pick rather than crashing. The byte read and
  * cursor query are the Android-framework glue behind the pure send pipeline.
  */
-private fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
+internal fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
     val resolver = context.contentResolver
     val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }
         .getOrNull() ?: return null

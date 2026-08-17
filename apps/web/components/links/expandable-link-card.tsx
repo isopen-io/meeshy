@@ -31,6 +31,7 @@ import {
 import { useI18n } from '@/hooks/useI18n';
 import { copyToClipboard } from '@/lib/clipboard';
 import { toast } from 'sonner';
+import { buildShareLinkPath, buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 interface ConversationLink {
   id: string;
@@ -95,7 +96,7 @@ export function ExpandableLinkCard({
   };
 
   const handleCopyLink = async () => {
-    const linkUrl = `${window.location.origin}/join/${link.linkId}`;
+    const linkUrl = buildShareLinkUrl(link.linkId);
     const result = await copyToClipboard(linkUrl);
     if (result.success) {
       toast.success(t('success.linkCopied'));
@@ -143,7 +144,7 @@ export function ExpandableLinkCard({
                       <Copy className="h-4 w-4 mr-3" />
                       <span className="font-medium">{t('actions.copy')}</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => router.push(`/join/${link.linkId}`)} className="py-3">
+                    <DropdownMenuItem onClick={() => router.push(buildShareLinkPath(link.linkId))} className="py-3">
                       <ExternalLinkIcon className="h-4 w-4 mr-3" />
                       <span className="font-medium">{t('actions.view')}</span>
                     </DropdownMenuItem>

@@ -131,6 +131,10 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
+            // Humeur / anneau de story par EnvironmentValues : les feuilles (dont
+            // la feuille de commentaires) en héritent, contrairement aux
+            // EnvironmentObject ci-dessus. Cf. SocialChromeEnvironment.swift.
+            .meeshySocialChrome(status: statusViewModel, story: storyViewModel, storyViewer: storyViewerCoordinator)
             .environment(\.zoomTransitionNamespace, storyZoomNamespace)
             // Propagate story viewer presentation state — same role as
             // RootView (cf. ConnectionBanner sync pill chevauchement fix
@@ -164,7 +168,7 @@ struct iPadRootView: View {
                 }
             )
             .storyEditComposerCover(session: $editingStorySessionFromProfile, viewModel: storyViewModel)
-            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("openMyStories"))) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .openMyStories)) { _ in
                 showMyStoriesFromProfile = true
             }
             .onAppear {
@@ -346,11 +350,18 @@ struct iPadRootView: View {
         if let conversation = activeConversation {
             ConversationView(
                 conversation: conversation,
-                replyContext: router.pendingReplyContext
+                replyContext: router.pendingReplyContext,
+                // I-075 — override éphémère, jamais persistant : consommé ici
+                // comme `pendingReplyContext` ci-dessus, jamais écrit en
+                // préférence.
+                forcedReadingMode: router.pendingForcedReadingMode
             )
             .id(conversation.id)
             .navigationBarHidden(true)
-            .onAppear { router.pendingReplyContext = nil }
+            .onAppear {
+                router.pendingReplyContext = nil
+                router.pendingForcedReadingMode = nil
+            }
         } else if let route = rightPanelRoute {
             // `NavigationStack` OBLIGATOIRE : sans lui, tout `NavigationLink`
             // interne à un écran du panneau est inerte (lignes de

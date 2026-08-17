@@ -6,7 +6,7 @@ import org.junit.Test
 class FeedMediaGalleryTest {
 
     private fun image(id: String, url: String, thumb: String? = null) =
-        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null)
+        FeedPostImage(id = id, url = url, thumbnailUrl = thumb, width = null, height = null, thumbHash = null)
 
     private fun presentation(
         images: List<FeedPostImage>,
@@ -16,6 +16,7 @@ class FeedMediaGalleryTest {
     ) = FeedPostPresentation(
         id = "p1",
         authorId = null,
+        authorUsername = null,
         authorName = authorName,
         authorAvatarUrl = null,
         createdAtIso = createdAtIso,
@@ -34,6 +35,9 @@ class FeedMediaGalleryTest {
         isEdited = false,
         isReel = false,
         repostEmbed = null,
+        viewCount = 0,
+        impressionCount = 0,
+        isAuthor = false,
     )
 
     @Test

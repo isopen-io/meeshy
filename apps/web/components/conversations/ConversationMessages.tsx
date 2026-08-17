@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback, memo, useState } from 'react';
+import { useRef, useEffect, useCallback, useMemo, memo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { cn } from '@/lib/utils';
 import type {
@@ -10,12 +10,17 @@ import type {
   ConversationType
 } from '@meeshy/shared/types';
 import { MessagesDisplay } from '@/components/common/messages-display';
+import { ScrollTimePill } from '@/components/conversations/reading/ScrollTimePill';
 import { Button } from '@/components/ui/button';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { formatDayLabel, formatTime } from '@/utils/date-format';
+import { useI18n } from '@/hooks/useI18n';
+import { DEFAULT_READING_MODE, type ReadingMode } from '@/lib/conversations/reading-mode';
 
 /**
  * Mux Focal — WF-110 (workshop §5 V4), patron WL-101 (MINIMAL, documenté).
@@ -71,6 +76,8 @@ interface ConversationMessagesProps {
   scrollDirection?: 'up' | 'down'; // Direction du scroll pour charger plus: 'up' = haut (défaut), 'down' = bas
   scrollButtonDirection?: 'up' | 'down'; // Direction du bouton scroll: 'up' = ArrowUp (BubbleStream), 'down' = ArrowDown (Conversations)
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>; // Ref externe du conteneur de scroll (pour BubbleStream)
+  /** Lentille de lecture — `focal` par défaut (verdict vol. 3). */
+  readingMode?: ReadingMode;
 }
 
 const ConversationMessagesComponent = memo(function ConversationMessages({
@@ -103,7 +110,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   reverseOrder = false,
   scrollDirection = 'up', // Par défaut: scroll vers le haut (comportement classique messagerie)
   scrollButtonDirection = 'down', // Par défaut: ArrowDown pour Conversations (descendre vers récent)
-  scrollContainerRef // Ref externe du conteneur de scroll (optionnelle)
+  scrollContainerRef, // Ref externe du conteneur de scroll (optionnelle)
+  readingMode = DEFAULT_READING_MODE
 }: ConversationMessagesProps) {
   // Drapeau du fil Focal (`useReadingModesFlag`) — WF-110. `reverseOrder`
   // distingue le fil "Conversations" (ancien en haut, drapeau applicable) du
@@ -230,6 +238,57 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
   // Keep handleScrollRef in sync with latest handleScroll
   handleScrollRef.current = handleScroll;
+
+  // ── Pilule « jour · heure » ────────────────────────────────────────────────
+  // Volume 4 : elle n'existe QUE pendant le défilement et nomme le message en
+  // tête de viewport. Le compteur `scrollTick` sert de battement : chaque
+  // incrément réarme le minuteur d'effacement côté `ScrollTimePill`.
+  const locale = useCurrentInterfaceLanguage();
+  const { t: tConversations } = useI18n('conversations');
+  const [scrollTick, setScrollTick] = useState(0);
+  const [topMessageId, setTopMessageId] = useState<string | null>(null);
+
+  const pillLabel = useMemo(() => {
+    if (!topMessageId) return '';
+    const message = (translatedMessages as Message[]).find(m => m.id === topMessageId)
+      ?? messages.find(m => m.id === topMessageId);
+    if (!message?.createdAt) return '';
+
+    const date = new Date(message.createdAt as unknown as string);
+    return `${formatDayLabel(date, { t: tConversations, locale })} · ${formatTime(date, locale)}`;
+  }, [topMessageId, translatedMessages, messages, tConversations, locale]);
+
+  useEffect(() => {
+    const container = scrollAreaRef.current;
+    if (!container) return;
+
+    let frame: number | null = null;
+
+    const measure = () => {
+      frame = null;
+      const containerTop = container.getBoundingClientRect().top;
+      const rows = container.querySelectorAll<HTMLElement>('[data-focal-row]');
+
+      for (const row of rows) {
+        const rect = row.getBoundingClientRect();
+        if (rect.bottom >= containerTop) {
+          setTopMessageId(row.getAttribute('data-focal-row'));
+          return;
+        }
+      }
+    };
+
+    const onScroll = () => {
+      setScrollTick(tick => tick + 1);
+      if (frame === null) frame = requestAnimationFrame(measure);
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      container.removeEventListener('scroll', onScroll);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [scrollAreaRef, conversationId]);
 
   // Attacher handleScroll au conteneur externe si fourni
   // Uses handleScrollRef to avoid detach/reattach on hasMore/isLoadingMore changes (#16)
@@ -475,6 +534,13 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           (`historicalMessagesDisplay` ci-dessous) en cas d'exception —
           jamais une page morte. Drapeau éteint ⇒ rendu historique inchangé,
           bit-à-bit identique (même invariant que WL-101/R20/R8).
+
+          CHEVAUCHEMENT à arbitrer (réconciliation post-pause) : `main` a livré
+          en parallèle la prop `readingMode` (`lib/conversations/reading-mode`,
+          magasin `reading-mode-store`), qui module le rendu À L'INTÉRIEUR de
+          `MessagesDisplay`. Les deux chemins « Focal » coexistent ici sans se
+          gêner — le repli reçoit `readingMode` verbatim, la branche WF-110 ne
+          le lit pas encore — mais leur unification reste à trancher.
         */}
         {(() => {
           const historicalMessagesDisplay = (
@@ -507,6 +573,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               hasMore={hasMore}
               isLoadingMore={isLoadingMore}
               onLoadMore={onLoadMore}
+              readingMode={readingMode}
             />
           );
 
@@ -551,6 +618,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
 
   return (
     <div className="flex-1 flex flex-col h-full relative">
+      <ScrollTimePill label={pillLabel} scrollTick={scrollTick} />
+
       {/* Si ref externe fourni, pas de conteneur scroll. Sinon, créer un conteneur scroll local */}
       {scrollContainerRef ? (
         // Pas de conteneur scroll - le parent gère le scroll
