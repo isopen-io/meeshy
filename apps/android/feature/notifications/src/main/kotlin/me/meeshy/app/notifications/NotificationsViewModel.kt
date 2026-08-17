@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
+import me.meeshy.sdk.socket.MessageSocketManager
 import javax.inject.Inject
 
 data class NotificationsUiState(
@@ -25,6 +26,7 @@ data class NotificationsUiState(
 @HiltViewModel
 class NotificationsViewModel @Inject constructor(
     private val notificationRepository: NotificationRepository,
+    private val messageSocketManager: MessageSocketManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(NotificationsUiState())
@@ -32,6 +34,28 @@ class NotificationsViewModel @Inject constructor(
 
     init {
         load()
+        observeRealtime()
+    }
+
+    /**
+     * A `notification:new` arriving while this screen is alive/backing the badge is prepended
+     * live — an already-known id (REST list beat the socket, or a duplicate delivery) is a
+     * no-op rather than a second row. Mirrors iOS `NotificationCoordinator`'s optimistic
+     * unread increment, minus the toast/dedup-window machinery (feature-parity §M — the toast
+     * itself is a separate, not-yet-scoped slice; this is real-time DATA only).
+     */
+    private fun observeRealtime() {
+        viewModelScope.launch {
+            messageSocketManager.notificationReceived.collect { notification ->
+                _state.update { s ->
+                    if (s.notifications.any { it.id == notification.id }) return@update s
+                    s.copy(
+                        notifications = listOf(notification) + s.notifications,
+                        unreadCount = if (notification.state.isRead) s.unreadCount else s.unreadCount + 1,
+                    )
+                }
+            }
+        }
     }
 
     fun load() {

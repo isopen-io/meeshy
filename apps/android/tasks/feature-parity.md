@@ -5227,10 +5227,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 ## M. Notifications
 - [ ] Notification center with category filters (messages, reactions, mentions, social,
       contacts, groups, calls, translations, system)
-- [ ] Notification list — stale-while-revalidate cache + real-time socket updates, paginated, unread-only filter
+- [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
+      `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
+      (gateway's socket payload is the durable `ApiNotification` shape plus toast-only
+      `title`/`subtitle`/`_seq` fields, silently dropped by `Json.ignoreUnknownKeys` — no separate
+      wire type needed) and exposes it as `SharedFlow<ApiNotification>`, mirroring iOS
+      `MessageSocketManager.notificationReceived`. `NotificationsViewModel` collects it and
+      prepends the fresh row live (dedup by id — a REST-list race or a duplicate delivery is a
+      no-op), bumping `unreadCount` only when the incoming notification isn't already read. +4
+      tests (`MessageSocketManagerNotificationTest`: payload decode; `NotificationsViewModelTest`
+      ×3: prepend+bump, already-read doesn't bump, duplicate id is a no-op). **Still open:
+      stale-while-revalidate cache** (today's `list()` is a plain REST call, no `CacheResult`/Room
+      layer) and pagination/unread-only filter — this slice was data-plumbing only, scoped
+      narrowly after finding the item's actual size during re-proof (see below).
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
-- [ ] In-app real-time notification toast
+- [ ] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
+      epic, not a one-shot**: iOS's reference (`NotificationToastManager.swift` +
+      `NotificationToastView.swift`) needs (1) the real-time data feed — **now landed above**,
+      (2) an orchestrator with 2s APN/socket dedup, 7s auto-dismiss timer, and suppression when
+      the arriving notification's `conversationId`/`postId` matches the currently-open
+      conversation/post (no redundant toast for a chat you're already in) — Android has **zero**
+      of this, and (3) UI mount + tap-to-navigate — the presentational atom already exists
+      (`MeeshyNotificationToast` in `:sdk-ui`'s `MeeshyToast.kt`, unused) but nothing calls it.
+      Sub-slices (2) and (3) remain unstarted.
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
@@ -5391,7 +5411,47 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [ ] UTM tracking links: create, list, toggle, delete; aggregate + per-link click stats
       (geo/device/browser breakdown, click timeline), QR generation
 - [ ] Affiliate / referral links: create, copy, share, delete, dashboard stats
-- [ ] Generic in-app share picker / Android Share-Sheet receiver (text/url/image/message/story → conversation)
+- [~] Generic in-app share picker / Android Share-Sheet receiver (text/url/image/message/story →
+      conversation) — **lot 1 (text/URL) shipped 2026-08-17** (slice `share-target-text-url`),
+      Android's counterpart to iOS's own `MeeshyShareExtension`, scoped identically to iOS's own
+      documented lot 1 ("Portée lot 1 : texte + URL" — `apps/ios/CLAUDE.md`). New
+      `ShareTargetActivity` (`:app`, `android:excludeFromRecents`) registers an `ACTION_SEND`
+      intent-filter for `text/plain` (a shared URL arrives as `EXTRA_TEXT` too, so one MIME type
+      covers both). Unlike iOS's extension — a separate process needing its own App Group session
+      read and a dedicated offline-relay queue (`ShareSender`/`SharePendingSendConsumer`) — this
+      runs in the SAME process as the rest of Meeshy, so `ShareTargetViewModel` reuses the app's
+      own `SessionRepository` and `MessageRepository.sendOptimistic` (already durably queued
+      through the existing outbox on a failed send) directly: no new relay machinery needed. The
+      conversation picker reuses `ForwardTargets` — the exact pure SSOT `ChatViewModel`'s own
+      forward-picker sheet already uses — rather than a second filtering rule. Unlike forwarding
+      (multi-target), a share picks exactly ONE conversation and finishes, matching platform
+      share-sheet convention. +7 tests (`ShareTargetViewModelTest`: picker populates from the
+      cache-first conversation stream, query filters by title, a successful send marks the target
+      sent and finishes, a second target while one send is in flight is a no-op, blank shared text
+      never hits the network, no signed-in user never hits the network, a failed send surfaces the
+      error and clears the sending flag without finishing).
+      **lot 2 (image/video attachments) shipped 2026-08-17** (slice
+      `share-target-media-attachments`). The previous entry's own "needs the TUS upload pipeline"
+      note was RE-PROVED and did not hold: `ChatViewModel.sendFileAttachment` — the existing chat
+      composer's own attachment path — already enqueues through `MediaUploadQueue` with a `null`
+      `TusUploadContext`, which uploads via `MediaRepository`/`POST /attachments/upload`; TUS on
+      Android is scoped to post/story/status/comment media only, never message attachments (`grep`
+      confirmed zero overlap). `ShareTargetActivity`'s manifest gained two more `ACTION_SEND`
+      intent-filters (`image/*`, `video/*`); the Uri is read off the main thread
+      (`Dispatchers.IO`) via the exact same `readPickedAttachment` helper the chat composer's own
+      picker already used (flipped `private` → `internal` in `ChatScreen.kt` to share it, no
+      duplicate glue), then threaded through `ShareTargetViewModel.loadAttachment(bytes, fileName,
+      declaredMimeType)` → `MediaUploadQueue.enqueue` → `MessageRepository.sendOptimistic` with the
+      resolved `messageType`/`attachmentUploadCmids`/`attachments`, mirroring
+      `sendFileAttachment`'s own send shape exactly. +4 tests: upload+send carries the correct
+      `messageType`/`attachmentUploadCmids`; an attachment with blank shared text still sends
+      (only "nothing at all" is inert now); mime resolves from the file extension when the
+      platform declares none; empty bytes are a no-op. **Still open: `ACTION_SEND_MULTIPLE`**
+      (sharing several images/videos from a gallery multi-select at once) — deliberately deferred,
+      not investigated in detail; a single-item share (the overwhelmingly common case) is fully
+      covered by lots 1+2. The "message/story" part of this checklist line's own parenthetical
+      refers to Meeshy-internal share/forward targets, not this external-receiver item — already
+      tracked separately (§C "forwarded" indicators, §E "Story actions: forward/send").
 
 ## P. Media (viewers & editors)
 - [ ] Inline video playback (thumbnail → play, auto-hiding controls); fullscreen immersive

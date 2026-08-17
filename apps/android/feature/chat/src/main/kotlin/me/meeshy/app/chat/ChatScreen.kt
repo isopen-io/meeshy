@@ -2478,8 +2478,12 @@ private fun MentionSuggestionStrip(
     }
 }
 
-/** The bytes + display name + declared content-type read back from a picked content Uri. */
-private data class PickedAttachment(
+/**
+ * The bytes + display name + declared content-type read back from a picked content Uri.
+ * Shared with [me.meeshy.app.chat.ShareTargetScreen] (an inbound `ACTION_SEND` attachment is
+ * read through the exact same content-Uri glue as a locally picked one).
+ */
+internal data class PickedAttachment(
     val bytes: ByteArray,
     val fileName: String,
     val mimeType: String?,
@@ -2492,7 +2496,7 @@ private data class PickedAttachment(
  * the composer silently ignores the pick rather than crashing. The byte read and
  * cursor query are the Android-framework glue behind the pure send pipeline.
  */
-private fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
+internal fun readPickedAttachment(context: Context, uri: Uri): PickedAttachment? {
     val resolver = context.contentResolver
     val bytes = runCatching { resolver.openInputStream(uri)?.use { it.readBytes() } }
         .getOrNull() ?: return null

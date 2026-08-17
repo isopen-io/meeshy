@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.ReactionUpdateEvent
 import me.meeshy.sdk.model.ReadStatusUpdatedEvent
 import me.meeshy.sdk.model.TranslationEvent
@@ -71,6 +72,7 @@ class MessageSocketManager @Inject constructor(
     private val _liveLocationStarted = buf<LiveLocationStartedEvent>()
     private val _liveLocationUpdated = buf<LiveLocationUpdatedEvent>()
     private val _liveLocationStopped = buf<LiveLocationStoppedEvent>()
+    private val _notificationReceived = buf<ApiNotification>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
     val messageUpdated: SharedFlow<ApiMessage> = _messageUpdated.asSharedFlow()
@@ -100,6 +102,15 @@ class MessageSocketManager @Inject constructor(
     val liveLocationUpdated: SharedFlow<LiveLocationUpdatedEvent> = _liveLocationUpdated.asSharedFlow()
     val liveLocationStopped: SharedFlow<LiveLocationStoppedEvent> = _liveLocationStopped.asSharedFlow()
 
+    /**
+     * Real-time notifications (ARCHITECTURE.md §18) — the gateway's socket payload is the
+     * durable [ApiNotification] shape plus a few toast-only fields (`title`/`subtitle`/`_seq`)
+     * that [Json.ignoreUnknownKeys] silently drops, so decoding straight into [ApiNotification]
+     * is safe and needs no separate wire type. Mirrors iOS
+     * `MessageSocketManager.notificationReceived`.
+     */
+    val notificationReceived: SharedFlow<ApiNotification> = _notificationReceived.asSharedFlow()
+
     fun attach() {
         listen("message:new", _messageReceived)
         listen("message:updated", _messageUpdated)
@@ -128,6 +139,7 @@ class MessageSocketManager @Inject constructor(
         listen("location:live-started", _liveLocationStarted)
         listen("location:live-updated", _liveLocationUpdated)
         listen("location:live-stopped", _liveLocationStopped)
+        listen("notification:new", _notificationReceived)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */

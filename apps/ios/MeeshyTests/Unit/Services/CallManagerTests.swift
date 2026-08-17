@@ -7364,3 +7364,81 @@ final class CallManagerTranscriptionMappingTests: XCTestCase {
         XCTAssertNil(segment.translatedLanguage)
     }
 }
+
+// MARK: - failCall() active-call guard
+
+/// Audit 2026-07-08 — `failCall()` is the shared teardown for every async
+/// failure path (SDP offer/answer handling, connecting watchdog, server
+/// call:error). Several of its call sites only re-check `currentCallId ==
+/// callId` for liveness, and `currentCallId` stays populated for ~1.5s after
+/// a local hangup. Without a `callState.isActive` guard — the same guard its
+/// siblings `endCall()` and `handleRemoteEnd()` already carry — an in-flight
+/// SDP failure that lands during that settle window calls `failCall()` on an
+/// already-ended call, and `endCallInternal(.failed(...))` overwrites the
+/// real end reason (`.local`/`.missed`/`.rejected`) with `.failed` in the UI,
+/// the UserDefaults snapshot, and the gateway call-history record.
+@MainActor
+final class FailCallActiveGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func failCallBody(in source: String) -> String? {
+        guard let funcRange = source.range(of: "private func failCall(") else { return nil }
+        let bodyEnd = source.range(
+            of: "\n    private func endCallInternal",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    func test_failCall_guardsCallStateIsActive() throws {
+        let source = try callManagerSource()
+        guard let body = failCallBody(in: source) else {
+            XCTFail("failCall not found in CallManager.swift"); return
+        }
+        XCTAssertTrue(
+            body.contains("guard callState.isActive else { return }"),
+            "failCall must guard callState.isActive — async call sites only check " +
+            "currentCallId == callId, which stays true during the ~1.5s settle window after " +
+            "a local hangup. Without this guard, an in-flight failure after hangup silently " +
+            "overwrites the real end reason (.local/.missed/.rejected) with .failed."
+        )
+    }
+
+    /// The guard must be the FIRST statement — before the CallKit `.failed`
+    /// report and before the `call:end` re-emit — matching `endCall()`'s
+    /// style. A guard placed later would still let a stale failure report
+    /// `.failed` to CallKit or re-emit `call:end` for a call already torn
+    /// down.
+    func test_failCall_guardPrecedesCallKitReportAndEmit() throws {
+        let source = try callManagerSource()
+        guard let body = failCallBody(in: source) else {
+            XCTFail("failCall not found in CallManager.swift"); return
+        }
+        guard let guardRange = body.range(of: "guard callState.isActive else { return }") else {
+            XCTFail("guard callState.isActive not found in failCall body"); return
+        }
+        guard let reportRange = body.range(of: "callProvider.reportCall") else {
+            XCTFail("callProvider.reportCall not found in failCall body"); return
+        }
+        guard let emitRange = body.range(of: "emitCallEndReliably") else {
+            XCTFail("emitCallEndReliably not found in failCall body"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, reportRange.lowerBound,
+            "the isActive guard must precede the CallKit .failed report"
+        )
+        XCTAssertLessThan(
+            guardRange.lowerBound, emitRange.lowerBound,
+            "the isActive guard must precede the call:end re-emit"
+        )
+    }
+}

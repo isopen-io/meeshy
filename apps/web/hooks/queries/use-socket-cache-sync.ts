@@ -66,9 +66,42 @@ const CONVERSATION_DATE_FIELDS = new Set([
 ]);
 
 /**
+ * Le groupe d'APERÇU d'un `conversation:updated` : les champs qui, ENSEMBLE,
+ * décrivent le message que la ligne de liste doit rendre.
+ *
+ * Aucun d'eux n'entre tel quel dans le cache — `Conversation` (web) n'en
+ * déclare aucun, et aucun lecteur ne les interroge. La ligne rend
+ * `conversation.lastMessage`, un OBJET ; c'est `mergeConversationUpdate` qui
+ * les consomme pour le composer. Les recopier en plus n'ajouterait qu'un champ
+ * fantôme par ligne, à chaque message.
+ *
+ * `location` y figure au même titre : elle décrit la position du MESSAGE, et la
+ * ligne web ne rend aucune épingle — la composer dans le message neutre
+ * fabriquerait une donnée que personne ne lit.
+ *
+ * `lastMessageAt` n'en fait délibérément PAS partie : il décrit le RANG de la
+ * conversation dans la liste, `Conversation` le déclare, et le tri le lit.
+ * `lastMessageTranslations` / `lastMessageOriginalLanguage` non plus : le
+ * gateway les pose au niveau conversation parce que la carte compacte
+ * `{ langue: aperçu }` n'a pas la forme de `Message.translations`, et c'est là
+ * que `formatLastMessage` va les chercher.
+ */
+const PREVIEW_GROUP_KEYS = new Set([
+  'lastMessageId',
+  'lastMessagePreview',
+  'senderId',
+  'location',
+  'previewRecalculated',
+]);
+
+/**
  * Turns an untyped `conversation:updated` payload into a patch that matches
  * `Conversation`: date fields are materialised, and an unparseable date is
  * dropped rather than overwriting a valid cached value with garbage.
+ *
+ * Ne décide RIEN du dernier message : cela demande de savoir lequel la ligne
+ * décrit déjà, que seul l'appelant tient. Voir `mergeConversationUpdate`, le
+ * point d'entrée du cache.
  *
  * The final assertion is the trust boundary: the event declares an
  * `[key: string]: unknown` index signature (the gateway spreads whichever
@@ -77,24 +110,7 @@ const CONVERSATION_DATE_FIELDS = new Set([
 export function normalizeConversationPatch(raw: Record<string, unknown>): Partial<Conversation> {
   const patch: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(raw)) {
-    if (key === 'lastMessageId') {
-      // `lastMessageId: null` — la clé PRÉSENTE et nulle — est la façon dont le
-      // serveur dit « ce lecteur n'a plus AUCUN message visible ici » : il vient
-      // de masquer POUR LUI (suppression pour soi, purge d'historique) le
-      // dernier message qui lui restait. Seul `emitConversationPreviewUpdate`
-      // produit cette forme ; les mises à jour de métadonnées n'emportent pas la
-      // clé du tout, et les chemins message-driven la portent toujours pleine.
-      //
-      // La ligne de liste rend `conversation.lastMessage`, pas
-      // `lastMessagePreview` : périmer le second sans le premier laisse le texte
-      // affiché intact. Le vidage doit donc porter sur l'objet que la ligne lit.
-      //
-      // L'id lui-même n'entre PAS dans le cache : `Conversation` (web) ne le
-      // déclare pas et aucun lecteur ne l'interroge — seul le signal qu'il porte
-      // a un sens ici. Le recopier n'ajoutait qu'un champ fantôme par ligne.
-      if (value === null) patch.lastMessage = undefined;
-      continue;
-    }
+    if (PREVIEW_GROUP_KEYS.has(key)) continue;
     if (key === 'lastMessageTranslations') {
       // `null` est une VALEUR ici, pas une absence : le serveur périme
       // `Message.translations` dans la même écriture qu'une édition, et c'est ce
@@ -117,6 +133,125 @@ export function normalizeConversationPatch(raw: Record<string, unknown>): Partia
     if (asDate) patch[key] = asDate;
   }
   return patch as Partial<Conversation>;
+}
+
+/**
+ * Ce que le groupe d'aperçu dit du message que la ligne DÉCRIT — ou rien, quand
+ * l'événement ne parle pas de lui (un renommage) ou n'en dit pas assez.
+ *
+ * `undefined` en `lastMessage` est une DÉCISION (« plus aucun message visible »),
+ * pas une absence : d'où le drapeau plutôt qu'un simple retour nullable.
+ */
+type PreviewedLastMessage =
+  | { readonly decided: false }
+  | { readonly decided: true; readonly lastMessage: Message | undefined };
+
+/**
+ * Le message NEUTRE que le seul groupe d'aperçu permet de composer.
+ *
+ * Ce que le payload ne porte pas — l'expéditeur, les pièces jointes, les
+ * drapeaux éphémères — reste vide plutôt que d'être hérité du message
+ * précédent : une ligne INCOMPLÈTE, que la prochaine synchro complète, plutôt
+ * qu'une ligne FAUSSE, que rien ne corrige. C'est la règle que
+ * `LastMessageFacet` tient côté iOS, pour le même défaut.
+ */
+function neutralLastMessage(
+  raw: Record<string, unknown>,
+  conversationId: string,
+  id: string,
+  createdAt: Date
+): Message {
+  return {
+    id,
+    conversationId,
+    senderId: typeof raw.senderId === 'string' ? raw.senderId : '',
+    content: typeof raw.lastMessagePreview === 'string' ? raw.lastMessagePreview : '',
+    originalLanguage:
+      typeof raw.lastMessageOriginalLanguage === 'string' ? raw.lastMessageOriginalLanguage : '',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    deliveredCount: 0,
+    readCount: 0,
+    reactionCount: 0,
+    isEncrypted: false,
+    translations: [],
+    createdAt,
+    timestamp: createdAt,
+  };
+}
+
+/**
+ * Quel message la ligne doit décrire après ce `conversation:updated`.
+ *
+ * Trois formes, et une seule d'entre elles était lue jusqu'ici :
+ *
+ * - **la clé est absente** — l'événement ne parle pas du dernier message (un
+ *   renommage, un réglage). Ne rien toucher.
+ * - **`lastMessageId: null`** — la clé PRÉSENTE et nulle est la façon dont le
+ *   serveur dit « ce lecteur n'a plus AUCUN message visible ici » : il vient de
+ *   masquer POUR LUI le dernier qui lui restait. Seul
+ *   `emitConversationPreviewUpdate` produit cette forme.
+ * - **`lastMessageId` plein** — et c'est là que tout se joue : le payload nomme
+ *   soit le message que la ligne décrit DÉJÀ (une édition, une traduction qui
+ *   atterrit), soit un AUTRE (masquage personnel, suppression pour tous). Le
+ *   premier cas ne rend faux que le texte ; le second rend faux TOUT ce que la
+ *   ligne disait.
+ *
+ * L'identité est la seule chose qui les sépare, et le client peut la lire — ce
+ * qu'il ne faisait pas : il appliquait la carte du Prisme du NOUVEAU message
+ * sur l'objet de l'ANCIEN, et la ligne servait un mélange des deux.
+ */
+function previewedLastMessage(
+  raw: Record<string, unknown>,
+  conversationId: string,
+  cached: Message | undefined
+): PreviewedLastMessage {
+  if (!('lastMessageId' in raw)) return { decided: false };
+
+  const id = raw.lastMessageId;
+  if (id === null) return { decided: true, lastMessage: undefined };
+  if (typeof id !== 'string' || id.length === 0) return { decided: false };
+
+  if (cached?.id === id) {
+    // MÊME message : seul son texte a pu changer. L'expéditeur, les pièces
+    // jointes et les drapeaux restent vrais — les jeter serait le défaut
+    // symétrique, et il frapperait le chemin le plus fréquenté, celui de
+    // l'envoi (`message:new` pose l'objet COMPLET, le `conversation:updated`
+    // jumeau arrive juste derrière avec le même id).
+    const preview = raw.lastMessagePreview;
+    if (typeof preview !== 'string' || preview === cached.content) return { decided: false };
+    return { decided: true, lastMessage: { ...cached, content: preview } };
+  }
+
+  // AUTRE message. Sans horodatage lisible on ne compose rien : la ligne rend
+  // `lastMessage.createdAt`, et une date fabriquée y afficherait « Invalid
+  // Date ». Périmée et corrigible vaut mieux qu'affichée cassée — les deux
+  // émetteurs portent toujours ce champ avec un id plein.
+  const createdAt = toDate(raw.lastMessageAt);
+  if (!createdAt) return { decided: false };
+
+  return { decided: true, lastMessage: neutralLastMessage(raw, conversationId, id, createdAt) };
+}
+
+/**
+ * Applique un `conversation:updated` à la conversation qu'il nomme.
+ *
+ * Point d'entrée du cache : la moitié du payload qui décrit la CONVERSATION
+ * passe par `normalizeConversationPatch`, celle qui décrit son dernier MESSAGE
+ * par `previewedLastMessage` — qui, elle, a besoin de savoir quel message la
+ * ligne décrit déjà.
+ */
+export function mergeConversationUpdate(
+  conversation: Conversation,
+  raw: Record<string, unknown>
+): Conversation {
+  const previewed = previewedLastMessage(raw, conversation.id, conversation.lastMessage);
+  const merged = { ...conversation, ...normalizeConversationPatch(raw) };
+  return previewed.decided ? { ...merged, lastMessage: previewed.lastMessage } : merged;
 }
 
 function updateInfiniteConversationCache(
@@ -1055,9 +1190,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const handleConversationUpdated = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => {
       const { conversationId: updatedId, updatedBy: _updatedBy, ...rest } = data;
       if (!updatedId) return;
-      const patch = normalizeConversationPatch(rest);
       updateInfiniteConversationCache(queryClient, (convs) =>
-        convs.map((c) => c.id === updatedId ? { ...c, ...patch } : c)
+        convs.map((c) => c.id === updatedId ? mergeConversationUpdate(c, rest) : c)
       );
     };
 
