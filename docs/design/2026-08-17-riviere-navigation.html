@@ -85,21 +85,27 @@
   .river-grid > svg { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
 
   .cell { position: relative; z-index: 1; padding: 7px 0 11px; }
-  .idh { display: flex; align-items: center; gap: 7px; min-height: var(--avatar); margin-bottom: 5px; }
+  /* L'identité vit DANS le haut de la bulle : la ligne contourne un bloc, pas
+     deux. C'est aussi la composition de la rangée plate du Fil, où le nom
+     surmonte le texte dans le même bloc — jamais un en-tête flottant. */
+  .idh { display: flex; align-items: center; gap: 7px; min-height: var(--avatar); margin-bottom: 2px; }
   .ava {
     width: var(--avatar); height: var(--avatar); border-radius: 50%; flex: none;
     display: grid; place-items: center; color: #FFF; font-size: 11px; font-weight: 700;
-    box-shadow: 0 0 0 2px var(--canvas);
   }
   .idh .nm { font-size: var(--name-size); font-weight: 800; letter-spacing: -0.01em; }
   .idh .tm {
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: var(--time-size);
-    font-weight: 600; color: var(--muted); margin-left: auto; padding-right: 22px;
+    font-weight: 600; color: var(--muted); margin-left: auto;
     font-variant-numeric: tabular-nums;
   }
+  /* Le CONTOUR de la bulle est un segment de la ligne (amendement R) : même
+     couleur, même épaisseur que le trait qui l'aborde. Son fond est OPAQUE —
+     c'est ce qui fait que la ligne, peinte derrière, s'arrête au bord haut et
+     repart au bord bas au lieu de traverser le texte. */
   .bub {
-    background: var(--surface); border: 1px solid var(--line); border-left: 2.5px solid;
-    border-radius: 12px; padding: 8px 12px 7px; cursor: pointer;
+    background: var(--surface); border: 2.5px solid; border-radius: 14px;
+    padding: 9px 13px 8px; cursor: pointer;
     display: flex; flex-direction: column; gap: 5px;
   }
   .bub:focus-visible { outline: 2px solid var(--river); outline-offset: 2px; }
@@ -330,12 +336,14 @@
         </p>
       </div>
       <div class="card">
-        <p class="rule">Le rail</p>
-        <h3>Le bord de la bulle EST la branche</h3>
+        <p class="rule">Le tracé</p>
+        <h3>La ligne CONTOURNE la bulle, puis poursuit</h3>
         <p>
-          La ligne d’un couloir court sur son bord gauche : la pastille est une <strong>perle sur le
-          rail</strong>, et le bord gauche de la bulle <strong>prolonge le trait</strong>. Rien ne
-          traverse le texte, et la branche reste continue de sa naissance à sa mort.
+          La branche descend au <strong>centre</strong> de son couloir et la bulle est
+          <strong>centrée dessus</strong> : la ligne l’aborde par le haut, son contour — même couleur,
+          même épaisseur — la porte de part et d’autre, et le trait repart par le bas. Une bulle posée
+          de côté ferait de la ligne une rambarde ; centrée, la ligne la <strong>traverse</strong>.
+          L’identité vit alors <em>dans</em> le haut de la bulle : la ligne contourne un bloc, pas deux.
         </p>
       </div>
     </div>
@@ -555,7 +563,7 @@
         <h3>Peau</h3>
         <p>
           La hauteur d’un rang — <strong>celle du texte, mesurée</strong>, plus jamais un rectangle
-          fixe —, la largeur d’un couloir, la position du rail, le rayon des bulles, la courbe des
+          fixe —, la largeur d’un couloir, l’axe de la branche, le rayon des bulles, la courbe des
           connecteurs, l’estompage d’une branche qui meurt, le rebond au bord. Les cotes intérieures
           de la bulle viennent du token gelé <code>thread.*</code> ; celles propres à la Rivière
           arriveront avec sa première peau (<code>lentille-tokens.json</code>, section
@@ -596,8 +604,7 @@
 
   // ── Tokens de PIXELS — ils appartiennent à la peau, jamais à la loi ───────
   var LANE_W = 300;   // largeur d'un couloir — assez pour que le texte se lise
-  var RAIL_X = 15;    // abscisse du rail dans son couloir
-  var GUTTER = 32;    // gouttière à droite de la bulle, où passent les arcs
+  var GUTTER = 28;    // gouttière de chaque côté de la bulle, où passent les arcs
   var FOCUS_OFFSET = 140;  // `FOCUS_BAND_OFFSET` de `focus-curve.ts`, jamais un chiffre neuf
 
   var NS = "http://www.w3.org/2000/svg";
@@ -641,7 +648,11 @@
     var svg = svgEl("svg", { width: width, height: 10, "aria-hidden": "true" });
     grid.appendChild(svg);
 
-    var railX = function (laneIndex) { return laneIndex * LANE_W + RAIL_X; };
+    // Le rail passe au CENTRE du couloir, et la bulle est centrée dessus : la
+    // ligne l'aborde par le haut, son contour la porte, et elle repart par le
+    // bas. Une bulle posée de côté ferait de la ligne une rambarde ; centrée,
+    // la ligne la TRAVERSE.
+    var railX = function (laneIndex) { return laneIndex * LANE_W + LANE_W / 2; };
 
     // ── Les cellules : ordre du DOM = ordre du temps (VoiceOver aussi) ──────
     var cellByRank = {};
@@ -651,12 +662,15 @@
       var cell = div("cell", grid);
       cell.style.gridColumn = String(bubble.laneIndex + 1);
       cell.style.gridRow = String(bubble.rank + 1);
-      cell.style.paddingLeft = "0";
+      cell.style.paddingLeft = GUTTER + "px";
       cell.style.paddingRight = GUTTER + "px";
 
+      var bub = div("bub", cell);
+      bub.style.borderColor = lane.color;
+      bub.setAttribute("tabindex", "0");
+
       if (bubble.isFirstInGroup) {
-        var head = div("idh", cell);
-        head.style.paddingLeft = (RAIL_X - 11) + "px";
+        var head = div("idh", bub);
         var avatar = div("ava", head);
         avatar.style.background = lane.color;
         avatar.textContent = lane.initials;
@@ -670,12 +684,6 @@
         stamp.textContent = bubble.time;
         head.appendChild(stamp);
       }
-
-      var bub = div("bub", cell);
-      bub.style.marginLeft = RAIL_X + "px";
-      bub.style.borderLeftColor = lane.color;
-      bub.style.paddingLeft = "18px";
-      bub.setAttribute("tabindex", "0");
 
       if (KIND_GLYPH[bubble.kind]) {
         var chip = div("chip", bub);
@@ -752,8 +760,8 @@
       // SÉRIALISÉE, il n'y a AUCUN trait à dessiner : le verdict de la loi dit
       // qu'il n'existe pas de branches ici. Les tracer quand même — même
       // empilés dans l'unique colonne — affirmerait un axe horizontal que la
-      // loi vient de retirer. Le bord gauche coloré de chaque bulle suffit à
-      // dire qui parle, et la citation remplace l'arc de réponse.
+      // loi vient de retirer. Le contour coloré de chaque bulle suffit à dire
+      // qui parle, et la citation remplace l'arc de réponse.
       if (D.layout === "serialized") return;
 
       // Les arcs de réponse passent DERRIÈRE les bulles : ce qu'on en voit,
@@ -782,6 +790,9 @@
           var liveTo = bubbles.length
             ? bubBottom[bubbles[bubbles.length - 1].rank]
             : rowMid(lastNode.rank) + 9;
+          // Le trait est peint DERRIÈRE les cellules : chaque bulle opaque
+          // l'interrompt d'elle-même, et son contour coloré reprend la course.
+          // Aucune découpe à calculer — c'est la superposition qui contourne.
           var top = rowTop[span.startRank] + 2;
           var end = rowBottom[span.endRank] - 4;
 
@@ -889,7 +900,7 @@
         altitude.style.top = (cell ? rowMid(cursor.rank) : 0) + "px";
         if (!onBubble) { ring.style.display = "none"; return; }
         ring.style.display = "block";
-        ring.style.left = (cursor.laneIndex * LANE_W + RAIL_X - 5) + "px";
+        ring.style.left = (cursor.laneIndex * LANE_W + GUTTER - 5) + "px";
         ring.style.top = (cell.offsetTop + bub.offsetTop - 5) + "px";
         ring.style.width = (bub.offsetWidth + 10) + "px";
         ring.style.height = (bub.offsetHeight + 10) + "px";
