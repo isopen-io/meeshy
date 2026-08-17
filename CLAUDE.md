@@ -77,10 +77,22 @@ docs/              → Architecture & feature documentation
 ### Local Test Parity (bun)
 Reproduce CI coverage locally — the prerequisites below are what CI does automatically:
 ```bash
+bun install --ignore-scripts                                  # see note below before using plain `bun install`
 cd packages/shared && npx prisma generate --generator client  # else ~17 gateway suites fail (commentId/PostMediaSelect)
 cd packages/shared && bun run build                           # else SocialEventsHandler fails (CommentMediaUpdatedEventData missing from dist)
-cd services/gateway && bun run test:coverage                   # 249/249 suites green, lines ~62.9%
+cd services/gateway && bun run test:coverage                   # 740/740 suites green
 ```
+
+**`bun install` échoue derrière un proxy sortant.** Le postinstall de `grpc-tools`
+télécharge un binaire préconstruit via une URL S3 que le proxy réécrit, et
+`node-pre-gyp` rend `Could not parse s3 bucket name from virtual host url` — l'install
+s'arrête là, laissant des arbres de workspace partiels. `bun install --ignore-scripts`
+passe et suffit pour TOUS les gates du gateway : `grpc-tools` n'en sert aucun. Ne pas
+lire l'échec comme un dépôt cassé.
+
+Note de layout : bun 1.3 installe en mode ISOLÉ (store `node_modules/.bun` +
+arbres de symlinks par workspace). Un `ls node_modules` maigre à la racine est
+NORMAL — vérifier plutôt `services/gateway/node_modules` et `node_modules/.bun`.
 Keep bun current with `bun upgrade`; bump `BUN_VERSION` in `.github/workflows/{ci,docker}.yml` in lockstep so local and CI never diverge.
 
 ## Development Philosophy

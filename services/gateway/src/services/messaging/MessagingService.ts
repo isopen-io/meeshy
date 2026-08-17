@@ -15,7 +15,11 @@ import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
 import { admitMessageForward, isForwardRefused } from './forwardAdmission';
-import { admitConversationWrite, isConversationWriteRefused } from './conversationWriteAdmission';
+import {
+  admitConversationWrite,
+  isConversationWriteRefused,
+  describeConversationWriteRefusal
+} from './conversationWriteAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -170,13 +174,15 @@ export class MessagingService {
       }
 
       // 3.6. Admission par l'ÉTAT DU CONTENEUR — la clôture, puis le rang
-      //      d'écriture. Aucune des gardes traversées jusqu'ici ne lit l'état de
+      //      d'écriture, puis le mode lent. Aucune des gardes traversées jusqu'ici ne lit l'état de
       //      la conversation : celle du dessus porte bien un `isActive`, mais
       //      c'est celui du `Participant`, et fermer une conversation ne touche
       //      aucune ligne `Participant`. Le drapeau `isAnnouncementChannel` ne
       //      gouvernait rien non plus — sa règle vivait dans
       //      `MessageValidator.checkPermissions`, sans un seul appelant de
-      //      production. Voir `conversationWriteAdmission`.
+      //      production. `slowModeSeconds` était le troisième du même genre :
+      //      réglable depuis l'écran de réglages iOS, diffusé aux clients, et
+      //      appliqué par personne. Voir `conversationWriteAdmission`.
       //
       //      Posé ICI, comme `admitMessageForward` plus bas, parce que les
       //      trois transports d'envoi convergent sur `handleMessage`.
@@ -200,12 +206,11 @@ export class MessagingService {
       );
       if (isConversationWriteRefused(conversationAdmission)) {
         logger.info('conversation write refused', {
-          ...corr, conversationId, reason: conversationAdmission.reason
+          ...corr, conversationId, reason: conversationAdmission.reason,
+          retryAfterSeconds: conversationAdmission.retryAfterSeconds
         });
         return this.createErrorResponse(
-          conversationAdmission.reason === 'conversation-closed'
-            ? 'Cette conversation est fermée : elle n’accepte plus de messages'
-            : 'Vous n’avez pas le droit d’écrire dans cette conversation'
+          describeConversationWriteRefusal(conversationAdmission)
         );
       }
 
