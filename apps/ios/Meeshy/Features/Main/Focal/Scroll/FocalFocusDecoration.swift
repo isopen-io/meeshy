@@ -42,6 +42,34 @@ final class FocalFocusDecoration {
     /// signal transitoire d'une autre nature et reste actif.
     static let drawsFocusCard = false
 
+    /// Valeur EFFECTIVE pour cette décoration-ci. Aucun site de production ne
+    /// passe l'argument : la valeur reste `Self.drawsFocusCard`, et l'essai
+    /// visuel garde exactement le comportement qu'il a demandé.
+    ///
+    /// L'interrupteur est ouvert à l'injection parce qu'un `static let false`
+    /// rendait INVÉRIFIABLE tout ce que le §4.6 gèle — géométrie au token
+    /// `thread.focusCard`, insertion à l'index 0 derrière le contenu, layer
+    /// réutilisé par cellule, masquage sans destruction. Ces cotes ne sont pas
+    /// suspendues par l'essai, seulement invisibles : les laisser sans témoin
+    /// pendant qu'il dure reviendrait à rétablir le cadre, un jour, sans filet.
+    /// Même patron d'injection que `FocalScrollPass(decoration:)` et
+    /// `FocalPerspectiveGeometry.standard`.
+    private let drawsCard: Bool
+
+    /// Le seul init qu'appelle la production — strictement l'ancien `init() {}`,
+    /// à la constante près, qu'il lit là où elle a toujours été.
+    init() {
+        self.drawsCard = Self.drawsFocusCard
+    }
+
+    /// Réservé aux témoins. Deux inits plutôt qu'un argument par défaut : un
+    /// défaut qui référence une propriété statique d'un type `@MainActor`
+    /// s'évalue au SITE D'APPEL, ce qui ferait dépendre chaque appelant de son
+    /// isolation. Ici l'appelant ordinaire n'écrit toujours rien.
+    init(drawsFocusCard: Bool) {
+        self.drawsCard = drawsFocusCard
+    }
+
     private static let cardLayerName = "focal.focus.card"
     private static let haloLayerName = "focal.focus.halo"
     private static let flashLayerName = "focal.focus.flash"
@@ -63,8 +91,6 @@ final class FocalFocusDecoration {
     private var cachedIsDark: Bool?
     private var cachedSurfaceKey: String?
     private var cachedSurfaceColor: CGColor?
-
-    init() {}
 
     // MARK: - Carte de focus (§4.6)
 
@@ -98,7 +124,7 @@ final class FocalFocusDecoration {
         // Un seul interrupteur, pour rétablir en une ligne. Tout le reste du
         // fichier — mémoïsation des couleurs, layers réutilisés, discipline
         // « aucune allocation / aucune animation implicite » — est INTACT.
-        guard Self.drawsFocusCard else {
+        guard drawsCard else {
             if let existing = cards.object(forKey: cell) {
                 withoutImplicitAnimations { existing.opacity = 0 }
             }
