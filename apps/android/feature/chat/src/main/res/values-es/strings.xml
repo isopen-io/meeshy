@@ -90,6 +90,7 @@
     <string name="chat_typing_many">%1$d personas están escribiendo…</string>
     <string name="chat_header_members">%1$d miembros</string>
     <string name="chat_scroll_to_bottom">Ir al último mensaje</string>
+    <string name="chat_offline">Sin conexión</string>
     <string name="chat_unread_photo">Foto</string>
     <string name="chat_unread_attachment">Adjunto</string>
     <string name="chat_unread_new_message">Nuevo mensaje</string>

@@ -198,20 +198,37 @@ strip_comments() {
 #
 # Le filtre ci-dessous ne s'applique QU'au littéral "900" — c'est le seul
 # des HARD_LITERALS qui coïncide avec un palier Tailwind (la rampe est
-# 50/100/150…900/950 ; 520/380/160/140/45 n'en sont pas) — et ne retire QUE
+# 50/100/150…900/950 ; 520/380/160/140/45 n'en sont pas) — et neutralise QUE
 # les occurrences de la forme `<lettres>-900` (nom de couleur + trait
 # d'union), avec modificateur d'opacité optionnel (`/NN`) ou frontière de
 # mot ensuite. Une vraie violation exécutable (`= 900`, `> 900`, `, 900,`,
 # `900;`) n'est JAMAIS précédée de `<lettres>-` : elle reste détectée.
+#
+# [Q-146/R5-5] Neutralisation au JETON, jamais à la LIGNE. L'ancienne forme
+# (`grep -vE ... ` appliqué à `$hits`, ligne par ligne) effaçait la LIGNE
+# ENTIÈRE dès qu'elle contenait UNE occurrence Tailwind — y compris quand
+# cette même ligne portait AUSSI un littéral gelé authentique :
+# `const STYLE = { cls: "dark:bg-gray-900/80", dismissMs: 900 };` ne
+# rapportait RIEN, l'occurrence Tailwind emportant avec elle le `900` de
+# `dismissMs` qui n'a rien à voir avec une teinte. La preuve retenue (R5-5)
+# est exactement cette ligne, dans un fixture de self-test.
+#
+# Le correctif neutralise le JETON Tailwind DANS le texte (900 → ###, même
+# empan que l'ancien filtre : `<lettre>-900`, opacité optionnelle, frontière
+# de mot) AVANT la recherche par frontière — jamais après, jamais la ligne.
+# Une occurrence mixte laisse donc le `900` non-Tailwind parfaitement visible
+# à la passe suivante.
 scan_hard_literal() {
   local literal="$1" f="$2"
   local esc="${literal//./\\.}"
-  local hits
-  hits="$(strip_comments "$f" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" || true)"
-  if [ "$literal" == "900" ] && [ -n "$hits" ]; then
-    hits="$(printf '%s\n' "$hits" \
-      | grep -vE '[A-Za-z]-900(/[0-9]{1,3})?([^0-9A-Za-z_.]|$)' || true)"
+  local content
+  content="$(strip_comments "$f")"
+  if [ "$literal" == "900" ]; then
+    content="$(printf '%s\n' "$content" \
+      | sed -E 's/([A-Za-z])-900(\/[0-9]{1,3})?([^0-9A-Za-z_.]|$)/\1-###\2\3/g')"
   fi
+  local hits
+  hits="$(printf '%s\n' "$content" | grep -nE "(^|[^0-9A-Za-z_.])${esc}(\$|[^0-9.])" || true)"
   [ -n "$hits" ] && printf '%s\n' "$hits" | sed "s@^@$f:@"
   return 0
 }
@@ -260,6 +277,22 @@ export const AFTER_STRING = 520;
 const CLOSER = "*/";
 EOF
 
+  # [Q-146/R5-5] — la collision Tailwind, raisonnée par LIGNE, effaçait une
+  # occurrence MIXTE (classe `-900` légitime ET littéral gelé authentique sur
+  # la même ligne) en même temps que le faux positif. `TailwindMixed.tsx` est
+  # la preuve retenue : `scan_hard_literal("900", …)` doit rapporter SA LIGNE
+  # (le `dismissMs: 900` survit à la neutralisation du jeton Tailwind).
+  # `TailwindOnly.tsx` est le témoin de non-régression symétrique : une classe
+  # Tailwind SEULE, sans littéral gelé à côté, ne doit toujours rien rapporter.
+  cat > "$root/TailwindMixed.tsx" <<'EOF'
+const STYLE = { cls: "dark:bg-gray-900/80", dismissMs: 900 };
+export default STYLE;
+EOF
+  cat > "$root/TailwindOnly.tsx" <<'EOF'
+const CLASS_NAME = "dark:bg-gray-900/80 text-indigo-900";
+export default CLASS_NAME;
+EOF
+
   local files
   mapfile -t files < <(list_skin_files "$root")
 
@@ -268,6 +301,9 @@ EOF
   local test_leaked=0
   local doc_false_positive=0
   local sneaky_lines=0
+  local mixed_caught=0
+  local mixed_lines=0
+  local tailwind_only_false_positive=0
   local f
   for f in "${files[@]}"; do
     local hits
@@ -284,6 +320,18 @@ EOF
     case "$f" in
       */Doc.tsx) [ -n "$hits" ] && doc_false_positive=1 ;;
       */Sneaky.tsx) [ -n "$hits" ] && sneaky_lines=$(printf '%s\n' "$hits" | wc -l) ;;
+    esac
+
+    local hits900
+    hits900="$(scan_hard_literal "900" "$f")"
+    case "$f" in
+      */TailwindMixed.tsx)
+        if [ -n "$hits900" ]; then
+          mixed_caught=1
+          mixed_lines=$(printf '%s\n' "$hits900" | wc -l)
+        fi
+        ;;
+      */TailwindOnly.tsx) [ -n "$hits900" ] && tailwind_only_false_positive=1 ;;
     esac
   done
 
@@ -309,6 +357,14 @@ EOF
   fi
   if [ "$sneaky_lines" -ne 2 ]; then
     echo -e "${RED}✗ self-test: du code exécutable après un bloc refermé / après une chaîne contenant '/*' n'est plus vu (${sneaky_lines}/2 lignes) — le retrait des commentaires rend la garde AVEUGLE${NC}"
+    ok=0
+  fi
+  if [ "$mixed_caught" -ne 1 ] || [ "$mixed_lines" -ne 1 ]; then
+    echo -e "${RED}✗ self-test [Q-146/R5-5]: une ligne MIXTE (classe Tailwind '-900' + littéral gelé '900' réel) n'est plus rapportée — l'exclusion Tailwind raisonne encore par LIGNE et efface le littéral avec elle${NC}"
+    ok=0
+  fi
+  if [ "$tailwind_only_false_positive" -ne 0 ]; then
+    echo -e "${RED}✗ self-test [Q-146/R5-5]: une classe Tailwind '-900' SEULE (sans littéral gelé) est rapportée à tort — régression de l'exclusion${NC}"
     ok=0
   fi
 

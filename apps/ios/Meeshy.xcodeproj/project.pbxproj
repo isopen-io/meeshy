@@ -584,6 +584,7 @@
 		7FD7A2A1A7C46A6B1BC4C4D6 /* MockSocialSocket.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA1EBE24B2AF8BE6A57D88D6 /* MockSocialSocket.swift */; };
 		8008E9B82AE93B660364D7A1 /* FeedPostCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B1A5A4D0A6D08BFDB31138 /* FeedPostCard.swift */; };
 		8065F9E899ECC3D9BB00B670 /* LentilleFlatRowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BDD09BEE88655937A889452 /* LentilleFlatRowTests.swift */; };
+		AE7ADAAF17C36343398C90AE /* LentilleFlatRowBridgeAriaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7539E6B0FCE88EA7C428902 /* LentilleFlatRowBridgeAriaTests.swift */; };
 		806EF95407381C3DFC1FA3DB /* BubbleContentMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7E669FB68B23497681257A /* BubbleContentMatrixTests.swift */; };
 		809CA883731CEE3FF952888D /* ExplicitPluralLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E3ABE797CD254FAC4B328D7 /* ExplicitPluralLabelTests.swift */; };
 		80AFB0131ECEE9EB50CB76CD /* StoryScrubSelectionResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EC883FE28A21462FF39C40F /* StoryScrubSelectionResolverTests.swift */; };
@@ -1989,6 +1990,7 @@
 		9BB52A80633BE2A3D8B0CDF9 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		9BD520E5744EF7F42AD99D06 /* PresenceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManagerTests.swift; sourceTree = "<group>"; };
 		9BDD09BEE88655937A889452 /* LentilleFlatRowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFlatRowTests.swift; sourceTree = "<group>"; };
+		A7539E6B0FCE88EA7C428902 /* LentilleFlatRowBridgeAriaTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFlatRowBridgeAriaTests.swift; sourceTree = "<group>"; };
 		9BED5467C7DF2902066B16BA /* DataStorageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStorageView.swift; sourceTree = "<group>"; };
 		9BEE03BD57A3FD466AF0E95E /* BubbleSwipeResistance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleSwipeResistance.swift; sourceTree = "<group>"; };
 		9C764D01DF22226D3F5BF59F /* FocalEphemeralBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocalEphemeralBadge.swift; sourceTree = "<group>"; };
@@ -3638,6 +3640,7 @@
 				A8F3A92081E01A9B367AD46B /* LentilleChromeSourceGuardTests.swift */,
 				C8409ABE74317D654853F704 /* LentilleFlagGateTests.swift */,
 				9BDD09BEE88655937A889452 /* LentilleFlatRowTests.swift */,
+				A7539E6B0FCE88EA7C428902 /* LentilleFlatRowBridgeAriaTests.swift */,
 				00CEF97A19548EF673402A17 /* LentilleFocusCardTests.swift */,
 				38D3B0ABCCBADA252D2144F4 /* LentilleFocusElectionCadenceTests.swift */,
 				2A8C1CE6B44F14B17D64DDF3 /* LentilleGroupingGraftTests.swift */,
@@ -5316,6 +5319,7 @@
 				B5D834A4B00067BF29C73807 /* LentilleChromeSourceGuardTests.swift in Sources */,
 				C96F63261FFBFBE6993B1416 /* LentilleFlagGateTests.swift in Sources */,
 				8065F9E899ECC3D9BB00B670 /* LentilleFlatRowTests.swift in Sources */,
+				AE7ADAAF17C36343398C90AE /* LentilleFlatRowBridgeAriaTests.swift in Sources */,
 				A0DAD513B7AE140E0F5F8E32 /* LentilleFocusCardTests.swift in Sources */,
 				36E171098B2B6E062DC8359F /* LentilleFocusElectionCadenceTests.swift in Sources */,
 				1A84E51C606D909601429BF0 /* LentilleGroupingGraftTests.swift in Sources */,
