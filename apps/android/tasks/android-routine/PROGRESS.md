@@ -2,6 +2,55 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Notification toast decision core shipped** (slice
+> `notification-toast-policy`, feature-parity §M), the second of the 3 sub-slices identified
+> for "In-app real-time notification toast" (the real-time data feed, sub-slice 1, landed
+> earlier the same day). `gh pr list --state open --search "apps/android OR apps/ios"` showed
+> two concurrent PRs (#3096, #3108), neither touching `apps/android`. `df -h /` showed
+> 10-11 Gi free, stable.
+>
+> **Deliberately trimmed mid-investigation after discovering the full port was bigger than
+> expected.** Read iOS's real reference (`UserNotificationPreferences+Filter.swift`) in full:
+> the per-type gate (`isTypeEnabled`) is an 80-case switch over `MeeshyNotificationType`, and
+> two of its buckets (`callsEnabled`, `friendContentEnabled`) reference iOS-only preference
+> fields that don't exist on Android's `UserNotificationPreferences` at all — porting it
+> faithfully would mean inventing new preference toggles (+ their sync/persistence/Settings UI),
+> real separate work, not something to smuggle into "the toast orchestrator." Cut the slice down
+> to what's genuinely self-contained: active-screen suppression, dedup, and the push+DND gate —
+> all three either brand-new pure logic or reuse of already-existing pure predicates, zero new
+> preference fields, zero new Settings UI.
+>
+> **`NotificationToastPolicy.decide(...)` is a genuine extraction, not a straight port** — iOS's
+> own `handleNewNotification` is an impure guard-chain (side effects and decision-making
+> entangled), so there was no isolated pure Swift function to mirror 1:1; the Kotlin version is
+> a first-time factoring of that logic into something testable. Precedence order matches iOS
+> exactly: active-conversation/post suppression wins over EVERYTHING (even a duplicate delivery
+> or push-disabled), then dedup, then push+DND.
+>
+> **The dedup check stays outside the pure function on purpose**: "was this notification id
+> already shown in the last 2 seconds" is inherently a comparison against PRIOR calls (state),
+> which doesn't belong in a single-call decision function — `decide()` takes a precomputed
+> `isDuplicateDelivery: Boolean` instead, pushing the actual window-tracking to whichever
+> stateful orchestrator wires this up next.
+>
+> **+8 tests** (`NotificationToastPolicyTest`): shows by default; suppresses when the
+> conversation is already open; suppresses when the post is already open; a DIFFERENT open
+> conversation does not suppress; deduplicates a duplicate delivery; blocks when push is
+> disabled; blocks inside the DND window; active-screen suppression wins over both a duplicate
+> flag AND push-disabled simultaneously (precedence proof).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules) green. Pure `:core:model` addition — no Robolectric/Hilt/Compose surface touched.
+>
+> **Still open**: the STATEFUL orchestrator wiring this pure core into
+> `MessageSocketManager.notificationReceived` (dedup-window bookkeeping, 7s dismiss timer, a
+> Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks —
+> Android has no equivalent to iOS's `ConversationSocketHandler.init`/`deinit` lifecycle today,
+> so wiring those hooks into `ChatViewModel`/post-detail is itself real work); the per-type
+> toggle resolver (needs either the 80-case switch or a new raw-string→toggle mapping, plus
+> possibly 2 new preference fields to reach full iOS parity); and sub-slice 3 (toast UI mount +
+> tap-to-navigate, atom already exists unused in `:sdk-ui`).
+
 > On 2026-08-17 **Real-time notification socket wiring shipped** (slice
 > `notification-realtime-socket`, feature-parity §M). `gh pr list --state open --search
 > "apps/android OR apps/ios"` showed three concurrent PRs (#3096, #3106, #3108), none touching
