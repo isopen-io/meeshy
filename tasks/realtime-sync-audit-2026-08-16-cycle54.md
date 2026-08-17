@@ -168,8 +168,49 @@ balaient : supprimer la ligne sans le fichier rendrait celui-ci irrécupérable.
 Fuite PRÉEXISTANTE, non introduite ici, et qui demande un cycle à elle. Piste
 n°3.
 
+## 7 bis. Ce que l'opt-in a découvert — `main` est ROUGE et personne ne le voit
+
+Prendre l'opt-in pour faire tourner les 2 témoins du handler a exécuté la suite
+app ENTIÈRE, 6706 témoins. **14 échouent, tous de la famille `Focal`**, et aucun
+fichier de cette famille n'est touché par ce cycle :
+
+```
+$ git diff --name-only origin/main...HEAD -- '*Focal*' '*MessageList*' '*ConversationView*'
+0
+```
+
+Trois des quatorze sont des GARDES SOURCE — elles assertent sur le CONTENU d'un
+fichier, donc elles se vérifient sans Xcode, et les fichiers visés sont octet
+pour octet identiques à `origin/main` :
+
+| Garde | Exige | État (identique à `main`) |
+|---|---|---|
+| `…referenceFocalMetricsTextIndent` | `FocalRow.swift` pose son retrait via `FocalMetrics.Text.indent` | **0 occurrence** |
+| `…isCalledFromBothScrollStopHandlers` | `scrollViewDidEndDragging` appelle `reconfigureFocusTypographyAtScrollStop()` | n'appelle que `settleFocalElection()` |
+| `…resetTheFocalPassFirst` | la closure de `typingRegistration` ouvre sur `focalPass.reset(cell)` | ouvre sur `guard let self else` |
+
+**Une garde source qui échoue sur un fichier identique à `main` échoue sur
+`main`.** Ce ne sont donc pas des échecs de ce cycle : ce sont les échecs de la
+ligne principale, rendus visibles par un opt-in que presque aucune PR ne prend.
+
+C'est le défaut de méthode le plus lourd trouvé ici, et il est de la même
+famille que celui qu'on corrige : **un signal existe, personne ne l'écoute.**
+Là c'était un événement socket sans abonné ; ici c'est une suite de tests sans
+exécution. Dans les deux cas rien ne casse qui se voie, et l'état faux dure.
+
+Conséquence pour la PR : elle reste OUVERTE, blocage documenté (Phase 15). Elle
+est prête dès que la famille `Focal` repasse au vert — le rouge est démontré
+étranger à ce diff, mais le retirer en abandonnant l'opt-in reviendrait à
+masquer ce qu'on vient de trouver.
+
 ## 8. Pistes pour le cycle 55 — repérées, NON livrées
 
+0. **LES 14 ÉCHECS `Focal` DE `main`** (§7 bis) — priorité devant tout le reste,
+   parce qu'ils bloquent la fusion de ce cycle ET qu'ils sont invisibles par
+   construction. Deux sujets distincts : les corriger, et **rendre leur rouge
+   visible** (un run planifié qui prend l'opt-in, ou un check séparé qui exécute
+   la suite sans mot-clé). Le second compte plus que le premier : sans lui, la
+   prochaine famille cassera dans le même silence.
 1. **`message:restored-for-me` côté iOS** (§7). Demande un chemin de relecture
    ciblé depuis le handler — le vrai sujet, et il déborde ce cycle.
 2. **Un consommateur global du canal de visibilité personnelle** (§7), qui
