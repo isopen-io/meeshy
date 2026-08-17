@@ -2,6 +2,59 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Notification list pagination shipped** (slice `notifications-pagination`,
+> feature-parity §M). `gh pr list --state open --search "apps/android OR apps/ios"` showed one
+> unrelated open PR (#3156, wrong branch naming for this routine, untouched). `df -h /` showed
+> 10 Gi free, stable.
+>
+> **Re-proved the candidate's own scope before coding, not just its checklist wording**: the note
+> grouped "pagination/unread-only filter" as one item, but reading the real iOS reference
+> (`NotificationListViewModel.swift`) directly revealed the `unreadOnly` published property is
+> genuinely DEAD CODE on iOS itself — `refreshFromAPI`/`loadMore` both hardcode `unreadOnly: false`
+> in the actual request; the real "Non lues" experience is 100% client-side filtering
+> (`filteredNotifications`) as ONE of **11** category chips (all/unread/messages/reactions/
+> mentions/social/contacts/groups/calls/translations/system, each with its own icon/color/type-match
+> predicate). That's a materially bigger UI feature than "wire a server query param" — correctly
+> split off as a separate future item rather than force-fit into this run. Only pagination (the
+> genuinely small half) was ported.
+>
+> **Found the right primitive already built and unused**: `pagedApiCall` (`core/network/ApiCall.kt`)
+> — a `apiCall` variant that PRESERVES the envelope's `pagination.hasMore` instead of discarding it
+> — already existed, with zero callers in `NotificationRepository` (which used the plain `apiCall`
+> everywhere, silently dropping pagination metadata on every request). Also confirmed
+> `ApiResponse.pagination: Pagination?` already carries `hasMore`/`offset`/`limit`/`nextCursor` — no
+> new wire format needed.
+>
+> **`NotificationRepository.loadMore()`**: fetches the page after the current cache size, dedupes
+> by id (mirrors `prependLive`'s established precedent), refreshes a new `hasMoreStream:
+> StateFlow<Boolean>` from the server-authoritative `pagination.hasMore` (not a heuristic like
+> "page size == limit"). A no-op before the first page has loaded (nothing to paginate from) or once
+> the server has already said there's no more; a failure leaves the cache and `hasMoreStream`
+> untouched so the next scroll simply retries. `revalidateNotifications` (the existing first-load/
+> refresh path) switched from `apiCall`/`list()` to `pagedApiCall` directly, so `hasMoreStream` is
+> correctly seeded on every fresh load too.
+>
+> **`NotificationsViewModel.loadMore()`** mirrors the re-entrancy-guarded shape already established
+> twice this session (`StatusesViewModel.loadMoreIfNeeded`, `PostCommentsViewModel.loadMore`) —
+> guard on `isLoadingMore`/`hasMore`, delegate, silent failure (next scroll retries). UI:
+> `NotificationsScreen`'s `LazyColumn` switched from `items` to `itemsIndexed` to fire `loadMore()`
+> when the LAST row appears (mirror of iOS's trailing `ProgressView().onAppear`), with a spinner
+> shown while `isLoadingMore`.
+>
+> **+9 tests**: `NotificationRepositoryTest` (6 — page appended in order, dedup against the existing
+> cache, `hasMoreStream` flips false when the server says so, no-op before any page has loaded,
+> no-op once the server reported exhaustion, cache/`hasMoreStream` untouched on a failed page).
+> `NotificationsViewModelTest` (3 — delegates when a page is available, inert when exhausted, a
+> second concurrent call while one is in flight is a no-op, verified via a held-open
+> `CompletableDeferred`).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green. Diff confirmed `apps/android`-only (5 files, `sdk-core` + `:feature:notifications`, no
+> resources touched — no new strings needed).
+>
+> **Still open**: the 11-category client-side filter bar (including "Non lues") — noted above as a
+> separate, larger UI feature, deliberately not attempted this run.
+
 > On 2026-08-17 **Live presence dot on conversation-list rows shipped** (slice
 > `conversation-list-presence-dot`, feature-parity §B). `gh pr list --state open --search
 > "apps/android OR apps/ios"` showed three unrelated open PRs (#3113, #3156, #3160 — all wrong

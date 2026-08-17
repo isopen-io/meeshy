@@ -5386,8 +5386,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`NotificationRepositoryTest`) + rewritten `NotificationsViewModelTest` (9 tests, now
       exercising the ViewModel's actual remaining job — projecting `CacheResult` variants and
       delegating writes — since dedup/rollback behaviour moved to and is tested at the repository
-      layer). **Still open: pagination/unread-only filter** (the stream serves the first page
-      only, matching `list()`'s existing default `limit=20`) — not attempted, a separate item.
+      layer). **Pagination shipped 2026-08-17** (slice `notifications-pagination`) — re-proved
+      against the real iOS reference (`NotificationListViewModel.swift`) rather than the checklist
+      wording, which surfaced that iOS's `unreadOnly` published property is genuinely DEAD CODE:
+      `refreshFromAPI`/`loadMore` both hardcode `unreadOnly: false` in the actual request, and the
+      real "Non lues" filter is 100% CLIENT-SIDE (`filteredNotifications` filters the already-fetched
+      list) as ONE of 11 category chips (all/unread/messages/reactions/mentions/social/contacts/
+      groups/calls/translations/system) — a materially bigger UI feature than "wire the server
+      param", correctly split off and left unattempted. **Only pagination was ported this run**:
+      `NotificationRepository.loadMore()` (new `pagedApiCall` — preserves `pagination.hasMore`,
+      unlike the plain `apiCall` `list()`/`revalidateNotifications` used before — dedupe by id,
+      no-op before the first page loads or once the server reports no further page, cache/`hasMore`
+      left untouched on failure so the next scroll retries) + `hasMoreStream: StateFlow<Boolean>`.
+      `NotificationsViewModel.loadMore()` mirrors the re-entrancy-guarded shape already established
+      by `StatusesViewModel.loadMoreIfNeeded`/`PostCommentsViewModel.loadMore`. UI: `NotificationsScreen`'s
+      `LazyColumn` fires `loadMore()` on the last row's appearance (mirror of iOS's trailing
+      `ProgressView().onAppear`), showing a spinner while `isLoadingMore`. +9 tests
+      (`NotificationRepositoryTest` ×6: append/dedupe/hasMore-false/no-op-before-first-page/
+      no-op-when-exhausted/failure-leaves-state-untouched; `NotificationsViewModelTest` ×3:
+      delegates-when-available/inert-when-exhausted/concurrent-call-guard). **Still open: the
+      11-category client-side filter bar** (including "Non lues") — a separate, larger UI feature,
+      not attempted this run.
 - [~] Mark read: ouverture du chat + message entrant → optimistic badge zero +
       READ_RECEIPT outbox (coalescé) ; swipe actions / mark-all pending
 - [~] In-app real-time notification toast — **re-proved 2026-08-17, found to be a 3-sub-slice
