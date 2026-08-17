@@ -1,5 +1,20 @@
 # Cycle 54-bis — la question de la leçon 212, posée aux écrivains LOCAUX
 
+## 0. La voie, et pourquoi ce n'est pas IOS_DETTE
+
+`tasks/lane-cursor.md` était à `lane=ANDROID android_streak=5
+last_run=feed-impression-batching`, et le commit de curseur annonçait la bascule
+vers `IOS_DETTE`. **Ce run ne pouvait pas l'honorer** : l'environnement
+d'exécution est un conteneur Linux sans Xcode (`which xcodebuild swift` → rien),
+donc les deux gates obligatoires du couloir iOS — `./apps/ios/meeshy.sh build` et
+`./apps/ios/meeshy.sh test` — sont inexécutables ici. Livrer du Swift non
+compilé aurait été un diff non prouvé, exactement ce que la discipline TDD du
+dépôt interdit.
+
+Voie retenue : le couloir temps réel, sur une surface entièrement gatable ici
+(web + `packages/shared`, jest + tsc). Le curseur est laissé à `IOS_DETTE` pour
+le prochain run disposant d'un Xcode — ce run-ci ne consomme pas la bascule.
+
 ## 1. D'où vient la piste
 
 Le cycle 53 a fermé le mélange de la ligne de liste web sur le chemin du fan-out
