@@ -4758,7 +4758,28 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Surpasses iOS (online-only
       send). +26 tests (9 `FriendRequestSend`, 3 `OutboxCoalescer`, 5 `FriendRepository`, 4 net
       `DiscoverViewModel`). Remaining: send **compose-new** UI (user-search entry point → connect)
-- [ ] Invite by email; invite by SMS; import phone contacts
+- [~] Invite by email; invite by SMS; import phone contacts — **email invite shipped**
+      (slice `discover-email-invite`, 2026-08-17). Found via the "ready backend, never wired
+      to UI" heuristic: `FriendRepository.sendEmailInvitation(email) → NetworkResult<EmailInvitationResponse>`
+      was fully implemented and tested at repository level with zero call sites anywhere in
+      `apps/android`. Port of iOS `DiscoverViewModel.sendEmailInvitation`/`DiscoverTab.emailInviteCard`
+      (`Features/Contacts/`, not the conversation-scoped `InviteFriendsSheet.swift` an earlier
+      search wrongly settled on). `DiscoverUiState` gained `emailText`/`isSendingInvite`/
+      `inviteErrorMessage`; `DiscoverViewModel.onEmailTextChanged`/`sendEmailInvitation` trim +
+      guard-non-empty + in-flight guard, mirroring iOS's `emailText`/`isSendingInvite` flow
+      exactly. New `EmailInviteCard` composable in `DiscoverTab.kt` (icon + title, `TextField` +
+      `Button`, `Button` disabled when `emailText.isEmpty() || isSendingInvite`) sits above the
+      search field, matching iOS's `inviteSection` position at the top of Discover. **Narrower
+      than iOS by design**: no toast — Android's Discover module has zero toast/snackbar
+      infrastructure (confirmed via exhaustive grep across `apps/android/feature`), so success
+      feedback is implicit (field clears + button disables) and failure surfaces as an inline
+      `Text` next to the card via the new `inviteErrorMessage` field — deliberately NOT the
+      existing `errorMessage` field, which drives a full-screen `ErrorState` wrong for a
+      transient invite failure. **Still open**: SMS invite, import phone contacts — no Android
+      SMS-compose or contacts-permission surface exists yet; left for a future slice. +4 tests
+      (`DiscoverViewModelTest`: trimmed send + field clear on success, blank address never hits
+      the network, error surfaces + address kept for retry, second concurrent call is a no-op).
+      Strings ×5 across EN/FR/ES/PT.
 - [x] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
       (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`

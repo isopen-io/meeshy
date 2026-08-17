@@ -30,6 +30,11 @@
     <string name="contacts_discover_pending">Pendente</string>
     <string name="contacts_discover_contact">Contato</string>
     <string name="contacts_discover_blocked">Bloqueado</string>
+    <string name="contacts_discover_email_title">Convidar por email</string>
+    <string name="contacts_discover_email_placeholder">Endereço de email</string>
+    <string name="contacts_discover_email_send">Enviar</string>
+    <string name="contacts_discover_email_send_a11y">Enviar o convite por email</string>
+    <string name="contacts_discover_email_error">Não foi possível enviar o convite</string>
     <string name="contacts_blocked_empty">Nenhum usuário bloqueado</string>
     <string name="contacts_blocked_error">Não foi possível carregar os usuários bloqueados</string>
     <string name="contacts_blocked_unblock">Desbloquear</string>
