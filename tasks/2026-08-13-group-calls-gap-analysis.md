@@ -431,3 +431,51 @@ toujours, direct inchangé), `CallEventsHandler.test.ts` (2 cas — fast-path
 broadcast REST, no-op défensif). Tous vérifiés ROUGE sans le fix serveur,
 VERT avec. Suites `CallService`/`CallEventsHandler`/`calls-routes` complètes
 vertes, `tsc --noEmit` propre.
+
+## Mise à jour 2026-08-17 — S3 corrigé : la première réponse tuait la notification manquée du reste du groupe
+
+**S3 levé.** `ringingTimeouts` (`CallService.ts`) est une `Map<callId, Timer>`
+— un timer PAR APPEL, pas par paire. `buildRingingTimeoutHandler`
+(`CallEventsHandler.ts`) est bien scopé `initiated`/`ringing` pour ne pas
+tuer un appel devenu `active` (rappel du verdict d'origine), mais le
+handler `call:signal` de type `answer` appelait
+`this.callService.clearRingingTimeout(data.callId)` **sans condition**, dès
+la PREMIÈRE négociation SDP réussie entre N'IMPORTE QUELLE paire. Dans un
+appel mesh à 3+ invités, dès qu'UN callee décrochait, le timer de TOUT
+l'appel était annulé — le seul mécanisme qui aurait fini par notifier les
+AUTRES invités n'ayant jamais répondu (`createMissedCallNotifications` via
+`getUnrespondedParticipants`, déjà câblé côté `handleMissedCall`) ne se
+déclenchait plus jamais pour cet appel. Concrètement : appel de groupe à
+Alice/Bob/Charlie, Bob décroche en 3s, Charlie ne décroche jamais (offline,
+app tuée, pas de wake VoIP) → Charlie ne reçoit AUCUNE notification d'appel
+manqué, alors que l'appel continue normalement pour Alice/Bob.
+
+**Fix** — deux changements complémentaires, aucun ne touche à l'état de
+l'appel actif :
+1. `call:signal` (answer) ne clear le timer QUE pour une conversation
+   `direct` (rien à attendre de plus une fois le seul callee décroché) ;
+   pour `group`, le timer reste armé jusqu'à son échéance d'origine.
+2. `buildRingingTimeoutHandler` : sa branche `updateMany.count === 0`
+   (« déjà transitionné ») ne fait plus un `return` silencieux — chaque
+   site qui appelle `clearRingingTimeout` correspond à une écriture
+   TERMINALE réelle (leaveCall dernier participant/endCall/markCallAsMissed/
+   les sweeps GC), donc atteindre cette branche avec un timer qui a
+   réellement sonné signifie que l'appel est non-terminal
+   (active/connecting/reconnecting) — le cas visé. Elle appelle maintenant
+   `createMissedCallNotifications(callId)` en best-effort : aucune écriture
+   de statut, aucun broadcast `ENDED`/`MISSED`, aucune libération de claim —
+   l'appel en cours pour qui a répondu est totalement inchangé. No-op
+   silencieux (`getUnrespondedParticipants` vide) une fois que tout le monde
+   a rejoint.
+
+Ne construit PAS de UI (badge « appel manqué » pour un membre resté hors
+d'un appel de groupe actif) — c'est un bug serveur pur qui rend la
+notification existante (push + `Notification` persistée, déjà utilisées par
+tous les autres chemins missed) enfin atteignable pour ce cas précis.
+
+Tests : nouveau `CallEventsHandler-group-ring-timeout-missed.test.ts` (5 cas
+— timer non cleared en groupe / cleared en direct, notifie les non-répondants
+sans toucher l'état, no-op si tout le monde a rejoint, pas de double
+notification quand la branche gagnante existante tourne). Suites
+`CallEventsHandler`/`CallService` complètes (43 suites / 898 tests) vertes,
+`tsc --noEmit` propre.
