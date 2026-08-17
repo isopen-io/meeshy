@@ -35,6 +35,10 @@
     <string name="contacts_discover_email_send">Send</string>
     <string name="contacts_discover_email_send_a11y">Send email invitation</string>
     <string name="contacts_discover_email_error">Couldn\'t send the invitation</string>
+    <string name="contacts_discover_sms_title">Invite by SMS</string>
+    <string name="contacts_discover_sms_placeholder">Phone number</string>
+    <string name="contacts_discover_sms_send">Send</string>
+    <string name="contacts_discover_sms_send_a11y">Send SMS invitation</string>
     <string name="contacts_blocked_empty">No blocked users</string>
     <string name="contacts_blocked_error">Couldn\'t load blocked users</string>
     <string name="contacts_blocked_unblock">Unblock</string>

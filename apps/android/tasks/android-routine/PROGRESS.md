@@ -2,6 +2,55 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Discover SMS invite shipped** (slice `discover-sms-invite`, feature-parity §J
+> "Invite by email; invite by SMS; import phone contacts" composite line). `gh pr list --state
+> open --search "apps/android OR apps/ios"` showed zero open PRs for this routine. `df -h /`
+> showed 6.7 Gi free, stable.
+>
+> **Found via a fresh Explore agent sweep of `[~]` lines**, ranked top of 3 candidates for
+> smallest/safest scope — the SMS half of the same composite line the previous run's
+> `discover-email-invite` slice left "still open," and explicitly the SMALLER of its two halves
+> (import-contacts needs `READ_CONTACTS` runtime permission + a multi-select picker, deliberately
+> NOT attempted).
+>
+> **Re-proved before coding**: read iOS `DiscoverTab.swift` (`smsInviteCard`, lines 94-142) and
+> `DiscoverViewModel.swift` (`phoneText`, `smsMessage`) directly. Confirmed this is materially
+> SMALLER than the email invite it mirrors visually — there's no network call at all. iOS just
+> checks `MFMessageComposeViewController.canSendText()` then presents the native SMS composer
+> pre-filled with `phoneText` as recipient and a fixed `smsMessage` literal as body; `phoneText`
+> is never cleared afterward (the viewer might cancel the native composer), unlike `emailText`
+> which clears on a confirmed successful send.
+>
+> **`DiscoverUiState.phoneText` + `DiscoverViewModel.onPhoneTextChanged`** — trivial state
+> holding, no async/network logic needed (unlike `sendEmailInvitation`). **New `SmsInviteCard`
+> composable** (`DiscoverTab.kt`, sibling of `EmailInviteCard`): icon + title, `OutlinedTextField`
+> (phone keyboard) + `Button`, launches `Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phone"))`
+> with `putExtra("sms_body", SMS_INVITE_MESSAGE)` on tap. **Reused an existing guarded-launch
+> idiom rather than inventing one**: `runCatching { context.startActivity(...) }`, the exact
+> pattern `ChatLinkOpener.openExternally` already uses for a missing handler — Android's platform
+> equivalent of iOS's `canSendText()` pre-check, degrading to a silent no-op instead of a toast
+> (Android's Discover module still has zero toast/snackbar infra, same constraint the email slice
+> hit). The invite message itself is a plain Kotlin `private const val`, deliberately **not**
+> wired through `stringResource()`/localized — faithful to iOS's own `smsMessage`, which is a
+> hardcoded literal never wrapped in `String(localized:)`, not an oversight to "fix" while
+> porting.
+>
+> **+1 test** (`onPhoneTextChanged updates the phone field`) — the actual SMS-intent launch is
+> thin Composable glue (`TDD-COVERAGE.md`'s documented exemption: push testable decisions out of
+> the Composable, cover those; a `context.startActivity` side effect has no decision left to
+> extract). Also confirmed via this run that `Icons.Filled.Sms` (material-icons-extended, already
+> on the classpath through `libs.bundles.compose`) compiles — never used anywhere in the repo
+> before this slice. Strings ×4 across EN/FR/ES/PT (`contacts_discover_sms_title/placeholder/
+> send/send_a11y`).
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=5 last_run=discover-sms-invite`. **streak reaches 5 → the NEXT iteration
+> bascules to IOS_DETTE.** Per the note left in iOS-debt Run #14, `tasks/ios-debt-routine-
+> progress.md` (well over ~1500 lines) should be archived FIRST, before choosing a new iOS item.
+
 > On 2026-08-17 **Reply @-mention auto-prefill shipped** (slice `reply-mention-prefill`,
 > feature-parity's `Threaded comments` composite line, "still open" reply-composition sub-gap).
 > `gh pr list --state open --search "apps/android OR apps/ios"` showed two unrelated open PRs
