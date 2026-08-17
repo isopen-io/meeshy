@@ -47,21 +47,23 @@ extension ConversationView {
 
     // MARK: - Header Call Buttons (audio + video)
 
-    @ViewBuilder
-    var headerCallButtons: some View {
-        if isDirect, let userId = conversation?.participantUserId {
-            // §7.6 — the start-call buttons are owned by a dedicated subview that
-            // observes CallManager, so during an active call they swap to a
-            // "tap to return" indicator (preventing a 2nd call from the header)
-            // without forcing the whole ConversationView to observe the singleton.
-            HeaderCallButtonsView(
-                conversationId: conversation?.id ?? "",
-                userId: userId,
-                calleeName: resolvedCalleeName,
-                accentColor: accentColor,
-                secondaryColor: secondaryColor
-            )
-        }
+    // AnyView : dernier maillon nu de la chaîne du header (voir les
+    // commentaires d'érasure sur `headerButtonsCluster`/
+    // `readingModeAffordanceCluster` dans ConversationView.swift, même
+    // débordement de pile au décodage de mangled name, 2026-08-17).
+    var headerCallButtons: AnyView {
+        guard isDirect, let userId = conversation?.participantUserId else { return AnyView(EmptyView()) }
+        // §7.6 — the start-call buttons are owned by a dedicated subview that
+        // observes CallManager, so during an active call they swap to a
+        // "tap to return" indicator (preventing a 2nd call from the header)
+        // without forcing the whole ConversationView to observe the singleton.
+        return AnyView(HeaderCallButtonsView(
+            conversationId: conversation?.id ?? "",
+            userId: userId,
+            calleeName: resolvedCalleeName,
+            accentColor: accentColor,
+            secondaryColor: secondaryColor
+        ))
     }
 
     /// Resolves the callee display name for DM calls.

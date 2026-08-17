@@ -33,7 +33,10 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_readingModeAffordanceCluster_isInsertedInsideTheHStack_afterTheSearchButton() throws {
         let code = try conversationViewSource()
-        guard let range = code.range(of: "private var headerButtonsCluster: some View {") else {
+        // `AnyView` (not `some View`) since 2026-08-17 — erasure at the
+        // DECLARATION was required to stop a Swift metadata-decoder stack
+        // overflow at first render (see ConversationFirstRenderWarmup.swift).
+        guard let range = code.range(of: "private var headerButtonsCluster: AnyView {") else {
             XCTFail("headerButtonsCluster introuvable dans ConversationView.swift.")
             return
         }
@@ -75,8 +78,11 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_readingModeAffordanceCluster_isGuardedByModeNotBubbles() throws {
         let code = try conversationViewSource()
+        // `guard … else { return AnyView(EmptyView()) }` (not `if`) since
+        // 2026-08-17 — same erasure campaign, same guarantee: drapeau OFF
+        // (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa.
         XCTAssertTrue(
-            code.contains("private var readingModeAffordanceCluster: some View {\n        if readingModeController.mode != .bubbles {"),
+            code.contains("private var readingModeAffordanceCluster: AnyView {\n        guard readingModeController.mode != .bubbles else { return AnyView(EmptyView()) }"),
             "La grappe Aa doit être entièrement gardée par `readingModeController.mode != .bubbles` — drapeau OFF (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa, bit-à-bit identique à avant ce lot."
         )
     }
@@ -85,8 +91,9 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_densityButton_isShownOnlyForFocalOrScript() throws {
         let code = try conversationViewSource()
+        // `guard … else { return AnyView(chip) }` (not `if`) since 2026-08-17.
         XCTAssertTrue(
-            code.contains("if readingModeController.mode == .focal || readingModeController.mode == .script {"),
+            code.contains("guard readingModeController.mode == .focal || readingModeController.mode == .script else {"),
             "Le bouton Aa doit être masqué en Résumé/Rivière — ils n'ont pas de densité (contrat §WS-7 travail 4)."
         )
     }

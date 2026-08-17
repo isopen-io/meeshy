@@ -21,7 +21,11 @@ final class ConversationViewHeaderButtonsClusterTests: XCTestCase {
 
     func test_headerButtonsCluster_usesZeroSpacing() throws {
         let view = try source()
-        guard let range = view.range(of: "private var headerButtonsCluster: some View {") else {
+        // `AnyView` (not `some View`) since 2026-08-17 — erasing at the
+        // DECLARATION (not just call sites) was required to stop a Swift
+        // metadata-decoder stack overflow at first render (see
+        // ConversationFirstRenderWarmup.swift doc comment).
+        guard let range = view.range(of: "private var headerButtonsCluster: AnyView {") else {
             XCTFail("ConversationView must define headerButtonsCluster")
             return
         }
@@ -39,7 +43,10 @@ final class ConversationViewHeaderButtonsClusterTests: XCTestCase {
     }
 
     func test_bothHeaderStates_useHeaderButtonsCluster_notInlineDuplication() throws {
-        let view = try source()
+        // Comments stripped: the 2026-08-17 AnyView-erasure doc comments
+        // mention "headerButtonsCluster" by name several times and would
+        // otherwise inflate this count (feedback_source_guard_tests_must_strip_comments).
+        let view = AppSourceGuard.stripComments(try source())
         let occurrences = view.components(separatedBy: "headerButtonsCluster").count - 1
         // 1 declaration + 2 call sites (collapsed-header state, expanded-options state).
         XCTAssertEqual(
