@@ -6,6 +6,7 @@
  */
 
 import { Socket } from 'socket.io';
+import { REACTION_SYNC_BUDGET } from '@meeshy/shared/types/socketio-events';
 import { logger } from './logger.js';
 
 interface RateLimitConfig {
@@ -188,11 +189,18 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000, // 1 minute — mirrors add limit
     keyPrefix: 'socket:reaction:remove'
   },
+  /**
+   * Read-only, triggered on conversation open AND on every socket reconnect
+   * (one demand per mounted bubble). Must not be blocked by the stricter
+   * REACTION_ADD write limit or users can't view reactions after hitting the
+   * emoji-send budget.
+   *
+   * Le budget lui-même vit dans `@meeshy/shared` : le client web s'en sert pour
+   * CADENCER sa réconciliation sous ce plafond, et deux copies du même nombre
+   * divergeraient au premier ajustement. Seule la clé Redis reste ici.
+   */
   REACTION_SYNC: {
-    maxRequests: 120,
-    windowMs: 60000, // 1 minute — read-only, triggered on conversation open; must not be
-    // blocked by the stricter REACTION_ADD write limit or users can't view reactions after
-    // hitting the emoji-send budget.
+    ...REACTION_SYNC_BUDGET,
     keyPrefix: 'socket:reaction:sync'
   },
   SOCKET_AUTH: {

@@ -1499,3 +1499,89 @@ littéralement la chaîne `try?` en prose, faisant échouer le verrou global du 
 matchent les patrons légitimes déjà documentés, ne garder que les vrais appels système/hardware sans
 seam de test » s'est montrée efficace ce run-ci et mérite d'être reproduite plutôt que de re-scanner
 l'ensemble à l'aveugle.
+
+### 2026-08-17 — Run #14 (`MediaSaveCoordinator.swift` — 1 site `try?` → `removeItemLogging`, PR #3155 mergée `69179bb40`)
+
+Contexte : `tasks/lane-cursor.md` à `lane=ANDROID android_streak=5 last_run=post-detail-reach-stats` —
+règle d'alternance déclenchée (5ᵉ run ANDROID consécutif). `gh pr list --state open --search
+"apps/android OR apps/ios"` → 1 PR concurrente (#3113, `claude/keen-hamilton-sqq310`), mauvaise
+convention de nommage pour cette routine (agent tiers), aucun fichier de ce diff touché.
+
+**RE-PROUVÉ tout le backlog avant de choisir — items 1-7 restent dans l'état documenté par les runs
+précédents** (rien de neuf à rouvrir). **Continué la méthode `try?` des Runs #12/#13** : recensement
+complet par comptage-par-fichier (`grep -rlE '[^a-zA-Z0-9_]try\?'` sur `apps/ios/Meeshy` +
+`packages/MeeshySDK/Sources`), échantillonnage de ~10 fichiers à 1 seul site non encore examinés
+(`MediaSaveCoordinator.swift`, `LocationPickerView.swift`, `StoryOfflineMediaWriter.swift`,
+`AttachmentQuickLookPreview.swift`, `ChangePasswordView.swift`, `MessageViewsDetailView.swift`) —
+tous écartés sauf un après lecture directe : `Task.sleep` (×2, patron déjà légitime), lecture
+best-effort d'un fichier local pour une preview QuickLook (`try? Data(contentsOf:)`, un fichier
+manquant/corrompu ne fait juste que masquer la preview — bénin), et un commentaire de prose
+mentionnant `try?` au passé sans code réel correspondant (`StoryOfflineMediaWriter.swift` — le
+défaut qu'il décrit est déjà corrigé).
+
+**Choisi : `MediaSaveCoordinator.discardStagingDirectory(of:)`, 1 site.** Nettoie le dossier de
+staging temporaire d'une copie exportée une fois écrite chez l'utilisateur — appel FileManager RÉEL
+pouvant authentiquement échouer (permissions, volume en lecture seule), même famille que le fix
+`CameraView` du Run #12 (déjà converti vers l'aide SDK `FileManager.removeItemLogging`). Signal
+supplémentaire : le helper `removeItemLogging`/`createDirectoryLogging`
+(`packages/MeeshySDK/Sources/MeeshySDK/Core/FileManagerLogging.swift`) existe déjà précisément pour
+ce patron — distinguer « déjà réclamé » (silencieux, cas nominal) d'un vrai échec (loggé).
+
+**TDD** — pas de seam pour forcer un vrai échec `FileManager` en test unitaire portable (même
+constat qu'au Run #13). Nouveau fichier source-guard
+`MediaSaveCoordinatorTryOptionalLoggingSourceGuardTests.swift` (même patron `AppSourceGuard
+.stripComments` que les gardes Focal existantes) : RED confirmé pour la bonne raison (`try?` encore
+présent, `removeItemLogging` absent — 2/2 assertions échouées, pas une erreur de compilation).
+
+**Piège rencontré et corrigé en cours de route** : le premier fix passait `logger: mediaSaveLog` (le
+`Logger` déjà déclaré en tête du fichier) — échec de compilation, `main actor-isolated let
+'mediaSaveLog' can not be referenced from a nonisolated context` (le target app compile sous
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, et `discardStagingDirectory` est `nonisolated static
+func`). Corrigé en omettant le paramètre `logger:` pour retomber sur le défaut du helper,
+`Logger.cache` — déclaré explicitement `nonisolated static let` dans
+`packages/MeeshySDK/Sources/MeeshySDK/Core/Logging.swift`, donc utilisable sans contrainte
+d'acteur ; la catégorie « cache » est d'ailleurs sémantiquement appropriée pour un nettoyage de
+dossier de staging disque.
+
+**Vérification** :
+- `./apps/ios/meeshy.sh build` vert après le correctif d'isolation (`xcodebuild build-for-testing`
+  confirmé `** TEST BUILD SUCCEEDED **`).
+- Test ciblé (nouvelle garde ×2 + `MediaSaveCoordinatorTests` existante ×35, pour couvrir à la fois
+  le nouveau comportement et l'absence de régression sur la garde d'exclusion `hasPrefix("meeshy-
+  branded-")` déjà en place) lancé via `nohup ... & disown` + `Monitor` (motif désormais systématique
+  pour tout run de test ciblé dans cette routine — le premier essai de ce run, via l'auto-promotion
+  arrière-plan de l'outil Bash sans `nohup` explicite, avait bien survécu mais avec une collecte de
+  diagnostics simulateur qui a traîné ~10 min après la fin réelle des tests, d'où le passage
+  systématique à `nohup` pour la suite) : 37/37 verts.
+- Suite complète `./apps/ios/meeshy.sh test` (`nohup` + `Monitor` PERSISTENT, ~35 min) : Phase 2
+  (connexion & contenu) verte, Phase 3 (connecté) verte. **Phase 0 (SDK) et Phase 1 (isolées)
+  rouges, TOUTES DEUX confirmées sans rapport par preuve indépendante, pas supposées** :
+  - Phase 0 : erreurs de compilation Swift 6 (concurrence, capture de variable) dans
+    `ConversationStoreSocketBridgeTests.swift`, fichier jamais touché par ce diff. Recoupé avec
+    `gh run list --workflow sdk-tests.yml --branch main` : le workflow `SDK Tests` était DÉJÀ rouge
+    sur les deux derniers push de `main` AVANT le point de branchement de cette PR (commits
+    `10888be66` puis un push GatewayBridgeProvider antérieur) — régression pré-existante d'une
+    session concurrente (« G-124 »).
+  - Phase 1 : `FocalFocusDecorationTests` en échec, zone jamais touchée par ce diff. Tracé
+    directement au commit `cd0eab511` (« le defilement suit enfin la courbe »), un fix Focal
+    poussé par une AUTRE session Claude en parallèle de ce run-ci (signalée via un message
+    cross-session reçu pendant l'attente de CI de ce même run) — confirmé via `git show cd0eab511
+    --stat` (modifie `Focal/`) et `git diff origin/main...HEAD --stat` (ce diff ne touche jamais
+    `Focal/`).
+- Branche `claude/apps/ios/debt-mediasavecoordinator-try-optional-logging` créée EN PREMIER, avant
+  toute édition. `project.pbxproj` régénéré par XcodeGen (référence du nouveau fichier de test
+  ajoutée, 4 lignes purement additives, committées comme le prescrit `apps/ios/CLAUDE.md`).
+- PR #3155 : CI intégralement verte, y compris `Build app (app + cibles de test)` (le job iOS
+  pertinent pour ce diff) — la matrice complète `ci.yml` s'est bien déclenchée malgré un diff
+  `apps/ios`-only, comme toujours dans ce repo. Mergée via l'API GitHub directe → `69179bb40`.
+
+- `tasks/lane-cursor.md` → `lane=ANDROID android_streak=0
+  last_run=mediasavecoordinator-try-optional-logging` (commit séparé, poussé directement sur
+  `main`, jamais mélangé au diff `apps/ios`).
+
+**Nouveau backlog noté pour un futur run IOS_DETTE** : `try?` reste un gisement d'environ 801 sites
+(1 de moins qu'au Run #13). **Hygiène à traiter en priorité au PROCHAIN run IOS_DETTE** : ce fichier
+dépasse maintenant nettement les ~1500 lignes du seuil documenté dans le prompt orchestrateur — la
+prochaine itération devrait ouvrir avec un archivage dédié (garder les ~300 dernières lignes,
+déplacer le reste vers `tasks/ios-debt-routine-progress-archive-2026-08.md`) AVANT de choisir un
+nouvel item, plutôt que de continuer à laisser le fichier grossir sans borne.

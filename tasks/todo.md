@@ -50,7 +50,7 @@
 
 ## Revue
 
-Voir `tasks/realtime-sync-audit-2026-08-17-cycle57.md` — pourquoi une note de
+Voir `tasks/realtime-sync-audit-2026-08-17-cycle57-bis.md` — pourquoi une note de
 conception a protégé une fonctionnalité morte pendant deux cycles, le tableau des
 sept étages où `slowModeSeconds` était complet, et les onze pistes du cycle 58.
 
