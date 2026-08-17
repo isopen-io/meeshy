@@ -1,0 +1,676 @@
+<title>La Rivière navigable</title>
+<style>
+  :root {
+    --paper: #F4F5F8; --surface: #FFFFFF; --ink: #1B2233; --muted: #5C6478;
+    --line: #DBDFE8; --soft: #EBEDF3; --ghost: #C9CEDA;
+    --river: #4358C7; --river-soft: #E4E8FA;
+    --canvas: #FBFCFE;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10131B; --surface: #181D29; --ink: #E9EBF2; --muted: #99A1B4;
+      --line: #2B3140; --soft: #202634; --ghost: #3A4254;
+      --river: #8D9CF0; --river-soft: #1E2540;
+      --canvas: #131824;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10131B; --surface: #181D29; --ink: #E9EBF2; --muted: #99A1B4;
+    --line: #2B3140; --soft: #202634; --ghost: #3A4254;
+    --river: #8D9CF0; --river-soft: #1E2540;
+    --canvas: #131824;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--paper); color: var(--ink); margin: 0; padding: 0 20px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55; -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1, h2, h3 { font-family: "Avenir Next", Futura, "Trebuchet MS", "Segoe UI", sans-serif; margin: 0; text-wrap: balance; }
+  p { margin: 0; }
+  .eyebrow {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0;
+  }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.92em; }
+  code { background: var(--soft); padding: 1px 5px; border-radius: 4px; }
+
+  .hero { padding: 58px 0 6px; display: flex; flex-direction: column; gap: 14px; }
+  .hero h1 { font-size: clamp(34px, 5.6vw, 52px); font-weight: 700; letter-spacing: -0.02em; }
+  .hero .lede { max-width: 66ch; font-size: 17px; color: var(--muted); }
+  .hero .lede strong { color: var(--ink); font-weight: 600; }
+  .verdict {
+    display: inline-flex; align-items: center; gap: 8px; align-self: flex-start;
+    background: var(--river-soft); color: var(--river); border-radius: 999px;
+    padding: 5px 13px; font-size: 12.5px; font-weight: 650;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.04em;
+  }
+
+  section { padding: 46px 0 4px; border-top: 1px solid var(--line); margin-top: 46px; }
+  section > h2 { font-size: clamp(23px, 3.2vw, 30px); margin: 8px 0 8px; }
+  section > .sub { color: var(--muted); max-width: 68ch; margin-bottom: 22px; }
+
+  .stage {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 306px; overflow: hidden;
+  }
+  @media (max-width: 900px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+
+  .river-col { display: flex; flex-direction: column; min-width: 0; }
+  .lane-strip-clip { overflow: hidden; background: var(--surface); border-bottom: 1px solid var(--line); }
+  .lane-strip { position: relative; height: 30px; }
+  .lane-strip span {
+    position: absolute; top: 8px; transform: translateX(-50%);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+    letter-spacing: 0.08em; font-weight: 600; white-space: nowrap;
+  }
+  .canvas-pane { background: var(--canvas); overflow: auto; max-height: 590px; }
+  .canvas-pane svg { display: block; }
+
+  .panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; }
+  @media (max-width: 900px) { .panel { border-left: none; border-top: 1px solid var(--line); } }
+  .panel-block { padding: 16px 18px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
+  .panel-block:last-child { border-bottom: none; }
+
+  .peek-who { display: flex; align-items: center; gap: 9px; }
+  .peek-dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+  .peek-name { font-weight: 650; font-size: 14.5px; }
+  .peek-meta { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .peek-text { font-size: 14.5px; }
+  .peek-reply {
+    font-size: 12.5px; color: var(--muted); border-left: 2px solid var(--ghost);
+    padding-left: 9px;
+  }
+  .tag {
+    display: inline-flex; gap: 5px; align-items: center; font-size: 11px; color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .pad { display: grid; grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(2, 34px); gap: 6px; }
+  .pad button {
+    font: inherit; font-size: 15px; color: var(--ink); background: var(--soft);
+    border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  }
+  .pad button:hover { background: var(--river-soft); border-color: var(--river); }
+  .pad button:focus-visible { outline: 2px solid var(--river); outline-offset: 2px; }
+  .pad .up { grid-column: 2; grid-row: 1; }
+  .pad .left { grid-column: 1; grid-row: 2; }
+  .pad .down { grid-column: 2; grid-row: 2; }
+  .pad .right { grid-column: 3; grid-row: 2; }
+  .follow {
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--surface); background: var(--river);
+    border: none; border-radius: 8px; padding: 9px 12px; cursor: pointer; text-align: left;
+  }
+  .follow:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  .verdict-line {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px;
+    display: flex; flex-direction: column; gap: 4px; color: var(--muted);
+  }
+  .verdict-line b { color: var(--ink); font-weight: 650; }
+  .verdict-line .moved { color: #2E9E6B; }
+  .verdict-line .edge { color: #C08A2E; }
+  .verdict-line .empty { color: var(--muted); }
+
+  .alive { display: flex; flex-wrap: wrap; gap: 6px; }
+  .alive span {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+    border-radius: 999px; padding: 3px 8px; border: 1px solid var(--line);
+  }
+  .alive span[data-alive="0"] { opacity: 0.38; text-decoration: line-through; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px 19px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .card h3 { font-size: 16.5px; }
+  .card p { font-size: 14px; color: var(--muted); }
+  .card p strong { color: var(--ink); font-weight: 600; }
+  .card .rule { font-size: 11.5px; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: var(--river); letter-spacing: 0.03em; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  td:first-child { white-space: nowrap; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; }
+  .scroller { overflow-x: auto; }
+
+  details { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); padding: 12px 16px; }
+  details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details ol { font-size: 13px; color: var(--muted); padding-left: 22px; margin: 10px 0 2px; }
+  details li { margin: 3px 0; }
+
+  footer { color: var(--muted); font-size: 13px; padding: 40px 0 60px; border-top: 1px solid var(--line); margin-top: 46px; }
+
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+  .hint kbd {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px;
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px;
+    padding: 1px 5px; background: var(--surface); color: var(--ink);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cursor-ring { transition: transform 160ms ease, opacity 160ms ease; }
+    .altitude { transition: transform 160ms ease; }
+  }
+</style>
+
+<div class="wrap">
+  <header class="hero">
+    <p class="eyebrow">Meeshy · Vue conversation · Volume 4 — la Rivière</p>
+    <h1>La Rivière navigable</h1>
+    <span class="verdict">procès gagné · 15 août 2026</span>
+    <p class="lede">
+      La Rivière était le pari en sursis du volume 3. Elle a gagné : elle devient l’interface des
+      conversations <strong>à plusieurs</strong>. Ce volume ajoute ce que la première forme n’avait pas —
+      les deux axes ne se <em>regardent</em> plus, ils se <strong>parcourent</strong> ; et les branches ne
+      traversent plus l’écran de bord à bord : elles <strong>apparaissent et disparaissent selon les
+      interactions</strong>. Ci-dessous, 22 vrais messages, 6 branches, 3 épisodes — et chaque pas de
+      navigation est rendu par la loi partagée, pas par cette page.
+    </p>
+  </header>
+
+  <section>
+    <p class="eyebrow">Le juge de paix</p>
+    <h2>Parcourez-la</h2>
+    <p class="sub">
+      Touchez un nœud : le message s’ouvre <em>sur place</em>, à droite. Puis naviguez —
+      <strong>haut/bas suit la personne</strong> à travers ses disparitions, <strong>gauche/droite change
+      d’interlocuteur</strong> sans quitter l’instant. À la hauteur du curseur, les branches éteintes
+      sont grisées : c’est la largeur réelle de l’axe horizontal à cet endroit du temps.
+    </p>
+
+    <div class="stage">
+      <div class="river-col">
+        <div class="lane-strip-clip"><div class="lane-strip" id="strip"></div></div>
+        <div class="canvas-pane" id="pane"><svg id="river" aria-hidden="true"></svg></div>
+      </div>
+      <div class="panel">
+        <div class="panel-block" id="peek"></div>
+        <div class="panel-block">
+          <p class="eyebrow">Naviguer</p>
+          <div class="pad">
+            <button class="up" data-dir="up" title="Message précédent de cette personne">↑</button>
+            <button class="left" data-dir="left" title="Interlocuteur à gauche">←</button>
+            <button class="down" data-dir="down" title="Message suivant de cette personne">↓</button>
+            <button class="right" data-dir="right" title="Interlocuteur à droite">→</button>
+          </div>
+          <button class="follow" id="follow">Suivre cette branche ↓</button>
+          <p class="verdict-line" id="verdict"></p>
+        </div>
+        <div class="panel-block">
+          <p class="eyebrow">Vivant à cette hauteur</p>
+          <div class="alive" id="alive"></div>
+        </div>
+      </div>
+    </div>
+    <p class="hint">
+      Clavier : <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd> — le curseur ne bouge que si
+      <code>resolveRiverStep</code> le dit. Le verdict de chaque pas est affiché tel quel.
+    </p>
+  </section>
+
+  <section>
+    <p class="eyebrow">Amendement R2 — A</p>
+    <h2>Une branche naît, court, meurt, renaît</h2>
+    <p class="sub">
+      Trois règles, et elles sont dans la loi partagée — aucune plateforme ne les rejoue à sa façon.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <p class="rule">Règle 1</p>
+        <h3>Interagir, c’est parler — ou se voir répondre</h3>
+        <p>
+          Une réponse fait <strong>reparaître</strong> la branche de la personne visée, sans bulle à elle
+          (nœud <code>addressed</code>, l’anneau creux). Mia se taît après 9 h 24 et sa branche reparaît
+          seule à 12 h 51, parce que Sarah répond à son message du matin. Sans cette règle, le connecteur
+          de réponse atterrirait sur une ligne éteinte.
+        </p>
+      </div>
+      <div class="card">
+        <p class="rule">Règle 2</p>
+        <h3>Un segment survit à ses propres bulles</h3>
+        <p>
+          Il court jusqu’au dernier message encore contenu dans la fenêtre de silence
+          (<strong>30 min</strong>) qui suit la dernière interaction de son propriétaire. C’est ce qui donne
+          à la rivière sa <strong>largeur navigable</strong> : plusieurs lignes courent côte à côte pendant
+          un même instant, puis s’éteignent l’une après l’autre.
+        </p>
+      </div>
+      <div class="card">
+        <p class="rule">Règle 3</p>
+        <h3>La colonne est réservée à vie</h3>
+        <p>
+          Le lecteur tient la colonne 0 — <strong>la rive</strong> : le pas latéral part toujours de chez
+          lui. Les autres prennent leur colonne par ordre de naissance, et la gardent : une branche morte
+          ne rend pas sa place, une arrivée n’en déplace aucune. Sinon la rivière tremblerait latéralement
+          à chaque nouvelle voix.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Amendement R2 — B</p>
+    <h2>Deux axes, un pas, trois verdicts</h2>
+    <p class="sub">
+      <code>resolveRiverStep</code> rend un curseur et un verdict. La peau anime, la loi décide.
+    </p>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Geste</th><th>Ce que la loi fait</th><th>Pourquoi ainsi</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>← →</td>
+            <td>La branche <b>vivante</b> suivante à cette hauteur ; les mortes sont <b>enjambées</b>.
+              On atterrit sur la bulle la plus proche <b>du segment vivant</b>.</td>
+            <td>Une ligne éteinte n’a rien à lire. Rester dans le segment garde le lecteur dans l’instant :
+              un segment ne dure jamais plus qu’une fenêtre de silence.</td>
+          </tr>
+          <tr>
+            <td>← → (égalité)</td>
+            <td>À égale distance, la bulle la <b>plus ancienne</b>.</td>
+            <td>Traverser ne doit jamais faire sauter le lecteur en avant dans un temps qu’il n’a pas lu.</td>
+          </tr>
+          <tr>
+            <td>↑ ↓</td>
+            <td>La bulle suivante <b>de la même personne</b>, par-dessus la mort de sa branche.</td>
+            <td>C’est le « Suivre Mia » que le procès demandait de prouver : une trajectoire que le fil
+              ne sait pas raconter.</td>
+          </tr>
+          <tr>
+            <td>bord d’axe</td>
+            <td><code>edge</code> — curseur <b>inchangé</b>.</td>
+            <td>La peau y colle son rebond ; la loi ne téléporte pas.</td>
+          </tr>
+          <tr>
+            <td>rivière vide</td>
+            <td><code>empty</code> — le curseur reçu est rendu tel quel.</td>
+            <td>Aucun curseur inventé : une absence ne se convertit jamais en affirmation.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">La frontière</p>
+    <h2>Ce que la loi décide, ce que la peau décide</h2>
+    <p class="sub">
+      Cette page est elle-même la démonstration du partage : elle n’a pas une ligne de géométrie à elle.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <h3>Loi partagée</h3>
+        <p>
+          <code>resolveRiverLanes</code> — couloirs, segments (naissance/mort/renaissance), nœuds de
+          contournement, bulles en ordre chronologique strict, connecteurs de réponse.
+          <code>resolveRiverStep</code> — les deux axes. <code>colorForName</code> — la graine de couleur.
+          <strong>Zéro pixel, zéro <code>Date.now()</code></strong> : 28 vecteurs gelés, rejoués à
+          l’identique par iOS, le web et Android.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Peau</h3>
+        <p>
+          La hauteur d’un rang, l’écart des couloirs, le rayon des bulles, la courbe des connecteurs,
+          l’estompage d’une branche qui meurt, le rebond au bord. Rien de tout cela n’entre dans la loi —
+          et aucune de ces valeurs ne redescend en dur : elles viennent des tokens
+          (<code>lentille-tokens.json</code>, section <code>river</code>, à poser avec sa première peau).
+        </p>
+      </div>
+      <div class="card">
+        <h3>Accessibilité</h3>
+        <p>
+          Les traits sont <strong>décoratifs</strong> (<code>aria-hidden</code>) : le contenu prime, et
+          <code>geometry.bubbles</code> <strong>est</strong> l’ordre du DOM et de VoiceOver — strictement
+          chronologique, quelle que soit la colonne. En <em>reduce motion</em>, une branche apparaît et
+          disparaît sans transition.
+        </p>
+      </div>
+    </div>
+    <details style="margin-top: 18px;">
+      <summary>L’ordre du DOM, tel que la loi le sert (22 messages)</summary>
+      <ol id="dom-order"></ol>
+    </details>
+  </section>
+
+  <footer class="wrap">
+    Meeshy · « La Rivière navigable » · 17 août 2026 — volume 4.
+    Vol. 1 : les dix propositions · Vol. 2 : cas d’usage &amp; orchestrateur · Vol. 3 : le verdict des modes.
+    Géométrie et navigation : <code>packages/shared/utils/river-lanes.ts</code> ·
+    Spécification : <code>tasks/lentille-workshop-execution.md</code> §7bis.
+  </footer>
+</div>
+
+<script id="river-data" type="application/json">{"silenceWindowMinutes":30,"lanes":[{"laneId":"me","laneIndex":0,"isViewer":true,"colorSeed":"Moi","spans":[{"startRank":2,"endRank":6,"isOpen":false,"nodes":[{"rank":2,"kind":"bubble","messageId":"m03"}]},{"startRank":8,"endRank":13,"isOpen":false,"nodes":[{"rank":8,"kind":"bubble","messageId":"m09"},{"rank":11,"kind":"bubble","messageId":"m12"}]},{"startRank":17,"endRank":21,"isOpen":true,"nodes":[{"rank":17,"kind":"bubble","messageId":"m18"}]}],"color":"#D4763B","name":"Moi"},{"laneId":"mia","laneIndex":1,"isViewer":false,"colorSeed":"Mia","spans":[{"startRank":0,"endRank":6,"isOpen":false,"nodes":[{"rank":0,"kind":"bubble","messageId":"m01"},{"rank":4,"kind":"bubble","messageId":"m05"}]},{"startRank":13,"endRank":13,"isOpen":false,"nodes":[{"rank":13,"kind":"addressed","messageId":"m14"}]},{"startRank":15,"endRank":21,"isOpen":true,"nodes":[{"rank":15,"kind":"bubble","messageId":"m16"},{"rank":21,"kind":"bubble","messageId":"m22"}]}],"color":"#E91E63","name":"Mia"},{"laneId":"sarah","laneIndex":2,"isViewer":false,"colorSeed":"Sarah","spans":[{"startRank":1,"endRank":6,"isOpen":false,"nodes":[{"rank":1,"kind":"bubble","messageId":"m02"},{"rank":2,"kind":"addressed","messageId":"m03"},{"rank":6,"kind":"bubble","messageId":"m07"}]},{"startRank":13,"endRank":13,"isOpen":false,"nodes":[{"rank":13,"kind":"bubble","messageId":"m14"}]},{"startRank":16,"endRank":21,"isOpen":true,"nodes":[{"rank":16,"kind":"bubble","messageId":"m17"},{"rank":17,"kind":"addressed","messageId":"m18"}]}],"color":"#B8860B","name":"Sarah"},{"laneId":"tom","laneIndex":3,"isViewer":false,"colorSeed":"Tom","spans":[{"startRank":3,"endRank":6,"isOpen":false,"nodes":[{"rank":3,"kind":"bubble","messageId":"m04"},{"rank":4,"kind":"addressed","messageId":"m05"}]},{"startRank":10,"endRank":13,"isOpen":false,"nodes":[{"rank":10,"kind":"bubble","messageId":"m11"},{"rank":11,"kind":"addressed","messageId":"m12"}]},{"startRank":18,"endRank":21,"isOpen":true,"nodes":[{"rank":18,"kind":"bubble","messageId":"m19"},{"rank":19,"kind":"addressed","messageId":"m20"}]}],"color":"#6D28D9","name":"Tom"},{"laneId":"hugo","laneIndex":4,"isViewer":false,"colorSeed":"Hugo","spans":[{"startRank":5,"endRank":6,"isOpen":false,"nodes":[{"rank":5,"kind":"bubble","messageId":"m06"}]},{"startRank":14,"endRank":21,"isOpen":true,"nodes":[{"rank":14,"kind":"bubble","messageId":"m15"},{"rank":20,"kind":"bubble","messageId":"m21"}]}],"color":"#E74C3C","name":"Hugo"},{"laneId":"lena","laneIndex":5,"isViewer":false,"colorSeed":"Lena","spans":[{"startRank":7,"endRank":13,"isOpen":false,"nodes":[{"rank":7,"kind":"bubble","messageId":"m08"},{"rank":8,"kind":"addressed","messageId":"m09"},{"rank":9,"kind":"bubble","messageId":"m10"},{"rank":12,"kind":"bubble","messageId":"m13"}]},{"startRank":19,"endRank":21,"isOpen":true,"nodes":[{"rank":19,"kind":"bubble","messageId":"m20"},{"rank":21,"kind":"addressed","messageId":"m22"}]}],"color":"#0EA5E9","name":"Lena"}],"bubbles":[{"messageId":"m01","laneId":"mia","laneIndex":1,"rank":0,"createdAtMs":1786785120000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"On part toujours à 14 h de Lyon ?","source":null,"time":"09:12"},{"messageId":"m02","laneId":"sarah","laneIndex":2,"rank":1,"createdAtMs":1786785300000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Oui ! J’ai la remorque pour les canoës.","source":null,"time":"09:15"},{"messageId":"m03","laneId":"me","laneIndex":0,"rank":2,"createdAtMs":1786785480000,"isViewer":true,"replyToMessageId":"m02","kind":"text","text":"Parfait, je passe prendre Hugo en route.","source":null,"time":"09:18"},{"messageId":"m04","laneId":"tom","laneIndex":3,"rank":3,"createdAtMs":1786785660000,"isViewer":false,"replyToMessageId":null,"kind":"file","text":"Carte des rapides (PDF, 2 pages)","source":null,"time":"09:21"},{"messageId":"m05","laneId":"mia","laneIndex":1,"rank":4,"createdAtMs":1786785840000,"isViewer":false,"replyToMessageId":"m04","kind":"text","text":"Merci Tom — le passage du Pas de Mousse est fermé ?","source":null,"time":"09:24"},{"messageId":"m06","laneId":"hugo","laneIndex":4,"rank":5,"createdAtMs":1786786140000,"isViewer":false,"replyToMessageId":null,"kind":"audio","text":"Vocal 0:34 — « je prends la glacière et deux pagaies de rechange »","source":null,"time":"09:29"},{"messageId":"m07","laneId":"sarah","laneIndex":2,"rank":6,"createdAtMs":1786786380000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Quelqu’un pense au réchaud ?","source":null,"time":"09:33"},{"messageId":"m08","laneId":"lena","laneIndex":5,"rank":7,"createdAtMs":1786796820000,"isViewer":false,"replyToMessageId":null,"kind":"photo","text":"Carrousel — 4 photos du départ de Vallon","source":null,"time":"12:27"},{"messageId":"m09","laneId":"me","laneIndex":0,"rank":8,"createdAtMs":1786797000000,"isViewer":true,"replyToMessageId":"m08","kind":"text","text":"La lumière est irréelle 😍","source":null,"time":"12:30"},{"messageId":"m10","laneId":"lena","laneIndex":5,"rank":9,"createdAtMs":1786797180000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"On s’arrête à la plage du Charmassonnet ?","source":null,"time":"12:33"},{"messageId":"m11","laneId":"tom","laneIndex":3,"rank":10,"createdAtMs":1786797360000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Estamos a 20 minutos, esperadnos ahí.","source":"es","time":"12:36"},{"messageId":"m12","laneId":"me","laneIndex":0,"rank":11,"createdAtMs":1786797540000,"isViewer":true,"replyToMessageId":"m11","kind":"text","text":"Ça marche, on tient la place.","source":null,"time":"12:39"},{"messageId":"m13","laneId":"lena","laneIndex":5,"rank":12,"createdAtMs":1786797900000,"isViewer":false,"replyToMessageId":null,"kind":"audio","text":"Vocal 0:12 — « on voit le pont d’Arc ! »","source":null,"time":"12:45"},{"messageId":"m14","laneId":"sarah","laneIndex":2,"rank":13,"createdAtMs":1786798260000,"isViewer":false,"replyToMessageId":"m01","kind":"text","text":"Mia, tu as pris la crème solaire finalement ?","source":null,"time":"12:51"},{"messageId":"m15","laneId":"hugo","laneIndex":4,"rank":14,"createdAtMs":1786823520000,"isViewer":false,"replyToMessageId":null,"kind":"photo","text":"Le bivouac, feu allumé","source":null,"time":"19:52"},{"messageId":"m16","laneId":"mia","laneIndex":1,"rank":15,"createdAtMs":1786823760000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Je suis morte. Mais quelle journée.","source":null,"time":"19:56"},{"messageId":"m17","laneId":"sarah","laneIndex":2,"rank":16,"createdAtMs":1786824000000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Estou a fazer o risoto, quem ajuda?","source":"pt","time":"20:00"},{"messageId":"m18","laneId":"me","laneIndex":0,"rank":17,"createdAtMs":1786824180000,"isViewer":true,"replyToMessageId":"m17","kind":"text","text":"J’arrive — je coupe les oignons.","source":null,"time":"20:03"},{"messageId":"m19","laneId":"tom","laneIndex":3,"rank":18,"createdAtMs":1786824420000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Demain lever 7 h si on veut les gorges au calme.","source":null,"time":"20:07"},{"messageId":"m20","laneId":"lena","laneIndex":5,"rank":19,"createdAtMs":1786824720000,"isViewer":false,"replyToMessageId":"m19","kind":"text","text":"7 h ?! Négocions 8 h.","source":null,"time":"20:12"},{"messageId":"m21","laneId":"hugo","laneIndex":4,"rank":20,"createdAtMs":1786824960000,"isViewer":false,"replyToMessageId":null,"kind":"text","text":"Moi je dors dehors, réveillez-moi au café.","source":null,"time":"20:16"},{"messageId":"m22","laneId":"mia","laneIndex":1,"rank":21,"createdAtMs":1786825200000,"isViewer":false,"replyToMessageId":"m20","kind":"text","text":"8 h, c’est voté. Bonne nuit tout le monde 🌙","source":null,"time":"20:20"}],"connectors":[{"fromMessageId":"m03","toMessageId":"m02","fromLaneIndex":0,"toLaneIndex":2,"fromRank":2,"toRank":1},{"fromMessageId":"m05","toMessageId":"m04","fromLaneIndex":1,"toLaneIndex":3,"fromRank":4,"toRank":3},{"fromMessageId":"m09","toMessageId":"m08","fromLaneIndex":0,"toLaneIndex":5,"fromRank":8,"toRank":7},{"fromMessageId":"m12","toMessageId":"m11","fromLaneIndex":0,"toLaneIndex":3,"fromRank":11,"toRank":10},{"fromMessageId":"m14","toMessageId":"m01","fromLaneIndex":2,"toLaneIndex":1,"fromRank":13,"toRank":0},{"fromMessageId":"m18","toMessageId":"m17","fromLaneIndex":0,"toLaneIndex":2,"fromRank":17,"toRank":16},{"fromMessageId":"m20","toMessageId":"m19","fromLaneIndex":5,"toLaneIndex":3,"fromRank":19,"toRank":18},{"fromMessageId":"m22","toMessageId":"m20","fromLaneIndex":1,"toLaneIndex":5,"fromRank":21,"toRank":19}],"rankCount":22,"laneCount":6,"steps":{"0:0:left":{"cursor":{"laneIndex":0,"rank":0},"reason":"edge"},"0:0:right":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"0:0:up":{"cursor":{"laneIndex":0,"rank":0},"reason":"edge"},"0:0:down":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:1:left":{"cursor":{"laneIndex":0,"rank":1},"reason":"edge"},"0:1:right":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"0:1:up":{"cursor":{"laneIndex":0,"rank":1},"reason":"edge"},"0:1:down":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:2:left":{"cursor":{"laneIndex":0,"rank":2},"reason":"edge"},"0:2:right":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"0:2:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"edge"},"0:2:down":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:3:left":{"cursor":{"laneIndex":0,"rank":3},"reason":"edge"},"0:3:right":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"0:3:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:3:down":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:4:left":{"cursor":{"laneIndex":0,"rank":4},"reason":"edge"},"0:4:right":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"0:4:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:4:down":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:5:left":{"cursor":{"laneIndex":0,"rank":5},"reason":"edge"},"0:5:right":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"0:5:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:5:down":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:6:left":{"cursor":{"laneIndex":0,"rank":6},"reason":"edge"},"0:6:right":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"0:6:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:6:down":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:7:left":{"cursor":{"laneIndex":0,"rank":7},"reason":"edge"},"0:7:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"0:7:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:7:down":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:8:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"edge"},"0:8:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"0:8:up":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"0:8:down":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:9:left":{"cursor":{"laneIndex":0,"rank":9},"reason":"edge"},"0:9:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"0:9:up":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:9:down":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:10:left":{"cursor":{"laneIndex":0,"rank":10},"reason":"edge"},"0:10:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"0:10:up":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:10:down":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:11:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"edge"},"0:11:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"0:11:up":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"0:11:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:12:left":{"cursor":{"laneIndex":0,"rank":12},"reason":"edge"},"0:12:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"0:12:up":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:12:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:13:left":{"cursor":{"laneIndex":0,"rank":13},"reason":"edge"},"0:13:right":{"cursor":{"laneIndex":1,"rank":13},"reason":"moved"},"0:13:up":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:13:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:14:left":{"cursor":{"laneIndex":0,"rank":14},"reason":"edge"},"0:14:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"0:14:up":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:14:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:15:left":{"cursor":{"laneIndex":0,"rank":15},"reason":"edge"},"0:15:right":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"0:15:up":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:15:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:16:left":{"cursor":{"laneIndex":0,"rank":16},"reason":"edge"},"0:16:right":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"0:16:up":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:16:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:17:left":{"cursor":{"laneIndex":0,"rank":17},"reason":"edge"},"0:17:right":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"0:17:up":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"0:17:down":{"cursor":{"laneIndex":0,"rank":17},"reason":"edge"},"0:18:left":{"cursor":{"laneIndex":0,"rank":18},"reason":"edge"},"0:18:right":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"0:18:up":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:18:down":{"cursor":{"laneIndex":0,"rank":18},"reason":"edge"},"0:19:left":{"cursor":{"laneIndex":0,"rank":19},"reason":"edge"},"0:19:right":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"0:19:up":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:19:down":{"cursor":{"laneIndex":0,"rank":19},"reason":"edge"},"0:20:left":{"cursor":{"laneIndex":0,"rank":20},"reason":"edge"},"0:20:right":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"0:20:up":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:20:down":{"cursor":{"laneIndex":0,"rank":20},"reason":"edge"},"0:21:left":{"cursor":{"laneIndex":0,"rank":21},"reason":"edge"},"0:21:right":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"0:21:up":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"0:21:down":{"cursor":{"laneIndex":0,"rank":21},"reason":"edge"},"1:0:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"edge"},"1:0:right":{"cursor":{"laneIndex":1,"rank":0},"reason":"edge"},"1:0:up":{"cursor":{"laneIndex":1,"rank":0},"reason":"edge"},"1:0:down":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:1:left":{"cursor":{"laneIndex":1,"rank":1},"reason":"edge"},"1:1:right":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"1:1:up":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"1:1:down":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:2:left":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"1:2:right":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"1:2:up":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"1:2:down":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:3:left":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"1:3:right":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"1:3:up":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"1:3:down":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:4:left":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"1:4:right":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"1:4:up":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"1:4:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:5:left":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"1:5:right":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"1:5:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:5:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:6:left":{"cursor":{"laneIndex":0,"rank":2},"reason":"moved"},"1:6:right":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"1:6:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:6:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:7:left":{"cursor":{"laneIndex":1,"rank":7},"reason":"edge"},"1:7:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"1:7:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:7:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:8:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"1:8:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"1:8:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:8:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:9:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"1:9:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"1:9:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:9:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:10:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"1:10:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"1:10:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:10:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:11:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"1:11:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"1:11:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:11:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:12:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"1:12:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"1:12:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:12:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:13:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"1:13:right":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"1:13:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:13:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:14:left":{"cursor":{"laneIndex":1,"rank":14},"reason":"edge"},"1:14:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"1:14:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:14:down":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:15:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"edge"},"1:15:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"1:15:up":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"1:15:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"1:16:left":{"cursor":{"laneIndex":1,"rank":16},"reason":"edge"},"1:16:right":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"1:16:up":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:16:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"1:17:left":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"1:17:right":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"1:17:up":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:17:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"1:18:left":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"1:18:right":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"1:18:up":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:18:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"1:19:left":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"1:19:right":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"1:19:up":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:19:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"1:20:left":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"1:20:right":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"1:20:up":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:20:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"1:21:left":{"cursor":{"laneIndex":0,"rank":17},"reason":"moved"},"1:21:right":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"1:21:up":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"1:21:down":{"cursor":{"laneIndex":1,"rank":21},"reason":"edge"},"2:0:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"2:0:right":{"cursor":{"laneIndex":2,"rank":0},"reason":"edge"},"2:0:up":{"cursor":{"laneIndex":2,"rank":0},"reason":"edge"},"2:0:down":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"2:1:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"2:1:right":{"cursor":{"laneIndex":2,"rank":1},"reason":"edge"},"2:1:up":{"cursor":{"laneIndex":2,"rank":1},"reason":"edge"},"2:1:down":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:2:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"2:2:right":{"cursor":{"laneIndex":2,"rank":2},"reason":"edge"},"2:2:up":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"2:2:down":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:3:left":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"2:3:right":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"2:3:up":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"2:3:down":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:4:left":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"2:4:right":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"2:4:up":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"2:4:down":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:5:left":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"2:5:right":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"2:5:up":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"2:5:down":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:6:left":{"cursor":{"laneIndex":1,"rank":4},"reason":"moved"},"2:6:right":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"2:6:up":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"2:6:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:7:left":{"cursor":{"laneIndex":2,"rank":7},"reason":"edge"},"2:7:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"2:7:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:7:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:8:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"2:8:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"2:8:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:8:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:9:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"2:9:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"2:9:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:9:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:10:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"2:10:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"2:10:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:10:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:11:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"2:11:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"2:11:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:11:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:12:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"2:12:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"2:12:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:12:down":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:13:left":{"cursor":{"laneIndex":1,"rank":13},"reason":"moved"},"2:13:right":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"2:13:up":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"2:13:down":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:14:left":{"cursor":{"laneIndex":2,"rank":14},"reason":"edge"},"2:14:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"2:14:up":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:14:down":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:15:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"2:15:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"2:15:up":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:15:down":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:16:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"2:16:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"2:16:up":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"2:16:down":{"cursor":{"laneIndex":2,"rank":16},"reason":"edge"},"2:17:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"2:17:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"2:17:up":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:17:down":{"cursor":{"laneIndex":2,"rank":17},"reason":"edge"},"2:18:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"2:18:right":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"2:18:up":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:18:down":{"cursor":{"laneIndex":2,"rank":18},"reason":"edge"},"2:19:left":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"2:19:right":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"2:19:up":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:19:down":{"cursor":{"laneIndex":2,"rank":19},"reason":"edge"},"2:20:left":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"2:20:right":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"2:20:up":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:20:down":{"cursor":{"laneIndex":2,"rank":20},"reason":"edge"},"2:21:left":{"cursor":{"laneIndex":1,"rank":21},"reason":"moved"},"2:21:right":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"2:21:up":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"2:21:down":{"cursor":{"laneIndex":2,"rank":21},"reason":"edge"},"3:0:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"3:0:right":{"cursor":{"laneIndex":3,"rank":0},"reason":"edge"},"3:0:up":{"cursor":{"laneIndex":3,"rank":0},"reason":"edge"},"3:0:down":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:1:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"3:1:right":{"cursor":{"laneIndex":3,"rank":1},"reason":"edge"},"3:1:up":{"cursor":{"laneIndex":3,"rank":1},"reason":"edge"},"3:1:down":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:2:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"3:2:right":{"cursor":{"laneIndex":3,"rank":2},"reason":"edge"},"3:2:up":{"cursor":{"laneIndex":3,"rank":2},"reason":"edge"},"3:2:down":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:3:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"3:3:right":{"cursor":{"laneIndex":3,"rank":3},"reason":"edge"},"3:3:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"edge"},"3:3:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:4:left":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"3:4:right":{"cursor":{"laneIndex":3,"rank":4},"reason":"edge"},"3:4:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:4:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:5:left":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"3:5:right":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"3:5:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:5:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:6:left":{"cursor":{"laneIndex":2,"rank":6},"reason":"moved"},"3:6:right":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"3:6:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:6:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:7:left":{"cursor":{"laneIndex":3,"rank":7},"reason":"edge"},"3:7:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"3:7:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:7:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:8:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"3:8:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"3:8:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:8:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:9:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"3:9:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"3:9:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:9:down":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:10:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"3:10:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"3:10:up":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"3:10:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:11:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"3:11:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"3:11:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:11:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:12:left":{"cursor":{"laneIndex":0,"rank":11},"reason":"moved"},"3:12:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"3:12:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:12:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:13:left":{"cursor":{"laneIndex":2,"rank":13},"reason":"moved"},"3:13:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"3:13:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:13:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:14:left":{"cursor":{"laneIndex":3,"rank":14},"reason":"edge"},"3:14:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"3:14:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:14:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:15:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"3:15:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"3:15:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:15:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:16:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"3:16:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"3:16:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:16:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:17:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"3:17:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"3:17:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:17:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:18:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"3:18:right":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"3:18:up":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"3:18:down":{"cursor":{"laneIndex":3,"rank":18},"reason":"edge"},"3:19:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"3:19:right":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"3:19:up":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:19:down":{"cursor":{"laneIndex":3,"rank":19},"reason":"edge"},"3:20:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"3:20:right":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"3:20:up":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:20:down":{"cursor":{"laneIndex":3,"rank":20},"reason":"edge"},"3:21:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"3:21:right":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"3:21:up":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"3:21:down":{"cursor":{"laneIndex":3,"rank":21},"reason":"edge"},"4:0:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"4:0:right":{"cursor":{"laneIndex":4,"rank":0},"reason":"edge"},"4:0:up":{"cursor":{"laneIndex":4,"rank":0},"reason":"edge"},"4:0:down":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:1:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"4:1:right":{"cursor":{"laneIndex":4,"rank":1},"reason":"edge"},"4:1:up":{"cursor":{"laneIndex":4,"rank":1},"reason":"edge"},"4:1:down":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:2:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"4:2:right":{"cursor":{"laneIndex":4,"rank":2},"reason":"edge"},"4:2:up":{"cursor":{"laneIndex":4,"rank":2},"reason":"edge"},"4:2:down":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:3:left":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"4:3:right":{"cursor":{"laneIndex":4,"rank":3},"reason":"edge"},"4:3:up":{"cursor":{"laneIndex":4,"rank":3},"reason":"edge"},"4:3:down":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:4:left":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"4:4:right":{"cursor":{"laneIndex":4,"rank":4},"reason":"edge"},"4:4:up":{"cursor":{"laneIndex":4,"rank":4},"reason":"edge"},"4:4:down":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:5:left":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"4:5:right":{"cursor":{"laneIndex":4,"rank":5},"reason":"edge"},"4:5:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"edge"},"4:5:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:6:left":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"4:6:right":{"cursor":{"laneIndex":4,"rank":6},"reason":"edge"},"4:6:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:6:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:7:left":{"cursor":{"laneIndex":4,"rank":7},"reason":"edge"},"4:7:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"4:7:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:7:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:8:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"4:8:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"4:8:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:8:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:9:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"4:9:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"4:9:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:9:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:10:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"4:10:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"4:10:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:10:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:11:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"4:11:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"4:11:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:11:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:12:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"4:12:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"4:12:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:12:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:13:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"4:13:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"4:13:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:13:down":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:14:left":{"cursor":{"laneIndex":4,"rank":14},"reason":"edge"},"4:14:right":{"cursor":{"laneIndex":4,"rank":14},"reason":"edge"},"4:14:up":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"4:14:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:15:left":{"cursor":{"laneIndex":1,"rank":15},"reason":"moved"},"4:15:right":{"cursor":{"laneIndex":4,"rank":15},"reason":"edge"},"4:15:up":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:15:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:16:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"4:16:right":{"cursor":{"laneIndex":4,"rank":16},"reason":"edge"},"4:16:up":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:16:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:17:left":{"cursor":{"laneIndex":2,"rank":16},"reason":"moved"},"4:17:right":{"cursor":{"laneIndex":4,"rank":17},"reason":"edge"},"4:17:up":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:17:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:18:left":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"4:18:right":{"cursor":{"laneIndex":4,"rank":18},"reason":"edge"},"4:18:up":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:18:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:19:left":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"4:19:right":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"4:19:up":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:19:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:20:left":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"4:20:right":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"4:20:up":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"4:20:down":{"cursor":{"laneIndex":4,"rank":20},"reason":"edge"},"4:21:left":{"cursor":{"laneIndex":3,"rank":18},"reason":"moved"},"4:21:right":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"4:21:up":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"4:21:down":{"cursor":{"laneIndex":4,"rank":21},"reason":"edge"},"5:0:left":{"cursor":{"laneIndex":1,"rank":0},"reason":"moved"},"5:0:right":{"cursor":{"laneIndex":5,"rank":0},"reason":"edge"},"5:0:up":{"cursor":{"laneIndex":5,"rank":0},"reason":"edge"},"5:0:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:1:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"5:1:right":{"cursor":{"laneIndex":5,"rank":1},"reason":"edge"},"5:1:up":{"cursor":{"laneIndex":5,"rank":1},"reason":"edge"},"5:1:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:2:left":{"cursor":{"laneIndex":2,"rank":1},"reason":"moved"},"5:2:right":{"cursor":{"laneIndex":5,"rank":2},"reason":"edge"},"5:2:up":{"cursor":{"laneIndex":5,"rank":2},"reason":"edge"},"5:2:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:3:left":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"5:3:right":{"cursor":{"laneIndex":5,"rank":3},"reason":"edge"},"5:3:up":{"cursor":{"laneIndex":5,"rank":3},"reason":"edge"},"5:3:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:4:left":{"cursor":{"laneIndex":3,"rank":3},"reason":"moved"},"5:4:right":{"cursor":{"laneIndex":5,"rank":4},"reason":"edge"},"5:4:up":{"cursor":{"laneIndex":5,"rank":4},"reason":"edge"},"5:4:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:5:left":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"5:5:right":{"cursor":{"laneIndex":5,"rank":5},"reason":"edge"},"5:5:up":{"cursor":{"laneIndex":5,"rank":5},"reason":"edge"},"5:5:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:6:left":{"cursor":{"laneIndex":4,"rank":5},"reason":"moved"},"5:6:right":{"cursor":{"laneIndex":5,"rank":6},"reason":"edge"},"5:6:up":{"cursor":{"laneIndex":5,"rank":6},"reason":"edge"},"5:6:down":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:7:left":{"cursor":{"laneIndex":5,"rank":7},"reason":"edge"},"5:7:right":{"cursor":{"laneIndex":5,"rank":7},"reason":"edge"},"5:7:up":{"cursor":{"laneIndex":5,"rank":7},"reason":"edge"},"5:7:down":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"5:8:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"5:8:right":{"cursor":{"laneIndex":5,"rank":8},"reason":"edge"},"5:8:up":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:8:down":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"5:9:left":{"cursor":{"laneIndex":0,"rank":8},"reason":"moved"},"5:9:right":{"cursor":{"laneIndex":5,"rank":9},"reason":"edge"},"5:9:up":{"cursor":{"laneIndex":5,"rank":7},"reason":"moved"},"5:9:down":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:10:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"5:10:right":{"cursor":{"laneIndex":5,"rank":10},"reason":"edge"},"5:10:up":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"5:10:down":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:11:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"5:11:right":{"cursor":{"laneIndex":5,"rank":11},"reason":"edge"},"5:11:up":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"5:11:down":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:12:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"5:12:right":{"cursor":{"laneIndex":5,"rank":12},"reason":"edge"},"5:12:up":{"cursor":{"laneIndex":5,"rank":9},"reason":"moved"},"5:12:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:13:left":{"cursor":{"laneIndex":3,"rank":10},"reason":"moved"},"5:13:right":{"cursor":{"laneIndex":5,"rank":13},"reason":"edge"},"5:13:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:13:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:14:left":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"5:14:right":{"cursor":{"laneIndex":5,"rank":14},"reason":"edge"},"5:14:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:14:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:15:left":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"5:15:right":{"cursor":{"laneIndex":5,"rank":15},"reason":"edge"},"5:15:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:15:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:16:left":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"5:16:right":{"cursor":{"laneIndex":5,"rank":16},"reason":"edge"},"5:16:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:16:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:17:left":{"cursor":{"laneIndex":4,"rank":14},"reason":"moved"},"5:17:right":{"cursor":{"laneIndex":5,"rank":17},"reason":"edge"},"5:17:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:17:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:18:left":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"5:18:right":{"cursor":{"laneIndex":5,"rank":18},"reason":"edge"},"5:18:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:18:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:19:left":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"5:19:right":{"cursor":{"laneIndex":5,"rank":19},"reason":"edge"},"5:19:up":{"cursor":{"laneIndex":5,"rank":12},"reason":"moved"},"5:19:down":{"cursor":{"laneIndex":5,"rank":19},"reason":"edge"},"5:20:left":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"5:20:right":{"cursor":{"laneIndex":5,"rank":20},"reason":"edge"},"5:20:up":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:20:down":{"cursor":{"laneIndex":5,"rank":20},"reason":"edge"},"5:21:left":{"cursor":{"laneIndex":4,"rank":20},"reason":"moved"},"5:21:right":{"cursor":{"laneIndex":5,"rank":21},"reason":"edge"},"5:21:up":{"cursor":{"laneIndex":5,"rank":19},"reason":"moved"},"5:21:down":{"cursor":{"laneIndex":5,"rank":21},"reason":"edge"}}}</script>
+<script>
+(function () {
+  "use strict";
+  var DATA = JSON.parse(document.getElementById("river-data").textContent);
+
+  // Tokens de PIXELS — ils appartiennent à la peau, jamais à la loi.
+  var ROW = 48, LANE = 128, PAD_X = 74, PAD_TOP = 22, PAD_BOTTOM = 52;
+  var BW = 108, BH = 26, RADIUS = 9, TAIL = 30;
+
+  var NS = "http://www.w3.org/2000/svg";
+  var svg = document.getElementById("river");
+  var width = PAD_X + (DATA.laneCount - 1) * LANE + BW / 2 + 26;
+  var height = PAD_TOP + DATA.rankCount * ROW + PAD_BOTTOM;
+  svg.setAttribute("viewBox", "0 0 " + width + " " + height);
+  svg.setAttribute("width", width);
+  svg.setAttribute("height", height);
+
+  var x = function (laneIndex) { return PAD_X + laneIndex * LANE; };
+  var y = function (rank) { return PAD_TOP + rank * ROW + ROW / 2; };
+
+  var el = function (name, attrs) {
+    var node = document.createElementNS(NS, name);
+    Object.keys(attrs || {}).forEach(function (key) { node.setAttribute(key, attrs[key]); });
+    return node;
+  };
+
+  var laneByIndex = {};
+  DATA.lanes.forEach(function (lane) { laneByIndex[lane.laneIndex] = lane; });
+  var bubbleAt = {};
+  DATA.bubbles.forEach(function (bubble) { bubbleAt[bubble.laneIndex + ":" + bubble.rank] = bubble; });
+  var bubbleByRank = {};
+  DATA.bubbles.forEach(function (bubble) { bubbleByRank[bubble.rank] = bubble; });
+
+  var KIND_GLYPH = { text: "", photo: "▣", audio: "▶", file: "▤" };
+
+  // ── En-têtes de colonne : hors du SVG, pour rester lisibles quand on
+  //    descend le fleuve (l'identité d'un couloir ne doit jamais défiler).
+  var strip = document.getElementById("strip");
+  var pane = document.getElementById("pane");
+  var stripClip = strip.parentNode;
+  strip.style.width = width + "px";
+  DATA.lanes.forEach(function (lane) {
+    var label = document.createElement("span");
+    label.textContent = lane.name.toUpperCase();
+    label.style.left = x(lane.laneIndex) + "px";
+    label.style.color = lane.color;
+    strip.appendChild(label);
+  });
+  pane.addEventListener("scroll", function () { stripClip.scrollLeft = pane.scrollLeft; });
+
+  var altitude = el("g", { class: "altitude" });
+  var altitudeLine = el("line", {
+    x1: 12, x2: width - 8, y1: 0, y2: 0,
+    stroke: "currentColor", "stroke-width": "1", "stroke-dasharray": "2 4", opacity: "0.28"
+  });
+  altitude.appendChild(altitudeLine);
+  svg.appendChild(altitude);
+
+  // ── Les branches : un tracé par segment, estompé s'il s'éteint ───────────
+  var defs = el("defs", {});
+  svg.appendChild(defs);
+
+  DATA.lanes.forEach(function (lane) {
+    var cx = x(lane.laneIndex);
+    lane.spans.forEach(function (span, spanIndex) {
+      var group = el("g", {});
+      var bubbleRanks = span.nodes.filter(function (n) { return n.kind === "bubble"; })
+        .map(function (n) { return n.rank; });
+
+      // Les COURSES : la ligne poursuit sa route d'une bulle à l'autre, les
+      // anneaux d'interpellation ne la coupent pas (elle passe derrière).
+      var runs = [];
+      var headY = y(span.startRank) - (bubbleRanks.length && bubbleRanks[0] === span.startRank ? BH / 2 : 0);
+      if (bubbleRanks.length === 0) {
+        runs.push([y(span.startRank) - 10, y(span.endRank) + (span.isOpen ? ROW / 2 : TAIL)]);
+      } else {
+        if (headY < y(bubbleRanks[0]) - BH / 2) runs.push([headY, y(bubbleRanks[0]) - BH / 2]);
+        for (var k = 0; k < bubbleRanks.length - 1; k += 1) {
+          runs.push([y(bubbleRanks[k]) + BH / 2, y(bubbleRanks[k + 1]) - BH / 2]);
+        }
+        var lastRank = bubbleRanks[bubbleRanks.length - 1];
+        runs.push([y(lastRank) + BH / 2, Math.max(y(span.endRank), y(lastRank)) + (span.isOpen ? ROW / 2 : TAIL)]);
+      }
+
+      runs.forEach(function (run, runIndex) {
+        if (run[1] - run[0] < 0.5) return;
+        var isTail = !span.isOpen && runIndex === runs.length - 1;
+        if (!isTail) {
+          group.appendChild(el("line", {
+            x1: cx, x2: cx, y1: run[0], y2: run[1], stroke: lane.color, "stroke-width": "2.5",
+            opacity: "0.85", "stroke-linecap": "round"
+          }));
+          return;
+        }
+        // Une branche qui MEURT s'estompe : c'est la disparition, pas une coupure nette.
+        // userSpaceOnUse OBLIGATOIRE : la boîte englobante d'une ligne
+        // verticale est de largeur nulle, et un dégradé en unités de boîte n'y
+        // peint rien du tout.
+        var gid = "fade-" + lane.laneIndex + "-" + spanIndex;
+        var grad = el("linearGradient", {
+          id: gid, gradientUnits: "userSpaceOnUse",
+          x1: cx, y1: run[0], x2: cx, y2: run[1]
+        });
+        grad.appendChild(el("stop", { offset: "0", "stop-color": lane.color, "stop-opacity": "0.85" }));
+        grad.appendChild(el("stop", { offset: "1", "stop-color": lane.color, "stop-opacity": "0" }));
+        defs.appendChild(grad);
+        group.appendChild(el("line", {
+          x1: cx, x2: cx, y1: run[0], y2: run[1], stroke: "url(#" + gid + ")", "stroke-width": "2.5"
+        }));
+      });
+
+      // Naissance : une amorce pleine, pour qu'on voie la branche APPARAÎTRE.
+      group.appendChild(el("circle", { cx: cx, cy: headY - 5, r: "2.6", fill: lane.color }));
+
+      span.nodes.forEach(function (node) {
+        if (node.kind === "addressed") {
+          // Reparue pour recevoir une réponse : anneau creux, aucune bulle.
+          group.appendChild(el("circle", {
+            cx: cx, cy: y(node.rank), r: "6.5", fill: "none", stroke: lane.color,
+            "stroke-width": "2", "stroke-dasharray": "3 2.5"
+          }));
+        }
+      });
+      svg.appendChild(group);
+    });
+  });
+
+  // ── Connecteurs de réponse : la bulle vers le message répondu ────────────
+  var connectors = el("g", {});
+  DATA.connectors.forEach(function (connector) {
+    var fx = x(connector.fromLaneIndex), tx = x(connector.toLaneIndex);
+    var fy = y(connector.fromRank), ty = y(connector.toRank);
+    var side = tx >= fx ? 1 : -1;
+    var startX = fx + side * (BW / 2 - 4);
+    var endX = tx - side * (BW / 2 - 4);
+    var midY = (fy + ty) / 2;
+    // Le second trait s'ARQUE dans la gouttière : une réponse à un message
+    // lointain doit se lire comme un arc qui remonte, jamais comme une
+    // colonne parallèle aux branches.
+    var bow = Math.max(30, Math.abs(tx - fx) * 0.42) + Math.min(96, Math.abs(ty - fy) * 0.14);
+    var lane = laneByIndex[connector.toLaneIndex];
+    var isLongReach = Math.abs(connector.toRank - connector.fromRank) > 4;
+    connectors.appendChild(el("path", {
+      d: "M " + startX + " " + fy + " C " + (startX + side * bow) + " " + fy + " " +
+         (endX - side * bow) + " " + midY + " " + endX + " " + ty,
+      fill: "none", stroke: lane.color, "stroke-width": "1.4",
+      "stroke-dasharray": "4 3", opacity: isLongReach ? "0.32" : "0.55"
+    }));
+  });
+  svg.appendChild(connectors);
+
+  // ── Les bulles : la ligne de l'auteur ENTOURE la bulle ───────────────────
+  var cursorRing = el("rect", {
+    class: "cursor-ring", rx: RADIUS + 4, ry: RADIUS + 4,
+    width: BW + 10, height: BH + 10, fill: "none",
+    stroke: "currentColor", "stroke-width": "1.5", opacity: "0"
+  });
+
+  DATA.bubbles.forEach(function (bubble) {
+    var lane = laneByIndex[bubble.laneIndex];
+    var cx = x(bubble.laneIndex), cy = y(bubble.rank);
+    var group = el("g", { style: "cursor: pointer;" });
+    group.appendChild(el("rect", {
+      x: cx - BW / 2, y: cy - BH / 2, width: BW, height: BH, rx: RADIUS, ry: RADIUS,
+      fill: "var(--surface)", stroke: lane.color, "stroke-width": "2.5"
+    }));
+    var glyph = KIND_GLYPH[bubble.kind] || "";
+    var label = el("text", {
+      x: cx, y: cy + 4, "text-anchor": "middle", "font-size": "11",
+      fill: "var(--ink)", "font-family": "system-ui, sans-serif"
+    });
+    var preview = bubble.text.replace(/\s+/g, " ").slice(0, glyph ? 10 : 13);
+    label.textContent = (glyph ? glyph + " " : "") + preview + "…";
+    group.appendChild(label);
+    // L'heure vit en base de bulle — décalée du centre pour ne pas s'asseoir
+    // sur la ligne, qui poursuit sa course juste dessous.
+    var time = el("text", {
+      x: cx + BW / 2 - 3, y: cy + BH / 2 + 11, "text-anchor": "end", "font-size": "9.5",
+      fill: "var(--muted)", "font-family": "ui-monospace, SF Mono, Menlo, monospace"
+    });
+    time.textContent = bubble.time;
+    group.appendChild(time);
+    group.addEventListener("click", function () { moveTo(bubble.laneIndex, bubble.rank, "click"); });
+    svg.appendChild(group);
+  });
+
+  svg.appendChild(cursorRing);
+
+  // ── Curseur : chaque pas vient de la loi (table pré-calculée) ────────────
+  var cursor = { laneIndex: DATA.bubbles[0].laneIndex, rank: 0 };
+  var peek = document.getElementById("peek");
+  var verdictBox = document.getElementById("verdict");
+  var aliveBox = document.getElementById("alive");
+  var followBtn = document.getElementById("follow");
+
+  var livingAt = function (rank) {
+    return DATA.lanes.filter(function (lane) {
+      return lane.spans.some(function (span) { return span.startRank <= rank && rank <= span.endRank; });
+    }).map(function (lane) { return lane.laneIndex; });
+  };
+
+  var render = function (verdict) {
+    var bubble = bubbleAt[cursor.laneIndex + ":" + cursor.rank];
+    var lane = laneByIndex[cursor.laneIndex];
+    var cx = x(cursor.laneIndex), cy = y(cursor.rank);
+
+    cursorRing.setAttribute("x", cx - (BW + 10) / 2);
+    cursorRing.setAttribute("y", cy - (BH + 10) / 2);
+    cursorRing.setAttribute("opacity", bubble ? "0.75" : "0.3");
+    altitudeLine.setAttribute("y1", cy);
+    altitudeLine.setAttribute("y2", cy);
+
+    var living = livingAt(cursor.rank);
+    aliveBox.innerHTML = "";
+    DATA.lanes.forEach(function (candidate) {
+      var chip = document.createElement("span");
+      var isAlive = living.indexOf(candidate.laneIndex) !== -1;
+      chip.setAttribute("data-alive", isAlive ? "1" : "0");
+      chip.textContent = candidate.name;
+      chip.style.color = isAlive ? candidate.color : "var(--muted)";
+      chip.style.borderColor = isAlive ? candidate.color : "var(--line)";
+      aliveBox.appendChild(chip);
+    });
+
+    var shown = bubble || bubbleByRank[cursor.rank];
+    var replyTo = shown && shown.replyToMessageId
+      ? DATA.bubbles.filter(function (b) { return b.messageId === shown.replyToMessageId; })[0]
+      : null;
+    peek.innerHTML = "";
+    var who = document.createElement("div");
+    who.className = "peek-who";
+    var dot = document.createElement("span");
+    dot.className = "peek-dot";
+    dot.style.background = lane.color;
+    var name = document.createElement("span");
+    name.className = "peek-name";
+    name.textContent = bubble ? lane.name : lane.name + " — branche reparue, sans message";
+    who.appendChild(dot); who.appendChild(name);
+    peek.appendChild(who);
+
+    var meta = document.createElement("p");
+    meta.className = "peek-meta";
+    meta.textContent = "colonne " + cursor.laneIndex + " · rang " + cursor.rank +
+      (shown ? " · " + shown.time : "");
+    peek.appendChild(meta);
+
+    if (shown) {
+      var text = document.createElement("p");
+      text.className = "peek-text";
+      text.textContent = shown.text;
+      peek.appendChild(text);
+      if (shown.source) {
+        var tag = document.createElement("p");
+        tag.className = "tag";
+        tag.textContent = "🌐 traduit — original en " + (shown.source === "es" ? "espagnol" : "portugais");
+        peek.appendChild(tag);
+      }
+      if (replyTo) {
+        var quote = document.createElement("p");
+        quote.className = "peek-reply";
+        quote.textContent = "en réponse à " + laneByIndex[replyTo.laneIndex].name + " · " + replyTo.text;
+        peek.appendChild(quote);
+      }
+    }
+
+    followBtn.textContent = "Suivre " + lane.name + " ↓";
+
+    verdictBox.innerHTML = "";
+    var call = document.createElement("span");
+    call.innerHTML = "<b>resolveRiverStep</b> · " + (verdict ? verdict.direction : "—");
+    var out = document.createElement("span");
+    out.className = verdict ? verdict.reason : "empty";
+    out.textContent = verdict
+      ? "→ " + verdict.reason + " · {couloir " + cursor.laneIndex + ", rang " + cursor.rank + "}"
+      : "→ curseur initial";
+    verdictBox.appendChild(call);
+    verdictBox.appendChild(out);
+  };
+
+  var moveTo = function (laneIndex, rank, how) {
+    cursor = { laneIndex: laneIndex, rank: rank };
+    render({ direction: how, reason: "moved" });
+  };
+
+  var step = function (direction) {
+    var result = DATA.steps[cursor.laneIndex + ":" + cursor.rank + ":" + direction];
+    if (!result) { render({ direction: direction, reason: "empty" }); return; }
+    cursor = { laneIndex: result.cursor.laneIndex, rank: result.cursor.rank };
+    render({ direction: direction, reason: result.reason });
+  };
+
+  var KEYS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" };
+  document.addEventListener("keydown", function (event) {
+    var direction = KEYS[event.key];
+    if (!direction) return;
+    event.preventDefault();
+    step(direction);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".pad button"), function (button) {
+    button.addEventListener("click", function () { step(button.getAttribute("data-dir")); });
+  });
+
+  var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  followBtn.addEventListener("click", function () {
+    var hops = 0;
+    var advance = function () {
+      var before = cursor.rank;
+      step("down");
+      hops += 1;
+      if (cursor.rank !== before && hops < 12) {
+        if (reduceMotion) advance(); else window.setTimeout(advance, 420);
+      }
+    };
+    advance();
+  });
+
+  var domOrder = document.getElementById("dom-order");
+  DATA.bubbles.forEach(function (bubble) {
+    var item = document.createElement("li");
+    item.textContent = laneByIndex[bubble.laneIndex].name + " · " + bubble.time + " — " + bubble.text;
+    domOrder.appendChild(item);
+  });
+
+  render(null);
+})();
+</script>
