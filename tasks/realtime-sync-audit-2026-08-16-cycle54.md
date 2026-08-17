@@ -190,9 +190,20 @@ n°3.
 
 - **Guards CI locales** : `check-law-literals.sh` et `check-swift-viewbuilder.sh`
   vertes (2547 fichiers Swift balayés).
-- **Compilation et tests Swift** : délégués à la CI (`iOS` sur `macos-15`,
-  `SDK Tests`) — aucun toolchain Swift sur l'hôte de cette routine, et les deux
-  workflows se déclenchent sur `apps/ios/**` et `packages/MeeshySDK/**`.
+- **Compilation et tests Swift** : délégués à la CI (`macos-15`) — aucun
+  toolchain Swift sur l'hôte de cette routine. Les deux workflows ne se valent
+  PAS, et il faut le savoir avant de lire leur vert :
+  - `SDK Tests` (`sdk-tests.yml`) se déclenche sur `packages/MeeshySDK/**` et
+    **exécute** la suite. Les 3 témoins de décodage et les 5 de la purge y
+    tournent sans rien demander.
+  - `iOS` (`ios.yml`) se déclenche sur `apps/ios/**` **mais ne COMPILE que**, à
+    moins que le SUJET du commit de tête ne porte `smoke test`, `run test` ou
+    `to test` (job « Portée du run »). Un vert par défaut atteste donc que le
+    bundle de tests LINKE, pas que les témoins passent — et le nom du check le
+    dit (« Build app » vs « Build app + tests unitaires »).
+  Les 2 témoins du handler vivent sous `apps/ios/**` : leur exécution demande
+  l'opt-in, et ce cycle le prend explicitement. `workflow_dispatch`, qui force
+  aussi `run_tests=true`, n'est pas accessible au jeton de la routine (403).
 - **Aucun fichier TypeScript touché** : les suites web/gateway/shared ne sont pas
   concernées par ce diff.
 - 10 témoins neufs : 3 de décodage, 5 sur la purge, 2 sur le handler.
