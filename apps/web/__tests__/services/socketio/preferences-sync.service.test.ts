@@ -147,13 +147,19 @@ describe('PreferencesSyncService', () => {
       expect(listener).toHaveBeenCalledTimes(1);
     });
 
-    it('registers user:preferences-reordered handler and fires callback', () => {
+    /**
+     * `user:preferences-reordered` PORTE une charge utile (`updates[]`), et la
+     * router vers le seau des catégories — dont l'écouteur est `() => void` —
+     * la jetait. Ce n'est pas non plus un événement de catégorie : un
+     * réordonnancement de conversations ne change aucune `UserConversationCategory`.
+     */
+    it('does not route user:preferences-reordered to the payload-less category bucket', () => {
       const socket = makeSocket();
       service.setupEventListeners(socket as any);
       const listener = jest.fn();
       service.onCategoryChanged(listener);
       socket._trigger('user:preferences-reordered', { userId: 'u1', updates: [] });
-      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).not.toHaveBeenCalled();
     });
 
     it('unsubscribe stops receiving category events', () => {
@@ -166,4 +172,54 @@ describe('PreferencesSyncService', () => {
       expect(listener).not.toHaveBeenCalled();
     });
   });
+
+  describe('onPreferencesReordered', () => {
+    it('registers user:preferences-reordered on the socket', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      expect(socket.on).toHaveBeenCalledWith('user:preferences-reordered', expect.any(Function));
+    });
+
+    it('forwards the updates payload verbatim to every listener', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const first = jest.fn();
+      const second = jest.fn();
+      service.onPreferencesReordered(first);
+      service.onPreferencesReordered(second);
+
+      const payload = {
+        userId: 'u1',
+        updates: [
+          { conversationId: 'conv-a', orderInCategory: 2 },
+          { conversationId: 'conv-b', orderInCategory: 5 },
+        ],
+      };
+      socket._trigger('user:preferences-reordered', payload);
+
+      expect(first).toHaveBeenCalledWith(payload);
+      expect(second).toHaveBeenCalledWith(payload);
+    });
+
+    it('unsubscribe stops receiving reorder events', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      const unsub = service.onPreferencesReordered(listener);
+      unsub();
+      socket._trigger('user:preferences-reordered', { userId: 'u1', updates: [] });
+      expect(listener).not.toHaveBeenCalled();
+    });
+
+    it('cleanup drops reorder listeners', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onPreferencesReordered(listener);
+      service.cleanup();
+      socket._trigger('user:preferences-reordered', { userId: 'u1', updates: [] });
+      expect(listener).not.toHaveBeenCalled();
+    });
+  });
+
 });
