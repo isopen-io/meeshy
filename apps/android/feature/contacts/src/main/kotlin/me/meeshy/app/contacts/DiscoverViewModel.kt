@@ -44,6 +44,9 @@ data class DiscoverUiState(
     val pendingActionIds: Set<String> = emptySet(),
     /** True while the empty-query cache-first suggestions surface owns [rows]. */
     val isShowingSuggestions: Boolean = false,
+    val emailText: String = "",
+    val isSendingInvite: Boolean = false,
+    val inviteErrorMessage: String? = null,
 ) {
     /** True when the trimmed query is long enough that a network search is in play. */
     val isSearchActive: Boolean
@@ -252,6 +255,27 @@ class DiscoverViewModel @Inject constructor(
     }
 
     fun dismissError() = _state.update { it.copy(errorMessage = null) }
+
+    /** Port of iOS `DiscoverViewModel.sendEmailInvitation` — invite by email. */
+    fun onEmailTextChanged(text: String) {
+        _state.update { it.copy(emailText = text, inviteErrorMessage = null) }
+    }
+
+    fun sendEmailInvitation() {
+        val email = _state.value.emailText.trim()
+        if (email.isEmpty() || _state.value.isSendingInvite) return
+        _state.update { it.copy(isSendingInvite = true, inviteErrorMessage = null) }
+        viewModelScope.launch {
+            when (val result = friendRepository.sendEmailInvitation(email)) {
+                is NetworkResult.Success ->
+                    _state.update { it.copy(isSendingInvite = false, emailText = "") }
+                is NetworkResult.Failure ->
+                    _state.update {
+                        it.copy(isSendingInvite = false, inviteErrorMessage = result.error.message)
+                    }
+            }
+        }
+    }
 
     private fun observeFriendshipCache() {
         viewModelScope.launch {
