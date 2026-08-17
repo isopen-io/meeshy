@@ -325,16 +325,36 @@ describe('mux du fil — les bornes', () => {
     );
   });
 
-  it('préférence `bulles` drapeau ON ⇒ Focal — `bubbles` n’est dans aucun catalogue drapeau-on', async () => {
+  /**
+   * RETOURNÉ EXPRÈS le 2026-08-17 (Q-142, réserve REV-5 **R6-4**).
+   *
+   * Ce témoin gardait la phrase « `bubbles` n'est dans aucun catalogue
+   * drapeau-on », donc « `bulles` ⇒ Focal ». Elle était vraie le jour où elle
+   * a été écrite ; la décision produit « Bulles par défaut », prise le même
+   * 2026-08-17, l'a rendue fausse en pratique — le mux monte la vue à bulles
+   * pour la branche `auto`, drapeau ON. Un choix EXPLICITE de bulles était
+   * donc rabattu là où l'ABSENCE de choix, elle, donnait les bulles :
+   * l'entrée « Bulles » de `LensSwitcher` (`ConversationView.tsx:326`) était
+   * un choix mort.
+   *
+   * Le catalogue du fil porte désormais `'bubbles'`
+   * (`use-thread-reading-mode.ts`, où l'arbitrage complet est écrit) et ce
+   * témoin dit l'inverse de ce qu'il disait. La BORNE, elle, n'a pas bougé
+   * d'un pouce : les deux témoins juste au-dessus (`riviere`, `resume`)
+   * restent rabattus sur Focal, et c'est eux qui prouvent que le catalogue a
+   * été ouvert à UNE image, pas relâché.
+   */
+  it('préférence `bulles` drapeau ON ⇒ le fil rend les BULLES (R6-4) — le seul mode hors `FocalThread` que cet écran monte', async () => {
     mockFocalActive = true;
     await writeFromLentilleMenu('bulles');
 
     render(<ConversationMessages {...defaultProps} reverseOrder />);
 
-    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
-      'data-density',
-      'focal'
+    expect(await screen.findByTestId('messages-display')).toHaveAttribute(
+      'data-reading-mode',
+      'bubble'
     );
+    expect(screen.queryByTestId('focal-thread-mount')).not.toBeInTheDocument();
   });
 
   /**

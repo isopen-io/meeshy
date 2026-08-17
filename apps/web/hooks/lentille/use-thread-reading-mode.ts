@@ -72,11 +72,59 @@ import { useReadingModePreference } from '@/stores/reading-mode-preference-store
 import type { FocalDensity } from '@/components/conversations/focal/FocalRow';
 
 /**
- * Les modes que le fil sait RÉELLEMENT monter aujourd'hui — les deux densités
- * de `FocalThread`. Toute entrée nouvelle ici (une Rivière montée, un Résumé
- * Vivant) est un changement de comportement délibéré, pas un détail.
+ * Les modes que le fil sait RÉELLEMENT monter aujourd'hui. Toute entrée
+ * nouvelle ici (une Rivière montée, un Résumé Vivant) est un changement de
+ * comportement délibéré, pas un détail.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Q-142 / réserve REV-5 **R6-4** — `'bubbles'` ENTRE ICI, et voici pourquoi
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Ce catalogue répond à UNE question : « qu'est-ce que cet ÉCRAN sait monter
+ * aujourd'hui ». Jusqu'au 2026-08-17 la réponse était exactement
+ * `['focal','script']` — les deux densités de `FocalThread`, et rien d'autre.
+ *
+ * La décision produit « Bulles par défaut » (le même jour,
+ * `PROVISIONAL_DEFAULT_RENDER` plus bas) a rendu cette réponse FAUSSE sans
+ * que ce tableau bouge : depuis elle, le mux monte la vue à bulles tous les
+ * jours, drapeau ON, pour la branche `auto` — `ConversationMessages.tsx`,
+ * `if (threadRender === 'bubbles') return renderHistorical('bubble')`. L'écran
+ * SAIT monter les bulles ; c'est le catalogue qui l'ignorait.
+ *
+ * LA CONSÉQUENCE QUE R6-4 NOMME. `LensSwitcher` — l'en-tête du fil, monté
+ * SANS drapeau par `ConversationView.tsx:326` — offre trois entrées : Focal,
+ * Script, Bulles. La troisième écrit la préférence `bulles` (AMENDEMENT S1),
+ * que ce hook passait à la loi avec un catalogue qui ne la contenait pas :
+ * `clampToCapabilities` la rabattait sur `focal`/`clamped-unavailable`. Un
+ * choix visible, offert, et sans le moindre effet.
+ *
+ * L'ARBITRAGE RENDU (Q-142), entre les deux remèdes possibles :
+ *
+ *   (a) MASQUER l'entrée « Bulles » du catalogue quand la Lentille est ON.
+ *       C'était le remède attendu — et il est REFUSÉ, pour une raison qui
+ *       tient en une phrase : tant que « Bulles par défaut » est une décision
+ *       ACTIVE, masquer l'entrée fait du défaut un ALLER SIMPLE. Un lecteur
+ *       qui choisit Focal une fois écrit `focal` dans le magasin ; `auto` est
+ *       parti ; et depuis l'en-tête du fil — le seul menu qu'il ait sous la
+ *       main, `ReadingModeMenu` et son entrée « Auto » vivant sur les rangs de
+ *       la LISTE — plus rien ne le ramène aux bulles. On aurait échangé un
+ *       choix mort contre une porte fermée : pire.
+ *
+ *   (b) BRANCHER l'entrée sur la préférence `bulles` LÉGALE — la rendre
+ *       vivante au lieu de la rendre invisible. C'est ce qui est fait ici, et
+ *       ça ne coûte qu'un mot : le catalogue dit enfin la vérité sur l'écran.
+ *       La loi partagée n'est PAS touchée (`STICKY_MODE_BY_PREFERENCE` traduit
+ *       déjà `bulles → 'bubbles'` depuis l'amendement S1) ; aucun mode neuf
+ *       n'est atteignable ; `resume` et `riviere` restent rabattus sur `focal`,
+ *       leurs écrans n'étant toujours pas montés (témoin de discrimination
+ *       dans `__tests__/lentille/reading-mode-default-bubbles.test.tsx`).
+ *
+ * CE MOT SE RETIRE AVEC LE DÉFAUT PROVISOIRE, et pas avant : le jour où
+ * `PROVISIONAL_DEFAULT_RENDER` disparaît, l'écran cesse de monter les bulles
+ * de lui-même, et la question de savoir si « Bulles » doit rester au
+ * sélecteur redevient une question produit ouverte — c'est ce jour-là que le
+ * remède (a) redeviendra défendable.
  */
-const THREAD_MOUNTABLE_MODES = ['focal', 'script'] as const;
+const THREAD_MOUNTABLE_MODES = ['focal', 'script', 'bubbles'] as const;
 
 /**
  * `riverEligibilityReason` n'alimente QUE le libellé grisé du menu ; le mux ne
@@ -160,6 +208,12 @@ export function useThreadReadingRender(conversationId: string | undefined): Thre
       isFlagEnabled: true,
     });
 
+    // Q-142/R6-4 — trois images, plus deux. `'bubbles'` n'arrive ici que par
+    // un CHOIX collant `bulles` (la branche drapeau-éteint de la loi n'est
+    // jamais empruntée : `isFlagEnabled` vaut `true` juste au-dessus) ; tout
+    // le reste — `summary` d'un `resume` ou d'une branche numérique, `river`
+    // d'un `riviere` — reste rabattu sur `focal` par `clampToCapabilities`.
+    if (decision.mode === 'bubbles') return 'bubbles';
     return decision.mode === 'script' ? 'script' : 'focal';
   }, [conversationId, preference]);
 }

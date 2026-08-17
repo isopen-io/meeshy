@@ -159,17 +159,30 @@ describe('garde — UN SEUL module lit/écrit la persistance de préférence de 
  * ce magasin gouverne réellement le rendu. Ce qui reste est de la peau —
  * deux listes, deux vocabulaires affichés, deux points de montage.
  *
- * `LensSwitcher` devient largement REDONDANT sous drapeau ON : ses trois
- * entrées y valent respectivement Focal, Script et (pour « Bulles ») un
- * `clamped-unavailable` qui rend Focal — soit un choix visible sans effet.
- * Il reste en revanche NÉCESSAIRE drapeau ÉTEINT, où le menu du contrat n'est
- * pas monté du tout (`LentilleConversationListMount` est derrière le
+ * `LensSwitcher` était réputé largement REDONDANT sous drapeau ON : ses trois
+ * entrées y valaient respectivement Focal, Script et (pour « Bulles ») un
+ * `clamped-unavailable` qui rendait Focal — un choix visible sans effet.
+ * Il restait en revanche NÉCESSAIRE drapeau ÉTEINT, où le menu du contrat
+ * n'est pas monté du tout (`LentilleConversationListMount` est derrière le
  * drapeau) et où « Bulles » est le seul accès au rendu historique.
- * PROPOSITION, hors périmètre de ce blocker et donc NON exécutée ici : monter
+ *
+ * CE PARAGRAPHE EST AMENDÉ le 2026-08-17 (Q-142, réserve REV-5 **R6-4**).
+ * « Bulles » N'EST PLUS un choix sans effet drapeau ON : le catalogue de
+ * l'écran porte désormais `'bubbles'` (`hooks/lentille/
+ * use-thread-reading-mode.ts`, où l'arbitrage est écrit au long), parce que
+ * la décision produit « Bulles par défaut » du même jour fait déjà monter la
+ * vue à bulles pour la branche `auto` — le catalogue disait le contraire de
+ * ce que l'écran faisait. `LensSwitcher` cesse donc d'être redondant : c'est
+ * aujourd'hui le SEUL menu, depuis l'en-tête d'un fil ouvert, qui ramène aux
+ * bulles après un choix explicite de Focal ou de Script (l'entrée « Auto » du
+ * menu du contrat vit sur les rangs de la LISTE, pas dans le fil).
+ * PROPOSITION, toujours hors périmètre et donc NON exécutée ici : monter
  * `ReadingModeMenu` à la place de `LensSwitcher` dans l'en-tête du fil quand
  * le drapeau est actif, en gardant `LensSwitcher` sur le chemin OFF —
  * l'inverse (supprimer `LensSwitcher`) casserait le chemin OFF que le
- * contrat promet bit-à-bit.
+ * contrat promet bit-à-bit. Elle coûte désormais plus cher qu'avant : elle
+ * devrait emporter avec elle le retour aux bulles, sans quoi le défaut
+ * provisoire deviendrait un aller simple.
  *
  * Cette garde ne fige pas cette proposition : elle fige le CONSTAT, pour
  * qu'un troisième `FocalRow` ou un troisième menu ne s'installe pas en
