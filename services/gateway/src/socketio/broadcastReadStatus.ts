@@ -133,6 +133,15 @@ export async function broadcastReadStatus(
   // Un cas reste tranché ici, gratuitement : un compteur retombé à zéro PROUVE
   // qu'il n'y a plus de pont (contrat gelé §3.2). C'est précisément le cas qui
   // doit nettoyer les autres appareils quand on finit de lire sur celui-ci.
+  //
+  // L'arbitrage, écrit franchement : sur ce chemin-ci — et sur lui seul — le
+  // pont conservé peut SUR-COMPTER, puisque le lecteur vient d'en consommer
+  // une partie (« 5 messages » sous une pastille à 2) jusqu'au prochain
+  // émetteur qui, lui, aura calculé. C'est l'écart d'un instantané périmé,
+  // celui que la doctrine stale-while-revalidate assume partout ailleurs, et
+  // il se corrige au premier message reçu, à la première reconnexion dans la
+  // fenêtre de l'instantané, ou au premier `GET /conversations`. L'ancienne
+  // forme, elle, effaçait le pont — pas plus juste, et sans recours.
   const emitUnreadUpdate = () => {
     if (!actorReadSync) return;
     io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {

@@ -78,6 +78,24 @@ une conversation sur un appareil retire désormais le pont de la ligne sur les
 autres appareils — ce que ni l'ancien silence (qui effaçait tout, y compris à
 tort) ni un mutisme complet n'auraient donné juste.
 
+### 2.1 bis L'arbitrage qui RESTE, écrit franchement
+
+Conserver un pont non recalculé n'est pas gratuit partout. Sur UN chemin — la
+resynchro après une lecture **partielle** — le pont conservé peut SUR-COMPTER :
+le rang rend la phrase du pont (`bridge.data.messageCount`, « Alice et Bob,
+5 messages ») à côté d'une pastille tombée à 2. Sur les trois autres chemins
+non calculants (borne de l'instantané, passe tombée, `conversation:join`), le
+pont conservé est **exact** — rien n'a été lu, la valeur n'a simplement pas été
+recalculée.
+
+C'est l'écart d'un instantané périmé, celui que la doctrine
+stale-while-revalidate assume partout ailleurs dans ce dépôt, et il se corrige
+au premier message reçu, à la première reconnexion dans la fenêtre de
+l'instantané, ou au premier `GET /conversations`. L'ancienne forme, elle,
+effaçait le pont : pas plus juste, et sans recours. Le choix est donc *stale*
+plutôt qu'*absent* — et il est consigné ici pour qu'un cycle ultérieur puisse
+le rouvrir en connaissance de cause s'il trouve un recalcul assez bon marché.
+
 ### 2.2 Le discriminant côté web
 
 `data.bridge === undefined`, **jamais** `'bridge' in data`. Socket.IO sérialise
