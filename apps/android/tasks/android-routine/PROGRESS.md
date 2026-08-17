@@ -2,6 +2,56 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Chat header presence dot shipped** (slice `chat-header-presence-dot`,
+> feature-parity's "Live presence dot on a direct conversation's row/header" composite line — the
+> last open half, the row dot having shipped earlier this session). `gh pr list --state open
+> --search "apps/android OR apps/ios"` showed three unrelated open PRs (#3177/#3179/#3180 — web
+> and an Android perf cycle from a concurrent session, none touching `ChatScreen.kt`/
+> `ChatViewModel.kt`). `df -h /` showed 15 Gi free.
+>
+> **Re-confirmed a candidate flagged in a prior iteration's summary but not yet attempted**: grepped
+> `ChatScreen.kt`/`ChatViewModel.kt` for "presence" — zero matches, confirming the gap was still
+> real. `ConversationListViewModel` already had every reusable piece (`presenceByUserId`,
+> `observePresence()`, `presenceStateFor`), built for the row dot earlier this session — this slice
+> is a near-verbatim port of that same machinery into `ChatViewModel`, not new design.
+>
+> **Process note**: started writing this slice's code directly on `ops/android-ios-parity-routine`
+> before creating a dedicated branch — caught while drafting the mid-run status note (before any
+> push), confirmed via `git log -1`/`git status` that no commit had landed on the ops branch in the
+> meantime, then `git checkout -b claude/apps/android/chat-header-presence-dot` carried the
+> uncommitted working-tree changes onto the new branch cleanly. No harm done, but a reminder to
+> create the branch as literally the first action of a slice, before opening any editor.
+>
+> **Adaptation from iOS, not a literal port**: iOS's `ConversationView.headerPresenceState` dots
+> `ThemedAvatarButton` — Android's chat header has no avatar at all. The existing 10dp circle next
+> to the title is a DIFFERENT thing (an unconditional conversation-accent identity marker, present
+> on every conversation type) — repurposing it for presence would conflate two meanings in one
+> element and be wrong for group chats. Added a separate, small 8dp dot ADJACENT to it instead:
+> shown only for a direct conversation, using the central `meeshyPresenceDotColor` mapping (`null`
+> = offline = no dot, same rule as every other presence surface in the app).
+>
+> **`ChatUiState`** gains `directPeerUserId` (computed via `ApiConversation
+> .otherParticipantUserId(currentUserId)`, the exact same pure extension the row-dot slice built and
+> tested) + `presenceByUserId: Map<String, UserStatusEvent>` + `headerPresence(nowEpochMillis):
+> PresenceState?`, a byte-for-byte mirror of `ConversationListUiState.presenceStateFor`.
+> **`ChatViewModel.observePresence()`** is the same mirror of `ConversationListViewModel`'s
+> identically-named function (subscribes to `MessageSocketManager.userStatus`/`.presenceSnapshot`),
+> called eagerly from `init` for the same reason: those are hot `SharedFlow`s with no replay, so a
+> late subscriber genuinely misses events.
+>
+> **+3 `ChatViewModelTest`** (live presence resolves for the other participant in a direct
+> conversation, stays null for a group conversation even when live presence data exists for that
+> userId, stays null before any presence data has arrived). Required extending the test file's
+> `socketManager()`/`harness()` helpers with injectable `userStatus`/`presenceSnapshot` flows — the
+> exact same extension `ConversationListViewModelTest.kt` already has, applied to the chat test file
+> for the first time.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=2 last_run=chat-header-presence-dot`.
+
 > On 2026-08-17 **Notification swipe actions shipped** (slice `notification-swipe-actions`,
 > feature-parity's "Mark read" composite line). First ANDROID run after this session's first
 > IOS_DETTE bascule (`android_streak` reset to 0). `gh pr list --state open --search

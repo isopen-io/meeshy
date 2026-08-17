@@ -136,9 +136,17 @@ nonisolated final class ReadingModePreferenceStore: FocalReadingModePreferenceSt
 nonisolated enum ReadingModePreferenceMapping {
 
     /// Mode mémorisé (ou rien) ⇒ préférence que l'orchestrateur et le menu
-    /// consomment. `.bubbles` n'est jamais un choix mémorisable (mode de repli
-    /// drapeau OFF, absent du catalogue sélectionnable) — replié sur `.auto`
-    /// par défense plutôt que sur une préférence qui n'existe pas côté loi.
+    /// consomment.
+    ///
+    /// AMENDEMENT S1 (REV-4bis/B2) : `.bubbles` se relit désormais `.bulles`,
+    /// et non plus `.auto`. L'ancien repli était motivé mot pour mot par
+    /// « une préférence qui n'existe pas côté loi » — elle existe depuis
+    /// l'amendement (`ReadingModeOrchestrator.ReadingModePreference.bulles`),
+    /// et continuer à relire `.auto` ferait de cette table la SEULE de l'app
+    /// qui perde de l'information à l'aller-retour. iOS n'OFFRE toujours pas
+    /// ce choix (`LentilleModeMenu.build`, cinq entrées) : le seul chemin qui
+    /// écrit `.bubbles` est une valeur venue du canal serveur, et c'est
+    /// exactement elle qu'il ne faut pas dégrader en `.auto`.
     static func preference(
         for mode: ConversationReadingMode?
     ) -> ReadingModeOrchestrator.ReadingModePreference {
@@ -148,7 +156,7 @@ nonisolated enum ReadingModePreferenceMapping {
         case .script: return .script
         case .summary: return .resume
         case .river: return .riviere
-        case .bubbles: return .auto
+        case .bubbles: return .bulles
         }
     }
 
@@ -165,6 +173,9 @@ nonisolated enum ReadingModePreferenceMapping {
         case .script: return .script
         case .resume: return .summary
         case .riviere: return .river
+        // AMENDEMENT S1 (REV-4bis/B2) — réciproque de `preference(for:)`
+        // ci-dessus : l'aller-retour `.bulles` ⇄ `.bubbles` est TOTAL.
+        case .bulles: return .bubbles
         }
     }
 }

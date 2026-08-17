@@ -18,7 +18,7 @@ final class FocalMagnificenceTests: XCTestCase {
 
     func test_magnification_peaksAtFocusLine() {
         XCTAssertEqual(
-            geometry.magnification(signedDistance: 0),
+            geometry.magnification(signedDistance: 0, rowHeight: 100),
             FocalPassConstants.magnificationPeak,
             accuracy: 0.0001,
             "pile sur la ligne de focus, la loupe atteint son pic — c'est la magnificence de l'élu posé."
@@ -27,8 +27,8 @@ final class FocalMagnificenceTests: XCTestCase {
 
     func test_magnification_isSymmetricAroundTheBand() {
         XCTAssertEqual(
-            geometry.magnification(signedDistance: 45),
-            geometry.magnification(signedDistance: -45),
+            geometry.magnification(signedDistance: 30, rowHeight: 100),
+            geometry.magnification(signedDistance: -30, rowHeight: 100),
             accuracy: 0.0001,
             "la loupe décroît symétriquement au-dessus et en dessous de la ligne — le défilement la traverse sans discontinuité de forme."
         )
@@ -37,17 +37,17 @@ final class FocalMagnificenceTests: XCTestCase {
     func test_magnification_vanishesExactlyAtRadius() {
         let radius = FocalFocusCurve.focusBandHalfHeight * FocalPassConstants.magnificationRadiusFactor
         XCTAssertEqual(
-            geometry.magnification(signedDistance: radius), 1, accuracy: 0.0001,
+            geometry.magnification(signedDistance: radius, rowHeight: 100), 1, accuracy: 0.0001,
             "au rayon, la loupe retombe EXACTEMENT à 1 — au-delà, la courbe gelée règne seule, sans marche."
         )
-        XCTAssertEqual(geometry.magnification(signedDistance: -radius), 1, accuracy: 0.0001)
-        XCTAssertEqual(geometry.magnification(signedDistance: radius + 200), 1, accuracy: 0.0001)
+        XCTAssertEqual(geometry.magnification(signedDistance: -radius, rowHeight: 100), 1, accuracy: 0.0001)
+        XCTAssertEqual(geometry.magnification(signedDistance: radius + 200, rowHeight: 100), 1, accuracy: 0.0001)
     }
 
     func test_magnification_isMonotonicTowardTheLine() {
-        let d1 = geometry.magnification(signedDistance: 10)
-        let d2 = geometry.magnification(signedDistance: 40)
-        let d3 = geometry.magnification(signedDistance: 80)
+        let d1 = geometry.magnification(signedDistance: 5, rowHeight: 100)
+        let d2 = geometry.magnification(signedDistance: 20, rowHeight: 100)
+        let d3 = geometry.magnification(signedDistance: 40, rowHeight: 100)
         XCTAssertGreaterThan(d1, d2, "plus près de la ligne = plus magnifié — jamais d'oscillation.")
         XCTAssertGreaterThan(d2, d3)
     }
@@ -60,7 +60,8 @@ final class FocalMagnificenceTests: XCTestCase {
             cellSize: CGSize(width: 366, height: 100),
             horizontalAnchor: .leading,
             isRightToLeft: false,
-            alphaCeiling: 1
+            alphaCeiling: 1,
+            isMagnifiable: true
         )
         XCTAssertEqual(
             transform.scale, FocalPassConstants.magnificationPeak, accuracy: 0.0001,
@@ -74,7 +75,8 @@ final class FocalMagnificenceTests: XCTestCase {
             cellSize: CGSize(width: 366, height: 100),
             horizontalAnchor: .leading,
             isRightToLeft: false,
-            alphaCeiling: 1
+            alphaCeiling: 1,
+            isMagnifiable: true
         )
         let frozen = FocalFocusCurve.focusCurve(distance: 190, variant: .thread)
         XCTAssertEqual(
@@ -90,7 +92,8 @@ final class FocalMagnificenceTests: XCTestCase {
             cellSize: CGSize(width: 366, height: height),
             horizontalAnchor: .leading,
             isRightToLeft: false,
-            alphaCeiling: 1
+            alphaCeiling: 1,
+            isMagnifiable: true
         )
         let expectedTy = -(height / 2) * (1 - transform.scale)
         XCTAssertEqual(
@@ -99,16 +102,55 @@ final class FocalMagnificenceTests: XCTestCase {
         )
     }
 
+    // MARK: - Règle STRICTE (demande user 17/08 soir)
+
+    func test_magnification_zoneIsExactlyTheFocusBand() {
+        XCTAssertEqual(
+            FocalPassConstants.magnificationRadiusFactor, 1,
+            "la ZONE DE MAGNIFICENCE est la bande de focus EXACTE (±demi-bande) — plus jamais le double : en dehors, échelle strictement 1, zéro résidu de loupe"
+        )
+        let radius = FocalFocusCurve.focusBandHalfHeight
+        XCTAssertEqual(
+            geometry.magnification(signedDistance: radius + 1, rowHeight: 100), 1, accuracy: 0.0001,
+            "un point hors de la bande n'est JAMAIS magnifié"
+        )
+    }
+
+    func test_magnification_growthIsCappedInAbsolutePoints() {
+        let tall = geometry.transform(
+            signedDistance: 0, cellSize: CGSize(width: 366, height: 400),
+            horizontalAnchor: .leading, isRightToLeft: false, alphaCeiling: 1, isMagnifiable: true
+        )
+        let maxAllowed = 1 + FocalPassConstants.magnificationMaxGrowth / 400
+        XCTAssertLessThanOrEqual(
+            tall.scale, maxAllowed + 0.0001,
+            "LIMITE DE TAILLE MAXIMUM : la croissance d'une rangée est plafonnée en POINTS absolus — une grande rangée ne devient jamais énorme, quel que soit le pic"
+        )
+        XCTAssertGreaterThan(tall.scale, 1, "dans la bande, la loupe s'applique quand même — juste bornée")
+    }
+
+    func test_transform_systemRows_areNeverMagnified() {
+        let pill = geometry.transform(
+            signedDistance: 0, cellSize: CGSize(width: 366, height: 32),
+            horizontalAnchor: .leading, isRightToLeft: false, alphaCeiling: 1, isMagnifiable: false
+        )
+        XCTAssertEqual(
+            pill.scale, 1, accuracy: 0.0001,
+            "SEULS LES MESSAGES grossissent : pilule de jour, typing, début de conversation ne prennent JAMAIS la loupe (ils gardent la perspective de réduction) — la pilule géante de la capture user est interdite par construction"
+        )
+        XCTAssertEqual(pill.zPosition, 0, accuracy: 0.0001, "aucune élévation sans loupe")
+    }
+
     // MARK: - zPosition : la rangée magnifiée recouvre ses voisines
 
     func test_transform_zPosition_liftsTheMagnifiedRow() {
         let atLine = geometry.transform(
             signedDistance: 0, cellSize: CGSize(width: 366, height: 100),
-            horizontalAnchor: .leading, isRightToLeft: false, alphaCeiling: 1
+            horizontalAnchor: .leading, isRightToLeft: false, alphaCeiling: 1, isMagnifiable: true
         )
         let far = geometry.transform(
             signedDistance: 400, cellSize: CGSize(width: 366, height: 100),
-            horizontalAnchor: .leading, isRightToLeft: false, alphaCeiling: 1
+            horizontalAnchor: .leading, isRightToLeft: false, alphaCeiling: 1, isMagnifiable: true
         )
         XCTAssertGreaterThan(
             atLine.zPosition, far.zPosition,

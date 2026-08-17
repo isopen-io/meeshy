@@ -172,6 +172,7 @@
 		258BD6EA5B10B1E3D6B34180 /* AffiliatesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0D34DA5C2F91268F510CA73 /* AffiliatesViewModelTests.swift */; };
 		25B30F449BE457F6D2458609 /* NotificationContentRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1163722A9E75745FAC983B /* NotificationContentRouter.swift */; };
 		25C1762B70854AC1E4B6631B /* FocalConversationStartRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23BEEB36466FD2EAA335857E /* FocalConversationStartRow.swift */; };
+		25C82A76BBB15E1BC38F7013 /* RiverStreamHostSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000DC6B58B09C752A55AB41D /* RiverStreamHostSourceGuardTests.swift */; };
 		25E9D62F9BAA18E88C864692 /* RiverColumnLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5160487BA1752BA2E2937672 /* RiverColumnLayoutTests.swift */; };
 		262E5980E90A24055CFC35E9 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = B605B59D0BA88C2403EB9F9A /* Localizable.xcstrings */; };
 		26906F7FFA101AF6BC5F7743 /* ScrollTimePillSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15B1ED2617BBD17AF41E3DCE /* ScrollTimePillSourceGuardTests.swift */; };
@@ -1236,6 +1237,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		000DC6B58B09C752A55AB41D /* RiverStreamHostSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverStreamHostSourceGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		005826130DD0EA048C6BDD71 /* LentilleSkeletonRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleSkeletonRow.swift; sourceTree = "<group>"; };
 		0069274F7A59311828A91F46 /* OnboardingLanguageStepAccessibilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingLanguageStepAccessibilityTests.swift; sourceTree = "<group>"; };
@@ -2987,6 +2989,7 @@
 				12B1F5A2E8F8FAED0165A25D /* RiverNavigationControllerTests.swift */,
 				0BD08C66530FBCDF32AA6C56 /* RiverScreenNotMountedTests.swift */,
 				E93DAC78D5720EF71E9A1E11 /* RiverSourceGuardTests.swift */,
+				000DC6B58B09C752A55AB41D /* RiverStreamHostSourceGuardTests.swift */,
 			);
 			path = Riviere;
 			sourceTree = "<group>";
@@ -5513,6 +5516,7 @@
 				9F9E12394852BF262C088A56 /* RiverNavigationControllerTests.swift in Sources */,
 				D350EBF1E6B83398C5F7C157 /* RiverScreenNotMountedTests.swift in Sources */,
 				C43A2FD47FAD84C9A7D8906A /* RiverSourceGuardTests.swift in Sources */,
+				25C82A76BBB15E1BC38F7013 /* RiverStreamHostSourceGuardTests.swift in Sources */,
 				994EC33FCDE22DDE91F22CF5 /* RootMenuLadderEntryTests.swift in Sources */,
 				C04153A6931BDF7C24C4A86E /* RouterHashtagResultsGuardTests.swift in Sources */,
 				CA35FEEC295D0E7B284B2220 /* RouterTests.swift in Sources */,

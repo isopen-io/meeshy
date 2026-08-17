@@ -17,6 +17,7 @@ import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
+import { useThreadReadingDensity } from '@/hooks/lentille/use-thread-reading-mode';
 import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { formatDayLabel, formatTime } from '@/utils/date-format';
@@ -119,6 +120,13 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // fil BubbleStream (récent en haut, hors périmètre Focal — en-tête ci-dessus) :
   // le mux ne s'active donc QUE quand `reverseOrder` est vrai.
   const focalActive = useReadingModesFlag().active && reverseOrder;
+
+  // REV-4bis/B2 — le fil OBÉIT au magasin autoritatif. La densité rendue est
+  // la résolution de la préférence mémorisée par la loi partagée, bornée au
+  // catalogue que CET écran sait monter (voir `use-thread-reading-mode.ts`).
+  // Appelé inconditionnellement — c'est un hook —, mais lu par la SEULE
+  // branche drapeau-on ci-dessous : le chemin OFF reste bit-à-bit intact.
+  const threadDensity = useThreadReadingDensity(conversationId);
 
   const translatedMessagesRef = useRef(translatedMessages);
   translatedMessagesRef.current = translatedMessages;
@@ -538,12 +546,19 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           jamais une page morte. Drapeau éteint ⇒ rendu historique inchangé,
           bit-à-bit identique (même invariant que WL-101/R20/R8).
 
-          CHEVAUCHEMENT à arbitrer (réconciliation post-pause) : `main` a livré
-          en parallèle la prop `readingMode` (`lib/conversations/reading-mode`,
-          magasin `reading-mode-store`), qui module le rendu À L'INTÉRIEUR de
-          `MessagesDisplay`. Les deux chemins « Focal » coexistent ici sans se
-          gêner — le repli reçoit `readingMode` verbatim, la branche WF-110 ne
-          le lit pas encore — mais leur unification reste à trancher.
+          CHEVAUCHEMENT ARBITRÉ (REV-4bis/B2) — il ne reste plus qu'UN état.
+          `main` avait livré en parallèle la prop `readingMode`
+          (`lib/conversations/reading-mode`), qui module le rendu À L'INTÉRIEUR
+          de `MessagesDisplay`, pendant que la branche WF-110 ne lisait aucun
+          magasin : deux chemins « Focal » côte à côte, dont l'un des deux
+          était toujours une écriture morte. L'unification est faite dans le
+          MAGASIN, pas ici : `reading-mode-store` est devenu une façade
+          au-dessus du magasin du contrat, donc la prop `readingMode` du repli
+          et la densité de la branche WF-110 ci-dessous sont désormais deux
+          LECTURES de la même préférence. Le repli continue de recevoir
+          `readingMode` verbatim (chemin OFF, bit-à-bit) ; la branche ON, elle,
+          passe par la loi partagée (`useThreadReadingDensity`), qui borne la
+          préférence au catalogue que cet écran sait monter.
         */}
         {(() => {
           const historicalMessagesDisplay = (
@@ -587,6 +602,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               <FocalThread
                 messages={messages}
                 currentUser={currentUser}
+                density={threadDensity}
                 scrollContainerRef={scrollAreaRef}
                 onNavigateToMessage={onNavigateToMessage}
               />
