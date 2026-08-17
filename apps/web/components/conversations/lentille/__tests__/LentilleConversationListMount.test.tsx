@@ -26,9 +26,11 @@ jest.mock('@/stores/conversation-ui-store', () => ({
 }));
 
 const rowElections: unknown[] = [];
+const rowShowDetails: unknown[] = [];
 jest.mock('../LentilleRow', () => ({
-  LentilleRow: ({ conversation, onClick, election }: any) => {
+  LentilleRow: ({ conversation, onClick, election, onShowDetails }: any) => {
     rowElections.push(election);
+    rowShowDetails.push(onShowDetails);
     return (
       <div data-testid="mock-lentille-row" data-id={conversation.id} onClick={onClick}>
         {conversation.title}
@@ -150,6 +152,26 @@ describe('LentilleConversationListMount', () => {
       <LentilleConversationListMount {...baseProps} currentUserId="user-1" conversations={[conv('a'), conv('b')]} />
     );
     expect(rowElections[rowElections.length - 1]).toBe(before);
+  });
+
+  /**
+   * REV-4/B3 — « réglages » est l'une des six actions historiques du ⋮ ; elle
+   * est la seule à devoir remonter jusqu'à l'appelant du mux. Si le point de
+   * montage ne la transmet pas, l'entrée existe mais ne fait rien.
+   */
+  it("transmet `onShowDetails` à chaque rang (behaviour-matrix:L07)", () => {
+    rowShowDetails.length = 0;
+    const onShowDetails = jest.fn();
+    render(
+      <LentilleConversationListMount
+        {...baseProps}
+        currentUserId="user-1"
+        conversations={[conv('a'), conv('b')]}
+        onShowDetails={onShowDetails}
+      />
+    );
+    expect(rowShowDetails).toHaveLength(2);
+    expect(rowShowDetails.every((fn) => fn === onShowDetails)).toBe(true);
   });
 
   it('fonctionne sans currentUserId (garde défensive)', () => {

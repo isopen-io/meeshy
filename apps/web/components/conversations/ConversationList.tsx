@@ -295,6 +295,9 @@ export const ConversationList = memo(function ConversationList({
               conversations={filteredConversations}
               selectedConversationId={selectedConversation?.id ?? null}
               onSelectConversation={handleSelectConversation}
+              /* REV-4/B3 — « réglages » du ⋮ de rang : le même rappel que le
+                 rang historique reçoit, jamais un second chemin. */
+              onShowDetails={onShowDetails}
               preferencesMap={preferencesMap}
               categories={categories}
               isLoading={isLoading || isLoadingPreferences}

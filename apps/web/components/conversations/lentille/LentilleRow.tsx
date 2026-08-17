@@ -83,6 +83,12 @@ export interface LentilleRowProps {
    * (test, aperçu) n'a pas d'élection et ne porte donc pas de carte.
    */
   readonly election?: LentilleFocusElection;
+  /**
+   * REV-4/B3 — « réglages », l'une des six actions historiques du ⋮, remontée
+   * à l'appelant comme le fait `ConversationItem`. Transmise telle quelle à
+   * `LentillePeek`, qui monte la section d'actions du rang historique.
+   */
+  readonly onShowDetails?: (conversation: Conversation) => void;
 }
 
 /** Sélection déterministe du typeur affiché (L01) : ordre alphabétique du nom, pas l'ordre d'arrivée socket. */
@@ -104,6 +110,7 @@ export const LentilleRow = memo(function LentilleRow({
   t,
   perspectiveRef,
   election,
+  onShowDetails,
 }: LentilleRowProps) {
   // behaviour-matrix:L11 — « la sélection … devient le style de la focus card
   // persistant sur le rang sélectionné » : la carte suit l'ÉLECTION pendant
@@ -227,6 +234,7 @@ export const LentilleRow = memo(function LentilleRow({
         t={t}
         wrapperRef={perspectiveRef}
         isFocused={showsFocusCard}
+        onShowDetails={onShowDetails}
         data-testid="lentille-row-perspective-wrapper"
         className="flex items-center gap-3 h-full w-full"
         style={{

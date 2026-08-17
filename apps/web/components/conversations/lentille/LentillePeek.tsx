@@ -74,6 +74,8 @@ import { resolveCapabilities, resolveOrchestratorDecision } from '@meeshy/shared
 import { isCurrentUserAnonymous } from '@/utils/auth';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { useReadingModePreference, useReadingModePreferenceActions } from '@/stores/reading-mode-preference-store';
+import { ConversationActionMenuItems } from '../conversation-item/ConversationItemActions';
+import { useConversationItemActions } from '../conversation-item/use-conversation-item-actions';
 import { LentilleFocusCard } from './LentilleFocusCard';
 import { ReadingModeMenu } from './ReadingModeMenu';
 import type { LentilleRowTranslate } from './LentilleRow';
@@ -106,6 +108,13 @@ export interface LentillePeekProps {
    * défaut : une `LentilleRow` rendue hors liste n'a pas de carte.
    */
   readonly isFocused?: boolean;
+  /**
+   * REV-4/B3 — l'action « réglages » du menu de rang, remontée à l'appelant
+   * exactement comme le fait le rang historique (`ConversationItem`). Absente
+   * ⇒ l'entrée reste rendue mais inerte, comme dans le chemin OFF quand
+   * l'appelant ne la fournit pas.
+   */
+  readonly onShowDetails?: (conversation: Conversation) => void;
 }
 
 /**
@@ -143,6 +152,7 @@ export function LentillePeek({
   activeParticipantCount = null,
   isRiverFlagEnabled = false,
   isFocused = false,
+  onShowDetails,
 }: LentillePeekProps) {
   const [peekOpen, setPeekOpen] = useState(false);
   const suppressNextClickRef = useRef(false);
@@ -153,6 +163,19 @@ export function LentillePeek({
   const currentPreference = useReadingModePreference(conversation.id);
   const { setReadingMode } = useReadingModePreferenceActions();
   const reducedMotion = useReducedMotion();
+
+  /**
+   * REV-4/B3 — les SIX actions historiques du rang (behaviour-matrix L07),
+   * inatteignables sous drapeau ON tant que le ⋮ Lentille ne montait que le
+   * catalogue de modes. Le hook est celui de `ConversationItem`, pas un
+   * jumeau : même magasin de préférences, mêmes bascules, mêmes toasts. La
+   * peau ne connaît donc RIEN de ces actions — elle les monte.
+   */
+  const rowActions = useConversationItemActions({
+    conversation,
+    t: t as (key: string) => string,
+    onShowDetails,
+  });
 
   // `now` FIGÉ au montage (jamais un `new Date()` de rendu) : sans cela, la
   // décision affichée dépendrait de l'instant du rendu, donc changerait au
@@ -350,6 +373,25 @@ export function LentillePeek({
         open={peekOpen}
         onOpenChange={setPeekOpen}
         data-testid="lentille-peek-menu"
+        // Le MÊME menu porte le catalogue de modes ET les actions du rang —
+        // une instance, trois déclencheurs (⋮, aperçu, encoche), et rien de
+        // recopié : `ConversationActionMenuItems` EST la section du rang
+        // historique.
+        actionsSection={
+          <ConversationActionMenuItems
+            isPinned={rowActions.isPinned}
+            isMuted={rowActions.isMuted}
+            isArchived={rowActions.isArchived}
+            reaction={rowActions.reaction}
+            onTogglePin={rowActions.onTogglePin}
+            onToggleMute={rowActions.onToggleMute}
+            onToggleArchive={rowActions.onToggleArchive}
+            onSetReaction={rowActions.onSetReaction}
+            onShowDetails={rowActions.onShowDetails}
+            onShareConversation={rowActions.onShareConversation}
+            t={t as (key: string) => string}
+          />
+        }
       />
     </div>
   );

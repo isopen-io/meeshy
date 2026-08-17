@@ -47,6 +47,8 @@ export interface LentilleConversationListMountProps {
   conversations: readonly Conversation[];
   selectedConversationId: string | null;
   onSelectConversation: (conversation: Conversation) => void;
+  /** REV-4/B3 — l'action « réglages » du menu de rang, remontée telle quelle depuis le mux. */
+  onShowDetails?: (conversation: Conversation) => void;
   preferencesMap: ReadonlyMap<string, UserConversationPreferences>;
   categories: readonly UserConversationCategory[];
   /** Chargement initial — le squelette n'apparaît QUE si aucune conversation n'est encore en cache. */
@@ -106,6 +108,7 @@ export function LentilleConversationListMount({
   conversations,
   selectedConversationId,
   onSelectConversation,
+  onShowDetails,
   preferencesMap,
   categories,
   isLoading,
@@ -246,6 +249,7 @@ export function LentilleConversationListMount({
                   t={t}
                   perspectiveRef={registerRow(conversation.id)}
                   election={election}
+                  onShowDetails={onShowDetails}
                 />
               ))}
             </div>

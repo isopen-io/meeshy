@@ -67,6 +67,19 @@ export interface ReadingModeMenuProps {
   readonly onOpenChange?: (open: boolean) => void;
   readonly align?: 'start' | 'end' | 'center';
   readonly 'data-testid'?: string;
+  /**
+   * REV-4/B3 — section d'entrées rendue APRÈS le catalogue de modes, telle
+   * quelle. Un seul menu porte donc les deux : le catalogue de modes (que ce
+   * composant possède) et les actions du rang (qu'il ne connaît pas — c'est
+   * `ConversationActionMenuItems`, le composant du rang historique, que
+   * `LentillePeek` lui passe). C'est l'union exacte que le contrat décrit
+   * côté iOS, prise par l'autre bout : là-bas le menu d'actions gagne le
+   * sous-menu « Mode de lecture », ici le menu de mode gagne les actions.
+   *
+   * Ce composant reste le POINT UNIQUE de rendu du catalogue et n'acquiert
+   * aucune connaissance des actions : il rend un `ReactNode` opaque.
+   */
+  readonly actionsSection?: React.ReactNode;
 }
 
 /**
@@ -121,6 +134,7 @@ export function ReadingModeMenu({
   onOpenChange,
   align = 'end',
   'data-testid': dataTestId,
+  actionsSection,
 }: ReadingModeMenuProps) {
   const isRiverSelectable = capabilities.availableModes.includes('river');
   const riverReason = riverReasonLabel(capabilities, t);
@@ -167,6 +181,13 @@ export function ReadingModeMenu({
             </div>
           </DropdownMenuRadioItem>
         </DropdownMenuRadioGroup>
+
+        {actionsSection && (
+          <>
+            <DropdownMenuSeparator />
+            {actionsSection}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
