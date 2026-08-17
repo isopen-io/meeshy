@@ -53,7 +53,24 @@ const mockReportMessage = jest.requireMock('@/services/report.service').reportSe
 // Mock des composants enfants pour isoler les tests
 jest.mock('@/components/common/bubble-message/BubbleMessageNormalView', () => ({
   BubbleMessageNormalView: ({ message, onEnterReactionMode, onEnterLanguageMode, onEnterEditMode, onEnterDeleteMode, onEnterReportMode }: any) => (
-    <div data-testid="normal-view">
+    <div data-testid="normal-view" data-lens="bubble">
+      <span data-testid="message-content">{message.content}</span>
+      <button data-testid="reaction-btn" onClick={onEnterReactionMode}>Reaction</button>
+      <button data-testid="language-btn" onClick={onEnterLanguageMode}>Language</button>
+      {onEnterEditMode && <button data-testid="edit-btn" onClick={onEnterEditMode}>Edit</button>}
+      {onEnterDeleteMode && <button data-testid="delete-btn" onClick={onEnterDeleteMode}>Delete</button>}
+      {onEnterReportMode && <button data-testid="report-btn" onClick={onEnterReportMode}>Report</button>}
+    </div>
+  ),
+}));
+
+// La rangée plate du mode Focal est la vue « normale » par DÉFAUT depuis le
+// verdict des modes (vol. 3) : `BubbleMessageNormalView` ne sert plus que la
+// lentille « Bulles ». Les deux exposent les mêmes affordances, donc le même
+// contrat de test — c'est la machine à vues qui est éprouvée ici.
+jest.mock('@/components/common/bubble-message/FocalRow', () => ({
+  FocalRow: ({ message, onEnterReactionMode, onEnterLanguageMode, onEnterEditMode, onEnterDeleteMode, onEnterReportMode }: any) => (
+    <div data-testid="normal-view" data-lens="flat">
       <span data-testid="message-content">{message.content}</span>
       <button data-testid="reaction-btn" onClick={onEnterReactionMode}>Reaction</button>
       <button data-testid="language-btn" onClick={onEnterLanguageMode}>Language</button>
@@ -176,7 +193,7 @@ describe('BubbleMessage', () => {
     it('devrait afficher la vue normale par defaut', () => {
       renderBubbleMessage();
 
-      expect(screen.getByTestId('normal-view')).toBeInTheDocument();
+      expect(screen.getByTestId('normal-view')).toHaveAttribute('data-lens', 'flat');
       expect(screen.queryByTestId('reaction-view')).not.toBeInTheDocument();
       expect(screen.queryByTestId('language-view')).not.toBeInTheDocument();
     });
@@ -189,11 +206,38 @@ describe('BubbleMessage', () => {
       expect(screen.getByTestId('message-content')).toHaveTextContent('Test message content');
     });
 
-    it('devrait passer les props correctement au BubbleMessageNormalView', () => {
+    it('devrait passer les props correctement a la vue normale', () => {
       const message = createMockMessage();
       renderBubbleMessage({ message });
 
       expect(screen.getByTestId('message-content')).toHaveTextContent(message.content);
+    });
+  });
+
+  describe('Lentille de lecture', () => {
+    // Verdict vol. 3 : Focal est le mode par défaut, Script est sa densité
+    // uniforme (bouton `Aa`) — les deux rendent la MÊME rangée plate.
+    it.each(['focal', 'script'] as const)('rend la rangee plate en mode %s', (readingMode) => {
+      renderBubbleMessage({ readingMode });
+
+      expect(screen.getByTestId('normal-view')).toHaveAttribute('data-lens', 'flat');
+    });
+
+    // La vue à bulles historique reste à un tap, le temps de la transition.
+    it('rend la vue a bulles historique en mode bubble', () => {
+      renderBubbleMessage({ readingMode: 'bubble' });
+
+      expect(screen.getByTestId('normal-view')).toHaveAttribute('data-lens', 'bubble');
+    });
+
+    // Les vues spécialisées ne dépendent PAS de la lentille : réagir, traduire,
+    // éditer, supprimer et signaler se comportent à l'identique partout.
+    it('ouvre les vues specialisees quelle que soit la lentille', () => {
+      renderBubbleMessage({ readingMode: 'bubble' });
+
+      fireEvent.click(screen.getByTestId('reaction-btn'));
+
+      expect(screen.getByTestId('reaction-view')).toBeInTheDocument();
     });
   });
 

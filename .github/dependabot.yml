@@ -74,6 +74,13 @@ updates:
       # (#2524 reverté). Rester sur 6.x tant que ts-jest ne supporte pas TS 7.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # ESLint 10 retire `context.getFilename()`. `eslint-plugin-react` — dépendance
+      # DURE de `eslint-config-next` — l'appelle encore et plafonne son peer à
+      # `eslint ^9.7` (7.37.5 est la dernière version publiée). Sous ESLint 10, tout
+      # `eslint`/`next lint` meurt AVANT de lire une ligne de code, sur tout le dépôt.
+      # Rester en 9.x tant que eslint-plugin-react n'annonce pas ESLint 10.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
 
   # Service Gateway (Node.js/gRPC)
   - package-ecosystem: "npm"
@@ -126,6 +133,13 @@ updates:
       # requise par ts-jest → toutes les suites Jest échouent au chargement
       # (#2524 reverté). Rester sur 6.x tant que ts-jest ne supporte pas TS 7.
       - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # ESLint 10 retire `context.getFilename()`. `eslint-plugin-react` — dépendance
+      # DURE de `eslint-config-next` — l'appelle encore et plafonne son peer à
+      # `eslint ^9.7` (7.37.5 est la dernière version publiée). Sous ESLint 10, tout
+      # `eslint`/`next lint` meurt AVANT de lire une ligne de code, sur tout le dépôt.
+      # Rester en 9.x tant que eslint-plugin-react n'annonce pas ESLint 10.
+      - dependency-name: "eslint"
         update-types: ["version-update:semver-major"]
 
   # Service Translator (Python/AI)

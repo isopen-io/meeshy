@@ -390,6 +390,106 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertNotNil(fetched[0].deletedAt)
     }
 
+    // MARK: - Purge (masquage PERSONNEL)
+
+    /// Le pendant dur de `markDeleted` : la ligne PART, elle ne devient pas une
+    /// pierre tombale. C'est toute la différence entre « supprimé pour tous »
+    /// (le fil garde la trace) et « retiré de MA vue » (le message reste vivant
+    /// pour les autres, et le serveur ne le renverra plus jamais à ce lecteur —
+    /// une tombstone y resterait donc affichée à vie).
+    func test_purgeMessages_removesRowEntirely_notATombstone() async throws {
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "hide_1", conversationId: "conv_hide", content: "Hide me")
+        )
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "keep_1", conversationId: "conv_hide", content: "Keep me")
+        )
+
+        try await actor.purgeMessages(ids: ["hide_1"])
+
+        let rows = try actor.messages(for: "conv_hide", limit: 10)
+        XCTAssertEqual(rows.map(\.localId), ["keep_1"],
+            "la ligne masquée doit disparaître, pas rester avec un deletedAt")
+    }
+
+    func test_purgeMessages_resolvesByServerId_forOwnOptimisticRow() async throws {
+        var record = MessageRecordFactory.make(localId: "cid_hide_1", conversationId: "conv_hide_srv")
+        record.serverId = "srv_hide_1"
+        try await actor.insertOptimistic(record)
+
+        // L'événement nomme l'id SERVEUR ; la ligne locale porte encore son id
+        // optimiste. Sans la double résolution, le masquage de son propre
+        // message ne trouverait rien.
+        try await actor.purgeMessages(ids: ["srv_hide_1"])
+
+        XCTAssertTrue(try actor.messages(for: "conv_hide_srv", limit: 10).isEmpty)
+    }
+
+    /// Les traductions sont clées sur le localId RÉEL de la ligne. Purger
+    /// depuis les identifiants REÇUS les laisserait derrière — invisibles,
+    /// jamais collectées, et re-servies si l'id local était réattribué.
+    func test_purgeMessages_alsoDropsChildRows() async throws {
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "hide_tr", conversationId: "conv_hide_tr")
+        )
+        try await actor.saveTranslation(
+            TranslationRecord(
+                id: "tr_hide_1", messageLocalId: "hide_tr", messageServerId: nil,
+                targetLanguage: "en", translatedContent: "Hello",
+                translationModel: "nllb-200", confidenceScore: 0.9,
+                sourceLanguage: "fr", receivedAt: Date()
+            )
+        )
+
+        try await actor.purgeMessages(ids: ["hide_tr"])
+
+        XCTAssertTrue(try actor.translations(for: "hide_tr").isEmpty)
+    }
+
+    /// Idempotence : la room est celle de l'UTILISATEUR, donc l'appareil qui a
+    /// émis la requête reçoit l'événement lui aussi, et un lot peut nommer des
+    /// messages qu'aucune ligne locale ne porte (hors de la page chargée).
+    func test_purgeMessages_unknownIds_isANoOp() async throws {
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "kept", conversationId: "conv_noop")
+        )
+
+        try await actor.purgeMessages(ids: ["never_seen"])
+        try await actor.purgeMessages(ids: [])
+
+        XCTAssertEqual(try actor.messages(for: "conv_noop", limit: 10).count, 1)
+    }
+
+    func test_purgeMessages_postsRefreshForEachAffectedConversation() async throws {
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "h_a", conversationId: "conv_a")
+        )
+        try await actor.insertOptimistic(
+            MessageRecordFactory.make(localId: "h_b", conversationId: "conv_b")
+        )
+
+        await drainMainQueueNotifications()
+
+        // Les observateurs de `MessageStore` filtrent par conversationId : un
+        // lot qui traverse deux fils doit rafraîchir les DEUX, sinon la bulle
+        // masquée reste rendue dans celui qu'on a oublié.
+        let (expA, obsA) = observeRefresh(
+            conversationId: "conv_a",
+            description: "messageStoreShouldRefresh fires for conv_a"
+        )
+        let (expB, obsB) = observeRefresh(
+            conversationId: "conv_b",
+            description: "messageStoreShouldRefresh fires for conv_b"
+        )
+        defer {
+            NotificationCenter.default.removeObserver(obsA)
+            NotificationCenter.default.removeObserver(obsB)
+        }
+
+        try await actor.purgeMessages(ids: ["h_a", "h_b"])
+        await fulfillment(of: [expA, expB], timeout: 1.0)
+    }
+
     // MARK: - Reactions
 
     func test_updateReactions_persistsJsonAndCount() async throws {

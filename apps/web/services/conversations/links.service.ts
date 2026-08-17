@@ -9,6 +9,7 @@ import { conversationsCrudService } from './crud.service';
 import { generateLinkName } from '@/utils/link-name-generator';
 import { authManager } from '../auth-manager.service';
 import type { CreateLinkData } from './types';
+import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 /**
  * Service pour les opérations sur les liens d'invitation
@@ -111,7 +112,7 @@ export class LinksService {
       throw new Error('Erreur lors de la création de la conversation avec lien');
     }
 
-    return `${process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://meeshy.me'}/join/${response.data.data.linkId}`;
+    return buildShareLinkUrl(response.data.data.linkId, process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://meeshy.me');
   }
 }
 

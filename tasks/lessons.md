@@ -9601,3 +9601,173 @@ livraison du cycle PRÉCÉDENT : elle est récente, son intention est écrite, e
 ses propres notes contiennent les chiffres qu'il faut confronter. Ce cycle n'a
 rien trouvé en balayant le contrat ; il a trouvé en relisant le §3.1 du cycle 56.
 
+
+## Leçon 222 — une correction posée sur UNE socket n'est pas une correction du dépôt ; et un double de socket qui ne change pas d'identité fait passer les témoins de reconnexion à VIDE (2026-08-17, routine messagerie, cycle 58)
+
+**Le fait.** Le web a deux sockets Socket.IO. Les deux durcissements du couloir
+des messages — jeton du handshake résolu à chaque tentative, `reconnect_failed`
+rendu à une boucle manuelle — n'avaient jamais traversé vers la socket des
+notifications. Chacun y était pourtant documenté par un commentaire qui DÉCRIT
+la panne qu'il supprime. Troisième occurrence de cette forme dans le dépôt.
+
+**Trois règles.**
+
+1. **Quand on corrige un transport, compter combien le dépôt en a.** La question
+   n'est pas « ai-je corrigé le bug ? » mais « combien de sites portent la même
+   construction ? ». Un `grep` sur l'option fautive (`auth: {`,
+   `reconnectionAttempts`) l'aurait rendu en une commande, à n'importe lequel
+   des trois cycles concernés. Le commentaire qui explique la correction est le
+   meilleur point de départ : il nomme la panne, donc il nomme quoi chercher
+   ailleurs.
+
+2. **Un compteur ÉCRIT et jamais LU ne protège rien — il empêche de voir qu'il
+   ne protège rien.** `reconnectAttempts++` donnait au fichier l'apparence
+   d'une gestion de tentatives qui n'existait pas ; c'est probablement ce qui a
+   fait passer les relectures précédentes. Un champ dont aucune lecture n'existe
+   se retire, il ne se garde pas « au cas où ».
+
+3. **Rendre le transport ne suffit pas : il faut rendre ce que la coupure a
+   coûté.** Une reprise « évidente » aurait reconstruit la socket via
+   `disconnect()` et aurait été VERTE sur « la socket revient » tout en
+   détruisant le rattrapage — `hasConnectedBefore` remis à false (donc plus de
+   `desync('reconnect')`) et curseur `_seq` effacé. D'où la séparation du
+   démontage TECHNIQUE et du reset SÉMANTIQUE : toute fonction de reconnexion
+   doit dire explicitement ce qu'elle préserve, pas seulement ce qu'elle jette.
+
+**Corollaire de méthode, sur les témoins.** Deux témoins de ce cycle étaient
+VERTS avant le correctif : ils émettaient sur `currentSocketMock`, c'est-à-dire
+sur la socket d'ORIGINE, puisque aucune neuve n'était construite. Ils
+mesuraient une socket vivante, ce qui n'a jamais été en doute. **Tout témoin de
+reconnexion doit d'abord prouver l'IDENTITÉ du double** (`expect(socket).not
+.toBe(dead)`) avant d'observer quoi que ce soit dessus ; sans cette assertion,
+un double qui ne se renouvelle pas rend le témoin tautologique. C'est la
+deuxième fois en trois cycles — la règle est désormais écrite.
+
+**Corollaire sur les gardes.** Une garde qu'aucune mutation ne fait rougir est
+soit inatteignable, soit non spécifiée. Ce cycle a vérifié laquelle (elle était
+inatteignable, la vraie protection vivant ailleurs et sa mutation étant rouge)
+et l'a RETIRÉE, plutôt que de lui écrire un témoin qui n'aurait mesuré que le
+double.
+## Leçon 221 — un canal que le serveur diffuse n'a pas d'écouteur par construction, et le chercher « par son nom » rend un tableau faux (2026-08-16, routine temps réel, cycle 54)
+
+*(Numérotée 213 à l'écriture, puis 219, puis 221 — deux collisions successives à la fusion — une leçon 213 de la
+routine calling, cycle 138, avait atterri sur `main` entre-temps. La collision
+est la conséquence normale de routines parallèles qui ajoutent à la fin du même
+fichier : c'est la DERNIÈRE arrivée qui cède, jamais celle déjà référencée par
+d'autres journaux.)*
+
+### 1. Le fait
+
+`services/gateway/src/services/personalMessageVisibilitySync.ts` a été écrit pour
+fermer un défaut précis, et son en-tête le dit :
+
+> nothing was broadcast, so the hiding only ever reached the device that issued
+> the request […] Every OTHER device of the same user kept showing the message
+> indefinitely.
+
+Le module a été écrit, l'événement diffusé, le web branché. **iOS n'a jamais eu
+d'abonné.** L'état que le module décrit comme corrigé était l'état exact d'iOS,
+quatorze cycles plus tard.
+
+### 2. Pourquoi ça survit à des audits successifs
+
+Parce qu'un canal sans écouteur ne casse rien qui se voie. Il n'y a ni erreur,
+ni log, ni test rouge : l'émetteur émet, personne n'écoute, et la seule trace est
+un écran qui n'a pas bougé. Aucun des deux côtés n'est faux **isolément** — c'est
+le RACCORD qui manque, et le raccord n'a de fichier nulle part.
+
+Pire : ici la moitié VOISINE de l'écran était juste. La ligne de liste était bien
+corrigée par le `conversation:updated` jumeau, donc la contradiction s'affichait
+franchement (l'aperçu annonçait un message, le fil en montrait un autre) sans
+qu'aucune des deux moitiés paraisse en tort.
+
+### 3. La règle
+
+**Un contrat serveur qui nomme « les clients » au pluriel doit être vérifié
+client par client, à l'écrivain près.** La question mécanique est : *quels
+consommateurs cet événement a-t-il, et un par plateforme ?* Pas « le canal
+existe-t-il », pas « le web l'honore-t-il ».
+
+### 4. Le piège de méthode — deux formes d'abonnement, un seul grep
+
+Le premier passage de ce cycle a produit un tableau FAUX, et il faut savoir
+pourquoi. Les deux clients ne s'abonnent pas de la même façon :
+
+- web : `socket.on(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, …)` — par la CONSTANTE.
+- iOS : `socket.on("message:hidden-for-me") { … }` — par le LITTÉRAL.
+
+Chercher le littéral rend « web = 0 » (faux) et « iOS = 0 » (juste). Chercher la
+constante rend l'inverse. **Un diff de couverture d'événements qui ne cherche
+qu'une forme conclura toujours à une lacune du mauvais côté** — et c'est ce qui a
+failli faire abandonner la piste. Les deux formes se cherchent séparément, et le
+tableau ne vaut qu'une fois les deux croisées.
+
+### 5. Le corollaire — porter un canal ne veut pas dire porter le GESTE
+
+`hidden-for-me` route naturellement vers le chemin de suppression existant, et
+le web le fait explicitement pour ne pas écrire deux retraits qui dériveraient.
+La transposition à iOS est fausse, et pour une raison qui ne se voit pas dans
+l'événement : les deux clients n'écrivent pas la même chose sur une suppression.
+Le web FILTRE la ligne hors du cache ; iOS pose une PIERRE TOMBALE. Le même
+routage produit donc un vide d'un côté et un « ce message a été supprimé » de
+l'autre — durable, puisque le serveur ne renverra plus jamais ce message à ce
+lecteur.
+
+**Avant de router un événement neuf vers un chemin existant, lire ce que ce
+chemin ÉCRIT, pas ce qu'il s'appelle.** Le nom du handler décrit l'événement
+qu'il consommait ; l'écriture décrit ce que l'utilisateur verra.
+
+## Leçon 223 — un garde-fou qui CRASHE n'est pas indisponible, il est désarmé (2026-08-17, livraison /chat partagé)
+
+**Ce que j'ai fait de travers.** J'ai rapporté « ESLint est cassé à l'échelle du
+dépôt (`Converting circular structure to JSON`, ESLint 10 contre config héritée),
+hors périmètre » et je suis passé à autre chose. C'était une abdication déguisée
+en constat : je nommais correctement le symptôme, puis j'en tirais la conclusion
+la plus confortable — que ce n'était pas mon affaire.
+
+**Le diagnostic tenait en trois questions.** Aucune ne demandait plus de dix
+minutes :
+
+1. *Qui exporte quoi ?* `eslint-config-next@16` ship des configs **plates**
+   (`Linter.Config[]`, cf. `dist/index.d.ts`). Les passer à `FlatCompat.extends()`
+   — le pont eslintrc → flat — fait valider un objet plat par le validateur
+   eslintrc, qui `JSON.stringify` la config pour formater ses erreurs et bute sur
+   le cycle `plugins.react → configs → plugins`. Le message parlait de JSON parce
+   que la panne était dans le FORMATEUR D'ERREUR, pas dans la config.
+2. *Qui supporte quoi ?* `eslint-plugin-react@7.37.5` — dernière version publiée,
+   dépendance DURE de `eslint-config-next` — appelle encore
+   `context.getFilename()`, retiré en ESLint 10, et plafonne son peer à `^9.7`.
+   ESLint 10 est donc simplement inutilisable avec la stack Next : le `"eslint":
+   "^10.8.0"` du `package.json` ÉTAIT le bug.
+3. *Qui gardait la porte ?* `continue-on-error: true` sur l'étape Lint de la CI.
+   Personne ne l'a vu tomber.
+
+**La leçon.** Un outil de qualité qui plante n'est pas « momentanément
+indisponible » : il est **désarmé**, et le code dérive derrière. La mesure une
+fois ESLint relancé : **3 756 erreurs**, dont **2 631 `no-explicit-any`** — contre
+la règle explicite « No `any` types - ever » du CLAUDE.md. Rien de tout cela
+n'était visible tant que le linter mourait avant de lire la première ligne.
+
+**Le corollaire qui m'a coûté deux erreurs de plus.** En reportant la règle
+`no-restricted-imports` de l'ancien `.eslintrc.local.json` (mort depuis ESLint 9,
+qui n'ouvre plus le format eslintrc), j'ai gardé ses `patterns` — dont la
+sémantique est **gitignore** : `@/components/ui` couvre aussi
+`@/components/ui/**`. La règle interdisait donc exactement l'import direct que
+son propre message recommande. `paths` matche le spécificateur EXACT, c'est-à-dire
+le fichier barrel lui-même. **Une règle inerte depuis longtemps n'a jamais été
+éprouvée : la réactiver, c'est la relire, pas la recopier.** Même famille que la
+leçon 219.
+
+Et une fois la règle vivante, elle a immédiatement trouvé deux vrais défauts dans
+mon propre code du jour : un `eslint-disable-next-line
+react-hooks/exhaustive-deps` devenu mensonger (les dépendances étaient
+exhaustives depuis que j'avais sorti `t` du corps de l'effet) et un `useMemo` qui
+dépendait de champs non déclarés. Les deux corrigés en supprimant le contournement,
+jamais en élargissant le silence.
+
+**Règle pour la prochaine fois.** Devant un gate cassé : ne jamais écrire « hors
+périmètre » sans avoir répondu aux trois questions ci-dessus. Le coût du
+diagnostic est presque toujours inférieur au coût de ce que le gate laissait
+passer pendant son sommeil. Et quand la conclusion est un pin de version, elle
+s'accompagne d'un `ignore` Dependabot MOTIVÉ — sinon le prochain bump automatique
+rendort le gate.

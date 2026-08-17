@@ -99,6 +99,7 @@ import me.meeshy.sdk.model.ConversationCategoryPicker
 import me.meeshy.sdk.model.ConversationDraft
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.MemberRole
+import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.accentHex
@@ -208,6 +209,7 @@ fun ConversationListScreen(
                                 conversation = conversation,
                                 currentUserId = state.currentUserId,
                                 currentUserPrefs = state.currentUser,
+                                presence = state.presenceStateFor(conversation, System.currentTimeMillis()),
                                 draft = state.draftFor(conversation.id),
                                 categories = state.categories,
                                 previewMessages = state.previewFor(conversation.id),
@@ -376,6 +378,7 @@ private fun ConversationRow(
     conversation: ApiConversation,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
+    presence: PresenceState?,
     draft: ConversationDraft?,
     categories: List<CategoryOption>,
     previewMessages: List<LocalMessage>?,
@@ -430,6 +433,7 @@ private fun ConversationRow(
             conversation = conversation,
             currentUserId = currentUserId,
             currentUserPrefs = currentUserPrefs,
+            presence = presence,
             draft = draft,
             isPinned = isPinned,
             isMuted = isMuted,
@@ -489,6 +493,7 @@ private fun ConversationRowContent(
     conversation: ApiConversation,
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
+    presence: PresenceState?,
     draft: ConversationDraft?,
     isPinned: Boolean,
     isMuted: Boolean,
@@ -557,6 +562,7 @@ private fun ConversationRowContent(
             MeeshyAvatar(
                 name = title,
                 containerColor = hexColor(conversation.accentHex()),
+                presence = presence,
             )
             Column(
                 modifier = Modifier
