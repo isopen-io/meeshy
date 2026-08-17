@@ -4850,11 +4850,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       feedback is implicit (field clears + button disables) and failure surfaces as an inline
       `Text` next to the card via the new `inviteErrorMessage` field — deliberately NOT the
       existing `errorMessage` field, which drives a full-screen `ErrorState` wrong for a
-      transient invite failure. **Still open**: SMS invite, import phone contacts — no Android
-      SMS-compose or contacts-permission surface exists yet; left for a future slice. +4 tests
+      transient invite failure. +4 tests
       (`DiscoverViewModelTest`: trimmed send + field clear on success, blank address never hits
       the network, error surfaces + address kept for retry, second concurrent call is a no-op).
-      Strings ×5 across EN/FR/ES/PT.
+      Strings ×5 across EN/FR/ES/PT. **SMS invite shipped** (slice `discover-sms-invite`,
+      2026-08-17): port of iOS `DiscoverTab.smsInviteCard`/`DiscoverViewModel.phoneText`/
+      `smsMessage` — unlike email, no network call at all; iOS just opens
+      `MFMessageComposeViewController` pre-filled with the number + a fixed invite message.
+      `DiscoverUiState.phoneText` + `DiscoverViewModel.onPhoneTextChanged` hold the draft (never
+      cleared on send — mirrors iOS, which also leaves `phoneText` untouched after presenting
+      the composer sheet, since the viewer may cancel it). New `SmsInviteCard` composable
+      launches `Intent(ACTION_SENDTO, "smsto:$phone")` with `putExtra("sms_body", …)` via
+      `runCatching` — the same guarded-launch idiom `ChatLinkOpener.openExternally` already uses
+      for a missing handler, Android's platform equivalent of iOS's `canSendText()` pre-check
+      (no toast: same "Android has no toast/snackbar infra yet" constraint as email). The invite
+      message is a plain Kotlin constant, deliberately **not** localized — faithful to iOS's own
+      `smsMessage`, which is a hardcoded literal, not wrapped in `String(localized:)`. +1 test
+      (`onPhoneTextChanged updates the phone field`; the actual send is thin Composable glue,
+      exempt from the JVM TDD gate per `TDD-COVERAGE.md`). Strings ×4 across EN/FR/ES/PT.
+      **Still open**: import phone contacts — needs `READ_CONTACTS` runtime permission + a
+      multi-select picker, a materially bigger surface; left for a future slice.
 - [x] Discover suggestions (cache-first) + live user search with inline connect —
       **live search + inline connect shipped** (slice `discover-user-search`): the Discover tab
       (was `ComingSoon()`) now runs a debounced-by-threshold user search (pure `:core:model`

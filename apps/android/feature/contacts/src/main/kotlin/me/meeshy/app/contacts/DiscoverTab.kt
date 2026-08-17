@@ -1,5 +1,8 @@
 package me.meeshy.app.contacts
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,6 +20,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Sms
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
@@ -30,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -70,6 +75,10 @@ fun DiscoverTab(
             errorMessage = state.inviteErrorMessage,
             onEmailTextChanged = viewModel::onEmailTextChanged,
             onSend = viewModel::sendEmailInvitation,
+        )
+        SmsInviteCard(
+            phoneText = state.phoneText,
+            onPhoneTextChanged = viewModel::onPhoneTextChanged,
         )
 
         OutlinedTextField(
@@ -161,6 +170,68 @@ private fun EmailInviteCard(
         }
     }
 }
+
+/**
+ * Port of iOS `DiscoverTab.smsInviteCard` — invite by SMS. Unlike email, this is a pure
+ * client-side hand-off: no network call, just the OS SMS composer pre-filled with the number
+ * and a fixed invite message (mirrors iOS `smsMessage`, deliberately not localized — same as
+ * iOS's own hardcoded literal). A missing SMS handler (no telephony, e.g. a tablet/emulator)
+ * degrades to a no-op rather than a crash, the same guarded-launch idiom as `ChatLinkOpener`.
+ */
+@Composable
+private fun SmsInviteCard(
+    phoneText: String,
+    onPhoneTextChanged: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Sms, contentDescription = null, modifier = Modifier.width(18.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = stringResource(R.string.contacts_discover_sms_title),
+                style = MaterialTheme.typography.labelLarge,
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = phoneText,
+                onValueChange = onPhoneTextChanged,
+                singleLine = true,
+                placeholder = { Text(stringResource(R.string.contacts_discover_sms_placeholder)) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(10.dp))
+            val sendAccessibilityLabel = stringResource(R.string.contacts_discover_sms_send_a11y)
+            Button(
+                onClick = { sendSmsInvite(context, phoneText) },
+                enabled = phoneText.isNotEmpty(),
+                modifier = Modifier.semantics { contentDescription = sendAccessibilityLabel },
+            ) {
+                Text(stringResource(R.string.contacts_discover_sms_send))
+            }
+        }
+    }
+}
+
+private fun sendSmsInvite(context: Context, phoneNumber: String) {
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:$phoneNumber")).apply {
+                putExtra("sms_body", SMS_INVITE_MESSAGE)
+            },
+        )
+    }
+}
+
+/** Port of iOS `DiscoverViewModel.smsMessage` — a fixed invite text, deliberately not localized. */
+private const val SMS_INVITE_MESSAGE = "Rejoins-moi sur Meeshy ! Telecharge l'app : https://meeshy.me/download"
 
 @Composable
 private fun ResultList(
