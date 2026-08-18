@@ -10018,3 +10018,59 @@ préexistant du fichier n'avait jamais été auditée. Vague 145 (kick anonyme, 
   d'infrastructure groupe (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct, décision d'équipe requise).
+
+## Vague 148 — `handleAnswer` gagne le `removeParticipant` que `createOffer`/`handleOffer` avaient déjà (web) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), enchaînée après
+Vague 147 (PR #3210, `use-webrtc-p2p.ts` déjà touché la vague précédente sur un autre chemin
+d'échec). Trouvé par un audit ciblé du fichier : trois fonctions terminent une négociation
+(`createOffer`, `handleOffer`, `handleAnswer`), deux portent un garde-fou anti-fuite documenté,
+la troisième non.
+
+- **Root cause** : `createOffer` et `handleOffer` appellent tous deux `removeParticipant(...)` dans
+  leur bloc `catch`, avec un commentaire explicite ("the peer connection may already have been
+  created and registered … without this it stays open and registered forever, an orphaned
+  RTCPeerConnection leak"). `handleAnswer`, la troisième fonction de négociation du même fichier,
+  n'appelait ni `removeParticipant` ni aucun équivalent — le seul des trois points d'entrée à
+  laisser la connexion pair pendre indéfiniment en cas d'échec.
+- **Scénario de défaillance concret** : le pair A appelle le pair B. A crée l'offre et enregistre un
+  `WebRTCService` pour B (`webrtcServicesRef`). B répond ; la réponse arrive chez A et est routée
+  vers `handleAnswer`. Si `service.setRemoteDescription(answer)` (ou le drain de candidats ICE juste
+  après) lève — une SDP malformée/tronquée relayée par la gateway, ou une réponse
+  périmée/dupliquée atterrissant dans le mauvais état de signalisation d'un `RTCPeerConnection` par
+  effet de course — la connexion pair échouée reste ouverte et enregistrée pour toujours, et le
+  `WebRTCService` périmé reste en cache dans `webrtcServicesRef` : une offre de reprise légitime du
+  même pair est alors routée vers `handleOffer`, qui récupère cette MÊME instance cassée au lieu
+  d'en créer une fraîche, et rappelle `createPeerConnection` dessus — lequel écrase
+  `this.peerConnection` sans jamais fermer l'ancien (`webrtc-service.ts:369`), orphelinant
+  silencieusement la première `RTCPeerConnection`.
+- **Fix** : un appel `removeParticipant(fromUserId)` ajouté dans le bloc `catch` de `handleAnswer`,
+  miroir exact des appels déjà présents dans `createOffer`/`handleOffer`. `removeParticipant` était
+  déjà une dépendance stable utilisée ailleurs dans le fichier — zéro changement de signature,
+  ajouté au tableau de dépendances du `useCallback`.
+- **Tests** (TDD, RED confirmé — la nouvelle assertion échouait avec 0 appel contre le code
+  pré-fix) : 1 cas neuf dans `use-webrtc-p2p.test.tsx` — « closes and deregisters the orphaned peer
+  connection when handling an answer fails » : `setRemoteDescription` mocké pour rejeter une fois
+  après qu'un `createOffer` a déjà enregistré une connexion pair, assertion que le service est fermé
+  (`close`) et désenregistré (`removePeerConnection`). 71/71 verts (fichier ciblé, +1 net, 0
+  régression). Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites / 776 tests** verts (+1
+  net vs Vague 147, 0 régression). `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** — 1261
+  erreurs `error TS` préexistantes (identique, aucune sur les deux fichiers touchés).
+- **Non fait volontairement** : l'alternat signalé en parallèle par l'audit —
+  `WebRTCService.createPeerConnection()` (`webrtc-service.ts:369`) n'appelle jamais `.close()` sur
+  une `RTCPeerConnection` préexistante avant de l'écraser (fuite documentée par un test existant
+  mais incomplet, describe « createPeerConnection — reused without close (participant rejoin) », qui
+  ne vérifie que la remise à zéro des indicateurs de négociation) — ce fix-ci ferme la porte pour le
+  déclencheur `handleAnswer` spécifiquement (un service supprimé sur l'échec n'est plus réutilisable
+  par une offre de reprise), mais le défaut sous-jacent dans `createPeerConnection` lui-même reste
+  ouvert pour tout autre chemin qui pourrait le déclencher — laissé en suivi dédié plutôt que d'élargir
+  ce correctif à préoccupation unique. Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains
+  iOS/Android hors d'atteinte dans ce sandbox ; fuite i18n `error.message` brut dans
+  `VideoCallInterface.tsx:104` (dette documentée, plus large qu'un correctif single-concern) ;
+  modérateur pouvant kicker une cible de rang supérieur (`calls.ts:914-922`, question de politique
+  produit, Vague 147) ; jumeau iOS de Vague 146 (`BubbleCallNoticeView.swift`/
+  `CallSummaryDetailSheet`) ; gaps d'infrastructure groupe
+  (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ;
+  dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée —
+  chantier distinct, décision d'équipe requise).
