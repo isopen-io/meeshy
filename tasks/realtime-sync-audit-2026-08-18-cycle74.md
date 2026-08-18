@@ -211,10 +211,21 @@ parlent serait une régression, là où une épingle figée est un défaut de s�
    de la même question, au niveau au-dessus : elle termine l'acteur lui-même dans
    TOUTES ses conversations à la fois. À vérifier plutôt qu'à supposer — la mort
    des sockets peut la couvrir, ou pas.
-2. **La ré-entrée** est le miroir non exploré de ce cycle : un membre banni puis
-   débanni, ou retiré puis réinvité, retrouve-t-il un état cohérent ?
-   `ban.ts` ré-injecte le débanni dans la room ; `replayLiveLocationsTo` n'est
-   appelé que sur `conversation:join`.
+2. **La ré-entrée** est le miroir de ce cycle, et le balayage la rend **vérifiée
+   plutôt que supposée**. `replayLiveLocationsTo` n'est câblé qu'à UN endroit —
+   le `conversation:join` du client, via le `replayLiveLocations` passé à
+   `ConversationHandler` (`MeeshySocketIOManager`, ligne ~476). Or la passerelle
+   fait entrer des sockets dans une room par un SECOND chemin, purement
+   serveur : `joinUserToConversationRoom`, dont le commentaire dit lui-même
+   qu'il sert « when a user is added to a conversation while already connected
+   (e.g. group invite mid-session) », et que `ban.ts` appelle pour défaire
+   l'éviction d'un débanni. Ce chemin joint la room **sans aucun rattrapage** :
+   le débanni, comme l'invité mid-session, ne voit aucune épingle en cours pour
+   toute la durée de sa session. C'est exactement la troisième fin de vie
+   documentée par l'en-tête de `LocationHandler` (« un participant qui ouvre la
+   conversation ENSUITE n'apprenait jamais l'existence du partage »), résolue
+   pour le join CLIENT et laissée ouverte pour le join SERVEUR — la même forme
+   « un chemin sur deux » que ce cycle vient de corriger, dans l'autre sens.
 3. **La règle de la Leçon 240** appliquée aux autres états par (acteur,
    conteneur) du produit, hors position : brouillons, épinglages, présence par
    conversation.
