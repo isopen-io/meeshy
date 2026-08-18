@@ -244,6 +244,36 @@ défaut, ils disent maintenant la même phrase que leur jumeau `delete-for-me`.
 
 ---
 
+## 5 bis. La même question passée aux DEUX autres streams de tombstones : zéro défaut
+
+La question qui a produit ce cycle — *les écrivains d'un même état s'accordent-ils ?*
+— a été passée sur les deux autres streams de `loadConversationTombstones`, qui
+portent sur `Participant` et non sur `Conversation`. **Elle rend zéro défaut**,
+et c'est un résultat : le cycle 68 n'a pas à la repasser sur ce périmètre.
+
+| stream | écrivains | verdict |
+|---|---|---|
+| `leftAt` | `leave.ts`, retrait de membre (`participants.ts`), bannissement | **tous** écrivent `{ isActive: false, leftAt }` ensemble |
+| `bannedAt` | `ban.ts` (aller et retour) | passe par une unité PARTAGÉE et typée, `conversationBanState.ts` |
+| `deletedForMe` | `delete-for-me.ts` | son propre stream ; l'absence de `leftAt` y est exacte — « masquer pour moi » n'est pas « partir » |
+
+Deux raisons à cet écart de discipline avec la clôture, et elles instruisent la
+leçon plus que le décompte :
+
+1. **Le bannissement a une unité partagée** (`resolveBanWrite` /
+   `resolveUnbanWrite`) qui rend la transition comme une VALEUR typée. Un
+   écrivain ne peut pas en omettre la moitié : le type
+   `{ bannedAt, isActive: false, leftAt }` ne se décompose pas. La clôture, elle,
+   était recopiée à la main dans quatre routes — et c'est exactement le site
+   recopié qui a divergé.
+2. **Un seul site écrit `deletedForMe`.** Aucun jumeau, donc aucune divergence
+   possible.
+
+> Le nombre d'écrivains d'un état est le meilleur prédicteur de sa divergence, et
+> une unité partagée typée est ce qui ramène ce nombre à un.
+
+---
+
 ## 6. Pistes pour le cycle 68
 
 1. **`presence:snapshot` n'est envoyé qu'à l'authentification** (cycle 66 § 7-1)
