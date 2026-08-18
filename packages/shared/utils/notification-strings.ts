@@ -12,6 +12,7 @@ export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 export const NOTIFICATION_STRING_KEYS = [
   'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
+  'comment.genericFrom', 'comment.repliedInFrom',
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
@@ -59,6 +60,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'En réponse à votre commentaire',
     'comment.replyWithParent': 'En réponse à « {preview} »',
     'comment.repliedToYours': 'a répondu à votre commentaire',
+    'comment.genericFrom': 'a commenté {indefObj} de {author}',
+    'comment.repliedInFrom': 'a répondu {locObj} de {author}',
     'someone': 'Quelqu’un',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} de {author}',
@@ -98,6 +101,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'Replied to your comment',
     'comment.replyWithParent': 'Replying to “{preview}”',
     'comment.repliedToYours': 'replied to your comment',
+    'comment.genericFrom': 'commented on {author}’s {bareObj}',
+    'comment.repliedInFrom': 'replied in {author}’s {bareObj}',
     'someone': 'Someone',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} from {author}',
@@ -137,6 +142,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'Respondió a tu comentario',
     'comment.replyWithParent': 'Respondiendo a «{preview}»',
     'comment.repliedToYours': 'respondió a tu comentario',
+    'comment.genericFrom': 'comentó {indefObj} de {author}',
+    'comment.repliedInFrom': 'respondió {locObj} de {author}',
     'someone': 'Alguien',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} de {author}',
@@ -176,6 +183,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'Respondeu ao seu comentário',
     'comment.replyWithParent': 'Respondendo a “{preview}”',
     'comment.repliedToYours': 'respondeu ao seu comentário',
+    'comment.genericFrom': 'comentou {indefObj} de {author}',
+    'comment.repliedInFrom': 'respondeu {locObj} de {author}',
     'someone': 'Alguém',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} de {author}',
@@ -215,6 +224,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'Hat auf deinen Kommentar geantwortet',
     'comment.replyWithParent': 'Antwort auf „{preview}“',
     'comment.repliedToYours': 'hat auf deinen Kommentar geantwortet',
+    'comment.genericFrom': 'hat {indefObj} von {author} kommentiert',
+    'comment.repliedInFrom': 'hat {locObj} von {author} geantwortet',
     'someone': 'Jemand',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} von {author}',
@@ -254,6 +265,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'Ha risposto al tuo commento',
     'comment.replyWithParent': 'In risposta a «{preview}»',
     'comment.repliedToYours': 'ha risposto al tuo commento',
+    'comment.genericFrom': 'ha commentato {indefObj} di {author}',
+    'comment.repliedInFrom': 'ha risposto {locObj} di {author}',
     'someone': 'Qualcuno',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} di {author}',
@@ -293,6 +306,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': 'ردّ على تعليقك',
     'comment.replyWithParent': 'ردًّا على «{preview}»',
     'comment.repliedToYours': 'ردّ على تعليقك',
+    'comment.genericFrom': 'علّق على {indefObj} لـ{author}',
+    'comment.repliedInFrom': 'ردّ {locObj} لـ{author}',
     'someone': 'شخص ما',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{nounCap} من {author}',
@@ -332,6 +347,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.reply': '回复了你的评论',
     'comment.replyWithParent': '回复 “{preview}”',
     'comment.repliedToYours': '回复了你的评论',
+    'comment.genericFrom': '评论了 {author} 的{bareObj}',
+    'comment.repliedInFrom': '在 {author} 的{bareObj}中回复了',
     'someone': '有人',
     'comment.subtitleOwner': '{ownerSubtitle}',
     'comment.subtitleFrom': '{author} 的{nounCap}',
@@ -418,6 +435,20 @@ const POST_NOUN_CAP: Record<NotificationLanguage, ObjMap> = {
   pt: { POST: 'Publicação', STORY: 'Story', MOOD: 'Humor', STATUS: 'Status', REEL: 'Reel' },
   de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status', REEL: 'Reel' },
   it: { POST: 'Post', STORY: 'Storia', MOOD: 'Stato d’animo', STATUS: 'Stato', REEL: 'Reel' },
+  ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة', REEL: 'ريل' },
+  'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
+};
+
+// Nom nu, non capitalisé — pour les langues qui placent le possesseur AVANT
+// l'objet (« Windie Nh’s reel », « Windie Nh 的短视频 ») et ne peuvent donc pas
+// réutiliser la forme indéfinie (« a reel »).
+const BARE_OBJ: Record<NotificationLanguage, ObjMap> = {
+  fr: { POST: 'publication', STORY: 'story', MOOD: 'humeur', STATUS: 'statut', REEL: 'réel' },
+  en: { POST: 'post', STORY: 'story', MOOD: 'mood', STATUS: 'status', REEL: 'reel' },
+  es: { POST: 'publicación', STORY: 'historia', MOOD: 'estado de ánimo', STATUS: 'estado', REEL: 'reel' },
+  pt: { POST: 'publicação', STORY: 'story', MOOD: 'humor', STATUS: 'status', REEL: 'reel' },
+  de: { POST: 'Beitrag', STORY: 'Story', MOOD: 'Stimmung', STATUS: 'Status', REEL: 'Reel' },
+  it: { POST: 'post', STORY: 'storia', MOOD: 'stato d’animo', STATUS: 'stato', REEL: 'reel' },
   ar: { POST: 'منشور', STORY: 'قصة', MOOD: 'مزاج', STATUS: 'حالة', REEL: 'ريل' },
   'zh-Hans': { POST: '帖子', STORY: '快拍', MOOD: '心情', STATUS: '状态', REEL: '短视频' },
 };
@@ -558,6 +589,7 @@ export function notificationString(
     tokens.indefObj = INDEF_OBJ[L][params.postType];
     tokens.locObj = LOC_OBJ[L][params.postType];
     tokens.nounCap = POST_NOUN_CAP[L][params.postType];
+    tokens.bareObj = BARE_OBJ[L][params.postType];
     tokens.ownerSubtitle = SUBTITLE_OWNER[L][params.postType];
     tokens.friendSubtitle = FRIEND_SUBTITLE[L][params.postType];
   }
@@ -606,6 +638,16 @@ export type NotificationDisplayInput = {
   readonly emoji?: string | null;
   /** Aperçu du commentaire parent (réponse à un commentaire). */
   readonly parentCommentPreview?: string | null;
+  /**
+   * Nom de l'AUTEUR du contenu visé, quand ce n'est pas le lecteur — « a
+   * commenté un réel DE WINDIE NH ». Fusionné dans la phrase d'action plutôt
+   * que juxtaposé en sous-titre, pour que la formulation soit la même que
+   * lorsque le contenu appartient au lecteur (« a commenté VOTRE réel »).
+   *
+   * Ignoré par les types dont l'action est déjà possessive : « a commenté
+   * votre réel de Windie Nh » désignerait deux propriétaires.
+   */
+  readonly authorName?: string | null;
 };
 
 export type NotificationDisplay = {
@@ -648,6 +690,7 @@ export function buildNotificationDisplay(
   const ns = (key: NotificationStringKey, postType?: NotificationPostKind) =>
     notificationString(L, key, { ...(emoji ? { emoji } : {}), ...(postType ? { postType } : {}) });
   const nounCap = kind ? notificationString(L, 'comment.subtitleBare', { postType: kind }) : null;
+  const author = (input.authorName && input.authorName.trim() !== '') ? input.authorName.trim() : null;
   // Un seul point de composition : le titre NAÎT du fragment d'action, et le
   // fragment est conservé tel quel. Rien ne peut diverger entre les deux.
   const framed = (fragment: string, subtitle: string | null): NotificationDisplay => ({
@@ -677,10 +720,25 @@ export function buildNotificationDisplay(
     }
 
     // ── Commentaire sur le contenu d'un AMI (fil / engagement) ──
+    //
+    // L'auteur du contenu, quand on le connaît, entre DANS la phrase : la
+    // forme « de {author} » ne se concatène pas côté serveur car les langues
+    // ne s'accordent pas sur sa place (« Windie Nh’s reel », « Windie Nh 的
+    // 短视频 ») — chaque catalogue porte donc sa propre variante.
     case 'friend_story_comment':
-      return framed(ns('comment.generic', kind ?? 'STORY'), nounCap);
+      return framed(
+        author
+          ? notificationString(L, 'comment.genericFrom', { postType: kind ?? 'STORY', author })
+          : ns('comment.generic', kind ?? 'STORY'),
+        nounCap,
+      );
     case 'story_thread_reply':
-      return framed(ns('comment.repliedIn', kind ?? 'STORY'), nounCap);
+      return framed(
+        author
+          ? notificationString(L, 'comment.repliedInFrom', { postType: kind ?? 'STORY', author })
+          : ns('comment.repliedIn', kind ?? 'STORY'),
+        nounCap,
+      );
 
     // ── Réponse à VOTRE commentaire (corrige le bug « a commenté votre publication ») ──
     case 'comment_reply': {

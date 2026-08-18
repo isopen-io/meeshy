@@ -148,52 +148,35 @@ describe('buildPushHeader', () => {
 //
 // Sur le chemin Communication Notification, iOS réécrit le titre avec le
 // displayName de l'INPerson expéditeur : le titre riche persisté (« elvira
-// ndjiki a commenté un réel ») ne peut donc PAS voyager par là. L'action
-// voyage en subtitle, seul champ que le client peut rendre sous le nom.
+// ndjiki a commenté un réel de Windie Nh ») ne peut donc PAS voyager par là.
+// L'action voyage en subtitle, seul champ que le client peut rendre sous le
+// nom — et elle s'y suffit : l'auteur du contenu y est déjà fusionné, et
+// l'aperçu du contenu visé occupe le corps.
 describe('buildPushHeader — action sociale', () => {
-  it('compose « action · cible » pour un commentaire sur le contenu d’un ami', () => {
+  it('rend l’action, auteur du contenu compris, sans rien lui adjoindre', () => {
     const result = buildPushHeader({
       type: 'friend_story_comment',
       actor: { id: 'u1', username: 'elvira', displayName: 'elvira ndjiki' },
       context: {},
-      action: 'a commenté un réel',
+      action: 'a commenté un réel de Windie Nh',
       entitySubtitle: 'Publication de Windie Nh',
     });
     expect(result.title).toBe('elvira ndjiki');
-    expect(result.subtitle).toBe('a commenté un réel · Publication de Windie Nh');
+    expect(result.subtitle).toBe('a commenté un réel de Windie Nh');
   });
 
-  it('n’ajoute pas une cible que l’action énonce déjà (« Nouveau réel »)', () => {
+  it('ne répète JAMAIS la cible derrière l’action (régression : doublon de bannière)', () => {
+    // Le défaut signalé : « a réagi ❤️ à votre publication · Votre publication »
+    // sur deux lignes, puis la même phrase une troisième fois dans le corps.
     const result = buildPushHeader({
-      type: 'friend_new_post',
-      actor: { id: 'u1', username: 'windie', displayName: 'Windie Nh' },
-      context: {},
-      action: 'a publié un nouveau réel',
-      entitySubtitle: 'Nouveau réel',
-    });
-    expect(result.subtitle).toBe('a publié un nouveau réel');
-  });
-
-  it('garde le DÉTAIL d’une cible redondante (l’aperçu du contenu visé)', () => {
-    const result = buildPushHeader({
-      type: 'post_comment',
+      type: 'post_like',
       actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
       context: {},
-      action: 'a commenté votre publication',
-      entitySubtitle: 'Votre publication : « Bonjour tout le monde »',
+      action: 'a réagi ❤️ à votre publication',
+      entitySubtitle: 'Votre publication',
     });
-    expect(result.subtitle).toBe('a commenté votre publication · « Bonjour tout le monde »');
-  });
-
-  it('garde le résumé média d’une cible redondante', () => {
-    const result = buildPushHeader({
-      type: 'post_comment',
-      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
-      context: {},
-      action: 'a commenté votre story',
-      entitySubtitle: 'Votre story · 📷 Photo',
-    });
-    expect(result.subtitle).toBe('a commenté votre story · 📷 Photo');
+    expect(result.subtitle).toBe('a réagi ❤️ à votre publication');
+    expect(result.subtitle).not.toContain('·');
   });
 
   it('rend l’action seule quand aucune cible n’est fournie', () => {
@@ -206,15 +189,14 @@ describe('buildPushHeader — action sociale', () => {
     expect(result.subtitle).toBe('a publié une nouvelle humeur');
   });
 
-  it('borne le subtitle composé à 120 caractères', () => {
+  it('borne le subtitle à 120 caractères', () => {
     const result = buildPushHeader({
-      type: 'post_comment',
+      type: 'friend_story_comment',
       actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
       context: {},
-      action: 'a commenté votre publication',
-      entitySubtitle: `Publication de ${'x'.repeat(300)}`,
+      action: `a commenté un réel de ${'x'.repeat(300)}`,
     });
-    expect(result.subtitle!.length).toBeLessThanOrEqual(120);
+    expect(result.subtitle!.length).toBe(120);
   });
 
   it('laisse les conversations intactes — l’action ne concerne pas les messages', () => {

@@ -148,45 +148,6 @@ const CONVERSATION_SUBTITLE_TYPES = new Set([
 
 /** Longueur au-delà de laquelle une bannière iOS 3 lignes coupe de toute façon. */
 const PUSH_SUBTITLE_MAX_LENGTH = 120;
-const PUSH_SUBTITLE_SEPARATOR = ' · ';
-
-/** Forme comparable d'un libellé : sans accents, sans casse, espaces normalisés. */
-function normalizeForCoverage(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-/**
- * Compose le sous-titre de bannière à partir de l'action (« a commenté un
- * réel ») et du sous-titre d'entité persisté (« Publication de Windie Nh »,
- * « Votre publication : « aperçu » »).
- *
- * L'entité est de la forme `<tête>` éventuellement suivie d'un détail après
- * ` : ` (aperçu texte) ou ` · ` (résumé média). Quand l'action ÉNONCE DÉJÀ la
- * tête — « a commenté votre publication » couvre « Votre publication » — la
- * répéter n'apprendrait rien au lecteur : on ne garde alors que le détail,
- * qui lui est neuf. La comparaison est faite sur une forme normalisée, donc
- * insensible à la casse et aux accents.
- *
- * Exporté pour les tests — pur et sans effet de bord.
- */
-export function composePushSubtitle(
-  action?: string | null,
-  entitySubtitle?: string | null,
-): string | undefined {
-  const act = action?.trim() ?? '';
-  const entity = entitySubtitle?.trim() ?? '';
-  if (act === '') return entity === '' ? undefined : entity.slice(0, PUSH_SUBTITLE_MAX_LENGTH);
-  if (entity === '') return act.slice(0, PUSH_SUBTITLE_MAX_LENGTH);
-
-  const split = entity.match(/^(.*?) [:·] (.*)$/s);
-  const head = split ? split[1].trim() : entity;
-  const detail = split ? split[2].trim() : '';
-  const alreadySaid = normalizeForCoverage(act).includes(normalizeForCoverage(head));
-
-  const complement = alreadySaid ? detail : entity;
-  const composed = complement === '' ? act : `${act}${PUSH_SUBTITLE_SEPARATOR}${complement}`;
-  return composed.slice(0, PUSH_SUBTITLE_MAX_LENGTH);
-}
 
 export function buildPushHeader(input: {
   type: string;
@@ -226,9 +187,16 @@ export function buildPushHeader(input: {
     ? conversationTitle
     : undefined;
 
-  // Ordre : action sociale composée → cible explicite → nom de conversation.
-  const subtitle = composePushSubtitle(input.action, input.entitySubtitle)
-    ?? conversationSubtitle;
+  // Ordre : action sociale → cible explicite → nom de conversation.
+  //
+  // L'action se suffit à elle-même : l'auteur du contenu y est déjà fusionné
+  // (« a commenté un réel DE WINDIE NH ») et l'aperçu du contenu visé occupe
+  // le CORPS. Y adjoindre la cible reproduirait, sur trois lignes, la même
+  // information écrite deux fois — le défaut signalé sur les réactions.
+  const action = input.action?.trim() || '';
+  const entity = input.entitySubtitle?.trim() || '';
+  const subtitle = (action || entity || conversationSubtitle || '').slice(0, PUSH_SUBTITLE_MAX_LENGTH)
+    || undefined;
 
   return { title, subtitle };
 }
@@ -922,6 +890,10 @@ export class NotificationService {
         emoji: (typeof meta.reactionEmoji === 'string' ? meta.reactionEmoji
           : typeof meta.emoji === 'string' ? meta.emoji : null),
         parentCommentPreview: (typeof meta.parentCommentPreview === 'string' ? meta.parentCommentPreview : null),
+        // Auteur du contenu visé, quand ce n'est pas le lecteur : il entre DANS
+        // la phrase (« a commenté un réel de Windie Nh ») au lieu d'être posé
+        // à côté en sous-titre. Même chemin que `parentCommentPreview`.
+        authorName: (typeof meta.contentAuthorName === 'string' ? meta.contentAuthorName : null),
       };
       // On ne touche la base pour la langue du destinataire QUE si un rendu
       // localisé en a réellement besoin (titre localisé du type, ou corps
@@ -981,11 +953,11 @@ export class NotificationService {
       // "<sender> · <conversation>" + body details consistently on both paths.
       //
       // `action` + `entitySubtitle` : le titre riche persisté (« elvira ndjiki
-      // a commenté un réel ») ne peut PAS servir de titre de bannière — iOS le
-      // réécrit avec le displayName de l'INPerson sur le chemin Communication
-      // Notification. L'action voyage donc en subtitle, seul champ que le
-      // client peut rendre sous le nom, et la cible s'y ajoute quand elle
-      // apprend quelque chose de plus (cf. `composePushSubtitle`).
+      // a commenté un réel de Windie Nh ») ne peut PAS servir de titre de
+      // bannière — iOS le réécrit avec le displayName de l'INPerson sur le
+      // chemin Communication Notification. L'action voyage donc en subtitle,
+      // seul champ que le client peut rendre sous le nom ; le corps garde
+      // l'aperçu du contenu.
       const { title: pushTitle, subtitle: pushSubtitle } = buildPushHeader({
         type: params.type,
         customTitle: params.title,
@@ -1754,7 +1726,15 @@ export class NotificationService {
       userId: params.messageAuthorId,
       type: 'message_reaction',
       priority: 'low',
-      content: notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
+      // Le corps porte l'action ET le message visé — contrairement aux
+      // réactions sociales, il n'a pas d'alternative : le sous-titre d'une
+      // notification DE CONVERSATION est déjà pris par le nom du groupe
+      // (recomposé côté client, Local-First) et purement ignoré par iOS en
+      // tête-à-tête. Le destinataire doit pouvoir dire À QUEL message on a
+      // réagi quand il en a écrit plusieurs.
+      content: messagePreview
+        ? `${notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji })} : « ${messagePreview} »`
+        : notificationString(lang, 'reaction.message', { emoji: params.reactionEmoji }),
       lang,
       expiresAt: message?.expiresAt ?? undefined,
 
@@ -2224,6 +2204,7 @@ export class NotificationService {
       commentId: params.commentId,
       commentPreview: excerpt,
       postType,
+      ...(authorName ? { contentAuthorName: authorName } : {}),
     };
     const actorInfo = {
       id: params.commenterId,
@@ -2266,7 +2247,10 @@ export class NotificationService {
           type: 'story_thread_reply',
           priority: 'low',
           content: excerpt || notificationString(rLang, 'comment.repliedIn', { postType: i18nPostType }),
-          subtitle: contextSubtitleFor(rLang),
+          // Pas de `subtitle` explicite : l'auteur du contenu est désormais
+          // DANS l'action (« a répondu dans une story de Alice »), et le
+          // répéter en sous-titre écrirait deux fois la même chose.
+          ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -2285,7 +2269,7 @@ export class NotificationService {
           type: 'friend_story_comment',
           priority: 'low',
           content: excerpt || notificationString(rLang, 'comment.generic', { postType: i18nPostType }),
-          subtitle: contextSubtitleFor(rLang),
+          ...(authorName ? {} : { subtitle: contextSubtitleFor(rLang) }),
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -3242,16 +3226,18 @@ export class NotificationService {
     // contenu sans ouvrir l'app, et le push iOS attache la miniature.
     const trimmedPreview = params.postPreview?.trim() ?? '';
     const media = await this.resolvePostMedia(params.postId);
-    const subtitle = this.buildOwnerSubtitleWithDetail(lang, subtitlePostType, {
-      textPreview: trimmedPreview,
-      mediaType: media?.mediaType,
-    });
+    // Le sous-titre nomme la cible, le corps la MONTRE : le détail (texte /
+    // média) descend dans le corps, que la phrase d'action n'occupe plus.
+    const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: subtitlePostType });
 
     return this.createNotification({
       userId: params.postAuthorId,
       type,
       priority: 'normal',
-      content: notificationString(lang, 'reaction.post', { emoji: params.emoji, postType: reactPostType }),
+      content: this.targetPreviewBody(lang, subtitlePostType, {
+        textPreview: trimmedPreview,
+        mediaType: media?.mediaType,
+      }),
       subtitle,
       lang,
 
@@ -3393,18 +3379,21 @@ export class NotificationService {
     const lang = await this.resolveRecipientLang(params.postAuthorId);
     const trimmedPostPreview = params.postPreview?.trim() ?? '';
     const media = await this.resolvePostMedia(params.originalPostId);
-    const subtitle = trimmedPostPreview !== ''
-      ? `« ${this.truncateMessage(trimmedPostPreview)} »`
-      : (this.mediaSummaryString(lang, media?.mediaType) || undefined);
+    // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
+    // détail du contenu partagé descend donc dans le corps.
+    const subtitle = notificationString(lang, 'comment.subtitleOwner', {
+      postType: params.postType ?? 'POST',
+    });
 
     return this.createNotification({
       userId: params.postAuthorId,
       type: 'post_repost',
       priority: 'normal',
-      content: notificationString(lang, 'repost', {
-        postType: params.postType === 'REEL' ? 'POST' : (params.postType ?? 'POST'),
+      content: this.targetPreviewBody(lang, params.postType ?? 'POST', {
+        textPreview: trimmedPostPreview,
+        mediaType: media?.mediaType,
       }),
-      ...(subtitle ? { subtitle } : {}),
+      subtitle,
       lang,
 
       actor: {
@@ -3553,18 +3542,20 @@ export class NotificationService {
 
     const lang = await this.resolveRecipientLang(params.commentAuthorId);
     const trimmedPreview = params.commentPreview?.trim() ?? '';
-    const subtitle = trimmedPreview !== ''
-      ? `« ${this.truncateMessage(trimmedPreview)} »`
-      : undefined;
     // Vignette du post portant le commentaire → attachée au push iOS.
     const media = await this.resolvePostMedia(params.postId);
+    // La cible est LE COMMENTAIRE : son extrait est ce que le corps doit
+    // montrer, la phrase d'action étant déjà portée par le titre et la
+    // bannière. Sans extrait, le corps nomme l'entité.
+    const commentBody = trimmedPreview !== ''
+      ? `« ${this.truncateMessage(trimmedPreview)} »`
+      : notificationString(lang, 'comment.reply');
 
     return this.createNotification({
       userId: params.commentAuthorId,
       type: 'comment_like',
       priority: 'low',
-      content: notificationString(lang, 'reaction.comment', { emoji: params.emoji }),
-      ...(subtitle ? { subtitle } : {}),
+      content: commentBody,
       lang,
 
       actor: {
@@ -4264,6 +4255,30 @@ export class NotificationService {
     if (text) return `${label} : « ${this.truncateMessage(text)} »`;
     const mediaSummary = this.mediaSummaryString(lang, detail.mediaType);
     return mediaSummary ? `${label} · ${mediaSummary}` : label;
+  }
+
+  /**
+   * Corps d'une notification qui n'apporte AUCUN contenu neuf — une réaction,
+   * un partage. Le geste lui-même est déjà énoncé par le titre et par le
+   * sous-titre de bannière (« a réagi ❤️ à votre publication ») : répéter cette
+   * phrase dans le corps écrivait la même information deux fois sur trois
+   * lignes. Le corps sert donc à identifier CE QUI a été visé — le début du
+   * texte, ou le résumé média, ou les deux.
+   *
+   * Le repli sur le libellé de l'entité (« Votre publication ») ne sert qu'aux
+   * contenus sans texte NI média : un corps vide ferait disparaître la ligne.
+   */
+  private targetPreviewBody(
+    lang: string,
+    postType: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+    detail: { textPreview?: string; mediaType?: 'image' | 'video' | 'audio' },
+  ): string {
+    const text = detail.textPreview?.trim();
+    const mediaSummary = this.mediaSummaryString(lang, detail.mediaType);
+    if (text && mediaSummary) return `${mediaSummary} · ${this.truncateMessage(text)}`;
+    if (text) return this.truncateMessage(text);
+    if (mediaSummary) return mediaSummary;
+    return notificationString(lang, 'comment.subtitleOwner', { postType });
   }
 
   /** Résumé média localisé (« 📷 Photo » / « 🎬 Vidéo » / « 🎵 Audio ») ou ''. */

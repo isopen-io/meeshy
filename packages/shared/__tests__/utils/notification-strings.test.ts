@@ -245,6 +245,58 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
       .toBe('shared a new reel');
   });
 
+  it('fusionne l’auteur du contenu dans la phrase, au lieu de le juxtaposer', () => {
+    // « a commenté un réel de Windie Nh », pas « a commenté un réel » suivi
+    // d'un « Publication de Windie Nh » posé à côté : une notification énonce
+    // UNE phrase, comme le fait déjà « a commenté VOTRE réel ».
+    const fr = buildNotificationDisplay('fr', {
+      type: 'friend_story_comment', actorName: 'elvira ndjiki',
+      postType: 'REEL', authorName: 'Windie Nh',
+    });
+    expect(fr.action).toBe('a commenté un réel de Windie Nh');
+    expect(fr.title).toBe('elvira ndjiki a commenté un réel de Windie Nh');
+
+    const thread = buildNotificationDisplay('fr', {
+      type: 'story_thread_reply', actorName: 'Bob', postType: 'STORY', authorName: 'Alice',
+    });
+    expect(thread.action).toBe('a répondu dans une story de Alice');
+  });
+
+  it('place le possesseur avant l’objet dans les langues qui l’exigent', () => {
+    // L'anglais et le chinois antéposent le possesseur : une concaténation
+    // « action + de + auteur » y produirait « commented on a reel de X ».
+    expect(buildNotificationDisplay('en', {
+      type: 'friend_story_comment', actorName: 'E', postType: 'REEL', authorName: 'Windie Nh',
+    }).action).toBe('commented on Windie Nh’s reel');
+
+    expect(buildNotificationDisplay('zh-Hans', {
+      type: 'friend_story_comment', actorName: 'E', postType: 'REEL', authorName: 'Windie Nh',
+    }).action).toBe('评论了 Windie Nh 的短视频');
+
+    expect(buildNotificationDisplay('de', {
+      type: 'story_thread_reply', actorName: 'E', postType: 'POST', authorName: 'Windie Nh',
+    }).action).toBe('hat in einem Beitrag von Windie Nh geantwortet');
+  });
+
+  it('retombe sur la forme indéfinie quand l’auteur est inconnu', () => {
+    for (const authorName of [undefined, '', '   ']) {
+      expect(buildNotificationDisplay('fr', {
+        type: 'friend_story_comment', actorName: 'E', postType: 'REEL', authorName,
+      }).action, String(authorName)).toBe('a commenté un réel');
+    }
+  });
+
+  it('n’injecte JAMAIS l’auteur dans une action déjà possessive', () => {
+    // « a commenté votre réel de Windie Nh » n'aurait aucun sens : la cible
+    // est le lecteur lui-même.
+    expect(buildNotificationDisplay('fr', {
+      type: 'post_comment', actorName: 'E', postType: 'REEL', authorName: 'Windie Nh',
+    }).action).toBe('a commenté votre réel');
+    expect(buildNotificationDisplay('fr', {
+      type: 'post_like', actorName: 'E', emoji: '❤️', postType: 'REEL', authorName: 'Windie Nh',
+    }).action).toBe('a réagi ❤️ à votre réel');
+  });
+
   it('n’expose aucune action là où il n’y a pas de titre (message, appel, système)', () => {
     for (const type of ['new_message', 'missed_call', 'login_new_device']) {
       const r = buildNotificationDisplay('fr', { type, actorName: 'X' });

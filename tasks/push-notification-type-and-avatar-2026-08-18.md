@@ -157,3 +157,63 @@ Le web (`apps/web/utils/push-notifications.ts`) affiche `icon: data.senderAvatar
 — la même URL relative, que le service worker résout contre l'origine du SITE et
 non celle du gateway. Hors du périmètre iOS demandé, noté ici parce que la cause
 est commune.
+
+
+---
+
+## Passe 2 — retour utilisateur (2026-08-18)
+
+Trois reproches, tous fondés :
+
+1. « Pourquoi pas *a commenté un réel de Windie Nh* ? » — la juxtaposition
+   « action · cible » ne parlait pas comme la forme possessive déjà en place
+   (« a commenté VOTRE réel »).
+2. « Les réactions dupliquent le corps et le sous-titre » — exact, et c'est la
+   passe 1 qui l'a créé : pour une réaction, le CORPS est déjà la phrase
+   d'action (`content: notificationString(lang, 'reaction.post', …)`), que mon
+   sous-titre répétait mot pour mot.
+3. « Dans le corps, l'image, le son, le début du texte ou une combinaison
+   devrait suffire » — le corps doit montrer la CIBLE, pas redire le geste.
+
+### Ce qui change
+
+**L'auteur entre dans la phrase.** Deux clés de catalogue, `comment.genericFrom`
+et `comment.repliedInFrom`, déclinées dans les 8 langues. Elles ne sont pas une
+concaténation : l'anglais et le chinois antéposent le possesseur (« Windie Nh’s
+reel », « Windie Nh 的短视频 »), d'où un nouveau token `bareObj` — le nom nu — à
+côté de la forme indéfinie. `buildNotificationDisplay` accepte `authorName` et
+l'ignore là où l'action est déjà possessive : « a commenté votre réel de Windie
+Nh » désignerait deux propriétaires.
+
+**Le sous-titre ne porte QUE l'action.** `composePushSubtitle` et son heuristique
+de couverture disparaissent : l'auteur étant fusionné et le détail descendu dans
+le corps, il n'y a plus rien à composer.
+
+**Le corps montre la cible.** Nouveau helper `targetPreviewBody` pour les
+notifications qui n'apportent aucun contenu neuf (réactions, partage) :
+début du texte, résumé média, ou les deux (« 📷 Photo · Coucher de soleil »).
+Repli sur le nom de l'entité pour un contenu sans texte ni média — un corps vide
+ferait disparaître la ligne. Trois sites branchés : réaction sur contenu,
+partage, réaction sur commentaire.
+
+### Répartition finale des trois lignes
+
+| ligne | contenu |
+|---|---|
+| titre | le nom de l'acteur (iOS le réécrit de toute façon) |
+| sous-titre | la phrase d'action complète, auteur du contenu compris |
+| corps | le contenu neuf (le commentaire) ou, à défaut, l'aperçu de la cible |
+
+### Vérification passe 2
+
+| Gate | Résultat |
+|---|---|
+| `vitest` — notification-strings (shared) | 38/38 |
+| `jest` — suites notifications gateway | 544/544 |
+| `jest` — notifications web | 163/163 |
+| `tsc --noEmit` gateway | 0 erreur |
+
+Le rendu simulateur n'a pas été recapturé : la première capture avait déjà
+établi qu'iOS rend le sous-titre APN, et le simulateur bascule l'app en
+livraison résumée après une série de pushes. Les textes eux-mêmes sont couverts
+par les tests.
