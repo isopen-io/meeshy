@@ -91,6 +91,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversation: {
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
     },
+    // La clôture et le départ committent ensemble (cycle 69).
+    $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
     ...overrides,
   };
 }
