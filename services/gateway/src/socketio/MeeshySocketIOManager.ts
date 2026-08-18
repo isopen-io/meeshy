@@ -41,6 +41,7 @@ import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
+  participantUserRooms,
   participantUserRoomTargets,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
@@ -2293,8 +2294,48 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * CORRECTION: Broadcaster le changement de statut d'un utilisateur à tous les clients
-   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen
+   * Diffuse une transition de présence (connexion / déconnexion) aux pairs qui
+   * AFFICHENT la pastille de cette personne.
+   *
+   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen, et le
+   * blocage bidirectionnel — même règle que `GET /users/presence`.
+   *
+   * **L'audience est faite de PERSONNES, pas de fils ouverts.** La pastille de
+   * présence se regarde très majoritairement HORS du fil : liste de
+   * conversations, écrans de contacts, en-têtes (`PRESENCE_DOT_CLASS` web,
+   * `PresenceState.dotColor` iOS). `conversation:<id>` ne pouvait donc pas être
+   * la seule adresse de l'événement, parce qu'un client la QUITTE en refermant
+   * le fil tout en restant connecté — `conversation:leave` →
+   * `ConversationHandler.handleConversationLeave` → `socket.leave(...)`, émis par
+   * `ConversationSocketHandler.deinit` (iOS) dès qu'une vue de conversation
+   * disparaît. La room que `AuthHandler` avait jointe à la connexion pour
+   * ATTEINDRE ce participant était démontée par un geste qui ne voulait dire que
+   * « je ne regarde plus ce fil ».
+   *
+   * Ce que ça coûtait, et pourquoi rien ne le rattrapait : `user:status` ne se
+   * répète pas, il ne marque que des TRANSITIONS. Un pair qui se connecte
+   * pendant que je suis ailleurs n'émettra plus rien tant qu'il reste en ligne,
+   * et `presence:snapshot` — le seul autre porteur de cette information — n'est
+   * envoyé qu'à l'authentification. Côté iOS, `PresenceManager` ne sonde jamais
+   * le réseau : son minuteur de 30 s ne fait que recalculer la DÉCROISSANCE
+   * 1/3/5 min depuis `lastActiveAt`. Une transition manquée ne se rattrapait
+   * donc pas d'elle-même : le pair restait éteint sur ma liste jusqu'à la
+   * prochaine reconnexion de socket — et ce, précisément pour les conversations
+   * que j'avais ouvertes, c'est-à-dire les miennes.
+   *
+   * Le remède suit la doctrine déjà écrite dans `emitToConversationParticipants` :
+   * un participant s'adresse par `userId ?? id`, dans une room personnelle que
+   * `AuthHandler` joint à la connexion et que RIEN ne fait quitter. Les rooms de
+   * conversation restent en tête de chaîne — l'élargissement n'est qu'ADDITIF,
+   * il ne retire aucun destinataire d'aujourd'hui — et le chaînage `.to()`
+   * garantit au plus une copie par socket, y compris pour celui qui siège dans
+   * les deux.
+   *
+   * Le prix est une requête `participant` de plus par transition, sur un chemin
+   * de connexion / déconnexion (jamais par message). C'est la MÊME requête que
+   * `_emitPresenceSnapshot` fait déjà à la connexion ; elle n'est délibérément
+   * pas mutualisée avec son cache, dont le TTL rendrait la LIVRAISON de la
+   * présence tributaire de la fraîcheur d'un cache cosmétique.
    */
   private async _broadcastUserStatus(userId: string, isOnline: boolean, isAnonymous: boolean): Promise<void> {
     try {
@@ -2326,12 +2367,26 @@ export class MeeshySocketIOManager {
           // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
           const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
 
-          // Broadcaster uniquement dans la conversation du participant anonyme
-          this.io.to(ROOMS.conversation(participant.conversationId)).emit(SERVER_EVENTS.USER_STATUS, {
-            userId: participant.id,
-            username: displayName,
-            isOnline,
-            lastActiveAt
+          // L'invité de lien partagé n'a QU'UNE conversation : « la room
+          // refermée » y vaut la totalité de sa présence, là où un inscrit n'en
+          // perdrait qu'une sur N. Le chemin à 1 objet n'est pas le cas facile,
+          // c'est celui qu'aucune redondance n'absorbe — d'où le même
+          // élargissement qu'à la porte inscrite, et non un raccourci.
+          const peers = await this.prisma.participant.findMany({
+            where: { conversationId: participant.conversationId, isActive: true },
+            select: { id: true, userId: true },
+          });
+          emitToConversationParticipants({
+            io: this.io,
+            conversationId: participant.conversationId,
+            participants: peers,
+            event: SERVER_EVENTS.USER_STATUS,
+            payload: {
+              userId: participant.id,
+              username: displayName,
+              isOnline,
+              lastActiveAt
+            },
           });
 
         }
@@ -2360,8 +2415,20 @@ export class MeeshySocketIOManager {
             select: { conversationId: true }
           });
 
-          // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
-          const rooms = participantRows.map(p => ROOMS.conversation(p.conversationId));
+          // Un seul emit pour toute l'audience (chaînage `.to()`), et une
+          // audience faite de personnes : les rooms de conversation amorcent la
+          // chaîne — aucun destinataire d'aujourd'hui n'est retiré — puis
+          // `participantUserRooms` y ajoute la room personnelle de chaque
+          // participant, seule adresse qui survive à la fermeture d'un fil.
+          const conversationIds = participantRows.map(p => p.conversationId);
+          const conversationRooms = conversationIds.map(id => ROOMS.conversation(id));
+          const peers = conversationIds.length > 0
+            ? await this.prisma.participant.findMany({
+                where: { conversationId: { in: conversationIds }, isActive: true },
+                select: { id: true, userId: true },
+              })
+            : [];
+          const rooms = participantUserRooms(peers, conversationRooms);
           if (rooms.length > 0) {
             // PRIVACY: exclure les sockets des viewers en relation de blocage
             // bidirectionnel avec ce user — même règle que GET /users/presence
