@@ -424,6 +424,19 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
           onError: (error) => {
             logger.error('[useWebRTCP2P]', 'WebRTC error', { error });
+
+            // scheduleIceRestart() (webrtc-service.ts) raises this PER-PEER,
+            // terminal signal only once ICE has already reached 'failed' for
+            // THAT one peer — the call-wide "Connection failed" escalation
+            // was already decided once, on the AGGREGATE ICE state, by
+            // onIceConnectionStateChange's 'failed' branch above. Escalating
+            // it a SECOND time here, ungated by aggregation, would toast and
+            // kill the whole call because one peer gave up on restarting ICE
+            // — even if every other peer in a group call is still connected.
+            if (error.message === 'ICE_RESTART_ATTEMPTS_EXHAUSTED') {
+              return;
+            }
+
             setError(error.message);
             toast.error(error.message);
             onError?.(error);
