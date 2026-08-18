@@ -86,26 +86,21 @@ public nonisolated enum ComposerMentionQuery {
         return found
     }
 
-    /// Le `content` à publier pour une slide : son texte propre, suivi des
-    /// handles que le canevas porte et qu'il ne contient pas déjà.
+    /// Les pseudos que le CANEVAS nomme, dans l'ordre où l'auteur les a posés et
+    /// dédupliqués sans tenir compte de la casse.
     ///
-    /// C'est ce qui fait notifier une personne épinglée sur une story par la
-    /// pastille « @ » plutôt que par une phrase — le canevas est du
-    /// `StoryEffects`, que le gateway ne lit pas pour les mentions.
-    /// Renvoie `nil` quand il n'y a rien à dire : une story sans texte ni
-    /// mention n'a pas à se voir inventer un contenu.
-    public static func publishedContent(existing: String?, canvasTexts: [String]) -> String? {
-        let base = (existing ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let already = Set(handles(in: base).map { $0.lowercased() })
-        let missing = canvasTexts
-            .flatMap { handles(in: $0) }
-            .reduce(into: [String]()) { acc, handle in
-                let key = handle.lowercased()
-                guard !already.contains(key), !acc.contains(where: { $0.lowercased() == key }) else { return }
-                acc.append(handle)
-            }
-        let appended = missing.map { "@" + $0 }.joined(separator: " ")
-        let joined = [base, appended].filter { !$0.isEmpty }.joined(separator: " ")
-        return joined.isEmpty ? nil : joined
+    /// C'est ce que la publication déclare au serveur (`mentions` de
+    /// `POST /posts`). Avant ce canal, le gateway n'extrayait les mentions que
+    /// du `content` : nommer quelqu'un par une pastille imposait d'écrire son
+    /// `@handle` dans la légende — une phrase inventée pour satisfaire
+    /// l'extracteur, visible de tous, et traduite par le Prisme comme du contenu
+    /// d'auteur. La déclaration remplace cette contorsion.
+    public static func handles(inAll texts: [String]) -> [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for handle in texts.flatMap(handles(in:)) where seen.insert(handle.lowercased()).inserted {
+            ordered.append(handle)
+        }
+        return ordered
     }
 }

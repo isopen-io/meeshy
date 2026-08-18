@@ -23,6 +23,8 @@ const POST = { id: 'post-1', authorId: 'u-author', type: 'POST' as const, visibi
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     postMention: {
+      // `source` fait partie du `select` de la réconciliation : un double qui
+      // l'omet ferait passer des lignes CANVAS pour du texte.
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
@@ -75,7 +77,7 @@ describe('resolvePostMentions — création', () => {
     expect(result.mentionedUserIds).toEqual(['u-alice']);
     expect(result.newlyMentionedUserIds).toEqual(['u-alice']);
     expect(result.reconciled).toBe(true);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice']);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'CONTENT');
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         postId: 'post-1',
@@ -165,7 +167,141 @@ describe('resolvePostMentions — création', () => {
     });
 
     expect(result.mentionedUserIds).toEqual(['u-alice']);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice']);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'CONTENT');
+  });
+});
+
+describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
+  it('persiste et prévient une pastille de canevas que le texte ne nomme pas', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(
+        new Map([['bob', { id: 'u-bob', username: 'bob' }]])
+      ),
+    });
+    const notificationService = makeNotifier();
+
+    const result = await resolvePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: 'une story sans une seule arobase',
+      declared: [{ username: 'bob' }],
+    });
+
+    expect(result.mentionedUserIds).toEqual(['u-bob']);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'CANVAS');
+    expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ mentionedUserIds: ['u-bob'] })
+    );
+  });
+
+  it('prend un userId déclaré tel quel, sans le résoudre par pseudo', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: null, declared: [{ userId: 'u-direct' }],
+    });
+
+    expect(mentionService.resolveUsernames).not.toHaveBeenCalled();
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-direct'], 'CANVAS');
+  });
+
+  /// Nommée des deux côtés, la personne compte comme mention de TEXTE : c'est
+  /// la voie que l'édition relit, donc celle qui gouverne sa survie.
+  it('classe en CONTENT une personne nommée à la fois dans le texte et déclarée', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'salut @alice', declared: [{ userId: 'u-alice' }],
+    });
+
+    expect(mentionService.createPostMentions).toHaveBeenCalledTimes(1);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'CONTENT');
+  });
+
+  it('ne touche à rien quand ni le texte ni la déclaration ne nomment personne', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+
+    const result = await resolvePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'bonjour', declared: [],
+    });
+
+    expect(result).toEqual({ mentionedUserIds: [], newlyMentionedUserIds: [], reconciled: true });
+    expect(mentionService.createPostMentions).not.toHaveBeenCalled();
+  });
+});
+
+describe('reconcilePostMentions — mentions DÉCLARÉES (tri-état)', () => {
+  /// Sans liste, les pastilles SURVIVENT. Les déduire du texte les effacerait à
+  /// la première correction de frappe — elles n'y sont pas, c'est leur raison
+  /// d'être.
+  it('préserve les pastilles de canevas quand le client ne parle pas de mentions', async () => {
+    const prisma = makePrisma();
+    prisma.postMention.findMany.mockResolvedValue([
+      { mentionedUserId: 'u-bob', source: 'CANVAS' },
+    ]);
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    const result = await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte édité sans arobase',
+    });
+
+    expect(prisma.postMention.deleteMany).not.toHaveBeenCalled();
+    expect(result.mentionedUserIds).toEqual(['u-bob']);
+    expect(result.newlyMentionedUserIds).toEqual([]);
+  });
+
+  it('retire les pastilles quand le client déclare une liste vide', async () => {
+    const prisma = makePrisma();
+    prisma.postMention.findMany.mockResolvedValue([
+      { mentionedUserId: 'u-bob', source: 'CANVAS' },
+    ]);
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    const result = await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte édité', declared: [],
+    });
+
+    expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
+      where: { postId: 'post-1', mentionedUserId: { in: ['u-bob'] } },
+    });
+    expect(result.mentionedUserIds).toEqual([]);
+  });
+
+  /// `source: null` = ligne écrite avant le discriminant. Elle se lit CONTENT :
+  /// c'était la seule voie qui existait alors.
+  it('relit dans le texte une ligne antérieure au discriminant', async () => {
+    const prisma = makePrisma();
+    prisma.postMention.findMany.mockResolvedValue([
+      { mentionedUserId: 'u-legacy', source: null },
+    ]);
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    const result = await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'plus aucune mention',
+    });
+
+    expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
+      where: { postId: 'post-1', mentionedUserId: { in: ['u-legacy'] } },
+    });
+    expect(result.mentionedUserIds).toEqual([]);
   });
 });
 
@@ -217,7 +353,7 @@ describe('reconcilePostMentions — édition', () => {
     expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
       where: { postId: 'post-1', mentionedUserId: { in: ['u-carol'] } },
     });
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob']);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'CONTENT');
     expect(result.newlyMentionedUserIds).toEqual(['u-bob']);
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({ mentionedUserIds: ['u-bob'] })

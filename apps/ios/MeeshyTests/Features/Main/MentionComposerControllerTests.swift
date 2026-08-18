@@ -42,7 +42,7 @@ final class MentionComposerControllerTests: XCTestCase {
         )
     }
 
-    /// Attend que `condition` devienne vraie, jusqu'à 3 s, en rendant la main à
+    /// Attend que `condition` devienne vraie, jusqu'à 10 s, en rendant la main à
     /// l'acteur principal entre deux vérifications.
     ///
     /// Remplace un `Task.sleep(400 ms)` nu qui pariait sur 100 ms de marge après
@@ -53,9 +53,15 @@ final class MentionComposerControllerTests: XCTestCase {
     /// déplacé le seuil sans supprimer le pari ; attendre la CONDITION le
     /// supprime, et rend la main dès qu'elle est vraie (les cas nominaux
     /// coûtent donc moins qu'avant, pas plus).
+    ///
+    /// Le plafond est GÉNÉREUX à dessein : une attente de condition ne le paie
+    /// que lorsqu'elle échoue. Trois secondes ne suffisaient pas sur une machine
+    /// chargée (mesuré : la suite entière du gateway en parallèle suffit à
+    /// affamer le débounce), et un plafond trop court ramène exactement le pari
+    /// qu'on vient de retirer.
     private func waitUntil(
         _ condition: () -> Bool,
-        timeout: TimeInterval = 3.0,
+        timeout: TimeInterval = 10.0,
         _ message: @autoclosure () -> String = "condition jamais atteinte",
         file: StaticString = #filePath,
         line: UInt = #line

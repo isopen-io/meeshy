@@ -47,7 +47,35 @@ export type PostMentionPrisma = Pick<PrismaClient, 'postMention'>;
 export interface PostMentionResolver {
   extractMentions(content: string): string[];
   resolveUsernames(usernames: string[]): Promise<Map<string, { id: string }>>;
-  createPostMentions(postId: string, mentionedUserIds: string[]): Promise<void>;
+  createPostMentions(
+    postId: string,
+    mentionedUserIds: string[],
+    source?: PostMentionSourceValue
+  ): Promise<void>;
+}
+
+/**
+ * D'où vient une ligne `PostMention` — miroir de l'enum Prisma
+ * `PostMentionSource`. Deux voies, deux réconciliations : le TEXTE est relu à
+ * chaque édition, une mention DÉCLARÉE ne bouge que si le client renvoie sa
+ * liste.
+ */
+export type PostMentionSourceValue = 'CONTENT' | 'CANVAS';
+
+/**
+ * Une personne que le post nomme SANS que son texte le dise : pastille posée
+ * sur le canevas d'une story, choix dans un sélecteur.
+ *
+ * `userId` OU `username`. Les deux existent parce que les deux appelants sont
+ * réels — un sélecteur rend un `User.id`, un canevas ne porte que le `@handle`
+ * qu'il affiche (et c'est lui qui survit à un brouillon repris trois jours plus
+ * tard, là où un id devrait être persisté en parallèle des effets). Les pseudos
+ * passent par la MÊME résolution que l'extraction de texte, donc les deux voies
+ * ne peuvent pas diverger.
+ */
+export interface DeclaredPostMention {
+  readonly userId?: string;
+  readonly username?: string;
 }
 
 /**
@@ -103,6 +131,14 @@ export interface PostMentionParams {
   notificationService: PostMentionNotifier | null | undefined;
   post: MentionTargetPost;
   content: string | null | undefined;
+  /**
+   * Mentions déclarées hors texte. TRI-ÉTAT à l'édition, comme `location` :
+   * `undefined` = le client n'en parle pas, les lignes `CANVAS` existantes
+   * survivent ; `[]` = il n'en déclare plus aucune, elles partent ; une liste
+   * remplace l'ensemble déclaré. À la création, `undefined` et `[]` reviennent
+   * au même — il n'y a rien à préserver.
+   */
+  declared?: readonly DeclaredPostMention[];
   onError?: (error: unknown) => void;
 }
 
@@ -121,16 +157,30 @@ export interface PostMentionParams {
  * journaliser dans le contexte de sa requête.
  */
 export async function resolvePostMentions(params: PostMentionParams): Promise<ResolvedPostMentions> {
-  const { mentionService, content } = params;
+  const { mentionService, content, declared } = params;
 
   if (!mentionService) return UNRESOLVED;
-  if (!content || !content.includes('@')) return NO_MENTIONS;
+
+  // Le court-circuit couvre désormais les DEUX voies : un post sans `@` ET sans
+  // mention déclarée ne doit coûter aucune requête. Le tester sur le seul
+  // contenu aurait silencieusement jeté toute pastille de canevas — le défaut
+  // même que la voie déclarée existe pour corriger.
+  const namesInContent = Boolean(content && content.includes('@'));
+  const namesDeclared = Boolean(declared && declared.length > 0);
+  if (!namesInContent && !namesDeclared) return NO_MENTIONS;
 
   try {
-    const mentionedUserIds = await resolveMentionedUserIds(mentionService, content);
+    const contentUserIds = namesInContent
+      ? await resolveMentionedUserIds(mentionService, content as string)
+      : [];
+    const declaredUserIds = await resolveDeclaredUserIds(mentionService, declared);
+    // Nommée des DEUX côtés, la personne compte comme mention de TEXTE : c'est
+    // la voie que l'édition relit, donc celle qui doit gouverner sa survie.
+    const canvasOnlyUserIds = declaredUserIds.filter((id) => !contentUserIds.includes(id));
+    const mentionedUserIds = [...contentUserIds, ...canvasOnlyUserIds];
     if (mentionedUserIds.length === 0) return NO_MENTIONS;
 
-    await mentionService.createPostMentions(params.post.id, mentionedUserIds);
+    await persistBySource(mentionService, params.post.id, contentUserIds, canvasOnlyUserIds);
     notifyNewlyMentioned(params, mentionedUserIds);
 
     return { mentionedUserIds, newlyMentionedUserIds: mentionedUserIds, reconciled: true };
@@ -183,16 +233,31 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
     // L'ensemble précédent est la seule source de « qui est parti » et de « qui
     // est nouveau ». Sa lecture est DANS le try : en échec, la réconciliation
     // ne peut plus garantir qu'elle ne détruit rien, donc elle s'abstient.
-    const previousUserIds = (
-      await prisma.postMention.findMany({
-        where: { postId: params.post.id },
-        select: { mentionedUserId: true },
-      })
-    ).map((row) => row.mentionedUserId);
+    const previousRows = await prisma.postMention.findMany({
+      where: { postId: params.post.id },
+      select: { mentionedUserId: true, source: true },
+    });
+    const previousUserIds = previousRows.map((row) => row.mentionedUserId);
+    // `source: null` = ligne écrite avant le discriminant. Elle se lit CONTENT :
+    // c'était la seule voie qui existait alors, et la relire dans le texte est
+    // exactement ce que faisait la réconciliation d'avant.
+    const previousCanvasUserIds = previousRows
+      .filter((row) => row.source === 'CANVAS')
+      .map((row) => row.mentionedUserId);
 
-    const mentionedUserIds = content && content.includes('@')
+    const contentUserIds = content && content.includes('@')
       ? await resolveMentionedUserIds(mentionService, content)
       : [];
+
+    // TRI-ÉTAT : sans liste, les pastilles du canevas SURVIVENT. Les déduire du
+    // texte les effacerait à la première correction de frappe — elles n'y sont
+    // pas, c'est leur raison d'être.
+    const canvasUserIds = params.declared === undefined
+      ? previousCanvasUserIds
+      : await resolveDeclaredUserIds(mentionService, params.declared);
+
+    const canvasOnlyUserIds = canvasUserIds.filter((id) => !contentUserIds.includes(id));
+    const mentionedUserIds = [...contentUserIds, ...canvasOnlyUserIds];
 
     const previous = new Set(previousUserIds);
     const retained = new Set(mentionedUserIds);
@@ -205,8 +270,12 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
       });
     }
 
-    // La garde du lot vide appartient à `createPostMentions`, qui la porte déjà.
-    await mentionService.createPostMentions(params.post.id, newlyMentionedUserIds);
+    await persistBySource(
+      mentionService,
+      params.post.id,
+      newlyMentionedUserIds.filter((id) => contentUserIds.includes(id)),
+      newlyMentionedUserIds.filter((id) => !contentUserIds.includes(id))
+    );
     notifyNewlyMentioned(params, newlyMentionedUserIds);
 
     return { mentionedUserIds, newlyMentionedUserIds, reconciled: true };
@@ -214,6 +283,62 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
     params.onError?.(error);
     return UNRESOLVED;
   }
+}
+
+/**
+ * Écrit chaque lot sous SA source. Deux appels et non un : c'est le
+ * discriminant qui dit, à l'édition suivante, laquelle relire dans le texte —
+ * un lot fusionné les rendrait toutes relisibles, et la première correction de
+ * frappe effacerait les pastilles du canevas.
+ *
+ * La garde du lot vide vit ici plutôt que dans `createPostMentions` : lui la
+ * porte déjà, mais l'appeler pour rien brouillerait le compte d'appels que
+ * lisent les tests — et une écriture qu'on n'a pas à faire ne se demande pas.
+ */
+async function persistBySource(
+  mentionService: PostMentionResolver,
+  postId: string,
+  contentUserIds: readonly string[],
+  canvasUserIds: readonly string[]
+): Promise<void> {
+  if (contentUserIds.length > 0) {
+    await mentionService.createPostMentions(postId, [...contentUserIds], 'CONTENT');
+  }
+  if (canvasUserIds.length > 0) {
+    await mentionService.createPostMentions(postId, [...canvasUserIds], 'CANVAS');
+  }
+}
+
+/**
+ * Les `User.id` des mentions DÉCLARÉES. Un `userId` fourni est pris tel quel ;
+ * un `username` passe par la même résolution que le texte. Dédupliqué en
+ * préservant l'ordre de déclaration — c'est celui du canevas, donc celui que
+ * l'auteur a posé.
+ */
+async function resolveDeclaredUserIds(
+  mentionService: PostMentionResolver,
+  declared: readonly DeclaredPostMention[] | undefined
+): Promise<string[]> {
+  if (!declared || declared.length === 0) return [];
+
+  const usernames = declared
+    .filter((mention) => !mention.userId)
+    .map((mention) => mention.username)
+    .filter((username): username is string => Boolean(username));
+
+  const resolvedByName = usernames.length > 0
+    ? await mentionService.resolveUsernames(usernames)
+    : new Map<string, { id: string }>();
+  const fromNames = Array.from(resolvedByName.values()).map((user) => user.id);
+
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const id of [...declared.map((m) => m.userId), ...fromNames]) {
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ordered.push(id);
+  }
+  return ordered;
 }
 
 /**

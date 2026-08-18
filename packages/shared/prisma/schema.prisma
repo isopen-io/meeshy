@@ -4168,12 +4168,34 @@ model CommentMention {
   @@index([mentionedAt])
 }
 
-/// Mention d'un utilisateur dans le corps d'un post
+/// D'où vient une mention de post.
+///
+/// Le discriminant existe parce que les deux voies ne se réconcilient pas
+/// pareil à l'édition : le TEXTE est relu à chaque fois (une mention retirée du
+/// contenu doit disparaître), une mention DÉCLARÉE ne bouge que si le client
+/// renvoie sa liste.
+enum PostMentionSource {
+  /// Extraite du texte du post (`@handle` dans `content`).
+  CONTENT
+  /// DÉCLARÉE par le client — une pastille posée sur le canevas d'une story,
+  /// choisie dans un sélecteur. Le texte du post ne la porte pas : sans ce
+  /// canal, la nommer imposait d'écrire son `@handle` dans la légende.
+  CANVAS
+}
+
+/// Mention d'un utilisateur dans un post — son texte, ou une pastille posée sur
+/// son canevas.
 model PostMention {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   postId            String   @db.ObjectId
   mentionedUserId   String   @db.ObjectId
   mentionedAt       DateTime @default(now())
+  /// OPTIONNEL, et pas `@default(CONTENT)` : sous MongoDB, un `@default` ne
+  /// s'applique qu'à l'ÉCRITURE — les lignes déjà en base n'ont pas ce champ, et
+  /// un champ requis absent fait échouer la LECTURE. `null` s'y lit donc
+  /// « antérieure au discriminant », que la réconciliation traite comme
+  /// `CONTENT` : c'est la seule voie qui existait quand elles ont été écrites.
+  source            PostMentionSource?
 
   post           Post @relation("PostMentions", fields: [postId], references: [id], onDelete: Cascade)
   mentionedUser  User @relation("UserPostMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)

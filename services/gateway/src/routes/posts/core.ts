@@ -172,6 +172,12 @@ export function registerCoreRoutes(
           visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
         },
         content: postContent,
+        // Les nommés que le TEXTE ne porte pas : pastille posée sur le canevas
+        // d'une story, choix dans un sélecteur. Sans ce canal, les nommer
+        // imposait d'écrire leur `@handle` dans la légende — une phrase
+        // inventée pour satisfaire l'extracteur, visible de tous et traduite
+        // par le Prisme comme du contenu d'auteur.
+        declared: parsed.data.mentions,
         onError: (err: unknown) => {
           fastify.log.error(`[POST /posts] post mention reconcile failed: ${err}`);
         },
@@ -324,6 +330,10 @@ export function registerCoreRoutes(
           visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
         },
         content: editedContent,
+        // TRI-ÉTAT : clé absente = les pastilles du canevas survivent, `[]` =
+        // elles partent. Les déduire du texte les effacerait à la première
+        // correction de frappe — elles n'y sont pas, c'est leur raison d'être.
+        declared: parsed.data.mentions,
         onError: (err: unknown) => {
           fastify.log.error(`[PUT /posts/:postId] post mention reconcile failed: ${err}`);
         },

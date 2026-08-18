@@ -1011,7 +1011,17 @@ export class MentionService {
    * @param postId - ID du post
    * @param mentionedUserIds - IDs des utilisateurs mentionnés
    */
-  async createPostMentions(postId: string, mentionedUserIds: string[]): Promise<void> {
+  /**
+   * `source` dit d'où vient la mention — le TEXTE du post, ou une pastille
+   * DÉCLARÉE par le client (canevas de story, sélecteur). Optionnel et
+   * défaillant vers `CONTENT` : c'était la seule voie avant que le canal
+   * déclaré existe, et les appelants d'alors ne passent rien.
+   */
+  async createPostMentions(
+    postId: string,
+    mentionedUserIds: string[],
+    source: 'CONTENT' | 'CANVAS' = 'CONTENT'
+  ): Promise<void> {
     if (mentionedUserIds.length === 0) return;
 
     await Promise.allSettled(
@@ -1020,6 +1030,7 @@ export class MentionService {
           data: {
             postId,
             mentionedUserId: userId,
+            source,
           },
         }).catch((error: any) => {
           if (error.code !== 'P2002') {

@@ -81,37 +81,27 @@ final class ComposerMentionQueryTests: XCTestCase {
         XCTAssertEqual(ComposerMentionQuery.handles(in: "@marie_l.dupont !"), ["marie_l.dupont"])
     }
 
-    // MARK: - Contenu publié
+    // MARK: - Mentions déclarées au serveur
 
-    /// Le canevas d'une story voyage dans `StoryEffects`, que le gateway ne lit
-    /// PAS pour les mentions : `POST /posts` n'accepte aucune liste de
-    /// mentionnés, et le serveur extrait les `@handle` du `content`. Sans cette
-    /// récolte, une pastille posée sur la slide ne préviendrait personne.
-    func test_publishedContent_liftsCanvasHandlesIntoTheContent() {
+    /// Le canevas voyage dans `StoryEffects`, que le gateway ne lit pas pour les
+    /// mentions. C'est cette récolte qui alimente le champ `mentions` de
+    /// `POST /posts` — sans elle, nommer quelqu'un par une pastille imposait
+    /// d'écrire son `@handle` dans la légende.
+    func test_handlesInAll_collectsEveryCanvasHandleInOrder() {
         XCTAssertEqual(
-            ComposerMentionQuery.publishedContent(existing: nil, canvasTexts: ["@alice", "Bonne journée"]),
-            "@alice"
+            ComposerMentionQuery.handles(inAll: ["@alice", "Bonne journée", "coucou @bob"]),
+            ["alice", "bob"]
         )
     }
 
-    func test_publishedContent_appendsToAnExistingCaptionWithoutRepeatingIt() {
+    func test_handlesInAll_deduplicatesAcrossTexts_caseInsensitively() {
         XCTAssertEqual(
-            ComposerMentionQuery.publishedContent(existing: "coucou @alice", canvasTexts: ["@alice", "@bob"]),
-            "coucou @alice @bob"
+            ComposerMentionQuery.handles(inAll: ["@alice", "@Alice et @bob"]),
+            ["alice", "bob"]
         )
     }
 
-    /// Le texte LIBRE du canevas ne monte pas dans `content` : les stories se
-    /// publient RAW et se re-traduisent chez chaque lecteur depuis
-    /// `effects.textObjects`. L'y recopier doublerait le texte et le ferait
-    /// traduire une seconde fois côté serveur.
-    func test_publishedContent_neverLiftsPlainCanvasText() {
-        XCTAssertNil(
-            ComposerMentionQuery.publishedContent(existing: nil, canvasTexts: ["Bonjour tout le monde"])
-        )
-    }
-
-    func test_publishedContent_withNothingToSay_isNil() {
-        XCTAssertNil(ComposerMentionQuery.publishedContent(existing: "   ", canvasTexts: []))
+    func test_handlesInAll_withoutAnyHandle_isEmpty() {
+        XCTAssertTrue(ComposerMentionQuery.handles(inAll: ["Bonjour", "contact@exemple.com"]).isEmpty)
     }
 }

@@ -151,24 +151,12 @@ extension StoryComposerView {
         if currentIndex >= 0, currentIndex < copy.count {
             copy[currentIndex].effects = currentEffects
         }
-        // Les mentions du CANEVAS deviennent du contenu. Le canevas voyage dans
-        // `StoryEffects`, que le gateway ne lit pas pour les mentions : `POST
-        // /posts` n'accepte aucune liste de mentionnés, et le seul canal est le
-        // `content` du post, d'où le serveur extrait les `@handle` pour écrire
-        // `Mention` et notifier. Une pastille posée sur la slide ne préviendrait
-        // donc personne — c'est-à-dire tout ce qu'on lui demande.
-        //
-        // On n'y verse QUE les handles, jamais le texte libre de la slide : les
-        // stories se publient RAW et se re-traduisent chez chaque lecteur depuis
-        // `effects.textObjects` (cf. `apps/ios/CLAUDE.md`, « Story Architecture »).
-        // Recopier leurs phrases dans `content` doublerait ce texte et le
-        // ferait traduire une seconde fois, côté serveur, pour rien.
-        for index in copy.indices {
-            copy[index].content = ComposerMentionQuery.publishedContent(
-                existing: copy[index].content,
-                canvasTexts: copy[index].effects.textObjects.map(\.text)
-            )
-        }
+        // Le `content` n'est PAS touché. Les mentions du canevas voyagent dans le
+        // champ `mentions` de `POST /posts` (`StoryViewModel.runStoryUpload` les
+        // dérive des `textObjects`) — pas déguisées en légende. Le détour par le
+        // texte a existé le temps que le gateway n'ait pas de canal déclaré ; il
+        // inventait une phrase d'auteur, visible de tous et traduite par le
+        // Prisme, pour satisfaire un extracteur.
         return copy
     }
 

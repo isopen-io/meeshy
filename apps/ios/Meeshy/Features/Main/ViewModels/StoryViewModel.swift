@@ -2189,6 +2189,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 "publish createStory slide=\(slide.id, privacy: .public) audioInPayload=\(postAudioCount) details=[\(postAudioIds, privacy: .public)]"
             )
 
+            // Les nommés que le `content` ne porte PAS : les pastilles `@pseudo`
+            // posées sur le canevas. Elles vivent dans `StoryEffects`, que le
+            // gateway ne lit pas pour les mentions — il fallait donc les lui
+            // DÉCLARER. Le serveur résout les pseudos avec la même fonction que
+            // l'extraction de texte, donc les deux voies ne divergent pas.
+            let canvasMentions = ComposerMentionQuery
+                .handles(inAll: updatedEffects.textObjects.map(\.text))
+                .map(PostMentionInput.handle)
+
             let post = try await postService.createStory(
                 content: slide.content,
                 storyEffects: updatedEffects,
@@ -2196,7 +2205,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibilityUserIds: upload.visibilityUserIds,
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
-                repostOfId: nil
+                repostOfId: nil,
+                mentions: canvasMentions.isEmpty ? nil : canvasMentions
             )
 
             newPostIds.append(post.id)

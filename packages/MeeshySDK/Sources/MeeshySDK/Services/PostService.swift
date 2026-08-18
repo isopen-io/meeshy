@@ -81,6 +81,11 @@ public protocol PostServiceProviding: Sendable {
     func share(postId: String) async throws
     func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
+    /// Même publication, plus les nommés que `content` ne porte pas (pastilles
+    /// du canevas). Signature SÉPARÉE et non un paramètre ajouté à la
+    /// précédente : les protocoles Swift ne portent pas de valeur par défaut, et
+    /// tout double de test aurait cessé de conformer d'un coup.
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
     func pinPost(postId: String) async throws
@@ -96,6 +101,16 @@ public protocol PostServiceProviding: Sendable {
 }
 
 public extension PostServiceProviding {
+    /// Défaut : un conformeur qui n'implémente que la signature SANS mentions
+    /// (mocks existants) reste valide — les pastilles sont simplement ignorées
+    /// tant que le type ne surcharge pas cette méthode. `PostService` la
+    /// surcharge réellement.
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                              visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                              mediaIds: mediaIds, repostOfId: repostOfId)
+    }
+
     /// Compat : la signature historique 8-params reste disponible pour les
     /// call sites existants — les protocoles Swift ne portent pas de valeurs
     /// par défaut. `storyEffects` / `mediaIds` (édition de story) partent à nil.
@@ -417,12 +432,18 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
+        try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                              visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                              mediaIds: mediaIds, repostOfId: repostOfId, mentions: nil)
+    }
+
+    public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost {
         // Strip composer-local `file://` paths from mediaObjects before the
         // payload hits the wire — they only resolve in the author's sandbox
         // and break the canvas for every reader (cf. StoryEffects+Sanitization
         // and StoryMediaLayer.swift:132-134).
         let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
-        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
+        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

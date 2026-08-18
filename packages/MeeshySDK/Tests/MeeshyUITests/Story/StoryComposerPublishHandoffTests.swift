@@ -46,51 +46,35 @@ final class StoryComposerPublishHandoffTests: XCTestCase {
         XCTAssertNil(slides[0].content, "Le composer ne peut plus atteindre ce qui est parti")
     }
 
-    // MARK: - Mentions du canevas → contenu publié
+    // MARK: - Le hand-off ne déguise plus les mentions en légende
 
     /// Directive user 2026-08-18 : « on doit pouvoir identifier des utilisateurs
-    /// dans les story sans que ce ne soit dans un texte ». La pastille vit sur
-    /// le canevas, donc dans `StoryEffects` — que le gateway ne lit PAS pour les
-    /// mentions : `POST /posts` n'accepte aucune liste de mentionnés et le
-    /// serveur extrait les `@handle` du seul `content`. Le hand-off est le
-    /// dernier point où la story est encore décidable : c'est là que les handles
-    /// deviennent du contenu, ou nulle part.
-    func test_handoffSlides_liftsCanvasMentionsIntoTheSlideContent() {
+    /// dans les story sans que ce ne soit dans un texte ». Les pastilles du
+    /// canevas partent désormais dans le champ `mentions` de `POST /posts`
+    /// (`StoryViewModel.runStoryUpload`), PAS recopiées dans `content`.
+    ///
+    /// Le détour par le texte a existé le temps que le gateway n'ait pas de
+    /// canal déclaré : il inventait une phrase d'auteur, visible de tous et
+    /// traduite par le Prisme, pour satisfaire un extracteur.
+    func test_handoffSlides_neverWritesCanvasMentionsIntoTheCaption() {
         var effects = StoryEffects()
         effects.textObjects = [StoryTextObject(text: "@alice")]
         let slides = [StorySlide(id: "a", effects: effects)]
 
         let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: effects)
 
-        XCTAssertEqual(result[0].content, "@alice")
+        XCTAssertNil(result[0].content, "La légende reste celle de l'auteur, ou rien.")
     }
 
-    /// Le texte LIBRE ne monte pas : les stories se publient RAW et se
-    /// re-traduisent chez chaque lecteur depuis `effects.textObjects`. Recopier
-    /// leurs phrases dans `content` doublerait le texte et le ferait traduire
-    /// une seconde fois, côté serveur, pour rien.
-    func test_handoffSlides_leavesPlainCanvasTextOutOfTheContent() {
+    /// Et la légende qu'il a réellement écrite (édition, repost) survit intacte.
+    func test_handoffSlides_leavesAnAuthoredCaptionUntouched() {
         var effects = StoryEffects()
-        effects.textObjects = [StoryTextObject(text: "Bonjour tout le monde")]
-        let slides = [StorySlide(id: "a", effects: effects)]
+        effects.textObjects = [StoryTextObject(text: "@alice")]
+        let slides = [StorySlide(id: "a", content: "coucou", effects: effects)]
 
         let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: effects)
 
-        XCTAssertNil(result[0].content)
-    }
-
-    /// La récolte couvre TOUTES les slides, pas seulement celle qu'on regarde :
-    /// une mention posée sur la slide 2 puis un retour sur la 1 ne doit pas
-    /// perdre sa notification.
-    func test_handoffSlides_harvestsEverySlide_notOnlyTheCurrentOne() {
-        var other = StoryEffects()
-        other.textObjects = [StoryTextObject(text: "@bob")]
-        let slides = [StorySlide(id: "a"), StorySlide(id: "b", effects: other)]
-
-        let result = StoryComposerView.handoffSlides(slides, currentIndex: 0, currentEffects: StoryEffects())
-
-        XCTAssertNil(result[0].content)
-        XCTAssertEqual(result[1].content, "@bob")
+        XCTAssertEqual(result[0].content, "coucou")
     }
 
     // MARK: - Garde de source (C3)

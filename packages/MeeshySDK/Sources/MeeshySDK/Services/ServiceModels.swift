@@ -236,6 +236,28 @@ public struct UpdatePostRequest: Encodable, Sendable {
     }
 }
 
+/// Une personne que le post NOMME sans que son texte le dise — pastille posée
+/// sur le canevas d'une story, choix dans un sélecteur.
+///
+/// Miroir de `PostMentionInputSchema` côté gateway. `userId` OU `username` :
+/// un sélecteur rend un `User.id`, un canevas ne porte que le `@handle` qu'il
+/// affiche — et c'est lui qui survit à un brouillon repris trois jours plus
+/// tard, là où un id devrait être persisté en parallèle des effets. Le serveur
+/// résout les pseudos avec la MÊME fonction que l'extraction de texte.
+public struct PostMentionInput: Encodable, Sendable, Equatable {
+    public let userId: String?
+    public let username: String?
+
+    public init(userId: String? = nil, username: String? = nil) {
+        self.userId = userId
+        self.username = username
+    }
+
+    public static func handle(_ username: String) -> PostMentionInput {
+        PostMentionInput(userId: nil, username: username)
+    }
+}
+
 public struct CreateStoryRequest: Encodable {
     public let type = "STORY"
     public let content: String?
@@ -245,12 +267,17 @@ public struct CreateStoryRequest: Encodable {
     public let originalLanguage: String?
     public let mediaIds: [String]?
     public let repostOfId: String?
+    /// Les nommés que `content` ne porte PAS. Sans ce champ, épingler quelqu'un
+    /// sur le canevas imposait d'écrire son `@handle` dans la légende : le
+    /// gateway n'extrayait les mentions que du texte du post.
+    public let mentions: [PostMentionInput]?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) {
+    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) {
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage; self.mediaIds = mediaIds
         self.repostOfId = repostOfId
+        self.mentions = mentions
     }
 }
 

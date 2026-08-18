@@ -304,6 +304,66 @@ describe('POST /posts — translatePost throws synchronously (catch block)', () 
   });
 });
 
+// ─── POST /posts — mentions DÉCLARÉES (hors texte) ───────────────────────────
+
+/**
+ * Directive user 2026-08-18 : `POST /posts` n'avait AUCUN champ `mentions` — le
+ * gateway extrayait les nommés du seul `content`. Épingler quelqu'un sur le
+ * canevas d'une story imposait donc d'écrire son `@handle` dans la légende.
+ *
+ * Ce cas verrouille le canal de bout en bout : le champ traverse la validation,
+ * la route, la résolution, et arrive persisté sous `CANVAS` — le discriminant
+ * qui empêchera l'édition suivante de le chercher dans un texte qui ne le porte
+ * pas.
+ */
+describe('POST /posts — mentions déclarées hors contenu', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockExtractMentions.mockReturnValue([]);
+    mockResolveUsernames.mockResolvedValue(new Map([['dana', { id: 'user-dana' }]]));
+    mockCreatePost.mockResolvedValue({
+      id: 'post-decl', content: 'une story sans arobase', type: 'STORY',
+      visibility: 'PUBLIC', createdAt: new Date(),
+    });
+    ({ app } = await buildApp());
+  });
+  afterAll(async () => {
+    mockExtractMentions.mockReturnValue([]);
+    mockResolveUsernames.mockResolvedValue(new Map());
+    mockCreatePost.mockResolvedValue({
+      id: 'post-001', content: 'Hello', type: 'POST', visibility: 'PUBLIC', createdAt: new Date(),
+    });
+    await app.close();
+  });
+
+  it('persiste une pastille de canevas sous la source CANVAS et prévient la personne', async () => {
+    mockCreatePostMentions.mockClear();
+    mockCreatePostMentionNotificationsBatch.mockClear();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: {
+        type: 'STORY',
+        content: 'une story sans arobase',
+        mentions: [{ username: 'dana' }],
+      },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-decl', ['user-dana'], 'CANVAS');
+    expect(mockCreatePostMentionNotificationsBatch).toHaveBeenCalled();
+  });
+
+  it('rejette une mention qui ne porte ni userId ni username', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'STORY', content: 'x', mentions: [{}] },
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+});
+
 // ─── POST /posts — mention notifications ─────────────────────────────────────
 
 describe('POST /posts — with @mentions in content', () => {
@@ -335,7 +395,7 @@ describe('POST /posts — with @mentions in content', () => {
       payload: { content: 'Hello @bob and @carol', type: 'POST' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-001', ['user-bob', 'user-carol']);
+    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-001', ['user-bob', 'user-carol'], 'CONTENT');
     expect(mockCreatePostMentionNotificationsBatch).toHaveBeenCalled();
   });
 });
@@ -443,7 +503,7 @@ describe('PUT /posts/:postId — edited content with @mentions', () => {
       payload: { content: 'Updated @dave check this' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockCreatePostMentions).toHaveBeenCalledWith(POST_ID, ['user-dave']);
+    expect(mockCreatePostMentions).toHaveBeenCalledWith(POST_ID, ['user-dave'], 'CONTENT');
   });
 });
 

@@ -175,6 +175,30 @@ export const StoryEffectsSchema = z.object({
     }
   }, { message: `storyEffects JSON exceeds ${STORY_EFFECTS_MAX_BYTES} bytes` });
 
+/**
+ * Une personne que le post NOMME sans que son texte le dise.
+ *
+ * `POST /posts` n'avait aucun canal de mention : le gateway extrayait les
+ * `@handle` du seul `content`. Épingler quelqu'un sur le canevas d'une story
+ * imposait donc d'écrire son pseudo dans la légende — une phrase inventée pour
+ * satisfaire l'extracteur, visible par tout le monde, et traduite par le Prisme
+ * comme du contenu d'auteur.
+ *
+ * `userId` OU `username`, au moins l'un des deux. Les deux existent parce que
+ * les deux appelants sont réels : un sélecteur rend un `User.id`, tandis qu'un
+ * canevas ne porte que le `@handle` qu'il affiche — et c'est LUI qui survit à
+ * un brouillon repris trois jours plus tard, là où un id devrait être persisté
+ * en parallèle des effets. Le serveur résout les pseudos avec la MÊME fonction
+ * que l'extraction de texte (`MentionService.resolveUsernames`), donc les deux
+ * voies ne peuvent pas diverger.
+ */
+export const PostMentionInputSchema = z.object({
+  userId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  username: z.string().min(1).max(64).optional(),
+}).refine((m) => Boolean(m.userId || m.username), {
+  message: 'userId ou username requis',
+});
+
 export const CreatePostSchema = z.object({
   type: z.enum(['POST', 'REEL', 'STORY', 'STATUS']).default('POST'),
   visibility: z.enum(['PUBLIC', 'FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY']).optional(),
@@ -195,6 +219,12 @@ export const CreatePostSchema = z.object({
   originalLanguage: z.string().min(2).max(5).optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(10).optional(),
+  // Mentions DÉCLARÉES — celles que le texte ne porte pas (pastille sur le
+  // canevas d'une story, choix dans un sélecteur). Elles s'AJOUTENT à celles
+  // que le contenu nomme ; elles ne les remplacent pas. Persistées avec
+  // `source: CANVAS` pour que l'édition sache lesquelles relire dans le texte
+  // et lesquelles n'y sont pas.
+  mentions: z.array(PostMentionInputSchema).max(50).optional(),
   // Mobile transcription for audio media
   mobileTranscription: MobileTranscriptionSchema.optional(),
   // Repost source ID (for StoryComposer publishing a repost via POST /posts)
@@ -292,6 +322,11 @@ export const UpdatePostSchema = z.object({
   // Ids of attached media (PostMedia) to detach during the edit. Only media
   // belonging to this post is removed; a reel must keep at least one media.
   removeMediaIds: z.array(z.string()).max(50).optional(),
+  // Mentions déclarées — TRI-ÉTAT, même contrat que `location` : clé ABSENTE =
+  // inchangées (le texte seul est relu), `[]` = plus aucune mention déclarée,
+  // liste = remplace l'ensemble déclaré. Les mentions issues du TEXTE sont
+  // réconciliées à part, depuis `content`, à chaque édition.
+  mentions: z.array(PostMentionInputSchema).max(50).optional(),
   // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).
