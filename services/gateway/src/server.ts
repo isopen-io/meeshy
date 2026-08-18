@@ -24,6 +24,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 // logger sans importer `server.ts` (effets de bord au chargement du module —
 // voir le commentaire en tête de `route-registration.ts`).
 import { logger } from './gateway-logger';
+import { schemaValidationErrorResponse } from './utils/schema-validation-error';
 import * as fs from 'fs';
 import * as path from 'path';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
@@ -611,6 +612,20 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           error: 'Authentication Failed',
           message: err.message,
           statusCode: 401,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
+      // `err.validation`. Sans cette branche il tombait dans le repli
+      // générique et ressortait en « Internal Server Error / An unexpected
+      // error occurred » sous un code 400 — le client apprenait qu'il avait
+      // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
+      // `POST /auth/register` le 2026-08-18.
+      const schemaRefusal = schemaValidationErrorResponse(error);
+      if (schemaRefusal) {
+        return reply.code(schemaRefusal.statusCode).send({
+          ...schemaRefusal,
           timestamp: new Date().toISOString()
         });
       }
