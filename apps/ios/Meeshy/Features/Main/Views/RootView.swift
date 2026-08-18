@@ -1156,10 +1156,12 @@ struct RootView: View {
         case .userProfile(let username):
             // Opens the profile sheet over the conversation list (same
             // surface as in-app `Link` taps via Router.handleDeepLink and
-            // as notification-driven profile navigation). `ProfileSheetUser`
-            // resolves the username server-side, so a typo just shows the
-            // empty state instead of crashing.
-            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+            // as notification-driven profile navigation). La fabrique
+            // `from(idOrUsername:)` distingue un ObjectId d'un pseudo : un
+            // `/l/<token>` de type PROFILE porte un userId, jamais un handle,
+            // et le passer comme `username` interrogeait le serveur avec un
+            // pseudo qui n'existe pas.
+            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username)
 
         case .ownProfile:
             // Pop to the conversation list root first so back-swipe from
@@ -1178,6 +1180,23 @@ struct RootView: View {
 
         case .hashtag(let tag):
             router.push(.hashtagResults(tag: tag))
+
+        case .externalLink(let url):
+            // `/l/<token>` de cible EXTERNAL (façade d'une URL postée dans un
+            // message) : la destination vit sur le web. Elle s'ouvre — elle ne
+            // « rejoint » rien.
+            UIApplication.shared.open(url)
+
+        case .unresolvedTrackedLink:
+            // Le serveur ne connaît pas ce token, ou on n'a pas pu le joindre.
+            // On le DIT. L'ancien repli poussait le token dans la voie jointure,
+            // qui répondait 404 et affichait « Lien introuvable » — un message
+            // faux pour un lien parfaitement valide mais hors ligne.
+            FeedbackToastManager.shared.showError(
+                String(localized: "deepLink.tracked.unresolved",
+                       defaultValue: "Ce lien n'a pas pu être ouvert",
+                       bundle: .main)
+            )
 
         case .magicLink:
             break

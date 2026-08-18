@@ -356,6 +356,21 @@ enum DeepLink: Equatable {
     case ownProfile
     case userLinks
     case hashtag(tag: String)
+    /// `/l/<token>` dont la cible vit sur le web : lien EXTERNAL, ou type de
+    /// cible que ce client ne connaît pas encore. Le consommateur l'OUVRE
+    /// (Safari) — il ne la rejoint pas.
+    case externalLink(url: URL)
+    /// `/l/<token>` que le serveur ne sait pas résoudre (404), ou qu'on n'a pas
+    /// pu joindre. Le consommateur en fait un message.
+    ///
+    /// Cette voie remplace un repli vers `.joinLink(identifier: token)` : le
+    /// token d'un `/l/` est un `TrackingLink.token` de six caractères, jamais un
+    /// `ConversationShareLink.linkId`. Le pousser dans la voie jointure appelait
+    /// `GET /anonymous/link/<token>`, qui répond 404 PAR CONSTRUCTION — et
+    /// affichait « Lien introuvable » pour chaque lien externe, chaque lien
+    /// désactivé, et chaque story de plus de 24 h (son expiration désactive ses
+    /// liens de suivi, cf. `deactivatePostTrackingLinks` côté gateway).
+    case unresolvedTrackedLink(token: String)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -397,31 +412,85 @@ final class DeepLinkRouter: ObservableObject {
     /// falls back to the legacy join flow (token = linkId) so nothing regresses.
     func resolveTrackedLink(_ token: String, resolver: TrackedLinkResolving = TrackedLinkService.shared) {
         Task { @MainActor in
-            await resolver.recordClick(token: token)
+            // Le comptage du clic part À CÔTÉ de la résolution, jamais devant
+            // elle. Enchaînés, la navigation payait DEUX allers-retours : sur un
+            // lancement à froid depuis un Universal Link, l'écran restait nu
+            // pendant les deux. Le comptage ne décide de rien — son propre
+            // contrat le dit (« best-effort, fire-and-forget ») — et rien
+            // n'attend son issue.
+            Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
             self.pendingDeepLink = Self.trackedDestination(for: resolved, token: token)
         }
     }
 
-    /// Maps a resolved tracked link to a `DeepLink`. Conversation invitations keep
-    /// the legacy `.joinLink` flow (the token IS the linkId); POST/REEL/STATUS →
-    /// `.postDetail`, STORY → `.storyDetail`, PROFILE → `.userProfile`. Unknown /
-    /// expired / missing id → `.joinLink` fallback (backward compatible).
+    /// Maps a resolved tracked link to a `DeepLink`.
+    ///
+    /// Ordre de lecture : l'invitation de conversation d'abord (le token EST
+    /// alors le `linkId`, seul cas où la voie jointure est la bonne), puis la
+    /// cible typée, puis l'`originalUrl` reparsée, puis l'aveu d'échec.
+    ///
+    /// `isActive == false` n'écarte PAS la cible typée : une story expirée
+    /// désactive ses liens de suivi, et son écran de destination porte déjà
+    /// l'état « Story indisponible ». Refuser d'ouvrir aurait remplacé une
+    /// explication par un cul-de-sac.
     static func trackedDestination(for resolved: ResolvedTrackedLink?, token: String) -> DeepLink {
-        let kind = (resolved?.kind ?? "").lowercased()
-        let type = (resolved?.targetType ?? "").uppercased()
+        guard let resolved else { return .unresolvedTrackedLink(token: token) }
+
+        let kind = (resolved.kind ?? "").lowercased()
+        let type = (resolved.targetType ?? "").uppercased()
         if kind == "conversation" || type == "CONVERSATION" {
             return .joinLink(identifier: token)
         }
-        if let targetId = resolved?.targetId, resolved?.isActive != false {
+
+        if let targetId = resolved.targetId, !targetId.isEmpty {
             switch type {
             case "STORY": return .storyDetail(postId: targetId)
+            // `targetId` est un ObjectId d'utilisateur, pas un pseudo — la
+            // fabrique du SDK distingue les deux et laisse l'écran résoudre.
             case "PROFILE": return .userProfile(username: targetId)
             case "REEL", "POST", "STATUS": return .postDetail(postId: targetId)
             default: break
             }
         }
-        return .joinLink(identifier: token)
+
+        // `originalUrl` porte la vérité quand le type manque, est vide, ou n'est
+        // pas connu de CE client (une version antérieure à un nouveau type de
+        // cible). Le gateway l'écrit systématiquement : `https://meeshy.me/story/<id>`,
+        // `https://meeshy.me/reel/<id>`, ou l'URL brute d'un lien externe.
+        if let url = resolved.originalUrl.flatMap(URL.init(string:)) {
+            return destination(forOriginalURL: url) ?? .unresolvedTrackedLink(token: token)
+        }
+
+        return .unresolvedTrackedLink(token: token)
+    }
+
+    /// Reparse l'`originalUrl` d'un lien de suivi avec le MÊME analyseur que les
+    /// Universal Links, pour qu'une URL Meeshy atterrisse in-app plutôt que dans
+    /// Safari. `nil` quand l'URL n'ouvre rien (schéma non web, forme vide).
+    static func destination(forOriginalURL url: URL) -> DeepLink? {
+        switch DeepLinkParser.parse(url) {
+        case .storyDetail(let id):        return .storyDetail(postId: id)
+        case .postDetail(let id):         return .postDetail(postId: id)
+        case .post(let id):               return .postDetail(postId: id)
+        case .conversation(let id, _):    return .conversation(id: id)
+        case .userProfile(let username):  return .userProfile(username: username)
+        case .ownProfile:                 return .ownProfile
+        case .userLinks:                  return .userLinks
+        case .hashtag(let tag):           return .hashtag(tag: tag)
+        case .joinLink(let identifier):   return .joinLink(identifier: identifier)
+        case .chatLink(let identifier):   return .chatLink(identifier: identifier)
+        case .magicLink(let token):       return .magicLink(token: token)
+        case .external(let target):
+            // Seul le web s'ouvre. Un `javascript:` ou un schéma inconnu remonté
+            // par un lien de suivi ne doit jamais être passé à `UIApplication`.
+            guard let scheme = target.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { return nil }
+            return .externalLink(url: target)
+        // `/l/<token>` imbriqué, partage brut : rien à ouvrir depuis une
+        // `originalUrl`, et re-résoudre ferait une boucle.
+        case .trackedLink, .share:        return nil
+        }
     }
 
     // MARK: - Universal Link Handling

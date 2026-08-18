@@ -87,6 +87,62 @@ final class CallViewLayoutGuardTests: XCTestCase {
         )
     }
 
+    /// Retour user 2026-08-18 (capture) : « lors d'un appel audio, vidéo la vue
+    /// doit prendre tout l'écran, ici on voit des bandes blanches ».
+    ///
+    /// La cause n'est pas un fond manquant — le gradient, le self-preview et les
+    /// flux vidéo posent chacun leur `.ignoresSafeArea()`. C'est le `clipShape`
+    /// du morph PiP : il rogne à la BOÎTE du ZStack racine, et tant que cette
+    /// boîte excluait la safe area haute, tout ce que ces `.ignoresSafeArea()`
+    /// avaient étendu jusqu'au bord était coupé net — laissant paraître le fond
+    /// du `fullScreenCover`, blanc en thème clair.
+    ///
+    /// La racine doit donc ignorer la safe area sur les QUATRE côtés, et le
+    /// chrome haut la retrouver lui-même.
+    func test_rootIgnoresEveryEdge_soThePiPClipNeverCutsTheFullBleedLayers() throws {
+        let source = try callViewSource()
+        XCTAssertFalse(
+            source.contains(".ignoresSafeArea(edges: .bottom)\n        // Morph PiP"),
+            "La racine ne peut pas n'ignorer que le bas : le `clipShape` du " +
+            "morph rogne alors le fond au ras de la safe area haute, et le " +
+            "blanc du cover apparaît en bandeau sous la Dynamic Island."
+        )
+        let clip = try XCTUnwrap(
+            source.range(of: ".clipShape(RoundedRectangle(cornerRadius: pipMorphProgress"),
+            "Le morph PiP doit toujours clipper ses coins arrondis."
+        )
+        let before = String(source[source.startIndex ..< clip.lowerBound])
+        let ignore = try XCTUnwrap(
+            before.range(of: ".ignoresSafeArea()", options: .backwards),
+            "Un `.ignoresSafeArea()` sans arête doit précéder le clip du morph."
+        )
+        XCTAssertTrue(
+            before.distance(from: ignore.upperBound, to: before.endIndex) < 700,
+            "…et il doit porter sur la RACINE, juste avant la chaîne du morph — " +
+            "posé plus haut il n'étendrait qu'une sous-vue."
+        )
+    }
+
+    /// Corollaire : une racine bord à bord ne descend plus la safe area jusqu'au
+    /// chrome flottant. Posé à 8 pt nus, le chevron minimize et le badge durée
+    /// se rendraient SOUS la Dynamic Island — le défaut que l'ancien `.padding(
+    /// .top, 50)` compensait à la main avant que le conteneur ne s'en charge.
+    /// L'encart est PARTAGÉ : deux rangées le lisent, et deux constantes les
+    /// auraient désalignées.
+    func test_topChromeReInsetsTheSafeAreaItself_fromTheWindow() throws {
+        let source = try callViewSource()
+        XCTAssertTrue(
+            source.contains("private static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }"),
+            "L'encart doit venir de la FENÊTRE : `GeometryProxy.safeAreaInsets` " +
+            "répond 0 dans un sous-arbre qui ignore la safe area."
+        )
+        XCTAssertEqual(
+            source.components(separatedBy: ".padding(.top, Self.chromeTopInset)").count - 1, 2,
+            "Les deux rangées de chrome haut (chevron/conversation, badge durée " +
+            "vidéo) doivent partager le MÊME encart — sinon elles se désalignent."
+        )
+    }
+
     /// Regression 2026-07-09: with `swapStreams == true` (user tapped the PiP
     /// to make their own camera the full-screen primary), if the survival
     /// controller then drops the outbound track (`hasLocalVideoTrack` flips to

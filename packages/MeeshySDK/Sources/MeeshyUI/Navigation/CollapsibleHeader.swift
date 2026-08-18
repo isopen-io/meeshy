@@ -82,6 +82,24 @@ public enum CollapsibleHeaderMetrics {
     /// drift apart.
     nonisolated public static var inlineAccessoryHeight: CGFloat { 56 }
 
+    /// Dégagement de FIN DE PISTE de l'accessoire pleine largeur.
+    ///
+    /// La trail court désormais jusqu'au bord droit de l'écran et passe SOUS le
+    /// chrome d'actions. Sans encart de fin, son dernier anneau vient au repos
+    /// exactement là où les boutons le couvrent : atteignable, jamais visible.
+    /// L'encart lui rend de quoi défiler au-delà.
+    ///
+    /// Il est POSÉ, pas mesuré : le header ne connaît pas le nombre de boutons
+    /// que chaque écran lui donne, et une mesure par `PreferenceKey` ferait
+    /// dépendre le contenu de la piste d'une largeur qu'elle-même n'influence
+    /// pas — de la complexité pour un gain nul. La valeur couvre la
+    /// configuration la plus large en service (deux disques de 44 pt groupés par
+    /// `AdaptiveGlassContainer` + la gouttière de bord) ; sur un écran à un seul
+    /// bouton, le surplus n'est qu'un peu de course de défilement en trop.
+    nonisolated public static var accessoryTrailingClearance: CGFloat {
+        2 * 44 + roundChromeEdgeGutter
+    }
+
     /// Bar height once the accessory has fully taken the title slot. Taller
     /// than `collapsedHeight` (a 44pt title line cannot host a 50pt ring) and
     /// still shorter than `expandedHeight`, so the header only ever shrinks as
@@ -259,9 +277,14 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                         .padding(.leading, showBackButton ? 0 : 8)
                 }
 
-                // Title ↔ in-bar accessory: ONE slot, two occupants. The title
-                // hands the slot over instead of surviving as a shrunken label
-                // above a second row.
+                // Fente du titre. Il CÈDE toujours la place à la trail (même
+                // fondu croisé qu'avant) — mais la trail ne vit plus DANS la
+                // fente : une piste horizontale posée entre le titre et les
+                // actions s'arrête à leur bord, alors que le défilement doit
+                // aller d'un bout à l'autre de l'écran (retour user 2026-08-18).
+                // Elle est désormais une couche PLEINE LARGEUR posée SOUS la
+                // rangée (`.background` plus bas), et le chrome droit flotte
+                // dessus.
                 ZStack(alignment: .leading) {
                     VStack(alignment: .leading, spacing: 2) {
                         if let titleView {
@@ -286,26 +309,8 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                     // gone from VoiceOver too, otherwise the trail's rings would
                     // be announced behind a heading nobody can see.
                     .accessibilityHidden(inlineAccessoryReveal > 0.5)
-
-                    if let titleAccessory {
-                        // Rendered unconditionally: the slot owns its own mount
-                        // threshold (it must not materialise its rings at rest),
-                        // and a conditional branch here would churn the
-                        // structural identity of that subtree on every crossing.
-                        titleAccessory()
-                            .opacity(Double(inlineAccessoryReveal))
-                    }
                 }
                 .padding(.leading, showBackButton ? 0 : 16)
-                // With an accessory the slot claims the whole width left of the
-                // trailing actions — a horizontal trail needs the room a title
-                // never asked for. Without one, the title keeps hugging its text.
-                .frame(maxWidth: titleAccessory == nil ? nil : CGFloat.infinity, alignment: .leading)
-                // …and it claims it AGAINST the `Spacer` below, which is flexible
-                // too: an HStack splits its slack evenly between flexible
-                // children, so without this priority half the width the trail was
-                // given would have gone to an empty gutter before the actions.
-                .layoutPriority(titleAccessory == nil ? 0 : 1)
 
                 if showCollapsedSubtitle {
                     makeSubtitleText(subtitle ?? "", size: 12, opacity: 0.5)
@@ -321,13 +326,12 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 // déborder la rangée dès que la fente est élastique.
                 Spacer(minLength: 0)
 
-                // Chrome de taille FIXE, servi avant la fente du titre : celle-ci
-                // réclame `maxWidth: .infinity` avec `layoutPriority(1)` dès
-                // qu'elle porte la trail, et prenait donc toute la largeur —
-                // les boutons débordaient de la barre par la droite, hors du
-                // viewport ((+) de la liste, (map) du feed, retour user
-                // 2026-08-14). La trail est l'occupant ÉLASTIQUE des deux :
-                // c'est à elle de prendre ce qui reste, pas l'inverse.
+                // Chrome de taille FIXE. Il ne dispute plus la largeur à
+                // personne : la trail est passée SOUS la rangée, hors layout.
+                // La priorité et la gouttière restent — elles sont ce qui a sorti
+                // le (+) de la liste et le (map) du feed de derrière le bord
+                // (retour user 2026-08-14, trois signalements), et rien ne dit
+                // qu'un futur occupant élastique de la fente ne reviendra pas.
                 trailing()
                     .frame(minWidth: 44, minHeight: 44)
                     .layoutPriority(2)
@@ -341,6 +345,29 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
             }
             .padding(.horizontal, CollapsibleHeaderMetrics.barHorizontalPadding)
             .padding(.bottom, titleBottomPadding)
+            // La trail, BORD À BORD, DERRIÈRE la rangée.
+            //
+            // `.background` ne participe pas au layout : la piste reçoit la
+            // largeur ENTIÈRE de la barre — marges de la rangée comprises — sans
+            // rien pousser, là où une fente voisine des actions s'arrêtait à leur
+            // bord. Et parce qu'elle est DESSOUS, les boutons restent au-dessus :
+            // le défilement passe derrière eux, ce qui est exactement le geste
+            // demandé (« de bout d'écran à bout d'écran »).
+            //
+            // Rendue sans autre condition que la présence du slot : la couche
+            // porte son propre seuil de montage (aucun anneau matérialisé au
+            // repos) et un `if` sur la révélation churnerait l'identité
+            // structurelle du sous-arbre à chaque passage du seuil.
+            .background(alignment: .leading) {
+                if let titleAccessory {
+                    titleAccessory()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .opacity(Double(inlineAccessoryReveal))
+                        // Sous les boutons, la piste ne doit pas leur voler le
+                        // geste tant qu'elle n'est pas réellement là.
+                        .allowsHitTesting(inlineAccessoryReveal > 0.5)
+                }
+            }
             // With a reveal the chip is vertically centered in the taller header
             // (the bottom edge stays faded/transparent); otherwise the title sits
             // at the bottom, near the scroll content, as before.

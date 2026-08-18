@@ -977,6 +977,12 @@ struct MeeshyApp: App {
             // `.task` + `.onChange` callers don't double-fire the request.
             deepLinkRouter.consumePendingDeepLink()
             validateMagicLinkToken(token)
+        case .externalLink(let url):
+            // `/l/<token>` de cible EXTERNAL reçu SANS compte : `RootView` n'est
+            // pas monté, donc personne d'autre ne l'ouvrirait. Le lien vise le
+            // web ouvert — aucune session n'est requise pour le suivre.
+            deepLinkRouter.consumePendingDeepLink()
+            UIApplication.shared.open(url)
         default:
             break
         }

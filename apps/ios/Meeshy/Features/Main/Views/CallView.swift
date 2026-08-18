@@ -72,6 +72,18 @@ struct CallView: View {
     // l'avatar des cercles d'appel et le fond pleine page.
     @State private var remoteProfile: MeeshyUser?
 
+    /// Encart supérieur du chrome flottant (chevron minimize, bouton
+    /// conversation, badge durée vidéo).
+    ///
+    /// La racine ignore la safe area sur les quatre côtés — c'est ce qui
+    /// empêche le `clipShape` du morph PiP de laisser passer le fond blanc du
+    /// cover. En contrepartie, la safe area ne descend plus d'elle-même jusqu'au
+    /// chrome : posé à 8 pt, il se rendrait SOUS la Dynamic Island. La lire au
+    /// niveau de la fenêtre est la seule voie — `GeometryProxy.safeAreaInsets`
+    /// répond 0 dans un sous-arbre qui l'ignore, ce que documente déjà
+    /// `DeviceLayout.safeAreaTop`.
+    private static var chromeTopInset: CGFloat { DeviceLayout.safeAreaTop + 8 }
+
     init(callManager: CallManager) {
         self.callManager = callManager
         self.transcriptionService = callManager.transcriptionService
@@ -237,17 +249,20 @@ struct CallView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 16)
-                // Safe area top désormais respectée par le conteneur : 8 pt
-                // suffisent (l'ancien 50 compensait l'encoche à la main).
-                .padding(.top, 8)
+                .padding(.top, Self.chromeTopInset)
             }
         }
-        // Safe area TOP respectée : les bannières/chrome top se posent SOUS la
-        // Dynamic Island (elles se rendaient derrière l'encoche, illisibles).
-        // Le fond, le self-preview et les flux vidéo restent full-bleed via
-        // leurs `.ignoresSafeArea()` internes ; seul le bottom est ignoré ici
-        // (barre de contrôles au ras du home indicator, comme avant).
-        .ignoresSafeArea(edges: .bottom)
+        // BORD À BORD sur les quatre côtés. Le `clipShape` du morph PiP (plus
+        // bas) rogne à la BOÎTE de ce ZStack : tant qu'elle excluait la safe
+        // area haute, il coupait net le fond, le self-preview et les flux vidéo
+        // que leurs propres `.ignoresSafeArea()` avaient étendus jusqu'au bord —
+        // et le fond BLANC du `fullScreenCover` transparaissait en bandeau sous
+        // la Dynamic Island (retour user 2026-08-18, capture).
+        //
+        // Le chrome haut ne perd rien : il ré-encarte lui-même la safe area via
+        // `chromeTopInset`, seule façon de la retrouver sous un conteneur qui
+        // l'ignore (le proxy d'un GeometryReader y répond 0).
+        .ignoresSafeArea()
         // Morph PiP (retour user 2026-08-12) : la réduction vers la bannière
         // et l'agrandissement depuis elle sont portés par CE trio scale/
         // opacité/coins — le fullScreenCover est basculé SANS animation
@@ -1115,7 +1130,10 @@ struct CallView: View {
                     .accessibilityAddTraits(.updatesFrequently)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
+                // Même encart que le chevron minimize : les deux rangées
+                // partagent l'axe vertical du chrome haut, et une seule des
+                // deux ré-encartée les aurait désalignées.
+                .padding(.top, Self.chromeTopInset)
                 Spacer()
             }
         }

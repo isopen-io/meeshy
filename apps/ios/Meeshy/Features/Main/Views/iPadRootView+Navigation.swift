@@ -121,8 +121,10 @@ extension iPadRootView {
         case .userProfile(let username):
             // Opens the profile sheet over the two-pane layout. Same
             // surface as friend-request notification taps above
-            // (handleNotificationTap → router.deepLinkProfileUser).
-            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+            // (handleNotificationTap → router.deepLinkProfileUser). Même
+            // fabrique que `RootView` : un `/l/<token>` de type PROFILE porte
+            // un userId, pas un pseudo.
+            router.deepLinkProfileUser = ProfileSheetUser.from(idOrUsername: username)
         case .ownProfile:
             // iPad surfaces own profile + user links in the right column,
             // matching the existing achievement / affiliate notification
@@ -132,6 +134,16 @@ extension iPadRootView {
             rightPanelRoute = .links
         case .hashtag(let tag):
             rightPanelRoute = .hashtagResults(tag: tag)
+        case .externalLink(let url):
+            // Cible EXTERNAL d'un `/l/<token>` : elle s'ouvre, elle ne se
+            // rejoint pas. Même geste que `RootView`.
+            UIApplication.shared.open(url)
+        case .unresolvedTrackedLink:
+            FeedbackToastManager.shared.showError(
+                String(localized: "deepLink.tracked.unresolved",
+                       defaultValue: "Ce lien n'a pas pu être ouvert",
+                       bundle: .main)
+            )
         case .magicLink:
             break
         }

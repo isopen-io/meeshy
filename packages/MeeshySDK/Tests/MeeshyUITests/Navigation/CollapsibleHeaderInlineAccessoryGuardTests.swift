@@ -1,4 +1,5 @@
 import XCTest
+@testable import MeeshyUI
 
 /// Directive user 2026-08-13 : au scroll, « il ne faut pas réduire juste les
 /// titres, il faut intégrer le trail de story à l'emplacement où se trouve le
@@ -55,28 +56,75 @@ final class CollapsibleHeaderInlineAccessoryGuardTests: XCTestCase {
         )
     }
 
-    /// La position : entre le titre et le `Spacer` qui précède les actions. La
-    /// trail se retrouve donc bien « à gauche des boutons d'actions ». Depuis
-    /// 3ae86ff5b le `Spacer` est à `minLength: 0` — l'écart visuel a déménagé
-    /// sur les actions (`titleActionsGap`) ; l'ORDRE, lui, n'a pas bougé.
-    func test_theAccessorySitsInTheTitleSlotLeftOfTheTrailingActions() throws {
+    /// Supersession 2026-08-18 — « le trail des story doit prendre toute la
+    /// largeur de l'écran jusqu'au view port et défiler derrière les boutons de
+    /// droite […] de bout d'écran à bout d'écran ».
+    ///
+    /// La trail vivait entre le titre et les actions, DANS la rangée : sa
+    /// largeur s'arrêtait au bord des boutons, et le défilement avec elle. Elle
+    /// est maintenant une couche `.background` de la rangée — hors layout, donc
+    /// pleine largeur (marges comprises), et DESSOUS, donc le chrome flotte
+    /// au-dessus et le défilement passe derrière lui.
+    ///
+    /// C'est une propriété STRUCTURELLE : seul un test de source dit dans quel
+    /// conteneur une vue a été posée.
+    func test_theAccessoryIsAFullWidthLayerBehindTheRow_notASiblingOfTheActions() throws {
         let code = try headerSource()
-        let title = try XCTUnwrap(code.range(of: "if let titleView"))
-        let accessory = try XCTUnwrap(code.range(of: "titleAccessory()"))
-        let spacer = try XCTUnwrap(code.range(of: "Spacer(minLength: 0)"))
         let trailing = try XCTUnwrap(code.range(of: "trailing()"))
+        let accessory = try XCTUnwrap(code.range(of: "titleAccessory()"))
+        XCTAssertTrue(
+            trailing.lowerBound < accessory.lowerBound,
+            "La trail doit être rendue APRÈS la rangée, dans son `.background` — " +
+            "posée entre le titre et les actions elle redevient leur voisine, et " +
+            "sa largeur s'arrête à leur bord."
+        )
 
+        let end = code.index(accessory.lowerBound, offsetBy: 400, limitedBy: code.endIndex) ?? code.endIndex
+        let layer = String(code[accessory.lowerBound ..< end])
         XCTAssertTrue(
-            title.lowerBound < accessory.lowerBound,
-            "L'accessoire partage la fente du titre : il se pose avec lui, pas avant."
+            layer.contains(".frame(maxWidth: .infinity, alignment: .leading)"),
+            "La couche doit réclamer toute la largeur de la barre."
         )
         XCTAssertTrue(
-            accessory.lowerBound < spacer.lowerBound && spacer.lowerBound < trailing.lowerBound,
-            "…et il reste À GAUCHE des boutons d'actions, le Spacer entre eux."
+            layer.contains(".allowsHitTesting(inlineAccessoryReveal > 0.5)"),
+            "Sous les boutons, la piste ne doit pas capter le geste tant qu'elle " +
+            "n'est pas révélée."
+        )
+        let background = try XCTUnwrap(
+            code.range(of: ".background(alignment: .leading) {"),
+            "La trail doit être posée en `.background` de la rangée — c'est ce qui " +
+            "la met hors layout ET sous le chrome."
         )
         XCTAssertTrue(
-            code.contains("padding(.leading, CollapsibleHeaderMetrics.titleActionsGap)"),
-            "L'écart trail↔actions vit sur les actions (titleActionsGap), réservé avec elles."
+            background.lowerBound < accessory.lowerBound,
+            "…et l'appel doit se trouver DANS ce background."
+        )
+    }
+
+    /// Le `.background` est posé APRÈS le padding horizontal de la rangée : il
+    /// épouse alors la barre ENTIÈRE, gouttières comprises. Posé avant, la piste
+    /// repartirait en retrait des deux bords — précisément ce qu'on corrige.
+    func test_theLayerSpansTheWholeBar_paddingIncluded() throws {
+        let code = try headerSource()
+        let padding = try XCTUnwrap(
+            code.range(of: ".padding(.horizontal, CollapsibleHeaderMetrics.barHorizontalPadding)"))
+        let background = try XCTUnwrap(code.range(of: ".background(alignment: .leading) {"))
+        XCTAssertTrue(
+            padding.lowerBound < background.lowerBound,
+            "Le fond doit venir après le padding de la rangée pour couvrir toute la barre."
+        )
+    }
+
+    /// Une piste qui court sous les boutons doit pouvoir défiler AU-DELÀ d'eux,
+    /// sinon son dernier anneau vient au repos sous le chrome : atteignable,
+    /// jamais visible. L'encart vit dans le catalogue du header — seul endroit
+    /// qui connaisse la largeur de son propre chrome.
+    func test_theTrailHasEndOfTrackClearanceForTheChromeItScrollsUnder() {
+        XCTAssertGreaterThanOrEqual(
+            CollapsibleHeaderMetrics.accessoryTrailingClearance,
+            2 * 44 + CollapsibleHeaderMetrics.roundChromeEdgeGutter,
+            "Le dégagement doit couvrir la configuration la plus large en service : " +
+            "deux disques de 44 pt groupés, plus la gouttière de bord."
         )
     }
 
@@ -107,20 +155,21 @@ final class CollapsibleHeaderInlineAccessoryGuardTests: XCTestCase {
         )
     }
 
-    /// Sans accessoire, rien ne change : le titre continue de se serrer contre
-    /// son texte. La largeur pleine n'est réclamée que par une trail horizontale.
-    func test_onlyAnAccessoryClaimsTheFullWidthOfTheSlot() throws {
+    /// Corollaire de la supersession : la fente du titre ne réclame PLUS la
+    /// largeur, et ne la dispute donc plus au chrome. C'est ce qui rend
+    /// structurellement impossible le défaut des trois signalements de
+    /// 2026-08-14/15/16 — le (+) de la liste et le (map) du feed poussés hors du
+    /// viewport par une fente élastique servie avant eux.
+    func test_theTitleSlotNoLongerCompetesWithTheActionsForWidth() throws {
         let code = try headerSource()
-        XCTAssertTrue(
+        XCTAssertFalse(
             code.contains("maxWidth: titleAccessory == nil ? nil : CGFloat.infinity"),
-            "Les headers sans accessoire gardent leur mise en page d'origine."
+            "La fente ne doit plus s'élargir pour porter la trail : celle-ci est " +
+            "hors layout désormais, et une fente élastique repousserait les boutons."
         )
-        // Le `Spacer` qui précède les actions est flexible lui aussi : sans
-        // priorité, un HStack partagerait la place en deux et la moitié de la
-        // largeur destinée à la trail finirait en gouttière vide.
-        XCTAssertTrue(
+        XCTAssertFalse(
             code.contains("layoutPriority(titleAccessory == nil ? 0 : 1)"),
-            "La fente doit remporter la place face au Spacer, sinon la trail n'en reçoit que la moitié."
+            "…et elle ne doit plus réclamer de priorité contre le Spacer."
         )
     }
 }

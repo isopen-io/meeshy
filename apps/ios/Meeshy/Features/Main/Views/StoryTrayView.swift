@@ -890,7 +890,14 @@ struct PinnedStoryTrailBand: View {
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.leading, 16)
+            // Fin de piste : la trail court jusqu'au bord droit de l'écran et
+            // passe SOUS les boutons d'actions (supersession 2026-08-18 — « de
+            // bout d'écran à bout d'écran »). Sans cet encart, le dernier anneau
+            // vient au repos précisément là où le chrome le couvre : on peut
+            // l'atteindre, jamais le voir. La valeur vit dans le catalogue du
+            // header, seul endroit qui connaisse la largeur de son chrome.
+            .padding(.trailing, CollapsibleHeaderMetrics.accessoryTrailingClearance)
             .padding(.top, 2)
             .padding(.bottom, 4)
         }
