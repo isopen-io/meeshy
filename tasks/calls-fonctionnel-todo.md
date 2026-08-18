@@ -9844,3 +9844,59 @@ scopé web (TypeScript pur), aucun edit Swift/Kotlin non testable.
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct).
+
+## Vague 145 — kicking an anonymous group-call guest failed unconditionally (gateway) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Vague 144
+(ICE-restart backoff/rate-limit scoping, PR #3197) mergée sur `main` juste avant cette vague — pas
+de section dédiée dans ce fichier (à noter pour la prochaine passe de rattrapage doc). Toolchains
+iOS/Android toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (TypeScript pur).
+
+- **Root cause** : `DELETE /calls/:callId/participants/:participantId` (`routes/calls.ts`), la
+  route unique qui sert à la fois le self-leave et le kick modérateur, résolvait TOUJOURS la cible
+  (quand `participantId !== userId`) via `prisma.participant.findFirst({ where: { conversationId,
+  userId: participantId, isActive: true } })` — une recherche par `Participant.userId`. Un
+  participant anonyme (invité de lien partagé) a `Participant.userId: null`
+  (`schema.prisma:569`, « null for anonymous/bot participants ») ; la clé de roster que le client
+  envoie pour lui est son PROPRE `Participant.id`, jamais un `User.id`. La recherche par `userId:`
+  ne peut donc JAMAIS matcher une cible anonyme — `targetParticipant` est toujours `null`, et la
+  route répond inconditionnellement `403 NOT_A_PARTICIPANT`, pour tout modérateur, à chaque essai.
+- **Scénario de défaillance concret** : appel de groupe avec un invité de lien partagé, une
+  configuration Meeshy ordinaire. `VideoCallInterface.tsx` affiche le bouton « retirer » à
+  l'identique sur CHAQUE vignette distante dès que `canKickParticipants` est vrai (modérateur/admin
+  d'une conversation `group`) — aucune distinction visuelle ou fonctionnelle pour une cible
+  anonyme. Le clic aboutit systématiquement à un toast d'échec générique ; l'invité n'est jamais
+  retiré. Il n'existe, avant ce correctif, AUCUN chemin par lequel cette action précise puisse
+  réussir pour une cible anonyme — un contrôle affiché comme fonctionnel qui échoue à coup sûr.
+- **Fix** : ajout d'un second lookup en repli, uniquement quand le premier échoue —
+  `prisma.participant.findFirst({ where: { conversationId: call.conversationId, id: participantId,
+  isActive: true } })`. Toujours scopé à LA conversation de cet appel et `isActive: true` — exactement
+  aussi sûr que le lookup par `userId:` qu'il complète, donc une résolution VÉRIFIÉE et non le repli
+  brut sur la chaîne non résolue que le commentaire voisin (garde de sécurité 2026-07-10, PR
+  antérieure) interdit toujours explicitement. Le chemin `participantId === userId` (self-leave,
+  y compris pour un invité anonyme qui se retire lui-même) était déjà correct — il utilise
+  `authContext.participantId`, jamais ce lookup — donc hors périmètre de ce fix.
+- **Tests** (TDD, RED confirmé avant le fix — le test neuf échouait avec « Number of calls: 0 » sur
+  `mockLeaveCall`) : 1 cas neuf dans `calls-routes.test.ts`, describe « DELETE
+  .../participants/:participantId — leaveCall » — « allows a moderator to remove an anonymous
+  participant, falling back to resolving the target by Participant.id when the userId lookup
+  misses » : mock `participant.findFirst` enchaîné (rôle modérateur → hit ; lookup `userId:` →
+  `null` ; lookup `id:` → hit) ; assertion que `leaveCall` reçoit bien l'id de la cible résolue.
+  81/81 verts (fichier ciblé, 0 régression sur les cas existants — moderator/admin/self-leave/
+  non-membre tous encore couverts par les mocks `mockResolvedValueOnce` existants, aucun test
+  préexistant n'a eu besoin d'être modifié). Sweep gateway `--testPathPatterns="[Cc]all"` : **56
+  suites / 1238 tests** verts (+1 net, 0 régression). `npx tsc --noEmit` (services/gateway) : **0
+  erreur**. Suite gateway COMPLÈTE (`bun run test:coverage`) : voir résultat rapporté dans le corps
+  de la PR.
+- **Non fait volontairement** : gate client (`VideoCallInterface.tsx`) — le bouton « retirer »
+  reste identique visuellement pour une cible anonyme ; ce fix restaure la fonctionnalité serveur
+  plutôt que de masquer le bouton, ce qui est le comportement produit désirable (le kick doit
+  MARCHER, pas disparaître). Reconduits (inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors
+  d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous`
+  (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans
+  filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ;
+  gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` (dont S1/S2,
+  toujours ouverts — cap dur à 2 participants actifs côté serveur et `mode: p2p` codé en dur) ;
+  suspend/resume audio-only par-pair (Vague 143) ; dette lint systémique
+  `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée — chantier distinct).

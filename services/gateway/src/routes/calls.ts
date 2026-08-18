@@ -936,10 +936,26 @@ export default async function callRoutes(fastify: FastifyInstance) {
       } else if (participantId === userId) {
         leaveParticipantId = callerMembership.id;
       } else {
-        const targetParticipant = await prisma.participant.findFirst({
-          where: { conversationId: call.conversationId, userId: participantId, isActive: true },
-          select: { id: true }
-        });
+        // A registered target is resolved by `userId`. An anonymous
+        // (shared-link) target has `Participant.userId: null`
+        // (schema.prisma) — the roster key the client sends for them is
+        // their OWN `Participant.id`, which the `userId:` lookup can never
+        // match. Without this fallback, kicking an anonymous guest from a
+        // group call failed unconditionally (403 NOT_A_PARTICIPANT) for
+        // every caller, every time. The fallback re-resolves `participantId`
+        // as a `Participant.id` directly — still scoped to THIS call's
+        // conversation and `isActive: true`, exactly as trustworthy as the
+        // `userId:` lookup above, so it stays a resolved, verified match and
+        // never the raw-string fallback the comment below still forbids.
+        const targetParticipant =
+          (await prisma.participant.findFirst({
+            where: { conversationId: call.conversationId, userId: participantId, isActive: true },
+            select: { id: true }
+          })) ??
+          (await prisma.participant.findFirst({
+            where: { conversationId: call.conversationId, id: participantId, isActive: true },
+            select: { id: true }
+          }));
         // Do NOT fall back to the raw, unresolved `participantId` string here
         // — that fallback is what previously let a caller with no real
         // relationship to this call's conversation reach
