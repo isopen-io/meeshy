@@ -21,7 +21,8 @@ import { MessageSearch } from './MessageSearch';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { LensSwitcher } from './reading/LensSwitcher';
 import { useConversationAccent } from '@/hooks/conversations/use-conversation-accent';
-import { useReadingMode, useReadingModeStore } from '@/stores/reading-mode-store';
+import { useReadingModeStore } from '@/stores/reading-mode-store';
+import { useThreadActiveReadingMode } from '@/hooks/lentille/use-thread-reading-mode';
 import { useSeenMessages } from '@/hooks/use-seen-messages';
 import { resolveConsumedLanguage } from '@/utils/consumed-language';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
@@ -273,7 +274,13 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     const token = typeof window !== 'undefined' ? getAuthToken()?.value : undefined;
 
     // Lentille de lecture — choix collant par conversation (verdict vol. 3).
-    const readingMode = useReadingMode(conversation.id);
+    // Q142-c (2026-08-18) : `useThreadActiveReadingMode` — pas `useReadingMode`
+    // — pour que `LensSwitcher` marque le mode RENDU (défaut « Bulles »
+    // provisoire compris, drapeau ON) plutôt que la préférence brute
+    // traduite bit-à-bit. Voir sa docstring : sans effet sur tout choix
+    // EXPLICITE, donc sans effet sur la prop `readingMode` repassée plus bas
+    // à `ConversationMessages` pour le repli historique / le secours d'erreur.
+    const readingMode = useThreadActiveReadingMode(conversation.id);
     const setReadingMode = useReadingModeStore(state => state.setMode);
     const toggleDensity = useReadingModeStore(state => state.toggleDensity);
 

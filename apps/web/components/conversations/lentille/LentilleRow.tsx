@@ -100,6 +100,7 @@ import { LentillePeek } from './LentillePeek';
 import { useConversationPreference } from '@/stores/conversation-preferences-store';
 import type { LentilleTypingUser } from '@/hooks/lentille/use-lentille-list-typing';
 import { useIsFocusedRow, type LentilleFocusElection } from '@/hooks/lentille/lentille-focus-election';
+import { useLentilleLiveTick } from '@/hooks/lentille/use-lentille-live-tick';
 import { isPlainLeftClick } from '@/lib/profile-link-click';
 
 export interface LentilleRowDraft {
@@ -505,6 +506,12 @@ export const LentilleRow = memo(function LentilleRow({
         ? resolveLentilleBridgeAriaText(bridge, t as BridgeTranslate, preferredLanguages)
         : lastMessagePreviewText;
 
+  // D-12 soldée (L14) — tick mutualisé 60s : UN SEUL `setInterval` de module
+  // (`useLentilleLiveTick`), jamais un minuteur posé ici. La valeur retournée
+  // n'est pas lue ; s'abonner suffit à forcer le re-rendu périodique de ce
+  // rang, qui relit alors `formatConversationDate` (donc l'horloge) à chaque
+  // tick — précédent iOS : `TimelineView(.periodic(by: 60))`.
+  useLentilleLiveTick();
   const time = conversation.lastMessage ? formatConversationDate(conversation.lastMessage.createdAt, { t: t as (key: string) => string }) : '';
 
   // V4ter/B1 — mensonge #1 : le nombre nu, émis même à 0. Mention SEULEMENT

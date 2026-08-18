@@ -196,13 +196,40 @@ describe('ReactionService', () => {
       expect(result?.reaction.participantId).toBe(testParticipantId2);
     });
 
-    // Le témoin « upsert sur la clé (messageId, participantId) — sans emoji »
-    // a été RETIRÉ avec le comportement qu'il décrivait (multi-réactions,
-    // 2026-08-18) : la clé unique porte désormais le TRIPLET, et empiler un
-    // second emoji ne remplace plus le premier. Sa relève est
-    // `ReactionService.multiReaction.test.ts`, qui épingle la clé triple et
-    // l'absence de tout retrait — même geste que les cinq autres suites
-    // touchées par ce changement.
+    it('should upsert on the (messageId, participantId, emoji) TRIPLET so two different emojis each get their own row', async () => {
+      // Multi-réactions (2026-08-18) : la clé unique porte le TRIPLET. Deux adds
+      // concurrents du MÊME emoji convergent sur le même document (le perdant
+      // retombe en no-op) ; deux emojis DIFFÉRENTS créent chacun le leur —
+      // c'est l'empilement, et c'est le modèle voulu.
+      //
+      // La couverture anti-doublon de 2026-07-04 (que l'ancienne clé à deux
+      // champs servait) survit ici : l'upsert reste atomique PAR TRIPLET, donc
+      // deux adds concurrents du même emoji ne peuvent toujours pas insérer
+      // deux lignes. Ce qui a changé, c'est la portée de l'unicité, pas son
+      // existence.
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
+        where: {
+          participant_reaction_unique: {
+            messageId: testMessageId,
+            participantId: testParticipantId,
+            emoji: '🔥'
+          }
+        },
+        // `update: {}` — la ligne existe déjà telle qu'on la veut ; il n'y a
+        // rien à réécrire, et surtout aucun emoji à ÉCRASER.
+        update: {},
+        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
+      });
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
+    });
 
     it('should throw error for invalid emoji format', async () => {
       (sanitizeEmoji as jest.Mock).mockReturnValue(null);
@@ -304,17 +331,66 @@ describe('ReactionService', () => {
         emoji: '👍'
       });
 
-      // `unchanged` distingue un ajout réel d'un re-tap no-op, et il est
-      // désormais le SEUL signal : `replacedEmojis` a disparu du contrat avec
-      // le swap qu'il décrivait (multi-réactions, 2026-08-18).
+      // Distinguer un vrai ajout d'un re-tap no-op : `unchanged` est le SEUL
+      // signal qui sépare les effets de bord (diffusion REACTION_ADDED +
+      // notification de l'auteur) d'un geste qui n'a rien changé en base.
       expect(result?.unchanged).toBe(false);
     });
 
-    // Les deux témoins de SWAP — « remplace la réaction précédente » et « ne
-    // rapporte aucun emoji remplacé » — ont été retirés avec le comportement.
-    // Poser un second emoji EMPILE désormais ; il n'y a plus ni remplacement ni
-    // champ `replacedEmojis` à observer. L'empilement est épinglé par
-    // `ReactionService.multiReaction.test.ts`.
+    it('should STACK a second emoji instead of replacing the first', async () => {
+      // Multi-réactions (2026-08-18) : le modèle « une seule réaction par
+      // personne » est ABANDONNÉ. Le participant a déjà 👍 et pose 🔥 — les
+      // deux coexistent. `findFirst` est désormais porté sur le TRIPLET, donc
+      // il ne répond plus « cette personne a-t-elle une réaction ? » mais
+      // « a-t-elle CET emoji ? » : ici non, d'où le null.
+      //
+      // Le toggle vit chez les clients : re-taper un emoji déjà posé appelle
+      // removeReaction, jamais addReaction.
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
+
+      const result = await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '🔥'
+      });
+
+      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
+        where: {
+          participant_reaction_unique: {
+            messageId: testMessageId,
+            participantId: testParticipantId,
+            emoji: '🔥'
+          }
+        },
+        update: {},
+        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
+      });
+      // Le point de la bascule : empiler ne SUPPRIME rien. Un `deleteMany` ici
+      // serait le retour du modèle à réaction unique.
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
+      expect(result?.reaction.emoji).toBe('🔥');
+      expect(result?.unchanged).toBe(false);
+    });
+
+    it('should not delete the participant existing emojis when adding a new one', async () => {
+      // Contre-épreuve de l'empilement, côté effacement : quel que soit ce que
+      // la personne a déjà posé, un ajout n'emporte aucune ligne. Ce témoin
+      // remplace l'ancien `replacedEmojis: []` — le champ a disparu du contrat
+      // avec le modèle à réaction unique qui le produisait.
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+
+      await service.addReaction({
+        messageId: testMessageId,
+        participantId: testParticipantId,
+        emoji: '👍'
+      });
+
+      // `deleteMany` est le SEUL chemin d'effacement du service (`removeReaction`
+      // s'en sert) : c'est donc lui qu'il faut voir muet, et le seul dont
+      // l'assertion ait un sens ici.
+      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
+    });
 
     it('should reject reactions on system messages', async () => {
       mockPrisma.message.findUnique.mockResolvedValue(
@@ -352,10 +428,11 @@ describe('ReactionService', () => {
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {
+      // Une seule lecture désormais : `findFirst` est porté sur le triplet, donc
+      // une réponse non nulle signifie déjà « cette personne a CET emoji » — le
+      // no-op se décide d'un coup, sans seconde requête.
       const existingReaction = createMockReaction({ emoji: '👍' });
-      mockPrisma.reaction.findFirst
-        .mockResolvedValueOnce({ emoji: '👍' })
-        .mockResolvedValueOnce(existingReaction);
+      mockPrisma.reaction.findFirst.mockResolvedValue(existingReaction);
 
       const result = await service.addReaction({
         messageId: testMessageId,
@@ -572,12 +649,10 @@ describe('ReactionService', () => {
       // `reactionSummary` with no backing `Reaction` row. Recomputing the whole map
       // from `groupBy` inside the same transaction as the count is immune to this:
       // whatever the final DB state is after the race, the summary matches it exactly.
-      //
-      // `findFirst` rend `null` : depuis les multi-réactions, la détection de
-      // no-op porte sur le TRIPLET (messageId, participantId, emoji). Un double
-      // qui rendait une réaction — fût-ce d'un AUTRE emoji — fait désormais
-      // sortir `addReaction` en no-op avant tout upsert, et ce témoin
-      // n'observerait plus aucun recalcul.
+      // `findFirst` porte le TRIPLET depuis les multi-réactions : null = « cette
+      // personne n'a pas ENCORE 🔥 », donc l'ajout va au bout. Un non-null ici
+      // ferait sortir addReaction en no-op avant tout recalcul, et le témoin
+      // mesurerait le silence au lieu de la règle.
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
       mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
       // Ground truth in the DB after the race settles: only 🔥 survives for this participant.
@@ -595,15 +670,15 @@ describe('ReactionService', () => {
       });
     });
 
-    it('should call updateMessageReactionSummary only once per addReaction', async () => {
-      // Une seule recomposition autoritative par mutation. L'implémentation
-      // d'origine bouclait sur les emojis remplacés — un appel par retrait PLUS
-      // un pour l'ajout, chacun relisant un résumé intermédiaire périmé. Le
-      // remplacement n'existe plus (multi-réactions), mais la propriété qui
-      // compte, elle, survit au changement de modèle : UN recalcul par ajout.
+    it('should call updateMessageReactionSummary only once per addReaction, not once per replaced emoji', async () => {
+      // Prior implementation looped over replacedEmojis calling updateMessageReactionSummary
+      // once per removed emoji PLUS once for the add — each call re-reading a stale
+      // intermediate summary. A single authoritative recompute per mutation is correct
+      // and cheaper.
       //
-      // `findFirst` rend `null` — même raison qu'au témoin précédent : le no-op
-      // se détecte sur le TRIPLET.
+      // `findFirst` à null (triplet, multi-réactions) : c'est la précondition
+      // d'un ajout qui va au bout. Le no-op, lui, ne recalcule rien du tout —
+      // c'est un autre témoin.
       mockPrisma.reaction.findFirst.mockResolvedValue(null);
       mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
 

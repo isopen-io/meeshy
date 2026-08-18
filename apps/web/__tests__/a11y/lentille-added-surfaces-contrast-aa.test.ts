@@ -42,8 +42,10 @@
  * LES DEUX FONDS QUI COMPTENT. Un rang Lentille se lit sur `--background`,
  * SAUF quand il porte la focus card (élu ou sélectionné, WL-108/L11) : son
  * fond devient alors `--secondary`, et c'est le cas le MOINS favorable. Les
- * deux sont mesurés — ne mesurer que le premier laisserait passer le seul
- * défaut que ce fichier trouve.
+ * deux sont mesurés — ne mesurer que le premier aurait laissé passer le
+ * seul défaut que ce fichier a trouvé (Q-142, 2026-08-17), tranché Q142-a
+ * le 2026-08-18 (`--muted-foreground` assombri d'un cran en thème clair,
+ * voir le témoin § 2 ci-dessous).
  */
 import {
   contrastRatio,
@@ -69,7 +71,7 @@ const SECONDARY: Readonly<Record<ThemeName, Rgb>> = {
 };
 
 const MUTED_FOREGROUND: Readonly<Record<ThemeName, Rgb>> = {
-  light: hslToRgb(220, 8.9, 46.1),
+  light: hslToRgb(220, 8.9, 45),
   dark: hslToRgb(217.9, 10.6, 64.9),
 };
 
@@ -155,35 +157,46 @@ describe('Q-142 — point médian et heure de la ligne 1 (`text-muted-foreground
   });
 
   /**
-   * FINDING Q-142 (2026-08-17) — le seul défaut de contraste que cette
-   * vérification croisée trouve, et il n'est pas masqué.
+   * FINDING Q-142 (2026-08-17), TRANCHÉ Q142-a (2026-08-18) — le seul défaut
+   * de contraste que cette vérification croisée trouvait, et il n'était pas
+   * masqué : ce témoin verrouillait alors le résultat MESURÉ (4,393:1) plutôt
+   * que de l'affirmer conforme, et c'est PRÉCISÉMENT le comportement que sa
+   * propre docstring annonçait : « Le jour où quelqu'un assombrit
+   * `--muted-foreground` en clair (…), ce test tombe — et c'est le signal
+   * attendu ». C'est ce qui vient de se produire.
    *
-   * Sur un rang qui porte la FOCUS CARD (élu au défilement, ou sélectionné —
-   * WL-108/behaviour-matrix:L11), le fond passe de `--background` à
-   * `--secondary`. En thème CLAIR, `--muted-foreground` y mesure **4,393:1**,
-   * soit sous les 4,5:1 que WCAG AA demande pour du texte normal — et
-   * l'heure du rang EST du texte normal (12 px, `--lentille-list-time-size`).
-   * Déficit : 0,107. En thème sombre, 5,782:1 — AA tenu.
+   * DÉCISION PRODUIT Q142-a (2026-08-18) — assombrir `--muted-foreground`
+   * en thème CLAIR d'un cran : `220 8.9% 46.1%` → `220 8.9% 45%` (même
+   * teinte/saturation, `apps/web/app/globals.css`). Thème sombre inchangé
+   * (déjà conforme, 5,782:1 sur `--secondary`).
    *
-   * PÉRIMÈTRE HONNÊTE : ce n'est PAS une régression des lots du 2026-08-17.
-   * L'heure et sa couleur préexistaient ; le point médian (maquette §3) et la
-   * focus card n'ont fait que les mettre côte à côte. Ce qui est neuf, c'est
-   * qu'on l'ait MESURÉ.
+   * POURQUOI CE CHANGEMENT EST SÛR PARTOUT AILLEURS (pas seulement ici) :
+   * `--muted-foreground` a 180+ consommateurs (`grep -rl text-muted-foreground
+   * apps/web`), mais dans TOUT le dépôt il n'est peint QU'EN TEXTE sur des
+   * fonds clairs du thème clair — `--background`/`--card`/`--popover`
+   * (0 0% 100%), `--secondary`/`--muted`/`--accent` (220 14.3% 95.9%), ou des
+   * utilitaires `bg-white/…`/`bg-gray-100` équivalents ; le seul fond sombre
+   * du dépôt en thème clair (`AttachmentGallery.tsx`, lightbox `bg-black/95`)
+   * ne peint PAS `text-muted-foreground` dedans (vérifié, aucune occurrence
+   * entre son `DialogContent` et sa fermeture). Assombrir un texte déjà plus
+   * sombre que CHACUN de ces fonds ne peut donc que faire MONTER chaque
+   * ratio, jamais descendre — aucune régression possible par construction.
    *
-   * CE TÉMOIN VERROUILLE LE RÉSULTAT MESURÉ plutôt que de l'affirmer conforme
-   * — même discipline, et même forme, que le constat `#6366F1` de
-   * `focal-contrast-aa.test.ts` (WF-113). Le jour où quelqu'un assombrit
-   * `--muted-foreground` en clair, éclaircit `--secondary`, ou route ces deux
-   * spans par `resolveBridgeTintColor`, ce test tombe — et c'est le signal
-   * attendu, pas une surprise. Reporté à l'orchestrateur : la décision
-   * (produit/design) n'appartient pas à cette tâche.
+   * NOUVEAUX RATIOS MESURÉS (2026-08-18, même loi WCAG,
+   * `lentille-contrast.ts`) : **4,567:1** sur `--secondary`/`--muted`/
+   * `--accent` (contre 4,393 avant — AA tenu, ≥ 4,5) ; **5,024:1** sur
+   * `--background`/`--card`/`--popover` (contre 4,830 avant — amélioré aussi).
+   *
+   * CE TÉMOIN AFFIRME DÉSORMAIS LA CONFORMITÉ au lieu de verrouiller un
+   * déficit — même inversion de forme que la remontée du constat `#6366F1`
+   * de `focal-contrast-aa.test.ts` (WF-113) le jour où CE finding-là sera
+   * tranché à son tour.
    */
-  it('thème clair — FINDING : sur la focus card, l’heure tombe à ≈ 4,39:1, SOUS le seuil AA', () => {
+  it('thème clair — Q142-a (2026-08-18) : sur la focus card, l’heure passe AA (≥ 4,5:1)', () => {
     const measured = contrastRatio(MUTED_FOREGROUND.light, SECONDARY.light);
 
-    expect(measured).toBeLessThan(AA_TEXT);
-    expect(measured).toBeGreaterThan(4.35);
-    expect(measured).toBeCloseTo(4.393, 2);
+    expect(measured).toBeGreaterThanOrEqual(AA_TEXT);
+    expect(measured).toBeCloseTo(4.567, 2);
   });
 
   it('thème sombre — sur la focus card, AA reste tenu', () => {
