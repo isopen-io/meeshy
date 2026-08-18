@@ -33,12 +33,6 @@ export interface GetReactionsOptions {
 export interface AddReactionResult {
   reaction: ReactionData;
   /**
-   * Emojis the participant had on this message before this add and that were
-   * swapped out by it (single-reaction-per-user model). Callers must broadcast
-   * a REACTION_REMOVED event per entry so other clients drop the old emoji.
-   */
-  replacedEmojis: string[];
-  /**
    * True when the participant already had exactly this emoji on this message,
    * so addReaction made no DB change. Callers MUST skip the REACTION_ADDED
    * broadcast and the author notification — nothing changed, and re-emitting
@@ -109,39 +103,29 @@ export class ReactionService {
       throw new Error('User is not a participant of this conversation');
     }
 
-    const previousReaction = await this.prisma.reaction.findFirst({
-      where: { messageId, participantId },
-      select: { emoji: true }
+    const existingReaction = await this.prisma.reaction.findFirst({
+      where: { messageId, participantId, emoji: sanitized }
     });
-
-    if (previousReaction?.emoji === sanitized) {
-      const existingReaction = await this.prisma.reaction.findFirst({
-        where: { messageId, participantId, emoji: sanitized }
-      });
-      if (existingReaction) {
-        return { reaction: this.mapReactionToData(existingReaction), replacedEmojis: [], unchanged: true };
-      }
+    if (existingReaction) {
+      return { reaction: this.mapReactionToData(existingReaction), unchanged: true };
     }
 
-    // Single-reaction-per-user model: the DB unique key is (messageId,
-    // participantId) — no emoji — so this upsert is atomic at the Mongo
-    // level. Two concurrent addReaction calls for different emojis now race
-    // on the SAME document instead of each inserting its own row (the prior
-    // find/deleteMany/create sequence let both pass the "no existing
-    // reaction" check before either committed).
+    // Multi-réactions (2026-08-18) : la clé unique DB porte le TRIPLET
+    // (messageId, participantId, emoji) — poser un second emoji EMPILE, il
+    // ne remplace plus jamais. L'upsert reste atomique par triplet : deux
+    // adds concurrents du MÊME emoji convergent sur le même document (le
+    // perdant retombe en no-op), deux emojis différents créent chacun le
+    // leur — c'est le modèle. Le toggle vit chez les clients : re-taper un
+    // emoji déjà posé appelle removeReaction.
     const reaction = await this.prisma.reaction.upsert({
-      where: { participant_reaction_unique: { messageId, participantId } },
-      update: { emoji: sanitized },
+      where: { participant_reaction_unique: { messageId, participantId, emoji: sanitized } },
+      update: {},
       create: { messageId, participantId, emoji: sanitized }
     });
 
-    const replacedEmojis = previousReaction && previousReaction.emoji !== sanitized
-      ? [previousReaction.emoji]
-      : [];
-
     await this.updateMessageReactionSummary(messageId);
 
-    return { reaction: this.mapReactionToData(reaction), replacedEmojis, unchanged: false };
+    return { reaction: this.mapReactionToData(reaction), unchanged: false };
   }
 
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {

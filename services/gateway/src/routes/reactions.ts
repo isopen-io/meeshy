@@ -170,7 +170,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         return sendInternalError(reply, 'Failed to add reaction');
       }
 
-      const { reaction, replacedEmojis } = addResult;
+      const { reaction } = addResult;
 
       if (addResult.unchanged) {
         // Idempotent no-op: the participant already had exactly this emoji.
@@ -203,29 +203,8 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       // perdue pour un pair hors ligne à cet instant.
       if (socketIOHandler && message) {
         const manager = fastify.socketIOHandler.getManager();
-        // Swap 1-réaction-par-user : signaler la disparition de l'ancien
-        // emoji avant l'ajout du nouveau, pour que les autres clients le
-        // retirent (chaque event porte son agrégation recalculée).
-        for (const removedEmoji of replacedEmojis) {
-          const removeEvent = await reactionService.createUpdateEvent(
-            messageId,
-            removedEmoji,
-            'remove',
-            participantId,
-            message.conversationId,
-            userId
-          );
-          await broadcastReactionMutation({
-            manager,
-            conversationId: message.conversationId,
-            actorParticipantId: participantId,
-            eventType: 'reaction-removed',
-            messageId,
-            emoji: removedEmoji,
-            payload: removeEvent as unknown as Record<string, unknown>,
-            onError: (error) => fastify.log.error({ error }, 'REST reaction swap-removal broadcast failed'),
-          });
-        }
+        // Multi-réactions (2026-08-18) : un add n'évince plus jamais un
+        // emoji précédent — aucun retrait compensatoire à diffuser.
         await broadcastReactionMutation({
           manager,
           conversationId: message.conversationId,
@@ -243,19 +222,6 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       // `REACTION_ADDED` à la room mais ne créait AUCUNE notification/push : les
       // réactions envoyées via l'outbox/REST (chemin iOS) ne déclenchaient donc
       // jamais de notif. Fire-and-forget : ne bloque pas la réponse 201.
-      // Un SWAP d'emoji est aussi un RETRAIT : `addReaction` a détruit l'emoji
-      // précédent du même acteur, dont la notification perd son sujet. Parité
-      // avec le handler socket `reaction:add`, qui draine `replacedEmojis` de
-      // la même façon.
-      for (const removedEmoji of replacedEmojis) {
-        void notifyReactionRemoved(
-          { prisma, notificationService: fastify.notificationService },
-          { messageId, reactorParticipantId: participantId, emoji: removedEmoji, isAnonymous }
-        ).catch((error: unknown) => {
-          fastify.log.error({ error }, 'REST replaced-emoji notification retraction failed');
-        });
-      }
-
       void notifyReactionAdded(
         { prisma, notificationService: fastify.notificationService },
         { messageId, reactorParticipantId: participantId, emoji, isAnonymous }

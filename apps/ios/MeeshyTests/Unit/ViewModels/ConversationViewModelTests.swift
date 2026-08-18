@@ -1195,10 +1195,11 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertNotNil(updated, "removeReaction must clear reactions in GRDB")
     }
 
-    /// Modèle 1-réaction-par-user (miroir attachment-level + serveur) : poser un
-    /// emoji DIFFÉRENT remplace ma réaction précédente au lieu de l'empiler.
-    /// Les réactions des AUTRES participants ne sont jamais touchées.
-    func test_toggleReaction_differentEmoji_replacesPreviousOwnReaction() async throws {
+    /// Multi-réactions (2026-08-18, feu vert user) : poser un emoji DIFFÉRENT
+    /// S'EMPILE avec ma réaction précédente — plus jamais de swap. Le retrait
+    /// reste PAR emoji (re-taper un emoji déjà posé l'enlève, lui seul). Les
+    /// réactions des AUTRES participants ne sont jamais touchées.
+    func test_toggleReaction_differentEmoji_stacksWithMyPreviousReaction() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
@@ -1228,14 +1229,14 @@ final class ConversationViewModelTests: XCTestCase {
             let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                                        from: record.reactionsJson ?? Data())) ?? []
             let mine = reactions.filter { $0.participantId == self.testUserId }
-            return mine.map(\.emoji) == ["thumbsup"]
+            return Set(mine.map(\.emoji)) == ["heart", "thumbsup"]
         }
         // awaitRecord returns the last-fetched record on timeout even when the
-        // predicate never matched — re-assert the swap explicitly on the result.
+        // predicate never matched — re-assert the stacking explicitly on the result.
         let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                                    from: updated?.reactionsJson ?? Data())) ?? []
-        let mine = reactions.filter { $0.participantId == testUserId }.map(\.emoji)
-        XCTAssertEqual(mine, ["thumbsup"], "my previous emoji must be swapped out, not stacked")
+        let mine = Set(reactions.filter { $0.participantId == testUserId }.map(\.emoji))
+        XCTAssertEqual(mine, ["heart", "thumbsup"], "mes deux emojis coexistent — le multi-réactions ne swappe plus jamais")
         XCTAssertTrue(
             reactions.contains { $0.participantId == "other-user" && $0.emoji == "heart" },
             "another participant's reaction must survive my swap"

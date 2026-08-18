@@ -99,7 +99,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
 
 function makeReactionService(overrides: Record<string, any> = {}) {
   return {
-    addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
+    addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' } }),
     removeReaction: jest.fn<any>().mockResolvedValue(true),
     getMessageReactions: jest.fn<any>().mockResolvedValue([]),
     createUpdateEvent: jest.fn<any>().mockResolvedValue({ messageId: MESSAGE_ID }),
@@ -225,7 +225,7 @@ describe('ReactionHandler', () => {
       // contract the file already applies to broadcast/notification failures.
       const { handler } = buildHandler({
         reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' }, replacedEmojis: [] }),
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'reaction-1', emoji: '👍' } }),
           createUpdateEvent: jest.fn<any>().mockRejectedValue(new Error('aggregation read timeout')),
         },
       });
@@ -248,70 +248,7 @@ describe('ReactionHandler', () => {
       );
     });
 
-    it('broadcasts reaction:removed for each replaced emoji before reaction:added (single-reaction swap)', async () => {
-      const createUpdateEvent = jest.fn<any>()
-        .mockImplementation((_messageId: string, emoji: string, action: string) =>
-          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
-      const { handler, io } = buildHandler({
-        reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({
-            reaction: { id: 'reaction-2', emoji: '🔥' },
-            replacedEmojis: ['👍'],
-          }),
-          createUpdateEvent,
-        },
-      });
-      const callback = jest.fn<any>();
 
-      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, callback);
-      // Broadcasts are fire-and-forget promises — let them settle.
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(callback).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
-      expect(createUpdateEvent).toHaveBeenCalledWith(MESSAGE_ID, '👍', 'remove', PARTICIPANT_ID, expect.any(String), USER_ID);
-      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
-      expect(emitted).toEqual(expect.arrayContaining([
-        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍' }) }),
-        expect.objectContaining({ event: 'reaction:added', payload: expect.objectContaining({ emoji: '🔥' }) }),
-      ]));
-    });
-
-    it('routes a swap-remove broadcast rejection to logger.error instead of an escaping unhandled rejection', async () => {
-      // Single-reaction swap: the REACTION_REMOVED broadcast for the replaced
-      // emoji is `async` (it awaits normalizeConversationId, then emits). If the
-      // emit itself rejects — e.g. socket.io fails to encode the packet — that
-      // rejection must reach the handler's `.catch`, exactly like the sibling
-      // REACTION_ADDED broadcast a few lines below. Otherwise it floats free as
-      // an unhandledRejection (gateway crash under Node's default handler) and
-      // the failure is never logged. This asserts parity between the two paths.
-      const createUpdateEvent = jest.fn<any>()
-        .mockImplementation((_messageId: string, emoji: string, action: string) =>
-          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
-      const emit = jest.fn<any>((event: string) => {
-        if (event === 'reaction:removed') throw new Error('packet encode failed');
-      });
-      const io = { to: jest.fn<any>().mockReturnValue({ emit }), _emit: emit };
-      const { handler } = buildHandler({
-        io,
-        reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({
-            reaction: { id: 'reaction-2', emoji: '🔥' },
-            replacedEmojis: ['👍'],
-          }),
-          createUpdateEvent,
-        },
-      });
-
-      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn<any>());
-      // Let the fire-and-forget broadcast promises settle.
-      await new Promise(resolve => setImmediate(resolve));
-      await new Promise(resolve => setImmediate(resolve));
-
-      expect(mockLogger.error).toHaveBeenCalledWith(
-        'reaction:add replaced-emoji broadcast failed',
-        expect.objectContaining({ conversationId: CONV_ID }),
-      );
-    });
 
     it('replies idempotent success without broadcasting or notifying when addReaction reports unchanged (no-op re-react)', async () => {
       // A duplicate reaction:add for an emoji the participant already has
@@ -325,7 +262,6 @@ describe('ReactionHandler', () => {
         reactionService: {
           addReaction: jest.fn<any>().mockResolvedValue({
             reaction: { id: 'reaction-1', emoji: '👍' },
-            replacedEmojis: [],
             unchanged: true,
           }),
           createUpdateEvent: jest.fn<any>(),
@@ -349,33 +285,6 @@ describe('ReactionHandler', () => {
      * jamais émis. La notification « X a réagi 👍 » resterait donc en base pour
      * un 👍 qui n'existe plus, et aucun autre chemin ne passerait la retirer.
      */
-    it('retire la notification de l’emoji REMPLACÉ lors d’un swap', async () => {
-      const { notifyReactionRemoved, notifyReactionAdded } = require('../../../services/notifications/reactionNotify');
-      const { handler } = buildHandler({
-        reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({
-            reaction: { id: 'reaction-1', emoji: '❤️' },
-            replacedEmojis: ['👍'],
-            unchanged: false,
-          }),
-          createUpdateEvent: jest.fn<any>().mockResolvedValue({}),
-        },
-      });
-
-      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '❤️' }, jest.fn<any>());
-      await new Promise(resolve => setImmediate(resolve));
-
-      // L'ANCIEN emoji est retiré…
-      expect(notifyReactionRemoved).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ messageId: MESSAGE_ID, emoji: '👍' })
-      );
-      // …et le NOUVEAU notifié : le swap produit les deux, jamais l'un sans l'autre.
-      expect(notifyReactionAdded).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ messageId: MESSAGE_ID, emoji: '❤️' })
-      );
-    });
 
     it('returns error on service exception without crashing', async () => {
       const { handler } = buildHandler({
@@ -1068,66 +977,7 @@ describe('ReactionHandler', () => {
       );
     });
 
-    it('also enqueues a reaction-removed for a replaced emoji during a single-reaction swap', async () => {
-      const deliveryQueue = makeDeliveryQueue();
-      const createUpdateEvent = jest.fn<any>()
-        .mockImplementation((_m: string, emoji: string, action: string) =>
-          Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
-      const { handler } = buildHandler({
-        prisma: makePrismaWithParticipants(),
-        connectedUsers: makeConnectedUsersWith(true),
-        deliveryQueue,
-        reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r2', emoji: '🔥' }, replacedEmojis: ['👍'] }),
-          createUpdateEvent,
-        },
-      });
 
-      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn());
-      await flush();
-
-      const events = deliveryQueue.enqueue.mock.calls.map((c: any[]) => c[1].eventType);
-      expect(events).toEqual(expect.arrayContaining(['reaction-added', 'reaction-removed']));
-      // Both enqueues target the offline peer only.
-      for (const call of deliveryQueue.enqueue.mock.calls) {
-        expect(call[0]).toBe(OFFLINE_USER);
-      }
-    });
-
-    it('still propagates the replaced-emoji removal (degraded) when its aggregation read rejects', async () => {
-      // The swap is already persisted by addReaction, so the removal MUST reach
-      // peers. If createUpdateEvent('remove', …) rejects (aggregation DB read
-      // fails) the handler falls back to a degraded REACTION_REMOVED rather than
-      // dropping it — otherwise every peer shows the actor's stale 👍 forever.
-      const deliveryQueue = makeDeliveryQueue();
-      const createUpdateEvent = jest.fn<any>()
-        .mockImplementation((_m: string, emoji: string, action: string) =>
-          action === 'remove'
-            ? Promise.reject(new Error('aggregation read timeout'))
-            : Promise.resolve({ messageId: MESSAGE_ID, emoji, action }));
-      const { handler, io } = buildHandler({
-        prisma: makePrismaWithParticipants(),
-        connectedUsers: makeConnectedUsersWith(true),
-        deliveryQueue,
-        reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r2', emoji: '🔥' }, replacedEmojis: ['👍'] }),
-          createUpdateEvent,
-        },
-      });
-
-      await handler.handleReactionAdd(makeSocket(), { messageId: MESSAGE_ID, emoji: '🔥' }, jest.fn());
-      await flush();
-      await flush();
-
-      // Live peers still receive the removal broadcast for the replaced emoji…
-      const emitted = io._emit.mock.calls.map((c: any[]) => ({ event: c[0], payload: c[1] }));
-      expect(emitted).toEqual(expect.arrayContaining([
-        expect.objectContaining({ event: 'reaction:removed', payload: expect.objectContaining({ emoji: '👍', action: 'remove' }) }),
-      ]));
-      // …and offline peers get the removal enqueued, not just the addition.
-      const events = deliveryQueue.enqueue.mock.calls.map((c: any[]) => c[1].eventType);
-      expect(events).toEqual(expect.arrayContaining(['reaction-added', 'reaction-removed']));
-    });
 
     it('is a no-op when no delivery queue is wired (does not throw)', async () => {
       const { handler } = buildHandler({
@@ -1149,7 +999,7 @@ describe('ReactionHandler', () => {
         connectedUsers: makeConnectedUsersWith(true),
         deliveryQueue,
         reactionService: {
-          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r1', emoji: '👍' }, replacedEmojis: [], unchanged: true }),
+          addReaction: jest.fn<any>().mockResolvedValue({ reaction: { id: 'r1', emoji: '👍' }, unchanged: true }),
           createUpdateEvent: jest.fn<any>(),
         },
       });

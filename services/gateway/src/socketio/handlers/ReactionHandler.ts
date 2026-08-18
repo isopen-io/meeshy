@@ -127,7 +127,7 @@ export class ReactionHandler {
         return;
       }
 
-      const { reaction, replacedEmojis } = addResult;
+      const { reaction } = addResult;
 
       if (addResult.unchanged) {
         // Idempotent no-op: the participant already had exactly this emoji on
@@ -175,32 +175,8 @@ export class ReactionHandler {
             userId
           );
 
-          // Single-reaction-per-user swap: tell other clients the previous emoji
-          // is gone before announcing the new one (order is cosmetic — the two
-          // events target different emojis and merge independently client-side).
-          for (const removedEmoji of replacedEmojis) {
-            reactionService.createUpdateEvent(
-              validated.messageId,
-              removedEmoji,
-              'remove',
-              participantId,
-              message.conversationId,
-              userId
-            )
-              // The swap is already persisted (addReaction removed the old emoji),
-              // so the removal MUST reach every peer. If the aggregation read here
-              // rejects (DB load/timeout) we fall back to a degraded removal event
-              // rather than dropping it — dropping it would leave every other
-              // participant showing the actor's stale emoji until a full
-              // reaction:sync. The degraded aggregation self-heals on the next sync.
-              .catch(err => {
-                logger.error('reaction:add replaced-emoji createUpdateEvent failed — propagating degraded removal', { error: err, conversationId: message.conversationId });
-                return this._degradedRemovalEvent(message.conversationId, participantId, validated.messageId, removedEmoji, userId);
-              })
-              .then(removeEvent => this._propagateReplacedEmojiRemoval(
-                message.conversationId, participantId, validated.messageId, removedEmoji, removeEvent
-              ));
-          }
+          // Multi-réactions (2026-08-18) : un add n'évince plus jamais un
+          // emoji précédent — aucun retrait compensatoire à diffuser.
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
             .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
           void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent as unknown as Record<string, unknown>);
@@ -209,17 +185,6 @@ export class ReactionHandler {
         // Reaction is persisted and the client already ACKed; the broadcast is
         // best-effort. Peers reconcile on the next reaction:sync.
         logger.error('reaction:add post-success side-effects failed', { error: sideEffectError });
-      }
-      // Un SWAP d'emoji est aussi un RETRAIT. `addReaction` détruit l'emoji
-      // précédent du même acteur (règle « une réaction par personne ») et le
-      // rend dans `replacedEmojis` : la notification qu'il avait produite perd
-      // son sujet exactement comme sur un `reaction:remove` explicite, et rien
-      // d'autre ne passera jamais la retirer. Le retrait précède l'ajout —
-      // sinon le throttle par paire, qui vient d'être consommé par la nouvelle
-      // notification, n'aurait rien à voir avec l'ordre, mais l'ancienne ligne
-      // resterait affichée plus longtemps que nécessaire.
-      for (const removedEmoji of replacedEmojis) {
-        void this._retractReactionNotification(validated.messageId, removedEmoji, participantId, isAnonymous);
       }
       // _createReactionNotification handles errors internally; void to be explicit.
       void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
@@ -483,52 +448,6 @@ export class ReactionHandler {
       (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
     );
     this.io.to(ROOMS.conversation(normalizedConversationId)).emit(eventType, updateEvent);
-  }
-
-  /**
-   * Propagate a single-reaction-swap removal to both live peers (broadcast) and
-   * offline peers (delivery queue). Shared by the success path (real aggregated
-   * event) and the degraded path (aggregation read failed) so the removal is
-   * NEVER dropped once the swap has been persisted.
-   */
-  private _propagateReplacedEmojiRemoval(
-    conversationId: string,
-    participantId: string,
-    messageId: string,
-    emoji: string,
-    removeEvent: ReactionUpdateEvent
-  ): void {
-    // The broadcast is async (awaits normalizeConversationId, then emits), so
-    // attach its own `.catch` — otherwise its rejection escapes as an
-    // unhandledRejection. Parity with the REACTION_ADDED broadcast.
-    this._broadcastReactionEventWithConversationId(conversationId, removeEvent, SERVER_EVENTS.REACTION_REMOVED)
-      .catch(err => logger.error('reaction:add replaced-emoji broadcast failed', { error: err, conversationId }));
-    void this._enqueueOfflineReactionEvent(conversationId, participantId, 'reaction-removed', messageId, emoji, removeEvent as unknown as Record<string, unknown>);
-  }
-
-  /**
-   * Degraded REACTION_REMOVED event built WITHOUT the aggregation DB read (which
-   * just failed). Clients key the removal off action+participantId+emoji to drop
-   * the actor's reaction; the zeroed aggregation is a placeholder that the next
-   * reaction:sync reconciles. Emitting this beats silently dropping the removal.
-   */
-  private _degradedRemovalEvent(
-    conversationId: string,
-    participantId: string,
-    messageId: string,
-    emoji: string,
-    userId: string
-  ): ReactionUpdateEvent {
-    return {
-      messageId,
-      conversationId,
-      participantId,
-      userId,
-      emoji,
-      action: 'remove',
-      aggregation: { emoji, count: 0, participantIds: [], hasCurrentUser: false },
-      timestamp: new Date()
-    };
   }
 
   /**

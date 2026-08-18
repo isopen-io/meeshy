@@ -162,7 +162,7 @@ describe('ReactionHandler — Fix 4: self-reaction notification guard', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (normalizeConversationId as unknown as jest.MockedFunction<() => Promise<string>>).mockResolvedValue(CONVERSATION_ID);
 
-    mockReactionService.addReaction.mockResolvedValue({ reaction: { id: 'reaction-1', emoji: EMOJI }, replacedEmojis: [] });
+    mockReactionService.addReaction.mockResolvedValue({ reaction: { id: 'reaction-1', emoji: EMOJI } });
     mockReactionService.createUpdateEvent.mockResolvedValue({ messageId: MESSAGE_ID, emoji: EMOJI });
   });
 
