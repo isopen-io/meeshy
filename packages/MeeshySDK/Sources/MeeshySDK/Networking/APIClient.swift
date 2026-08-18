@@ -452,6 +452,29 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         set { tokenLock.withLock { $0.anon = newValue } }
     }
 
+    /// L'identifiant à présenter au gateway, et SOUS QUEL EN-TÊTE.
+    ///
+    /// Deux populations, deux protocoles : un inscrit s'annonce par
+    /// `Authorization: Bearer <JWT>`, un invité de lien par
+    /// `X-Session-Token: <anon_…>`. Ce n'est pas un détail de transport — le
+    /// gateway lit les deux dans des middlewares différents, et présenter un
+    /// jeton anonyme en `Bearer` fait répondre « Invalid JWT token ».
+    ///
+    /// Porter l'en-tête AVEC la valeur est le point : un `String` nu oblige
+    /// chaque appelant à SUPPOSER le protocole, et le web a payé exactement
+    /// cette supposition (`fix(web)` du 2026-08-18) — tout appel d'un visiteur
+    /// sans compte partait sans identifiant utilisable.
+    public var requestCredential: MeeshyRequestCredential? {
+        let pair = tokenLock.withLock { $0 }
+        if let auth = pair.auth {
+            return .bearer(auth)
+        }
+        if let anon = pair.anon {
+            return .anonymousSession(anon)
+        }
+        return nil
+    }
+
     /// Écriture atomique de la paire — à préférer aux deux setters séparés
     /// quand les deux tokens changent ensemble (switch de compte).
     public func setTokens(auth: String?, anonymous: String?) {
@@ -582,10 +605,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
 
-        if let token = authToken {
-            urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        } else if let token = anonymousSessionToken {
-            urlRequest.setValue(token, forHTTPHeaderField: "X-Session-Token")
+        // Une seule autorité pour « qui suis-je et sous quel en-tête » — la
+        // même que la couche d'upload et que le siège de test ci-dessous.
+        if let credential = requestCredential {
+            urlRequest.setValue(credential.value, forHTTPHeaderField: credential.header)
         }
 
         if let token = authToken, shouldAttemptRefresh && AuthManager.isTokenExpired(token, now: Date()) {
@@ -882,8 +905,13 @@ extension APIClient {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
 
-        if let authToken {
-            urlRequest.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        // Le siège de test lisait `authToken` seul là où la production lit les
+        // DEUX identités : la copie avait déjà divergé sur la branche anonyme,
+        // et aucun témoin porté par elle ne pouvait le montrer. Elle consulte
+        // désormais la même règle.
+        let seamCredential = authToken.map(MeeshyRequestCredential.bearer) ?? requestCredential
+        if let seamCredential {
+            urlRequest.setValue(seamCredential.value, forHTTPHeaderField: seamCredential.header)
         }
         if let body {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")

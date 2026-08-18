@@ -293,8 +293,12 @@ extension ConversationView {
                 }
             }
             let serverOrigin = MeeshyConfig.shared.serverOrigin
+            // Une pièce jointe de MESSAGE ne demande pas de compte : un invité
+            // de lien partagé a le droit d'en envoyer (le gateway le lui
+            // accorde), et exiger `authToken` ici lui affichait « Échec de
+            // l'envoi » sans qu'aucune requête ne parte.
             guard let baseURL = URL(string: serverOrigin),
-                  let token = APIClient.shared.authToken else {
+                  let credential = APIClient.shared.requestCredential else {
                 await MainActor.run {
                     composerState.isUploading = false
                     FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
@@ -447,7 +451,7 @@ extension ConversationView {
                             let thumbHash = item.thumbHash
                             group.addTask {
                                 let result = try await uploader.uploadFile(
-                                    fileURL: fileURL, mimeType: mime, token: token, thumbHash: thumbHash
+                                    fileURL: fileURL, mimeType: mime, credential: credential, thumbHash: thumbHash
                                 )
                                 return (index, result)
                             }

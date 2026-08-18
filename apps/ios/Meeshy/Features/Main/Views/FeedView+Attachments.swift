@@ -347,7 +347,7 @@ extension FeedView {
 
                 if let audioURL {
                     let result = try await uploader.uploadFile(
-                        fileURL: audioURL, mimeType: "audio/mp4", token: token, uploadContext: "post"
+                        fileURL: audioURL, mimeType: "audio/mp4", credential: .bearer(token), uploadContext: "post"
                     )
                     uploadedIds.append(result.id)
                     try? FileManager.default.removeItem(at: audioURL)
@@ -357,7 +357,7 @@ extension FeedView {
                     if let fileURL = mediaFiles[attachment.id] {
                         let thumbHash = pendingThumbnails[attachment.id]?.toThumbHash()
                         let result = try await uploader.uploadFile(
-                            fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post", thumbHash: thumbHash
+                            fileURL: fileURL, mimeType: attachment.mimeType, credential: .bearer(token), uploadContext: "post", thumbHash: thumbHash
                         )
                         uploadedIds.append(result.id)
                         try? FileManager.default.removeItem(at: fileURL)
@@ -423,7 +423,7 @@ extension FeedView {
 
         do {
             let uploader = TusUploadManager(baseURL: baseURL)
-            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
+            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, credential: .bearer(token), uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
 
             await viewModel.createPost(
@@ -1593,7 +1593,7 @@ struct FeedComposerSheet: View {
                 for attachment in attachments {
                     if let fileURL = mediaFiles[attachment.id] {
                         let thumbHash = pendingThumbnails[attachment.id]?.toThumbHash()
-                        let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: attachment.mimeType, token: token, uploadContext: "post", thumbHash: thumbHash)
+                        let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: attachment.mimeType, credential: .bearer(token), uploadContext: "post", thumbHash: thumbHash)
                         uploadedIds.append(result.id)
                         try? FileManager.default.removeItem(at: fileURL)
                     }
@@ -1638,7 +1638,7 @@ struct FeedComposerSheet: View {
         await MainActor.run { isUploading = true }
         do {
             let uploader = TusUploadManager(baseURL: baseURL)
-            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, token: token, uploadContext: "post")
+            let result = try await uploader.uploadFile(fileURL: audioURL, mimeType: mimeType, credential: .bearer(token), uploadContext: "post")
             try? FileManager.default.removeItem(at: audioURL)
             await viewModel.createPost(
                 // Même moteur de classification que les chemins visuels : un

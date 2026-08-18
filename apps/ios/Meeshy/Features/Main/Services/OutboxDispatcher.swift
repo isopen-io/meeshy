@@ -460,7 +460,7 @@ struct OutboxDispatcher: OutboxDispatching {
                     let tusResult = try await uploader.uploadFile(
                         fileURL: URL(fileURLWithPath: absolutePath),
                         mimeType: mime,
-                        token: token
+                        credential: .bearer(token)
                     )
                     uploadedIds.append(tusResult.id)
                     uploadedLocalPaths.append(absolutePath)
@@ -733,8 +733,10 @@ struct OutboxDispatcher: OutboxDispatching {
 
             if !pendingAudioPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
+                // Rejeu d'une pièce jointe de MESSAGE : accessible à un
+                // invité de lien partagé, contrairement aux médias de post.
                 guard let baseURL = URL(string: serverOrigin),
-                      let token = APIClient.shared.authToken else {
+                      let credential = APIClient.shared.requestCredential else {
                     throw NSError(
                         domain: "OutboxDispatcher",
                         code: 401,
@@ -756,7 +758,7 @@ struct OutboxDispatcher: OutboxDispatching {
                         let tusResult = try await uploader.uploadFile(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: "audio/mp4",
-                            token: token
+                            credential: credential
                         )
                         uploadedIds.append(tusResult.id)
                         uploadedPaths.append(absolutePath)
@@ -821,8 +823,10 @@ struct OutboxDispatcher: OutboxDispatching {
             // the saved offset.
             if let pendingMediaPaths = item.localMediaPaths, !pendingMediaPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
+                // Rejeu d'une pièce jointe de MESSAGE : accessible à un
+                // invité de lien partagé, contrairement aux médias de post.
                 guard let baseURL = URL(string: serverOrigin),
-                      let token = APIClient.shared.authToken else {
+                      let credential = APIClient.shared.requestCredential else {
                     throw NSError(
                         domain: "OutboxDispatcher",
                         code: 401,
@@ -846,7 +850,7 @@ struct OutboxDispatcher: OutboxDispatching {
                         let tusResult = try await uploader.uploadFile(
                             fileURL: URL(fileURLWithPath: absolutePath),
                             mimeType: mime,
-                            token: token
+                            credential: credential
                         )
                         uploadedIds.append(tusResult.id)
                         uploadedPaths.append(absolutePath)

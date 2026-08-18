@@ -72,7 +72,7 @@ public actor TusUploadManager {
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    nonisolated(unsafe) private var queue: [(URL, String, String, String?, String?, CheckedContinuation<TusUploadResult, Error>)] = []
+    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
 
@@ -90,7 +90,12 @@ public actor TusUploadManager {
         }
     }
 
-    public func uploadFile(fileURL: URL, mimeType: String, token: String, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
+    /// `credential` porte l'en-tête ET la valeur. Recevoir un jeton nu
+    /// obligeait cette couche à supposer `Bearer`, ce qui excluait en silence
+    /// les invités de lien partagé — alors que le gateway accepte
+    /// explicitement leurs pièces jointes de MESSAGE (`tus-handler.ts`, la
+    /// branche `x-session-token`).
+    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
         let fileId = UUID().uuidString
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -103,16 +108,16 @@ public actor TusUploadManager {
         emitProgress()
 
         return try await withCheckedThrowingContinuation { continuation in
-            queue.append((fileURL, mimeType, token, uploadContext, thumbHash, continuation))
+            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, continuation))
             processQueue()
         }
     }
 
-    public func uploadFiles(fileURLs: [(url: URL, mimeType: String)], token: String) async throws -> [TusUploadResult] {
+    public func uploadFiles(fileURLs: [(url: URL, mimeType: String)], credential: MeeshyRequestCredential) async throws -> [TusUploadResult] {
         try await withThrowingTaskGroup(of: TusUploadResult.self) { group in
             for item in fileURLs {
                 group.addTask {
-                    try await self.uploadFile(fileURL: item.url, mimeType: item.mimeType, token: token)
+                    try await self.uploadFile(fileURL: item.url, mimeType: item.mimeType, credential: credential)
                 }
             }
             var results: [TusUploadResult] = []
@@ -125,12 +130,12 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileURL, mimeType, token, uploadContext, thumbHash, continuation) = queue.removeFirst()
+            let (fileURL, mimeType, credential, uploadContext, thumbHash, continuation) = queue.removeFirst()
             activeCount += 1
             Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
-                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, token: token, uploadContext: uploadContext, thumbHash: thumbHash)
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
                     // cache média typé, keyé par l'URL canonique serveur. L'auteur
@@ -194,7 +199,7 @@ public actor TusUploadManager {
         }
     }
 
-    private func performTusUpload(fileURL: URL, mimeType: String, token: String, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
+    private func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
@@ -238,7 +243,7 @@ public actor TusUploadManager {
                 fileSize: fileSize,
                 fileName: fileName,
                 mimeType: mimeType,
-                token: token,
+                credential: credential,
                 uploadContext: uploadContext,
                 thumbHash: thumbHash
             )
@@ -278,7 +283,7 @@ public actor TusUploadManager {
 
             var patchReq = URLRequest(url: patchURL)
             patchReq.httpMethod = "PATCH"
-            patchReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            patchReq.setValue(credential.value, forHTTPHeaderField: credential.header)
             patchReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
             patchReq.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
             patchReq.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
@@ -341,7 +346,7 @@ public actor TusUploadManager {
                 // realign before retrying the same chunk on the next
                 // iteration.
                 Self.logger.warning("PATCH 409 at offset \(offset, privacy: .public); HEAD-recovering")
-                let serverOffset = try await headOffset(patchURL: patchURL, token: token)
+                let serverOffset = try await headOffset(patchURL: patchURL, credential: credential)
                 fileHandle.seek(toFileOffset: UInt64(serverOffset))
                 offset = serverOffset
                 await store.updateOffset(checkpointKey: checkpointKey, offset: serverOffset)
@@ -369,14 +374,14 @@ public actor TusUploadManager {
         fileSize: Int64,
         fileName: String,
         mimeType: String,
-        token: String,
+        credential: MeeshyRequestCredential,
         uploadContext: String?,
         thumbHash: String?
     ) async throws -> String {
         let uploadURL = baseURL.appendingPathComponent("api/v1/uploads")
         var createReq = URLRequest(url: uploadURL)
         createReq.httpMethod = "POST"
-        createReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        createReq.setValue(credential.value, forHTTPHeaderField: credential.header)
         createReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         createReq.setValue("\(fileSize)", forHTTPHeaderField: "Upload-Length")
 
@@ -406,10 +411,10 @@ public actor TusUploadManager {
     /// offset, used to recover from a 409 Conflict (client + server out of
     /// sync). Returns 0 if the response is malformed or the server doesn't
     /// support HEAD.
-    private func headOffset(patchURL: URL, token: String) async throws -> Int64 {
+    private func headOffset(patchURL: URL, credential: MeeshyRequestCredential) async throws -> Int64 {
         var req = URLRequest(url: patchURL)
         req.httpMethod = "HEAD"
-        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue(credential.value, forHTTPHeaderField: credential.header)
         req.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
         let (_, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {

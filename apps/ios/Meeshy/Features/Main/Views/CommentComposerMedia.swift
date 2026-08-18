@@ -53,7 +53,7 @@ enum CommentMediaUploader {
         let result = try await uploader.uploadFile(
             fileURL: media.fileURL,
             mimeType: media.mimeType,
-            token: token,
+            credential: .bearer(token),
             uploadContext: "comment",
             thumbHash: media.thumbHash
         )

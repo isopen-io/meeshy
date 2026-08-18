@@ -2065,7 +2065,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 defer { try? FileManager.default.removeItem(at: tempURL) }
                 let result = try await uploader.uploadFile(
                     fileURL: tempURL, mimeType: compressed.mimeType,
-                    token: token, uploadContext: "story", thumbHash: thumbHash
+                    credential: .bearer(token), uploadContext: "story", thumbHash: thumbHash
                 )
                 uploadResult = result
                 // Pre-populate the image cache under the server URL so that when
@@ -2090,7 +2090,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     if obj.kind == .video, let videoURL = upload.loadedVideoURLs[obj.id] {
                         let result = try await uploader.uploadFile(
                             fileURL: videoURL, mimeType: "video/mp4",
-                            token: token, uploadContext: "story"
+                            credential: .bearer(token), uploadContext: "story"
                         )
                         // Seed the video cache under the server URL — metadata-only
                         // reconciliation: viewer gets a cache hit, never re-downloads.
@@ -2107,7 +2107,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         defer { try? FileManager.default.removeItem(at: tempURL) }
                         let result = try await uploader.uploadFile(
                             fileURL: tempURL, mimeType: compressed.mimeType,
-                            token: token, uploadContext: "story", thumbHash: fgThumbHash
+                            credential: .bearer(token), uploadContext: "story", thumbHash: fgThumbHash
                         )
                         // Seed the image cache under the server URL — metadata-only
                         // reconciliation: viewer gets a cache hit, never re-downloads.
@@ -2158,7 +2158,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     }
                     let result = try await uploader.uploadFile(
                         fileURL: audioURL, mimeType: "audio/mp4",
-                        token: token, uploadContext: "story"
+                        credential: .bearer(token), uploadContext: "story"
                     )
                     // Seed the audio cache under the server URL — metadata-only
                     // reconciliation: viewer gets a cache hit, never re-downloads.
@@ -2333,7 +2333,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     defer { try? FileManager.default.removeItem(at: tempURL) }
                     let result = try await uploader.uploadFile(
                         fileURL: tempURL, mimeType: compressed.mimeType,
-                        token: token, uploadContext: "story", thumbHash: thumbHash
+                        credential: .bearer(token), uploadContext: "story", thumbHash: thumbHash
                     )
                     await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
                     newMediaIds.append(result.id)
@@ -2357,7 +2357,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     if obj.kind == .video, let videoURL = loadedVideoURLs[obj.id] {
                         let result = try await uploader.uploadFile(
                             fileURL: videoURL, mimeType: "video/mp4",
-                            token: token, uploadContext: "story"
+                            credential: .bearer(token), uploadContext: "story"
                         )
                         await CacheCoordinator.shared.video.seed(copyingLocalFile: videoURL, for: result.fileUrl)
                         mediaObjects[i].postMediaId = result.id
@@ -2372,7 +2372,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         defer { try? FileManager.default.removeItem(at: tempURL) }
                         let result = try await uploader.uploadFile(
                             fileURL: tempURL, mimeType: compressed.mimeType,
-                            token: token, uploadContext: "story", thumbHash: fgThumbHash
+                            credential: .bearer(token), uploadContext: "story", thumbHash: fgThumbHash
                         )
                         await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
                         mediaObjects[i].postMediaId = result.id
@@ -2403,7 +2403,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     }
                     let result = try await uploader.uploadFile(
                         fileURL: audioURL, mimeType: "audio/mp4",
-                        token: token, uploadContext: "story"
+                        credential: .bearer(token), uploadContext: "story"
                     )
                     await CacheCoordinator.shared.audio.seed(copyingLocalFile: audioURL, for: result.fileUrl)
                     audioObjects[i].postMediaId = result.id

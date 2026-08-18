@@ -813,7 +813,7 @@ public final class ConversationSettingsViewModel: ObservableObject {
                   let token = APIClient.shared.authToken else { return nil }
 
             let manager = TusUploadManager(baseURL: baseURL)
-            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", token: token)
+            let result = try await manager.uploadFile(fileURL: tempURL, mimeType: "image/jpeg", credential: .bearer(token))
             try? FileManager.default.removeItem(at: tempURL)
             return result.fileUrl
         } catch {
