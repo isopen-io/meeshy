@@ -9844,3 +9844,49 @@ scopé web (TypeScript pur), aucun edit Swift/Kotlin non testable.
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct).
+
+## Vague 145 — kick REST résout enfin la cible anonyme (gateway, gap groupe connu du 2026-08-17) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend la
+« limite connue, non traitée » documentée dans `2026-08-13-group-calls-gap-analysis.md` à l'issue
+du câblage du bouton « exclure » web (2026-08-17) : le kick REST d'un participant anonyme échouait
+toujours. Fix scopé gateway (TypeScript pur, pas de toolchain iOS/Android requis).
+
+- **Root cause** : `DELETE /calls/:callId/participants/:participantId` (self-leave ET kick
+  modérateur) résolvait la cible via `prisma.participant.findFirst({ where: { userId:
+  participantId, ... } })` UNIQUEMENT. Un participant anonyme (invité de lien partagé) n'a pas de
+  ligne `User` liée — sa colonne `Participant.userId` n'est jamais renseignée — et le client web
+  envoie forcément son propre `Participant.id` en guise de `participantId` (clé `remoteStreams` =
+  `participant.userId || participant.participantId`, `VideoCallInterface.tsx`). La recherche par
+  `userId` échouait donc SYSTÉMATIQUEMENT pour une cible anonyme, et le modérateur recevait
+  `403 NOT_A_PARTICIPANT` en tentant de retirer un participant pourtant bien présent dans la
+  conversation — silencieusement confondu avec un vrai refus de droits côté UI (même toast
+  générique `removeParticipantFailed`).
+- **Fix** : quand la recherche par `userId` échoue, une seconde recherche par `id: participantId`
+  (le `Participant.id` lui-même) est tentée avant d'abandonner. Un utilisateur enregistré résout
+  toujours au premier essai — zéro requête supplémentaire, zéro changement de comportement pour ce
+  chemin. Aucune collision possible en pratique entre les deux colonnes (deux `ObjectId` générés
+  indépendamment, la recherche reste scopée à `conversationId` + `isActive: true`) — même idiome
+  déjà établi ailleurs dans le gateway pour la résolution de room personnelle (`services/gateway/
+  CLAUDE.md` § Authentication : « une requête `Participant` sur cette clé doit choisir sa
+  COLONNE »).
+- **Tests** (TDD, RED confirmé — `git stash` du fichier de production, suite rejouée, `git stash
+  pop`) : 2 cas neufs dans `calls-routes.test.ts` — recherche par `id` déclenchée et cible résolue
+  quand la recherche par `userId` échoue (vérifie la forme exacte des deux appels `findFirst`
+  successifs) ; `403 NOT_A_PARTICIPANT` quand NI l'une NI l'autre ne résout. RED confirmé sur les
+  deux (l'ancien code plafonnait à 2 appels `findFirst`, jamais 3). **2/2 verts après fix.** Suite
+  `calls-routes.test.ts` complète : **82/82** verts. Sweep gateway `--testPathPatterns="[Cc]all"` :
+  **56 suites / 1239 tests** verts, 0 régression. Suite gateway COMPLÈTE (`bun run
+  test:coverage`) : **746 suites / 18075 tests**, 100% vert. `npx tsc --noEmit`
+  (services/gateway) : **0 erreur** avant et après (fichier propre des deux côtés).
+- **Non fait volontairement** : pas de diagnostic UI dédié (toast distinct « participant
+  introuvable » vs « permission refusée ») — hors du scope strict de cette correction serveur ; le
+  kick fonctionne maintenant pour la cible anonyme, ce qui élimine le seul cas réel qui aurait
+  déclenché ce message confus. Reconduits (inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors
+  d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous`
+  (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` sans filtre
+  `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; reste du
+  W6/W7 (grille adaptative multi-participants, roster dédié, i18n groupe restante) documenté dans
+  `2026-08-13-group-calls-gap-analysis.md` ; suspend/resume audio-only par-pair (Vague 143) ; dette
+  lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée).

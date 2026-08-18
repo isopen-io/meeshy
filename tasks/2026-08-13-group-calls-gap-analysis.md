@@ -534,3 +534,48 @@ toast d'échec). Suite complète `apps/web` : 644 suites / 12 953 tests verts.
 `tsc --noEmit` et `eslint` sans régression (mêmes 11 erreurs tsc et 5
 findings eslint pré-existants, aucun nouveau, vérifié par diff avant/après
 via `git stash`).
+
+## Mise à jour 2026-08-18 — limite connue du kick corrigée : résolution du participant anonyme
+
+**Limite du 2026-08-17 levée.** La route `DELETE
+/calls/:callId/participants/:participantId` (self-leave ET kick modérateur)
+ne résolvait la cible QUE par `Participant.userId`. Un participant anonyme
+(invité de lien partagé) n'a pas de ligne `User` liée, donc `Participant.userId`
+n'est jamais renseigné pour lui — le client web envoie forcément son propre
+`Participant.id` en guise de `participantId`
+(`VideoCallInterface.tsx`'s `handleKickParticipant`, clé `remoteStreams` =
+`participant.userId || participant.participantId`, `participant.participantId`
+étant la FK `Participant.id` côté `CallParticipant`). La recherche par
+`userId: participantId` échouait donc TOUJOURS pour une cible anonyme, et le
+kick renvoyait `403 NOT_A_PARTICIPANT` même quand le modérateur avait
+légitimement le droit de retirer ce participant — silencieusement, sans
+diagnostic exploitable côté UI (le toast d'échec générique `removeParticipantFailed`
+était identique à celui d'une vraie absence de droits).
+
+**Fix** — quand la recherche par `userId` échoue, une seconde recherche par
+`id: participantId` (le `Participant.id` lui-même) est tentée avant d'abandonner
+avec `NOT_A_PARTICIPANT`. Un utilisateur enregistré résout toujours au premier
+essai et n'atteint jamais ce chemin. Aucune collision possible en pratique
+(les deux colonnes portent des `ObjectId` générés indépendamment, sur la même
+`conversationId` + `isActive: true`) — même idiome que celui déjà établi pour
+la résolution de room personnelle (`services/gateway/CLAUDE.md` §
+Authentication, « une requête `Participant` sur cette clé doit choisir sa
+COLONNE »).
+
+**Tests** (TDD, RED confirmé — `git stash` du fichier de production, suite
+rejouée, `git stash pop`) : 2 cas neufs dans `calls-routes.test.ts` —
+recherche par `id` déclenchée et cible résolue quand la recherche par
+`userId` échoue (vérifie aussi la forme exacte des deux appels `findFirst`),
+et `403 NOT_A_PARTICIPANT` quand NI l'une NI l'autre ne résout. RED confirmé
+sur les deux (l'ancien code ne faisait que 2 appels `findFirst`, jamais 3).
+**2/2 verts après fix.** Suite `calls-routes.test.ts` complète : 82/82
+verts. Sweep gateway `--testPathPatterns="[Cc]all"` : **56 suites / 1239
+tests** verts, 0 régression. Suite gateway COMPLÈTE (`bun run
+test:coverage`) : **746 suites / 18075 tests**, 100% vert. `npx tsc --noEmit`
+(services/gateway) : **0 erreur** avant et après (fichier propre).
+
+Ne construit PAS de diagnostic UI dédié (toast distinct « ce participant est
+introuvable » vs « permission refusée ») — hors du scope strict de cette
+correction serveur ; le kick fonctionne maintenant simplement pour la cible
+anonyme, ce qui élimine le seul cas réel qui aurait déclenché ce message
+confus.

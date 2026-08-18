@@ -936,10 +936,26 @@ export default async function callRoutes(fastify: FastifyInstance) {
       } else if (participantId === userId) {
         leaveParticipantId = callerMembership.id;
       } else {
-        const targetParticipant = await prisma.participant.findFirst({
+        let targetParticipant = await prisma.participant.findFirst({
           where: { conversationId: call.conversationId, userId: participantId, isActive: true },
           select: { id: true }
         });
+        // Anonymous participants have no linked User row, so `userId` is
+        // never populated for them — the web client sends their own
+        // Participant.id as `participantId` instead (remoteStreams key is
+        // `participant.userId || participant.participantId`, see
+        // VideoCallInterface.tsx's handleKickParticipant). Without this
+        // fallback, a moderator kicking an anonymous participant always
+        // 403s NOT_A_PARTICIPANT even though they're genuinely in the
+        // conversation (2026-08-13 group-calls gap analysis, W6 known
+        // limit). Registered users resolve on the first lookup and never
+        // reach this branch.
+        if (!targetParticipant) {
+          targetParticipant = await prisma.participant.findFirst({
+            where: { conversationId: call.conversationId, id: participantId, isActive: true },
+            select: { id: true }
+          });
+        }
         // Do NOT fall back to the raw, unresolved `participantId` string here
         // — that fallback is what previously let a caller with no real
         // relationship to this call's conversation reach

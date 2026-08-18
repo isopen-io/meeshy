@@ -1125,6 +1125,85 @@ describe('callRoutes', () => {
       );
     });
 
+    it('falls back to resolving the target by Participant.id when no userId match exists (anonymous participant kick)', async () => {
+      // Anonymous participants have no linked User row, so `userId` is never
+      // populated on their Participant row — the web client sends their own
+      // Participant.id as `participantId` instead. The userId lookup must
+      // miss, and a second lookup by `id` must resolve them.
+      const session = makeCallSession();
+      const modMembership = makeMembership({ role: 'moderator' });
+      const resolvedTargetParticipant = { id: 'anon-target-part-id' };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(null) // userId lookup misses (anonymous target)
+        .mockResolvedValueOnce(resolvedTargetParticipant); // id lookup resolves
+
+      const { routes, reply } = setup({
+        participant: { findFirst: participantFindFirst },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockLeaveCall.mockResolvedValueOnce(session);
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(participantFindFirst).toHaveBeenCalledTimes(3);
+      expect(participantFindFirst).toHaveBeenNthCalledWith(2, {
+        where: { conversationId: CONV_ID, userId: TARGET_PART_ID, isActive: true },
+        select: { id: true },
+      });
+      expect(participantFindFirst).toHaveBeenNthCalledWith(3, {
+        where: { conversationId: CONV_ID, id: TARGET_PART_ID, isActive: true },
+        select: { id: true },
+      });
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: resolvedTargetParticipant.id })
+      );
+      expect(reply.status).not.toHaveBeenCalledWith(403);
+    });
+
+    it('returns 403 NOT_A_PARTICIPANT when neither the userId nor the id lookup resolves the target', async () => {
+      const session = makeCallSession();
+      const modMembership = makeMembership({ role: 'moderator' });
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(null) // userId lookup misses
+        .mockResolvedValueOnce(null); // id lookup also misses
+
+      const { routes, reply } = setup({
+        participant: { findFirst: participantFindFirst },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+
+      mockGetCallSession.mockResolvedValueOnce(session);
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(participantFindFirst).toHaveBeenCalledTimes(3);
+      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply._body?.error).toBe('NOT_A_PARTICIPANT');
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
     it('returns 403 when regular member tries to remove another participant', async () => {
       const session = makeCallSession();
       const regularMembership = makeMembership({ role: 'member' });
