@@ -31,9 +31,14 @@ export interface PostReactionData {
  * est `true` quand la ligne existait déjà (re-fire d'un like : double-fire optimiste,
  * retry socket, second appareil) — aucun état n'a changé en base. Le handler s'en
  * sert pour NE PAS re-diffuser `post:liked`/`post:reaction-added` ni re-notifier
- * l'auteur sur un no-op. Miroir de `ReactionService.addReaction` (`{ reaction,
- * replacedEmojis, unchanged }`), forme aplatie ici car `MAX_REACTIONS_PER_USER = 1`
- * (pas de `replacedEmojis`). Marqueur transitoire — jamais persisté ni diffusé.
+ * l'auteur sur un no-op. Miroir de `ReactionService.addReaction`
+ * (`{ reaction, unchanged }`), forme aplatie ici. Marqueur transitoire — jamais
+ * persisté ni diffusé.
+ *
+ * Le POST garde `MAX_REACTIONS_PER_USER = 1` là où le MESSAGE l'a abandonné
+ * (multi-réactions, 2026-08-18) : deux modèles distincts, deux clés uniques
+ * distinctes, et ce commentaire ne doit plus se lire comme si l'un décrivait
+ * l'autre.
  */
 export type AddPostReactionResult = PostReactionData & { readonly unchanged: boolean };
 

@@ -107,6 +107,71 @@ serait présentée à l'utilisateur comme une limite de réactions inexistante.
 
 ---
 
+## 2 quater. Le MÊME commit avait laissé `main` ROUGE, et sa note de vérification dit pourquoi
+
+Le CI de cette PR a rendu `Test gateway` en échec — **7 témoins**, sur un
+périmètre que cette branche ne touche pas (aucun fichier gateway dans
+`a0e0c2ac..HEAD`). Reproduit à l'identique en local :
+
+```
+● ReactionService › addReaction › should upsert on the (messageId, participantId) compound key…
+● ReactionService › addReaction › should flag a genuine first-time reaction as changed
+● ReactionService › addReaction › should replace the previous reaction when adding a different emoji
+● ReactionService › addReaction › should not report a replaced emoji when…
+● ReactionService › addReaction › should allow adding same emoji again (returns existing)
+● ReactionService › updateMessageReactionSummary › should recompute the full per-emoji summary…
+● ReactionService › updateMessageReactionSummary › should call … only once per addReaction
+Tests: 7 failed, 18 064 passed
+```
+
+`src/__tests__/unit/services/ReactionService.test.ts` interrogeait toujours
+`result?.replacedEmojis` — le champ que `a0e0c2ac` a supprimé — et affirmait
+toujours l'upsert sur la clé à DEUX champs. **`main` était donc rouge depuis le
+merge des multi-réactions**, et cette PR en a simplement hérité.
+
+La cause est écrite noir sur blanc dans la note de vérification du commit
+fautif :
+
+> Tests : ReactionService.multiReaction (4, …), **493 verts sur les 5 suites
+> gateway touchees** (tests de swap supprimes avec le comportement)
+
+Cinq suites *touchées* — pas la suite. `ReactionService.test.ts` n'a pas été
+modifié par le commit, donc il n'était pas dans les cinq ; il testait pourtant
+la classe exacte qui changeait. C'est **mot pour mot la leçon du cycle 67 § 4
+bis**, écrite deux jours plus tôt et non appliquée :
+
+> Après avoir réécrit un témoin qui épinglait un défaut, **lancer la suite large
+> avant de conclure** : les fichiers qui gèlent le même comportement ne partagent
+> ni nom, ni harnais, ni convention d'assertion.
+
+Ici ils ne partageaient même pas le fait d'avoir été ouverts.
+
+### 2 quinquies. Ce qui a été fait des sept
+
+Deux témoins **supprimés** — ils décrivaient le swap, comportement qui n'existe
+plus, et l'empilement est déjà couvert par `ReactionService.multiReaction.test.ts` :
+`should replace the previous reaction…` et `should not report a replaced emoji…`.
+
+Cinq **réécrits**, parce que chacun portait un invariant qui SURVIT au
+changement de modèle :
+
+| témoin | l'invariant conservé |
+|---|---|
+| clé d'upsert | l'écriture reste un upsert atomique — **sur le TRIPLET**, et `update: {}` (écrire l'emoji ressusciterait le swap) |
+| `unchanged=false` | `unchanged` est désormais le SEUL discriminant ajout-réel / re-tap |
+| même emoji re-posé | le no-op ne réécrit rien et ne diffuse rien |
+| recompute autoritaire | le résumé vient d'un `groupBy`, jamais d'un delta |
+| une seule relecture | une mutation ⇒ une relecture |
+
+Nettoyés dans la foulée, verts mais périmés : six `replacedEmojis: []` dans les
+doubles de `conversation-messages-advanced.test.ts` (un champ absent du type
+depuis deux jours, recopié dans des mocks — exactement le motif « une table
+recopiée se lit comme une source de vérité »), et le commentaire de
+`PostReactionService` qui décrivait `ReactionService.addReaction` par une forme
+qu'il n'a plus.
+
+---
+
 ## 3. Ce qui a été livré
 
 Le hook vivant rejoint son jumeau mort, sur les trois moitiés du geste :

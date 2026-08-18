@@ -196,13 +196,22 @@ describe('ReactionService', () => {
       expect(result?.reaction.participantId).toBe(testParticipantId2);
     });
 
-    it('should upsert on the (messageId, participantId) compound key — no emoji — so concurrent adds with different emojis race on the same document', async () => {
-      // Regression coverage for the duplicate-reaction race (2026-07-04): the old
-      // find/deleteMany/create sequence let two concurrent addReaction calls with
-      // different emojis both pass the "no existing reaction" check before either
-      // committed, so each inserted its own row. The DB unique key is now
-      // (messageId, participantId) with no emoji, so this upsert always targets the
-      // same document regardless of which emoji is sent.
+    it('should upsert on the TRIPLE key (messageId, participantId, emoji) — atomic per emoji, never a swap', async () => {
+      // Ce que la garde protège n'a pas changé depuis la course aux doublons du
+      // 2026-07-04 : l'ancienne séquence find/deleteMany/create laissait deux
+      // `addReaction` concurrents passer tous deux le contrôle « pas de réaction
+      // existante » avant qu'aucun ne commite, et chacun insérait sa ligne.
+      // L'upsert reste la réponse — mais depuis les multi-réactions
+      // (2026-08-18), sa clé porte l'EMOJI (`participant_reaction_unique` sur le
+      // triplet) : deux adds du MÊME emoji convergent sur le même document,
+      // deux emojis DIFFÉRENTS créent chacun le leur, ce qui est le modèle et
+      // non la course.
+      //
+      // `update: {}` et non `update: { emoji }` : la ligne visée porte déjà cet
+      // emoji par construction de la clé — il n'y a rien à réécrire, et écrire
+      // ressusciterait le swap.
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
+
       await service.addReaction({
         messageId: testMessageId,
         participantId: testParticipantId,
@@ -210,8 +219,8 @@ describe('ReactionService', () => {
       });
 
       expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
-        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId } },
-        update: { emoji: '🔥' },
+        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' } },
+        update: {},
         create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
       });
       expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
@@ -317,47 +326,12 @@ describe('ReactionService', () => {
         emoji: '👍'
       });
 
-      // Distinguishing a real add from a no-op re-react: both return
-      // replacedEmojis: [], so `unchanged` is the ONLY signal that tells the
-      // broadcast/notify side-effects apart.
+      // `unchanged` est le SEUL signal qui distingue un vrai ajout d'un
+      // re-tap no-op : les deux rendent une réaction, et c'est lui que les
+      // appelants lisent pour décider s'ils diffusent REACTION_ADDED et
+      // notifient l'auteur. (`replacedEmojis` a disparu avec le swap le
+      // 2026-08-18 — il ne peut plus servir de discriminant.)
       expect(result?.unchanged).toBe(false);
-      expect(result?.replacedEmojis).toEqual([]);
-    });
-
-    it('should replace the previous reaction when adding a different emoji', async () => {
-      // Single-reaction-per-user model (WhatsApp/iMessage): the user already
-      // has 👍 and now sends 🔥 — the server must swap them, not reject.
-      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' });
-      mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
-
-      const result = await service.addReaction({
-        messageId: testMessageId,
-        participantId: testParticipantId,
-        emoji: '🔥'
-      });
-
-      expect(mockPrisma.reaction.upsert).toHaveBeenCalledWith({
-        where: { participant_reaction_unique: { messageId: testMessageId, participantId: testParticipantId } },
-        update: { emoji: '🔥' },
-        create: { messageId: testMessageId, participantId: testParticipantId, emoji: '🔥' }
-      });
-      expect(mockPrisma.reaction.deleteMany).not.toHaveBeenCalled();
-      expect(result?.reaction.emoji).toBe('🔥');
-      expect(result?.replacedEmojis).toEqual(['👍']);
-      // A swap changes DB state — it must broadcast, so unchanged is false.
-      expect(result?.unchanged).toBe(false);
-    });
-
-    it('should not report a replaced emoji when the user has no previous reaction', async () => {
-      mockPrisma.reaction.findFirst.mockResolvedValue(null);
-
-      const result = await service.addReaction({
-        messageId: testMessageId,
-        participantId: testParticipantId,
-        emoji: '👍'
-      });
-
-      expect(result?.replacedEmojis).toEqual([]);
     });
 
     it('should reject reactions on system messages', async () => {
@@ -409,7 +383,6 @@ describe('ReactionService', () => {
 
       expect(result).toBeDefined();
       expect(result?.reaction.emoji).toBe('👍');
-      expect(result?.replacedEmojis).toEqual([]);
       expect(result?.unchanged).toBe(true);
       expect(mockPrisma.reaction.upsert).not.toHaveBeenCalled();
     });
@@ -617,10 +590,20 @@ describe('ReactionService', () => {
       // `reactionSummary` with no backing `Reaction` row. Recomputing the whole map
       // from `groupBy` inside the same transaction as the count is immune to this:
       // whatever the final DB state is after the race, the summary matches it exactly.
-      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' }); // stale pre-race read
+      // Le participant ne porte pas encore 🔥 : la lecture de no-op (clé TRIPLE)
+      // rend `null`, l'upsert a donc bien lieu. C'est le cas où la carte
+      // dénormalisée est réécrite, donc le seul où l'invariant se teste.
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
       mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
-      // Ground truth in the DB after the race settles: only 🔥 survives for this participant.
-      mockPrisma.reaction.groupBy.mockResolvedValue([{ emoji: '🔥', _count: { emoji: 1 } }]);
+      // Vérité de la base après que la course se soit réglée. Elle est
+      // DÉLIBÉRÉMENT plus riche que ce qu'un delta aurait produit : un delta
+      // n'aurait posé que 🔥, la relecture autoritaire voit aussi le 👍 que ce
+      // participant garde par ailleurs (les deux coexistent depuis les
+      // multi-réactions). Un summary calculé par delta manquerait le second.
+      mockPrisma.reaction.groupBy.mockResolvedValue([
+        { emoji: '🔥', _count: { emoji: 1 } },
+        { emoji: '👍', _count: { emoji: 1 } }
+      ]);
 
       await service.addReaction({
         messageId: testMessageId,
@@ -630,16 +613,17 @@ describe('ReactionService', () => {
 
       expect(mockPrisma.message.update).toHaveBeenCalledWith({
         where: { id: testMessageId },
-        data: { reactionSummary: { '🔥': 1 }, reactionCount: 1 }
+        data: { reactionSummary: { '🔥': 1, '👍': 1 }, reactionCount: 2 }
       });
     });
 
-    it('should call updateMessageReactionSummary only once per addReaction, not once per replaced emoji', async () => {
-      // Prior implementation looped over replacedEmojis calling updateMessageReactionSummary
-      // once per removed emoji PLUS once for the add — each call re-reading a stale
-      // intermediate summary. A single authoritative recompute per mutation is correct
-      // and cheaper.
-      mockPrisma.reaction.findFirst.mockResolvedValue({ emoji: '👍' });
+    it('should recompute the summary exactly ONCE per addReaction', async () => {
+      // L'implémentation d'avant bouclait sur `replacedEmojis` en appelant
+      // updateMessageReactionSummary une fois par emoji retiré PLUS une fois
+      // pour l'ajout — chaque appel relisant un résumé intermédiaire périmé.
+      // Le swap a disparu (2026-08-18) mais l'invariant qu'il avait imposé
+      // reste celui qui compte : une mutation, une relecture autoritaire.
+      mockPrisma.reaction.findFirst.mockResolvedValue(null);
       mockPrisma.reaction.upsert.mockResolvedValue(createMockReaction({ emoji: '🔥' }));
 
       await service.addReaction({
