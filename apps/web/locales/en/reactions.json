@@ -16,7 +16,6 @@
     "error": "Error loading reactions",
     "errorAdding": "Error adding reaction",
     "errorRemoving": "Error removing reaction",
-    "maxReactionsReached": "You can only add {max} different reactions per message",
     "chooseReaction": "Choose a reaction",
     "close": "Close",
     "searchEmoji": "Search for an emoji...",

@@ -10469,3 +10469,58 @@ sonde correcte (`_roomsFor(event)`, qui lit la chaîne de l'émission elle-même
 > lisent.** Lire l'en-tête du double AVANT d'écrire l'assertion — et devant un
 > rouge attendu, vérifier qu'il tombe pour la raison nommée, pas seulement qu'il
 > tombe.
+
+---
+
+## Leçon 235 — un correctif se pose sur le fichier qui porte le TRAFIC, pas sur celui qui porte le NOM (2026-08-18, routine messagerie, cycle 68)
+
+**Contexte.** Le cycle 67 a livré les multi-réactions sur quatre surfaces. Son
+message de commit décrit le volet web ainsi : « retrait du cap client
+`MAX_REACTIONS_PER_USER=3` ». La phrase est exacte, et elle porte sur
+`apps/web/hooks/use-message-reactions.ts` — un hook que **zéro composant de
+production n'importe**. Le hook réellement monté par les quatre surfaces de
+réaction est `apps/web/hooks/queries/use-reactions-query.ts`, et il gardait son
+cap intact.
+
+Livré : la fonctionnalité ne marchait pas sur le web au-delà de trois emojis.
+Le 4e tap produisait un toast, aucune ligne, aucun événement — et rien côté
+gateway ne pouvait l'observer, puisqu'un cap qui refuse AVANT l'émission ne
+laisse aucune trace sur le transport.
+
+**Ce qui a rendu la confusion naturelle.** Le fichier mort porte le nom de la
+fonctionnalité (`use-message-reactions`) ; le fichier vivant porte le nom de sa
+technique (`queries/use-reactions-query`). Une recherche par intention tombe sur
+le premier. Le second ne se trouve qu'en partant des CONSOMMATEURS.
+
+> **Avant d'éditer un fichier client, remonter à ses importateurs de
+> production.** `grep -rn "<nom-du-module>" --include=*.tsx | grep -v __tests__`
+> — zéro résultat hors du fichier de tests signifie que le correctif ne changera
+> rien pour personne. Le coût est d'une commande ; le prix de l'omission est une
+> fonctionnalité entière livrée inerte, avec sa migration de base de données et
+> ses témoins verts.
+
+### Corollaire — un témoin vert peut être la SPÉCIFICATION du défaut
+
+`Max Reactions Limit › should prevent adding more than max reactions` affirmait
+`success === false` sur la 4e réaction. Vert, et gelant exactement ce qu'il
+fallait retirer. Comme au cycle 67 § 4 bis : le témoin d'un défaut ne se trouve
+pas en cherchant le nom de la fonctionnalité — il se trouve en lisant ce que le
+site VIVANT affirme aujourd'hui.
+
+### Corollaire — retirer une variable a DEUX sites, et le second ne ressemble pas à un usage
+
+Le cap retiré, `t` restait dans le tableau de dépendances de son `useCallback` :
+
+```
+ReferenceError: t is not defined
+  }, [enabled, messageId, isPersisted, userReactions, addMutation, t]);
+```
+
+`tsc` ne l'a pas discriminé (le projet web porte 1 264 erreurs préexistantes
+dans ses fichiers de test) ; la suite l'a vu au premier rendu. Un tableau de
+dépendances est évalué à CHAQUE rendu : livré, il plantait toute bulle montée.
+
+> **Après avoir supprimé une variable d'un composant React, grep son
+> identifiant dans le fichier** — les tableaux de dépendances la mentionnent
+> sans y ressembler, et un typecheck noyé dans du bruit préexistant ne
+> l'attrapera pas.

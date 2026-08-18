@@ -25,7 +25,6 @@ import {
   RATE_LIMIT_REFUSAL_MESSAGE,
   REACTION_SYNC_BUDGET,
 } from '@meeshy/shared/types/socketio-events';
-import { useI18n } from '@/hooks/useI18n';
 
 // Étendre les query keys pour les réactions
 const reactionKeys = {
@@ -217,9 +216,7 @@ export function useReactionsQuery({
   initialReactionSummary,
   initialCurrentUserReactions,
 }: UseReactionsQueryOptions) {
-  const { t } = useI18n('reactions');
   const queryClient = useQueryClient();
-  const MAX_REACTIONS_PER_USER = 3;
 
   // Restaure EXACTEMENT l'état d'avant la mise à jour optimiste, y compris
   // l'absence d'état. `setQueryData(key, undefined)` ne suffit pas : React Query
@@ -426,12 +423,12 @@ export function useReactionsQuery({
       // survivait au refus du serveur.
       restoreReactionSnapshot(context?.previousData);
 
-      const errorMessage = err instanceof Error ? err.message : 'Failed to add reaction';
-      if (errorMessage.includes('Maximum') && errorMessage.includes('different reactions')) {
-        toast.error(t('maxReactionsReached', { max: MAX_REACTIONS_PER_USER }));
-      } else {
-        toast.error(errorMessage);
-      }
+      // Erreur serveur VERBATIM. Le remap qui traduisait « Maximum N different
+      // reactions » visait une erreur que `ReactionService.addReaction`
+      // n'émet plus depuis les multi-réactions (2026-08-18) : elle ne
+      // subsiste que chez Post/Comment, dont les services gardent leur
+      // `MAX_REACTIONS_PER_USER = 1` et que ce hook ne sert pas.
+      toast.error(err instanceof Error ? err.message : 'Failed to add reaction');
     },
   });
 
@@ -504,19 +501,18 @@ export function useReactionsQuery({
     // Vérifier si déjà réagi
     if (userReactions.includes(emoji)) return true;
 
-    // Vérifier la limite
-    if (userReactions.length >= MAX_REACTIONS_PER_USER) {
-      toast.error(t('maxReactionsReached', { max: MAX_REACTIONS_PER_USER }));
-      return false;
-    }
-
+    // Multi-réactions (2026-08-18) : AUCUN cap client. La clé unique du serveur
+    // porte le triplet (messageId, participantId, emoji) et `addReaction` est
+    // additif — iOS et Android n'ont jamais plafonné, et ce hook était le
+    // dernier site à refuser une 4e réaction sans qu'aucune règle serveur ne
+    // l'exige.
     try {
       await addMutation.mutateAsync(emoji);
       return true;
     } catch {
       return false;
     }
-  }, [enabled, messageId, isPersisted, userReactions, addMutation, t]);
+  }, [enabled, messageId, isPersisted, userReactions, addMutation]);
 
   const removeReaction = useCallback(async (emoji: string): Promise<boolean> => {
     if (!enabled || !messageId || !isPersisted) return false;
