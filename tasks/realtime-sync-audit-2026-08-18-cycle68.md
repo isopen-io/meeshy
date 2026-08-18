@@ -173,6 +173,44 @@ recopiée se lit comme une source de vérité »), et le commentaire de
 `PostReactionService` qui décrivait `ReactionService.addReaction` par une forme
 qu'il n'a plus.
 
+### 2 quinquies bis. Et `main` est reparti ROUGE une seconde fois, par le même mécanisme
+
+Après intégration de `main`, le CI a rendu `Test gateway` en échec **une seconde
+fois** — 2 témoins cette fois, dans `AttachmentReactionService.test.ts`, un
+fichier que `5cd0e509` a laissé derrière lui exactement comme `a0e0c2ac` avait
+laissé `ReactionService.test.ts`.
+
+**La cause n'était pas dans les témoins mais dans leur DOUBLE.** `makePrismaMock`
+modélisait encore la clé à deux champs :
+
+```ts
+findUnique: … rows.find(r => r.attachmentId === key.attachmentId
+  && r.participantId === key.participantId)   // l'emoji n'est jamais comparé
+```
+
+Un double qui ignore l'emoji répond « déjà réagi » pour un emoji que le
+participant n'a JAMAIS posé — et le service, qui s'y fie pour sa détection de
+no-op, cesse d'ajouter quoi que ce soit. Le témoin tombe alors sur le service,
+qui est juste ; c'est le décor qui ment.
+
+> Un double de base de données encode une CONTRAINTE. Quand la contrainte change,
+> le double est un site de production comme un autre — et il est le seul qui ne
+> lève aucune erreur de type en divergeant.
+
+Deux témoins avaient en plus une prémisse INVERSÉE par le nouveau modèle, et
+c'est le cas intéressant : leur correction n'est pas mécanique.
+
+| témoin | ce qu'il affirmait | ce qu'il affirme |
+|---|---|---|
+| `caps at 1 emoji per user per attachment (replaces)` | le cap supprimé | l'empilement — les deux emojis coexistent |
+| `never … two rows … racing two different emojis` | deux emojis ⇒ UNE ligne | la garde change de **borne** : deux emojis différents ⇒ deux lignes (le modèle), le doublon du **même** emoji reste impossible |
+| `reports changed=true when swapping` | un remplacement | un AJOUT — même résultat attendu, raison opposée, et ❤️ reste en place |
+
+La deuxième mérite qu'on s'y arrête : la réponse paresseuse aurait été de la
+supprimer, puisque ce qu'elle affirmait est devenu faux. Mais la course qu'elle
+protège existe TOUJOURS — seule sa borne a bougé. Un témoin dont la prémisse
+s'inverse se re-borne ; il ne se jette que si le risque lui-même a disparu.
+
 ---
 
 ## 2 sexies. Le même défaut trouvé DEUX FOIS, en parallèle — et ce qu'il en reste
@@ -292,15 +330,25 @@ ressemble pas à une utilisation.
 | Suite web complète | ✅ **691/691 suites, 13 426 témoins** verts |
 | Seuils de couverture web (`lines: 42`) | ✅ **60,17 %** lignes (60,21 % avant le retrait du hook mort : **−0,04 pt**) |
 | Suite `ReactionService` gateway | ✅ **77/77** (79 avant, **−2** témoins obsolètes) |
-| **Suite gateway complète** | ✅ **747/747 suites, 18 069 témoins** — **rouge avant** (7 en échec, § 2 quater) |
+| Suite `AttachmentReactionService` | ✅ **10/10** (9 avant dont 2 rouges, **+1** témoin) |
+| **Suite gateway complète** | ✅ **747/747 suites, 18 068 témoins** — **rouge DEUX fois avant** (7 puis 2 en échec, § 2 quater et 2 quinquies bis) |
 | `tsc` gateway | ✅ 0 erreur |
 | `tsc` shared | ✅ 0 erreur |
 | Validité JSON des 4 locales | ✅ |
 | iOS / Android | **aucun changement** |
 
-Le delta de témoins gateway se vérifie à l'unité : 18 071 avant (18 064 verts +
-7 rouges) − 2 témoins supprimés = **18 069**, tous verts. Aucun témoin n'a été
-perdu au passage.
+Le delta de témoins gateway se vérifie à l'unité, en deux temps :
+
+| étape | total | verts | rouges |
+|---|---|---|---|
+| `main` au départ de ce cycle | 18 071 | 18 064 | **7** |
+| après les 7 corrections (−2 témoins obsolètes) | 18 069 | 18 069 | 0 |
+| après intégration de `main` (`5cd0e509`) | 18 067 | 18 065 | **2** |
+| après la correction des PJ (+1 témoin) | **18 068** | **18 068** | 0 |
+
+Aucun témoin n'a été perdu au passage : les trois seuls retirés (2 + 0) le sont
+avec le comportement qu'ils décrivaient, et deux ont été ajoutés (1 garde de
+transport côté web, 1 garde de deux-lignes côté PJ).
 
 **Prérequis d'environnement, à ne pas lire comme une régression** : 26 suites
 web échouent à se CHARGER tant que `packages/shared/dist` n'est pas bâti
