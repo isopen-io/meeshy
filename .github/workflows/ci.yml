@@ -56,6 +56,13 @@ jobs:
   quality:
     name: Quality (${{ github.event.inputs.package_manager || 'bun' }})
     runs-on: ubuntu-latest
+    # Toutes les autres portes dépendent de celle-ci (`needs: quality`), donc une
+    # étape qui PEND ici ne retarde pas un job, elle gèle le pipeline entier —
+    # et sans borne, jusqu'au plafond implicite de 6 h de GitHub. Constaté le
+    # 2026-08-18 : `Type-check` bloqué 40 min sur un pas qui en prend une, sur un
+    # commit dont le typecheck était vert au commit précédent. Même borne que le
+    # job `test`, qui fait plus de travail que celui-ci.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v7
