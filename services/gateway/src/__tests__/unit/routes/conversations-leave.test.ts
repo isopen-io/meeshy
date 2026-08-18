@@ -50,6 +50,7 @@ function makeSocketIO() {
   const mockManager = {
     getIO: jest.fn<any>().mockReturnValue(mockIo),
     invalidateParticipantCache: jest.fn<any>(),
+    endLiveLocationForDepartedMember: jest.fn<any>(),
   };
   return { mockIo, mockManager, mockFetchSockets, mockEmit, mockLeave };
 }
@@ -341,6 +342,17 @@ describe('POST /conversations/:id/leave — les AUTRES appareils du partant', ()
     // l'ordre s'inversait, l'appareil qui a le fil ouvert perdrait le signal.
     expect(socket.mockIo._indexOf('conversation:participant-left')).toBe(0);
     expect(socket.mockLeave).toHaveBeenCalledWith(`conversation:${CONV_ID}`);
+  });
+
+  it("éteint le partage de position du partant — le fil VIT, et il n'a plus le pouvoir de l'arrêter", () => {
+    // `location:live-stop` commence par résoudre l'appartenance
+    // (`isActive: true`) : partie, elle ne rend plus rien et le verbe tombe en
+    // silence. Sans cette extinction, l'épingle reste plantée dans un groupe
+    // dont le partant ne fait plus partie, jusqu'à huit heures.
+    expect(socket.mockManager.endLiveLocationForDepartedMember).toHaveBeenCalledWith(
+      CONV_ID,
+      USER_ID
+    );
   });
 
   it("porte l'effectif des RESTANTS, partant exclu", () => {

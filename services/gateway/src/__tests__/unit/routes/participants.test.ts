@@ -169,11 +169,19 @@ function wireServerToFastify(
   server?: { io?: unknown; notificationService?: unknown }
 ) {
   const invalidateParticipantCache = jest.fn<any>();
+  const endLiveLocationForDepartedMember = jest.fn<any>();
   fastify.socketIOHandler = server?.io
-    ? { getManager: () => ({ getIO: () => server.io, invalidateParticipantCache }) }
+    ? {
+        getManager: () => ({
+          getIO: () => server.io,
+          invalidateParticipantCache,
+          endLiveLocationForDepartedMember,
+        }),
+      }
     : undefined;
   fastify.notificationService = server?.notificationService;
   fastify._invalidateParticipantCache = invalidateParticipantCache;
+  fastify._endLiveLocationForDepartedMember = endLiveLocationForDepartedMember;
 }
 
 function createParticipant(overrides: Record<string, unknown> = {}) {
@@ -1331,6 +1339,14 @@ describe('registerParticipantsRoutes', () => {
       expect(io.in).toHaveBeenCalledWith(`user:${TARGET_USER_ID}`);
       expect(io._leave).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
       expect(mockFastify._invalidateParticipantCache).toHaveBeenCalledWith(TARGET_USER_ID, VALID_CONV_ID);
+      // Le retrait met fin à l'appartenance sans fermer le fil, et
+      // `location:live-stop` la résout avant tout (`isActive: true`) : sans
+      // cette extinction, la position réelle du retiré reste affichée au groupe
+      // qui vient de l'exclure, et lui n'a plus aucun moyen de la retirer.
+      expect(mockFastify._endLiveLocationForDepartedMember).toHaveBeenCalledWith(
+        VALID_CONV_ID,
+        TARGET_USER_ID
+      );
       expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
