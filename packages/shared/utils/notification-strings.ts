@@ -613,6 +613,17 @@ export type NotificationDisplay = {
   readonly title: string | null;
   /** Base de sous-titre localisée (SANS date — le client l'append), ou null. */
   readonly subtitle: string | null;
+  /**
+   * L'action SEULE, sans l'acteur (« a commenté un réel ») — le titre en est
+   * exactement la composition `<acteur> <action>`.
+   *
+   * Elle existe parce qu'une bannière push iOS ne peut PAS porter le titre
+   * riche : sur le chemin Communication Notification, iOS réécrit le titre
+   * avec le `displayName` de l'`INPerson` expéditeur. L'action doit donc
+   * voyager séparément pour être rendue sous le nom. `null` partout où
+   * `title` est `null`.
+   */
+  readonly action: string | null;
 };
 
 /** Normalise un postType potentiellement absent/inconnu vers une clé sûre. */
@@ -636,68 +647,70 @@ export function buildNotificationDisplay(
   const kind = normalizePostKind(input.postType);
   const ns = (key: NotificationStringKey, postType?: NotificationPostKind) =>
     notificationString(L, key, { ...(emoji ? { emoji } : {}), ...(postType ? { postType } : {}) });
-  const compose = (fragment: string) => `${actor} ${fragment}`.trim();
   const nounCap = kind ? notificationString(L, 'comment.subtitleBare', { postType: kind }) : null;
+  // Un seul point de composition : le titre NAÎT du fragment d'action, et le
+  // fragment est conservé tel quel. Rien ne peut diverger entre les deux.
+  const framed = (fragment: string, subtitle: string | null): NotificationDisplay => ({
+    title: `${actor} ${fragment}`.trim(),
+    subtitle,
+    action: fragment,
+  });
 
   switch (input.type) {
     // ── Réactions sur contenu (post / story / humeur / statut / réel) ──
     case 'post_like':
     case 'story_reaction':
     case 'status_reaction':
-      return {
-        title: compose(ns('reaction.post', kind ?? 'POST')),
-        subtitle: kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
-      };
+      return framed(
+        ns('reaction.post', kind ?? 'POST'),
+        kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
+      );
 
     // ── Commentaire sur VOTRE contenu ──
     case 'post_comment':
-    case 'story_new_comment':
-      return {
-        title: compose(ns('comment.your', kind ?? (input.type === 'story_new_comment' ? 'STORY' : 'POST'))),
-        subtitle: notificationString(L, 'comment.subtitleOwner', { postType: kind ?? (input.type === 'story_new_comment' ? 'STORY' : 'POST') }),
-      };
+    case 'story_new_comment': {
+      const ownKind = kind ?? (input.type === 'story_new_comment' ? 'STORY' : 'POST');
+      return framed(
+        ns('comment.your', ownKind),
+        notificationString(L, 'comment.subtitleOwner', { postType: ownKind }),
+      );
+    }
 
     // ── Commentaire sur le contenu d'un AMI (fil / engagement) ──
     case 'friend_story_comment':
-      return {
-        title: compose(ns('comment.generic', kind ?? 'STORY')),
-        subtitle: nounCap,
-      };
+      return framed(ns('comment.generic', kind ?? 'STORY'), nounCap);
     case 'story_thread_reply':
-      return {
-        title: compose(ns('comment.repliedIn', kind ?? 'STORY')),
-        subtitle: nounCap,
-      };
+      return framed(ns('comment.repliedIn', kind ?? 'STORY'), nounCap);
 
     // ── Réponse à VOTRE commentaire (corrige le bug « a commenté votre publication ») ──
     case 'comment_reply': {
       const parent = input.parentCommentPreview?.trim();
-      return {
-        title: compose(notificationString(L, 'comment.repliedToYours')),
-        subtitle: (parent && parent !== '')
+      return framed(
+        notificationString(L, 'comment.repliedToYours'),
+        (parent && parent !== '')
           ? notificationString(L, 'comment.replyWithParent', { preview: parent })
           : (nounCap ?? notificationString(L, 'comment.reply')),
-      };
+      );
     }
 
     // ── Réaction sur VOTRE commentaire ──
     case 'comment_like':
     case 'comment_reaction':
-      return {
-        title: compose(ns('reaction.comment')),
-        subtitle: nounCap,
-      };
+      return framed(ns('reaction.comment'), nounCap);
 
     // ── Partage / repost ──
     case 'post_repost':
-      return {
-        title: compose(ns('repost', kind ?? 'POST')),
-        subtitle: kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
-      };
+      return framed(
+        ns('repost', kind ?? 'POST'),
+        kind ? notificationString(L, 'comment.subtitleOwner', { postType: kind }) : null,
+      );
 
     // ── Nouveau contenu d'un ami ──
     case 'friend_new_story':
-      return { title: compose(notificationString(L, 'friend.story')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'STORY' }) };
+      return framed(
+        notificationString(L, 'friend.story'),
+        notificationString(L, 'friend.subtitleNew', { postType: 'STORY' }),
+      );
     case 'friend_new_post':
       // Un réel reste le type de notification `friend_new_post` (variante de post),
       // mais son titre ET son sous-titre restent conscients de l'entité — le
@@ -705,18 +718,24 @@ export function buildNotificationDisplay(
       // client ». Sans titre réel-conscient, un nouveau réel s'annonçait « a
       // publié un nouveau post » alors que le sous-titre disait déjà « Nouveau
       // réel » : titre et sous-titre se contredisaient sur la même entrée.
-      return { title: compose(notificationString(L, kind === 'REEL' ? 'friend.reel' : 'friend.post')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }) };
+      return framed(
+        notificationString(L, kind === 'REEL' ? 'friend.reel' : 'friend.post'),
+        notificationString(L, 'friend.subtitleNew', { postType: kind === 'REEL' ? 'REEL' : 'POST' }),
+      );
     case 'friend_new_mood':
-      return { title: compose(notificationString(L, 'friend.mood')), subtitle: notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }) };
+      return framed(
+        notificationString(L, 'friend.mood'),
+        notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }),
+      );
 
     // ── Mention (conversation ou commentaire) ──
     case 'mention':
     case 'user_mentioned':
-      return { title: compose(notificationString(L, 'mention')), subtitle: nounCap };
+      return framed(notificationString(L, 'mention'), nounCap);
 
     default:
       // Types non gérés ici (messages, appels, contacts, système…) :
       // le client conserve son rendu de repli.
-      return { title: null, subtitle: null };
+      return { title: null, subtitle: null, action: null };
   }
 }

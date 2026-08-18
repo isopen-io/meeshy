@@ -563,3 +563,150 @@ final class NotificationPayloadHelpersTests: XCTestCase {
         XCTAssertNil(NotificationPayloadHelpers.callCategoryIdentifier(type: "new_message"))
     }
 }
+
+// MARK: - Résolution des URLs média du payload push
+
+/// Le gateway persiste l'avatar d'un utilisateur en chemin RELATIF
+/// (`/api/v1/attachments/file/…`) et le recopie tel quel dans `imageURL`.
+/// `URL(string:)` accepte cette chaîne mais produit une URL sans schéma ni
+/// hôte : `URLSession` échoue, l'avatar n'arrive jamais, et la bannière
+/// retombe sur l'icône de l'app au lieu de la photo de l'auteur.
+final class NotificationPayloadMediaURLTests: XCTestCase {
+
+    private let base = "https://gate.meeshy.me"
+
+    func test_resolveRemoteMediaURL_relativePath_prependsTheAPIOrigin() {
+        let url = NotificationPayloadHelpers.resolveRemoteMediaURL(
+            "/api/v1/attachments/file/2026%2F07%2Favatar_9bf11cbf.webp",
+            apiBaseURL: base
+        )
+        XCTAssertEqual(
+            url?.absoluteString,
+            "https://gate.meeshy.me/api/v1/attachments/file/2026%2F07%2Favatar_9bf11cbf.webp"
+        )
+    }
+
+    func test_resolveRemoteMediaURL_relativePathWithoutLeadingSlash_stillResolves() {
+        let url = NotificationPayloadHelpers.resolveRemoteMediaURL("uploads/a.jpg", apiBaseURL: base)
+        XCTAssertEqual(url?.absoluteString, "https://gate.meeshy.me/uploads/a.jpg")
+    }
+
+    func test_resolveRemoteMediaURL_absoluteHTTPS_isReturnedVerbatim() {
+        let raw = "https://static.meeshy.me/u/i/2026/02/avatar_1771743728433_lbsc9z.jpg"
+        XCTAssertEqual(
+            NotificationPayloadHelpers.resolveRemoteMediaURL(raw, apiBaseURL: base)?.absoluteString,
+            raw
+        )
+    }
+
+    func test_resolveRemoteMediaURL_percentEncodingIsPreserved() {
+        // Le chemin encode déjà ses séparateurs (%2F) : les ré-encoder donnerait
+        // un 404 sur un fichier dont le nom contiendrait « %252F ».
+        let url = NotificationPayloadHelpers.resolveRemoteMediaURL("/f/a%2Fb.webp", apiBaseURL: base)
+        XCTAssertEqual(url?.absoluteString, "https://gate.meeshy.me/f/a%2Fb.webp")
+    }
+
+    func test_resolveRemoteMediaURL_baseWithTrailingSlash_doesNotDoubleTheSeparator() {
+        let url = NotificationPayloadHelpers.resolveRemoteMediaURL("/a.jpg", apiBaseURL: "https://gate.meeshy.me/")
+        XCTAssertEqual(url?.absoluteString, "https://gate.meeshy.me/a.jpg")
+    }
+
+    func test_resolveRemoteMediaURL_localhostBase_allowsPlainHTTP() {
+        // Environnement de dev : la base allowlistée est http://localhost:3000.
+        let url = NotificationPayloadHelpers.resolveRemoteMediaURL("/a.jpg", apiBaseURL: "http://localhost:3000")
+        XCTAssertEqual(url?.absoluteString, "http://localhost:3000/a.jpg")
+    }
+
+    func test_resolveRemoteMediaURL_absolutePlainHTTP_isRejected() {
+        // Une URL en clair venue du payload dégraderait le transport ; le NSE
+        // ne la suit pas. Seul localhost (dev) est toléré.
+        XCTAssertNil(NotificationPayloadHelpers.resolveRemoteMediaURL("http://evil.example/a.jpg", apiBaseURL: base))
+    }
+
+    func test_resolveRemoteMediaURL_nonHTTPSchemes_areRejected() {
+        for raw in ["file:///etc/passwd", "data:image/png;base64,AAAA", "javascript:alert(1)", "ftp://x/a.jpg"] {
+            XCTAssertNil(
+                NotificationPayloadHelpers.resolveRemoteMediaURL(raw, apiBaseURL: base),
+                "schéma refusé attendu pour \(raw)"
+            )
+        }
+    }
+
+    func test_resolveRemoteMediaURL_emptyOrBlank_returnsNil() {
+        XCTAssertNil(NotificationPayloadHelpers.resolveRemoteMediaURL("", apiBaseURL: base))
+        XCTAssertNil(NotificationPayloadHelpers.resolveRemoteMediaURL("   ", apiBaseURL: base))
+    }
+}
+
+// MARK: - Cadrage de la Communication Notification
+
+/// Une notification sociale (commentaire, nouveau post) n'appartient à aucune
+/// conversation. Le chemin Communication la rendait donc en 1:1
+/// (`recipients: nil`), et iOS ignore `content.subtitle` dans ce mode : la
+/// bannière se réduisait à « <nom> » + le corps, sans jamais dire CE QUI
+/// s'était passé. `communicationFraming` décide du cadrage : quand il y a
+/// quelque chose à dire sous le nom, l'intent passe en mode groupe et l'action
+/// devient le `speakableGroupName` — le seul champ qu'iOS rend à cet endroit.
+final class NotificationCommunicationFramingTests: XCTestCase {
+
+    private func framing(
+        conversationId: String = "",
+        conversationType: String = "",
+        postId: String = "",
+        notificationId: String = "n1",
+        subtitle: String
+    ) -> NotificationPayloadHelpers.CommunicationFraming {
+        NotificationPayloadHelpers.communicationFraming(
+            conversationId: conversationId,
+            conversationType: conversationType,
+            postId: postId,
+            notificationId: notificationId,
+            subtitle: subtitle
+        )
+    }
+
+    func test_socialNotification_becomesGroupFramedOnTheAction() {
+        let f = framing(postId: "p1", subtitle: "a commenté un réel · Publication de Windie Nh")
+        XCTAssertTrue(f.usesGroupFraming)
+        XCTAssertEqual(f.groupName, "a commenté un réel · Publication de Windie Nh")
+        XCTAssertEqual(f.intentKey, "post:p1")
+    }
+
+    func test_socialNotificationWithoutSubtitle_staysOneToOne() {
+        // Rien à dire sous le nom : le mode groupe n'apporterait qu'un cadre vide.
+        let f = framing(postId: "p1", subtitle: "   ")
+        XCTAssertFalse(f.usesGroupFraming)
+        XCTAssertNil(f.groupName)
+    }
+
+    func test_groupConversation_keepsItsOwnGroupName_notTheSubtitle() {
+        // Le nom d'une conversation de groupe est recomposé côté client
+        // (Local-First, cf. composedConversationSubtitle) : le cadrage ne doit
+        // PAS le remplacer par le subtitle du gateway.
+        let f = framing(conversationId: "c1", conversationType: "group", subtitle: "Équipe Dev")
+        XCTAssertTrue(f.usesGroupFraming)
+        XCTAssertNil(f.groupName)
+        XCTAssertEqual(f.intentKey, "c1")
+    }
+
+    func test_directConversation_staysOneToOne() {
+        let f = framing(conversationId: "c1", conversationType: "direct", subtitle: "")
+        XCTAssertFalse(f.usesGroupFraming)
+        XCTAssertNil(f.groupName)
+        XCTAssertEqual(f.intentKey, "c1")
+    }
+
+    func test_directConversationWithSubtitle_staysOneToOne() {
+        // Un direct ne doit jamais basculer en groupe : iOS afficherait un
+        // cadre de conversation collective pour un tête-à-tête.
+        let f = framing(conversationId: "c1", conversationType: "direct", subtitle: "peu importe")
+        XCTAssertFalse(f.usesGroupFraming)
+    }
+
+    func test_intentKey_fallsBackToNotificationId_whenNothingElseIdentifiesIt() {
+        // Sans clé, TOUTES les notifications sociales partageaient la chaîne
+        // vide comme identifiant d'intent.
+        let f = framing(notificationId: "n42", subtitle: "vous a envoyé une demande")
+        XCTAssertEqual(f.intentKey, "n42")
+    }
+}
