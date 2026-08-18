@@ -87,7 +87,7 @@ describe('addAttachmentReaction', () => {
     expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
   });
 
-  it('upserts on the (attachmentId, participantId) compound key — no emoji — when user has no existing reaction', async () => {
+  it('upserts on the (attachmentId, participantId, emoji) TRIPLE key when user has no such reaction (multi-réactions)', async () => {
     const emoji = makeEmoji('👍');
     const prisma = makePrisma();
     const svc = new AttachmentReactionService(prisma);
@@ -97,9 +97,9 @@ describe('addAttachmentReaction', () => {
     expect(prisma.attachmentReaction.findMany).not.toHaveBeenCalled();
     expect(prisma.attachmentReaction.deleteMany).not.toHaveBeenCalled();
     expect(prisma.attachmentReaction.upsert).toHaveBeenCalledWith({
-      where: { attachment_participant_reaction: { attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID } },
+      where: { attachment_participant_reaction: { attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID, emoji } },
       create: { attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji },
-      update: { emoji },
+      update: {},
     });
   });
 
@@ -132,11 +132,15 @@ describe('addAttachmentReaction', () => {
     expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
   });
 
-  it('reports changed=true when swapping the user from one emoji to a different one', async () => {
+  it('reports changed=true when STACKING a second different emoji (multi-réactions, plus jamais de swap)', async () => {
     const emoji = makeEmoji('❤️');
     const prisma = makePrisma({
       attachmentReaction: {
-        findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ emoji: '👍' }),
+        // la détection de no-op est sur la clé TRIPLE : le 👍 déjà posé ne
+        // matche pas la recherche du ❤️
+        findUnique: (jest.fn() as jest.Mock<any>).mockImplementation(({ where }: any) =>
+          Promise.resolve(where.attachment_participant_reaction.emoji === '👍' ? { emoji: '👍' } : null)
+        ),
         findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
         deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
         upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
@@ -150,7 +154,7 @@ describe('addAttachmentReaction', () => {
     expect(prisma.attachmentReaction.upsert).toHaveBeenCalledTimes(1);
   });
 
-  it('re-adding the same emoji the user already has still goes through the atomic upsert (no delete)', async () => {
+  it('a first add goes through the atomic triple-key upsert (no delete, no rewrite)', async () => {
     const emoji = makeEmoji('👍');
     const prisma = makePrisma();
     const svc = new AttachmentReactionService(prisma);
@@ -159,19 +163,14 @@ describe('addAttachmentReaction', () => {
 
     expect(prisma.attachmentReaction.deleteMany).not.toHaveBeenCalled();
     expect(prisma.attachmentReaction.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ update: { emoji } })
+      expect.objectContaining({ update: {} })
     );
   });
 
-  it('swaps to a different emoji atomically via upsert update — no separate delete step', async () => {
-    // Regression for the duplicate-reaction race (2026-07-04, mirrors
-    // ReactionService): the old find/deleteMany/upsert sequence let two
-    // concurrent addAttachmentReaction calls with different emojis both pass
-    // the "no existing reaction" check before either committed, so each
-    // inserted its own row. The DB unique key is now (attachmentId,
-    // participantId) with no emoji, so this upsert always targets the same
-    // document regardless of which emoji is sent — concurrent calls race on
-    // the same document instead of each creating one.
+  it('stacks a different emoji atomically via the triple-key upsert — no delete, the first emoji survives', async () => {
+    // Multi-réactions (2026-08-18) : deux adds concurrents du MÊME emoji
+    // convergent sur le même document (l'upsert triple sérialise) ; deux
+    // emojis différents créent chacun le leur — c'est le modèle.
     const newEmoji = makeEmoji('❤️');
     const prisma = makePrisma();
     const svc = new AttachmentReactionService(prisma);
@@ -181,9 +180,9 @@ describe('addAttachmentReaction', () => {
     expect(prisma.attachmentReaction.findMany).not.toHaveBeenCalled();
     expect(prisma.attachmentReaction.deleteMany).not.toHaveBeenCalled();
     expect(prisma.attachmentReaction.upsert).toHaveBeenCalledWith({
-      where: { attachment_participant_reaction: { attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID } },
+      where: { attachment_participant_reaction: { attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID, emoji: newEmoji } },
       create: { attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: newEmoji },
-      update: { emoji: newEmoji },
+      update: {},
     });
   });
 });

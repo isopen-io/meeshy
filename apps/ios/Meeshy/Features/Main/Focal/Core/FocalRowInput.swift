@@ -296,6 +296,11 @@ struct FocalRowActions {
     var onReplyTap: ((String) -> Void)?
     var onStoryReplyTap: ((String) -> Void)?
     var onMediaTap: ((MessageAttachment) -> Void)?
+    /// Lot 3.2 (2026-08-18) — cartes lieu/fichier réelles en rangée plate :
+    /// tap sur la carte lieu → plein écran (présenté par ConversationView,
+    /// même chaîne que `onReadMore`) ; partage d'un fichier téléchargé.
+    var onTapLocation: ((SharedPlace) -> Void)?
+    var onShareFile: ((URL) -> Void)?
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     var onReactToAttachment: ((String, String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?

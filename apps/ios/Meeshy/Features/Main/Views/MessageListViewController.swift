@@ -223,6 +223,11 @@ final class MessageListViewController: UIViewController {
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
     var onReadMore: ((FocalReadMorePayload) -> Void)?
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran présenté par
+    /// ConversationView (même chaîne que `onReadMore`).
+    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
+    var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically presents a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Consume a view-once message.
@@ -381,6 +386,9 @@ final class MessageListViewController: UIViewController {
             stickyDayState.isDark = isDark
             // F-086bis (WS-2) : la pilule jour·heure suit le même thème.
             scrollTimePillState.isDark = isDark
+            // Le pass lit accent/isDark pour la carte de focus : poussés ICI
+            // (événement), plus jamais à chaque frame de défilement.
+            syncFocalPassTheme()
             applySnapshot(animated: false)
         }
     }
@@ -403,10 +411,12 @@ final class MessageListViewController: UIViewController {
         // clavier/composeur laisse le HAUT visuel calculé contre un ANCIEN
         // bas visuel. `applyTopInsetToViews` est idempotente (garde
         // `if != total`) : aucune écriture redondante si rien n'a changé.
+        //
+        // FocalPassCallSite.contentInsetChange — site 5 (§4.8) : le rejeu du
+        // pass vit en FIN d'`applyTopInsetToViews`, UNE seule fois — le
+        // second appel qui vivait ici doublait le balayage O(visibles) à
+        // chaque frame de suivi interactif du clavier (audit 2026-08-18).
         applyTopInsetToViews()
-        // FocalPassCallSite.contentInsetChange — site 5 (§4.8) : la ligne de
-        // focus dépend de `contentInset.top`.
-        applyFocalPassIfEnabled()
     }
 
     /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre
@@ -497,6 +507,14 @@ final class MessageListViewController: UIViewController {
         else {
             return .ineligible
         }
+        // Une rangée fantôme (message supprimé) ou une notice système/appel
+        // suit la perspective comme tout le reste, mais ne CONCOURT jamais à
+        // l'élection ni à la carte de focus (matrice §5, audit 2026-08-18) :
+        // élire un fantôme posait la bande sur du vide et volait la carte au
+        // vrai message voisin.
+        guard record.deletedAt == nil, record.messageType != "system" else {
+            return .ineligible
+        }
         let isOptimistic = Self.optimisticStates.contains(record.state)
         return FocalScrollPass.CellDescriptor(
             localId: localId,
@@ -534,7 +552,11 @@ final class MessageListViewController: UIViewController {
     @discardableResult
     private func applyFocalPassIfEnabled() -> String? {
         guard readingMode != .bubbles, collectionView != nil else { return nil }
-        syncFocalPassTheme()
+        // Le thème du pass n'est PAS resynchronisé ici : ce chemin tourne à
+        // chaque frame de défilement, et accent/isDark ne changent qu'aux
+        // événements (`update(isDark:accentColor:)`, changement de mode) —
+        // qui le poussent eux-mêmes (audit 2026-08-18, zéro travail par
+        // frame qui ne dépende pas du défilement).
         return focalPass.apply(to: collectionView, describe: focalDescriptor(at:))
     }
 
@@ -600,15 +622,42 @@ final class MessageListViewController: UIViewController {
     /// le chrome escamoté (`setScrollingActive(true)`) jusqu'à la pose.
     private var isFocalSettleNudgeInFlight = false
 
+    /// Atterrissage PROGRAMMATIQUE (§4.7 — saut de recherche/citation) en
+    /// cours. Sans ce drapeau, la fin d'animation ne posait JAMAIS la tenue
+    /// de focus (le garde du nudge court-circuitait tout) et le pass n'était
+    /// rejoué qu'à la position de DÉPART : la rangée d'atterrissage restait
+    /// élue sans tenue jusqu'au geste suivant.
+    private var isFocalLandingInFlight = false
+    /// Cible de l'atterrissage — relue à la POSE pour re-viser UNE fois si
+    /// les hauteurs estimées (`.estimated`) ont dérivé pendant l'animation
+    /// (les attributs d'items lointains ne sont réalisés qu'en chemin).
+    private var focalLandingTargetLocalId: String?
+    private var focalLandingDidRetarget = false
+
     /// §4.7ter — un `reconfigureItems` global est arrivé PENDANT le geste et
     /// a été retenu (re-mesurer des cellules visibles en plein défilement
     /// décale tout ce qui est au-dessus d'elles). Rejoué à la pose.
     private var hasDeferredGlobalReconfigure = false
 
+    /// §4.7ter, volet CIBLÉ — les reconfigures par message (traduction
+    /// tardive, transcription Whisper, audio traduit, sélection de langue)
+    /// arrivés PENDANT le geste. Une traduction qui change le nombre de
+    /// lignes re-mesure une cellule visible et décale tout ce qui est
+    /// au-dessus — exactement le saut que le report du reconfigure GLOBAL
+    /// évitait déjà (audit 2026-08-18 : ce chemin-ci n'était pas gardé).
+    private var deferredTargetedReconfigureIds: Set<String> = []
+
     private func flushDeferredReconfigureAtSettle() {
-        guard hasDeferredGlobalReconfigure else { return }
-        hasDeferredGlobalReconfigure = false
-        applySnapshot(animated: false)
+        if hasDeferredGlobalReconfigure {
+            hasDeferredGlobalReconfigure = false
+            deferredTargetedReconfigureIds.removeAll()
+            applySnapshot(animated: false)
+            return
+        }
+        guard !deferredTargetedReconfigureIds.isEmpty else { return }
+        let ids = deferredTargetedReconfigureIds
+        deferredTargetedReconfigureIds.removeAll()
+        reconfigureMessages(serverIds: ids)
     }
 
     /// Dernier item de tête pour lequel la sticky pill a été calculée. Permet
@@ -649,6 +698,30 @@ final class MessageListViewController: UIViewController {
         // guaranteed 0 here (first `applySnapshot` never increments it), so
         // this force-syncs the badge to the truth.
         onNewMessagesBadge?(pendingUnreadCount)
+    }
+
+    /// Dernières `bounds` pour lesquelles le pass a été rejoué — garde de
+    /// dédoublonnage de `viewDidLayoutSubviews` (appelé à chaque passe de
+    /// layout, pas seulement aux rotations).
+    private var focalLastLaidOutSize: CGSize = .zero
+
+    /// Rotation / split view / redimensionnement de fenêtre : `focusY`,
+    /// le plafond de `headInset` (0.8×H) et l'élection dépendent tous de
+    /// `bounds` — AUCUN des six sites du pass n'observe un changement de
+    /// taille (trou d'audit 2026-08-18). Rejoue insets + pass, puis pose la
+    /// tenue du nouvel élu.
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard collectionView != nil else { return }
+        let size = view.bounds.size
+        guard size != focalLastLaidOutSize else { return }
+        let isFirstLayout = focalLastLaidOutSize == .zero
+        focalLastLaidOutSize = size
+        // Le premier layout est déjà servi par `viewDidLoad`
+        // (`applyTopInsetToViews` + `applyReadingModeChange`).
+        guard !isFirstLayout else { return }
+        applyTopInsetToViews()
+        reconfigureFocusTypographyAtScrollStop()
     }
 
     private func configureStickyDayOverlay() {
@@ -897,7 +970,7 @@ final class MessageListViewController: UIViewController {
         // absorbées par `contentOffset` dans la même transaction de layout —
         // sans quoi la scène visible saute (et l'échelle Focal avec elle,
         // `visualMidY` étant fonction de `center.y − offset`).
-        let layout = MessageListLayout { [weak self] _, environment in
+        let layout = MessageListLayout { [weak self] _, _ in
             let estimate = (self?.readingMode.usesFlatRow ?? false)
                 ? Self.estimatedFlatRowLayoutHeight
                 : Self.estimatedBubbleRowLayoutHeight
@@ -914,17 +987,14 @@ final class MessageListViewController: UIViewController {
             let section = NSCollectionLayoutSection(group: group)
             section.interGroupSpacing = 0
             // 12pt horizontal breathing room so bubbles don't kiss the screen
-            // edge. En perspective, le trailing RÉSERVE la place de la loupe
-            // pleine (spec Magnificence) : une rangée pleine largeur magnifiée
-            // au pic ne clippe jamais ses timestamps au bord droit.
+            // edge — identique dans TOUS les modes depuis le retrait de la
+            // loupe (spec §5 réancrée : échelle ≤ 1, aucune réserve à payer ;
+            // la date de l'élu retrouve au passage sa pleine largeur).
             section.contentInsets = NSDirectionalEdgeInsets(
                 top: 8,
                 leading: 12,
                 bottom: 8,
-                trailing: Self.sectionTrailingInset(
-                    usesPerspective: self?.readingMode.usesPerspective ?? false,
-                    viewportWidth: environment.container.effectiveContentSize.width
-                )
+                trailing: 12
             )
             return section
         }
@@ -953,17 +1023,6 @@ final class MessageListViewController: UIViewController {
         collectionView.scrollsToTop = false
         collectionView.delegate = self
         view.addSubview(collectionView)
-    }
-
-    /// Inset trailing de section : l'historique 12 hors perspective —
-    /// bit-à-bit inchangé — et la réserve de loupe (formule, jamais un
-    /// littéral) en perspective. Pur, testable.
-    static func sectionTrailingInset(usesPerspective: Bool, viewportWidth: CGFloat) -> CGFloat {
-        guard usesPerspective else { return 12 }
-        return FocalPerspectiveGeometry.standard.magnifiedTrailingReserve(
-            viewportWidth: viewportWidth,
-            leadingInset: 12
-        )
     }
 
     // MARK: - DataSource
@@ -1003,9 +1062,18 @@ final class MessageListViewController: UIViewController {
             let typingNames = self.conversationViewModel?.typingUsernames ?? []
             let typingAccent = self.accentColor
             let typingDark = self.isDark
+            // Matrice §5 « Typing indicator » : en rangée plate (Focal/Script),
+            // pastille 22 de l'auteur + points pulsants accent SANS capsule ;
+            // la capsule reste le rendu du mode bulles.
+            let typingFlat = self.readingMode != .bubbles
             cell.contentConfiguration = UIHostingConfiguration {
-                TypingIndicatorBubble(names: typingNames, accentHex: typingAccent, isDark: typingDark)
-                    .scaleEffect(x: 1, y: -1)
+                TypingIndicatorBubble(
+                    names: typingNames,
+                    accentHex: typingAccent,
+                    isDark: typingDark,
+                    isFlat: typingFlat
+                )
+                .scaleEffect(x: 1, y: -1)
             }
             .margins(.all, 0)
             cell.backgroundColor = .clear
@@ -1066,9 +1134,29 @@ final class MessageListViewController: UIViewController {
             self.primeFocalCell(cell, item: item)
             let name = self.conversationViewModel?.currentConversationName ?? ""
             let dark = self.isDark
+            // Spec §5 « Début de la conversation · {date} » (lot 3.4) : la
+            // date du PREMIER message, formatée par la MÊME loi que les
+            // séparateurs de jour (MessageDayLabel) — jamais un second
+            // formateur. `store.messages` est CHRONOLOGIQUE (le snapshot le
+            // renverse, `applySnapshot`) : le plus ancien est `.first`.
+            let firstDayLabel: String? = self.store.messages.first.map { oldest in
+                MessageDayLabel.label(
+                    for: oldest.createdAt,
+                    now: Date(),
+                    calendar: .current,
+                    locale: .current,
+                    today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                    yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                    dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+                )
+            }
             cell.contentConfiguration = UIHostingConfiguration {
-                FocalConversationStartRow(conversationName: name, isDark: dark)
-                    .scaleEffect(x: 1, y: -1)
+                FocalConversationStartRow(
+                    conversationName: name,
+                    isDark: dark,
+                    firstMessageDayLabel: firstDayLabel
+                )
+                .scaleEffect(x: 1, y: -1)
             }
             .margins(.all, 0)
             cell.backgroundColor = .clear
@@ -1195,6 +1283,8 @@ final class MessageListViewController: UIViewController {
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
             let readMoreHandler = self.onReadMore
+            let tapLocationHandler = self.onFocalTapLocation
+            let shareFileHandler = self.onFocalShareFile
             let callBackHandler = self.onCallBack
             let callDetailHandler = self.onCallDetailRequest
             let mediaTapHandler = self.onMediaTap
@@ -1399,16 +1489,33 @@ final class MessageListViewController: UIViewController {
                     translatedAudios: translatedAudios,
                     allAudioItems: allAudioItems,
                     conversationName: conversationName ?? "",
-                    // §4.6 — la rangée ÉLUE se magnifie. Lu ici, à la
-                    // configuration de cellule, donc UNIQUEMENT quand l'hôte
+                    // Matrice §5 « Effets, mentions, appels » : le bitfield du
+                    // message alimente `.messageEffects` de FocalRow — resté
+                    // au défaut `.none` jusqu'au 2026-08-18 (feature morte,
+                    // audit) : aucune rangée Focal ne jouait le moindre effet.
+                    effects: message.effects,
+                    // §4.6 — la rangée ÉLUE porte la tenue de focus. Lu ici, à
+                    // la configuration de cellule, donc UNIQUEMENT quand l'hôte
                     // reconfigure : à l'arrêt du défilement et au changement
                     // de mode (`reconfigureFocusTypographyAtScrollStop`),
                     // jamais par frame. Le pass reste pur compositor.
                     //
                     // `.focal` SEUL : Script est plat par construction (WS-4),
-                    // il n'élit rien à magnifier.
+                    // il n'élit rien à distinguer.
+                    //
+                    // GARDE ANTI-CHROME-FANTÔME (2026-08-18) : pendant un
+                    // geste, `focusedLocalId` change à chaque frame — une
+                    // cellule RECYCLÉE mi-défilement qui lirait l'élu du
+                    // moment garderait sa tenue périmée à la pose (l'arrêt ne
+                    // reconfigure que [ancien élu, élu final]). En mouvement,
+                    // toute cellule configurée rend donc la tenue ORDINAIRE ;
+                    // la tenue de focus est posée à l'arrêt, par la
+                    // reconfiguration d'élection — jamais par le recyclage.
                     isFocused: self.readingMode == .focal
-                        && self.focalPass.focusedLocalId == localId,
+                        && self.focalPass.focusedLocalId == localId
+                        && !self.store.isUserScrolling
+                        && !self.isFocalSettleNudgeInFlight
+                        && !self.isFocalLandingInFlight,
                     sentAt: message.createdAt
                 )
                 var focalActions = FocalRowActions()
@@ -1426,6 +1533,8 @@ final class MessageListViewController: UIViewController {
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
                 focalActions.onReadMore = readMoreHandler
+                focalActions.onTapLocation = tapLocationHandler
+                focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)
                 }
@@ -1491,20 +1600,31 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(timestampReveal)
                 // Counter-flip to undo the parent collectionView.transform.
                 .scaleEffect(x: 1, y: -1)
-                // iOS 26+ : `.contextMenu` NATIF + aperçu = la VRAIE bulle
-                // d'origine, rendue « standalone » (épouse son contenu, pas de
-                // spacers de row) et mise à l'échelle SEULEMENT si trop haute
-                // pour tenir à l'écran (proportions intactes). Le platter système
-                // colle alors à la bulle — plus aucune bordure/card autour, la
-                // bulle est « prise de sa position et affichée comme avant »
-                // (feedback device 2026-07-14). No-op < iOS 26 → overlay custom.
+                // iOS 26+ : `.contextMenu` NATIF + aperçu = le RENDU d'origine.
+                // En rangée plate (Focal/Script), l'aperçu est LA RANGÉE PLATE
+                // (lot 3.3, 2026-08-18 — l'aperçu montrait une BULLE alors que
+                // l'utilisateur pressait une rangée plate : deux rendus pour
+                // le même message). En bulles : la vraie bulle « standalone »
+                // (épouse son contenu, pas de spacers de row), mise à
+                // l'échelle SEULEMENT si trop haute (proportions intactes) —
+                // « prise de sa position et affichée comme avant » (feedback
+                // device 2026-07-14). No-op < iOS 26 → overlay custom.
                 .nativeMessageContextMenu(menu: nativeMenu) {
                     MessageMenuPreviewContainer {
-                        makeThemedBubble(true)
-                            .environmentObject(host)
-                            .environmentObject(stories)
-                            .environmentObject(statuses)
-                            .environmentObject(convList)
+                        if let focalRow {
+                            focalRow
+                                .environmentObject(host)
+                                .environmentObject(stories)
+                                .environmentObject(statuses)
+                                .environmentObject(convList)
+                                .environmentObject(self.timestampReveal)
+                        } else {
+                            makeThemedBubble(true)
+                                .environmentObject(host)
+                                .environmentObject(stories)
+                                .environmentObject(statuses)
+                                .environmentObject(convList)
+                        }
                     }
                 }
             }
@@ -1656,7 +1776,18 @@ final class MessageListViewController: UIViewController {
         // stays visible just below the last message.
         let typingJustAppeared = showTyping && !previouslyShowedTyping
         let shouldAutoScroll = (hasGenuinelyNewMessages || typingJustAppeared) && isCurrentlyNearBottom
-        if hasGenuinelyNewMessages && !isCurrentlyNearBottom {
+        // Le badge non-lus ne compte JAMAIS un message dont l'utilisateur est
+        // l'AUTEUR : envoyer depuis l'historique (rangée optimiste insérée en
+        // bas pendant qu'on lit plus haut) n'est pas un « nouveau message à
+        // lire » (matrice §5, audit 2026-08-18). Le seuil regarde le PLUS
+        // RÉCENT : un envoi propre accompagné d'un vrai message entrant dans
+        // le même batch reste compté par le delta.
+        let newestIsOwnMessage: Bool = {
+            guard case .message(let localId) = newestItem,
+                  let record = store.message(for: localId) else { return false }
+            return record.senderId == currentUserId
+        }()
+        if hasGenuinelyNewMessages && !isCurrentlyNearBottom && !newestIsOwnMessage {
             pendingUnreadCount += delta
             onNewMessagesBadge?(pendingUnreadCount)
         }
@@ -1802,10 +1933,36 @@ final class MessageListViewController: UIViewController {
                 self?.reconfigureVisibleCells()
             }
             .store(in: &cancellables)
+
+        // Présence 1/3/5 sur la pastille d'identité (matrice §5) — l'état
+        // vit dans PresenceManager, hors GRDB : aucun chemin existant ne
+        // reconfigurait les rangées quand il change, la pastille restait
+        // FIGÉE à l'état de sa dernière configuration (audit 2026-08-18).
+        // Même canal que les anneaux story : `refreshSignal.presenceVersion`
+        // est publié pour ça (débouncé, un tick par rafale d'événements),
+        // reconfiguration des seules cellules visibles — les autres
+        // re-snappent à leur prochaine config.
+        PresenceManager.shared.refreshSignal.$presenceVersion
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (_: Int) in
+                self?.reconfigureVisibleCells()
+            }
+            .store(in: &cancellables)
     }
 
     private func reconfigureVisibleCells() {
         guard let dataSource else { return }
+        // §4.7ter — MÊME report que les reconfigures globaux et ciblés :
+        // re-mesurer les cellules visibles EN PLEIN geste déclenche la
+        // cascade d'invalidation du solveur self-sizing (récursion
+        // `_updateVisibleCellsNow` → SIGTRAP, crash reproduit sur long
+        // fling 2026-08-18 — le tick de présence ~30 s tombait au milieu du
+        // défilement). À la pose, le flush global re-servira l'état frais.
+        if store.isUserScrolling || isFocalSettleNudgeInFlight || isFocalLandingInFlight {
+            hasDeferredGlobalReconfigure = true
+            return
+        }
         let visibleItems = collectionView.indexPathsForVisibleItems
             .compactMap { dataSource.itemIdentifier(for: $0) }
         guard !visibleItems.isEmpty else { return }
@@ -1863,6 +2020,16 @@ final class MessageListViewController: UIViewController {
 
     private func reconfigureMessages(serverIds: Set<String>) {
         guard let dataSource = dataSource, !serverIds.isEmpty else { return }
+
+        // §4.7ter (volet ciblé) : pendant un geste en rangée plate, différer —
+        // re-mesurer une cellule visible en plein défilement fait sauter le
+        // champ visuel ET la perspective (visualMidY = f(center.y − offset)).
+        // Bulles : comportement historique conservé (reconfigure immédiat).
+        if readingMode != .bubbles,
+           store.isUserScrolling || isFocalSettleNudgeInFlight || isFocalLandingInFlight {
+            deferredTargetedReconfigureIds.formUnion(serverIds)
+            return
+        }
 
         // Translation/transcription events key by server id; the flag-strip
         // selection keys by `message.id`, which IS the local id for a not-yet
@@ -2002,6 +2169,19 @@ final class MessageListViewController: UIViewController {
     /// (contrat §4.7, « les deux routines conservent .centeredVertically »)
     /// — Script n'a pas de bande à viser, bulles n'ont pas de pass du tout.
     private func landOnFocusBand(indexPath: IndexPath, animated: Bool) {
+        // La POSE (rejeu du pass, re-ciblage éventuel, tenue de focus) vit
+        // dans `scrollViewDidEndScrollingAnimation` — armée ici pour tout
+        // atterrissage Focal animé, y compris le repli `scrollToItem` (les
+        // attributs peuvent manquer sur une cible très lointaine).
+        if readingMode == .focal, animated {
+            isFocalLandingInFlight = true
+            focalLandingDidRetarget = false
+            if case .message(let localId) = dataSource?.itemIdentifier(for: indexPath) {
+                focalLandingTargetLocalId = localId
+            } else {
+                focalLandingTargetLocalId = nil
+            }
+        }
         guard readingMode == .focal,
               let attrs = collectionView.layoutAttributesForItem(at: indexPath)
         else {
@@ -2306,7 +2486,6 @@ extension MessageListViewController: UICollectionViewDelegate {
         // API sans ré-élire — un candidat unique gagnerait toujours et la
         // carte sauterait sur chaque cellule entrante).
         if readingMode != .bubbles {
-            syncFocalPassTheme()
             focalPass.apply(to: cell, in: collectionView, descriptor: focalDescriptor(at: indexPath))
         }
         guard let serverId = serverMessageId(at: indexPath) else { return }
@@ -2331,7 +2510,12 @@ extension MessageListViewController: UICollectionViewDelegate {
         let contentHeight = scrollView.contentSize.height
         let frameHeight = scrollView.frame.height
 
-        setScrollingActive(scrollView.isDragging || scrollView.isDecelerating || isFocalSettleNudgeInFlight)
+        setScrollingActive(
+            scrollView.isDragging
+                || scrollView.isDecelerating
+                || isFocalSettleNudgeInFlight
+                || isFocalLandingInFlight
+        )
 
         // FocalPassCallSite.scrollViewDidScroll — site 1 (§4.8), le cas
         // nominal. Pur compositor (transform/alpha seuls) : AUCUN
@@ -2426,30 +2610,67 @@ extension MessageListViewController: UICollectionViewDelegate {
         flushDeferredReconfigureAtSettle()
     }
 
-    /// Fin de l'animation du nudge — ne se déclenche QUE pour
-    /// `setContentOffset(animated:)`, jamais pour un geste. Les scrolls
-    /// programmatiques d'atterrissage (`scrollToMessage…`) passent aussi par
-    /// ici : la garde les laisse indemnes.
+    /// Fin de TOUTE animation programmatique (`setContentOffset(animated:)`,
+    /// `scrollToItem(animated:)`) — jamais un geste. C'est LA pose commune :
+    /// nudge d'élection (§4.7bis), atterrissage de recherche/citation (§4.7)
+    /// et auto-scroll de message entrant partagent le même épilogue — rejeu
+    /// du pass (un défilement programmatique ne déclenche pas fiablement
+    /// `didScroll` sur sa dernière frame), retour du chrome, tenue de focus.
+    /// Avant 2026-08-18, seul le nudge y avait droit : un saut de citation
+    /// laissait la rangée d'atterrissage élue SANS tenue jusqu'au geste
+    /// suivant.
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        guard isFocalSettleNudgeInFlight else { return }
-        isFocalSettleNudgeInFlight = false
-        focalPass.pinnedFocusLocalId = nil
-        // FocalPassCallSite.programmaticScrollCompletion — même règle que
-        // les deux `scrollToMessage…` : un défilement programmatique ne
-        // déclenche pas fiablement `didScroll` sur sa dernière frame.
+        if isFocalSettleNudgeInFlight {
+            isFocalSettleNudgeInFlight = false
+            focalPass.pinnedFocusLocalId = nil
+        }
+        if isFocalLandingInFlight {
+            // Re-ciblage UNIQUE : les hauteurs `.estimated` réalisées pendant
+            // l'animation peuvent avoir déposé la cible hors bande
+            // (tolérance `landingTolerance`). On re-vise avec les attributs
+            // désormais RÉALISÉS — une seule fois, jamais une boucle.
+            if !focalLandingDidRetarget,
+               readingMode == .focal,
+               let localId = focalLandingTargetLocalId,
+               let dataSource,
+               let indexPath = dataSource.indexPath(for: .message(localId: localId)),
+               let attrs = collectionView.layoutAttributesForItem(at: indexPath) {
+                let targetY = focalPass.landingContentOffsetY(
+                    forCellCenterY: attrs.center.y,
+                    in: collectionView
+                )
+                if abs(targetY - collectionView.contentOffset.y) > FocalPassConstants.landingTolerance {
+                    focalLandingDidRetarget = true
+                    collectionView.setContentOffset(CGPoint(x: 0, y: targetY), animated: true)
+                    return
+                }
+            }
+            isFocalLandingInFlight = false
+            focalLandingTargetLocalId = nil
+            focalLandingDidRetarget = false
+        }
+        // FocalPassCallSite.programmaticScrollCompletion — site 4 (§4.8).
         applyFocalPassIfEnabled()
         setScrollingActive(false)
         reconfigureFocusTypographyAtScrollStop()
         flushDeferredReconfigureAtSettle()
     }
 
-    /// Le doigt reprend la main pendant l'atterrissage : UIKit annule
-    /// l'animation et `scrollViewDidEndScrollingAnimation` ne viendra
-    /// JAMAIS. Sans cette levée, le chrome resterait escamoté pour toujours.
+    /// Le doigt reprend la main pendant un atterrissage (nudge OU saut
+    /// programmatique) : UIKit annule l'animation et
+    /// `scrollViewDidEndScrollingAnimation` ne viendra JAMAIS. Sans cette
+    /// levée, le chrome resterait escamoté pour toujours et une pose
+    /// d'atterrissage fantôme guetterait la prochaine animation.
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        guard isFocalSettleNudgeInFlight else { return }
-        isFocalSettleNudgeInFlight = false
-        focalPass.pinnedFocusLocalId = nil
+        if isFocalSettleNudgeInFlight {
+            isFocalSettleNudgeInFlight = false
+            focalPass.pinnedFocusLocalId = nil
+        }
+        if isFocalLandingInFlight {
+            isFocalLandingInFlight = false
+            focalLandingTargetLocalId = nil
+            focalLandingDidRetarget = false
+        }
     }
 
     /// Offset cible du nudge, ou `nil` si l'élu est déjà au clair. La boîte
@@ -2525,6 +2746,10 @@ private struct TypingIndicatorBubble: View {
     let names: [String]
     let accentHex: String
     let isDark: Bool
+    /// Rangée PLATE (Focal/Script, matrice §5) : pastille 22 de l'auteur +
+    /// trois points pulsants accent, SANS capsule ni libellé visible (mêmes
+    /// timings 0.5 s / 0.18 s). `false` = capsule historique du mode bulles.
+    var isFlat: Bool = false
 
     @State private var animating = false
 
@@ -2537,40 +2762,60 @@ private struct TypingIndicatorBubble: View {
         }
     }
 
+    /// Les trois points pulsants — mêmes timings dans les deux tenues.
+    private func pulsingDots(accent: Color) -> some View {
+        HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(accent)
+                    .frame(width: 5, height: 5)
+                    .scaleEffect(animating ? 1.0 : 0.5)
+                    .opacity(animating ? 1.0 : 0.4)
+                    .animation(
+                        .easeInOut(duration: 0.5)
+                            .repeatForever(autoreverses: true)
+                            .delay(Double(i) * 0.18),
+                        value: animating
+                    )
+            }
+        }
+    }
+
     var body: some View {
         let accent = Color(hex: accentHex)
         HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                if !label.isEmpty {
-                    Text(label)
-                        // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —
-                        // scale via MeeshyFont.relative. La bulle est dimensionnée par
-                        // padding (pas de frame figée), donc elle grandit proprement ;
-                        // les 3 points restent des `Circle` décoratifs de 5pt.
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
-                        .lineLimit(1)
+            if isFlat {
+                HStack(spacing: 7) {
+                    MeeshyAvatar(
+                        name: names.first ?? "",
+                        context: .custom(22),
+                        accentColor: accentHex,
+                        isDark: isDark
+                    )
+                    pulsingDots(accent: accent)
                 }
-                HStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { i in
-                        Circle()
-                            .fill(accent)
-                            .frame(width: 5, height: 5)
-                            .scaleEffect(animating ? 1.0 : 0.5)
-                            .opacity(animating ? 1.0 : 0.4)
-                            .animation(
-                                .easeInOut(duration: 0.5)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.18),
-                                value: animating
-                            )
+                // Aligné sur la colonne d'identité de FocalRow (retrait
+                // horizontal de rangée) — aucune capsule, aucun bord.
+                .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
+            } else {
+                HStack(spacing: 6) {
+                    if !label.isEmpty {
+                        Text(label)
+                            // Dynamic Type (153i) : libellé « X écrit… » réel et localisé —
+                            // scale via MeeshyFont.relative. La bulle est dimensionnée par
+                            // padding (pas de frame figée), donc elle grandit proprement ;
+                            // les 3 points restent des `Circle` décoratifs de 5pt.
+                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
+                            .lineLimit(1)
                     }
+                    pulsingDots(accent: accent)
                 }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
+                .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
-            .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 8)

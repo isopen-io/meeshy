@@ -9967,6 +9967,55 @@ garde rien. Seul un témoin qui mesure l'effet garde. Quand on trouve une règle
 énoncée en commentaire, **vérifier ses voisins immédiats** — c'est là qu'elle est
 le plus souvent violée, parce que la proximité a fait croire qu'elle était lue.
 
+
+
+## Leçon 228 — quand un client s'avère IMMUNISÉ contre le défaut du cycle précédent, demander ce que l'immunité lui coûte (2026-08-17, routine messagerie, cycle 61)
+
+**Le contexte.** Le cycle 60 a fermé une garde monotone manquante côté web, et a
+posé la question de suite qui allait de soi : « le troisième client la
+porte-t-il ? ». Réponse pour Android : **non, et il n'en a pas besoin** —
+`ConversationListViewModel` n'applique aucun payload au cache de liste, ses
+abonnements temps réel relisent le serveur. Aucun désordre de diffusion ne peut
+faire reculer une ligne que le serveur réécrit en entier.
+
+C'est une réponse correcte, et c'est là que le piège se referme : **elle invite
+à classer le client « sain » et à passer au suivant.**
+
+**Le défaut que la question suivante a rendu.** La propriété qui immunise
+Android est exactement celle qui le ruine. Relire tout, c'est répondre à chaque
+trame par un `GET /conversations` COMPLET plus une transaction Room
+`upsertAll` + `deleteNotIn`. Or un message entrant ne vaut pas une trame mais
+**TROIS** — `message:new`, `conversation:updated`,
+`conversation:unread-updated`, toutes émises par le même
+`MessageHandler.broadcastNewMessage`, pour le même message. Trois collecteurs
+indépendants, aucune coordination : **×3 en réseau, base et recompositions, par
+message reçu**, pour un résultat que la première relecture portait déjà en
+entier.
+
+**La forme à retenir.** Immunité et coût étaient la MÊME ligne de code. Il n'y
+avait pas de bon côté à choisir. Un audit qui demande seulement « ce client
+a-t-il le défaut X ? » rend un tableau de conformité et rate ce genre de chose
+par construction : la question qui paie est « **par quel mécanisme y
+échappe-t-il, et que ce mécanisme coûte-t-il ailleurs ?** ». Un client sain par
+accident d'architecture est un client à examiner, pas à cocher.
+
+**Le corollaire de correctif — fusionner n'est pas retarder.** Le réflexe devant
+une rafale est le `debounce`, et il aurait divisé le trafic tout aussi bien —
+en payant CHAQUE message d'un retard d'affichage, ce que les principes Instant
+App interdisent. Un `Channel(CONFLATED)` + une pompe séquentielle donne la
+fusion sans la latence : canal vide au repos ⇒ la trame isolée part
+immédiatement ; rafale pendant une relecture en vol ⇒ **une** relecture de
+queue. Les deux bornes se prouvent séparément, et le témoin « une trame isolée
+ne subit AUCUN délai » est celui qui barre la route à la régression par
+`debounce` — sans lui, la suite reste verte quand quelqu'un « simplifie ».
+
+**Et la garde qui change de statut sans changer de code.** Trois collecteurs
+portaient chacun leur `try/catch`. Une pompe unique en fait un point de
+défaillance unique : la même garde, inchangée, protège désormais TOUTES les
+relectures au lieu d'une famille. **Une refactorisation qui sérialise des
+chemins jusque-là indépendants promeut leurs gardes existantes en gardes
+critiques** — il faut alors leur donner un témoin, même si aucune ligne de la
+garde n'a bougé.
 ### Un champ optionnel devient obligatoire le jour où un client le lit autoritairement
 
 `bridge` est OPTIONNEL sur `conversation:unread-updated`. Les deux clients le
@@ -10385,7 +10434,12 @@ elle est un réflexe de conception et non un diagnostic.
 
 ---
 
-## Leçon 234 — Un défaut NOMMÉ dans le code n'est pas un défaut suivi (cycle 67)
+## Leçon 234 bis — Un défaut NOMMÉ dans le code n'est pas un défaut suivi (cycle 67)
+
+> Numéro en « bis » : le cycle 67 a repris un 234 déjà pris par le cycle 66,
+> faute d'avoir relu la fin du carnet avant d'écrire. Corrigé ici sans renuméroter
+> la suite — une cascade traverserait les branches concurrentes, et le numéro
+> d'une leçon n'est pas ce qu'elle enseigne.
 
 `conversationWriteAdmission.ts` portait, depuis le cycle 30, cette phrase exacte :
 
@@ -10469,3 +10523,298 @@ sonde correcte (`_roomsFor(event)`, qui lit la chaîne de l'émission elle-même
 > lisent.** Lire l'en-tête du double AVANT d'écrire l'assertion — et devant un
 > rouge attendu, vérifier qu'il tombe pour la raison nommée, pas seulement qu'il
 > tombe.
+
+---
+
+## Leçon 235 bis — Un cycle qui finit SON SUJET l'écrit comme s'il finissait le FICHIER (cycle 68)
+
+> « bis » : trois passes concurrentes ont numéroté 235 le même jour. Celle qui
+> a atteint `main` la première garde le numéro nu ; celle-ci prend le suffixe.
+> Même geste que pour la 234 bis et le dossier `cycle68-bis` — renommer plutôt
+> que renuméroter en cascade à travers des branches vivantes.
+
+Le cycle 35 a corrigé l'invalidation des traductions sur les quatre transports
+d'ÉDITION, et a laissé dans `routes/messages.ts` cette phrase :
+
+> `translations: null` appartient à CETTE écriture, pas à une seconde plus bas […]
+> Les trois autres transports d'édition invalident déjà dans l'écriture du
+> contenu ; **celui-ci était le dernier à ne pas le faire.**
+
+Exact, et trompeur. « Le dernier » vaut pour la famille ÉDITION. Trois cents
+lignes plus bas, dans le MÊME fichier, la route de SUPPRESSION portait le même
+défaut — deux écritures séparées, `translations: null` puis `deletedAt` — et
+personne n'y est revenu.
+
+> **Une note de clôture porte toujours un périmètre implicite, et c'est celui du
+> cycle qui l'écrit, pas celui du fichier qui la reçoit.** Écrire « le dernier »,
+> « tous les autres le font déjà », « la famille est complète » sans NOMMER la
+> famille produit une preuve d'exhaustivité que la lecture suivante applique au
+> mauvais ensemble. Nommer : « le dernier des quatre transports d'ÉDITION ».
+> Et devant une telle note, ne jamais la lire comme un quitus : demander de
+> quelle famille elle parle, puis chercher les familles VOISINES du même fichier.
+
+### Le corollaire opératoire : le correctif était déjà écrit, à côté
+
+Le plus frappant n'est pas que le défaut ait duré — c'est que **son argument, son
+raisonnement et sa formulation existaient déjà dans les deux fichiers
+concernés**, sur la route voisine. Aucune découverte n'était nécessaire : il
+fallait relire ce que le fichier disait déjà, en se demandant à quoi d'autre
+cela s'appliquait.
+
+> Quand un fichier explique longuement POURQUOI une écriture doit être atomique,
+> passer cet argument aux autres écritures du même fichier est le geste le moins
+> cher du dépôt — et celui que personne ne fait, parce qu'un argument déjà écrit
+> se lit comme un problème déjà réglé.
+
+### Le vrai prix d'une écriture en deux temps n'est pas la fenêtre, c'est son échec
+
+Le réflexe est de mesurer la fenêtre (« quelques millisecondes, un lecteur
+concurrent au pire »). C'est le petit prix. Le grand est l'ÉCHEC de la seconde
+écriture, qui fige l'état intermédiaire **définitivement** — ici : un message
+vivant, sans aucune traduction, que rien ne recalcule (le dépôt l'écrit :
+« aucun chemin ne retente une traduction absente »).
+
+> Devant deux écritures séparées, poser les deux questions dans cet ordre :
+> *que voit un lecteur DANS la fenêtre* (souvent bénin) et *que reste-t-il si la
+> seconde n'a JAMAIS lieu* (souvent irréversible). La seconde décide.
+
+Corollaire d'ordonnancement, déjà présent ailleurs dans le dépôt (« Échouer ICI
+laisse le lien ACTIF : c'est le sens sûr ») : **l'écriture destructrice ne
+committe jamais en premier.** Et quand les deux peuvent tenir dans un seul
+`update`, fusionner ne choisit pas un meilleur ordre — il supprime la question.
+
+### Une garde qui compte des écritures décrit une FORME ; préférer l'état interdit
+
+La garde évidente est « exactement UN `update` ». Elle tombe bien sous la
+réintroduction du défaut, mais elle décrit une forme : un refactor qui repasserait
+à deux écritures dans l'ORDRE INVERSE la satisferait encore sur la première.
+
+La garde qui porte la propriété rejoue les écritures sur une ligne modèle et
+INTERDIT l'état intermédiaire — ici « vivante ET sans traductions ». Les deux ont
+été livrées ; seule la seconde survit à un réordonnancement.
+
+### La famille « aveux du dépôt » (Leçon 234) rend des candidats, pas des verdicts
+
+Premier candidat instruit ce cycle : `node-signal-stores.ts`, « TODO: Replace
+with database persistence for production », **zéro consommateur dans tout le
+dépôt**. Du code mort, en apparence — et il ne fallait PAS le supprimer : il
+appartient à un chantier ÉTAGÉ (`dma-interoperability/`, jalons « Phase 3 »
+explicites chez ses voisins), pendant que le chiffrement de production passe
+ailleurs.
+
+> Un aveu VÉRIDIQUE sur un travail étagé n'est pas une dette. Pour chaque aveu,
+> trancher d'abord : est-ce un OUBLI ou un JALON ? Zéro consommateur prouve que
+> le code n'est pas branché — jamais qu'il est abandonné.
+---
+---
+
+## Leçon 235 — un correctif se pose sur le fichier qui porte le TRAFIC, pas sur celui qui porte le NOM (2026-08-18, routine messagerie, cycle 68)
+
+**Contexte.** Le cycle 67 a livré les multi-réactions sur quatre surfaces. Son
+message de commit décrit le volet web ainsi : « retrait du cap client
+`MAX_REACTIONS_PER_USER=3` ». La phrase est exacte, et elle porte sur
+`apps/web/hooks/use-message-reactions.ts` — un hook que **zéro composant de
+production n'importe**. Le hook réellement monté par les quatre surfaces de
+réaction est `apps/web/hooks/queries/use-reactions-query.ts`, et il gardait son
+cap intact.
+
+Livré : la fonctionnalité ne marchait pas sur le web au-delà de trois emojis.
+Le 4e tap produisait un toast, aucune ligne, aucun événement — et rien côté
+gateway ne pouvait l'observer, puisqu'un cap qui refuse AVANT l'émission ne
+laisse aucune trace sur le transport.
+
+**Ce qui a rendu la confusion naturelle.** Le fichier mort porte le nom de la
+fonctionnalité (`use-message-reactions`) ; le fichier vivant porte le nom de sa
+technique (`queries/use-reactions-query`). Une recherche par intention tombe sur
+le premier. Le second ne se trouve qu'en partant des CONSOMMATEURS.
+
+> **Avant d'éditer un fichier client, remonter à ses importateurs de
+> production.** `grep -rn "<nom-du-module>" --include=*.tsx | grep -v __tests__`
+> — zéro résultat hors du fichier de tests signifie que le correctif ne changera
+> rien pour personne. Le coût est d'une commande ; le prix de l'omission est une
+> fonctionnalité entière livrée inerte, avec sa migration de base de données et
+> ses témoins verts.
+
+### Corollaire — un témoin vert peut être la SPÉCIFICATION du défaut
+
+`Max Reactions Limit › should prevent adding more than max reactions` affirmait
+`success === false` sur la 4e réaction. Vert, et gelant exactement ce qu'il
+fallait retirer. Comme au cycle 67 § 4 bis : le témoin d'un défaut ne se trouve
+pas en cherchant le nom de la fonctionnalité — il se trouve en lisant ce que le
+site VIVANT affirme aujourd'hui.
+
+### Corollaire — retirer une variable a DEUX sites, et le second ne ressemble pas à un usage
+
+Le cap retiré, `t` restait dans le tableau de dépendances de son `useCallback` :
+
+```
+ReferenceError: t is not defined
+  }, [enabled, messageId, isPersisted, userReactions, addMutation, t]);
+```
+
+`tsc` ne l'a pas discriminé (le projet web porte 1 264 erreurs préexistantes
+dans ses fichiers de test) ; la suite l'a vu au premier rendu. Un tableau de
+dépendances est évalué à CHAQUE rendu : livré, il plantait toute bulle montée.
+
+> **Après avoir supprimé une variable d'un composant React, grep son
+> identifiant dans le fichier** — les tableaux de dépendances la mentionnent
+> sans y ressembler, et un typecheck noyé dans du bruit préexistant ne
+> l'attrapera pas.
+
+### Corollaire — une raison de NE PAS faire est une affirmation, et elle se vérifie
+
+Ce même cycle a d'abord différé la suppression du hook mort avec cette
+justification : « un retrait de fichier intégralement couvert tire la couverture
+globale vers le bas, et le seuil CI est à `lines: 42` ». Prudent, et **faux** :
+mesurée, la couverture web est à **60,21 %** — dix-huit points de marge. Les 413
+lignes retirées la déplacent de moins d'un quart de point.
+
+La formule « à instruire avec la mesure, pas avec l'intuition » avait été écrite
+dans l'audit… sans que la mesure soit prise.
+
+> **Un motif de report qui porte sur un CHIFFRE se vérifie avant d'être écrit.**
+> Sinon c'est une intuition qui a emprunté le vocabulaire de la rigueur — et
+> elle est plus difficile à déloger qu'un aveu d'incertitude, précisément parce
+> qu'elle en a la forme.
+
+### Corollaire — « N suites touchées » est une note de vérification qui ANNONCE le trou
+
+Le même commit `a0e0c2ac` a laissé `main` ROUGE : `ReactionService.test.ts`
+interrogeait toujours `replacedEmojis`, champ qu'il venait de supprimer. Sept
+témoins en échec, découverts par le CI de la PR suivante.
+
+Sa note de vérification le disait déjà, sans que personne (moi compris, deux
+jours plus tard) ne l'entende :
+
+> « 493 verts sur les **5 suites gateway touchees** »
+
+Touchées — pas la suite. Le fichier fautif n'avait pas été ouvert, donc il
+n'était pas dans les cinq ; il testait pourtant la classe exacte qui changeait.
+La leçon du cycle 67 § 4 bis (« lancer la suite LARGE avant de conclure »)
+existait déjà, écrite deux jours plus tôt.
+
+> **Un périmètre de test qui se décrit par les fichiers TOUCHÉS ne prouve rien
+> sur un changement de CONTRAT.** Retirer un champ d'un type public rend
+> suspecte toute suite qui lit ce type, pas seulement celles qu'on a éditées —
+> et la seule façon de les énumérer est de toutes les lancer. Quand une note de
+> vérification doit qualifier son périmètre (« les N suites touchées », « les
+> tests concernés »), c'est le signe que la suite complète n'a pas tourné : la
+> qualification EST l'aveu.
+
+## Leçon 236 — « ça dépasse le périmètre » est parfois le défaut lui-même (2026-08-18, routine messagerie, cycle 69)
+
+> Numérotation : le carnet porte DEUX « Leçon 234 » (cycles 66 et 67) et la 235
+> est prise par le cycle 68 (PR #3204, concurrente). 236 est le premier numéro
+> libre — vérifié, pas supposé.
+
+Le cycle 67 a nommé une piste, l'a documentée avec précision, et l'a classée
+non-livrable sur une excuse :
+
+> Corriger demande de savoir ce que le client doit croire après un 500, ce qui
+> **dépasse le périmètre** d'un correctif de clôture.
+
+L'excuse était fausse, et sa fausseté était visible dans son énoncé même. La
+question « que doit croire le client après un 500 ? » **n'existe que parce que
+les deux écritures peuvent atterrir séparément.** Elle n'appelait pas une
+réponse : elle appelait la suppression de sa propre condition d'existence. Une
+transaction, et un 500 redevient ce qu'il prétend être.
+
+> Quand une piste est reportée parce qu'elle « exige de trancher X », demander
+> d'abord **si X est une question ou un symptôme**. Une question qui n'apparaît
+> que dans un mode d'échec n'a pas à être tranchée — elle a à être supprimée avec
+> le mode d'échec. Reporter revient alors à conserver le défaut pour préserver la
+> question qu'il pose.
+
+### Le corollaire qui coûte le plus cher
+
+Une note de report est écrite par quelqu'un qui vient de comprendre le dossier —
+donc au moment de **compétence maximale** sur ce code. Elle est relue par
+quelqu'un qui n'a que la note. Elle est donc crue.
+
+> Une piste reportée avec une raison est plus durable qu'une piste reportée sans
+> raison : la raison la fait passer pour instruite. **Relire les reports du cycle
+> précédent en attaquant leur JUSTIFICATION, pas leur sujet.**
+
+### Et la variante « le fichier énonce la règle qu'il viole »
+
+`delete-for-me.ts` portait, vingt lignes au-dessus de son émission fautive, la
+règle exacte que cette émission enfreignait — appliquée aux deux branches de
+clôture, absente de la troisième. Même forme que la Leçon 235, rencontrée le même
+jour sur un autre fichier par une autre passe : **un commentaire porte le
+périmètre du cycle qui l'écrit, jamais celui du fichier qui le reçoit.**
+
+> Devant un commentaire qui énonce une règle générale, ne pas le lire comme un
+> constat — le lire comme une REQUÊTE, et l'exécuter sur tout le fichier.
+
+---
+
+## Leçon 237 — une garde à moitié posée est une garde qu'on croit posée (2026-08-18, routine messagerie, cycle 70)
+
+> Numérotation : 236 était le dernier occupé — vérifié sur le carnet, pas supposé.
+
+Le schéma documente `Conversation.closedAt` par « closed for all — **no one can
+write**, messages stay readable ». Le cycle 31 a fait respecter cette phrase, et
+l'a documentée longuement. Trente-neuf cycles plus tard, on pouvait toujours
+**ENTRER** dans une conversation close, par les quatre portes, indéfiniment.
+
+Personne n'avait menti. La phrase du schéma parle d'écriture, la garde parle
+d'écriture, les deux s'accordent. **La question voisine n'a simplement jamais été
+posée** — et une question non posée n'a pas de réponse fausse à corriger : elle a
+une réponse par défaut, ici « oui », que rien n'écrit nulle part.
+
+> Quand une garde fait respecter un état sur UNE opération, énumérer les autres
+> opérations que ce même état devrait interdire — **avant** de la déclarer posée.
+> Un état terminal touche au moins trois familles : écrire, entrer, être admis à
+> rester. Une garde qui n'en couvre qu'une laisse les autres avec une réponse par
+> défaut, et la documentation de la garde posée fait passer tout le sujet pour
+> traité.
+
+### Le corollaire qui fait tenir le défaut : un état porté par UN modèle est invisible aux autorisations dérivées d'un AUTRE
+
+Fermer une conversation n'écrit sur **aucune** ligne `Participant`. Les deux
+portes d'ajout autorisaient sur le rang de l'appelant — donc sur `Participant` —
+et le rang survit intact à la clôture. Elles étaient exactement aussi ouvertes le
+lendemain de la clôture que la veille, et aucune relecture de leur logique
+d'autorisation ne pouvait le montrer : cette logique est correcte, elle regarde
+juste ailleurs.
+
+C'est la variante exacte du piège déjà noté par `conversationWriteAdmission` —
+« `isActive` existe sur DEUX modèles, une relecture le trouve partout et
+s'arrête ». Ici ce n'est plus une confusion de lecture, c'est une propriété du
+schéma : **une autorisation dérivée de A ne peut pas voir un fait porté par B.**
+
+### Et la variante « le prédicat existait, exporté, avec son mode d'emploi »
+
+`isConversationClosed` était exporté, lisait les deux colonnes, et son en-tête
+désignait nommément les routes de lien de partage comme ses clientes. Les routes
+l'appelaient — sur le chemin d'ÉCRITURE. La porte d'ENTRÉE du même fichier, à
+trois cents lignes de là, ne l'appelait pas.
+
+> Devant un prédicat partagé, ne pas se demander « est-il appelé ? » mais
+> **« quels appelants lui manquent ? »**. Chercher par nom de symbole rend les
+> sites qui l'utilisent ; il faut chercher par la QUESTION qu'il répond, et la
+> poser à chaque route qui devrait se la poser.
+
+### Ce qui rend le correctif durable, et c'est du typage, pas de la vigilance
+
+Le paramètre ajouté à `resolveConversationEntry` est **requis**, jamais optionnel.
+Optionnel, la porte qui l'oublie garde le trou et personne ne le voit. Requis, il
+fait échouer la compilation de toute porte — y compris une porte future — qui n'y
+répond pas.
+
+> Quand on ajoute une question qu'un appelant DOIT se poser, la rendre
+> obligatoire dans le type plutôt que documentée dans l'en-tête. Un défaut par
+> omission ne se corrige durablement qu'en rendant l'omission impossible à
+> exprimer.
+
+### Et la mesure du rouge, encore
+
+Le stash des fichiers de production a produit un rouge sur le fichier d'unité —
+mais un rouge de COMPILATION (`TS2561`, champ inconnu), pas de comportement,
+puisque le stash retirait aussi le type. Un rouge dont la cause n'est pas celle
+qu'on croit ne prouve rien. La mutation a dû être refaite au scalpel : la seule
+ligne de court-circuit retirée, le type conservé.
+
+> Rappel de la leçon 234 dans son cas le plus traître : **quand une livraison
+> touche un TYPE et un COMPORTEMENT, le stash global ne peut pas prouver le
+> comportement.** Muter la ligne, pas le fichier.

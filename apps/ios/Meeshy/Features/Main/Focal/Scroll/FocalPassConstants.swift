@@ -54,54 +54,38 @@ nonisolated enum FocalPassConstants {
     /// « opacité arbitraire » au lieu de « plafond neutre ».
     static let opaqueAlphaCeiling: CGFloat = 1
 
-    /// **Plancher d'opacité des rangées VOISINES.**
-    ///
-    /// `FocalFocusCurve.threadAlphaDecay` vaut `0.82` : à la distance
-    /// maximale, la courbe rend `1 − 0.82 = 0,18`. Les deux ou trois messages
-    /// qui encadrent l'élu s'effaçaient donc presque entièrement — or ils
-    /// restent le CONTEXTE de ce qu'on lit, et le mode Focal ne demande pas
-    /// qu'on les perde de vue : il demande qu'ils passent au second plan.
-    ///
-    /// Posé en PLANCHER plutôt qu'en réécriture de `threadAlphaDecay` : la
-    /// courbe est un miroir GELÉ (M-043), partagé avec la Lentille. Un
-    /// plancher borne son résultat sans toucher sa pente, donc sans déplacer
-    /// l'élection ni l'échelle — seule la lisibilité des voisins change.
-    ///
-    /// TODO CONTRACTUEL : `thread.focusBand.neighbourAlphaFloor` absent du
-    /// token, comme les cinq autres valeurs de ce fichier.
-    static let neighbourAlphaFloor: CGFloat = 0.58
+    // La LOUPE positionnelle (spec Magnificence 2026-08-17 : pic 1.18,
+    // rayon demi-bande, plafond 48 pt, élévation zPosition) et le plancher
+    // `neighbourAlphaFloor` (mort depuis le retrait du fondu) sont RETIRÉS
+    // 2026-08-18 : la spec « Focal Grandeur Nature » §5, réancrée comme
+    // contrat, ne connaît qu'une échelle ≤ 1 et le fondu de la courbe gelée
+    // (plancher 0.18 par construction). Voir `FocalPerspectiveGeometry`.
 
-    // MARK: - Loupe (spec Magnificence 2026-08-17)
+    // MARK: - ESSAI VISUEL — bande de focus au CENTRE (demande user 2026-08-18)
 
-    /// Pic de la loupe positionnelle — l'échelle rendue PILE sur la ligne
-    /// de focus (la courbe gelée y rend 1). Choix user : « forte ».
-    /// TODO CONTRACTUEL : `thread.magnification.peak` absent du token.
-    static let magnificationPeak: CGFloat = 1.18
+    /// `true` ⇒ la ligne de focus vit au CENTRE du viewport
+    /// (`H · centeredBandRatio` depuis le bas) au lieu du « bas − 150 » de la
+    /// spec §5. La moitié estompée se réduit de ~80 % à ~50 % de l'écran —
+    /// c'est l'hypothèse à juger à l'œil. Même patron d'interrupteur que
+    /// `FocalFocusDecoration.drawsFocusCard` : l'essai se REVERT en une ligne
+    /// (`false` ⇒ spec §5 bit-à-bit). Le clavier garde la priorité : la bande
+    /// remonte toujours au-dessus de `composeur + bandGap` quand celui-ci
+    /// dépasse le centre.
+    static let centersFocusBand = true
 
-    /// Rayon de la loupe, en multiples de `FocalFocusCurve.focusBandHalfHeight`
-    /// (jamais un littéral rival du miroir gelé). RÈGLE STRICTE (user 17/08
-    /// soir) : la ZONE DE MAGNIFICENCE est la bande de focus EXACTE — en
-    /// dehors, échelle strictement 1, zéro résidu de loupe.
-    static let magnificationRadiusFactor: CGFloat = 1
-
-    /// LIMITE DE TAILLE MAXIMUM (règle stricte) : croissance d'une rangée
-    /// plafonnée en POINTS absolus — `m = min(pic, 1 + maxGrowth/h)`. Une
-    /// grande rangée ne devient jamais énorme, quel que soit le pic.
-    static let magnificationMaxGrowth: CGFloat = 48
-
-    /// Étendue de l'élévation `zPosition` portée par la loupe : la rangée
-    /// magnifiée doit RECOUVRIR ses voisines en grandissant.
-    static let magnificationElevationSpan: CGFloat = 1000
+    /// Fraction du viewport, mesurée depuis le BAS, où vit la ligne de focus
+    /// pendant l'essai. `0.5` = centre géométrique.
+    static let centeredBandRatio: CGFloat = 0.5
 
     // MARK: - Bande de focus (§4.3)
 
     /// Marge minimale entre la ligne de focus et le haut du composeur, dans
     /// `focusY = H − max(bandLift, contentInset.top + bandGap)`.
     ///
-    /// Le `bandLift` (plancher) vient du miroir GELÉ
-    /// (`FocalFocusCurve.focusBandOffset`) — voir `FocalPerspectiveGeometry`
-    /// pour l'écart assumé avec le `150` du §4.3. Le `bandGap`, lui, n'existe
-    /// nulle part : il est ici.
+    /// Le `bandLift` (plancher) vient du miroir de la bande du FIL
+    /// (`FocalFocusCurve.threadFocusBandOffset` = 150, spec §5 — arbitrage
+    /// 150/140 clos 2026-08-18). Le `bandGap`, lui, n'existe nulle part :
+    /// il est ici.
     ///
     /// TODO CONTRACTUEL : `thread.focusBand.gap` absent du token.
     static let bandGap: CGFloat = 8

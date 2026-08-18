@@ -170,3 +170,17 @@ describe('CallSystemMessage — durcissement (kind/outcome inconnus)', () => {
     expect(screen.getByRole('button', { name: 'Rappeler' })).toBeInTheDocument();
   });
 });
+
+describe('CallSystemMessage — « Rappeler » masqué pour un utilisateur anonyme (Vague 146)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('masque « Rappeler » pour un utilisateur anonyme sur un appel terminé (le gate serveur le refuserait, comme « Rejoindre »)', () => {
+    renderCall(terminalMetadata(), { isAnonymous: true });
+    expect(screen.queryByRole('button', { name: 'Rappeler' })).not.toBeInTheDocument();
+  });
+
+  it('garde « Rappeler » pour un utilisateur inscrit (non-régression)', () => {
+    renderCall(terminalMetadata(), { isAnonymous: false });
+    expect(screen.getByRole('button', { name: 'Rappeler' })).toBeInTheDocument();
+  });
+});

@@ -259,4 +259,113 @@ nonisolated enum NotificationPayloadHelpers {
             return nil
         }
     }
+
+    // MARK: - Résolution des URLs média du payload push
+
+    /// Résout une URL média du payload push en URL absolue téléchargeable.
+    ///
+    /// Le gateway persiste les avatars et les pièces jointes en chemin RELATIF
+    /// (`/api/v1/attachments/file/…`) et les recopie tels quels dans `imageURL`
+    /// / `attachmentUrl`. `URL(string:)` accepte volontiers cette chaîne, mais
+    /// l'URL produite n'a ni schéma ni hôte : `URLSession` échoue sans qu'on
+    /// puisse le distinguer d'un réseau lent, et la bannière retombe
+    /// silencieusement sur l'icône de l'app.
+    ///
+    /// - Parameters:
+    ///   - raw: la valeur brute du payload (relative ou absolue).
+    ///   - apiBaseURL: l'origine API, résolue depuis l'ALLOWLIST du NSE
+    ///     (`NSEDataSync.trustedApiBaseURL`) — jamais depuis le payload, qui
+    ///     n'est pas une source de confiance pour une destination réseau.
+    /// - Returns: une URL `https` (ou `http` sur localhost, pour le dev), ou
+    ///   `nil` si la valeur est vide ou porte un schéma non suivable.
+    nonisolated static func resolveRemoteMediaURL(_ raw: String, apiBaseURL: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Toute valeur qui PORTE un schéma (`https:`, `file:`, `data:`,
+        // `javascript:`…) est traitée comme absolue et devra passer le contrôle
+        // de schéma ci-dessous. La préfixer de l'origine API la déguiserait en
+        // chemin `https` valide vers le gateway — un rejet transformé en 404.
+        // Un chemin relatif ne peut pas matcher : le `/` y précède tout `:`.
+        let carriesScheme = trimmed.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:", options: .regularExpression) != nil
+
+        let absolute: String
+        if carriesScheme {
+            absolute = trimmed
+        } else {
+            // Les chemins portent déjà leur pourcentage-encodage (`%2F` comme
+            // séparateur interne) : on concatène sans ré-encoder, sinon un
+            // `%2F` deviendrait `%252F` et le fichier serait introuvable.
+            let base = apiBaseURL.hasSuffix("/") ? String(apiBaseURL.dropLast()) : apiBaseURL
+            absolute = trimmed.hasPrefix("/") ? base + trimmed : base + "/" + trimmed
+        }
+
+        guard let url = URL(string: absolute),
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased() else { return nil }
+
+        if scheme == "https" { return url }
+        if scheme == "http", host == "localhost" || host == "127.0.0.1" || host == "::1" { return url }
+        return nil
+    }
+
+    // MARK: - Cadrage de la Communication Notification
+
+    /// Comment cadrer l'`INSendMessageIntent` d'une notification donnée.
+    nonisolated struct CommunicationFraming: Equatable {
+        /// `true` → l'intent est donné avec des destinataires (mode GROUPE).
+        /// C'est le seul mode où iOS rend quoi que ce soit sous le nom de
+        /// l'expéditeur ; en 1:1 (`recipients: nil`) il ignore jusqu'au
+        /// `content.subtitle` posé à la main.
+        let usesGroupFraming: Bool
+        /// Nom de groupe à donner à l'intent, ou `nil` pour laisser l'appelant
+        /// composer le sien (cas d'une vraie conversation de groupe, dont le
+        /// nom est recomposé côté client en Local-First).
+        let groupName: String?
+        /// Identifiant de conversation de l'intent, jamais vide.
+        let intentKey: String
+    }
+
+    /// Décide du cadrage d'une notification.
+    ///
+    /// Une notification SOCIALE (commentaire, nouveau post, réaction) n'a pas
+    /// de conversation : elle tombait donc en 1:1, où iOS n'affiche que le nom
+    /// et le corps. Son sous-titre — qui porte l'action (« a commenté un
+    /// réel · Publication de Windie Nh ») — n'atteignait jamais l'écran. On la
+    /// cadre en groupe pour que l'action devienne le `speakableGroupName`,
+    /// affiché sous le nom.
+    ///
+    /// Une vraie conversation garde son comportement : un groupe reste un
+    /// groupe avec son nom composé côté client, un direct reste un 1:1.
+    nonisolated static func communicationFraming(
+        conversationId: String,
+        conversationType: String,
+        postId: String,
+        notificationId: String,
+        subtitle: String
+    ) -> CommunicationFraming {
+        let type = conversationType.trimmingCharacters(in: .whitespaces).lowercased()
+        let conversation = conversationId.trimmingCharacters(in: .whitespaces)
+        let post = postId.trimmingCharacters(in: .whitespaces)
+        let key = !conversation.isEmpty ? conversation
+            : (!post.isEmpty ? "post:\(post)" : notificationId)
+
+        // Conversation identifiée : le cadrage suit son type, et son nom est
+        // l'affaire de l'appelant (composition Local-First).
+        if !type.isEmpty {
+            return CommunicationFraming(
+                usesGroupFraming: type != "direct",
+                groupName: nil,
+                intentKey: key
+            )
+        }
+
+        // Hors conversation : le mode groupe n'a d'intérêt que s'il y a
+        // quelque chose à dire sous le nom.
+        let action = subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !action.isEmpty else {
+            return CommunicationFraming(usesGroupFraming: false, groupName: nil, intentKey: key)
+        }
+        return CommunicationFraming(usesGroupFraming: true, groupName: action, intentKey: key)
+    }
 }

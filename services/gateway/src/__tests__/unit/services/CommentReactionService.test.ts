@@ -298,19 +298,22 @@ describe('CommentReactionService', () => {
       expect(result?.unchanged).toBe(true);
     });
 
-    it('should throw error when max reactions per user reached', async () => {
-      // User has already 1 different emoji (MAX_REACTIONS_PER_USER = 1)
+    it('stacks a second different emoji (multi-réactions — plus aucun cap)', async () => {
       mockPrisma.commentReaction.findMany.mockResolvedValue([
         { emoji: '👍' }
       ]);
+      mockPrisma.commentReaction.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.addReaction({
-          commentId: testCommentId,
-          userId: testUserId,
-          emoji: '❤️' // Trying to add 2nd different emoji
-        })
-      ).rejects.toThrow('Maximum 1 different reactions per comment reached');
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '❤️'
+      });
+
+      expect(result?.unchanged).toBe(false);
+      expect(mockPrisma.commentReaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ emoji: '❤️' }) })
+      );
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {

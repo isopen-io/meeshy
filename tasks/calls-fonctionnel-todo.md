@@ -9900,3 +9900,58 @@ iOS/Android toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (TypeS
   toujours ouverts — cap dur à 2 participants actifs côté serveur et `mode: p2p` codé en dur) ;
   suspend/resume audio-only par-pair (Vague 143) ; dette lint systémique
   `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée — chantier distinct).
+
+## Vague 146 — `canCallBack` gagne le garde-fou `!isAnonymous` que `canJoin` avait déjà (web) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en "Non fait volontairement" par la Vague 144 (`CallSystemMessage.tsx:63
+canCallBack sans garde !isAnonymous`), qualifié à l'époque de "toujours latent, aucun scénario réel"
+— vérifié faux cette vague : le chemin est bien atteignable (`isAnonymous` est correctement enfilé
+depuis `BubbleMessageNormalView` jusqu'à `CallSystemMessage` pour tout spectateur invité par lien
+partagé d'une conversation directe/groupe), et c'est exactement la même classe de défaut que la
+Vague 145 vient de corriger côté serveur (un contrôle qui a l'air fonctionnel et échoue à coup sûr).
+
+- **Root cause** : `CallSystemMessage.tsx` calculait deux affordances d'appel à partir des mêmes
+  garde-fous conversation/live, mais seule `canJoin` (`isLive && conversationSupportsCalls &&
+  !isAnonymous`) portait le garde `!isAnonymous` — documenté dans son propre commentaire ("Anonymous
+  ... viewers cannot join calls — the gateway refuses them; showing 'Rejoindre' would be a lying
+  button"). `canCallBack` (`!isLive && conversationSupportsCalls`), qui rend le bouton « Rappeler »
+  sur toute bulle de résumé d'appel TERMINÉ, ne le portait pas : un invité anonyme (lien partagé)
+  voyant l'historique d'un appel terminé dans une conversation directe/groupe se voyait proposer un
+  bouton « Rappeler » identique à celui d'un utilisateur inscrit — bouton qui appelle `startCall()`
+  (`useVideoCall`), lequel le gate serveur refuse pour tout participant anonyme exactement comme il
+  refuse un `join`. Même mensonge d'UI que celui documenté pour `canJoin`, jamais fermé pour son
+  jumeau.
+- **Fix** : `canCallBack = !isLive && conversationSupportsCalls && !isAnonymous` — un seul opérande
+  ajouté, symétrique à `canJoin`. `isAnonymous` était déjà une prop du composant (défaut `false`),
+  zéro changement de signature, zéro impact pour un utilisateur inscrit (comportement identique).
+- **Tests** (TDD, RED confirmé — la nouvelle assertion échouait avant le fix, bouton trouvé alors
+  qu'attendu absent) : 2 cas neufs dans `CallSystemMessage.test.tsx`, describe « « Rappeler » masqué
+  pour un utilisateur anonyme (Vague 146) » — masqué pour `isAnonymous: true` sur un appel terminé,
+  toujours présent pour `isAnonymous: false` (non-régression explicite). 16/16 verts après fix (14
+  existants inchangés + 2 neufs). Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites /
+  774 tests** verts, 0 régression (seul point d'usage de `canCallBack`/`Rappeler` dans `apps/web`,
+  confirmé par grep — pas de second site à corriger). `npx tsc --noEmit` (apps/web) : **0 erreur
+  ajoutée** — 1264 erreurs `error TS` préexistantes (aucune sur `CallSystemMessage.tsx`), comparées
+  par grep ciblé sur le fichier touché. `eslint` non exécuté cette vague : le binaire local du
+  projet (`./node_modules/.bin/eslint`, ESLint 10.8.1) plante sur `eslint-plugin-react` PARTOUT dans
+  le dépôt (`react/display-name` : `contextOrFilename.getFilename is not a function`), y compris sur
+  un fichier non touché (`use-video-call.ts`) — confirmé pré-existant et environnemental (pas
+  introduit par ce changement), délégué au gate CI `Quality (bun)` qui tourne dans un environnement
+  résolu différemment.
+- **Non fait volontairement** : le jumeau iOS potentiel (`BubbleCallNoticeView.swift` /
+  `CallSummaryDetailSheet.callBackButton`, gardé uniquement par `onCallBack != nil` — la chaîne
+  d'enfilage jusqu'à `ConversationView.swift:969 → viewModel.callBack(for:)` n'a pas été auditée
+  jusqu'au bout pour confirmer ou infirmer un gate anonyme côté `CallManager`/`ConversationViewModel`)
+  n'a pas été corrigé : toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de
+  `xcodebuild`/`swift`), et un edit Swift non compilé/testé serait pure spéculation — laissé en
+  suivi dédié pour une session avec accès device/Xcode. Reconduits (inchangés) : dead code /
+  god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  `mergeEntries`/`upsertRemoteSegment` sans filtre `targetLanguage` explicite côté client (racine
+  déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure groupe
+  (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ;
+  dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée —
+  chantier distinct, décision d'équipe requise). Vague 145 (kick anonyme, PR #3200/#3203, doublons
+  sur le même correctif serveur) mergée juste après cette vague — `Test gateway` y échouait
+  temporairement sur `ReactionService.test.ts`/`AttachmentReactionService.test.ts` (multi-réactions,
+  cycle 68, hors périmètre calling), résolu par le rebase post-merge de #3201.

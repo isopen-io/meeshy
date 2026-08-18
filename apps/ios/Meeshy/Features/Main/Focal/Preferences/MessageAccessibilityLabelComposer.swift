@@ -167,14 +167,24 @@ enum MessageAccessibilityLabelComposer {
         return parts
     }
 
+    /// Localisé — les chaînes françaises EN DUR (et sans accents : « envoye »,
+    /// « distribue ») étaient une régression i18n vs la source bulle
+    /// (audit 2026-08-18) : un lecteur d'écran anglophone entendait du
+    /// français approximatif.
     private static func deliveryStatusAccessibilityLabel(_ status: MeeshyMessage.DeliveryStatus?) -> String {
         switch status {
-        case .sending, .invisible, .clock, nil: return "en cours d'envoi"
-        case .slow: return "envoi lent"
-        case .sent: return "envoye"
-        case .delivered: return "distribue"
-        case .read: return "lu"
-        case .failed: return "echec d'envoi"
+        case .sending, .invisible, .clock, nil:
+            return String(localized: "a11y.delivery.sending", defaultValue: "en cours d'envoi", bundle: .main)
+        case .slow:
+            return String(localized: "a11y.delivery.slow", defaultValue: "envoi lent", bundle: .main)
+        case .sent:
+            return String(localized: "a11y.delivery.sent", defaultValue: "envoyé", bundle: .main)
+        case .delivered:
+            return String(localized: "a11y.delivery.delivered", defaultValue: "distribué", bundle: .main)
+        case .read:
+            return String(localized: "a11y.delivery.read", defaultValue: "lu", bundle: .main)
+        case .failed:
+            return String(localized: "a11y.delivery.failed", defaultValue: "échec d'envoi", bundle: .main)
         }
     }
 }

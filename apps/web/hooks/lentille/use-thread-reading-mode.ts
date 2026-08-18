@@ -69,7 +69,9 @@ import {
   type ReadingModeCapabilities,
 } from '@meeshy/shared/utils/reading-modes';
 import { useReadingModePreference } from '@/stores/reading-mode-preference-store';
+import { readingModeFromPreference, type ReadingMode } from '@/lib/conversations/reading-mode';
 import type { FocalDensity } from '@/components/conversations/focal/FocalRow';
+import { useReadingModesFlag } from './use-reading-modes-flag';
 
 /**
  * Les modes que le fil sait RÉELLEMENT monter aujourd'hui. Toute entrée
@@ -166,7 +168,10 @@ export type ThreadReadingRender = FocalDensity | 'bubbles';
  * Le hook redevient un pur appel à `resolveOrchestratorDecision`, et le
  * comportement d'avant le 2026-08-17 revient sans autre geste. Aucune loi
  * partagée n'a été amendée pour cette décision — c'est précisément pourquoi
- * elle se retire d'une ligne.
+ * elle se retire d'une ligne. Retirer cette constante retire AUSSI, du même
+ * geste, la branche `isReadingModesFlagActive` de `useThreadActiveReadingMode`
+ * ci-dessous et celle de `notchText` (`lentille-mode-labels.ts`) : les trois
+ * s'éteignent ensemble, aucune trace du défaut ne doit survivre à son retrait.
  *
  * CE QU'ELLE NE TOUCHE PAS :
  *   - le chemin drapeau ÉTEINT, qui rendait DÉJÀ les bulles et reste
@@ -174,6 +179,19 @@ export type ThreadReadingRender = FocalDensity | 'bubbles';
  *   - un choix EXPLICITE (`focal`, `script`, `resume`, `riviere`, `bulles`),
  *     qui garde exactement le pouvoir qu'il avait ;
  *   - iOS, qui n'est pas concerné.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * DÉCISION PRODUIT — 2026-08-18 (Q142-c TRANCHÉE)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Le défaut ci-dessus est GARDÉ et ASSUMÉ — il n'est plus « à confirmer ou
+ * retirer » (§2.2/§2.3 point Q142-c, `tasks/lentille-cloture-phase1.md`
+ * D-5). Ce que Q142-c changeait n'était pas CE défaut, mais le fait que les
+ * AFFORDANCES du fil ne le reflétaient pas : « l'écran fait une chose, les
+ * affordances en annoncent une autre ». `useThreadActiveReadingMode`
+ * ci-dessous et `notchText` (`lentille-mode-labels.ts`) sont le correctif —
+ * ils font dire à l'encoche et à `LensSwitcher` exactement ce que ce hook
+ * vient de décider, jamais une préférence brute non traduite. La procédure
+ * de retrait ci-dessus reste intacte et prime si elle est un jour exécutée.
  */
 const PROVISIONAL_DEFAULT_RENDER: ThreadReadingRender = 'bubbles';
 
@@ -216,4 +234,61 @@ export function useThreadReadingRender(conversationId: string | undefined): Thre
     if (decision.mode === 'bubbles') return 'bubbles';
     return decision.mode === 'script' ? 'script' : 'focal';
   }, [conversationId, preference]);
+}
+
+/**
+ * Traduit `ThreadReadingRender` (ce que le fil dessine) vers `ReadingMode`
+ * (`lib/conversations/reading-mode.ts`, le vocabulaire du sélecteur
+ * historique — `LensSwitcher`, `notchText`). Identité sur les deux densités
+ * plates ; `'bubbles'` (pluriel, le rendu) devient `'bubble'` (singulier, la
+ * lentille) — même mot, deux catalogues voisins, comme `bridgeSuggestedRenderMode`
+ * le fait déjà dans l'autre sens pour `notchText`.
+ */
+function threadReadingRenderToReadingMode(render: ThreadReadingRender): ReadingMode {
+  return render === 'bubbles' ? 'bubble' : render;
+}
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Q142-c (2026-08-18, TRANCHÉE) — LE MODE QUE LES AFFORDANCES DOIVENT MARQUER ACTIF
+ * ═══════════════════════════════════════════════════════════════════════════
+ * `LensSwitcher` (l'en-tête du fil) affichait jusqu'ici la PRÉFÉRENCE brute
+ * traduite bit-à-bit (`useReadingMode`, `stores/reading-mode-store.ts` :
+ * `auto → focal`, TOUJOURS) — sans jamais consulter ce que ce fichier décide
+ * plus haut. Résultat, drapeau ON et sans choix explicite : le fil rend les
+ * BULLES (`PROVISIONAL_DEFAULT_RENDER`) pendant que le sélecteur marquait
+ * « Focal » actif. « L'écran fait une chose, les affordances en annoncent
+ * une autre » (Q-142) — exactement le défaut que ce hook corrige.
+ *
+ * CE QU'IL FAIT, ET RIEN DE PLUS : traduire le verdict déjà rendu par
+ * `useThreadReadingRender` (drapeau ON) ou par la traduction bit-à-bit du
+ * chemin OFF (drapeau ÉTEINT) vers le vocabulaire `ReadingMode` que
+ * `LensSwitcher` consomme déjà. AUCUN recalcul de loi : les deux branches
+ * appellent chacune une fonction qui existe déjà ailleurs.
+ *
+ * DRAPEAU ÉTEINT ⇒ `readingModeFromPreference` VERBATIM, l'exact résultat
+ * qu'`useReadingMode` aurait donné : le défaut provisoire ne s'applique QUE
+ * là où `useThreadReadingRender` s'applique lui-même (drapeau ON) — ce hook
+ * ne fait qu'exposer cette même frontière au sélecteur, il ne la déplace pas.
+ * DRAPEAU ALLUMÉ ⇒ `useThreadReadingRender`, LE point de décision du rendu du
+ * fil, traduit par `threadReadingRenderToReadingMode` ci-dessus.
+ *
+ * Ce hook est sans danger pour la prop `readingMode` que `ConversationView`
+ * repasse aussi à `ConversationMessages` (repli historique / secours
+ * d'erreur de `FocalThread`) : pour tout choix EXPLICITE (`focal`, `script`,
+ * `resume`, `riviere`, `bulles`), il rend EXACTEMENT la même valeur que
+ * `useReadingMode` — la seule divergence est `auto` drapeau ON, précisément
+ * le cas que la branche « Bulles par défaut » de `ConversationMessages.tsx`
+ * ignore déjà cette prop pour monter `renderHistorical('bubble')` en dur.
+ *
+ * @see components/conversations/lentille/lentille-mode-labels.ts (`notchText`)
+ *      — même correction, pour l'encoche de la focus card côté liste.
+ */
+export function useThreadActiveReadingMode(conversationId: string | undefined): ReadingMode {
+  const { active: isReadingModesFlagActive } = useReadingModesFlag();
+  const render = useThreadReadingRender(conversationId);
+  const preference = useReadingModePreference(conversationId ?? '');
+
+  if (!isReadingModesFlagActive) return readingModeFromPreference(preference);
+  return threadReadingRenderToReadingMode(render);
 }

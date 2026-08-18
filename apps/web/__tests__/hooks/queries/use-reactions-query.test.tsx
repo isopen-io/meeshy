@@ -58,17 +58,9 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
   },
 }));
 
-// Mock i18n hook
-jest.mock('@/hooks/useI18n', () => ({
-  useI18n: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
-      if (key === 'maxReactionsReached') {
-        return `Maximum ${params?.max} reactions reached`;
-      }
-      return key;
-    },
-  }),
-}));
+// Pas de mock i18n : le hook ne traduit plus rien. Sa seule traduction était
+// `maxReactionsReached`, dont le cap et le remap d'erreur ont disparu avec les
+// multi-réactions — les erreurs serveur remontent désormais VERBATIM.
 
 // Mock toast
 jest.mock('sonner', () => ({
@@ -598,18 +590,26 @@ describe('useReactionsQuery', () => {
     });
   });
 
-  describe('Max Reactions Limit', () => {
-    it('should prevent adding more than max reactions', async () => {
+  describe('Multi-réactions — plus aucun cap client', () => {
+    const threeReactions = () => ({
+      reactions: mockReactions,
+      userReactions: ['❤️', '👍', '🎉'],
+    });
+
+    const ackAdd = () => {
+      mockSocketEmit.mockImplementation((event, payload, callback) => {
+        if (event === CLIENT_EVENTS.REACTION_ADD) {
+          callback({ success: true });
+        }
+      });
+    };
+
+    it('stacks a 4th distinct emoji instead of refusing it', async () => {
       const { toast } = require('sonner');
-
-      const stateWithMaxReactions = {
-        reactions: mockReactions,
-        userReactions: ['❤️', '👍', '🎉'], // Already at max (3)
-      };
-
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], stateWithMaxReactions);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], threeReactions());
+      ackAdd();
 
       const { result } = renderHook(
         () => useReactionsQuery({
@@ -624,11 +624,48 @@ describe('useReactionsQuery', () => {
       });
 
       const success = await act(async () => {
-        return await result.current.addReaction('😀'); // Try to add 4th
+        return await result.current.addReaction('😀');
       });
 
-      expect(success).toBe(false);
-      expect(toast.error).toHaveBeenCalled();
+      expect(success).toBe(true);
+      expect(toast.error).not.toHaveBeenCalled();
+
+      const data = queryClient.getQueryData<{ userReactions: string[] }>(['reactions', '507f1f77bcf86cd799439011']);
+      expect(data?.userReactions).toEqual(['❤️', '👍', '🎉', '😀']);
+    });
+
+    it('reaches the server instead of refusing locally — la 4e réaction est ÉMISE', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], threeReactions());
+      ackAdd();
+
+      const { result } = renderHook(
+        () => useReactionsQuery({
+          messageId: '507f1f77bcf86cd799439011',
+          currentUserId: 'user-1',
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      await act(async () => {
+        await result.current.addReaction('😀');
+      });
+
+      // La garde qui PORTE. Celle du dessus décrit l'état du cache et resterait
+      // verte si un futur cap refusait après la mise à jour optimiste puis
+      // rollbackait. Le cap refusait AVANT l'émission : un client capé ne
+      // laisse aucune trace côté transport, et c'est cette absence qui rendait
+      // le serveur multi-réactions inatteignable depuis le web.
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.REACTION_ADD,
+        { messageId: '507f1f77bcf86cd799439011', emoji: '😀' },
+        expect.any(Function)
+      );
     });
   });
 
@@ -831,7 +868,7 @@ describe('useReactionsQuery', () => {
       });
     });
 
-    it('shows maxReactionsReached toast when server returns maximum error', async () => {
+    it('surfaces the server error VERBATIM — plus aucun remap « maximum »', async () => {
       const { toast } = jest.requireMock('sonner');
       const { wrapper, queryClient } = createWrapperWithClient();
 
@@ -840,6 +877,10 @@ describe('useReactionsQuery', () => {
         userReactions: [],
       });
 
+      // PLUS AUCUN service de réaction n'émet cette phrase : message, pièce
+      // jointe, post et commentaire sont tous additifs depuis le 2026-08-18.
+      // Le remap qui la traduisait visait donc une erreur disparue — il aurait
+      // fait passer une erreur voisine pour une limite inexistante.
       mockSocketEmit.mockImplementation((event, payload, callback) => {
         if (event === CLIENT_EVENTS.REACTION_ADD) {
           callback({ success: false, error: 'Maximum 3 different reactions per user' });
@@ -856,7 +897,7 @@ describe('useReactionsQuery', () => {
       });
 
       await waitFor(() => {
-        expect(toast.error).toHaveBeenCalled();
+        expect(toast.error).toHaveBeenCalledWith('Maximum 3 different reactions per user');
       });
     });
   });

@@ -13,6 +13,15 @@
  * Les assertions passent par le payload Socket.IO `notification:new`, qui
  * embarque le même couple `title`/`subtitle` que le push APN/FCM.
  *
+ * DEUX sous-titres coexistent, et ce fichier les distingue :
+ *  - le sous-titre PERSISTÉ (`prisma.notification.create`, lu par la LISTE
+ *    in-app sous un titre riche) ne porte que la CIBLE — « Votre story » ;
+ *  - le sous-titre de BANNIÈRE (payload socket/push) porte l'ACTION, plus ce
+ *    que la cible ajoute encore — « a commenté votre story · « aperçu » ».
+ *    Il le doit parce qu'iOS réécrit le titre d'une Communication
+ *    Notification avec le nom de l'expéditeur : sans action dans le
+ *    sous-titre, la bannière ne dit jamais ce qui s'est passé.
+ *
  * @jest-environment node
  */
 import { NotificationService } from '../../../../services/notifications/NotificationService';
@@ -115,7 +124,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'post_comment');
       expect(payload).toBeDefined();
       expect(payload.title).toBe('Bob Commentateur');
-      expect(payload.subtitle).toBe('Votre statut : « Journée de ouf au bureau »');
+      expect(payload.subtitle).toBe('a commenté votre statut · « Journée de ouf au bureau »');
       expect(payload.content).toBe('Trop drôle !');
       // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
       expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
@@ -131,7 +140,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         postType: 'POST',
       });
 
-      expect(payloadOfType(mockIO, 'post_comment').subtitle).toBe('Votre publication');
+      expect(payloadOfType(mockIO, 'post_comment').subtitle).toBe('a commenté votre publication');
     });
 
     it('défaut POST quand le type n\'est pas fourni (compat appels existants)', async () => {
@@ -143,7 +152,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
         commentPreview: 'ok',
       });
 
-      expect(payloadOfType(mockIO, 'post_comment').subtitle).toBe('Votre publication');
+      expect(payloadOfType(mockIO, 'post_comment').subtitle).toBe('a commenté votre publication');
     });
   });
 
@@ -245,7 +254,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       const payload = payloadOfType(mockIO, 'comment_like');
       expect(payload.content).toBe('a réagi 🔥 à votre commentaire');
-      expect(payload.subtitle).toBe('« Mon avis sur la question »');
+      expect(payload.subtitle).toBe('a réagi 🔥 à votre commentaire · « Mon avis sur la question »');
     });
   });
 
@@ -307,7 +316,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       const payload = payloadOfType(mockIO, 'post_repost');
       expect(payload.content).toBe('a partagé votre story');
-      expect(payload.subtitle).toBe('« Coucher de soleil à Douala »');
+      expect(payload.subtitle).toBe('a partagé votre story · « Coucher de soleil à Douala »');
     });
 
     it('défaut « a partagé votre publication » sans type ni extrait', async () => {
@@ -320,7 +329,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       const payload = payloadOfType(mockIO, 'post_repost');
       expect(payload.content).toBe('a partagé votre publication');
-      expect(payload.subtitle).toBeUndefined();
+      expect(payload.subtitle).toBe('a partagé votre publication');
     });
 
     it('persiste postExpiresAt/postCreatedAt en contexte (story partagée expirée)', async () => {
@@ -379,7 +388,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
 
       const payload = payloadOfType(mockIO, 'friend_new_mood');
       expect(payload).toBeDefined();
-      expect(payload.subtitle).toBe('Nouvelle humeur');
+      expect(payload.subtitle).toBe('a publié une nouvelle humeur');
       expect(payload.content).toBe('Motivé comme jamais 💪');
     });
 
@@ -391,7 +400,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       const payload = payloadOfType(mockIO, 'friend_new_story');
-      expect(payload.subtitle).toBe('Nouvelle story');
+      expect(payload.subtitle).toBe('a publié une nouvelle story');
       expect(payload.content).toBe('a publié une nouvelle story');
     });
   });
@@ -418,9 +427,9 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
     it('STORY : « Votre story » pour l\'auteur, « Story de X » pour thread et amis', async () => {
       await service.createStoryCommentNotificationsBatch(baseParams);
 
-      expect(payloadOfType(mockIO, 'story_new_comment').subtitle).toBe('Votre story');
-      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('Story de Alice Autrice');
-      expect(payloadOfType(mockIO, 'friend_story_comment').subtitle).toBe('Story de Alice Autrice');
+      expect(payloadOfType(mockIO, 'story_new_comment').subtitle).toBe('a commenté votre story');
+      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans une story · Story de Alice Autrice');
+      expect(payloadOfType(mockIO, 'friend_story_comment').subtitle).toBe('a commenté une story · Story de Alice Autrice');
     });
 
     it('POST : le bucket auteur est sauté (post_comment notifie déjà l\'auteur) et le wording est « publication »', async () => {
@@ -433,7 +442,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payloadOfType(mockIO, 'story_new_comment')).toBeUndefined();
       const thread = payloadOfType(mockIO, 'story_thread_reply');
       expect(thread.content).toBe('a répondu dans une publication');
-      expect(thread.subtitle).toBe('Publication de Alice Autrice');
+      expect(thread.subtitle).toBe('a répondu dans une publication · Publication de Alice Autrice');
       expect(payloadOfType(mockIO, 'friend_story_comment').content).toBe('a commenté une publication');
     });
 
@@ -445,7 +454,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans un statut');
-      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('Statut de Alice Autrice');
+      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut · Statut de Alice Autrice');
     });
   });
 });

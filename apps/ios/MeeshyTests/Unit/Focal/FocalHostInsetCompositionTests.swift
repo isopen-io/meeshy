@@ -157,8 +157,12 @@ final class FocalHostInsetCompositionTests: XCTestCase {
         // Le clavier s'ouvre : le composeur grandit, `contentInset.top`
         // (bas visuel) augmente — la bande de focus doit MONTER en
         // conséquence (§4.3 : « la formule retenue … fait MONTER la bande
-        // avec le clavier »), donc `headInset` doit varier.
-        vc.applyBottomInset(400)
+        // avec le clavier »), donc `headInset` doit varier. `600` et non
+        // `400` : sous l'essai « bande centrée » le plancher vaut H/2 — un
+        // clavier plus petit que la demi-hauteur du harnais ne déplace pas
+        // la bande (comportement voulu), le témoin doit la dépasser pour
+        // rester discriminant dans les deux régimes.
+        vc.applyBottomInset(600)
         let afterKeyboard = try XCTUnwrap(vc.focalCollectionViewForTesting?.contentInset.bottom)
 
         XCTAssertNotEqual(

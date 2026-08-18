@@ -14,20 +14,51 @@
  * `reading-mode-preference-store.ts` pour le raisonnement complet. Le nom de
  * CE fichier reste celui du contrat pour que la recherche
  * `conversation-preferences-store.readingMode` retrouve la bonne suite.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AMENDÉ PAR D-4 / R5-6 (2026-08-18) — LES CLÉS D'ENTRÉE SONT SCOPÉES
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Ce fichier lisait `entries.get('conv-b')` — la clé NUE, sans identité.
+ * Depuis D-4, la clé d'entrée en mémoire est `<scopeId>:<conversationId>`
+ * (`scopedEntryKey`, `reading-mode-preference-store.ts`) : c'est exactement
+ * l'ancrage de l'ancien monde que R5-6 ferme (voir
+ * `stores/__tests__/reading-mode-identity-scope.test.ts` pour le témoin
+ * dédié). Ce fichier établit désormais une identité INSCRITE fixe
+ * (`REGISTERED_USER_ID`) pour que persistance et rollback restent
+ * exerçables — sans identité, `setReadingMode` réussit toujours EN MÉMOIRE
+ * (repli documenté), mais n'écrit plus jamais `localStorage`, ce qui aurait
+ * rendu les témoins de rollback ci-dessous vides de sens (rien à faire
+ * échouer). `entryKey(...)` reproduit le calcul de clé pour les seules
+ * assertions qui lisent `entries` directement ; toutes les autres
+ * assertions passent par l'API publique (`getReadingMode`), inchangée.
  */
 import { act, renderHook } from '@testing-library/react';
+import { AUTH_STORAGE_KEYS } from '../../constants/auth';
 import {
   useReadingModePreferenceStore,
   useReadingModePreference,
   useReadingModePreferenceActions,
 } from '../../stores/reading-mode-preference-store';
 
+jest.mock('../../services/reading-mode-sync.service', () => ({
+  writeReadingModePreferenceToServer: jest.fn().mockResolvedValue(undefined),
+  fetchServerReadingModePreference: jest.fn().mockResolvedValue(null),
+}));
+
+const REGISTERED_USER_ID = 'user-wl107';
+const entryKey = (conversationId: string): string => `u-${REGISTERED_USER_ID}:${conversationId}`;
+
 describe('reading-mode-preference-store — écriture optimiste versionnée (WL-106/LWS-11)', () => {
   beforeEach(() => {
+    window.localStorage.clear();
     act(() => {
       useReadingModePreferenceStore.getState().reset();
     });
-    window.localStorage.clear();
+    window.localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'fake-jwt-for-tests');
+    window.localStorage.setItem(
+      AUTH_STORAGE_KEYS.USER_DATA,
+      JSON.stringify({ id: REGISTERED_USER_ID })
+    );
   });
 
   it('défaut "auto" quand rien n\'est mémorisé pour la conversation', () => {
@@ -57,12 +88,12 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
       await useReadingModePreferenceStore.getState().setReadingMode('conv-b', 'focal');
     });
     const first = useReadingModePreferenceStore.getState();
-    expect(first.entries.get('conv-b')?.version).toBe(1);
+    expect(first.entries.get(entryKey('conv-b'))?.version).toBe(1);
 
     await act(async () => {
       await useReadingModePreferenceStore.getState().setReadingMode('conv-b', 'script');
     });
-    expect(useReadingModePreferenceStore.getState().entries.get('conv-b')?.version).toBe(2);
+    expect(useReadingModePreferenceStore.getState().entries.get(entryKey('conv-b'))?.version).toBe(2);
   });
 
   it('rollback sur échec de la persistance locale — reprend la valeur d\'avant l\'écriture optimiste', async () => {
@@ -79,7 +110,7 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
     });
 
     expect(useReadingModePreferenceStore.getState().getReadingMode('conv-c')).toBe('auto');
-    expect(useReadingModePreferenceStore.getState().entries.has('conv-c')).toBe(false);
+    expect(useReadingModePreferenceStore.getState().entries.has(entryKey('conv-c'))).toBe(false);
 
     setItemSpy.mockRestore();
   });
@@ -103,7 +134,7 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
     });
 
     expect(useReadingModePreferenceStore.getState().getReadingMode('conv-d')).toBe('focal');
-    expect(useReadingModePreferenceStore.getState().entries.get('conv-d')?.version).toBe(1);
+    expect(useReadingModePreferenceStore.getState().entries.get(entryKey('conv-d'))?.version).toBe(1);
 
     setItemSpy.mockRestore();
   });
@@ -112,7 +143,7 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
     await expect(
       useReadingModePreferenceStore.getState().setReadingMode('conv-e', 'not-a-real-mode' as never)
     ).rejects.toThrow();
-    expect(useReadingModePreferenceStore.getState().entries.has('conv-e')).toBe(false);
+    expect(useReadingModePreferenceStore.getState().entries.has(entryKey('conv-e'))).toBe(false);
   });
 
   describe('applyReadingModeUpdate — réconciliation par version, le point d\'entrée prêt pour le canal G-121', () => {
@@ -121,7 +152,7 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
         useReadingModePreferenceStore.getState().applyReadingModeUpdate('conv-f', 'focal', 3);
       });
       expect(useReadingModePreferenceStore.getState().getReadingMode('conv-f')).toBe('focal');
-      expect(useReadingModePreferenceStore.getState().entries.get('conv-f')?.version).toBe(3);
+      expect(useReadingModePreferenceStore.getState().entries.get(entryKey('conv-f'))?.version).toBe(3);
     });
 
     it('IGNORE un payload de version STRICTEMENT INFÉRIEURE — critère d\'acceptation LWS-11 explicite', () => {
@@ -132,7 +163,7 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
         useReadingModePreferenceStore.getState().applyReadingModeUpdate('conv-g', 'focal', 2);
       });
       expect(useReadingModePreferenceStore.getState().getReadingMode('conv-g')).toBe('script');
-      expect(useReadingModePreferenceStore.getState().entries.get('conv-g')?.version).toBe(5);
+      expect(useReadingModePreferenceStore.getState().entries.get(entryKey('conv-g'))?.version).toBe(5);
     });
 
     it('IGNORE un payload de version ÉGALE (rejeu, jamais un recul ni un doublon appliqué)', () => {
@@ -149,7 +180,7 @@ describe('reading-mode-preference-store — écriture optimiste versionnée (WL-
       await act(async () => {
         await useReadingModePreferenceStore.getState().setReadingMode('conv-i', 'focal');
       });
-      expect(useReadingModePreferenceStore.getState().entries.get('conv-i')?.version).toBe(1);
+      expect(useReadingModePreferenceStore.getState().entries.get(entryKey('conv-i'))?.version).toBe(1);
 
       act(() => {
         useReadingModePreferenceStore.getState().applyReadingModeUpdate('conv-i', 'riviere', 9);

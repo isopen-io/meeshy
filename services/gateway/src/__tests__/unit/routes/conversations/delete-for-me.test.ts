@@ -85,6 +85,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // itself, so a non-direct conversation would also resolve to 0 here).
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    // La clôture (ou la promotion du successeur) et le masquage de l'appelant
+    // committent ensemble (cycle 69).
+    $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
     ...overrides,
   };
 }

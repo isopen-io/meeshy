@@ -525,6 +525,57 @@ describe('DELETE /messages/:messageId', () => {
     expect(res.statusCode).toBe(500);
   });
 
+  // La suppression se commit d'UN SEUL coup — la propriété, pas la forme.
+  //
+  // Écrite en deux fois (`translations: null`, puis `deletedAt`), elle laissait
+  // la ligne VIVANTE et dépouillée de ses traductions entre les deux. Le prix
+  // n'est pas la fenêtre mais son échec : la seconde écriture ratée fige cet
+  // état DÉFINITIVEMENT, et `MessageTranslationService` écrit lui-même
+  // qu'« aucun chemin ne retente une traduction absente ». L'écriture
+  // destructrice committait donc avant celle qui la rend inoffensive.
+  //
+  // La route d'ÉDITION de ce même fichier porte cet argument depuis le cycle 35
+  // (« `translations: null` appartient à CETTE écriture, pas à une seconde plus
+  // bas ») ; la famille de SUPPRESSION ne l'avait jamais reçu.
+  it('committe la suppression en UNE écriture, traductions comprises', async () => {
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce(null);
+    (app as any).prisma.message.update.mockClear();
+
+    const res = await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    expect(res.statusCode).toBe(200);
+    const writes = (app as any).prisma.message.update.mock.calls;
+    // UNE seule écriture : une seconde, quel que soit son contenu, rouvre la
+    // fenêtre que celle-ci existe pour supprimer.
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0].data).toEqual(
+      expect.objectContaining({ translations: null, deletedAt: expect.any(Date) })
+    );
+  });
+
+  // Le corollaire, énoncé comme une INTERDICTION d'état plutôt que comme un
+  // compte d'écritures : aucun état committé ne doit porter « vivante ET sans
+  // traductions ». Un futur refactor qui repasserait à deux écritures dans
+  // l'autre ordre (`deletedAt` d'abord) satisferait encore « une seule écriture
+  // porte les deux champs » sur la première — pas celle-ci.
+  it('ne committe jamais un état « vivante et sans traductions »', async () => {
+    (app as any).prisma.message.findFirst
+      .mockResolvedValueOnce(mockMessage)
+      .mockResolvedValueOnce(null);
+    (app as any).prisma.message.update.mockClear();
+
+    await app.inject({ method: 'DELETE', url: '/messages/' + MSG_ID });
+
+    const row: Record<string, unknown> = { ...mockMessage };
+    const forbidden = (app as any).prisma.message.update.mock.calls.filter((call: any[]) => {
+      Object.assign(row, call[0].data);
+      return row.translations === null && row.deletedAt == null;
+    });
+    expect(forbidden).toHaveLength(0);
+  });
+
   // Cette route — celle qu'emploie Android — retirait le message sans jamais
   // rendre son crédit aux compteurs. Le décompte ne vivait que dans la route
   // iOS/web, et le comptage que dans le handler socket : aucune des deux

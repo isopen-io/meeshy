@@ -3334,12 +3334,9 @@ class ConversationViewModel: ObservableObject {
             mine.removeAll { $0 == emoji }
             messageSocket.removeAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
         } else {
-            // 1 emoji/user/PJ : retirer la réaction précédente de l'utilisateur.
-            for old in mine {
-                summary[old] = max(0, (summary[old] ?? 1) - 1)
-                if summary[old] == 0 { summary.removeValue(forKey: old) }
-            }
-            mine.removeAll()
+            // Multi-reactions (2026-08-18) : les emojis s'empilent, par piece
+            // jointe comme partout — plus jamais de swap. Le retrait reste par
+            // emoji via la branche alreadyReacted.
             summary[emoji] = (summary[emoji] ?? 0) + 1
             mine.append(emoji)
             messageSocket.addAttachmentReaction(attachmentId: attachmentId, messageId: remoteId, emoji: emoji)
