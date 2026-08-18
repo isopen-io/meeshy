@@ -361,6 +361,8 @@ Une porte n'est pas une impression : c'est une liste close, et chaque ligne a sa
 | Réversibilité | drapeau éteint ⇒ snapshot identique à aujourd'hui | idem |
 | Non-régression | matrice §5.3 rejouée : swipes, menus, drag & drop, pagination, pull-to-refresh | idem + le test de câblage Prisme existant reste vert |
 
+> **Renvoi, 2026-08-18.** Deux lignes de cette table sont amendées ailleurs et ne sont pas réécrites ici : « Performance — zéro allocation » se lit désormais « allocation bornée O(rangs visibles), jamais O(liste) » (§9.1-AMENDEMENT ⑧, source `tasks/lentille-implementation-contract.md` §4.1) ; « Matrice comportementale — **28** `id` + **16** `id` » compte en réalité **17 + 15 = 32** `id` (§9.1-AMENDEMENT, errata de comptes).
+
 **V2 porte une exigence que V1 n'a pas** : la parité. Le web ne se valide pas seul, il se valide **contre iOS**, planche contre planche et `id` contre `id`. C'est pour cela que l'ordre est imposé : on ne compare pas deux cibles mouvantes.
 
 ### 6.2 Le web sur `main` : dormant, accessible, et incapable de casser le reste
@@ -455,6 +457,36 @@ C'est la seule clôture qui compte pour livrer. Elle est atteinte quand, et seul
 10. **`main` n'a jamais été mis en danger** : à chaque étape, drapeaux éteints, l'app est identique ; la peau dégrade vers le rendu historique si elle lève ; le bundle n'est pas servi à qui ne l'a pas demandé.
 
 Une régression silencieuse vaut mieux qu'un joli effet : si un des dix points est rouge, la phase 1 n'est pas close, quel que soit l'état visuel.
+
+### §9.1-AMENDEMENT (2026-08-18, décision produit)
+
+> **Les dix points ci-dessus ne sont pas réécrits.** Ils restent la trace littérale de ce que le chantier s'était engagé à tenir, avec leurs comptes d'origine. Ce bloc dit ce qui, au 2026-08-18, fait foi **à leur place**. Instruction et preuves ligne par ligne : `tasks/lentille-cloture-phase1.md` (Q-145).
+
+**② La grille qui fait foi.** La clôture se prononce sur la grille **amendée par REV-4ter** — « chaque `id`/point classé : couvert avec preuve **OU** non couvert avec raison typée re-prouvée » — et non sur la lecture littérale des dix points. En conséquence, **la phase 1 est CLOSE-AVEC-RÉSERVES** au 2026-08-18. La grille littérale reste au-dessus, intacte, comme trace historique ; elle n'est plus le juge. Renvoi : `tasks/lentille-cloture-phase1.md` §0 et §1 (Récapitulatif).
+
+**⑥ Point 2 — R13 est RETIRÉ de la grille de recette.** Le contrat §8 prime : « la liste **affiche** l'existence de la Scène ; elle ne l'implémente pas » — la liste affichera la Scène le jour où la Scène existera. La **capacité** d'affichage reste prouvée (`test_L13_liveCallBanner_isConsumedByTheRow` demeure) ; le câblage rejoint le backlog de la Scène. Le point 2 se lit donc « R1 → R12 », R13 hors grille — à mentionner dans les **notes de version du palier 2**. Renvoi : `tasks/lentille-cloture-phase1.md` §1 point 2 et §3 D-8.
+
+**⑦ Point 4 — la clause « en Focal ET en Script » est AMENDÉE.** Script **hérite des preuves de Focal** : même hôte, même moteur, seule la densité diffère — la matrice n'a pas à être rejouée une seconde fois. **Risque résiduel nommé** : un défaut spécifique à la densité (troncature, espacement) n'a pas de témoin dédié. Amendement porté à sa source dans `tasks/focal-implementation-contract.md` (LWS-13, « Matrice temps réel §5 »). Renvoi : `tasks/lentille-cloture-phase1.md` §1 point 4 et §3 D-10.
+
+**⑧ Point 6 — le critère d'allocation est AMENDÉ.** « Zéro allocation dans la passe » devient **« allocation bornée O(rangs visibles), jamais O(liste) »**, mesure à l'appui : **1 + 2N objets par frame**, N = rangs visibles (banc Q-143). L'optimisation par pool reste une **option**, à ouvrir seulement si une mesure device/profiler la justifie un jour. **Le reste du point 6 est inchangé** : la mesure aux Instruments et au profiler navigateur reste **due**, au titre de la dette D-6. Amendement porté à sa source dans `tasks/lentille-implementation-contract.md` §4.1. Renvoi : `tasks/lentille-cloture-phase1.md` §1 point 6 et §3 D-7.
+
+**⑨ `agent_grammar` — la décision produit écrite qu'exige §5.2 du contrat est prise : « pas maintenant ».** Réexamen après le **palier 3** et l'audit R6-7/D-14 (étage agent mono-langue de fait). Le chemin technique reste prouvé et prêt (C3 non écrivant, tenu depuis G-126). Décision consignée aussi à sa source, `tasks/lentille-implementation-contract.md` §5.2. Renvoi : `tasks/lentille-cloture-phase1.md` §3 D-15.
+
+**⑪ L03 / L05 / L09 — « iOS seulement pour la phase 1 ».** La position du dernier message (`lastMessageLocation`), `hasPendingSync` et les glyphes de kind sont consignés comme écarts `absent-structurel` **assumés** côté web. L'ouverture du chantier modèle web reste au backlog (D-16), **non planifiée**. Renvoi : `tasks/lentille-cloture-phase1.md` §1 point 3 et §3 D-16.
+
+**⑫ Phase 2 Android — no-go pour l'instant.** Priorité à la stabilisation des paliers 1-3 ; réexamen ensuite. L'estimation de D-17 reste valable et la dette est **fermée** en l'état. Le §9.2 ci-dessous n'est donc pas ouvert.
+
+**Errata de comptes, actés.** Les points ci-dessus citent des nombres écrits avant que le référentiel réel soit connu. Ils ne sont pas corrigés dans le texte d'origine — ils le sont ici :
+
+| Écrit dans §9.1 / §9.2 | Réel, re-prouvé |
+|---|---|
+| point 1 — « les **sept** fichiers de vecteurs » | **12** fichiers (`packages/shared/fixtures/reading-modes/`) |
+| point 3 — « **28** lignes » (matrice `list`) | **17** lignes, `L01`..`L17` |
+| point 4 — « **16** lignes » (matrice `thread`) | **15** lignes, `F01`..`F15` |
+| point 7 — « les **44** `id` de `behaviour-matrix.json` » | **32** `id` |
+| **§9.2 point 3 — « les 44 `id` »** | **32** `id` — même erratum, à reprendre dans l'avenant Android, pas au milieu d'une vague |
+
+**Verdict résultant : phase 1 CLOSE-AVEC-RÉSERVES au 2026-08-18.** Les réserves sont nommées, datées et ordonnées dans `tasks/lentille-cloture-phase1.md` §3 (D-1..D-17).
 
 ### 9.2 Clôture de la **phase 2** — Android
 

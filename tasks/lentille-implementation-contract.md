@@ -608,6 +608,8 @@ Ce qui est livré **maintenant** :
 - **C2 — zéro donnée fabriquée.** Un résumé agent qui ne couvre pas la fenêtre non lue du lecteur n'est **pas** servi comme s'il la couvrait : la gateway retombe sur le déterministe. Un résumé partiel se déclare partiel, exactement comme `DeterministicConversationDigest.isComplete` de #3010 WS-8.
 - **C3 — le pont n'écrit jamais dans le fil, et l'allumer ne doit jamais allumer l'impersonation.** C'est la contrainte la plus importante, et elle est **renforcée** par rapport à #3010, pas relâchée. Le service produit aujourd'hui pour **livrer** — l'animateur poste sous l'identité de vrais utilisateurs dans les conversations `group/channel/public/global`. Le pont doit emprunter un chemin de production **non écrivant**, sans file de livraison, sans identité d'emprunt. Concrètement : la génération du pont ne passe **pas** par `generator` + `delivery`, mais par un débouché de lecture adossé à l'observer. Tant que cette séparation n'est pas en place, `agent_grammar` reste **OFF** et son activation requiert la décision produit écrite déjà exigée par #3010 WS-10.
 
+> **DÉCISION PRODUIT ÉCRITE — 2026-08-18 : « pas maintenant ».** C'est la décision que cette section exige, et elle est prise : `agent_grammar` **reste OFF**, non pas faute de condition technique, mais par choix. **Réexamen après le palier 3 et après l'audit R6-7 / D-14** (l'étage agent est mono-langue de fait, réserve de REV-5 jamais instruite). **Le chemin technique reste prouvé et prêt** : la séparation C3 (chemin de production non écrivant, adossé à l'observer) est tenue depuis G-126 (`03b4eaea`, clôture d'imports prouvée, durcie en allowlist exacte par Q-146/R6-1), et le site d'appel iOS lit le vrai drapeau depuis R6-2 (`1f32b312`). Rien à reconstruire le jour du réexamen. Renvois : `tasks/lentille-focal-workshop.md` §9.1-AMENDEMENT ⑨ ; `tasks/lentille-cloture-phase1.md` §3 D-15.
+
 **Conséquences, à respecter partout.**
 1. L'étage `fallback` n'est **jamais** traduit — il n'a pas de langue. Un changement de langue du lecteur le reformate instantanément, sans aller-retour serveur.
 2. L'étage `agent` se résout **exclusivement** par `resolveLastMessagePreview()`. Aucun code du chantier n'écrit une seconde résolution de langue.
@@ -641,7 +643,9 @@ sous la bande : fondu court sur d / 160, plafonné à −0.35
 reduce motion : alpha = 1, scale = 1, focus card = fond seul
 ```
 
-**Invariants.** `transform` et `opacity` **seuls** — jamais une hauteur, jamais une police. Coût O(rangs visibles), zéro allocation dans la passe, aucune invalidation de layout. La hauteur du rang (64) n'apparaît **nulle part** dans la loi : c'est ce qui garantit le « zéro relayout ».
+**Invariants.** `transform` et `opacity` **seuls** — jamais une hauteur, jamais une police. Coût O(rangs visibles), **allocation bornée O(rangs visibles), jamais O(liste)**, aucune invalidation de layout. La hauteur du rang (64) n'apparaît **nulle part** dans la loi : c'est ce qui garantit le « zéro relayout ».
+
+> **Amendé le 2026-08-18** (décision produit ⑧), mesure **Q-143** à l'appui — banc `apps/web/hooks/lentille/__tests__/use-lentille-perspective.perf.test.ts` : **1 + 2N objets par frame**, N = rangs visibles (301 objets pour N = 150), strictement bornés par la fenêtre visible, jamais O(liste). **Texte originel** : « Coût O(rangs visibles), zéro allocation dans la passe, aucune invalidation de layout. » L'optimisation par **pool** de candidats réutilisé entre frames reste une **option**, à ouvrir seulement si une mesure device/profiler la justifie un jour. Ce qui n'est **pas** amendé : la mesure aux Instruments et au profiler navigateur reste **due** (dette D-6). Renvois : `tasks/lentille-focal-workshop.md` §9.1-AMENDEMENT ⑧ ; `tasks/lentille-cloture-phase1.md` §1 point 6 et §3 D-7.
 
 ### 4.2 Élection de la focus card
 
@@ -707,6 +711,10 @@ Reprise 1:1 du vol. 5 §7, avec le propriétaire de la preuve.
 | R11 | Encoche et modes : menu par 3 chemins, mémorisé par conversation, multi-appareils, orchestrateur réengagé sur Auto | test 2 appareils + unitaire versionné | LWS-8 | LWS-11 | LWS-12 |
 | R12 | Long press : aperçu + actions rapides sur les 2 chemins iOS, clic droit + appui long web ; tap court jamais intercepté | passe manuelle + test UI | LWS-8 | LWS-11 | LWS-12 |
 | R13 | Appel en cours : ● pulsant + « n voix · depuis X », Rejoindre seulement si non rejoint | test manuel + snapshot des 2 états | LWS-8 | LWS-10 | LWS-12 |
+
+> **R13 — RETIRÉ de la grille de recette le 2026-08-18** (décision produit ⑥). La ligne reste ci-dessus comme trace du critère d'origine ; elle **ne conditionne plus la clôture**. Motif : le workshop §8 prime — « la liste **affiche** l'existence de la Scène ; elle ne l'implémente pas » — et la liste affichera la Scène le jour où la Scène existera. La **capacité** d'affichage reste prouvée et gardée (`test_L13_liveCallBanner_isConsumedByTheRow`) ; le **câblage** de `ConversationLiveCallProviding` rejoint le backlog de la Scène. Idem pour la ligne `L13` de la matrice comportementale. Renvois : `tasks/lentille-focal-workshop.md` §9.1-AMENDEMENT ⑥ ; `tasks/lentille-cloture-phase1.md` §1 point 2 et §3 D-8.
+
+> **R2 — renvoi du 2026-08-18.** Le « zéro allocation » de la ligne R2 se lit désormais **« allocation bornée O(rangs visibles), jamais O(liste) »** : voir la note d'amendement de §4.1 ci-dessus. La mesure Instruments / profiler (60 et 120 Hz) reste **due**, elle, sans changement (dette D-6).
 
 **Trois critères s'ajoutent, propres à l'unification** (workshop §8) :
 

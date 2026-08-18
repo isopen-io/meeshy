@@ -405,8 +405,11 @@
     </table>
   </div>
 
+  <p><b>Renvoi — amendements du 2026-08-18 (décision produit).</b> «&nbsp;Zéro allocation dans le pass&nbsp;» (ligne <i>Perf &amp; accessibilité</i> ci-dessus) se lit désormais «&nbsp;allocation bornée O(rangs visibles), jamais O(liste)&nbsp;», mesure Q-143 à l’appui (1 + 2N objets/frame, N = rangs visibles)&nbsp;; la mesure au profiler, elle, reste due. Source&nbsp;: <code>tasks/lentille-implementation-contract.md</code> §4.1, renvoi <code>tasks/lentille-focal-workshop.md</code> §9.1-AMENDEMENT ⑧.</p>
+
   <h2 style="margin-top:44px;">Matrice de couverture — toutes les features de la vue actuelle</h2>
   <p class="intro">Chaque ligne est un invariant de recette&nbsp;: la feature doit se comporter à l’identique en Focal et en Script. Sources = composants réels du repo.</p>
+  <p><b>Renvoi — amendement du 2026-08-18 (décision produit ⑦).</b> L’<i>invariant</i> «&nbsp;identique en Focal et en Script&nbsp;» reste vrai&nbsp;; c’est l’<i>obligation de preuve</i> qui est amendée&nbsp;: la matrice est jouée en Focal, <b>Script hérite des preuves de Focal</b> (même hôte, même moteur, seule la densité diffère) et n’est pas rejouée. Risque résiduel nommé&nbsp;: un défaut spécifique à la densité (troncature, espacement) n’a aucun témoin dédié. Source&nbsp;: <code>tasks/focal-implementation-contract.md</code> (LWS-13), renvoi <code>tasks/lentille-cloture-phase1.md</code> §3 D-10.</p>
   <div class="tablewrap">
     <table>
       <thead><tr><th>Feature (source actuelle)</th><th>Comportement en Focal / Script</th></tr></thead>
