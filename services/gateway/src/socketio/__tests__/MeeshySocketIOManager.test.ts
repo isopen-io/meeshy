@@ -321,7 +321,7 @@ jest.mock('../AgentAdminRelay', () => ({
 
 jest.mock('../../services/ReactionService.js', () => ({
   ReactionService: jest.fn().mockImplementation(() => ({
-    addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
+    addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' } }),
     createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1' }),
   })),
 }));
@@ -4124,7 +4124,7 @@ describe('MeeshySocketIOManager', () => {
     it('returns early without broadcasting when addReaction reports unchanged (agent already had this emoji)', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [], unchanged: true }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, unchanged: true }),
         createUpdateEvent: jest.fn(),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -4141,7 +4141,7 @@ describe('MeeshySocketIOManager', () => {
     it('emits REACTION_ADDED to conversation room on success', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [], unchanged: false }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, unchanged: false }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -4162,7 +4162,7 @@ describe('MeeshySocketIOManager', () => {
     it('creates notification when reactor !== author', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' } }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -4182,7 +4182,7 @@ describe('MeeshySocketIOManager', () => {
     it('skips notification when reactor === author', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' } }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '👍' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -5331,7 +5331,7 @@ describe('MeeshySocketIOManager', () => {
     it('continues when createReactionNotification rejects', async () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-1' });
       const mockReactionSvc = {
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' }, replacedEmojis: [] }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'reaction-1' } }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'reaction-1', emoji: '🔥' }),
       };
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
@@ -6878,7 +6878,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-msg-null' });
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
       ReactionService.mockImplementationOnce(() => ({
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'rxn-msg-null' }, replacedEmojis: [] }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'rxn-msg-null' } }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'rxn-msg-null' }),
       }));
       prisma.message.findUnique.mockResolvedValue(null);  // message not found
@@ -6900,7 +6900,7 @@ describe('MeeshySocketIOManager', () => {
       prisma.participant.findFirst.mockResolvedValue({ id: 'part-sndr-null' });
       const { ReactionService } = jest.requireMock('../../services/ReactionService.js') as any;
       ReactionService.mockImplementationOnce(() => ({
-        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'rxn-sndr-null' }, replacedEmojis: [] }),
+        addReaction: jest.fn().mockResolvedValue({ reaction: { id: 'rxn-sndr-null' } }),
         createUpdateEvent: jest.fn().mockResolvedValue({ reactionId: 'rxn-sndr-null' }),
       }));
       prisma.message.findUnique.mockResolvedValue({

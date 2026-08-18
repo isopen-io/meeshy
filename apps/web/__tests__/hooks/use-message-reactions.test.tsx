@@ -214,7 +214,7 @@ describe('useMessageReactions', () => {
       expect(mockEmit).not.toHaveBeenCalled();
     });
 
-    it('should enforce max 3 reactions limit', async () => {
+    it('stacks reactions without any client cap (multi-réactions)', async () => {
       const { result } = renderHook(() =>
         useMessageReactions({
           messageId: mockMessageId,
@@ -236,14 +236,16 @@ describe('useMessageReactions', () => {
 
       expect(result.current.userReactions.length).toBe(3);
 
-      // Try to add 4th reaction
-      let success: boolean = true;
+      // Multi-réactions (2026-08-18) : plus AUCUN cap client — la 4e réaction
+      // s'empile comme les autres (parité iOS/Android, serveur sans limite).
+      let success: boolean = false;
       await act(async () => {
         success = await result.current.addReaction('fire');
       });
 
-      expect(success).toBe(false);
-      expect(mockToastError).toHaveBeenCalledWith('Maximum 3 reactions reached');
+      expect(success).toBe(true);
+      expect(result.current.userReactions.length).toBe(4);
+      expect(mockToastError).not.toHaveBeenCalled();
     });
 
     it('should return false when socket not connected', async () => {

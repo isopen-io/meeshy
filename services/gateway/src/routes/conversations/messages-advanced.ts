@@ -1182,28 +1182,8 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const manager = socketIOHandler.getManager?.();
-          // Swap 1-réaction-par-user : l'ancien emoji part avant que le
-          // nouveau arrive (agrégations recalculées par event).
-          for (const removedEmoji of addResult.replacedEmojis) {
-            const removeEvent = await reactionService.createUpdateEvent(
-              messageId,
-              removedEmoji,
-              'remove',
-              currentParticipant.id,
-              conversationId,
-              userId,
-            );
-            await broadcastReactionMutation({
-              manager,
-              conversationId,
-              actorParticipantId: currentParticipant.id,
-              eventType: 'reaction-removed',
-              messageId,
-              emoji: removedEmoji,
-              payload: removeEvent as unknown as Record<string, unknown>,
-              onError: (error) => logger.warn('[REACTION-REST] swap-removal broadcast failed', error),
-            });
-          }
+          // Multi-réactions (2026-08-18) : un add n'évince plus jamais un
+          // emoji précédent — aucun retrait compensatoire à diffuser.
           await broadcastReactionMutation({
             manager,
             conversationId,

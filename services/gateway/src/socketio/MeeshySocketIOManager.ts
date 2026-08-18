@@ -3306,27 +3306,8 @@ export class MeeshySocketIOManager {
 
       if (message) {
         const normalizedConversationId = message.conversationId;
-        // Swap 1-réaction-par-user : broadcast du retrait de l'ancien emoji de
-        // l'agent avant l'ajout du nouveau.
-        for (const removedEmoji of result.replacedEmojis) {
-          const removeEvent = await reactionService.createUpdateEvent(
-            reaction.targetMessageId,
-            removedEmoji,
-            'remove',
-            participant.id,
-            normalizedConversationId,
-            reaction.asUserId
-          );
-          this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, removeEvent);
-          void this.enqueueOfflineReactionMutation({
-            conversationId: normalizedConversationId,
-            actorParticipantId: participant.id,
-            eventType: 'reaction-removed',
-            messageId: reaction.targetMessageId,
-            emoji: removedEmoji,
-            payload: removeEvent as unknown as Record<string, unknown>,
-          });
-        }
+        // Multi-réactions (2026-08-18) : un add n'évince plus jamais un
+        // emoji précédent — aucun retrait compensatoire à diffuser.
         this.io.to(ROOMS.conversation(normalizedConversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
         // An agent's reaction is a reaction like any other: without this the
         // room emit is its only audience and the toggle is lost for every

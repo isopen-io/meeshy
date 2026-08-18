@@ -269,7 +269,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -290,7 +290,7 @@ describe('reactionRoutes', () => {
 
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
       fastify.prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
 
       const req = makeRequest({
         body: { messageId: MESSAGE_ID, emoji: '👍' },
@@ -451,7 +451,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup(true);
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       // findUnique for socket broadcast returns null → skip emit
       fastify.prisma.message.findUnique.mockResolvedValue(null);
 
@@ -495,7 +495,7 @@ describe('reactionRoutes', () => {
       const handler = getHandler(fastify, 'POST', '/reactions');
 
       const updateEvent = { messageId: MESSAGE_ID, emoji: '👍', action: 'add' };
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       mockCreateUpdateEvent.mockResolvedValue(updateEvent);
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
@@ -515,7 +515,7 @@ describe('reactionRoutes', () => {
       const handler = getHandler(fastify, 'POST', '/reactions');
 
       const updateEvent = { messageId: MESSAGE_ID, emoji: '👍', action: 'add' };
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       mockCreateUpdateEvent.mockResolvedValue(updateEvent);
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
@@ -533,38 +533,12 @@ describe('reactionRoutes', () => {
       });
     });
 
-    it('queues the single-reaction swap removal for offline peers too', async () => {
-      // One reaction per user: adding 🎉 over 👍 persists a REMOVAL of 👍. An
-      // offline peer that only ever replays the addition keeps showing the
-      // actor's stale 👍 forever.
-      const { fastify, reply } = setup(true);
-      const handler = getHandler(fastify, 'POST', '/reactions');
-
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: ['👍'] });
-      mockCreateUpdateEvent.mockImplementation(async (_m: any, emoji: any, action: any) => ({
-        messageId: MESSAGE_ID,
-        emoji,
-        action,
-      }));
-      fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
-
-      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '🎉' } });
-      await handler(req, reply);
-      await Promise.resolve();
-
-      expect(mockEnqueueOfflineReaction).toHaveBeenCalledWith(
-        expect.objectContaining({ eventType: 'reaction-removed', emoji: '👍' }),
-      );
-      expect(mockEnqueueOfflineReaction).toHaveBeenCalledWith(
-        expect.objectContaining({ eventType: 'reaction-added', emoji: '🎉' }),
-      );
-    });
 
     it('does not queue an offline replay for an idempotent re-react (nothing changed)', async () => {
       const { fastify, reply } = setup(true);
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [], unchanged: true });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, unchanged: true });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -578,7 +552,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup(true);
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
       mockEnqueueOfflineReaction.mockRejectedValue(new Error('redis down'));
 
@@ -599,7 +573,7 @@ describe('reactionRoutes', () => {
       // otherwise every participant gets a redundant fan-out and the author is
       // re-notified for a reaction that never changed. 200, not 201 — nothing
       // was created.
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [], unchanged: true });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData, unchanged: true });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -615,7 +589,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup(false);
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -630,7 +604,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
 
       const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '👍' } });
@@ -654,7 +628,7 @@ describe('reactionRoutes', () => {
       const { fastify, reply } = setup();
       const handler = getHandler(fastify, 'POST', '/reactions');
 
-      mockAddReaction.mockResolvedValue({ reaction: reactionData, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: reactionData });
       fastify.prisma.message.findUnique.mockResolvedValue(messageRow);
       mockNotifyReactionAdded.mockRejectedValue(new Error('push failed'));
 

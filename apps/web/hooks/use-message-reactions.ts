@@ -131,13 +131,9 @@ export function useMessageReactions({
       return true; // Retourner succès car la réaction existe déjà
     }
 
-    // LIMITE: Maximum 3 réactions différentes par utilisateur
-    const MAX_REACTIONS_PER_USER = 3;
-    if (userReactions.length >= MAX_REACTIONS_PER_USER) {
-      toast.error(t('maxReactionsReached', { max: MAX_REACTIONS_PER_USER }));
-      return false;
-    }
-
+    // Multi-réactions (2026-08-18) : aucun cap client — le serveur accepte
+    // tout emoji distinct par participant (clé unique triple), parité
+    // iOS/Android qui n'ont jamais plafonné.
     try {
       // Optimistic update
       setReactions(prev => {
@@ -193,14 +189,7 @@ export function useMessageReactions({
               console.error('❌ [useMessageReactions] Server returned error:', response.error);
               setError(response.error || 'Failed to add reaction');
 
-              // Afficher l'erreur à l'utilisateur
-              // Si c'est l'erreur de limite de réactions, utiliser la traduction
-              if (response.error?.includes('Maximum') && response.error?.includes('different reactions')) {
-                toast.error(t('maxReactionsReached', { max: MAX_REACTIONS_PER_USER }));
-              } else {
-                // Afficher l'erreur brute pour les autres cas
-                toast.error(response.error || 'Failed to add reaction');
-              }
+              toast.error(response.error || 'Failed to add reaction');
 
               refreshReactions();
               resolve(false);

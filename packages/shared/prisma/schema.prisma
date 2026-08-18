@@ -1260,12 +1260,16 @@ model Reaction {
   message     Message     @relation("MessageReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
-  // itself enforces "at most one row per (message, participant)". This makes
-  // ReactionService.addReaction's upsert atomic — two concurrent adds with
-  // different emojis now race on the SAME document instead of each inserting
-  // their own row (see 2026-07-04-reaction-single-per-user-unique-index.mongodb.js).
-  @@unique([messageId, participantId], name: "participant_reaction_unique")
+  // Multi-réactions (2026-08-18, feu vert user) : la clé unique porte le
+  // TRIPLET (messageId, participantId, emoji) — un participant empile
+  // plusieurs emojis DISTINCTS sur le même message, jamais deux fois le
+  // même. L'upsert de ReactionService.addReaction reste atomique par
+  // triplet : deux adds concurrents du MÊME emoji convergent sur le même
+  // document ; deux emojis différents créent chacun le leur (voulu).
+  // Index Mongo : 2026-08-18-reaction-multi-per-user-unique-index.mongodb.js
+  // (à exécuter AVANT le déploiement — l'ancien index à 2 champs REJETTE la
+  // seconde ligne d'un même participant).
+  @@unique([messageId, participantId, emoji], name: "participant_reaction_unique")
   @@index([messageId])
   @@index([participantId])
   @@index([emoji])
