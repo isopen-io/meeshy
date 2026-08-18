@@ -9,17 +9,13 @@ nonisolated struct FocalCellTransform: Equatable, Sendable {
     let scale: CGFloat
     let alpha: CGFloat
     let translation: CGSize
-    /// Élévation `layer.zPosition` — la rangée magnifiée par la loupe
-    /// recouvre ses voisines (spec Magnificence). `0` hors bande.
-    let zPosition: CGFloat
 
     static let identity = FocalCellTransform(scale: 1, alpha: 1, translation: .zero)
 
-    init(scale: CGFloat, alpha: CGFloat, translation: CGSize, zPosition: CGFloat = 0) {
+    init(scale: CGFloat, alpha: CGFloat, translation: CGSize) {
         self.scale = scale
         self.alpha = alpha
         self.translation = translation
-        self.zPosition = zPosition
     }
 }
 
@@ -65,27 +61,20 @@ nonisolated enum FocalHorizontalAnchor: String, Sendable, CaseIterable {
 ///
 /// ## Constantes : d'où vient chaque nombre
 ///
-/// | Cote §4 | Source réelle | Écart assumé |
+/// | Cote spec §5 | Source réelle | Écart assumé |
 /// |---|---|---|
-/// | `falloff` 380, amplitudes 0.40 / 0.82 | `FocalFocusCurve.focusCurve(_, .thread)` (GELÉ) | aucun — jamais recalculé ici |
-/// | `bandLift` 150 | `FocalFocusCurve.focusBandOffset` = **140** | voir ci-dessous |
-/// | `focusTolerance` 95 | `FocalFocusCurve.focusBandHalfHeight` = **45** | voir ci-dessous |
+/// | `falloff` 380, amplitudes 0.40 / 0.82 | `FocalFocusCurve.focusCurve(_, .thread)` (miroir de la loi partagée, amendée spec 2026-08-18) | aucun — jamais recalculé ici |
+/// | `bandLift` 150 | `FocalFocusCurve.threadFocusBandOffset` | aucun — bande du FIL, spec §5 (la bande 140 ± 45 reste celle de la LISTE) |
+/// | `focusTolerance` 95 | `FocalFocusCurve.threadFocusBandHysteresis` | aucun — recette §7 « hystérésis 95 px » |
 /// | `bandGap` 8, plafond 0.7, ratio 0.8, tolérance 8 | `FocalPassConstants` (+ TODO contractuel) | absentes partout |
 ///
-/// **Écart assumé `150`→`140` et `95`→`45`.** Le §4.3 du contrat Focal cite
-/// `bandLift = 150` et `focusTolerance = 95`, mais le miroir GELÉ S1 déclare
-/// `focusBandOffset = 140` / `focusBandHalfHeight = 45` (loi partagée
-/// `packages/shared/utils/focus-curve.ts`, « bottom − 140 ± 45 »), et sa
-/// documentation désigne NOMMÉMENT « Focal atterrissage » comme consommateur :
-/// « Déclarée UNE fois ici — les vues (Lentille `list.focusCard`, Focal
-/// atterrissage) la lisent d'ici, jamais en dur (garde R15) ». Le workshop
-/// d'exécution dit la même chose (I-070, « bande `bottom−140±45` »). Déclarer
-/// un `150` rival ici recréerait exactement les deux sources de vérité que le
-/// gel S1 a supprimées. Le miroir gagne ; l'écart est signalé au rapport
-/// F-084 pour arbitrage de contrat.
+/// L'arbitrage F-084 (« 150 vs 140, 95 vs 45 ») est CLOS 2026-08-18 : la spec
+/// « Focal Grandeur Nature » §5 fait foi, la loi partagée porte désormais les
+/// DEUX bandes (`THREAD_FOCUS_BAND_*` pour le fil, `FOCUS_BAND_*` pour la
+/// liste) — aucune valeur rivale déclarée ici.
 ///
 /// @see tasks/focal-implementation-contract.md §4.1 → §4.7
-/// @see apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift (GELÉ)
+/// @see apps/ios/Meeshy/Features/Main/Focal/Core/FocalFocusCurve.swift
 nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
 
     /// Plancher de la ligne de focus au-dessus du bas du viewport.
@@ -97,19 +86,12 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     /// Borne haute de l'inset de tête, en fraction du viewport.
     let headInsetMaxRatio: CGFloat
 
-    /// Loupe (spec Magnificence 2026-08-17) — valeurs PAR DÉFAUT (hors
-    /// init memberwise : aucun site de construction ne change). Le pic
-    /// vient de `FocalPassConstants`, le rayon est DÉRIVÉ du miroir gelé.
-    let magnificationPeak: CGFloat = FocalPassConstants.magnificationPeak
-    let magnificationRadius: CGFloat =
-        FocalFocusCurve.focusBandHalfHeight * FocalPassConstants.magnificationRadiusFactor
-
     /// La seule instance du produit. Injectable pour les tests, comme le
     /// contrat §WS-5 le prévoyait avec `FocalFocusCurve.standard`.
     static let standard = FocalPerspectiveGeometry(
-        bandLift: FocalFocusCurve.focusBandOffset,
+        bandLift: FocalFocusCurve.threadFocusBandOffset,
         bandGap: FocalPassConstants.bandGap,
-        focusTolerance: FocalFocusCurve.focusBandHalfHeight,
+        focusTolerance: FocalFocusCurve.threadFocusBandHysteresis,
         headInsetMaxRatio: FocalPassConstants.headInsetMaxRatio
     )
 
@@ -180,74 +162,17 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     /// `alphaCeiling` : `1` pour une rangée confirmée,
     /// `FocalPassConstants.optimisticAlphaCeiling` pour un envoi optimiste
     /// (§4.4). C'est un `min`, jamais une substitution — le plafond ne RELÈVE
-    /// jamais une rangée déjà estompée par la distance.
-    /// La LOUPE : terme positionnel C1 (smoothstep), pic à la ligne de
-    /// focus, retombée EXACTE à 1 au rayon, symétrique au-dessus/en dessous
-    /// — donc continue pendant que le défilement traverse la bande. COMPOSÉE
-    /// par-dessus la courbe gelée, jamais écrite dedans (écart iOS assumé,
-    /// spec Magnificence 2026-08-17 — même précédent que le retrait du
-    /// fondu d'alpha ; zéro collision avec le chantier web V4).
-    /// RÈGLE STRICTE (user 17/08 soir) : zone = bande exacte (rayon =
-    /// demi-bande), et croissance plafonnée en POINTS absolus par
-    /// `magnificationMaxGrowth` — le pic effectif d'une rangée est
-    /// `min(pic, 1 + maxGrowth/h)`.
-    func magnification(signedDistance: CGFloat, rowHeight: CGFloat) -> CGFloat {
-        let t = max(0, 1 - abs(signedDistance) / magnificationRadius)
-        let smooth = t * t * (3 - 2 * t)
-        let cappedPeak = min(
-            magnificationPeak,
-            1 + FocalPassConstants.magnificationMaxGrowth / max(rowHeight, 1)
-        )
-        return 1 + (cappedPeak - 1) * smooth
-    }
-
-    /// Distance SIGNÉE à la ligne de focus (positive au-dessus, négative en
-    /// dessous) — l'entrée de la loupe, là où `distance` (clampée) reste
-    /// celle de la courbe gelée.
-    func signedDistance(visualMidY: CGFloat, focusY: CGFloat) -> CGFloat {
-        focusY - visualMidY
-    }
-
-    /// Transform complet AVEC loupe — le chemin nominal du pass. La courbe
-    /// gelée reçoit la distance clampée (son domaine), la loupe la distance
-    /// signée ; l'échelle rendue est le produit des deux, l'élévation
-    /// `zPosition` suit la loupe seule.
-    /// `isMagnifiable` (règle stricte) : SEULS LES MESSAGES prennent la
-    /// loupe — pilule de jour, typing, début de conversation suivent la
-    /// perspective de RÉDUCTION mais ne grossissent jamais.
-    func transform(
-        signedDistance: CGFloat,
-        cellSize: CGSize,
-        horizontalAnchor: FocalHorizontalAnchor,
-        isRightToLeft: Bool,
-        alphaCeiling: CGFloat,
-        isMagnifiable: Bool
-    ) -> FocalCellTransform {
-        let curve = FocalFocusCurve.focusCurve(distance: max(0, signedDistance), variant: .thread)
-        let loupe = isMagnifiable
-            ? magnification(signedDistance: signedDistance, rowHeight: cellSize.height)
-            : 1
-        return anchoredTransform(
-            scale: curve.scale * loupe,
-            cellSize: cellSize,
-            horizontalAnchor: horizontalAnchor,
-            isRightToLeft: isRightToLeft,
-            alphaCeiling: alphaCeiling,
-            zPosition: (loupe - 1) * FocalPassConstants.magnificationElevationSpan
-        )
-    }
-
-    /// Réserve trailing des rangées en perspective : la plus grande largeur
-    /// de contenu telle qu'une rangée PLEINE LARGEUR magnifiée au pic tienne
-    /// dans l'écran (pivot 18 % fixe) : `L + Wc·(p + (1−p)·A) ≤ W`. Le
-    /// débord leading du pivot (≈ p·Wc·(A−1) ≈ 11 pt) tient dans l'inset 12.
-    func magnifiedTrailingReserve(viewportWidth: CGFloat, leadingInset: CGFloat) -> CGFloat {
-        let p = FocalFocusCurve.threadHorizontalPivot
-        let growth = p + (1 - p) * magnificationPeak
-        let maxContentWidth = (viewportWidth - leadingInset) / growth
-        return max(0, (viewportWidth - leadingInset - maxContentWidth).rounded(.up))
-    }
-
+    /// jamais une rangée déjà estompée par la distance :
+    /// `alpha = min(plafond, alphaPerspective)`, littéralement la formule de
+    /// la matrice §5.
+    ///
+    /// La LOUPE positionnelle (spec Magnificence 2026-08-17, pic 1.18 plafonné
+    /// 48 pt) est RETIRÉE 2026-08-18 : la spec §5 réancrée ne connaît qu'une
+    /// échelle ≤ 1 — l'élu est à l'échelle PLEINE (1.0), jamais au-delà ; sa
+    /// mise en avant passe par la carte de focus et la tenue de la rangée
+    /// (`FocalRowInput.isFocused`), pas par un grossissement du layer. C'est
+    /// aussi ce qui supprime la réserve trailing et l'élévation `zPosition`
+    /// qu'elle imposait.
     func transform(
         distance: CGFloat,
         cellSize: CGSize,
@@ -258,21 +183,21 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
         let curve = FocalFocusCurve.focusCurve(distance: distance, variant: .thread)
         return anchoredTransform(
             scale: curve.scale,
+            curveAlpha: curve.alpha,
             cellSize: cellSize,
             horizontalAnchor: horizontalAnchor,
             isRightToLeft: isRightToLeft,
-            alphaCeiling: alphaCeiling,
-            zPosition: 0
+            alphaCeiling: alphaCeiling
         )
     }
 
     private func anchoredTransform(
         scale: CGFloat,
+        curveAlpha: CGFloat,
         cellSize: CGSize,
         horizontalAnchor: FocalHorizontalAnchor,
         isRightToLeft: Bool,
-        alphaCeiling: CGFloat,
-        zPosition: CGFloat
+        alphaCeiling: CGFloat
     ) -> FocalCellTransform {
         let shrink = 1 - scale
 
@@ -280,17 +205,17 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
         let tx: CGFloat
         switch horizontalAnchor {
         case .leading:
-            // Pivot horizontal à `18 %` de la largeur — PAS au bord gauche.
+            // Pivot horizontal à `16 %` de la largeur — PAS au bord gauche.
             //
-            // La maquette de référence l'écrit littéralement
-            // (`docs/design/2026-08-15-conversation-modes-verdict.html` :
-            // `transform-origin: "18% bottom"`). `anchorPoint` restant au
-            // centre (0,5) — il n'est JAMAIS touché, cf. écart #2 ci-dessus —
-            // la compensation vaut `(0,5 − 0,18)` de la largeur, et non
-            // `0,5` : ancrer à `0,5` fait pivoter autour du bord GAUCHE
-            // (0 %), et la rangée s'effondre vers l'extrême bord au lieu de
-            // se contracter vers sa colonne d'avatar, qui doit rester en
-            // place.
+            // C'est le `x` de l'`anchorPoint (0.16, 1.0)` de la spec §5
+            // (`docs/design/2026-08-15-focal-spec-integration.html`, réancrée
+            // 2026-08-18 — remplace le `18 %` de la maquette vol. 3).
+            // `anchorPoint` restant au centre (0,5) — il n'est JAMAIS touché,
+            // cf. écart #2 ci-dessus — la compensation vaut
+            // `(0,5 − 0,16)` de la largeur, et non `0,5` : ancrer à `0,5`
+            // fait pivoter autour du bord GAUCHE (0 %), et la rangée
+            // s'effondre vers l'extrême bord au lieu de se contracter vers sa
+            // colonne d'avatar, qui doit rester en place.
             let pivot = FocalFocusCurve.threadHorizontalPivot
             tx = (isRightToLeft ? 1 : -1) * (cellSize.width * (0.5 - pivot)) * shrink
         case .center:
@@ -299,18 +224,16 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
 
         return FocalCellTransform(
             scale: scale,
-            // AUCUN fondu de distance — décision produit 2026-08-16
-            // (« enlever l'effet transparent sur les bulles »), constatée sur
-            // device en mode sombre : l'estompage rendait le haut du fil
-            // illisible. Écart ASSUMÉ avec la maquette de référence
-            // (`opacity = 1 − 0.78·f`) : la profondeur est portée par
-            // l'ÉCHELLE seule. Le plafond reste — il porte un état d'envoi
-            // (optimiste 0,7, §4.4), pas un effet de perspective ; la courbe
-            // gelée continue de calculer son alpha, il n'est simplement plus
-            // consommé ici.
-            alpha: alphaCeiling,
-            translation: CGSize(width: tx, height: ty),
-            zPosition: zPosition
+            // Fondu de distance RÉTABLI 2026-08-18 (spec §5 réancrée par
+            // l'utilisateur : `alpha = 1 − 0.82f`, plancher 0.18 ; recette §7
+            // « à 400 px au-dessus, ≤ 20 % d'opacité »). Le retrait du
+            // 2026-08-16 (« enlever l'effet transparent ») est REVERSÉ par ce
+            // réancrage explicite — si la lisibilité du haut du fil repose la
+            // question, c'est `threadAlphaDecay` (loi partagée) qu'il faudra
+            // arbitrer, jamais une substitution locale. Le `min` garde au
+            // plafond son rôle d'état d'envoi (optimiste 0,7, §4.4).
+            alpha: min(alphaCeiling, curveAlpha),
+            translation: CGSize(width: tx, height: ty)
         )
     }
 

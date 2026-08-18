@@ -141,3 +141,101 @@ describe('buildPushHeader', () => {
     expect(result.title).not.toContain('Meeshy Global');
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Action sociale — ce que la bannière iOS peut RÉELLEMENT montrer
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Sur le chemin Communication Notification, iOS réécrit le titre avec le
+// displayName de l'INPerson expéditeur : le titre riche persisté (« elvira
+// ndjiki a commenté un réel ») ne peut donc PAS voyager par là. L'action
+// voyage en subtitle, seul champ que le client peut rendre sous le nom.
+describe('buildPushHeader — action sociale', () => {
+  it('compose « action · cible » pour un commentaire sur le contenu d’un ami', () => {
+    const result = buildPushHeader({
+      type: 'friend_story_comment',
+      actor: { id: 'u1', username: 'elvira', displayName: 'elvira ndjiki' },
+      context: {},
+      action: 'a commenté un réel',
+      entitySubtitle: 'Publication de Windie Nh',
+    });
+    expect(result.title).toBe('elvira ndjiki');
+    expect(result.subtitle).toBe('a commenté un réel · Publication de Windie Nh');
+  });
+
+  it('n’ajoute pas une cible que l’action énonce déjà (« Nouveau réel »)', () => {
+    const result = buildPushHeader({
+      type: 'friend_new_post',
+      actor: { id: 'u1', username: 'windie', displayName: 'Windie Nh' },
+      context: {},
+      action: 'a publié un nouveau réel',
+      entitySubtitle: 'Nouveau réel',
+    });
+    expect(result.subtitle).toBe('a publié un nouveau réel');
+  });
+
+  it('garde le DÉTAIL d’une cible redondante (l’aperçu du contenu visé)', () => {
+    const result = buildPushHeader({
+      type: 'post_comment',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: {},
+      action: 'a commenté votre publication',
+      entitySubtitle: 'Votre publication : « Bonjour tout le monde »',
+    });
+    expect(result.subtitle).toBe('a commenté votre publication · « Bonjour tout le monde »');
+  });
+
+  it('garde le résumé média d’une cible redondante', () => {
+    const result = buildPushHeader({
+      type: 'post_comment',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: {},
+      action: 'a commenté votre story',
+      entitySubtitle: 'Votre story · 📷 Photo',
+    });
+    expect(result.subtitle).toBe('a commenté votre story · 📷 Photo');
+  });
+
+  it('rend l’action seule quand aucune cible n’est fournie', () => {
+    const result = buildPushHeader({
+      type: 'friend_new_mood',
+      actor: { id: 'u1', username: 'g', displayName: 'G' },
+      context: {},
+      action: 'a publié une nouvelle humeur',
+    });
+    expect(result.subtitle).toBe('a publié une nouvelle humeur');
+  });
+
+  it('borne le subtitle composé à 120 caractères', () => {
+    const result = buildPushHeader({
+      type: 'post_comment',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: {},
+      action: 'a commenté votre publication',
+      entitySubtitle: `Publication de ${'x'.repeat(300)}`,
+    });
+    expect(result.subtitle!.length).toBeLessThanOrEqual(120);
+  });
+
+  it('laisse les conversations intactes — l’action ne concerne pas les messages', () => {
+    const result = buildPushHeader({
+      type: 'new_message',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: { conversationType: 'group', conversationTitle: 'Équipe Dev' },
+      action: null,
+    });
+    expect(result).toEqual({ title: 'Alice', subtitle: 'Équipe Dev' });
+  });
+
+  it('préfère une cible explicite au nom de conversation quand il n’y a pas d’action', () => {
+    // Comportement historique préservé : `params.subtitle` primait déjà sur le
+    // sous-titre dérivé du type.
+    const result = buildPushHeader({
+      type: 'message_reaction',
+      actor: { id: 'u1', username: 'alice', displayName: 'Alice' },
+      context: { conversationType: 'group', conversationTitle: 'Équipe Dev' },
+      entitySubtitle: 'En réponse à « salut »',
+    });
+    expect(result.subtitle).toBe('En réponse à « salut »');
+  });
+});

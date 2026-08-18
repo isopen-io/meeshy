@@ -107,8 +107,23 @@ public nonisolated struct MeeshyColors {
         isDark ? indigo300 : indigo700.opacity(0.6)
     }
 
+    /// D-18 (2026-08-18, soldée) — `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)`
+    /// (valeurs d'origine) mesuraient **1,67:1 en clair et 2,46:1 en sombre**
+    /// contre `backgroundSecondary`/le fond ambiant (composition alpha PUIS
+    /// luminance WCAG, même loi que Q142-a) — les DEUX thèmes étaient sous
+    /// AA texte normal (4,5:1), pas seulement le clair consigné par le
+    /// finding initial (la mesure prime : le sombre a été re-mesuré rouge
+    /// ici, D-18 corrigé en conséquence). Assombri/opacifié au cran minimal
+    /// qui passe, dans la MÊME famille indigo (jamais un gris neutre) :
+    /// `indigo700.opacity(0.8)` clair (**4,76:1** sur `backgroundSecondary`
+    /// `#F8F7FF`, **4,60:1** sur `backgroundTertiary` `#EEF2FF` — les deux
+    /// fonds clairs déclarés les plus sombres du thème) et
+    /// `indigo300.opacity(0.7)` sombre (**5,13:1** sur `backgroundSecondary`
+    /// `#13111C`, **4,65:1** sur `backgroundTertiary` `#1E1B4B` — le fond
+    /// sombre déclaré le plus clair, donc le pire cas pour du texte clair).
+    /// Verrouillé par `TextMutedContrastAATests` (`MeeshyTests`).
     public static func textMuted(isDark: Bool) -> Color {
-        isDark ? indigo400.opacity(0.5) : indigo500.opacity(0.4)
+        isDark ? indigo300.opacity(0.7) : indigo700.opacity(0.8)
     }
 
     public static func backgroundSecondary(isDark: Bool) -> Color {

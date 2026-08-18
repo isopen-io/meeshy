@@ -302,8 +302,7 @@ final class FocalScrollPass {
                     cellSize: cell.bounds.size,
                     isRightToLeft: isRightToLeft,
                     alphaCeiling: descriptor.alphaCeiling,
-                    usesPerspective: usesPerspective,
-                    isMagnifiable: descriptor.localId != nil
+                    usesPerspective: usesPerspective
                 ),
                 to: cell
             )
@@ -419,8 +418,7 @@ final class FocalScrollPass {
                 cellSize: cell.bounds.size,
                 isRightToLeft: collectionView.effectiveUserInterfaceLayoutDirection == .rightToLeft,
                 alphaCeiling: descriptor.alphaCeiling,
-                usesPerspective: rendering == .perspective,
-                isMagnifiable: descriptor.localId != nil
+                usesPerspective: rendering == .perspective
             ),
             to: cell
         )
@@ -534,19 +532,17 @@ final class FocalScrollPass {
         cellSize: CGSize,
         isRightToLeft: Bool,
         alphaCeiling: CGFloat,
-        usesPerspective: Bool,
-        isMagnifiable: Bool
+        usesPerspective: Bool
     ) -> FocalCellTransform {
         guard usesPerspective else {
             return geometry.flatTransform(alphaCeiling: alphaCeiling)
         }
         return geometry.transform(
-            signedDistance: geometry.signedDistance(visualMidY: visualMidY, focusY: focusY),
+            distance: geometry.distance(visualMidY: visualMidY, focusY: focusY),
             cellSize: cellSize,
             horizontalAnchor: horizontalAnchor,
             isRightToLeft: isRightToLeft,
-            alphaCeiling: alphaCeiling,
-            isMagnifiable: isMagnifiable
+            alphaCeiling: alphaCeiling
         )
     }
 
@@ -575,7 +571,9 @@ final class FocalScrollPass {
         matrix.m41 = transform.translation.width
         matrix.m42 = transform.translation.height
         cell.layer.transform = matrix
-        cell.layer.zPosition = transform.zPosition
+        // `zPosition` remis à 0 : l'élévation appartenait à la loupe retirée
+        // (spec §5 réancrée) — une cellule recyclée n'en hérite jamais.
+        cell.layer.zPosition = 0
         cell.alpha = transform.alpha
     }
 }

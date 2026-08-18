@@ -104,8 +104,11 @@ final class FocalHostCallSiteMountGuardTests: XCTestCase {
         // Site 2 (willDisplay) — garde inline au point d'appel, pas dans une
         // fonction partagée (la cellule entrante n'utilise PAS
         // `applyFocalPassIfEnabled`, qui ré-élirait).
+        // Le thème n'est PLUS resynchronisé au point d'appel (audit perf
+        // 2026-08-18) : accent/isDark sont poussés aux événements qui les
+        // changent, jamais par cellule entrante.
         XCTAssertTrue(
-            code.contains("if readingMode != .bubbles {\n            syncFocalPassTheme()\n            focalPass.apply(to: cell, in: collectionView, descriptor:"),
+            code.contains("if readingMode != .bubbles {\n            focalPass.apply(to: cell, in: collectionView, descriptor:"),
             "Le site 2 (willDisplayCell) doit garder son appel `focalPass.apply(to:in:descriptor:)` derrière `readingMode != .bubbles` — sans quoi l'entrée d'une cellule appellerait le pass drapeau OFF."
         )
 

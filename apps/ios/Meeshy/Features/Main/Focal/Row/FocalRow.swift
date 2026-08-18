@@ -145,21 +145,32 @@ struct FocalRow: View {
                 )
             }
 
-            if showsQuotedReply, let reply = content.reply {
-                FocalQuotedReplyView(
-                    reply: reply,
-                    accentHex: input.accentHex,
-                    isDark: input.isDark,
-                    mentionDisplayNames: input.mentionDisplayNames,
-                    onReplyTap: actions.onReplyTap,
-                    onStoryReplyTap: actions.onStoryReplyTap
-                )
+            // Matrice §5 « Éphémère / flou / vue unique » : le flou de
+            // niveau MESSAGE s'applique au BLOC CONTENU (citation comprise),
+            // jamais à l'identité ni à la méta — corrigé 2026-08-18 (un
+            // message protégé s'affichait EN CLAIR en Focal). L'état de
+            // révélation vit dans la feuille (`FocalProtectedContent`),
+            // FocalRow reste sans @State (contrainte dure §WS-4).
+            //
+            // Le wrapper ne se MONTE que pour un message protégé — même
+            // discipline que le mux de l'hôte (« plan vide ⇒ vue intacte ») :
+            // l'écrasante majorité des messages n'a pas de flou et ne paie ni
+            // le `@StateObject` ni le modificateur. `isBlurred` est stable
+            // sur la vie du message, la branche ne bascule pas au recyclage.
+            if content.isBlurred {
+                FocalProtectedContent(
+                    isBlurred: true,
+                    isViewOnce: content.isViewOnce,
+                    messageId: content.messageId,
+                    onConsumeViewOnce: actions.onConsumeViewOnce
+                ) {
+                    contentSections
+                }
+            } else {
+                contentSections
             }
 
-            visualBlock
-            audioBlock
-            nonMediaBlock
-            textOrEmojiBlock
+            failedRetrySection
             // Hors focus, les réactions gardent leur place habituelle sous le
             // contenu. En focus, elles MIGRENT dans la barre de base, où elles
             // ouvrent la rangée « posé → (+) → à poser » : deux jeux de
@@ -348,6 +359,51 @@ struct FocalRow: View {
         content.reply != nil && !content.audioHostsReply && !content.visualHostsReply
     }
 
+    /// Le bloc contenu protégé par le flou de message — citation + médias +
+    /// audio + non-média + texte. Le VStack reprend le MÊME espacement que la
+    /// pile parente : hauteur de rangée identique, wrapper monté ou pas.
+    private var contentSections: some View {
+        VStack(alignment: .leading, spacing: FocalMetrics.Row.paddingVertical) {
+            if showsQuotedReply, let reply = content.reply {
+                FocalQuotedReplyView(
+                    reply: reply,
+                    accentHex: input.accentHex,
+                    isDark: input.isDark,
+                    mentionDisplayNames: input.mentionDisplayNames,
+                    onReplyTap: actions.onReplyTap,
+                    onStoryReplyTap: actions.onStoryReplyTap
+                )
+            }
+
+            visualBlock
+            audioBlock
+            nonMediaBlock
+            textOrEmojiBlock
+        }
+    }
+
+    /// Matrice §5 « Envoi optimiste / échec » : « Bande orange de retry
+    /// inchangée, exclue de la perspective ». Réutilise
+    /// `BubbleFailedRetryBar` TELLE QUELLE (§1.3 — spinner, blink gaté
+    /// Reduce Motion, a11y) ; seule sa POSE change : une bande compacte sous
+    /// le contenu au retrait de colonne, à la place de l'onglet de bord de
+    /// bulle. Jusqu'au 2026-08-18, `onRetry` était câblé par l'hôte mais
+    /// AUCUNE vue Focal ne le consommait — un message échoué n'offrait aucun
+    /// moyen de le renvoyer.
+    private var isFailedOutgoing: Bool {
+        content.isMe && content.meta.deliveryStatus == .failed
+    }
+
+    @ViewBuilder
+    private var failedRetrySection: some View {
+        if isFailedOutgoing {
+            BubbleFailedRetryBar(onRetry: { actions.onRetry?(input.localId) })
+                .frame(width: 72, height: 28)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.leading, indent)
+        }
+    }
+
     private var audioMode: FocalAudioMode { FocalAudioRouting.mode(for: content) }
 
     @ViewBuilder
@@ -460,10 +516,16 @@ struct FocalRow: View {
     /// méta, juste après le texte : `showsTranslationChip` ne fait AUCUNE
     /// seconde résolution, elle compare deux champs déjà résolus par
     /// `BubbleContentBuilder` (`activeLangCode`/`originalLangCode`).
+    /// Texte effectif de la rangée (Prisme résolu en amont) — partagé par le
+    /// rendu, la sheet « Lire plus » et la clé du cross-fade.
+    private var effectiveText: String {
+        content.translation?.preferredContent ?? content.text?.raw ?? ""
+    }
+
     private var textBlock: some View {
         HStack(alignment: .top, spacing: 4) {
             BubbleExpandableText(
-                content: content.translation?.preferredContent ?? content.text?.raw ?? "",
+                content: effectiveText,
                 isMe: content.isMe,
                 mentionDisplayNames: input.mentionDisplayNames,
                 highlightTerm: input.highlightSearchTerm,
@@ -478,10 +540,18 @@ struct FocalRow: View {
             )
             .equatable()
             .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: textSize))
+            // Matrice §5 « Traductions qui arrivent » : « swap du texte en
+            // place (cross-fade 150 ms) ». L'identité suit le texte effectif :
+            // quand la traduction préférée arrive après coup (reconfigure
+            // ciblé), l'ancien rendu se fond dans le nouveau — fondu
+            // d'opacité pur, toléré sous Reduce Motion (doctrine effets).
+            .id(effectiveText)
+            .transition(.opacity)
 
             translationChip
         }
         .padding(.leading, indent)
+        .animation(.easeInOut(duration: 0.15), value: effectiveText)
     }
 
     /// Charge de la sheet « Lire plus » — le MÊME texte effectif que la
@@ -491,28 +561,52 @@ struct FocalRow: View {
             messageId: content.messageId,
             senderName: content.senderName ?? "",
             timeString: content.meta.timeString,
-            text: content.translation?.preferredContent ?? content.text?.raw ?? "",
+            text: effectiveText,
             accentHex: input.accentHex,
             isDark: input.isDark
         )
     }
 
-    /// « Apparition du chip 🌐 en méta » (F06) quand le texte affiché EST
-    /// une traduction — `translation.activeLangCode != translation.originalLangCode`,
-    /// les deux déjà résolus en amont (aucune seconde résolution Prisme).
+    /// Chip 🌐 quand le texte affiché EST une traduction — INTERACTIF depuis
+    /// le 2026-08-18 (matrice §5 : « Appui sur 🌐 = V.O., appui long =
+    /// sélecteur de langues existant » — il était purement décoratif). Le tap
+    /// bascule vers la langue d'ORIGINE via l'override existant du ViewModel
+    /// (re-taper revient à la résolution Prisme) ; l'appui long ouvre la vue
+    /// Langue. Aucun état local (contrainte dure §WS-4) : la rangée renvoie
+    /// la cible, le ViewModel tranche.
+    /// `true` quand la rangée montre une TRADUCTION (le tap ramène à la
+    /// V.O.) ; `false` quand un override explicite montre déjà la V.O. (le
+    /// tap rend la main au Prisme). Sans ce second état, le premier tap
+    /// faisait disparaître le chip et la V.O. devenait un cul-de-sac.
+    private var chipShowsTranslation: Bool {
+        (content.translation?.activeLangCode ?? "") != (content.translation?.originalLangCode ?? "")
+    }
+
     @ViewBuilder
     private var translationChip: some View {
         if let translation = content.translation,
            translation.preferredContent != nil,
-           translation.activeLangCode != translation.originalLangCode {
-            Image(systemName: "globe")
-                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo400)
-                // Purement visuel (F06 demande un SIGNAL visuel, le texte
-                // traduit se lit déjà tel quel) — masqué de VoiceOver pour
-                // éviter un doublon si un futur segment de traduction
-                // rejoint `MessageAccessibilityLabelComposer`.
-                .accessibilityHidden(true)
+           chipShowsTranslation || input.activeDisplayLangCode != nil {
+            Button {
+                actions.onSetActiveDisplayLanguage?(
+                    content.messageId,
+                    chipShowsTranslation ? translation.originalLangCode : nil
+                )
+            } label: {
+                Image(systemName: "globe")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .foregroundColor(chipShowsTranslation ? MeeshyColors.indigo400 : MeeshyColors.indigo400.opacity(0.5))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+                    actions.onShowTranslationDetail?(content.messageId)
+                }
+            )
+            .accessibilityLabel(chipShowsTranslation
+                ? String(localized: "focal.translation.show_original", defaultValue: "Voir la version originale", bundle: .main)
+                : String(localized: "focal.translation.back_to_translation", defaultValue: "Revenir à la traduction", bundle: .main))
         }
     }
 }

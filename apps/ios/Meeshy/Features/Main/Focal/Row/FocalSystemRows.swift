@@ -58,7 +58,9 @@ struct FocalBurnedRow: View, Equatable {
 }
 
 /// Notice système générique (ex. futur événement de conversation) — plate,
-/// sans capsule. `text` porte déjà le libellé localisé par l'appelant (même
+/// sans capsule, CENTRÉE (matrice §5 « Notices d'appel et système = rangées
+/// centrées plates » — l'alignement au retrait 29 était un écart, corrigé
+/// 2026-08-18). `text` porte déjà le libellé localisé par l'appelant (même
 /// contrat d'entrée que `BubbleSystemNoticeView.text`).
 struct FocalSystemNoticeRow: View, Equatable {
     let text: String
@@ -68,8 +70,8 @@ struct FocalSystemNoticeRow: View, Equatable {
         Text(text)
             .font(MeeshyFont.relative(12.5, weight: .medium))
             .foregroundColor(ThemeManager.shared.textMuted)
-            .multilineTextAlignment(.leading)
-            .padding(.leading, FocalMetrics.Text.indent)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity, alignment: .center)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(text)
     }

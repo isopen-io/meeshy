@@ -97,6 +97,18 @@ let mockAuthToken: string | null = 'valid-token';
 jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: () => mockAuthToken,
+    // D-4 / R5-6 — `reading-mode-preference-store.ts` (importé transitivement
+    // via `hooks/queries/index.ts` → `use-socket-cache-sync.ts` →
+    // `lib/conversations/reading-mode-broadcast.ts`) résout l'identité au
+    // chargement du module (`isAuthenticated`/`getCurrentUser`). Ce fichier ne
+    // teste rien de la Lentille : valeurs STATIQUES plutôt que dérivées de
+    // `mockAuthToken` — ce module se charge avant l'initialisation de ce
+    // `let` sur au moins un chemin de `jest.requireActual` de ce fichier
+    // (`@/hooks/queries`, plus bas), une fermeture sur `mockAuthToken` ici y
+    // lèverait une TDZ. `false`/`null` suffisent : rien dans cette suite
+    // n'exerce le magasin de mode de lecture.
+    isAuthenticated: () => false,
+    getCurrentUser: () => null,
     clearAllSessions: jest.fn(),
     registerOnClear: jest.fn(),
     getAnonymousSession: jest.fn(() => null),

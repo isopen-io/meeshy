@@ -2,27 +2,31 @@ import { describe, it, expect } from 'vitest'
 import { focusCurve, electFocusRow, type FocusRowCandidate } from '../utils/focus-curve'
 
 describe('focusCurve — thread variant (Focal, fil)', () => {
-  // Constantes transposées de la maquette de référence
-  // docs/design/2026-08-15-conversation-modes-verdict.html, perspective(scr) :
-  // f = min(1, d/520) ; opacity = 1 − 0.78·f ; scale = 1 − 0.38·f.
-  it('at d=520 (saturation), alpha = 1 − 0.78 = 0.22 and scale = 1 − 0.38 = 0.62', () => {
-    const { alpha, scale } = focusCurve(520, 'thread')
-    expect(alpha).toBeCloseTo(0.22, 4)
-    expect(scale).toBeCloseTo(0.62, 4)
+  // Spec « Focal Grandeur Nature » §3/§5
+  // (docs/design/2026-08-15-focal-spec-integration.html, contrat 2026-08-18) :
+  // f = min(1, d/380) ; opacity = 1 − 0.82·f ; scale = 1 − 0.40·f.
+  it('at d=380 (saturation), alpha = 1 − 0.82 = 0.18 and scale = 1 − 0.40 = 0.60 — the spec floors', () => {
+    const { alpha, scale } = focusCurve(380, 'thread')
+    expect(alpha).toBeCloseTo(0.18, 4)
+    expect(scale).toBeCloseTo(0.6, 4)
   })
 
-  it('f saturates at d=520 exactly — same result as d=900 (min(1, ·) caps the ramp)', () => {
-    expect(focusCurve(520, 'thread')).toEqual(focusCurve(900, 'thread'))
+  it('f saturates at d=380 exactly — same result as d=900 (min(1, ·) caps the ramp)', () => {
+    expect(focusCurve(380, 'thread')).toEqual(focusCurve(900, 'thread'))
   })
 
   it('at d=0 (pile dans la bande de focus) renders alpha=1, scale=1 — no fade, no shrink', () => {
     expect(focusCurve(0, 'thread')).toEqual({ alpha: 1, scale: 1 })
   })
 
-  it('at d=260 (mid-ramp), alpha and scale sit exactly halfway to their d=520 floor', () => {
-    const { alpha, scale } = focusCurve(260, 'thread')
-    expect(alpha).toBeCloseTo(1 - 0.78 * 0.5, 4)
-    expect(scale).toBeCloseTo(1 - 0.38 * 0.5, 4)
+  it('at d=190 (mid-ramp), alpha and scale sit exactly halfway to their d=380 floor', () => {
+    const { alpha, scale } = focusCurve(190, 'thread')
+    expect(alpha).toBeCloseTo(1 - 0.82 * 0.5, 4)
+    expect(scale).toBeCloseTo(1 - 0.4 * 0.5, 4)
+  })
+
+  it('recette §7 : a row 400px above the band weighs ≤ 20% opacity', () => {
+    expect(focusCurve(400, 'thread').alpha).toBeLessThanOrEqual(0.2)
   })
 
   it('negative distance (thread has no below-band amendment) clamps to the same d=0 result', () => {

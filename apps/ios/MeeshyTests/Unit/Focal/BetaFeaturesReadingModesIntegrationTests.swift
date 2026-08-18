@@ -222,12 +222,26 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
 
     func test_messageListViewController_neverMentionsFlagOrPreferenceTypes() throws {
         let code = try source("MessageListViewController.swift")
-        for forbidden in ["LentilleFeatureFlag", "BetaFeaturesPreference", "MeeshyFeatureFlags"] {
+        for forbidden in ["LentilleFeatureFlag", "BetaFeaturesPreference"] {
             XCTAssertFalse(
                 code.contains(forbidden),
                 "MessageListViewController.swift ne doit JAMAIS mentionner \(forbidden) — les six sites d'appel du pass de perspective (§4.8, gardés par FocalHostSourceGuardTests) consomment uniquement `readingMode`, DÉJÀ décidé en amont par ConversationView.init → ReadingModeController. Le système de modes de lecture ne gagne aucun site de montage avec ce lot."
             )
         }
+        // Exception ÉTROITE, constatée rouge sur main (triage 2026-08-18) :
+        // R6-2/WS-10 (F-089) a branché `MeeshyFeatureFlags.isAgentGrammarEnabled`
+        // au site de config de cellule — un drapeau de GRAMMAIRE AGENT, pas
+        // du système de modes de lecture. Cette garde protège les MODES : le
+        // seul symbole de `MeeshyFeatureFlags` toléré est celui-là.
+        let strippedOfAgentGrammar = code
+            .replacingOccurrences(of: "MeeshyFeatureFlags.isAgentGrammarEnabled", with: "")
+            // La doc du site R6-2 cite le fichier hôte du drapeau — un
+            // commentaire, pas un site de décision.
+            .replacingOccurrences(of: "MeeshyFeatureFlags.swift", with: "")
+        XCTAssertFalse(
+            strippedOfAgentGrammar.contains("MeeshyFeatureFlags"),
+            "MessageListViewController.swift ne doit mentionner MeeshyFeatureFlags QUE via `isAgentGrammarEnabled` (R6-2) — aucun drapeau de mode de lecture ne se décide dans l'hôte."
+        )
     }
 
     func test_messageListView_neverMentionsFlagOrPreferenceTypes() throws {

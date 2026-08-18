@@ -23,6 +23,7 @@ import { LensSwitcher } from './reading/LensSwitcher';
 import { useConversationAccent } from '@/hooks/conversations/use-conversation-accent';
 import { useReadingModeStore } from '@/stores/reading-mode-store';
 import { useThreadActiveReadingMode } from '@/hooks/lentille/use-thread-reading-mode';
+import { useReadingModeServerSync } from '@/hooks/lentille/use-reading-mode-server-sync';
 import { useSeenMessages } from '@/hooks/use-seen-messages';
 import { resolveConsumedLanguage } from '@/utils/consumed-language';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
@@ -283,6 +284,12 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     const readingMode = useThreadActiveReadingMode(conversation.id);
     const setReadingMode = useReadingModeStore(state => state.setMode);
     const toggleDensity = useReadingModeStore(state => state.toggleDensity);
+
+    // D-4 / R5-6 — au chargement du fil, la préférence SERVEUR (si présente)
+    // prime sur le repli local scopé (arbitrage par version, voir la
+    // docstring du hook). Gardé par le drapeau du fil (`useReadingModesFlag`) et par l'identité
+    // (inscrit seulement — aucune route pour les comptes anonymes).
+    useReadingModeServerSync(conversation.id);
 
     // L'accent de la conversation, publié en variables CSS : le ring de focus du
     // mode Focal et la Lentille le consomment via `--conv-accent`.
