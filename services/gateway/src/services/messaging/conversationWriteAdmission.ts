@@ -36,13 +36,27 @@
  * gagne.
  *
  * **Le prédicat lit les DEUX colonnes, et ce n'est pas de la ceinture.** Les
- * quatre écrivains de clôture ne s'accordent pas sur ce qu'ils écrivent :
- * `core.ts` et les deux branches de `delete-for-me.ts` posent `{ isActive:
- * false, closedAt, closedBy }`, mais `leave.ts` (créateur dernier membre)
- * n'écrit que `isActive: false` — constat latent nº 2 du cycle 30, non corrigé
- * depuis. Un prédicat qui ne lirait que `closedAt` laisserait ce quatrième
- * écrivain hors de la règle. Lire les deux fait tenir la garde sur l'état réel
- * de la base plutôt que sur la discipline de ses écrivains.
+ * quatre écrivains de clôture s'accordent DEPUIS LE CYCLE 67 seulement :
+ * `core.ts` et les deux branches de `delete-for-me.ts` posaient `{ isActive:
+ * false, closedAt, closedBy }`, quand `leave.ts` (créateur dernier membre)
+ * n'écrivait que `isActive: false` — constat latent nº 2 du cycle 30, resté
+ * ouvert trente-sept cycles. Il pose désormais les trois champs comme ses
+ * jumeaux.
+ *
+ * **Ce qui ne change pas : la lecture reste sur DEUX colonnes.** Les lignes
+ * fermées par l'ancien `leave.ts` existent en base, `isActive: false` et
+ * `closedAt` absent, et rien ne les rétro-remplit. Un prédicat qui ne lirait que
+ * `closedAt` les laisserait accepter des messages — la discipline retrouvée des
+ * écrivains ne dit rien de ce qu'ils ont déjà écrit. C'est aussi la propriété
+ * qui a fait tenir cette garde pendant les trente-sept cycles où le quatrième
+ * écrivain divergeait : lire l'état réel de la base plutôt que la discipline de
+ * ses écrivains est ce qui rend une garde indépendante de leurs oublis.
+ *
+ * Le rattrapage delta n'a PAS cette double lecture — `utils/delta-tombstones.ts`
+ * interroge `closedAt > since` et rien d'autre. C'est ce qui rendait le
+ * quatrième écrivain coûteux et non pas seulement inélégant, et c'est ce que le
+ * cycle 67 corrige à la SOURCE plutôt qu'en ajoutant une seconde colonne à un
+ * second lecteur.
  *
  * ═══ RÈGLE 2 — LE RANG D'ÉCRITURE ══════════════════════════════════════════
  *

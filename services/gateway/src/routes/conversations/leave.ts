@@ -45,6 +45,21 @@ export function registerLeaveRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
+      // Un seul instant pour toute l'opération — même discipline que le jumeau
+      // `delete-for-me.ts` : la clôture éventuelle et le départ sont deux faces
+      // du même geste, et `closedAt` sert de borne au delta (`closedAt > since`)
+      // exactement comme `leftAt`. Deux `new Date()` les feraient tomber de part
+      // et d'autre d'un `since` de rattrapage.
+      const now = new Date()
+
+      // L'audience de la clôture, ramenée PAR l'écriture et jamais par une
+      // requête de plus — même raison que les jumeaux `core.ts` et
+      // `delete-for-me.ts`, mot pour mot : « une seconde requête pour les lire
+      // pourrait tomber sur un état déjà modifié ». Elle porte l'appelant, encore
+      // actif à cet instant (il ne le devient pas moins avant l'écriture
+      // suivante).
+      let closedAudience: Array<{ id: string; userId: string | null }> = []
+
       if (participant.role === 'creator') {
         const otherActiveCount = await prisma.participant.count({
           where: { conversationId: id, isActive: true, userId: { not: userId } },
@@ -55,13 +70,31 @@ export function registerLeaveRoutes(
             "Le créateur doit transférer l'ownership ou supprimer la conversation avant de quitter"
           )
         }
-        await prisma.conversation.update({
+        // `closedAt`/`closedBy` ne sont pas décoratifs, et leur absence ici était
+        // le QUATRIÈME écrivain de clôture hors de la discipline des trois autres
+        // — « constat latent nº 2 du cycle 30 », nommé dans
+        // `services/messaging/conversationWriteAdmission.ts` et non corrigé
+        // depuis. Une clôture qui n'écrit que `isActive: false` n'est portée par
+        // AUCUN tombstone : `loadConversationTombstones` interroge `closedAt >
+        // since` et rien d'autre, si bien que la ligne survivait dans le cache
+        // persistant de tout client qui ne serait pas l'appelant.
+        //
+        // L'appelant, lui, est couvert par son propre `leftAt` (troisième stream
+        // de tombstones) — ce qui rendait le trou INVISIBLE tant que la garde
+        // `otherActiveCount === 0` tenait. Elle ne tient qu'à l'instant où elle
+        // est lue : un ajout de participant qui commit entre ce `count` et cette
+        // écriture laisse un membre actif dans une conversation terminale, à qui
+        // ni le direct ni le rattrapage n'apprenaient rien. Étroit, et c'est
+        // précisément la sorte de fenêtre qu'un état écrit referme et qu'un état
+        // omis laisse ouverte.
+        const closed = await prisma.conversation.update({
           where: { id },
-          data: { isActive: false },
+          data: { isActive: false, closedAt: now, closedBy: userId },
+          include: { participants: { select: { id: true, userId: true, isActive: true } } },
         })
+        closedAudience = (closed.participants ?? []).filter(p => p.isActive)
       }
 
-      const now = new Date()
       await prisma.participant.update({
         where: { id: participant.id },
         data: { isActive: false, leftAt: now },
@@ -122,6 +155,34 @@ export function registerLeaveRoutes(
             memberCount: remaining.length,
           },
         })
+
+        // La clôture GLOBALE, quand la branche créateur l'a prononcée. Elle est
+        // un fait DIFFÉRENT du départ : `conversation:participant-left` dit « un
+        // membre s'en va », jamais « ce fil est terminé », et c'est la seconde
+        // phrase que le prédicat d'admission en écriture
+        // (`conversationWriteAdmission`) fera respecter au prochain envoi. Sans
+        // elle, un client qui garde la ligne se voit refuser ses messages sans
+        // qu'aucun événement n'ait jamais expliqué pourquoi.
+        //
+        // Émise APRÈS toutes les écritures, comme dans `delete-for-me.ts` et pour
+        // sa raison : une annonce ne précède jamais la durabilité du fait
+        // qu'elle annonce.
+        //
+        // `emitToConversationParticipants` et non un emit vers la seule room de
+        // conversation — correction que les deux jumeaux portent déjà : un client
+        // posé sur la LISTE a quitté `conversation:<id>` et n'est joignable que
+        // par sa room personnelle. Le chaînage `.to()` garantit au plus une copie
+        // par socket, y compris pour un appareil de l'appelant resté dans les
+        // deux rooms.
+        if (closedAudience.length > 0) {
+          emitToConversationParticipants({
+            io,
+            conversationId: id,
+            participants: closedAudience,
+            event: SERVER_EVENTS.CONVERSATION_CLOSED,
+            payload: { conversationId: id, closedBy: userId, closedAt: now.toISOString() },
+          })
+        }
 
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         await Promise.all(userSockets.map(s => s.leave(room)))

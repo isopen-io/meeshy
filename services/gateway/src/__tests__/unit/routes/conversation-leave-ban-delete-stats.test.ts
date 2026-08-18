@@ -234,10 +234,121 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
     prisma.participant.count.mockResolvedValue(0);
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
+    // Ce témoin épinglait `data: { isActive: false }` À L'EXCLUSION du reste,
+    // c'est-à-dire exactement le défaut : `loadConversationTombstones`
+    // interroge `closedAt > since` et rien d'autre, donc une clôture sans
+    // `closedAt` n'est portée par AUCUN delta de rattrapage. Il dit désormais
+    // la même phrase que son jumeau `delete-for-me`.
     expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { isActive: false } })
+      expect.objectContaining({
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: VALID_USER_ID },
+      })
     );
     expect(mockedSendSuccess).toHaveBeenCalled();
+  });
+
+  it('annonce la clôture aux rooms PERSONNELLES quand le départ du créateur ferme le fil', async () => {
+    const io = createMockIO();
+    const { prisma, route, reply } = setup(io);
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
+    prisma.participant.count.mockResolvedValue(0);
+    // L'audience est ramenée PAR l'écriture de clôture, jamais par une requête
+    // de plus — le double doit donc la rendre, sans quoi le test mesurerait le
+    // `?? []` et non le fan-out.
+    prisma.conversation.update.mockResolvedValue({
+      participants: [{ id: PARTICIPANT_ID, userId: VALID_USER_ID, isActive: true }],
+    });
+    const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
+    await route.handler(request, reply);
+    // `_roomsFor` et non `io.to` : la room doit appartenir à la chaîne qui a
+    // émis CET événement, pas avoir été nommée quelque part dans la route (cf.
+    // l'en-tête de `makeChainableIO`). `io.to` ne retient d'ailleurs que le
+    // PREMIER maillon — la room de conversation — et serait vert sur une
+    // diffusion qui n'atteint aucune room personnelle.
+    expect(io._roomsFor(SERVER_EVENTS.CONVERSATION_CLOSED)).toContain(ROOMS.user(VALID_USER_ID));
+    expect(io._payloadFor(SERVER_EVENTS.CONVERSATION_CLOSED)).toEqual(
+      expect.objectContaining({ conversationId: VALID_CONV_ID, closedBy: VALID_USER_ID })
+    );
+  });
+
+  it("n'annonce AUCUNE clôture quand un simple membre s'en va", async () => {
+    const io = createMockIO();
+    const { prisma, route, reply } = setup(io);
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
+    const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
+    await route.handler(request, reply);
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    expect(io._emit).not.toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_CLOSED, expect.anything());
+  });
+
+  it('les DEUX routes de clôture par départ écrivent le même état et annoncent le même fait', async () => {
+    // La garde qui a de la valeur, et pour la raison du cycle 66 § 4 : les trois
+    // témoins ci-dessus décrivent `leave` seul et resteraient VERTS si son
+    // jumeau `delete-for-me` perdait demain ses `closedAt`/`closedBy` ou son
+    // annonce. Celle-ci ne nomme AUCUNE des deux formes — elle fait jouer aux
+    // deux routes le même geste (le créateur part, personne ne reste) et compare
+    // les deux résultats entre eux.
+    async function closeViaLeave() {
+      const io = createMockIO();
+      const fastify = createMockFastify();
+      wireIO(fastify, io);
+      const prisma = createMockPrisma();
+      registerLeaveRoutes(fastify, prisma, jest.fn(), jest.fn());
+      prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
+      prisma.participant.count.mockResolvedValue(0);
+      prisma.conversation.update.mockResolvedValue({
+        participants: [{ id: PARTICIPANT_ID, userId: VALID_USER_ID, isActive: true }],
+      });
+      await getRoute(fastify, 'POST', 'leave').handler(
+        makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID),
+        createMockReply()
+      );
+      return { prisma, io };
+    }
+
+    async function closeViaDeleteForMe() {
+      const io = createMockIO();
+      const fastify = createMockFastify();
+      wireIO(fastify, io);
+      const prisma = createMockPrisma();
+      registerDeleteForMeRoutes(fastify, prisma, jest.fn(), jest.fn());
+      prisma.participant.findFirst
+        .mockResolvedValueOnce(makeParticipant({ role: 'creator' }))
+        .mockResolvedValueOnce(null)  // aucun modérateur
+        .mockResolvedValueOnce(null); // aucun autre membre
+      prisma.conversation.update.mockResolvedValue({
+        participants: [{ id: PARTICIPANT_ID, userId: VALID_USER_ID, isActive: true }],
+      });
+      await getRoute(fastify, 'DELETE', 'delete-for-me').handler(
+        makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID),
+        createMockReply()
+      );
+      return { prisma, io };
+    }
+
+    const viaLeave = await closeViaLeave();
+    const viaDeleteForMe = await closeViaDeleteForMe();
+
+    const stateWritten = (r: { prisma: any }) => {
+      const call = r.prisma.conversation.update.mock.calls.at(-1)?.[0];
+      return Object.keys(call?.data ?? {}).sort();
+    };
+    const closureAnnounced = (r: { io: any }) =>
+      r.io._sendsFor(SERVER_EVENTS.CONVERSATION_CLOSED).length > 0;
+    // La room PERSONNELLE lue sur la chaîne de l'annonce elle-même : c'est la
+    // propriété que les deux routes revendiquent (« un client posé sur la LISTE
+    // a quitté `conversation:<id>` »), et la seule que `io.to` ne peut pas voir.
+    const reachesPersonalRoom = (r: { io: any }) =>
+      r.io._roomsFor(SERVER_EVENTS.CONVERSATION_CLOSED).includes(ROOMS.user(VALID_USER_ID));
+
+    expect(stateWritten(viaLeave)).toEqual(stateWritten(viaDeleteForMe));
+    expect({
+      annonce: closureAnnounced(viaLeave),
+      roomPersonnelle: reachesPersonalRoom(viaLeave),
+    }).toEqual({
+      annonce: closureAnnounced(viaDeleteForMe),
+      roomPersonnelle: reachesPersonalRoom(viaDeleteForMe),
+    });
   });
 
   it('emits CONVERSATION_PARTICIPANT_LEFT and removes user from room when IO present', async () => {
