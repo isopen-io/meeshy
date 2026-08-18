@@ -32,6 +32,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
     SIGNAL_FAILED: 'SIGNAL_FAILED',
     MEDIA_PERMISSION_DENIED: 'MEDIA_PERMISSION_DENIED',
     CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
+    CONVERSATION_CLOSED: 'CONVERSATION_CLOSED',
     NOT_A_PARTICIPANT: 'NOT_A_PARTICIPANT',
     CALL_NOT_FOUND: 'CALL_NOT_FOUND',
     CALL_ALREADY_ACTIVE: 'CALL_ALREADY_ACTIVE',
@@ -278,7 +279,11 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.initiated);
       expect(mockPrisma.conversation.findUnique).toHaveBeenCalledWith({
         where: { id: 'conv-123' },
-        select: { id: true, type: true, identifier: true }
+        // `isActive` / `closedAt` alimentent `isConversationClosed`, qui accepte
+        // une ligne partielle : les retirer compile. Cette assertion est la
+        // seule à voir la régression — cf.
+        // `CallService.closedConversation.test.ts`.
+        select: { id: true, type: true, identifier: true, isActive: true, closedAt: true }
       });
     });
 
