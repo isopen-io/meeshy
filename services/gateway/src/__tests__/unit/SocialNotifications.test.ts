@@ -469,6 +469,10 @@ describe('Social Notification Methods', () => {
       // extrait ni média, le corps nomme l'entité partagée.
       expect(createArg.data.content).toContain('publication');
       expect(createArg.data.content).not.toContain('partagé');
+      // Complément : leur `not.toContain` prouve que le corps ne porte plus la
+      // phrase, pas qu'elle existe encore. Sans cette ligne, la retirer de
+      // PARTOUT garderait ce témoin vert. On asserte donc les deux extrémités.
+      expect(createArg.data.title).toContain('partagé');
     });
 
     it('montre l\'extrait du contenu partagé dans le corps quand il y en a un', async () => {
@@ -807,6 +811,11 @@ describe('Social Notification Methods', () => {
         emoji: '🎉',
       });
 
+      // L'emoji ne vit plus dans le CORPS — celui-ci montre la cible (l'extrait
+      // du commentaire, ou « En réponse à votre commentaire » à défaut). Il est
+      // porté par `metadata.emoji`, d'où les clients le lisent. Assertion
+      // déplacée vers l'endroit qui le porte, et non retirée : l'emoji doit
+      // toujours voyager, et ce témoin tombe encore s'il cesse de le faire.
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.metadata.emoji).toBe('🎉');
       expect(createArg.data.content).not.toContain('🎉');
