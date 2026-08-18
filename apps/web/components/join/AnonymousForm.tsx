@@ -205,7 +205,9 @@ export function AnonymousForm({
           value={formData.language}
           onValueChange={(value) => onUpdateForm('language', value)}
         >
-          <SelectTrigger>
+          {/* Radix génère l'`id` du déclencheur : sans celui-ci, le `htmlFor`
+              ci-dessus ne désigne aucun élément et le libellé ne nomme rien. */}
+          <SelectTrigger id="language">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

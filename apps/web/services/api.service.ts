@@ -1,3 +1,4 @@
+import { resolveRequestCredential, type RequestCredential } from './api-credential';
 import { buildApiUrl } from '@/lib/config';
 import { getDeviceLocaleHeaders } from '@/lib/device-locale';
 import { getGeolocationHeaders } from '@/lib/geolocation';
@@ -89,13 +90,22 @@ class ApiService {
     return isSlow;
   }
 
+  /**
+   * `credential` porte l'en-tête ET la valeur, jamais un jeton nu : un visiteur
+   * sans compte s'annonce par `X-Session-Token`, pas par `Bearer`. Recevoir un
+   * `string` obligeait ce niveau à SUPPOSER le protocole, et il supposait
+   * toujours le mauvais pour les anonymes.
+   *
+   * La clé de cache porte le NOM de l'en-tête pour la même raison : deux
+   * identités différentes ne doivent jamais partager une entrée.
+   */
   private buildHeaders(
     method: string,
     hasBody: boolean,
-    token: string | null,
+    credential: RequestCredential | null,
     customHeaders?: Record<string, string>
   ): Record<string, string> {
-    const cacheKey = `${method}-${hasBody}-${!!token}-${JSON.stringify(customHeaders || {})}`;
+    const cacheKey = `${method}-${hasBody}-${credential?.header ?? 'none'}-${JSON.stringify(customHeaders || {})}`;
     if (this.headersCache.has(cacheKey)) {
       return this.headersCache.get(cacheKey)!;
     }
@@ -111,8 +121,8 @@ class ApiService {
       delete headers['Content-Type'];
     }
 
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+    if (credential) {
+      headers[credential.header] = credential.value;
     }
 
     this.headersCache.set(cacheKey, headers);
@@ -168,10 +178,17 @@ class ApiService {
 
     const shouldExcludeContentType = ApiService.METHODS_WITH_OPTIONAL_BODY.has(options.method || '') && !options.body;
 
+    // Un jeton de compte présent l'emporte ; sinon on retombe sur la session
+    // anonyme, avec SON en-tête. Sans cette résolution, tout appel d'un
+    // visiteur sans compte partait sans identifiant.
+    const credential: RequestCredential | null = token
+      ? { header: 'Authorization', value: `Bearer ${token}` }
+      : resolveRequestCredential();
+
     const headers = this.buildHeaders(
       options.method || 'GET',
       !shouldExcludeContentType,
-      token,
+      credential,
       options.headers as Record<string, string> | undefined
     );
 
@@ -265,23 +282,25 @@ class ApiService {
         formData.append(key, String(value));
       });
     }
-    const token = authManager.getAuthToken();
+    // Même règle que `request` : un visiteur sans compte s'annonce par
+    // `X-Session-Token`. Poser un `Bearer` en dur ici lui refusait tout envoi.
+    const credential = resolveRequestCredential();
     return this.request<T>(endpoint, {
       method: 'POST',
       body: formData,
       headers: {
         ...getDeviceLocaleHeaders(),
-        ...(token && { Authorization: `Bearer ${token}` }),
+        ...(credential && { [credential.header]: credential.value }),
       },
     });
   }
 
   async getBlob(endpoint: string, options?: { signal?: AbortSignal; headers?: Record<string, string> }): Promise<Blob> {
     const url = buildApiUrl(endpoint);
-    const token = authManager.getAuthToken();
+    const blobCredential = resolveRequestCredential();
     const headers = {
       ...getDeviceLocaleHeaders(),
-      ...(token && { Authorization: `Bearer ${token}` }),
+      ...(blobCredential && { [blobCredential.header]: blobCredential.value }),
       ...options?.headers,
     };
     const controller = new AbortController();

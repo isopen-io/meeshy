@@ -26,6 +26,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
+import { hasAccountCredential } from '@/services/api-credential';
 
 const recentToasts = new Set<string>();
 
@@ -60,6 +61,10 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   const router = useRouter();
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuthStore();
+  // Lu au rendu, comme `ApiService` le lit à l'envoi : une seule autorité pour
+  // « ce navigateur porte-t-il un compte ». Le re-rendu vient d'`isAuthenticated`,
+  // que `setUser` déplace sur les deux chemins d'entrée.
+  const hasAccount = hasAccountCredential();
   const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
   const resyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -74,7 +79,12 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   // donc aussi sur /login, /join/*, etc. Sans garde, la query (refetchOnMount
   // 'always' + withRetry) tirait des GET /notifications non authentifiés sur
   // toutes les pages publiques.
-  } = useInfiniteNotificationsQuery({ limit, enabled: isAuthenticated, ...filters });
+  //
+  // `isAuthenticated` seul ne suffit PAS : il dit « une identité existe », pas
+  // « un compte existe ». `joinAnonymously` pose `setUser(participant)`, donc un
+  // visiteur entré par lien franchissait le garde et tirait une requête que le
+  // gateway réserve aux comptes (401 sans en-tête, 403 avec `X-Session-Token`).
+  } = useInfiniteNotificationsQuery({ limit, enabled: isAuthenticated && hasAccount, ...filters });
 
   const unreadCount = notificationsData?.pages[0]?.unreadCount ?? 0;
 

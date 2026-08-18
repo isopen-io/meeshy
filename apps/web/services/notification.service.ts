@@ -30,7 +30,37 @@ const SERVICE_CONFIG = {
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Helper pour retry avec backoff exponentiel
+ * Cet échec peut-il donner un autre résultat si on le rejoue ?
+ *
+ * `withRetry` rejouait sur N'IMPORTE quelle erreur. Un `GET /notifications`
+ * répondant 401 partait donc quatre fois — constaté en production le
+ * 2026-08-18 : quatre 401 identiques dans la console, et sept secondes de
+ * backoff avant que l'erreur ne remonte.
+ *
+ * Rejouer un 401 ne peut pas aboutir, et surtout : `ApiService.request` a DÉJÀ
+ * tenté le rafraîchissement du jeton avant de laisser remonter ce 401 (il ne
+ * jette `TOKEN_EXPIRED` qu'après échec du refresh). Le rejeu du service
+ * relançait donc trois cycles complets — nouvelle requête ET nouvelle
+ * tentative de refresh — pour refaire ce qui venait d'échouer.
+ *
+ * Deux couches de rejeu existaient, une seule était gardée : le `retry` du
+ * QueryClient exclut bien 401/403/404, mais la couche interne avalait l'échec
+ * avant qu'il ne l'atteigne. Une garde qu'on court-circuite ne garde rien.
+ *
+ * On rejoue donc ce qui PEUT changer d'avis : coupure réseau (aucun statut),
+ * 5xx, et 429 — seule exception 4xx, parce que le serveur y dit explicitement
+ * « plus tard » au lieu de refuser sur le fond.
+ */
+export function shouldRetryNotificationFailure(error: unknown): boolean {
+  const status = (error as { status?: unknown })?.status;
+  if (typeof status !== 'number') return true;
+
+  if (status === 429) return true;
+  return status < 400 || status >= 500;
+}
+
+/**
+ * Helper pour retry avec backoff exponentiel — bornée aux échecs REJOUABLES.
  */
 async function withRetry<T>(
   fn: () => Promise<T>,
@@ -40,7 +70,7 @@ async function withRetry<T>(
   try {
     return await fn();
   } catch (error) {
-    if (retries === 0) {
+    if (retries === 0 || !shouldRetryNotificationFailure(error)) {
       throw error;
     }
 

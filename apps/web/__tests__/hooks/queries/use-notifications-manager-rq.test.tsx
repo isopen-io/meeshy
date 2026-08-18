@@ -89,6 +89,17 @@ jest.mock('@/stores/auth-store', () => {
   return { useAuthStore };
 });
 
+/**
+ * Le manager ne se contente plus de croire le store : il vérifie que ce
+ * navigateur porte un identifiant de COMPTE, parce qu'`isAuthenticated` vaut
+ * aussi pour une session invitée, qui n'a pas de boîte de notifications.
+ * Le harnais doit donc poser le jeton là où l'application le range réellement.
+ */
+beforeEach(() => {
+  localStorage.setItem('meeshy_auth_token', 'test-token');
+});
+
+
 let mockActiveConversationId: string | null = null;
 
 jest.mock('@/stores/notification-store', () => {
