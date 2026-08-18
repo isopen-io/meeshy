@@ -10,7 +10,6 @@
 
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
-import { ConflictError } from '../errors/custom-errors';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -32,8 +31,8 @@ export interface PostReactionData {
  * retry socket, second appareil) — aucun état n'a changé en base. Le handler s'en
  * sert pour NE PAS re-diffuser `post:liked`/`post:reaction-added` ni re-notifier
  * l'auteur sur un no-op. Miroir de `ReactionService.addReaction` (`{ reaction,
- * replacedEmojis, unchanged }`), forme aplatie ici car `MAX_REACTIONS_PER_USER = 1`
- * (pas de `replacedEmojis`). Marqueur transitoire — jamais persisté ni diffusé.
+ * replacedEmojis, unchanged }`), forme aplatie ici (le modèle
+ * post n'a jamais eu de swap). Marqueur transitoire — jamais persisté ni diffusé.
  */
 export type AddPostReactionResult = PostReactionData & { readonly unchanged: boolean };
 
@@ -108,28 +107,9 @@ export class PostReactionService {
       throw new Error('Post has been deleted');
     }
 
-    const MAX_REACTIONS_PER_USER = 1;
-
-    const userExistingReactions = await this.prisma.postReaction.findMany({
-      where: {
-        postId,
-        userId
-      },
-      select: { emoji: true }
-    });
-
-    const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
-
-    if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-      // Reachable domain guard (the user is changing their emoji, e.g. iOS
-      // reacting to a story via REST `POST /posts/:id/like`). Signal a typed
-      // conflict so the route maps it to HTTP 409 — never a 500 INTERNAL_ERROR.
-      throw new ConflictError(
-        `Maximum ${MAX_REACTIONS_PER_USER} different reactions per post reached`,
-        'REACTION_LIMIT_REACHED',
-      );
-    }
-
+    // Multi-réactions (2026-08-18) : plus aucun cap applicatif — la clé
+    // unique DB (postId, userId, emoji) accepte tout emoji distinct par
+    // utilisateur, à parité avec les messages et les pièces jointes.
     const existingReaction = await this.prisma.postReaction.findFirst({
       where: {
         postId,

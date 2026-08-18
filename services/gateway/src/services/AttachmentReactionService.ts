@@ -37,24 +37,26 @@ export class AttachmentReactionService {
         attachment_participant_reaction: {
           attachmentId: o.attachmentId,
           participantId: o.participantId,
+          emoji,
         },
       },
       select: { emoji: true },
     });
-    if (previous?.emoji === emoji) return { changed: false };
+    if (previous) return { changed: false };
 
-    // Single-reaction-per-user model: the DB unique key is (attachmentId,
-    // participantId) — no emoji — so this upsert is atomic at the Mongo level.
-    // Two concurrent addAttachmentReaction calls for different emojis now race
-    // on the SAME document instead of each inserting their own row (the prior
-    // find/deleteMany/upsert sequence let both pass the "no existing reaction"
-    // check before either committed — see 2026-07-04-attachment-reaction-
-    // duplicate-race-fix.md).
+    // Multi-réactions (2026-08-18, « du multiple sur tout contenu à
+    // réaction ») : la clé unique DB porte le TRIPLET (attachmentId,
+    // participantId, emoji) — un participant empile plusieurs emojis
+    // distincts par pièce jointe. L'upsert reste atomique par triplet :
+    // deux adds concurrents du MÊME emoji convergent sur le même document,
+    // deux emojis différents créent chacun le leur (voulu). Le toggle vit
+    // chez les clients (remove sur un emoji déjà posé).
     await this.prisma.attachmentReaction.upsert({
       where: {
         attachment_participant_reaction: {
           attachmentId: o.attachmentId,
           participantId: o.participantId,
+          emoji,
         },
       },
       create: {
@@ -63,7 +65,7 @@ export class AttachmentReactionService {
         participantId: o.participantId,
         emoji,
       },
-      update: { emoji },
+      update: {},
     });
     return { changed: true };
   }
