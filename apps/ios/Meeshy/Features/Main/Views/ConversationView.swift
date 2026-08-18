@@ -110,6 +110,13 @@ struct ConversationScrollState {
     var recentVideoToEdit: URL? = nil
 }
 
+/// Lot 3.2 — enveloppe `Identifiable` d'une URL de fichier pour la
+/// `ShareSheet` de la rangée plate (même patron que `BubbleFullscreenPlace`).
+struct FocalShareFileItem: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
 struct PreviewMedia: Identifiable {
     let id = UUID()
     let url: URL
@@ -319,6 +326,11 @@ struct ConversationView: View {
     /// « Lire plus » Focal (spec Magnificence §3) — présentée par item :
     /// l'identité du payload est le message.
     @State private var focalReadMorePayload: FocalReadMorePayload?
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (même patron
+    /// que `BubbleFullscreenPlace` côté bulle, même chaîne que « Lire plus »).
+    @State private var focalFullscreenPlace: BubbleFullscreenPlace?
+    /// Lot 3.2 — fichier à partager depuis la rangée plate (ShareSheet).
+    @State private var focalShareFileItem: FocalShareFileItem?
     /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
@@ -843,6 +855,24 @@ struct ConversationView: View {
             // (préférence collante F-080 GELÉE) — jamais un état local dupliqué.
             .sheet(item: $focalReadMorePayload) { payload in
                 FocalReadMoreSheet(payload: payload)
+            }
+            // Lot 3.2 — plein écran du lieu depuis la rangée plate : mêmes
+            // primitives que la bulle (`BubbleStandardLayout`,
+            // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
+            // parce que la rangée vit dans une cellule de collection (même
+            // chaîne que « Lire plus »).
+            .fullScreenCover(item: $focalFullscreenPlace) { item in
+                LocationFullscreenView(
+                    latitude: item.place.latitude,
+                    longitude: item.place.longitude,
+                    placeName: item.place.name,
+                    address: item.place.address,
+                    accentColor: accentColor,
+                    senderName: nil
+                )
+            }
+            .sheet(item: $focalShareFileItem) { item in
+                ShareSheet(activityItems: [item.url])
             }
     }
 
@@ -1556,6 +1586,12 @@ struct ConversationView: View {
                 },
                 onReadMore: { payload in
                     focalReadMorePayload = payload
+                },
+                onFocalTapLocation: { place in
+                    focalFullscreenPlace = BubbleFullscreenPlace(place: place)
+                },
+                onFocalShareFile: { url in
+                    focalShareFileItem = FocalShareFileItem(url: url)
                 },
                 onMediaTap: { attachment in
                     // User tapped a media — opportunistically warm the cache,

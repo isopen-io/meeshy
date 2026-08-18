@@ -67,31 +67,70 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     // §4.3 — Ligne de focus
     // =========================================================================
 
-    /// Composeur masqué (`contentInset.top == 0`) : le plancher `bandLift`
-    /// empêche la bande de coller au bord bas. `bandLift` vient du miroir de
-    /// la bande du FIL (`FocalFocusCurve.threadFocusBandOffset` = 150, spec
-    /// §5 « focusY = bas − 150 »), jamais d'un littéral — et jamais la bande
-    /// de la LISTE (140), qui reste à la Lentille.
+    /// Composeur masqué (`contentInset.top == 0`) : le plancher EFFECTIF
+    /// empêche la bande de coller au bord bas. Hors essai, il vient du miroir
+    /// de la bande du FIL (`threadFocusBandOffset` = 150, spec §5 « focusY =
+    /// bas − 150 ») ; pendant l'essai « bande centrée »
+    /// (`FocalPassConstants.centersFocusBand`) il est élevé à la fraction du
+    /// viewport. Le test dérive du plancher effectif — vert dans les deux
+    /// régimes ; les témoins d'essai dédiés (plus bas) discriminent chacun.
     func test_focusY_composerHidden_floorsOnBandLift() {
         let focusY = geometry.focusY(viewportHeight: 800, bottomClearance: 0)
         XCTAssertEqual(
-            focusY, 800 - FocalFocusCurve.threadFocusBandOffset, accuracy: Self.epsilon,
-            "FocalPerspectiveGeometry.focusY : composeur masqué ⇒ H − FocalFocusCurve.threadFocusBandOffset (plancher de bande, spec §5)"
+            focusY, 800 - geometry.effectiveBandLift(viewportHeight: 800), accuracy: Self.epsilon,
+            "FocalPerspectiveGeometry.focusY : composeur masqué ⇒ H − plancher effectif de bande"
+        )
+    }
+
+    /// Le plancher effectif ne descend JAMAIS sous le plancher spec (150) —
+    /// essai centré ou pas — et 150 vient bien du miroir du FIL (jamais le
+    /// 140 de la liste).
+    func test_effectiveBandLift_neverBelowTheSpecFloor() {
+        XCTAssertGreaterThanOrEqual(
+            geometry.effectiveBandLift(viewportHeight: 800),
+            FocalFocusCurve.threadFocusBandOffset - Self.epsilon,
+            "le plancher effectif ≥ threadFocusBandOffset (spec §5) dans tous les régimes"
         )
         XCTAssertEqual(
-            focusY, 800 - 150, accuracy: Self.epsilon,
+            FocalFocusCurve.threadFocusBandOffset, 150, accuracy: Self.epsilon,
             "spec §5 : le plancher de la bande du fil est 150 — pas le 140 de la liste"
         )
     }
 
-    /// Composeur au repos (~146 pt mesurés, §4.3) : `146 + bandGap` dépasse le
-    /// plancher, la bande se cale donc sur le composeur.
+    /// ESSAI « bande centrée » (demande user 2026-08-18) — témoin du régime
+    /// ACTIF. Essai coupé ⇒ c'est le régime spec qui est épinglé (150 exact).
+    func test_focusBandPlacement_matchesTheActiveRegime() {
+        let lift = geometry.effectiveBandLift(viewportHeight: 800)
+        if FocalPassConstants.centersFocusBand {
+            XCTAssertEqual(
+                lift, 800 * FocalPassConstants.centeredBandRatio, accuracy: Self.epsilon,
+                "essai actif : la ligne de focus vit à la fraction du viewport (centre)"
+            )
+            XCTAssertEqual(
+                geometry.focusY(viewportHeight: 800, bottomClearance: 0), 400, accuracy: Self.epsilon,
+                "essai actif, H=800 : focusY au centre géométrique"
+            )
+        } else {
+            XCTAssertEqual(
+                lift, FocalFocusCurve.threadFocusBandOffset, accuracy: Self.epsilon,
+                "essai coupé : le plancher spec §5 (150) est bit-à-bit rétabli"
+            )
+        }
+    }
+
+    /// Composeur au repos (~146 pt mesurés, §4.3) : la bande se cale sur le
+    /// MAX(plancher effectif, composeur + gap) — au-dessus du composeur dans
+    /// tous les régimes.
     func test_focusY_composerAtRest_clearsTheComposer() {
         let composer: CGFloat = 146
         let focusY = geometry.focusY(viewportHeight: 800, bottomClearance: composer)
+        let expected = 800 - max(
+            geometry.effectiveBandLift(viewportHeight: 800),
+            composer + FocalPassConstants.bandGap
+        )
         XCTAssertEqual(
-            focusY, 800 - (composer + FocalPassConstants.bandGap), accuracy: Self.epsilon,
-            "FocalPerspectiveGeometry.focusY : au repos la bande se pose au-dessus du composeur (composer + FocalPassConstants.bandGap, §4.3)"
+            focusY, expected, accuracy: Self.epsilon,
+            "FocalPerspectiveGeometry.focusY : jamais sous composeur + bandGap, jamais sous le plancher effectif (§4.3)"
         )
     }
 
@@ -568,10 +607,23 @@ final class FocalScrollPassGeometryTests: XCTestCase {
             headClearance: 0,
             firstRowHeight: 0
         )
-        XCTAssertEqual(
-            inset, viewport * FocalPassConstants.headInsetMaxRatio, accuracy: Self.epsilon,
-            "FocalPerspectiveGeometry.headInset : plafonné à H · FocalPassConstants.headInsetMaxRatio (§4.5)"
-        )
+        if FocalPassConstants.centersFocusBand {
+            // Bande centrée : `needed = focusY = H/2` ne peut JAMAIS
+            // atteindre le plafond 0.8·H avec des dégagements positifs — le
+            // clamp est mathématiquement inatteignable, l'inset vaut le
+            // besoin exact. C'est l'énoncé UTILE de ce régime.
+            XCTAssertEqual(
+                inset, geometry.focusY(viewportHeight: viewport, bottomClearance: 0),
+                accuracy: Self.epsilon,
+                "essai bande centrée : headInset = besoin exact (focusY), jamais clampé pour des dégagements positifs"
+            )
+            XCTAssertLessThanOrEqual(inset, viewport * FocalPassConstants.headInsetMaxRatio)
+        } else {
+            XCTAssertEqual(
+                inset, viewport * FocalPassConstants.headInsetMaxRatio, accuracy: Self.epsilon,
+                "FocalPerspectiveGeometry.headInset : plafonné à H · FocalPassConstants.headInsetMaxRatio (§4.5)"
+            )
+        }
     }
 
     // =========================================================================
@@ -945,14 +997,31 @@ final class FocalScrollPassWriteTests: XCTestCase {
         }
 
         let dayHeader = try cell(8)
-        let neighbour = try cell(7)
-        XCTAssertEqual(
-            dayHeader.layer.transform.m11, neighbour.layer.transform.m11, accuracy: 0.05,
-            "un séparateur de jour doit être mis à l'échelle comme la rangée voisine — sinon il flotte en taille pleine par-dessus un texte réduit"
+        // L'attendu vient de la LOI elle-même, à la position de LA cellule —
+        // plus une comparaison lâche au voisin (±0.05) : sur la partie raide
+        // de la courbe, deux cellules adjacentes divergent légitimement de
+        // plus que la tolérance (constaté au passage à la bande centrée), et
+        // l'invariant réel est « le séparateur suit la MÊME courbe », pas
+        // « il ressemble à son voisin ».
+        let geometry = FocalPerspectiveGeometry.standard
+        let viewport = collectionView.bounds.height
+        let focusY = geometry.focusY(viewportHeight: viewport, bottomClearance: collectionView.contentInset.top)
+        let visual = geometry.visualMidY(
+            contentMidY: dayHeader.center.y,
+            contentOffsetY: collectionView.contentOffset.y,
+            viewportHeight: viewport
+        )
+        let expected = FocalFocusCurve.focusCurve(
+            distance: geometry.distance(visualMidY: visual, focusY: focusY),
+            variant: .thread
         )
         XCTAssertEqual(
-            dayHeader.alpha, neighbour.alpha, accuracy: 0.05,
-            "un séparateur de jour doit s'estomper comme la rangée voisine"
+            dayHeader.layer.transform.m11, expected.scale, accuracy: 0.0001,
+            "un séparateur de jour doit être mis à l'échelle par la MÊME courbe que les rangées — sinon il flotte en taille pleine par-dessus un texte réduit"
+        )
+        XCTAssertEqual(
+            dayHeader.alpha, expected.alpha, accuracy: 0.0001,
+            "un séparateur de jour doit s'estomper par la MÊME courbe que les rangées"
         )
     }
 

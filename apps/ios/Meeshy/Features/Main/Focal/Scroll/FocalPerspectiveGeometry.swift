@@ -109,8 +109,18 @@ nonisolated struct FocalPerspectiveGeometry: Equatable, Sendable {
     /// sous le clavier dès son ouverture. Le plancher `bandLift` empêche
     /// symétriquement la bande de coller au bord bas quand le composeur est
     /// masqué (§4.3).
+    /// Plancher de bande EFFECTIF : la spec §5 donne `bandLift` (150, absolu
+    /// depuis le bas) ; l'essai « bande centrée »
+    /// (`FocalPassConstants.centersFocusBand`) l'élève à la fraction du
+    /// viewport — le `max` garantit que l'essai ne descend jamais SOUS le
+    /// plancher spec sur un viewport très bas (split view étroit).
+    func effectiveBandLift(viewportHeight: CGFloat) -> CGFloat {
+        guard FocalPassConstants.centersFocusBand else { return bandLift }
+        return max(bandLift, viewportHeight * FocalPassConstants.centeredBandRatio)
+    }
+
     func focusY(viewportHeight: CGFloat, bottomClearance: CGFloat) -> CGFloat {
-        viewportHeight - max(bandLift, bottomClearance + bandGap)
+        viewportHeight - max(effectiveBandLift(viewportHeight: viewportHeight), bottomClearance + bandGap)
     }
 
     // MARK: - §4.2 — Contenu → écran
