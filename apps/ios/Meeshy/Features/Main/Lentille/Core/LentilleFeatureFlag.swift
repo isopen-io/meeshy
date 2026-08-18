@@ -49,6 +49,33 @@ import Foundation
 ///    (défaut ON) — à l'installation, `reading_modes` est donc ON par la
 ///    bêta, et couper « Activer les bêta » rend TOUT le système inactif
 ///    (chemins historiques bit-à-bit, `.bubbles`).
+///
+/// I-075 — **RETIRÉ le 2026-08-18 (décision produit)**. L'étage 3 ci-dessus
+/// faisait qu'une installation N'AYANT RIEN DEMANDÉ ouvrait ses
+/// conversations via l'orchestrateur (tap normal ⇒ Focal/Résumé), parce que
+/// l'ABSENCE de la clé bêta valait `true`. La décision produit du
+/// 2026-08-18 retire ce repli implicite : une installation neuve ouvre en
+/// BULLES (comportement historique). L'historique ci-dessus est CONSERVÉ à
+/// dessein — il dit ce que le code a fait entre le 2026-08-16 et le
+/// 2026-08-18, pas ce qu'il fait aujourd'hui.
+///
+/// Ce que le retrait change, EXACTEMENT (« absence ⇒ OFF ») :
+/// 1. **Absence de toute clé ⇒ OFF.** Ni env, ni `meeshy.flag.reading_modes`,
+///    ni `meeshy.pref.beta_features_enabled` ⇒ `false`.
+/// 2. **Les choix explicites survivent, dans les deux sens** — l'étage 1
+///    (env `MEESHY_FLAG_READING_MODES`, `"1"`/`"0"`) et l'étage 2 (clé
+///    `meeshy.flag.reading_modes` posée, `true` ET `false`) sont INCHANGÉS.
+/// 3. **L'opt-in bêta VOLONTAIRE n'est pas retiré** : l'étage 3 subsiste,
+///    mais n'est consulté que si la préférence bêta est EXPRIMÉE
+///    (`BetaFeaturesPreference.isExplicitlySet` — clé écrite, ou surcharge
+///    process reconnue). Toggle « Bêta » explicitement ON ⇒ modes de lecture
+///    ON, comme avant ; explicitement OFF ⇒ OFF. Seule l'ABSENCE de ce
+///    choix ne vaut plus opt-in.
+///
+/// Portée : `BetaFeaturesPreference` garde son propre défaut ON pour son
+/// AUTRE client (l'item « Focal (bêta) » du menu d'appui long), hors décision
+/// du 2026-08-18 — voir la docstring de ce type. Le retrait vit ICI, dans la
+/// cascade, pas là-bas dans la polarité de défaut.
 nonisolated enum LentilleFeatureFlag {
     case lentilleList
     case readingModes
@@ -88,10 +115,13 @@ nonisolated enum LentilleFeatureFlag {
     /// dictionnaire d'environnement, pour ne jamais dépendre du process réel
     /// ni y laisser de résidu. La surcharge process prime : `"1"` force ON,
     /// `"0"` force OFF, toute autre valeur (y compris absente) retombe :
-    /// - `.lentilleList` → `defaults.bool(forKey:)` (défaut `false`, INCHANGÉ) ;
+    /// - `.lentilleList`/`.riviereMode` → `defaults.bool(forKey:)` (défaut
+    ///   `false`, INCHANGÉ) ;
     /// - `.readingModes` → clé EXPLICITEMENT posée (`object(forKey:) != nil`)
-    ///   ⇒ sa valeur ; sinon `BetaFeaturesPreference.isEnabled` (défaut
-    ///   `true` — second amendement I-075, docstring du type ci-dessus).
+    ///   ⇒ sa valeur ; sinon `BetaFeaturesPreference.isEnabled` MAIS
+    ///   uniquement si cette préférence est EXPRIMÉE — sans quoi
+    ///   `defaults.bool(forKey:)`, donc `false` (retrait I-075 du
+    ///   2026-08-18 : absence ⇒ OFF, docstring du type ci-dessus).
     func isEnabled(
         defaults: UserDefaults = .standard,
         environment: [String: String] = ProcessInfo.processInfo.environment
@@ -101,9 +131,17 @@ nonisolated enum LentilleFeatureFlag {
         case "0": return false
         default: break
         }
-        if case .readingModes = self, defaults.object(forKey: userDefaultsKey) == nil {
+        // Étage 3, réservé à `.readingModes` — la condition
+        // `isExplicitlySet` EST le retrait du 2026-08-18 : sans elle, une
+        // préférence bêta jamais touchée rendait `true` (son défaut ON) et
+        // allumait les modes de lecture sur toute installation neuve.
+        if case .readingModes = self,
+           defaults.object(forKey: userDefaultsKey) == nil,
+           BetaFeaturesPreference.isExplicitlySet(defaults: defaults, environment: environment) {
             return BetaFeaturesPreference.isEnabled(defaults: defaults, environment: environment)
         }
+        // Clé absente ⇒ `false` (défaut Foundation) : c'est le « absence ⇒
+        // OFF » de la décision produit, pour les trois drapeaux désormais.
         return defaults.bool(forKey: userDefaultsKey)
     }
 

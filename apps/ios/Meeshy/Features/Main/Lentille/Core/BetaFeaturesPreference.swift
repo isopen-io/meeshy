@@ -32,6 +32,26 @@ import Foundation
 /// leur propre `UserDefaults`/dictionnaire d'environnement, jamais
 /// `.standard`/le vrai `ProcessInfo`, cf. `StoryVisibilityPreferenceStore`).
 ///
+/// **I-075 RETIRÉ le 2026-08-18 (décision produit) — portée du retrait** :
+/// le retrait concerne le CLIENT `reading_modes`, PAS cette préférence-ci.
+/// Le second amendement I-075 (2026-08-16) avait fait de
+/// `LentilleFeatureFlag.readingModes` un client de ce type, si bien que
+/// l'ABSENCE de la clé ci-dessous (défaut ON) valait opt-in aux modes de
+/// lecture : toute installation neuve ouvrait ses conversations via
+/// l'orchestrateur (Focal/Résumé) au tap normal. C'est CE repli-là qui est
+/// retiré — désormais « absence ⇒ OFF » pour `reading_modes`, l'opt-in
+/// explicite restant préservé dans les deux sens.
+///
+/// Ce type, LUI, garde son défaut ON, et c'est délibéré : son AUTRE client —
+/// la visibilité de l'item « Focal (bêta) » du menu d'appui long
+/// (`ConversationListView+Overlays.swift`, `ConversationContextMenuView`) —
+/// n'est PAS visé par la décision du 2026-08-18. Basculer le défaut de CE
+/// type à OFF aurait fait disparaître cet item de toute installation neuve :
+/// un second changement produit que personne n'a demandé. Le retrait vit
+/// donc dans la cascade de `LentilleFeatureFlag.isEnabled(defaults:
+/// environment:)`, qui ne consulte plus ce type que s'il est EXPLICITEMENT
+/// exprimé — voir `isExplicitlySet(defaults:environment:)` ci-dessous.
+///
 /// Écriture : `setEnabled(_:defaults:)`, appelée par l'écran de réglages
 /// (`SettingsView`, section « Bêta ») à chaque bascule du toggle — CETTE
 /// préférence-ci est écrite en plein droit (contrairement au forçage éphémère
@@ -60,6 +80,35 @@ nonisolated enum BetaFeaturesPreference {
             // rendrait `false` ici — voir la docstring du type.
             guard defaults.object(forKey: userDefaultsKey) != nil else { return true }
             return defaults.bool(forKey: userDefaultsKey)
+        }
+    }
+
+    /// La préférence a-t-elle été EXPRIMÉE, dans un sens ou dans l'autre ?
+    ///
+    /// Introduit par le retrait I-075 du 2026-08-18. `isEnabled` seul ne peut
+    /// PAS répondre à cette question : son défaut ON confond « l'utilisateur a
+    /// activé les bêta » et « personne n'a jamais touché au réglage » — les
+    /// deux rendent `true`. Or c'est EXACTEMENT la distinction que la décision
+    /// produit exige pour `reading_modes` (l'absence ne vaut plus opt-in,
+    /// l'opt-in explicite survit). D'où un prédicat séparé, porté par le type
+    /// qui possède les deux clés plutôt que reconstitué chez l'appelant.
+    ///
+    /// « Exprimée » = surcharge process RECONNUE (`"1"`/`"0"` — une valeur
+    /// parasite comme `"yes"` n'exprime rien, cohérent avec le repli
+    /// `UserDefaults` de `isEnabled`), OU clé `UserDefaults` réellement écrite
+    /// (`object(forKey:) != nil` — le toggle des réglages, ou un test).
+    ///
+    /// Ne dit RIEN de la valeur : `isExplicitlySet == true` avec la
+    /// préférence à `false` est le cas « l'utilisateur a coupé les bêta ».
+    /// Les appelants enchaînent donc les deux (`isExplicitlySet` puis
+    /// `isEnabled`), jamais l'un pour l'autre.
+    static func isExplicitlySet(
+        defaults: UserDefaults = .standard,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        switch environment[environmentKey] {
+        case "1", "0": return true
+        default: return defaults.object(forKey: userDefaultsKey) != nil
         }
     }
 
