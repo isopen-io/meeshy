@@ -10897,3 +10897,47 @@ contenu qu'il ne pourrait plus jamais reprendre.
 > Quand on gèle une famille de verbes, dire aussi lesquels restent ouverts, et
 > poser un témoin sur ce choix. Une exception non écrite se lit au cycle suivant
 > comme un oubli, et se « corrige » en régression.
+
+### Corollaire de routine (cycle 71) — un rouge de CI n'est pas à soi tant qu'on ne l'a pas daté
+
+La suite gateway rendait 2 rouges à la fin de ce cycle. Le réflexe coûteux
+aurait été de les traiter comme une conséquence du changement — le changement
+touche des routes de messages, les rouges touchent des notifications, il y a
+toujours une histoire plausible qui relie les deux.
+
+Trois mesures les ont datés en quelques minutes, et dans cet ordre :
+
+1. **Rejouer la suite sur le commit d'AVANT** (`git checkout HEAD~1`) : mêmes
+   deux rouges. Le changement est hors de cause.
+2. **Dater le FICHIER** (`git log -- <fichier de témoins>`) : il vient d'un
+   commit déjà ancêtre de `main`. Ce n'est donc pas « ma branche est en
+   retard », c'est « `main` est rouge ».
+3. **Lire ce que la production fait VRAIMENT** plutôt que ce que le témoin
+   attend — une sonde `console.log` sur l'objet réellement écrit. Elle a rendu
+   la réponse d'un coup : la phrase d'action avait migré vers le titre, l'emoji
+   vers `metadata`.
+
+> Devant un rouge inattendu, ne pas chercher **la cause** avant d'avoir cherché
+> **la date**. « Est-ce que ça rougissait déjà hier ? » se répond en une
+> commande et disqualifie ou confirme tout le reste de l'enquête.
+
+### Et la règle qui décide quoi en faire : DÉPLACER l'assertion, jamais la retirer
+
+Un témoin qui gèle un contrat révolu doit être mis à jour, pas supprimé — et la
+frontière entre les deux est nette : **l'information a-t-elle disparu, ou
+changé d'endroit ?** Ici elle avait changé d'endroit, donc l'assertion suit
+l'information (`metadata.emoji`, `title`) et le témoin garde son pouvoir de
+tomber. La preuve n'est pas facultative : on mute la production pour faire
+disparaître l'information à son NOUVEL endroit, et on vérifie que le témoin
+déplacé rougit encore.
+
+> « Rendre vert » n'est jamais une raison d'affaiblir un témoin. Quand un
+> contrat bouge, l'assertion voyage avec lui — et on redémontre son ROUGE à sa
+> nouvelle adresse, sans quoi on a écrit une décoration en croyant réparer une
+> garde.
+
+Corollaire pour le partage, appliqué ici : le témoin asserte désormais les
+**deux** moitiés (phrase d'action dans le titre, cible dans le corps). Une
+information qui se déplace une fois se déplacera deux fois ; asserter les deux
+extrémités fait rougir le déplacement qui n'écrit la phrase NULLE PART, seul
+cas qui soit un vrai défaut.
