@@ -540,6 +540,30 @@ conversation sync engine, story draft persistence, theme/color generation, hot-p
 
 **Android port:** This is the most architecturally critical file after the socket manager. Kotlin coroutines: `withContext` + `coroutineScope`/`async` for the parallel page fan-out (bound with a `Semaphore(4)`); `SharedFlow` for change publishers; Room as the cache backend. Replicate the retry/progress-guard/cooldown logic exactly — these defend against the "blank list forever" and "infinite pagination" bugs. The atomic-merge pattern (`mergeUpdate`) must be honored to avoid losing socket messages during REST hydration. Run the socket relay in a long-lived service-scoped coroutine. Persist sync checkpoints in DataStore.
 
+**Deux regles que ce relais doit porter DES SA NAISSANCE** (elles ne sont pas
+deductibles du code iOS a recopier — l'une y est acquise de longue date, l'autre
+n'existe que parce qu'Android a choisi une autre strategie) :
+
+1. **Garde monotone sur l'apercu de ligne.** Des que le relais applique un
+   payload au cache de liste (« upsert + bump conversation to top ») au lieu de
+   relire le serveur, il devient vulnerable au desordre de diffusion : un
+   ecrivain nommant un message plus ANCIEN fait reculer le texte, l'auteur, la
+   carte du Prisme et le RANG de la ligne. iOS tient cette regle
+   (`ConversationStore.merging`), le web l'a acquise au cycle 60. Ses bornes ne
+   se devinent pas : l'EGALITE d'horodatage n'est pas un recul (c'est une
+   edition), l'IDENTITE du message prime sur l'horodatage, et le drapeau serveur
+   `previewRecalculated` est l'exception qui autorise un recul LEGITIME
+   (suppression, masquage). Aujourd'hui Android est structurellement immunise —
+   `ConversationListViewModel` ne fait que relire le serveur — et c'est
+   precisement cette immunite que le relais retire.
+2. **Fusion des trames.** Un message entrant vaut TROIS trames
+   (`message:new`, `conversation:updated`, `conversation:unread-updated`,
+   toutes du meme `MessageHandler.broadcastNewMessage`). Le relais doit les
+   traiter comme UN evenement, sinon il refait trois fois la meme mutation.
+   `ConversationListViewModel.refreshRequests` porte aujourd'hui cette fusion
+   pour la strategie « relecture serveur » ; le relais devra la porter pour la
+   strategie « mutation locale ».
+
 - [ ] Cold-start full conversation sync (parallel paging, retries, completeness guards)
 - [ ] Foreground / reconnect delta sync (updatedSince checkpoint, burst cooldown)
 - [ ] Message hydration with stale-while-revalidate + atomic socket merge

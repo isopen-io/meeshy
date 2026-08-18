@@ -99,11 +99,14 @@ if (errorMessage.includes('Maximum') && errorMessage.includes('different reactio
 }
 ```
 
-`ReactionService.addReaction` n'émet plus cette phrase — elle ne subsiste que
-chez `PostReactionService` et `CommentReactionService`, qui gardent leur
-`MAX_REACTIONS_PER_USER = 1` et que ce hook ne sert pas. Le remap ne pouvait
-donc plus que MENTIR : toute erreur serveur future contenant ces deux mots
-serait présentée à l'utilisateur comme une limite de réactions inexistante.
+`ReactionService.addReaction` n'émet plus cette phrase. Elle subsistait encore
+chez `PostReactionService` et `CommentReactionService` au moment où ce cycle a
+commencé — **et elle n'y est plus non plus** : `5cd0e509`, arrivé sur `main`
+pendant ce cycle, a étendu les multi-réactions aux pièces jointes, aux posts et
+aux commentaires, supprimant leurs deux caps applicatifs. Le remap visait donc
+une erreur que PLUS AUCUN service n'émet, et il ne pouvait plus que MENTIR :
+toute erreur serveur future contenant ces deux mots serait présentée à
+l'utilisateur comme une limite de réactions inexistante.
 
 ---
 
@@ -169,6 +172,46 @@ depuis deux jours, recopié dans des mocks — exactement le motif « une table
 recopiée se lit comme une source de vérité »), et le commentaire de
 `PostReactionService` qui décrivait `ReactionService.addReaction` par une forme
 qu'il n'a plus.
+
+---
+
+## 2 sexies. Le même défaut trouvé DEUX FOIS, en parallèle — et ce qu'il en reste
+
+Pendant que ce cycle instruisait le hook web, `5cd0e509` est arrivé sur `main`
+(auteur : jcnm, 07:00 locale) et y a corrigé **le même cap**, dans le même
+fichier, avec le même diagnostic :
+
+> WEB : use-reactions-query (variante React Query) perd son cap client de 3 et le
+> remap d'erreur « Maximum » (le hook socket avait ete traite dans a0e0c2acc)
+
+Il faut l'écrire sans se draper : **la trouvaille n'était pas exclusive**, et sur
+la moitié la plus visible du dossier ce cycle a produit un doublon. La
+convergence est en soi une confirmation — deux instructions indépendantes ont
+nommé le même fichier et la même cause.
+
+Ce qui RESTE propre à ce cycle après intégration manuelle de `main` :
+
+| apport | présent sur `main` ? |
+|---|---|
+| cap + remap retirés de `use-reactions-query` | **oui** — doublon, résolu en faveur de `main` |
+| **suite gateway réparée** (7 témoins rouges) | **non** — `main` est resté ROUGE |
+| **hook mort supprimé** (413 + 693 lignes) | non |
+| **2 types partagés sans lecteur** retirés | non |
+| **clé de locale orpheline** retirée × 4 | non |
+| `useI18n`/`t` morts retirés du hook | non — `main` les a laissés |
+| garde de **transport** (la 4e réaction est ÉMISE) | non — `main` fusionne état et émission en un témoin |
+| garde d'**erreur verbatim** | non — `main` a supprimé le témoin |
+
+La résolution des trois conflits a suivi une seule règle : **la version qui décrit
+le dépôt d'aujourd'hui gagne.** Les commentaires de ce cycle affirmaient que
+« seuls Post/Comment gardent leur `MAX_REACTIONS_PER_USER = 1` » — vrai à
+l'écriture, faux deux heures plus tard, puisque `5cd0e509` a supprimé ces deux
+caps. Ils ont été remplacés par ceux de `main`, corrigés là où `main` gardait
+encore une mention de `replacedEmojis`.
+
+> Une trouvaille simultanée ne s'annule pas, elle se déclare. Ce qui aurait
+> discrédité ce dossier, ce n'est pas le doublon — c'est de le taire et de
+> présenter la partie déjà corrigée comme un apport.
 
 ---
 

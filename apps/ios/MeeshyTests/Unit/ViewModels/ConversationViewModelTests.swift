@@ -776,7 +776,7 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageSocket.removeAttachmentReactionCallCount, 1)
     }
 
-    func test_toggleAttachmentReaction_capsAtOneEmojiPerUser() throws {
+    func test_toggleAttachmentReaction_differentEmoji_stacksWithPrevious() throws {
         let pool = try makeInMemoryPool()
         let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: MessagePersistenceActor(dbWriter: pool)))
         sut.messages = [makeImageMessage()]
@@ -785,9 +785,9 @@ final class ConversationViewModelTests: XCTestCase {
         sut.toggleAttachmentReaction(attachmentId: "a1", messageId: "m1", emoji: "👍")
 
         let att = sut.messages.first?.attachments.first
-        XCTAssertNil(att?.reactionSummary?["❤️"])
+        XCTAssertEqual(att?.reactionSummary?["❤️"], 1, "multi-réactions : le premier emoji survit au second")
         XCTAssertEqual(att?.reactionSummary?["👍"], 1)
-        XCTAssertEqual(att?.currentUserReactions, ["👍"])
+        XCTAssertEqual(Set(att?.currentUserReactions ?? []), ["❤️", "👍"])
     }
 
     func test_applyAttachmentReactionDelta_replacesSummary() throws {

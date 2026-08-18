@@ -1201,7 +1201,10 @@ model AttachmentReaction {
   // concurrent adds with different emojis now race on the SAME document instead
   // of each inserting their own row (mirrors Reaction, see
   // 2026-07-04-attachment-reaction-single-per-user-unique-index.mongodb.js).
-  @@unique([attachmentId, participantId], name: "attachment_participant_reaction")
+  // Multi-réactions (2026-08-18) : triplet — un participant empile
+  // plusieurs emojis distincts par pièce jointe (parité messages/posts).
+  // Index Mongo : 2026-08-18-attachment-reaction-multi-per-user-unique-index.mongodb.js
+  @@unique([attachmentId, participantId, emoji], name: "attachment_participant_reaction")
   @@index([attachmentId])
   @@index([messageId])
   @@index([participantId])

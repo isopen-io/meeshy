@@ -590,24 +590,26 @@ describe('useReactionsQuery', () => {
     });
   });
 
-  describe('Multi-réactions — aucun cap client', () => {
-    it('stacks a 4th distinct emoji instead of refusing it', async () => {
-      const { toast } = require('sonner');
+  describe('Multi-réactions — plus aucun cap client', () => {
+    const threeReactions = () => ({
+      reactions: mockReactions,
+      userReactions: ['❤️', '👍', '🎉'],
+    });
 
-      const stateWithThreeReactions = {
-        reactions: mockReactions,
-        userReactions: ['❤️', '👍', '🎉'],
-      };
-
-      const { wrapper, queryClient } = createWrapperWithClient();
-
-      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], stateWithThreeReactions);
-
+    const ackAdd = () => {
       mockSocketEmit.mockImplementation((event, payload, callback) => {
         if (event === CLIENT_EVENTS.REACTION_ADD) {
           callback({ success: true });
         }
       });
+    };
+
+    it('stacks a 4th distinct emoji instead of refusing it', async () => {
+      const { toast } = require('sonner');
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], threeReactions());
+      ackAdd();
 
       const { result } = renderHook(
         () => useReactionsQuery({
@@ -635,16 +637,8 @@ describe('useReactionsQuery', () => {
     it('reaches the server instead of refusing locally — la 4e réaction est ÉMISE', async () => {
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
-        reactions: mockReactions,
-        userReactions: ['❤️', '👍', '🎉'],
-      });
-
-      mockSocketEmit.mockImplementation((event, payload, callback) => {
-        if (event === CLIENT_EVENTS.REACTION_ADD) {
-          callback({ success: true });
-        }
-      });
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], threeReactions());
+      ackAdd();
 
       const { result } = renderHook(
         () => useReactionsQuery({
@@ -662,12 +656,14 @@ describe('useReactionsQuery', () => {
         await result.current.addReaction('😀');
       });
 
-      // Le cap refusait AVANT l'émission : un client capé ne laisse aucune
-      // trace côté transport, et c'est cette absence qui rendait le serveur
-      // multi-réactions inatteignable depuis le web.
+      // La garde qui PORTE. Celle du dessus décrit l'état du cache et resterait
+      // verte si un futur cap refusait après la mise à jour optimiste puis
+      // rollbackait. Le cap refusait AVANT l'émission : un client capé ne
+      // laisse aucune trace côté transport, et c'est cette absence qui rendait
+      // le serveur multi-réactions inatteignable depuis le web.
       expect(mockSocketEmit).toHaveBeenCalledWith(
         CLIENT_EVENTS.REACTION_ADD,
-        expect.objectContaining({ emoji: '😀' }),
+        { messageId: '507f1f77bcf86cd799439011', emoji: '😀' },
         expect.any(Function)
       );
     });
@@ -881,11 +877,10 @@ describe('useReactionsQuery', () => {
         userReactions: [],
       });
 
-      // Le serveur n'émet plus JAMAIS cette phrase pour une réaction de
-      // MESSAGE — `ReactionService.addReaction` est additif depuis le
-      // 2026-08-18, et seuls Post/Comment gardent leur `MAX_REACTIONS_PER_USER
-      // = 1`. Le remap qui la traduisait visait une erreur disparue : il
-      // aurait fait passer une erreur voisine pour une limite inexistante.
+      // PLUS AUCUN service de réaction n'émet cette phrase : message, pièce
+      // jointe, post et commentaire sont tous additifs depuis le 2026-08-18.
+      // Le remap qui la traduisait visait donc une erreur disparue — il aurait
+      // fait passer une erreur voisine pour une limite inexistante.
       mockSocketEmit.mockImplementation((event, payload, callback) => {
         if (event === CLIENT_EVENTS.REACTION_ADD) {
           callback({ success: false, error: 'Maximum 3 different reactions per user' });

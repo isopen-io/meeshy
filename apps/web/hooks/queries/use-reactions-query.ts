@@ -424,11 +424,12 @@ export function useReactionsQuery({
       restoreReactionSnapshot(context?.previousData);
 
       // Erreur serveur VERBATIM. Le remap qui traduisait « Maximum N different
-      // reactions » visait une erreur que `ReactionService.addReaction`
-      // n'émet plus depuis les multi-réactions (2026-08-18) : elle ne
-      // subsiste que chez Post/Comment, dont les services gardent leur
-      // `MAX_REACTIONS_PER_USER = 1` et que ce hook ne sert pas.
-      toast.error(err instanceof Error ? err.message : 'Failed to add reaction');
+      // reactions » visait une erreur que PLUS AUCUN service de réaction
+      // n'émet : message, pièce jointe, post et commentaire sont tous additifs
+      // depuis le 2026-08-18. Le garder ne pouvait plus que présenter une
+      // erreur voisine comme une limite inexistante.
+      const errorMessage = err instanceof Error ? err.message : 'Failed to add reaction';
+      toast.error(errorMessage);
     },
   });
 
@@ -501,11 +502,8 @@ export function useReactionsQuery({
     // Vérifier si déjà réagi
     if (userReactions.includes(emoji)) return true;
 
-    // Multi-réactions (2026-08-18) : AUCUN cap client. La clé unique du serveur
-    // porte le triplet (messageId, participantId, emoji) et `addReaction` est
-    // additif — iOS et Android n'ont jamais plafonné, et ce hook était le
-    // dernier site à refuser une 4e réaction sans qu'aucune règle serveur ne
-    // l'exige.
+    // Multi-réactions (2026-08-18) : aucun cap client — parité messages/
+    // pièces jointes/posts, le serveur accepte tout emoji distinct.
     try {
       await addMutation.mutateAsync(emoji);
       return true;
