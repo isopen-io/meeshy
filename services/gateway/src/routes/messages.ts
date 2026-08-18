@@ -634,18 +634,31 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Supprimer les traductions du message (vider le JSON)
+      // UNE écriture — jumelle exacte de celle de `messages-advanced.ts`, et
+      // même argument que la route d'ÉDITION de CE fichier deux cents lignes
+      // plus haut : « `translations: null` appartient à CETTE écriture, pas à
+      // une seconde plus bas ». Cette phrase-là finissait sur « celui-ci était
+      // le dernier à ne pas le faire » — vrai de la famille d'ÉDITION, qui a
+      // été balayée en entier. La famille de SUPPRESSION ne l'avait pas été.
+      //
+      // Séparées, elles ouvraient une fenêtre où la ligne est VIVANTE et
+      // dépouillée de ses traductions. Le prix qui compte n'est pas la fenêtre
+      // mais son échec : si la SECONDE écriture échoue, le message reste vivant
+      // sans aucune traduction, DÉFINITIVEMENT — `MessageTranslationService`
+      // écrit lui-même qu'« aucun chemin ne retente une traduction absente ».
+      // L'écriture destructrice committait donc en premier, et celle qui la
+      // rend inoffensive en second : l'échec tombait du mauvais côté.
+      //
+      // Elle ferme aussi la course avec l'édition, dont la garde optimiste
+      // (`where: { id, deletedAt: null }`, décrite plus haut) lisait `deletedAt`
+      // encore nul pendant la fenêtre : l'édition était acceptée et diffusée
+      // pour une ligne que l'écriture suivante effaçait.
+      //
+      // Forme reprise du handler socket, seul des quatre écrivains à la porter
+      // avec les deux champs dans le même `update`.
       await prisma.message.update({
         where: { id: messageId },
-        data: { translations: null }
-      });
-
-      // Marquer le message comme supprimé (soft delete)
-      await prisma.message.update({
-        where: { id: messageId },
-        data: {
-          deletedAt: new Date()
-        }
+        data: { translations: null, deletedAt: new Date() }
       });
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et
