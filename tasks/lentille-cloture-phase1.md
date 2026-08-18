@@ -526,13 +526,25 @@ dans son magasin scopé (`MeeshyApp` branche `onReadingModePreferenceChanged`, g
 tiré côté web : c'est une tâche, pas un chantier.
 
 **Q142-a, en clair.** Sur un rang portant la focus card, en thème **clair**, le point médian
-et l'heure (`text-muted-foreground` sur `--secondary`) mesurent **4,393:1** contre 4,5:1
+et l'heure (`text-muted-foreground` sur `--secondary`) mesuraient **4,393:1** contre 4,5:1
 exigés pour du texte normal — l'heure est cotée 12 px. Déficit **0,107**. Thème sombre :
-5,78, tenu. Fond ordinaire : 4,83 clair / 7,93 sombre, tenu. Ce n'est pas une régression
-(la couleur préexistait) : ce qui est neuf, c'est la mesure, et le témoin **verrouille le
-chiffre mesuré** au lieu d'affirmer une conformité. Trois issues : assombrir d'un cran le
-token sur le fond `--secondary` ; monter l'heure à 14 px (elle devient « texte large », seuil
-3:1) ; ou consigner l'écart comme accepté et daté. **Aucune n'est prise ici.**
+5,78, tenu. Fond ordinaire : 4,83 clair / 7,93 sombre, tenu. Ce n'était pas une régression
+(la couleur préexistait) : ce qui était neuf, c'est la mesure, et le témoin **verrouillait
+le chiffre mesuré** au lieu d'affirmer une conformité.
+
+**TRANCHÉE le 2026-08-18 : assombrie, ratio recalculé 4,567:1.** `--muted-foreground`
+(thème clair uniquement, `apps/web/app/globals.css`) assombri d'un cran, `220 8.9% 46.1%` →
+`220 8.9% 45%` — même teinte/saturation. Nouveau ratio sur `--secondary` (fond de la focus
+card) : **4,567:1**, AA tenu. Sur le fond ordinaire (`--background`) : 5,024:1 (amélioré
+aussi, contre 4,83 avant). Thème sombre inchangé (déjà conforme, 5,78:1). Changement sûr
+pour les 180+ autres consommateurs de `--muted-foreground` : dans tout le dépôt le token
+n'est peint qu'en texte sur des fonds clairs du thème clair, donc l'assombrir ne peut que
+faire monter chaque ratio, jamais descendre (vérifié par grep, aucune exception). Témoin
+amendé : `apps/web/__tests__/a11y/lentille-added-surfaces-contrast-aa.test.ts` affirme
+désormais la conformité au lieu de verrouiller le déficit. iOS : la paire jumelle
+(`MeeshyColors.textMuted`/`backgroundSecondary`) n'est pas un token gris — c'est un tint
+indigo semi-transparent, sans témoin qui la verrouille ; non touchée ici (voir le rapport de
+la tâche Q142-a du 2026-08-18 pour la mesure et la justification).
 
 **Q142-b, en clair.** `grep -l 'DynamicTypeSize\|accessibility5'` sur
 `apps/ios/MeeshyTests/Unit/Lentille/` → **0 fichier**. Le contrat
@@ -672,7 +684,7 @@ Tailles : **S** ≈ une micro-tâche Sonnet · **M** ≈ 2-4 micro-tâches · **
 | # | Dette | Origine | Bloque | Propriétaire suggéré | Taille |
 |---|---|---|---|---|---|
 | **D-1** | **SOLDÉE le 2026-08-18** — commit `test(ios): [A-154] D-1 soldée — Dynamic Type accessibility5 prouvé sur les 8 branches de la rangée Lentille`. Q142-b — Dynamic Type `.accessibility5` sur les 8 branches de la rangée Lentille. Le harnais existant (`FocalDynamicTypeTests`) est désormais appliqué à `LentilleConversationRow` par `MeeshyTests/Unit/Lentille/LentilleRowDynamicTypeTests.swift` (garde de source : 8 branches de ligne 2 — `typing`/`draft`/`bridge`/`expired`/`hidden`/`viewOnce`/`ephemeralActive`/`standard`). | Q-142 / contrat §LWS-13 | **plus rien** | Sonnet (iOS) | **S** |
-| **D-2** | **Q142-a — contraste 4,393:1 (point médian + heure sur focus card, thème clair).** Déficit 0,107. Trois issues chiffrées au §2.3. **Décision design** puis, le cas échéant, un token à bouger. | Q-142 / `81e93f3a` | **palier 2** | Design + Sonnet (web/iOS) | **S** |
+| **D-2** | **SOLDÉE (2026-08-18)** — Q142-a — contraste 4,393:1 (point médian + heure sur focus card, thème clair). Décision : assombrir. `--muted-foreground` (clair) `220 8.9% 46.1%` → `220 8.9% 45%`, ratio recalculé **4,567:1** (AA tenu). Témoin amendé, thème sombre intact. | Q-142 / `81e93f3a` | — | Sonnet (web) | **S** |
 | **D-3** | **Garde d'ensemble `behaviour-matrix` rouge au timeout par défaut de vitest.** Rouge 2/2 en suite complète, verte isolée et à `--testTimeout=60000`. Porter le correctif V4bis `588b585f` (index en process, 0,96 s à froid) au jumeau vitest — ou, a minima, un `testTimeout` explicite sur ce seul `it`. La garde porte le point 7 et R18 : un rouge parasite la rend ignorable. | **Q-145 (cette revue)** — récurrence de REV-4/B5 | rien formellement, **la crédibilité du point 7** | Sonnet (shared) | **S** |
 | **D-4** | **R5-6 — le magasin web de mode de lecture n'a pas d'identité.** Clé `meeshy:reading-mode:<conversationId>`, sans préfixe. La colonne (G-120) et la route (G-121) existent ; iOS consomme déjà le broadcast ; le web n'appelle jamais la route. | REV-4ter | **palier 3** | Sonnet (web + gateway) | **M** |
 | **D-5** | **Q142-c — le défaut « Bulles » provisoire n'est reflété ni par l'encoche ni par `LensSwitcher`.** L'écran fait une chose, les affordances en annoncent une autre. **Décision produit** : garder le défaut (et l'annoncer), ou le retirer (une constante et une branche, procédure écrite dans `use-thread-reading-mode.ts`). | `e87886a9` / Q-142 | **palier 3** | Produit, puis Sonnet (web) | **S** (après décision) |
