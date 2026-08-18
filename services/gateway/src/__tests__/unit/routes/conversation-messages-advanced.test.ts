@@ -37,7 +37,7 @@ const mockGetOrCompute = jest.fn<any>().mockResolvedValue([]);
 const mockOnMessageEdited = jest.fn<any>().mockResolvedValue(undefined);
 const mockOnMessageDeleted = jest.fn<any>().mockResolvedValue(undefined);
 
-const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
+const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
 const mockRemoveReaction = jest.fn().mockResolvedValue(true);
 const mockCreateUpdateEvent = jest.fn().mockResolvedValue({ messageId: 'msg-id', emoji: '👍' });
 
@@ -348,7 +348,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       trackingLinks: [],
     });
     mockCollectContentTrackingLinks.mockResolvedValue([]);
-    mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
+    mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
     mockRemoveReaction.mockResolvedValue(true);
     mockCreateUpdateEvent.mockResolvedValue({ messageId: MSG_ID, emoji: '👍' });
 
@@ -2595,7 +2595,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     it('returns success and broadcasts reaction on happy path', async () => {
       prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
       prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -2615,7 +2615,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       // Duplicate add for an emoji the participant already has — a DB no-op.
       // The route must still report success but must NOT re-broadcast
       // REACTION_ADDED (nothing changed). Parity with the socket handler.
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [], unchanged: true });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, unchanged: true });
 
       const req = makeRequest({
         params: { id: CONV_ID, messageId: MSG_ID },
@@ -3549,7 +3549,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('add reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
       const f = createNullSocketFastify();
       const p = makePrisma();
       p.message.findFirst.mockResolvedValue({ id: MSG_ID });
@@ -3599,7 +3599,7 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
 
     it('add reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, replacedEmojis: [] });
+      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
       const f = createNullSocketFastify();
       f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
       const p = makePrisma();

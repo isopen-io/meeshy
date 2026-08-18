@@ -16,7 +16,6 @@
     "error": "Erreur lors du chargement",
     "errorAdding": "Erreur lors de l'ajout",
     "errorRemoving": "Erreur lors de la suppression",
-    "maxReactionsReached": "Vous ne pouvez ajouter que {max} réactions différentes par message",
     "chooseReaction": "Choisir une réaction",
     "close": "Fermer",
     "searchEmoji": "Rechercher un emoji...",
