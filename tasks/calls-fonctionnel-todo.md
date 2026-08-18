@@ -9764,3 +9764,83 @@ bitrate/tier. Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; 
   scoping (l'autre moitié du follow-up PR #3182, non traitée ici) ; dette lint systémique
   `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (mesurée cette vague, non corrigée — chantier
   distinct, décision d'équipe requise sur la portée du refactor).
+
+## Vague 144 — ICE-restart backoff/rate-limit scoping (web, follow-up to PR #3182 / Vague 143) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement la seconde moitié laissée en suivi par la Vague 143 (« ICE-restart backoff/rate-limit
+scoping ... left for follow-up PRs »), elle-même la moitié restante de la note de PR #3182. Toolchains
+iOS/Android toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix
+scopé web (TypeScript pur), aucun edit Swift/Kotlin non testable.
+
+- **Root cause** : `WebRTCService.oniceconnectionstatechange` (`apps/web/services/webrtc-service.ts`)
+  appelait `restartIce()` DIRECTEMENT et SANS DÉLAI à chaque transition ICE `'failed'`, et de même
+  depuis le minuteur de grâce quand un `'disconnected'` persiste au-delà de `ICE_DISCONNECT_GRACE_MS`
+  — sans aucun compteur de tentatives ni recul. Sur un transport réellement mort (allocation TURN
+  expirée, route bloquée en sortie), chaque cycle de restart réamorce une négociation complète
+  (`createOffer` → `setLocalDescription` → relais SDP via `onLocalDescription` → signalisation), et
+  s'il échoue de nouveau rapidement, le cycle suivant repart IMMÉDIATEMENT — boucle non bornée qui
+  consomme CPU/batterie/bande passante pour une connexion qui ne reviendra pas seule. C'est
+  exactement la classe de défaut nommée par la note de suivi de PR #3182 et redocumentée comme non
+  traitée à la Vague 143.
+- **Scénario de défaillance concret** : un pair derrière un NAT symétrique dont l'allocation TURN a
+  expiré (ou un réseau qui bloque durablement le nouveau chemin ICE après un restart) voit son ICE
+  osciller `failed`/`disconnected`/`checking` sans jamais atteindre `connected`. Avant ce correctif,
+  chaque transition relance `restartIce()` sur-le-champ : des dizaines de renégociations par minute,
+  chacune émettant une offre SDP fraîche vers le pair distant via la relais de signalisation — sur
+  liaison cellulaire, ce trafic de fond dégrade directement la latence/le débit du reste de l'appel
+  (audio des AUTRES participants d'un appel de groupe compris) et la batterie, sans jamais faire
+  progresser la reconnexion.
+- **Fix** : `scheduleIceRestart()` (nouvelle méthode privée) remplace les deux appels directs à
+  `restartIce()`. Le PREMIER restart d'un épisode de dégradation reste immédiat (playbook
+  « unstable-connection » existant, inchangé — la plupart des accrocs se réparent d'eux-mêmes en un
+  essai). Chaque restart CONSÉCUTIF sans `'connected'`/`'completed'` intermédiaire recule
+  exponentiellement (`2s, 4s, 8s, 16s` — base `ICE_RESTART_BACKOFF_BASE_MS=2000`, plafond
+  `ICE_RESTART_BACKOFF_MAX_MS=16000`), et au-delà de `ICE_RESTART_MAX_ATTEMPTS=5` tentatives
+  consécutives le service ABANDONNE : plus aucun restart n'est programmé, `config.onError` est
+  appelé avec `ICE_RESTART_ATTEMPTS_EXHAUSTED` pour que la couche appelante (déjà câblée sur
+  `onError` dans `use-webrtc-p2p.ts`) puisse réagir (toast, fin d'appel) au lieu que le service
+  boucle silencieusement pour toujours. Un `'connected'`/`'completed'` réel remet le compteur à zéro
+  ET annule un minuteur de recul en attente — une dégradation ULTÉRIEURE repart avec son propre
+  premier essai immédiat, elle n'hérite pas du recul/plafond de l'épisode précédent. `close()` annule
+  aussi le minuteur de recul (comme il le fait déjà pour le minuteur de grâce) : sans ça, un restart
+  programmé pouvait encore se déclencher après démontage du pair (`peerConnection === null`),
+  travail perdu et fuite potentielle de minuteur.
+- **Périmètre délibérément exclu** : la note de PR #3182 groupait « ICE-restart backoff/rate-limit
+  scoping » avec « per-peer adaptive bitrate degradation » — cette seconde moitié a été traitée par
+  la Vague 143. Le comptage de tentatives ici est PAR INSTANCE `WebRTCService` (donc par pair, dans
+  un appel de groupe à un `WebRTCService` par participant) — un pair qui souffre n'affecte ni le
+  compteur ni le recul d'un AUTRE pair, cohérent avec le traitement par-pair déjà établi côté
+  bitrate/tier (Vague 143) et côté grace-timer (préexistant).
+- **Tests** (TDD, RED confirmé — `git stash` des deux fichiers touchés, suite rejouée, `git stash
+  pop`) : 4 cas neufs dans `webrtc-service.coverage.test.ts`, describe « createPeerConnection — ICE
+  restart backoff and attempt cap » — recul du DEUXIÈME restart consécutif (immédiat au premier,
+  différé au second, RED : les deux tiraient `createOffer` au même tick) ; abandon + `onError`
+  `ICE_RESTART_ATTEMPTS_EXHAUSTED` après 5 tentatives consécutives, et silence total (aucun
+  `createOffer` de plus) après abandon (RED : `onError` jamais appelé, boucle continuait sans fin) ;
+  remise à zéro du compteur sur récupération réelle — un restart ULTÉRIEUR après un `'connected'`
+  repart immédiat (RED avant fix : passait trivialement faute de recul à casser, redevient un test
+  de non-régression utile une fois le recul en place) ; minuteur de recul annulé par `close()`, pas
+  de `restartIce()` fantôme sur un pair démonté (RED : passait aussi trivialement avant fix, même
+  raison — verrouille le comportement pour la suite). **2/4 RED confirmés à l'introduction du
+  correctif** (les deux autres décrivaient un comportement qui n'existait pas encore à casser,
+  volontairement conservés car ils verrouillent le contrat final). **4/4 verts après fix.** Suite du
+  fichier : **156/156** verts (+4 nets, 0 régression) ; `webrtc-service.test.ts` inchangé, **14/14**
+  verts. Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites / 772 tests** verts (+7 net
+  vs Vague 143, 0 régression). Suite `apps/web` COMPLÈTE (`bun run test`) : **692 suites / 13473
+  tests** (21 skip préexistants), 100% vert (la hausse de 688→692 suites vs Vague 143 vient
+  d'autres branches mergées sur `main` entre-temps, hors périmètre calling). `npx tsc --noEmit`
+  (apps/web) : **0 erreur ajoutée** — 1261 erreurs
+  `error TS` préexistantes, comparées par grep ciblé (`webrtc-service`, 23→23) et par diff `git
+  stash` du compte TOTAL du dépôt (1261→1261, identique au caractère près). `eslint`
+  (`./node_modules/.bin/eslint`, binaire du projet) : 0 erreur sur les deux fichiers touchés avant
+  et après ; 6 warnings `Unused eslint-disable directive` PRÉEXISTANTS (décalés de ligne par
+  l'insertion, comptés et comparés un par un via `git stash` — 6→6, même nature).
+- **Non fait volontairement** : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; suspend/resume audio-only
+  par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
+  (Vague 143, non corrigée — chantier distinct).

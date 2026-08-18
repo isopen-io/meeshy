@@ -70,6 +70,21 @@ const VIDEO_ENCODING_LADDER: Record<
 // Grace window before an ICE 'disconnected' escalates to a restart.
 const ICE_DISCONNECT_GRACE_MS = 3_000;
 
+// ICE-restart backoff/rate-limit scoping (follow-up to PR #3182, deferred at
+// Vague 143). The FIRST restart of a degradation episode stays immediate
+// (unstable-connection playbook, see oniceconnectionstatechange) — most
+// blips self-heal on that single attempt. Every consecutive restart without
+// an intervening 'connected'/'completed' backs off exponentially, and after
+// ICE_RESTART_MAX_ATTEMPTS the service stops retrying altogether: without a
+// cap, a genuinely broken transport (dead TURN allocation, blackholed route)
+// makes createPeerConnection hammer createOffer/setLocalDescription — and
+// relay a fresh SDP through signaling via onLocalDescription — in a tight,
+// unbounded loop, burning battery/CPU/bandwidth for a connection that is
+// never coming back on its own.
+const ICE_RESTART_MAX_ATTEMPTS = 5;
+const ICE_RESTART_BACKOFF_BASE_MS = 2_000;
+const ICE_RESTART_BACKOFF_MAX_MS = 16_000;
+
 export class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
   private localStream: MediaStream | null = null;
@@ -113,6 +128,10 @@ export class WebRTCService {
   // restart. A blip often self-heals within a couple of seconds; restarting
   // immediately causes needless churn.
   private disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  // Consecutive ICE-restart attempts since the last real recovery
+  // ('connected'/'completed'). Drives the backoff/cap in scheduleIceRestart().
+  private iceRestartAttempt = 0;
+  private iceRestartBackoffTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config: WebRTCServiceConfig = {}) {
     this.config = {
@@ -432,9 +451,7 @@ export class WebRTCService {
               participantId,
               state,
             });
-            this.restartIce().catch((error) => {
-              logger.error('[WebRTCService] ICE restart attempt failed', { error });
-            });
+            this.scheduleIceRestart();
           } else if (state === 'disconnected') {
             logger.warn('[WebRTCService] ICE disconnected, starting grace timer', {
               participantId,
@@ -449,13 +466,16 @@ export class WebRTCService {
                   participantId,
                   current,
                 });
-                this.restartIce().catch((error) => {
-                  logger.error('[WebRTCService] ICE restart after grace failed', { error });
-                });
+                this.scheduleIceRestart();
               }
             }, ICE_DISCONNECT_GRACE_MS);
           } else if (state === 'connected' || state === 'completed') {
             this.clearDisconnectGraceTimer();
+            // Real recovery — forgive past attempts so a LATER degradation
+            // episode gets its own immediate first restart instead of
+            // inheriting this episode's backoff/cap.
+            this.iceRestartAttempt = 0;
+            this.clearIceRestartBackoffTimer();
           }
         }
       };
@@ -1144,6 +1164,55 @@ export class WebRTCService {
   }
 
   /**
+   * Schedule an ICE restart with exponential backoff after the first
+   * consecutive attempt, and give up once ICE_RESTART_MAX_ATTEMPTS is
+   * exceeded. See the constants' doc comment for why an unbounded, immediate
+   * retry-on-every-transition loop is unsafe. Attempts are forgiven on real
+   * recovery ('connected'/'completed', see oniceconnectionstatechange).
+   */
+  private scheduleIceRestart(): void {
+    this.iceRestartAttempt += 1;
+    const attempt = this.iceRestartAttempt;
+
+    if (attempt > ICE_RESTART_MAX_ATTEMPTS) {
+      logger.error('[WebRTCService] ICE restart attempts exhausted, giving up', {
+        participantId: this.participantId,
+        attempts: attempt - 1,
+      });
+      this.config.onError?.(new Error('ICE_RESTART_ATTEMPTS_EXHAUSTED'));
+      return;
+    }
+
+    const delayMs = attempt <= 1
+      ? 0
+      : Math.min(
+          ICE_RESTART_BACKOFF_BASE_MS * 2 ** (attempt - 2),
+          ICE_RESTART_BACKOFF_MAX_MS
+        );
+
+    logger.info('[WebRTCService] Scheduling ICE restart', {
+      participantId: this.participantId,
+      attempt,
+      delayMs,
+    });
+
+    this.clearIceRestartBackoffTimer();
+    this.iceRestartBackoffTimer = setTimeout(() => {
+      this.iceRestartBackoffTimer = null;
+      this.restartIce().catch((error) => {
+        logger.error('[WebRTCService] Scheduled ICE restart failed', { error });
+      });
+    }, delayMs);
+  }
+
+  private clearIceRestartBackoffTimer(): void {
+    if (this.iceRestartBackoffTimer) {
+      clearTimeout(this.iceRestartBackoffTimer);
+      this.iceRestartBackoffTimer = null;
+    }
+  }
+
+  /**
    * Get connection state
    */
   getConnectionState(): RTCPeerConnectionState | null {
@@ -1190,6 +1259,8 @@ export class WebRTCService {
     });
 
     this.clearDisconnectGraceTimer();
+    this.clearIceRestartBackoffTimer();
+    this.iceRestartAttempt = 0;
 
     // Release this instance's own reference; only stop the tracks themselves
     // when this service owns the full teardown (see doc comment above).
