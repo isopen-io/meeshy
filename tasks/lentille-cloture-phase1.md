@@ -508,7 +508,7 @@ web, pas après (c'est Q142-c).
 | **R6-4** « Bulles » ON sans effet | REV-5 couture (d) | **SOLDÉE** — `6efc56ac`, l'entrée `bubble` du `LensSwitcher` est BRANCHÉE (et non masquée : masquer aurait fait du défaut provisoire un aller simple) | plus rien |
 | **R6-5** `suggestedMode` 0 consommateur | REV-5 couture (b), Q-141 §4 | **SOLDÉE** — `b62bc163` (web) + `784f3c16` (iOS) : l'encoche de la focus card lit la décision du serveur au lieu de la recalculer. Critère produit A6 satisfait | plus rien |
 | **R6-3** Rivière non montée | REV-5 couture (c) | **VERROU EN PLACE** — `95a499a1`, `defaultIsOn && !isMounted ⇒ build rouge`, les deux plateformes | `riviere_mode` ON par défaut, jusqu'à **R-137** |
-| **R5-6** scope web sans identité | REV-4ter, « **condition** : LWS-3/G-121 avant activation multi-comptes » | **OUVERTE** | toute activation web de `reading_modes` sur un navigateur multi-comptes |
+| **R5-6** scope web sans identité | REV-4ter, « **condition** : LWS-3/G-121 avant activation multi-comptes » | **SOLDÉE le 2026-08-18** — `feat(web): [A-157] R5-6 soldée — le magasin de mode de lecture a une identité, la route G-121 est branchée`, voir `git log --oneline -- apps/web/stores/reading-mode-preference-store.ts` | plus rien |
 | **Q142-a** contraste 4,393:1 | Q-142 croisé, `81e93f3a` | **OUVERTE — décision design** | rien techniquement ; un critère AA du contrat |
 | **Q142-b** Dynamic Type rangée Lentille | Q-142 | **SOLDÉE le 2026-08-18** — commit `test(ios): [A-154] D-1 soldée — Dynamic Type accessibility5 prouvé sur les 8 branches de la rangée Lentille`, harnais `FocalDynamicTypeTests` appliqué à `LentilleConversationRow` (`LentilleRowDynamicTypeTests.swift`, garde de source, 8 branches de ligne 2) | plus rien |
 | **Q142-c** défaut Bulles non reflété | Q-142 / `e87886a9` | **TRANCHÉE le 2026-08-18** — gardé et assumé, `LensSwitcher`/l'encoche le reflètent (D-5) | plus rien |
@@ -524,6 +524,35 @@ dans son magasin scopé (`MeeshyApp` branche `onReadingModePreferenceChanged`, g
 `isReadingModesEnabled`) ; **le web, lui, n'écrit ni ne lit la route** — aucun appel réseau
 `readingMode` dans `apps/web` (grep 2026-08-17). Le levier de sortie existe et n'est pas
 tiré côté web : c'est une tâche, pas un chantier.
+
+> **SOLDÉE le 2026-08-18 (D-4, commit `feat(web): [A-157] R5-6 soldée`).** Clé désormais
+> `meeshy:reading-mode:<scopeId>:<conversationId>` — `scopeId` = `u-<userId>` (compte
+> inscrit, `authManager.getCurrentUser()`) ou `a-<participantId>` (session anonyme,
+> `authManager.getAnonymousSession()`), résolu et injecté dans
+> `apps/web/stores/reading-mode-preference-store.ts` SEUL ; le type partagé gelé
+> `ReadingModePreferenceScope` n'a pas bougé (le préfixe reste une affaire de clé de
+> stockage web, comme le mandat l'exigeait). **Politique de migration : SUPPRESSION
+> one-shot, jamais adoption.** Une ancienne clé non scopée — l'antique `meeshy-reading-mode`
+> (zustand/persist, pré-REV-4bis) ou la clé DE CE MAGASIN d'avant D-4
+> (`meeshy:reading-mode:<conversationId>`, sans scope) — peut appartenir à n'importe lequel
+> des comptes ayant utilisé ce navigateur ; l'adopter pour le premier lecteur venu aurait
+> reproduit la fuite. Perte acceptée et documentée : le lecteur re-choisit son mode une fois.
+> iOS avait affronté la même question pour SA propre ancienne clé (`meeshy.readingMode.*`,
+> `LentilleScopedReadingModePreferenceStore`) et avait choisi de ne RIEN migrer (ni adopter,
+> ni supprimer — laisser en friche, motivé par le fait que cette clé n'a jamais été écrite en
+> production sur cet OS). Le web va un cran plus loin — SUPPRIMER plutôt qu'orpheliner — pour
+> l'hygiène de `localStorage` (la clé non scopée EST la clé de production d'avant ce commit,
+> contrairement au cas iOS) ; les deux politiques REFUSENT l'adoption, ce qui est le seul
+> point qui comptait pour R5-6. La route G-121 est désormais branchée dans les trois sens du
+> mandat : précédence serveur au chargement d'un fil (arbitrage par version, le serveur
+> l'emporte dès qu'il porte `version >= 1`), écriture fire-and-forget d'un choix explicite
+> (identité INSCRITE seulement — aucune route pour les comptes anonymes), et consommation du
+> broadcast versionné `USER_PREFERENCES_UPDATED`, gardée par le drapeau web du fil
+> (`useReadingModesFlag`) — le pendant exact de `MeeshyApp.swift:
+> onReadingModePreferenceChanged` côté iOS. RED-GREEN rejoué : contre le code d'avant ce
+> commit, le témoin R5-6 (`apps/web/stores/__tests__/reading-mode-identity-scope.test.ts`)
+> rougit 9/12 sur la fuite exacte nommée ci-dessus (`Expected: "auto", Received: "focal"`
+> quand le compte B relit le choix du compte A) ; vert après ce commit.
 
 **Q142-a, en clair.** Sur un rang portant la focus card, en thème **clair**, le point médian
 et l'heure (`text-muted-foreground` sur `--secondary`) mesuraient **4,393:1** contre 4,5:1
@@ -686,7 +715,7 @@ Tailles : **S** ≈ une micro-tâche Sonnet · **M** ≈ 2-4 micro-tâches · **
 | **D-1** | **SOLDÉE le 2026-08-18** — commit `test(ios): [A-154] D-1 soldée — Dynamic Type accessibility5 prouvé sur les 8 branches de la rangée Lentille`. Q142-b — Dynamic Type `.accessibility5` sur les 8 branches de la rangée Lentille. Le harnais existant (`FocalDynamicTypeTests`) est désormais appliqué à `LentilleConversationRow` par `MeeshyTests/Unit/Lentille/LentilleRowDynamicTypeTests.swift` (garde de source : 8 branches de ligne 2 — `typing`/`draft`/`bridge`/`expired`/`hidden`/`viewOnce`/`ephemeralActive`/`standard`). | Q-142 / contrat §LWS-13 | **plus rien** | Sonnet (iOS) | **S** |
 | **D-2** | **SOLDÉE (2026-08-18)** — Q142-a — contraste 4,393:1 (point médian + heure sur focus card, thème clair). Décision : assombrir. `--muted-foreground` (clair) `220 8.9% 46.1%` → `220 8.9% 45%`, ratio recalculé **4,567:1** (AA tenu). Témoin amendé, thème sombre intact. | Q-142 / `81e93f3a` | — | Sonnet (web) | **S** |
 | **D-3** | **Garde d'ensemble `behaviour-matrix` rouge au timeout par défaut de vitest.** Rouge 2/2 en suite complète, verte isolée et à `--testTimeout=60000`. Porter le correctif V4bis `588b585f` (index en process, 0,96 s à froid) au jumeau vitest — ou, a minima, un `testTimeout` explicite sur ce seul `it`. La garde porte le point 7 et R18 : un rouge parasite la rend ignorable. | **Q-145 (cette revue)** — récurrence de REV-4/B5 | rien formellement, **la crédibilité du point 7** | Sonnet (shared) | **S** |
-| **D-4** | **R5-6 — le magasin web de mode de lecture n'a pas d'identité.** Clé `meeshy:reading-mode:<conversationId>`, sans préfixe. La colonne (G-120) et la route (G-121) existent ; iOS consomme déjà le broadcast ; le web n'appelle jamais la route. | REV-4ter | **palier 3** | Sonnet (web + gateway) | **M** |
+| **D-4** | **SOLDÉE le 2026-08-18** — commit `feat(web): [A-157] R5-6 soldée — le magasin de mode de lecture a une identité, la route G-121 est branchée`. R5-6 — le magasin web de mode de lecture n'avait pas d'identité (clé `meeshy:reading-mode:<conversationId>`, sans préfixe). Clé désormais `meeshy:reading-mode:<scopeId>:<conversationId>` (`scopeId` = `u-<userId>` inscrit ou `a-<participantId>` anonyme, résolu dans `apps/web/stores/reading-mode-preference-store.ts` seul) ; ancienne clé non scopée PURGÉE one-shot, jamais adoptée (politique de sécurité, détail au §2.3) ; route G-121 branchée dans les trois sens (précédence serveur au chargement, écriture explicite fire-and-forget identité inscrite seulement, broadcast versionné consommé gardé par `reading_modes`). Comptes anonymes : aucune route serveur (`fastify.authenticate` l'exige) — le scope local anonyme suffit, aucun appel fabriqué. | REV-4ter | **plus rien** | Sonnet (web) | fait |
 | **D-5** | **Q142-c — SOLDÉE, 2026-08-18.** Décision produit : le défaut « Bulles » provisoire est **GARDÉ et assumé** — les affordances le reflètent désormais. `useThreadActiveReadingMode` (`use-thread-reading-mode.ts`) traduit ce que le fil rend RÉELLEMENT (pas la préférence brute) vers `LensSwitcher` ; `notchText` (`lentille-mode-labels.ts`, param `isReadingModesFlagActive`) fait de même pour l'encoche de la focus card (`LentilleFocusCard`/`LentillePeek`). Défaut `false` sur ce paramètre : zéro régression sur R6-4/R6-5. Commit `ab4eb50e` (`feat/q142c-encoche-defaut`). | `e87886a9` / Q-142 | plus rien | — | fait |
 | **D-6** | **Point 6 — la mesure qui n'a jamais eu lieu.** Aucune trace Instruments (iOS), aucune trace de profiler navigateur (web). Le palier 1 la rend possible sans rien déployer. Neuf items device-only recensés en Q-143 §2. | §9.1 point 6 / Q-143 | **la clôture littérale** | QA + Sonnet | **M** |
 | **D-7** | **« Zéro allocation » : l'énoncé du contrat §4.1 est faux.** Mesuré : 1 + 2N objets par frame, N = rangs visibles. Amender le texte (« allocation bornée O(rangs visibles) ») **ou** poser un pool. L'amendement est le geste honnête tant que D-6 n'a rien mesuré. **SOLDÉE le 2026-08-18 (décision ⑧) — par amendement** : le contrat §4.1 lit désormais « allocation bornée O(rangs visibles), jamais O(liste) », note datée avec citation du texte originel (`tasks/lentille-implementation-contract.md` §4.1, renvoi en R2 de §5) ; le pool reste une **option** non ouverte, conditionnée à une mesure device/profiler. **D-6 n'est pas soldée pour autant.** | Q-143 §1.b | rien | Rédacteur du contrat | **S** (amendement) / **M** (pool) |

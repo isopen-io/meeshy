@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
@@ -9,6 +9,8 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useNotificationStore } from '@/stores/notification-store';
 import { useConversationPreferencesStore } from '@/stores/conversation-preferences-store';
 import { setConversationUnreadInCache } from '@/lib/conversations/unread-cache';
+import { applyReadingModePreferenceBroadcast } from '@/lib/conversations/reading-mode-broadcast';
+import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
 import {
   rebuildInfiniteConversationPages,
   type InfiniteConversationData,
@@ -513,6 +515,15 @@ function messageCacheKeysFor(
 export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   const { conversationId, enabled = true } = options;
   const queryClient = useQueryClient();
+
+  // D-4 / R5-6 — le drapeau qui garde la consommation du broadcast de mode de
+  // lecture (`applyReadingModePreferenceBroadcast`, point 3(c) du mandat).
+  // Lu en ref : le `useEffect` ci-dessous ne dépend que de
+  // `[conversationId, enabled, queryClient]` (inchangé) — la fermeture des
+  // écouteurs socket lirait sinon une valeur figée au montage.
+  const { active: isReadingModesFlagActive } = useReadingModesFlag();
+  const isReadingModesFlagActiveRef = useRef(isReadingModesFlagActive);
+  isReadingModesFlagActiveRef.current = isReadingModesFlagActive;
 
   useEffect(() => {
     if (!enabled) return;
@@ -1537,6 +1548,10 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // onglet ouvert. Le store arbitre lui-même sur `version`.
       if ('conversationId' in data) {
         useConversationPreferencesStore.getState().applyRemotePreferences(data);
+        // D-4 / R5-6, point 3(c) — le pendant web de
+        // `MeeshyApp.swift:onReadingModePreferenceChanged` : même événement,
+        // un second magasin scopé à nourrir, gardé par le même drapeau du fil (`useReadingModesFlag`).
+        applyReadingModePreferenceBroadcast(data, isReadingModesFlagActiveRef.current);
         return;
       }
       if ('category' in data) {
