@@ -582,7 +582,18 @@ export function registerSharingRoutes(
         prisma,
         conversationId: shareLink.conversationId,
         userId: userToken.userId,
+        // Les trois validations ci-dessus portent sur le LIEN. Aucune ne portait
+        // sur ce vers quoi il pointe : une clôture n'éteint aucun lien de
+        // partage, si bien qu'un lien qui circule restait joignable après la
+        // mort du fil. La ligne est déjà chargée (`include: { conversation }`),
+        // la question ne coûte rien.
+        conversation: shareLink.conversation,
       });
+
+      if (entry.outcome === 'closed') {
+        logger.info('Jointure refusée — conversation close', { conversationId: shareLink.conversationId });
+        return sendError(reply, 410, 'Cette conversation est terminée');
+      }
 
       if (entry.outcome === 'banned') {
         logger.warn('Jointure refusée — participant banni', { conversationId: shareLink.conversationId });
@@ -848,7 +859,15 @@ export function registerSharingRoutes(
         prisma: fastify.prisma,
         conversationId,
         userId,
+        // Déjà chargée pour vérifier l'appartenance de l'inviteur — inviter dans
+        // un fil terminé donnait une ligne active dans une conversation que
+        // `GET /conversations` ne rend plus et où le premier message est refusé.
+        conversation,
       });
+
+      if (entry.outcome === 'closed') {
+        return sendError(reply, 410, 'Cette conversation est terminée');
+      }
 
       if (entry.outcome === 'banned') {
         return sendForbidden(reply, 'This user is banned from the conversation — lift the ban first');

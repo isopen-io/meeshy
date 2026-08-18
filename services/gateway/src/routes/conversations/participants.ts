@@ -12,7 +12,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
@@ -323,7 +323,21 @@ export function registerParticipantsRoutes(
       // sans passer par `POST …/unban` — laquelle exige le rang `admin` là où
       // cette route s'ouvre aussi aux `moderator`, et écrit une trace. Voir
       // `services/conversations/conversationEntryAdmission.ts`.
-      const entry = await resolveConversationEntry({ prisma, conversationId, userId });
+      // La SEULE des trois portes qui ne tenait pas déjà l'état de la
+      // conversation : elle n'autorisait que sur le rang de l'appelant, et un
+      // rang survit à la clôture (fermer n'écrit sur AUCUNE ligne
+      // `Participant`). Un admin restait donc capable d'ajouter des gens à un
+      // fil terminé. Deux colonnes, cf. `conversationWriteAdmission`.
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { isActive: true, closedAt: true },
+      });
+
+      const entry = await resolveConversationEntry({ prisma, conversationId, userId, conversation });
+
+      if (entry.outcome === 'closed') {
+        return sendError(reply, 410, 'Cette conversation est terminée');
+      }
 
       if (entry.outcome === 'banned') {
         return sendForbidden(reply, 'Cet utilisateur est banni de la conversation — levez le bannissement d\'abord');

@@ -47,6 +47,11 @@ function createMockPrisma() {
   return {
     conversation: {
       findFirst: jest.fn<any>(),
+      // L'état terminal que la porte d'ajout doit désormais opposer à
+      // `resolveConversationEntry`. Vivante par défaut : c'est le conteneur dans
+      // lequel tous les cas ci-dessous se placent, et le dire ici évite de le
+      // répéter partout.
+      findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }),
     },
     participant: {
       findFirst: jest.fn<any>(),
@@ -758,6 +763,52 @@ describe('registerParticipantsRoutes', () => {
       await route.handler(createPostRequest(), reply);
 
       expect(reply.status).toHaveBeenCalledWith(400);
+    });
+
+    // Fermer une conversation n'écrit sur AUCUNE ligne `Participant` : le rang
+    // de l'appelant survit intact à la clôture, et l'autorisation par le rang —
+    // la seule que cette route pratiquait — ne pouvait donc pas la refuser.
+    it('n\'ÉCRIT AUCUNE ligne `Participant` quand la conversation est close', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant({ role: 'admin' }));
+      mockPrisma.user.findFirst.mockResolvedValue({ id: TARGET_USER_ID, username: 'target' });
+      mockPrisma.conversation.findUnique.mockResolvedValue({ isActive: false, closedAt: new Date('2026-03-01') });
+      const reply = createMockReply();
+
+      await route.handler(createPostRequest(), reply);
+
+      expect(mockPrisma.participant.create).not.toHaveBeenCalled();
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+      expect(reply.status).toHaveBeenCalledWith(410);
+    });
+
+    it('refuse aussi sur `isActive: false` seul — les lignes fermées par l\'ancien `leave.ts` n\'ont pas de `closedAt`', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant({ role: 'creator' }));
+      mockPrisma.user.findFirst.mockResolvedValue({ id: TARGET_USER_ID, username: 'target' });
+      mockPrisma.conversation.findUnique.mockResolvedValue({ isActive: false, closedAt: null });
+      const reply = createMockReply();
+
+      await route.handler(createPostRequest(), reply);
+
+      expect(mockPrisma.participant.create).not.toHaveBeenCalled();
+      expect(reply.status).toHaveBeenCalledWith(410);
+    });
+
+    it('ne RÉINTÈGRE pas non plus un ancien membre dans un fil terminé', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant({ role: 'admin' }));
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        createParticipant({ userId: TARGET_USER_ID, isActive: false, bannedAt: null }),
+      ]);
+      mockPrisma.user.findFirst.mockResolvedValue({ id: TARGET_USER_ID, username: 'target' });
+      mockPrisma.conversation.findUnique.mockResolvedValue({ isActive: false, closedAt: new Date('2026-03-01') });
+      const reply = createMockReply();
+
+      await route.handler(createPostRequest(), reply);
+
+      expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+      expect(reply.status).toHaveBeenCalledWith(410);
     });
 
     it('should create participant with correct data on success', async () => {

@@ -157,6 +157,49 @@ describe('POST /anonymous/join/:linkId', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json().success).toBe(true);
   });
+
+  // Les neuf refus ci-dessus portent tous sur le LIEN. Aucun ne portait sur ce
+  // vers quoi il POINTE — et une clôture n'éteint aucun lien de partage. Pour
+  // un anonyme le dégât est terminal : ce participant EST son identité, il n'a
+  // aucun autre chemin vers la conversation.
+  it('returns 410 when the conversation itself is closed, even though every link property is valid', async () => {
+    (app as any).prisma.participant.create.mockClear();
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { ...mockShareLink.conversation, isActive: false, closedAt: new Date('2026-03-01') },
+    });
+
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+
+    expect(res.statusCode).toBe(410);
+    expect((app as any).prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses on `isActive: false` alone — rows closed by the old `leave.ts` carry no `closedAt`', async () => {
+    (app as any).prisma.participant.create.mockClear();
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { ...mockShareLink.conversation, isActive: false, closedAt: null },
+    });
+
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+
+    expect(res.statusCode).toBe(410);
+    expect((app as any).prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('CONTRE-ÉPREUVE — a live conversation still admits the anonymous joiner', async () => {
+    (app as any).prisma.participant.create.mockClear();
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({
+      ...mockShareLink,
+      conversation: { ...mockShareLink.conversation, isActive: true, closedAt: null },
+    });
+
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+
+    expect(res.statusCode).toBe(201);
+    expect((app as any).prisma.participant.create).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─── POST /anonymous/refresh ──────────────────────────────────────────────────

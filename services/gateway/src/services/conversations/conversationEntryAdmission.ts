@@ -72,6 +72,53 @@
  *   une ligne périmée. C'est la leçon 89 — une permission ne doit pas survivre
  *   à la révocation du lien qui la justifiait.
  *
+ * ─── L'ÉTAT DU CONTENEUR ─────────────────────────────────────────────────────
+ *
+ * Les trois portes ci-dessus interrogeaient l'état de la PERSONNE — bannie,
+ * membre, ancienne, inconnue — et **aucune n'interrogeait celui de la
+ * CONVERSATION.** Une conversation close acceptait donc encore des membres, par
+ * les quatre portes, indéfiniment.
+ *
+ * C'est la moitié symétrique du constat de `conversationWriteAdmission` : le
+ * schéma documente `Conversation.closedAt` par « closed for all — **no one can
+ * write**, messages stay readable », et cette phrase-là est tenue depuis le
+ * cycle 31. Personne n'avait posé la question voisine — *peut-on encore y
+ * ENTRER ?* — dont la réponse était non écrite et valait « oui ».
+ *
+ * **Ce que ça coûtait, et pourquoi ça ne se voyait pas.** Une clôture n'éteint
+ * aucun lien de partage : les quatre écrivains de clôture (`core.ts`,
+ * `leave.ts`, les deux branches de `delete-for-me.ts`) n'écrivent que sur
+ * `Conversation`, et `ConversationShareLink.isActive` leur survit. Un lien qui
+ * circule reste donc joignable après la mort du fil, et la porte anonyme vérifie
+ * NEUF propriétés du LIEN — actif, expiration, usages, concurrence, pays,
+ * langue, plage IP, compte requis, identité requise — et zéro propriété de la
+ * conversation. Ce qu'obtient l'arrivant :
+ *
+ *  - un **200**, et une ligne `Participant` neuve et active dans un fil mort ;
+ *  - une conversation que `GET /conversations` ne rend pas (filtre `isActive`)
+ *    et que les clients ont retirée de leur cache sur `conversation:closed` —
+ *    donc introuvable dans la liste ;
+ *  - un premier message refusé par `conversationWriteAdmission`, sans qu'aucun
+ *    événement n'ait jamais expliqué pourquoi ;
+ *  - un `conversation:participant-joined` diffusé aux membres d'un fil terminé.
+ *
+ * Pour l'anonyme, c'est terminal : sa seule identité est ce participant-là.
+ *
+ * **La garde LIT l'état, elle ne fait pas confiance aux écrivains.** Éteindre
+ * les liens à la clôture serait l'autre correctif possible ; il ne couvrirait ni
+ * l'ajout par un admin ni l'invitation, il ne dirait rien des conversations
+ * DÉJÀ closes, et il ferait dépendre la fermeture de la porte de la discipline
+ * de quatre écrivains — celle-là même qui a divergé trente-sept cycles durant
+ * (cf. `conversationWriteAdmission` § « lire l'état réel de la base plutôt que
+ * la discipline de ses écrivains »). Les deux colonnes sont lues, et pour la
+ * raison qui y est écrite : les lignes fermées par l'ancien `leave.ts` n'ont
+ * pas de `closedAt`.
+ *
+ * **La porte anonyme n'appelle PAS cette unité** — elle est keyée sur
+ * `(conversationId, userId)`, et un anonyme n'a pas de `User.id`. Elle appelle
+ * `isConversationClosed` directement, sur la ligne qu'elle charge déjà. C'est le
+ * seul site que le typage ne contraint pas ; il a sa propre garde.
+ *
  * ─── LES DOUBLONS DÉJÀ EN BASE ───────────────────────────────────────────────
  *
  * Les deux portes d'ajout en ont produit avant ce correctif. La décision lit
@@ -83,8 +130,19 @@
  * de réparation.
  */
 
+import {
+  isConversationClosed,
+  type ConversationTerminalStateRow,
+} from '../messaging/conversationWriteAdmission';
+
 /** L'état de la paire `(conversationId, userId)`, et ce que l'appelant doit en faire. */
 export type ConversationEntryOutcome =
+  /**
+   * La CONVERSATION est terminale. Aucune porte ne s'ouvre, pour personne, et
+   * aucune ligne `Participant` n'est même lue — cf. l'en-tête § L'ÉTAT DU
+   * CONTENEUR.
+   */
+  | 'closed'
   /** Une ligne porte `bannedAt`. Aucune porte ne s'ouvre — `POST …/unban` est le chemin. */
   | 'banned'
   /** Une ligne active existe. Rien à écrire ; l'appelant répond « déjà membre ». */
@@ -129,6 +187,26 @@ export interface ConversationEntryParams {
   conversationId: string;
   /** `User.id` de celui qui entre — jamais son `Participant.id`, qui n'existe pas encore au premier passage. */
   userId: string;
+  /**
+   * L'état terminal de la conversation qu'on rejoint — **obligatoire**, et
+   * volontairement passé plutôt que lu.
+   *
+   * Passé, parce que DEUX des trois portes tiennent déjà la ligne
+   * (`shareLink.conversation` pour la jointure par lien, le `findUnique` de
+   * l'invitation) : leur faire payer une lecture de plus pour reposer une
+   * question dont elles ont la réponse serait un coût gratuit — c'est le motif
+   * qu'`isConversationClosed` énonce déjà pour lui-même.
+   *
+   * Obligatoire, parce qu'un paramètre optionnel aurait laissé la question sans
+   * réponse à la porte qui l'oublie, et EN SILENCE. Requis, il fait échouer la
+   * COMPILATION de toute porte — y compris une porte future — qui n'y répond
+   * pas. `null` reste une réponse recevable : c'est celle d'un appelant qui a
+   * cherché la conversation et ne l'a pas trouvée, et elle est permissive par
+   * la même règle que les champs absents d'une ligne héritée (cf.
+   * `isConversationClosed`) — la porte qui ne trouve pas la conversation a déjà
+   * son propre 404 à rendre.
+   */
+  conversation: ConversationTerminalStateRow | null;
 }
 
 /**
@@ -142,7 +220,14 @@ export interface ConversationEntryParams {
 export async function resolveConversationEntry(
   params: ConversationEntryParams
 ): Promise<ConversationEntryDecision> {
-  const { prisma, conversationId, userId } = params;
+  const { prisma, conversationId, userId, conversation } = params;
+
+  // AVANT toute lecture de `Participant`, et ce n'est pas qu'une économie : la
+  // question « que faire de la ligne déjà là » ne se pose que dans un conteneur
+  // qui accepte encore quelqu'un. Une conversation terminale n'a ni membre à
+  // réintégrer ni ligne à créer, et un `create` y serait exactement le défaut
+  // que ce prédicat existe pour empêcher.
+  if (isConversationClosed(conversation)) return { outcome: 'closed' };
 
   const rows = await prisma.participant.findMany({
     where: { conversationId, userId },
