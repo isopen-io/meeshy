@@ -6,8 +6,10 @@
 `socketio/announceConversationClosed.ts` — neuf,
 `socketio/MeeshySocketIOManager.ts`, `routes/conversations/{core,leave,delete-for-me}.ts`)
 **Clients touchés** : aucun (aucun nom d'événement, aucune charge utile modifiés ;
-un `location:live-stopped` de plus part, sur un événement que les trois clients
-traitent déjà)
+un `location:live-stopped` de plus part, sur un événement que les deux clients
+portant la fonction traitent déjà — iOS `MessageSocketManager`, Android
+`LiveLocationEventFold`. Vérifié : `apps/web` n'a AUCUN client de position vive,
+l'événement y est inerte.)
 
 ---
 
