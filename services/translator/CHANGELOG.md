@@ -1,5 +1,51 @@
 # @meeshy/translator
 
+## 1.28.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la présence n'était adressée qu'au fil, où la pastille ne se regarde pas [cycle 66]
+  - l'invité de lien partagé rejoignait sa seule room sans réessai [cycle 65]
+  - l'accusé de lecture ne part plus deux fois — l'alias sans client est retiré [cycle 64] (#3195)
+  - lire le compteur par `userState`, le proxy legacy n'existe plus
+  - per-peer adaptive bitrate/tier degradation [Vague 143] (#3192)
+  - le pont ✦ avait deux formes pour trois phrases — « je n'ai pas calculé » effaçait [cycle 63]
+  - la garde de matrice vitest borne enfin sa lecture — B5 porté au jumeau (trouvaille Q-145)
+  - group-hangup fast path leaked the participant FK into PARTICIPANT_LEFT [Vague 142] (#3187)
+  - `try?` aplatit l'optionnel — la liaison conditionnelle en trop ne compilait pas
+  - l'encoche lit la décision du serveur — suggestedMode branché [R6-5]
+  - drop stale/replayed renegotiation offers and answers (security audit) (#3182)
+  - le pont ✦ gagne un troisième état — le silence ne détruit plus [cycle 63]
+  - le lecteur d'écran entend le pont ✦ que l'œil voit [Q-140/L16-iOS]
+  - scroll-to-bottom control surfaces an offline pill (#3189)
+  - le profil s'ouvre en modale depuis l'auteur d'un message [profile-modal]
+  - borner la passe de ponts de la reconnexion à une page de liste [cycle 62]
+  - wire the email notification toggle (#3185)
+  - la reconnexion effaçait le pont ✦ de TOUTES les lignes [cycle 62]
+  - le rail des vivants s'alimente enfin — typing et salve ✦ [lentille-fidelity]
+  - ligne 2 — le non-lu se lit, la sourdine grise le pont [lentille-fidelity]
+  - ligne 1 du rang — grammaire « Nom · heure », favori et pastilles de tags [lentille-fidelity]
+  - l'avatar du rang Lentille ouvre le profil, jamais la conversation [lentille-fidelity]
+  - « Bulles » par défaut, décision produit provisoire du 2026-08-17 [default-bubbles]
+  - le fil Focal/Script affiche toutes les données du message [focal-parity]
+  - le pont ✦ traverse enfin du payload au rang [REV-5/B1]
+  - P2 — le chip de mode unique : tap = cycle, appui long = menu ; le bouton Aa et la feuille Lentille tirent leur reverence
+  - aucun type de message ne rend une rangée vide [focal-empty]
+  - la pastille de reconnexion existait, et le serveur la refusait aux invités (#3183)
+  - un lien à l'historique privé garde sa porte de jonction [anon-join]
+  - le handshake socket nomme la session anonyme [anon-join]
+  - l'identité anonyme n'occupe plus l'emplacement du jeton JWT [anon-join]
+  - ConversationView — débordement de pile Swift au 1er rendu (démarrage app cassé)
+  - wire moderator "remove from call" to the REST kick endpoint (W6) (#3177)
+  - la loupe obeit a une regle STRICTE — zone exacte, plafond absolu, messages seuls
+  - live presence dot on a direct conversation's header (#3181)
+  - first answer in a group call silenced the rest's missed-call notification (#3173)
+  - le pont ✦ survit à une lecture PARTIELLE — dernier émetteur instruit (#3191)
+  - le pont ✦ survit à une lecture PARTIELLE [cycle 63]
+  - le pont du fan-out socket cesse de payer 5 requêtes par destinataire [REV-5/B2]
+
 ## 1.27.0
 
 ### Minor Changes
