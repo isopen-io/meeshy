@@ -66,7 +66,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
             candidates: [FocalFocusCurve.RowCandidate(id: "just-arrived", midY: focusY)],
             focusY: focusY,
             currentId: nil,
-            hysteresis: FocalFocusCurve.focusBandHalfHeight
+            hysteresis: FocalFocusCurve.threadFocusBandHysteresis
         )
         XCTAssertEqual(winner, "just-arrived", "F01 : un message qui vient d'arriver pile sur la ligne de focus doit être élu immédiatement")
     }

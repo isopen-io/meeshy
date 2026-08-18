@@ -1,213 +1,128 @@
-# Livraison — `/chat/:sharedId` en vue courante + Lentille (Focal / Script)
+# Focal Grandeur Nature §5 — réécriture fidèle du défilement iOS (2026-08-18)
 
-Branche : `claude/shared-conversation-modes-m5kktb`
-Sources : `docs/design/2026-08-15-conversation-modes-verdict.html` (vol. 3),
-`docs/design/2026-08-15-focal-spec-integration.html` (vol. 4).
+Contrat : `docs/design/2026-08-15-focal-spec-integration.html` §5 fait foi (demande user 18/08).
+Les acquis d'architecture (six sites d'appel, `FocalPerspectiveCell` qui repose en
+`layoutSubviews`, `MessageListLayout` compensation d'offset, décoration CALayer,
+épingle d'élection, chrome escamoté, hauteur de rangée invariante à l'élection)
+sont CONSERVÉS — ils ne contredisent pas la spec, ils la font tenir à 120 Hz.
 
-## Verdict retenu pour cette livraison
+## Lot 1 — Cœur du défilement (loi + pass + bogues)
 
-| Mode | Décision vol. 3 | Cette livraison |
-|------|-----------------|-----------------|
-| **Focal** | Garder (défaut) | ✅ livré — rangée plate, perspective au scroll, carte de focus |
-| **Script** | Densité de Focal (`Aa`) | ✅ livré — même rangée, sans perspective |
-| **Lentille** | 2–3 choix + appel | ✅ livré — Focal / Script / Bulles (héritage) |
-| **Scène** | Garder · couche live | ⏭️ déjà couverte par la couche d'appel existante (`video-call`) |
-| **Résumé Vivant** | Garder | ⏭️ hors périmètre — dépend de l'API observer `assist:*` (absente du gateway) |
-| **Rivière** | Sursis | ⏭️ hors périmètre — doit gagner son procès sur prototype |
+- [ ] 1.1 Loi partagée : `FOCUS_CURVE_CONSTANTS.thread` → `{ maxDistance: 380, scaleDecay: 0.40, alphaDecay: 0.82 }`
+      (`packages/shared/utils/focus-curve.ts`) + bande thread dédiée
+      `THREAD_FOCUS_BAND_OFFSET = 150`, `THREAD_FOCUS_BAND_HYSTERESIS = 95`
+      (la bande `list` 140/45 de la Lentille/Rivière ne bouge PAS). Régénérer
+      vecteurs + tests TS.
+- [ ] 1.2 Miroir Swift `FocalFocusCurve` : mêmes constantes, pivot horizontal
+      0.18 → **0.16** (spec anchorPoint (0.16, 1.0) — mécanisme translation
+      équivalente conservé, documenté). `FocalPerspectiveGeometry.standard` :
+      bandLift 150, focusTolerance 95. Forme dynamique
+      `focusY = H − max(150, composeur + 8)` conservée (clavier).
+- [ ] 1.3 Fondu de distance RÉTABLI (spec) : `alpha = min(alphaCeiling, courbe.alpha)`
+      — plancher 0.18 par construction, optimiste = `min(0.7, alphaPerspective)`
+      littéralement. Supprimer `neighbourAlphaFloor` (mort).
+- [ ] 1.4 LOUPE SUPPRIMÉE (spec : échelle ≤ 1, l'élu est à 1.0 + carte + tenue de
+      focus) : retirer `magnification*` (constantes, geometry, zPosition
+      d'élévation, `magnifiedTrailingReserve`, réserve trailing de section →
+      retour à 12). `FocalCellTransform` sans zPosition (écrit 0).
+- [ ] 1.5 Bogue « chrome de focus fantôme » : `isFocused` à la config de cellule
+      gated par `!scrollingActive` ; à l'arrêt, reconfigure [ancien élu, élu].
+- [ ] 1.6 Bogue « atterrissage sans tenue » : drapeau d'atterrissage programmatique ;
+      `scrollViewDidEndScrollingAnimation` gère nudge ET atterrissage (rejoue le
+      pass, re-cible UNE fois si |visualMidY − focusY| > 8 — hauteurs estimées —
+      puis pose chrome + typographie + flush).
+- [ ] 1.7 Pose après auto-scroll message entrant : `scrollToBottom` animé passe
+      par le même chemin de pose (typographie du nouvel élu).
+- [ ] 1.8 Coûts par frame : suppression du double balayage d'inset
+      (`applyBottomInset` n'appelle plus le pass en propre), `syncFocalPassTheme`
+      hors chemin chaud (aux changements seulement), garde d'égalité
+      `ScrollTimePillState.isVisible`, code mort pilule flottante retiré
+      (`configureScrollTimePillOverlay` sans appelant).
+- [ ] 1.9 Rotation / changement de taille : rejouer pass + insets sur changement
+      de bounds (`viewDidLayoutSubviews` gardé par delta), typographie ensuite.
+- [ ] 1.10 Tests : mise à jour de la liste `wouldBreakOnSpecReturn` (géométrie,
+      write, magnificence supprimée, élection 95, focusY 150) + nouveaux tests
+      RED d'abord pour 1.3/1.5/1.6/1.7/1.9.
 
-## Objectif produit
+## Lot 2 — Matrice temps réel
 
-1. `meeshy.me/chat/<ID_PARTAGE>` charge la conversation partagée **dans la vue courante**
-   (responsive téléphone / tablette / ordinateur), plus jamais dans une page à part.
-2. Visiteur non connecté → **modale** de connexion / création de compte / rejoindre en anonyme.
-   La page `/join/<linkId>` disparaît (redirection permanente) ; son contenu vit dans la modale.
-3. La Lentille (Focal / Script) est disponible dans cette vue.
+- [ ] 2.1 Reconfigures ciblés (traductions, transcriptions, audios traduits)
+      DIFFÉRÉS pendant le geste (§4.7ter), flush à la pose.
+- [ ] 2.2 Swap de traduction tardive : cross-fade 150 ms sur le bloc texte
+      (animation scopée au changement de texte effectif) + chip 🌐 INTERACTIF
+      (tap = V.O., appui long = sélecteur).
+- [ ] 2.3 Présence live : canal d'observation → reconfigure des rangées visibles
+      (différé pendant geste).
+- [ ] 2.4 Pilule non-lus : ne plus compter ses PROPRES messages.
+- [ ] 2.5 Typing indicator PLAT en Focal/Script (pastille 22 auteur + 3 points
+      accent, sans capsule) ; capsule conservée en bulles.
+- [ ] 2.6 Effets de message : `effects` réellement passé à `FocalRowInput`
+      (aujourd'hui jamais fourni — feature morte).
+- [ ] 2.7 Échec d'envoi : bande retry rendue en Focal (`onRetry` déjà câblé),
+      exclue de la perspective (plafond alpha inchangé pour .failed = 1).
+- [ ] 2.8 Élection : messages supprimés / système / appel / éphémère expiré
+      NON candidats et sans carte ; rangées système/appel CENTRÉES (spec).
 
-## Increments TDD (tous livrés)
+## Lot 3 — Parité contenu & accessibilité
 
-### Gateway
-- [x] G1 — RED/GREEN : `GET /links/:identifier` expose `requireAccount` + `requireBirthday`
-      (déclarés côté web dans `LinkConversationData`, mais retirés par la sérialisation Fastify).
-- [x] G2 — RED/GREEN : `GET /links/:identifier` — un utilisateur **authentifié non membre**
-      reçoit aujourd'hui `403`. Il doit retomber sur la règle d'aperçu public
-      (`isActive && allowViewHistory`) pour voir l'aperçu + la modale « Rejoindre ».
+- [ ] 3.1 Flou de message (`content.isBlurred`) appliqué au bloc contenu en
+      Focal avec révélation (parité bulle).
+- [ ] 3.2 Lieu / fichier : rendu réel (carte lieu, carte fichier + badge de
+      téléchargement + tap ouvrir) au lieu du repli texte inerte.
+- [ ] 3.3 Long-press iOS 26 : préview native = rangée Focal (pixels), plus
+      jamais une bulle en mode Focal.
+- [ ] 3.4 « Début de la conversation · {date} » (date du premier message).
+- [ ] 3.5 VoiceOver : libellés d'état d'envoi localisés (plus de français en dur
+      sans accents dans `MessageAccessibilityLabelComposer`).
 
-### Web — accès partagé
-- [x] W1 — `useSharedConversationAccess` : résout l'identité (`member` | `anonymous` | `visitor` | erreur).
-- [x] W2 — `JoinConversationModal` : reprend `LoginForm`, `RegisterForm` (avec `linkId`,
-      donc l'inscription rejoint en une étape) et `AnonymousForm` (nom/prénom, pseudo +
-      vérification de disponibilité, email, anniversaire selon `require*`).
-      `JoinHeader` / `JoinInfo` / `JoinActions` / `JoinLoading` étaient le chrome de la
-      page d'accueil : supprimés, la modale porte ce rôle.
-- [x] W3 — `/chat/[id]` : membre → `ConversationLayout` (vue app complète) ;
-      anonyme → surface conversation ; visiteur → aperçu + modale.
-- [x] W4 — `/join/[linkId]` → redirection permanente vers `/chat/[linkId]`.
-- [x] W5 — tout producteur de lien de partage émet `/chat/<linkId>`.
+## Écarts spec ASSUMÉS (conservés, documentés au rapport)
+- Carte de focus = fond accent translucide SANS anneau (choix user 17/08,
+  postérieur à la spec) — `ringSize` 1.5 reste à une ligne.
+- Texte 15→16 remplacé par la tenue de focus à hauteur constante (pastille 34,
+  nom +2, barre) — la variation de corps re-mesurait la cellule à chaque arrêt.
+- Pilule « jour · heure » remplacée par le révélé d'heures (amendement P2).
+- Chrome escamoté pendant le défilement (demande user, absent de la spec).
+- `focusY` dynamique (suit clavier/composeur) plutôt que littéral H−150.
+- Carrousel audio multi-pistes : « inchangé » (spec) — garde sa carte.
+- Orchestrateur `noteOpened` jamais appelé (isReaderAbsent toujours vrai) —
+  hors périmètre défilement, signalé au rapport.
 
-### Web — Lentille
-- [x] L1 — `useFocalScroller` : `focusY = bas − 150`, `f = min(1, d/380)`,
-      échelle `1 − 0.40f`, opacité `1 − 0.82f`, transform/opacity seulement, neutralisé par
-      `prefers-reduced-motion`.
-- [x] L2 — `FocalRow` : rangée plate, tête de groupe `Pseudo · HH:mm`, retrait 29, aucune bulle.
-- [x] L3 — `DateSticker` (collant) + `ScrollTimePill` (auto-effacement 900 ms).
-- [x] L4 — `LensSwitcher` dans le header + persistance collante par conversation.
-- [x] L5 — `--conv-accent` depuis `conversationAccentPalette()` (`packages/shared`).
+## Review (2026-08-18, fin de passe)
 
-### Livraison
-- [x] D1 — `tsc` + tests web & gateway verts, `next build` vert, **ESLint réparé et vert
-      sur les fichiers de la livraison**.
-- [ ] D2 — images Docker : **non construites dans cette session**, le proxy sortant
-      bloque tous les blobs Docker Hub (403). Construites par
-      `.github/workflows/docker.yml` au push. Détail en Revue.
-- [x] D3 — commit + push sur la branche.
+**Livré** : lots 1 et 2 COMPLETS + 3.1/3.5, plus deux correctifs de crash
+découverts en vérification :
+- Loi partagée réancrée spec §5 : thread 380/0.40/0.82 (fondu RÉTABLI),
+  bande fil 150/95 (`THREAD_FOCUS_BAND_*`), pivot 0.16 ; vecteurs régénérés,
+  parité TS/Swift verte, web intact (aucun consommateur production du thread).
+- Loupe Magnificence SUPPRIMÉE (échelle ≤ 1, réserve trailing retirée,
+  zPosition sans écrivain) ; `FocalSpecCurveTests` remplace
+  `FocalMagnificenceTests`.
+- Bogues de défilement corrigés : chrome de focus fantôme (gate
+  anti-recyclage), pose d'atterrissage programmatique (drapeau + re-ciblage
+  unique + épilogue commun de `scrollViewDidEndScrollingAnimation`),
+  double balayage d'inset, travail mort par frame (pilule, thème).
+- **CRASH long fling (SIGTRAP `_updateVisibleCellsNow` ×7, 3 .ips le
+  18/08)** : cascade compensation d'offset × solveur self-sizing — plafonné
+  à 3 compensations/transaction CA (`MessageListLayout`), réarmé au tour
+  suivant. 60 flings violents post-fix : zéro crash. Reconfigures (globaux,
+  ciblés, visibles/présence) TOUS différés pendant le geste.
+- Matrice : effets câblés (feature morte), flou de message en Focal
+  (`FocalProtectedContent`, conditionnel), bande retry, chip 🌐 interactif +
+  cross-fade 150 ms, présence vivante (refreshSignal), badge non-lus sans
+  ses propres envois, typing plat, fantômes/système exclus de l'élection,
+  notices centrées, VoiceOver localisé.
+- 581 tests Focal/Lentille verts ; garde `BetaFeatures…` (rouge sur main,
+  préexistant) résolue par exception étroite agent-grammar.
 
-## Revue
-
-### Gateway — 2 correctifs demandés + 3 bugs trouvés en chemin
-
-`GET /links/:identifier` était la route dont dépend toute la vue partagée. En
-écrivant les tests du nouveau flux, cinq défauts sont sortis :
-
-1. **`requireAccount` / `requireBirthday` absents du schéma de réponse.** Déclarés
-   côté web dans `LinkConversationData`, mais retirés par la sérialisation
-   Fastify — la modale ne pouvait pas savoir quels champs afficher.
-2. **Un compte connecté non membre recevait `403`.** Être identifié donnait donc
-   MOINS d'accès que la navigation privée. Il retombe maintenant sur l'aperçu
-   public (`isActive && allowViewHistory`), puis la modale propose « Rejoindre ».
-3. **`currentUser`, `members` et `anonymousParticipants` étaient sérialisés `{}`.**
-   Déclarés `{ type: 'object' }` sans `properties`, fast-json-stringify les
-   vidait. La conversation partagée arrivait au client sans savoir qui parle.
-   Même famille de panne que celle documentée au-dessus de
-   `linkMessageSenderSchema`.
-4. **Aucun membre n'était jamais reconnu.** Le `select` Prisma ne projetait pas
-   `isActive` (un `where: { isActive: true }` ne PROJETTE pas le champ), donc
-   `member.isActive` valait `undefined` et `userType: 'member'` était
-   inatteignable en production — masqué par un mock de test qui, lui, portait le
-   champ.
-5. **L'identité des participants anonymes était lue à plat.** Le modèle Prisma
-   `Participant` ne porte ni `username` ni `firstName` ni `canSend*` : tout vit
-   dans `anonymousSession.profile` et `permissions`. Le `select` est restreint à
-   `profile` — `session` porte le hash de jeton, l'IP et l'empreinte appareil,
-   qui ne sortent jamais d'une route consultable sans authentification (test de
-   non-fuite ajouté).
-
-### Web — un écran, trois rendus, zéro navigation
-
-`SharedConversationExperience` remplace la paire `/chat` + `/join` qui se
-renvoyait la balle par `router.push`. Trois gardes `sessionStorage` avaient été
-empilées pour contenir la boucle (Safari → app iOS → Safari, sans fin) : elles
-disparaissent avec la cause. `use-auth` ne redirige plus sur `/chat/*` non plus.
-
-Deux défauts trouvés par les tests d'intégration, corrigés :
-- la modale s'ouvrait **une frame après** le premier rendu (état synchronisé par
-  un effet) → le visiteur voyait l'aperçu nu clignoter. Elle est maintenant
-  **dérivée** de l'accès résolu.
-- le chargement du lien **rebouclait** : `t` de `useI18n` change d'identité à
-  chaque rendu et figurait dans les dépendances de l'effet. Le message d'erreur
-  est traduit au rendu, plus au chargement.
-
-`/chat/[id]` : **1,18 Mo → 217 ko** de First Load JS. Les trois surfaces sont
-exclusives, elles sont donc chargées via `next/dynamic` — un visiteur sans compte
-ne télécharge plus la vue applicative complète.
-
-Les métadonnées riches (titre, créateur, participants, image OG générée) ont
-déménagé de `/join/[linkId]/layout.tsx` vers `/chat/[id]/layout.tsx` : `/chat`
-est désormais l'URL collée dans WhatsApp, elle doit porter l'aperçu.
-
-Sept endroits fabriquaient l'URL de partage à la main → une seule source,
-`buildShareLinkUrl()`. `/chat/*` ajouté à l'AASA iOS (Universal Links).
-
-### Lentille
-
-Les cotes ne sont pas réinventées : `styles/lentille-tokens.css`, généré depuis
-`packages/shared/design/lentille-tokens.json`, existait déjà mais n'était importé
-nulle part (« Wiring belongs to future work (WL-100+) »). C'était ce travail.
-De même, `conversationAccentPalette()` (portage TS de `ColorGeneration.swift`)
-existait sans aucun consommateur web — l'indigo était codé en dur. Il alimente
-maintenant `--conv-accent`.
-
-`FocalRow` est une **sœur** de `BubbleMessageNormalView`, pas un remplacement :
-elle réutilise les mêmes hooks (`useReactionsQuery`, `useMessageInteractions`,
-`useMessageDisplay`) et les mêmes enfants, avec un chrome plat. La vue à bulles
-reste intacte, à un tap via la Lentille. Réaction, langue, édition, suppression
-et signalement sont identiques dans toutes les lentilles.
-
-Piège évité : la perspective ne peut PAS être écrite sur l'élément mesuré par
-`tanstack-virtual`. Le rectangle mesuré rétrécirait, la courbe recalculerait une
-autre échelle, et la liste tremblerait d'une frame à l'autre. D'où la séparation
-ancre de géométrie (`data-focal-row`) / cible de transformation
-(`data-focal-scale`), pinnée par un test.
-
-### ESLint — réparé (demande de suivi)
-
-Le blocage rapporté d'abord comme « hors périmètre » ne l'était pas. Trois causes
-empilées, aucune dans le code du dépôt :
-
-1. **`FlatCompat` sur des configs déjà plates.** `eslint-config-next@16` exporte
-   des `Linter.Config[]`. Les passer à `FlatCompat.extends()` fait valider un objet
-   plat par le validateur *eslintrc*, qui `JSON.stringify` la config pour formater
-   ses erreurs et bute sur le cycle `plugins.react → configs → plugins`. Le message
-   parlait de JSON parce que la panne était dans le formateur d'erreur. Les presets
-   sont maintenant importés et étalés directement.
-2. **ESLint 10 est inutilisable avec la stack Next.** `eslint-plugin-react@7.37.5`
-   (dernière version publiée, dépendance DURE de `eslint-config-next`) appelle encore
-   `context.getFilename()`, retiré en ESLint 10, et plafonne son peer à `^9.7`. Le
-   `"eslint": "^10.8.0"` d'`apps/web` était donc le bug → pin `^9.39.5`, plus un
-   `ignore` Dependabot motivé dans les deux blocs npm concernés pour que le prochain
-   bump automatique ne rendorme pas le gate.
-3. **`.eslintrc.local.json` était mort.** ESLint 9+ n'ouvre plus le format eslintrc :
-   son interdiction des imports barrel ne s'appliquait à rien depuis des mois. Reprise
-   dans la config plate — mais avec `paths` et non `patterns`, dont la sémantique
-   gitignore faisait couvrir `@/components/ui/**` par `@/components/ui`, si bien que
-   la règle interdisait exactement l'import direct que son message recommande.
-
-`apps/web` passe aussi de `next lint` (déprécié, supprimé dans Next 16) à `eslint .`,
-la migration recommandée par Next.
-
-**Ce que le linter a immédiatement trouvé dans le code du jour** — deux vrais
-défauts, corrigés en retirant le contournement : un `eslint-disable-next-line
-react-hooks/exhaustive-deps` devenu mensonger (les dépendances étaient exhaustives
-depuis que `t` était sorti du corps de l'effet) et un `useMemo` dépendant de champs
-non déclarés (`use-conversation-accent`).
-
-**Ce que le linter révèle sur l'existant** : 1 750 fichiers analysés,
-**3 756 erreurs / 246 avertissements** sur 594 fichiers, dont **2 631
-`no-explicit-any`** — contre la règle « No `any` types - ever » du CLAUDE.md. Un
-gate qui plante n'est pas indisponible : il est désarmé, et le code dérive derrière.
-Non corrigé ici (la CI ne bloque pas : `continue-on-error: true`), mais mesuré et
-consigné — leçon 222.
-
-### Vérification
-
-| Gate | Résultat |
-|------|----------|
-| `jest` web | **591 suites / 12 505 tests** verts |
-| Couverture web | 57,7 % lignes (seuil 42) |
-| `next build` | ✅ — `/chat/[id]` à 217 ko |
-| `tsc --noEmit` web | **0 erreur ajoutée** (base pré-existante de 890 inchangée) |
-| `jest` gateway | **740 suites / 17 927 tests** verts (une suite tuée par l'OOM du conteneur, verte seule) |
-| `tsc` gateway | ✅ `dist/src/server.js` produit |
-
-### Non livré, et pourquoi
-
-- **Résumé Vivant** — dépend de l'API observer `assist:*` côté gateway, qui
-  n'existe pas. Le volume 4 le pose explicitement comme indépendant des PR 1-4.
-- **Rivière** — en sursis par le verdict : elle doit gagner son procès sur
-  prototype (« Deux non — on coupe, la Rampe hérite »).
-- **Scène** — déjà couverte par la couche d'appel existante (`video-call`) ; ce
-  n'est pas une lentille de lecture.
-- **Images Docker** — non construites *dans cette session* : le proxy sortant
-  renvoie 403 sur tous les blobs Docker Hub
-  (`production.cloudfront.docker.com`), donc aucune image de base n'est
-  téléchargeable ici. À la place, tout ce dont dépend le build d'image a été
-  vérifié : `next build` (sortie `standalone`) et `tsc` gateway (`dist/`).
-  `.github/workflows/docker.yml` construit et pousse `meeshy-web` et
-  `meeshy-gateway` automatiquement — les deux chemins surveillés
-  (`apps/web/**`, `services/gateway/**`) sont touchés par cette livraison.
-- **Les 3 756 erreurs ESLint pré-existantes** — révélées, pas corrigées (voir
-  ci-dessous). La CI ne les bloque pas (`continue-on-error: true`), et les
-  corriger ici noierait la livraison.
-- **`lint` de `services/gateway`, `packages/shared`, `services/agent`** — ces trois
-  scripts sont `eslint src/` alors qu'aucun des trois n'a jamais eu ESLint ni de
-  config (et `packages/shared` n'a même pas de `src/`). Leur donner une stack
-  TypeScript-ESLint est un chantier distinct, à décider par l'équipe.
+**Restes (prochaine passe)** :
+- Starvation de rendu hosting sur fling EXTRÊME (frames clairsemées à très
+  haute vélocité — préexistant, atténué par les reports ; piste : pré-chauffe
+  de cellules/`UICollectionViewDataSourcePrefetching`, simplification du
+  corps de FocalRow).
+- Lot 3 restant : lieu/fichier réels (3.2), préview iOS 26 en rangée plate
+  (3.3), date du premier message dans « Début de la conversation » (3.4).
+- `noteOpened` jamais appelé (orchestrateur : `isReaderAbsent` toujours
+  vrai) — hors périmètre défilement, signalé.
+- « Crash à l'ouverture » signalé en fin de passe = artefact d'installation
+  build-for-testing (dylib widget absente du bundle installé), PAS un défaut
+  du code — réinstallé via `meeshy.sh build`, lancement sain vérifié.

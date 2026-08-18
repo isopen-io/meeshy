@@ -180,7 +180,13 @@ final class FocalHostSourceGuardTests: XCTestCase {
             XCTFail("landOnFocusBand introuvable — l'atterrissage §4.7 a-t-il été renommé ?")
             return
         }
-        let windowEnd = code.index(range.upperBound, offsetBy: 300, limitedBy: code.endIndex) ?? code.endIndex
+        // Fenêtre = le CORPS de la fonction (jusqu'à la déclaration
+        // suivante), jamais un compte de caractères figé : l'armement de la
+        // pose d'atterrissage (2026-08-18) vit désormais AVANT la garde, et
+        // une fenêtre fixe rougirait sans que l'invariant ait bougé.
+        let body = code[range.upperBound...]
+        let windowEnd = body.range(of: "\n    private func ")
+            .map(\.lowerBound) ?? (body.range(of: "\n    func ")?.lowerBound ?? code.endIndex)
         let window = code[range.upperBound..<windowEnd]
         XCTAssertTrue(
             window.contains("guard readingMode == .focal"),
@@ -286,10 +292,15 @@ final class FocalHostSourceGuardTests: XCTestCase {
             XCTFail("`scrollViewDidEndScrollingAnimation` introuvable — la fin du nudge §4.7bis a-t-elle été renommée ?")
             return
         }
-        let animWindowEnd = code.index(animEnd.upperBound, offsetBy: 500, limitedBy: code.endIndex) ?? code.endIndex
+        // Fenêtre = le CORPS de la fonction (jusqu'à la déclaration suivante),
+        // jamais un compte de caractères figé : l'épilogue commun s'est enrichi
+        // (re-ciblage d'atterrissage 2026-08-18) et une fenêtre fixe rougirait
+        // à chaque ligne ajoutée AVANT la pose, sans que l'invariant ait bougé.
+        let animBody = code[animEnd.upperBound...]
+        let animWindowEnd = animBody.range(of: "\n    func ")?.lowerBound ?? code.endIndex
         XCTAssertTrue(
             code[animEnd.upperBound..<animWindowEnd].contains("reconfigureFocusTypographyAtScrollStop()"),
-            "`scrollViewDidEndScrollingAnimation` doit poser la typographie au terme du nudge — c'est l'AUTRE sortie de `settleFocalElection` (§4.7bis) ; sans elle, un élu dégagé du composeur garderait le corps d'avant."
+            "`scrollViewDidEndScrollingAnimation` doit poser la typographie au terme d'une animation programmatique (nudge §4.7bis, atterrissage §4.7) ; sans elle, un élu dégagé du composeur garderait le corps d'avant."
         )
         XCTAssertTrue(
             code.contains("reconfigureFocusTypographyAtScrollStop() {\n        guard readingMode == .focal"),
