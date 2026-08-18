@@ -2211,6 +2211,120 @@ describe('MeeshySocketIOManager', () => {
         userId: 'user-reg-3',
       }));
     });
+
+    // -----------------------------------------------------------------------
+    // La pastille de présence se REGARDE hors du fil : liste de conversations,
+    // écrans de contacts, en-têtes. La room `conversation:<id>` ne peut donc pas
+    // être la seule adresse de `user:status` — un client qui referme un fil en
+    // sort (`conversation:leave` → `socket.leave`, iOS
+    // `ConversationSocketHandler.deinit`) tout en restant connecté, et sa liste
+    // continue d'afficher la pastille de ce pair.
+    // -----------------------------------------------------------------------
+
+    it('adresse la présence aux rooms PERSONNELLES des pairs, pas seulement au fil', async () => {
+      const chains = recordEmitChains(ioState);
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-away', username: 'alice', displayName: 'Alice',
+        firstName: 'Alice', lastName: 'Smith', lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany
+        .mockResolvedValueOnce([{ conversationId: 'conv-aaa' }])
+        .mockResolvedValueOnce([
+          { id: 'part-peer', userId: 'user-peer' },
+          { id: 'part-self', userId: 'user-away' },
+        ]);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await (manager as any)._broadcastUserStatus('user-away', true, false);
+
+      const rooms = chains.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
+      chains.restore();
+      expect(rooms).toContain(ROOMS.user('user-peer'));
+    });
+
+    it("adresse la présence d'un pair SANS COMPTE par son Participant.id", async () => {
+      const chains = recordEmitChains(ioState);
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-host', username: 'host', displayName: 'Host',
+        firstName: 'Host', lastName: '', lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany
+        .mockResolvedValueOnce([{ conversationId: 'conv-link' }])
+        .mockResolvedValueOnce([
+          { id: 'part-guest', userId: null },
+          { id: 'part-host', userId: 'user-host' },
+        ]);
+      prisma.user.findMany.mockResolvedValue([]);
+
+      await (manager as any)._broadcastUserStatus('user-host', true, false);
+
+      const rooms = chains.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
+      chains.restore();
+      expect(rooms).toContain(ROOMS.user('part-guest'));
+    });
+
+    // La garde de PARITÉ — celle qui a de la valeur. Les deux témoins ci-dessus
+    // décrivent la porte inscrite ; ils resteraient verts si la porte anonyme
+    // gardait son unique `to(ROOMS.conversation(...))`. Or c'est elle qui porte
+    // le pire cas : un invité de lien partagé n'a QU'UNE conversation, donc « la
+    // room quittée » y vaut la totalité de sa présence (corollaire de la
+    // Leçon 233 : le chemin à 1 objet n'est pas le cas facile). Le témoin ne
+    // nomme aucun nombre de rooms — il exige des DEUX portes qu'elles adressent
+    // le pair par sa room personnelle, et tombe dès que l'une diverge.
+    it('les DEUX portes de présence adressent le pair par sa room personnelle', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findMany.mockResolvedValue([]);
+
+      const chainsRegistered = recordEmitChains(ioState);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-reg-parity', username: 'reg', displayName: 'Reg',
+        firstName: 'Reg', lastName: '', lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany
+        .mockResolvedValueOnce([{ conversationId: 'conv-parity' }])
+        .mockResolvedValueOnce([{ id: 'part-witness', userId: 'user-witness' }]);
+      await (manager as any)._broadcastUserStatus('user-reg-parity', true, false);
+      const registeredRooms = chainsRegistered.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
+      chainsRegistered.restore();
+
+      const chainsAnonymous = recordEmitChains(ioState);
+      prisma.participant.findUnique.mockResolvedValue({
+        id: 'anon-parity', displayName: 'Guest', nickname: null,
+        lastActiveAt: new Date(), conversationId: 'conv-parity',
+      });
+      prisma.participant.findMany.mockResolvedValue([{ id: 'part-witness', userId: 'user-witness' }]);
+      await (manager as any)._broadcastUserStatus('anon-parity', true, true);
+      const anonymousRooms = chainsAnonymous.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
+      chainsAnonymous.restore();
+
+      const peerRoom = ROOMS.user('user-witness');
+      expect({
+        porteInscrite: registeredRooms.includes(peerRoom),
+        porteAnonyme: anonymousRooms.includes(peerRoom),
+      }).toEqual({ porteInscrite: true, porteAnonyme: true });
+    });
+
+    // L'élargissement de l'audience ne doit RIEN retirer au filtre de blocage :
+    // il exclut par socket.id, donc il doit survivre au changement d'adressage.
+    it("l'exclusion des bloqueurs survit à l'adressage par rooms personnelles", async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-blocked-parity', username: 'alice', displayName: 'Alice',
+        firstName: 'Alice', lastName: 'Smith', lastActiveAt: new Date(),
+      });
+      prisma.participant.findMany
+        .mockResolvedValueOnce([{ conversationId: 'conv-blocked' }])
+        .mockResolvedValueOnce([{ id: 'part-blocker', userId: 'user-blocker' }]);
+      (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
+      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker' }]);
+
+      await (manager as any)._broadcastUserStatus('user-blocked-parity', true, false);
+
+      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([ROOMS.user('user-blocker')]));
+      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker']);
+    });
   });
 
   // -------------------------------------------------------------------------
