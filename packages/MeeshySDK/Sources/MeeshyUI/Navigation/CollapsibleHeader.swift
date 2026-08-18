@@ -309,6 +309,12 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                     // gone from VoiceOver too, otherwise the trail's rings would
                     // be announced behind a heading nobody can see.
                     .accessibilityHidden(inlineAccessoryReveal > 0.5)
+                    // …et il doit lâcher le GESTE, pas seulement la vue. Un
+                    // `Text` à `opacity(0)` reste hit-testable en SwiftUI : posé
+                    // DEVANT la trail (qui vit maintenant dans le `.background`
+                    // de la rangée), il avalerait les taps des premiers anneaux
+                    // — exactement ceux qu'on atteint sans faire défiler.
+                    .allowsHitTesting(inlineAccessoryReveal < 0.5)
                 }
                 .padding(.leading, showBackButton ? 0 : 16)
 
@@ -317,6 +323,9 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                         .lineLimit(1)
                         .padding(.leading, 8)
                         .opacity(max(0, (progress - 0.7) / 0.3))
+                        // Même raison que le titre : purement informatif, il ne
+                        // prend jamais le geste destiné à la trail derrière lui.
+                        .allowsHitTesting(false)
                 }
 
                 // `minLength: 0` — l'écart titre ↔ actions est porté par les

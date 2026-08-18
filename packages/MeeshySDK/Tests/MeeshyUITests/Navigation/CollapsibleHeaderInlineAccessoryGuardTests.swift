@@ -101,6 +101,26 @@ final class CollapsibleHeaderInlineAccessoryGuardTests: XCTestCase {
         )
     }
 
+    /// La trail vit DERRIÈRE la rangée : tout ce qui la recouvre et qui reste
+    /// hit-testable lui vole ses taps. Un `Text` à `opacity(0)` en fait partie —
+    /// SwiftUI le teste toujours — et la fente du titre, qui hugge son texte,
+    /// couvre précisément les premiers anneaux : ceux qu'on atteint sans faire
+    /// défiler. Invisible ne veut pas dire transparent au geste.
+    func test_theHandedOverTitleAlsoReleasesTheGesture_notJustThePixels() throws {
+        let code = try headerSource()
+        XCTAssertTrue(
+            code.contains("allowsHitTesting(inlineAccessoryReveal < 0.5)"),
+            "Une fois la fente cédée, le titre doit cesser de capter les taps — " +
+            "sinon les premiers anneaux de la trail sont inertes."
+        )
+        let title = try XCTUnwrap(code.range(of: "opacity(Double(1 - inlineAccessoryReveal))"))
+        let release = try XCTUnwrap(code.range(of: "allowsHitTesting(inlineAccessoryReveal < 0.5)"))
+        XCTAssertTrue(
+            title.lowerBound < release.lowerBound,
+            "…et cette libération doit porter sur la fente du titre elle-même."
+        )
+    }
+
     /// Le `.background` est posé APRÈS le padding horizontal de la rangée : il
     /// épouse alors la barre ENTIÈRE, gouttières comprises. Posé avant, la piste
     /// repartirait en retrait des deux bords — précisément ce qu'on corrige.

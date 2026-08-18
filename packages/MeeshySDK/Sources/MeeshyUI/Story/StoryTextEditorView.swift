@@ -127,7 +127,11 @@ public struct StoryTextEditorView: View {
     @ViewBuilder
     private var mentionSuggestions: some View {
         if let query = mentionQuery {
-            MentionSuggestionList(query: query, maxHeight: 160) { user in
+            // 132 pt = trois rangées. Le bandeau du composer est
+            // content-driven : sa hauteur suit ce panneau et le canvas se scale
+            // au-dessus. Plus haut, la liste mangerait la moitié de la story
+            // pendant qu'on tape un pseudo.
+            MentionSuggestionList(query: query, maxHeight: 132) { user in
                 textObject.text = ComposerMentionQuery.replacingTrailingHandle(
                     in: textObject.text, with: user.username
                 )
