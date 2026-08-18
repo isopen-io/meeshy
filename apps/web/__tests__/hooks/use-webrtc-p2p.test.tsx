@@ -1381,6 +1381,29 @@ describe('useWebRTCP2P', () => {
       expect(toast.error).toHaveBeenCalledWith('Connection failed. Retrying...');
       expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
     });
+
+    it('a single peer exhausting ICE restart attempts does not escalate to a call-wide error while another peer is still connected (Vague 147)', async () => {
+      const { result, onError, peer1, peer2 } = await connectTwoPeers();
+
+      act(() => peer1.onConnectionStateChange('connected'));
+      act(() => peer2.onConnectionStateChange('connected'));
+
+      (toast.error as jest.Mock).mockClear();
+      onError.mockClear();
+
+      // scheduleIceRestart() in webrtc-service.ts raises this PER-PEER,
+      // terminal signal only once ICE has already reached 'failed' for THAT
+      // one peer (see its own onIceConnectionStateChange 'failed' branch
+      // above, which already gates the call-wide escalation on the
+      // AGGREGATE). Re-escalating it a second time here, ungated, would
+      // toast/kill the whole call because one peer gave up — even though
+      // peer1 is still connected and media keeps flowing for them.
+      act(() => peer2.onError(new Error('ICE_RESTART_ATTEMPTS_EXHAUSTED')));
+
+      expect(result.current.connectionState).toBe('connected');
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
+    });
   });
 
   // Bug fix (2026-07-27): iOS's CallManager enforces a per-peer negotiationId

@@ -9955,3 +9955,66 @@ Vague 145 vient de corriger côté serveur (un contrôle qui a l'air fonctionnel
   sur le même correctif serveur) mergée juste après cette vague — `Test gateway` y échouait
   temporairement sur `ReactionService.test.ts`/`AttachmentReactionService.test.ts` (multi-réactions,
   cycle 68, hors périmètre calling), résolu par le rebase post-merge de #3201.
+
+## Vague 147 — un pair épuisant ses tentatives de restart ICE faisait planter tout l'appel de groupe (web) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Vague 144
+(ICE-restart backoff/rate-limit scoping, PR #3197) a introduit le même jour le signal terminal
+`ICE_RESTART_ATTEMPTS_EXHAUSTED` — son interaction avec le contrat d'agrégation par-pair
+préexistant du fichier n'avait jamais été auditée. Vague 145 (kick anonyme, PR #3203) et Vague 146
+(`canCallBack`, PR #3206) mergées juste avant cette vague.
+
+- **Root cause** : `use-webrtc-p2p.ts` calcule un état AGRÉGÉ (`aggregateConnectionState`,
+  `aggregateIceConnectionState`) sur tous les pairs d'un appel de groupe, et documente
+  explicitement (commentaires existants sur `onConnectionStateChange`/`onIceConnectionStateChange`)
+  qu'un SEUL pair en échec ne doit jamais toaster/tuer l'appel entier tant que d'autres restent
+  connectés — l'escalade call-wide (`setError`/`toast.error`/`onError`) est gardée sur la transition
+  de l'AGRÉGAT, jamais sur l'état individuel d'un pair. `scheduleIceRestart()`
+  (`webrtc-service.ts:1173`, ajouté Vague 144) contourne ce contrat : après 5 tentatives de restart
+  ICE épuisées PAR PAIR (backoff exponentiel), il appelle `this.config.onError?.(new
+  Error('ICE_RESTART_ATTEMPTS_EXHAUSTED'))` — lequel atterrit dans le callback `onError` GÉNÉRIQUE
+  de `use-webrtc-p2p.ts` (ligne 425), qui faisait inconditionnellement `setError` +
+  `toast.error(error.message)` + `onError?.(error)` pour l'échec d'UN SEUL pair, sans passer par la
+  garde d'agrégat que ses deux callbacks voisins appliquent déjà pour les DEUX signaux d'échec
+  jumeaux (`PEER_CONNECTION_FAILED`, `ICE_CONNECTION_FAILED`).
+- **Scénario de défaillance concret** : appel de groupe à 3 participants ; un pair coincé derrière
+  un NAT/TURN qui ne récupère jamais (allocation TURN morte, route black-holée — exactement le
+  scénario que le commentaire de Vague 144 décrit). Après 5 tentatives de restart (backoff
+  exponentiel, ~30s), `WebRTCService` abandonne CE pair et appelle `onError`. L'utilisateur voit
+  alors : un toast affichant la chaîne interne brute non traduite `"ICE_RESTART_ATTEMPTS_EXHAUSTED"`,
+  un second toast via `VideoCallInterface.handleWebRTCError`, et `useCallStore.error` posé
+  call-wide — alors que les deux AUTRES pairs restent parfaitement connectés et que l'audio/vidéo
+  continue de circuler pour eux. Contredit directement l'objectif produit que le contrat
+  d'agrégation existe pour garantir, le jour même où Vague 144 l'a introduit.
+- **Fix** : garde-fou dans le callback `onError` générique de `use-webrtc-p2p.ts` (ligne ~425) —
+  `if (error.message === 'ICE_RESTART_ATTEMPTS_EXHAUSTED') { return; }` avant l'escalade call-wide.
+  L'état ICE de ce pair est déjà `'failed'` avant que l'épuisement ne puisse se déclencher (c'est ce
+  qui arme `scheduleIceRestart`), donc la garde d'agrégat de `onIceConnectionStateChange` (ligne
+  413-421) a déjà décidé, correctement, si CET échec méritait une escalade call-wide — le log seul
+  suffit ici, la ré-escalader une seconde fois ne ferait que dupliquer/contourner cette décision.
+- **Tests** (TDD, RED confirmé avant le fix — `toast.error`/`onError` reçus 1 fois au lieu de 0) : 1
+  cas neuf dans `use-webrtc-p2p.test.tsx`, describe « Multi-peer connection state aggregation (W4) »
+  — « a single peer exhausting ICE restart attempts does not escalate to a call-wide error while
+  another peer is still connected » : deux pairs connectés, `peer2.onError(new
+  Error('ICE_RESTART_ATTEMPTS_EXHAUSTED'))` déclenché directement, assertion que
+  `connectionState` reste `'connected'` et qu'aucun `toast.error`/`onError` call-wide ne part. 71/71
+  verts sur le fichier ciblé (+1 net, 0 régression). Sweep web `--testPathPatterns="[Cc]all|webrtc"` :
+  **58 suites / 775 tests** verts, 0 régression. `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée**
+  — 1261 erreurs `error TS` préexistantes avant et après (compte identique au caractère près,
+  aucune sur les deux fichiers touchés). `eslint` non exécuté cette vague : même échec
+  environnemental PARTOUT dans le dépôt que documenté en Vague 146 (`react/display-name`:
+  `contextOrFilename.getFilename is not a function`), délégué au gate CI `Quality (bun)`.
+- **Non fait volontairement** : les DEUX autres signaux d'échec call-wide (`PEER_CONNECTION_FAILED`,
+  `ICE_CONNECTION_FAILED`) affichent toujours leur `error.message` brut, non traduit, dans un toast
+  — dette i18n préexistante, plus large que ce fix ciblé, laissée pour un futur chantier dédié
+  (repérée mais volontairement non mêlée à ce guard-clause pour garder le fix à une seule
+  préoccupation). Un kick modérateur ne vérifie que le RÔLE de l'appelant, jamais celui de la cible
+  (`routes/calls.ts:914-922`) — un modérateur simple peut retirer un admin/autre modérateur d'un
+  appel en cours ; question de politique produit plutôt que bug non ambigu, laissée en l'état.
+  Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; jumeau iOS potentiel `BubbleCallNoticeView`/`CallSummaryDetailSheet`
+  (Vague 146, toolchain iOS hors d'atteinte) ; `mergeEntries`/`upsertRemoteSegment` sans filtre
+  `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps
+  d'infrastructure groupe (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only
+  par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
+  (Vague 143, non corrigée — chantier distinct, décision d'équipe requise).
