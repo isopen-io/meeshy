@@ -134,6 +134,12 @@ function createMockPrisma() {
     user: {
       findMany: jest.fn<any>(),
     },
+    // Les deux routes de clôture committent leur écriture jumelle et le geste
+    // de l'appelant dans UNE transaction. Le double n'en simule pas l'atomicité
+    // — il rend les résultats dans l'ordre, ce qui suffit à ce que la route
+    // lise son audience — et il RETIENT ses arguments, ce dont les gardes
+    // d'atomicité se servent pour dire QUELLES écritures y sont entrées.
+    $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
   } as any;
 }
 
@@ -349,6 +355,48 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
       annonce: closureAnnounced(viaDeleteForMe),
       roomPersonnelle: reachesPersonalRoom(viaDeleteForMe),
     });
+  });
+
+  it('committe la clôture et le départ dans UNE transaction, sans écriture isolée', async () => {
+    // La clôture est DÉFINITIVE et rien ne la rétro-remplit. Séparée du départ,
+    // elle committait la première : un échec du second laissait la conversation
+    // fermée pour tout le monde pendant que la réponse HTTP — un 500 — niait
+    // l'opération, et sans qu'aucune annonce ne parte (le bloc socket est plus
+    // bas). Ce témoin dit que les deux moitiés ne peuvent plus atterrir seules.
+    const { prisma, route, reply } = setup();
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
+    prisma.participant.count.mockResolvedValue(0);
+    const CLOSURE = { participants: [{ id: PARTICIPANT_ID, userId: VALID_USER_ID, isActive: true }] };
+    const DEPARTURE = { id: PARTICIPANT_ID, isActive: false };
+    prisma.conversation.update.mockResolvedValue(CLOSURE);
+    prisma.participant.update.mockResolvedValue(DEPARTURE);
+
+    await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
+
+    // Les deux écritures sont DANS la transaction, et dans cet ordre : la
+    // clôture d'abord, pour que l'audience ramenée par son `include` porte
+    // encore l'appelant.
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    await expect(Promise.all(prisma.$transaction.mock.calls[0][0])).resolves.toEqual([
+      CLOSURE,
+      DEPARTURE,
+    ]);
+    // Et AUCUNE des deux n'a de jumelle restée dehors — sans quoi la moitié
+    // laissée seule reproduirait exactement le défaut que la transaction ferme.
+    expect(prisma.conversation.update).toHaveBeenCalledTimes(1);
+    expect(prisma.participant.update).toHaveBeenCalledTimes(1);
+  });
+
+  it("le départ d'un simple membre reste une écriture SEULE, sans transaction", async () => {
+    // La contre-épreuve, et elle compte : sans elle, envelopper toute la route
+    // dans une transaction inutile satisferait le témoin précédent. Un membre
+    // qui part n'a aucune écriture jumelle à accorder.
+    const { prisma, route, reply } = setup();
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
+    await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.participant.update).toHaveBeenCalledTimes(1);
+    expect(mockedSendSuccess).toHaveBeenCalled();
   });
 
   it('emits CONVERSATION_PARTICIPANT_LEFT and removes user from room when IO present', async () => {
@@ -768,6 +816,109 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
       expect.objectContaining({ userId: TARGET_USER_ID, newRole: 'creator' })
     );
     expect(mockedSendSuccess).toHaveBeenCalled();
+  });
+
+  it("n'annonce AUCUN transfert d'ownership quand l'écriture échoue", async () => {
+    // LA garde de ce cycle, et la seule qui distingue « émettre plus tard » de
+    // « émettre au bon moment ». Avant, la promotion committait puis s'annonçait
+    // AUSSITÔT, entre les deux écritures : un échec du masquage de l'appelant
+    // laissait tout le fil informé d'un nouveau créateur que le 500 démentait,
+    // et l'ancien créateur en place à côté de lui — deux créateurs, qu'un
+    // réessai aggrave en promouvant un troisième participant.
+    //
+    // Elle ne nomme ni la transaction ni l'ordre des lignes : elle affirme la
+    // PROPRIÉTÉ (rien n'est annoncé de ce qui n'est pas committé), et tombe sur
+    // toute forme qui la perd.
+    const MODERATOR_ID = '507f1f77bcf86cd799439066';
+    const io = createMockIO();
+    const { prisma, route, reply } = setup(io);
+    prisma.participant.findFirst
+      .mockResolvedValueOnce(makeParticipant({ role: 'creator' }))
+      .mockResolvedValueOnce({ id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator' });
+    prisma.$transaction.mockRejectedValue(new Error('write failed'));
+
+    await expect(
+      route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply)
+    ).rejects.toThrow('write failed');
+
+    expect(io._emit).not.toHaveBeenCalledWith(
+      SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
+      expect.anything()
+    );
+  });
+
+  it("committe la promotion du successeur et le masquage de l'appelant dans UNE transaction", async () => {
+    const MODERATOR_ID = '507f1f77bcf86cd799439066';
+    const { prisma, route, reply } = setup(createMockIO());
+    prisma.participant.findFirst
+      .mockResolvedValueOnce(makeParticipant({ role: 'creator' }))
+      .mockResolvedValueOnce({ id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator' });
+
+    await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // Les deux écritures de participant sont les DEUX de la transaction : la
+    // promotion, puis le masquage. Aucune n'est restée dehors.
+    expect(prisma.$transaction.mock.calls[0][0]).toHaveLength(2);
+    expect(prisma.participant.update).toHaveBeenCalledTimes(2);
+    expect(prisma.participant.update).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ where: { id: MODERATOR_ID }, data: { role: 'creator' } })
+    );
+    expect(prisma.participant.update).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { id: PARTICIPANT_ID },
+        data: expect.objectContaining({ isActive: false }),
+      })
+    );
+  });
+
+  it('les DEUX routes de clôture committent leur geste ATOMIQUEMENT', async () => {
+    // Même argument que la garde de parité du cycle 67, sur la propriété de ce
+    // cycle-ci : les témoins d'atomicité écrits côté `leave` resteraient VERTS
+    // si `delete-for-me` repassait demain à deux écritures. Celle-ci fait jouer
+    // aux deux routes le même geste et compare les deux résultats entre eux.
+    async function closeVia(register: any, method: string, fragment: string, arrange: (p: any) => void) {
+      const fastify = createMockFastify();
+      wireIO(fastify, createMockIO());
+      const prisma = createMockPrisma();
+      register(fastify, prisma, jest.fn(), jest.fn());
+      arrange(prisma);
+      await getRoute(fastify, method, fragment).handler(
+        makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID),
+        createMockReply()
+      );
+      return prisma;
+    }
+
+    const viaLeave = await closeVia(registerLeaveRoutes, 'POST', 'leave', p => {
+      p.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
+      p.participant.count.mockResolvedValue(0);
+    });
+    const viaDeleteForMe = await closeVia(registerDeleteForMeRoutes, 'DELETE', 'delete-for-me', p => {
+      p.participant.findFirst
+        .mockResolvedValueOnce(makeParticipant({ role: 'creator' }))
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+    });
+
+    const shape = (p: any) => ({
+      transactions: p.$transaction.mock.calls.length,
+      opsInTransaction: p.$transaction.mock.calls[0]?.[0]?.length ?? 0,
+      closureWrites: p.conversation.update.mock.calls.length,
+      participantWrites: p.participant.update.mock.calls.length,
+    });
+
+    expect(shape(viaLeave)).toEqual(shape(viaDeleteForMe));
+    // Et la forme elle-même, nommée une fois : une transaction, deux écritures
+    // dedans, aucune dehors.
+    expect(shape(viaLeave)).toEqual({
+      transactions: 1,
+      opsInTransaction: 2,
+      closureWrites: 1,
+      participantWrites: 1,
+    });
   });
 
   it('falls back to first active member when no moderator', async () => {

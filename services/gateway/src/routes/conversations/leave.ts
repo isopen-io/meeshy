@@ -87,18 +87,41 @@ export function registerLeaveRoutes(
         // ni le direct ni le rattrapage n'apprenaient rien. Étroit, et c'est
         // précisément la sorte de fenêtre qu'un état écrit referme et qu'un état
         // omis laisse ouverte.
-        const closed = await prisma.conversation.update({
-          where: { id },
-          data: { isActive: false, closedAt: now, closedBy: userId },
-          include: { participants: { select: { id: true, userId: true, isActive: true } } },
-        })
+        //
+        // Les DEUX écritures committent ENSEMBLE ou pas du tout. Séparées, la
+        // clôture — destructrice et DÉFINITIVE — committait avant celle qui la
+        // rend cohérente : un échec du départ laissait la conversation fermée
+        // pour tout le monde alors que la réponse HTTP est un 500 qui NIE
+        // l'opération, et que l'appelant reste un participant ACTIF d'un fil
+        // terminal. Aucune annonce ne part (le bloc socket est plus bas), donc
+        // ni le direct ni la réponse ne disent ce qui vient d'être écrit.
+        //
+        // Ordonner les deux écritures autrement ne ferait que déplacer le
+        // mauvais côté de l'échec — les fusionner SUPPRIME la question, et
+        // c'est l'idiome que le dépôt applique déjà à deux modèles distincts
+        // (`routes/me/delete-account.ts`).
+        //
+        // L'audience reste ramenée PAR l'écriture de clôture, qui s'exécute en
+        // PREMIER dans la transaction : l'appelant y est encore actif, donc
+        // encore dans l'audience — sémantique inchangée.
+        const [closed] = await prisma.$transaction([
+          prisma.conversation.update({
+            where: { id },
+            data: { isActive: false, closedAt: now, closedBy: userId },
+            include: { participants: { select: { id: true, userId: true, isActive: true } } },
+          }),
+          prisma.participant.update({
+            where: { id: participant.id },
+            data: { isActive: false, leftAt: now },
+          }),
+        ])
         closedAudience = (closed.participants ?? []).filter(p => p.isActive)
+      } else {
+        await prisma.participant.update({
+          where: { id: participant.id },
+          data: { isActive: false, leftAt: now },
+        })
       }
-
-      await prisma.participant.update({
-        where: { id: participant.id },
-        data: { isActive: false, leftAt: now },
-      })
       invalidateParticipantLookup(participant.id, id)
 
       const io = socketIOHandler?.getManager()?.getIO()

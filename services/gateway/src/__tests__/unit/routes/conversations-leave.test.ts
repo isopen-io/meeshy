@@ -70,6 +70,11 @@ function makePrisma(overrides: Record<string, any> = {}) {
       update: jest.fn<any>().mockResolvedValue({}),
       ...(overrides.conversation ?? {}),
     },
+    // La clôture et le départ committent ensemble (cycle 69) : le double rend
+    // les résultats dans l'ordre, ce dont la route se sert pour lire l'audience
+    // ramenée par l'écriture de clôture.
+    $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
+    ...(overrides.$transaction ? { $transaction: overrides.$transaction } : {}),
   };
 }
 
