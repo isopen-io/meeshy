@@ -126,6 +126,33 @@ ou `emitToConversationParticipants()` (`socketio/emitToConversationParticipants.
 Le `select` Prisma doit charger `id` **et** `userId`. Détail et exceptions :
 `src/socketio/README.md` § « Quel `id` passer a `ROOMS.user()` ? ».
 
+### Un champ que le client lit AUTORITATIVEMENT n'est plus optionnel pour l'émetteur
+
+Quand un client recopie un champ de payload INCONDITIONNELLEMENT dans son cache, tout émetteur du
+même événement qui l'omet **écrit** — il n'est pas muet. Le contrat doit alors porter autant d'états
+que l'émetteur a de choses à dire, sans quoi « je n'ai pas calculé » sort sur le fil sous la forme de
+« il n'y en a pas », et détruit.
+
+Cas de référence, `conversation:unread-updated` et son pont ✦
+(`ConversationUnreadUpdatedEventData.bridge`, 4 émetteurs) :
+
+| forme | phrase | le client |
+|-------|--------|-----------|
+| `bridge: {…}` | voici le pont de CE lecteur | écrit |
+| `bridge: null` | j'ai calculé, il n'y en a pas | efface |
+| clé absente | je n'ai pas calculé | garde le sien |
+
+`bridgeComputed()` / `bridgeNotComputed()` (`socketio/unreadBridgeField.ts`) sont les deux seules
+façons d'écrire ce champ — un émetteur ne construit jamais l'objet à la main. `bridgeComputed(x)`
+déclare un savoir (`x` ou `null`) ; `bridgeNotComputed()` déclare l'ignorance et n'émet aucune clé.
+Un `unreadCount` à zéro relève du PREMIER : le contrat gelé §3.2 prouve l'absence de pont sans
+ouvrir de requête. Une passe qui TOMBE, ou une conversation hors de la borne de l'instantané de
+reconnexion, relèvent du second — se taire ne coûte rien, et `null` y ordonnerait un effacement sur
+la foi d'une panne.
+
+Corollaire de lot : **quand on rend un champ autoritatif côté client, on énumère TOUS les émetteurs
+serveur du même événement dans le même lot.**
+
 ### Connection Maps
 ```typescript
 connectedUsers: Map<string, SocketUser>   // userId → user info
