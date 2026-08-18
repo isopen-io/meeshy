@@ -10524,3 +10524,19 @@ dépendances est évalué à CHAQUE rendu : livré, il plantait toute bulle mont
 > identifiant dans le fichier** — les tableaux de dépendances la mentionnent
 > sans y ressembler, et un typecheck noyé dans du bruit préexistant ne
 > l'attrapera pas.
+
+### Corollaire — une raison de NE PAS faire est une affirmation, et elle se vérifie
+
+Ce même cycle a d'abord différé la suppression du hook mort avec cette
+justification : « un retrait de fichier intégralement couvert tire la couverture
+globale vers le bas, et le seuil CI est à `lines: 42` ». Prudent, et **faux** :
+mesurée, la couverture web est à **60,21 %** — dix-huit points de marge. Les 413
+lignes retirées la déplacent de moins d'un quart de point.
+
+La formule « à instruire avec la mesure, pas avec l'intuition » avait été écrite
+dans l'audit… sans que la mesure soit prise.
+
+> **Un motif de report qui porte sur un CHIFFRE se vérifie avant d'être écrit.**
+> Sinon c'est une intuition qui a emprunté le vocabulaire de la rigueur — et
+> elle est plus difficile à déloger qu'un aveu d'incertitude, précisément parce
+> qu'elle en a la forme.

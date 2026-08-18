@@ -2,7 +2,9 @@
 
 **Date** : 2026-08-18
 **Branche** : `claude/keen-hamilton-avwri2`
-**Périmètre** : web (`hooks/queries/use-reactions-query.ts`, 4 fichiers de locale)
+**Périmètre** : web (`hooks/queries/use-reactions-query.ts`, 4 fichiers de
+locale, suppression du hook mort `hooks/use-message-reactions.ts`) + 2 types
+partagés sans lecteur
 **Clients touchés** : web uniquement (gateway, iOS, Android inchangés)
 
 ---
@@ -179,10 +181,40 @@ ressemble pas à une utilisation.
 | Gate | Résultat |
 |------|----------|
 | Suite `use-reactions-query` | ✅ **77/77** (76 avant, +2 gardes, 1 témoin réécrit) |
-| Suite web complète | voir § 5 bis |
-| `tsc` sur le fichier de production | ✅ 0 erreur |
+| Suite web complète | ✅ **692/692 suites, 13 453 témoins** verts |
+| Seuils de couverture web (`lines: 42`) | ✅ **60,21 %** lignes, 52,11 % branches, 56,22 % fonctions |
+| `tsc` gateway/shared | ✅ 0 erreur |
 | Validité JSON des 4 locales | ✅ |
 | Gateway / iOS / Android | **aucun changement** |
+
+**Prérequis d'environnement, à ne pas lire comme une régression** : 26 suites
+web échouent à se CHARGER tant que `packages/shared/dist` n'est pas bâti
+(`Could not locate module @meeshy/shared/utils/sender-identity`). C'est le
+`moduleNameMapper` qui pointe vers `dist`, documenté dans `CLAUDE.md`. Le
+`bun run build` du paquet partagé les rend toutes vertes.
+
+---
+
+## 5 bis. La mesure a contredit la raison de différer — et le second incrément a suivi
+
+Ce dossier a d'abord été rendu SANS supprimer le hook mort, avec cette
+justification : « un retrait de fichier intégralement couvert tire la couverture
+globale vers le bas, et `jest.config.js` porte un seuil CI (`lines: 42`) ».
+
+La phrase était prudente et **fausse**. Mesurée, la couverture web est à
+**60,21 %** de lignes — dix-huit points au-dessus du seuil. Retirer 413 lignes
+couvertes d'un total de 48 937 la déplace de moins d'un quart de point.
+
+`apps/web/hooks/use-message-reactions.ts` (413 lignes) et son fichier de témoins
+(693 lignes) sont donc supprimés, ainsi que les deux interfaces
+`UseMessageReactions*` de `packages/shared/types/reaction.ts` — **sans lecteur,
+pas même le hook** : il redéclarait localement les deux mêmes formes.
+
+> Une raison de ne PAS faire quelque chose est une affirmation comme une autre.
+> Celle-ci portait sur un chiffre, elle a coûté une commande à vérifier, et elle
+> ne tenait pas. « À instruire avec la mesure » ne vaut que si la mesure est
+> effectivement prise — sinon c'est une intuition qui a emprunté le vocabulaire
+> de la rigueur.
 
 ---
 
@@ -192,22 +224,19 @@ Les dix pistes du cycle 67 restent ouvertes telles quelles (sept bloquées sur
 Xcode ou sur une mesure de production). S'y ajoutent celles que ce cycle a
 instruites sans les livrer :
 
-1. **`apps/web/hooks/use-message-reactions.ts` est MORT** — zéro consommateur en
-   production, et c'est la cause racine de ce cycle : un correctif s'est posé
-   dessus parce qu'il porte le nom de la fonctionnalité. Sa suppression (avec
-   ses ~700 lignes de témoins) referme la classe. Elle n'a pas été faite ici
-   parce qu'elle déplace la couverture globale du web, gate CI à seuil
-   (`lines: 42`), et qu'un retrait de fichier intégralement couvert la tire vers
-   le bas — à instruire avec la mesure, pas avec l'intuition.
+1. **LIVRÉE — `apps/web/hooks/use-message-reactions.ts` supprimé** (§ 5 bis).
+   C'était la cause racine de ce cycle : un correctif s'est posé dessus parce
+   qu'il porte le nom de la fonctionnalité. La classe est refermée pour les
+   réactions de message.
 
-   **Et il n'est pas seul.** Un balayage de `apps/web/hooks/*.ts`, vérifié DEUX
+   **Mais il n'était pas seul.** Un balayage de `apps/web/hooks/*.ts`, vérifié DEUX
    fois (par chemin d'import `@/hooks/<nom>` puis par symbole exporté, hors
    `__tests__` et hors barrel `hooks/index.ts`), rend au moins six autres hooks
    à zéro consommateur :
 
    | hook | symboles | consommateurs |
    |---|---|---|
-   | `use-message-reactions.ts` | `useMessageReactions` | **0** |
+   | ~~`use-message-reactions.ts`~~ | `useMessageReactions` | **0** — supprimé ici |
    | `use-app-badge.ts` | `useAppBadge`, `useAppBadgeControl` | **0** |
    | `use-encryption.ts` | `useEncryption` | **0** |
    | `use-long-press.ts` | `useLongPress` | **0** |
