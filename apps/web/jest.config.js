@@ -30,7 +30,20 @@ const customJestConfig = {
     '^@/components/messages/MarkdownMessage$': '<rootDir>/__mocks__/components/messages/MarkdownMessage.tsx',
     // Handle module aliases
     '^@/(.*)$': '<rootDir>/$1',
-    '^@meeshy/shared/(.*)$': '<rootDir>/../../packages/shared/dist/$1',
+    // D-13 tranchée (2026-08-18, tasks/lentille-cloture-phase1.md §3) — il n'y
+    // a PAS de règle `@meeshy/shared/*` ici : les suites web testent la
+    // SOURCE de @meeshy/shared, jamais dist/. `next/jest` régénère son
+    // propre mapper depuis les `paths` de tsconfig.json (qui pointent vers
+    // packages/shared/*.ts, pas dist/) et cette génération l'emporte sur
+    // tout mapper `dist/` posé ici — re-preuve : une ligne `dist/$1` a été
+    // ajoutée ICI, un fichier dist a été empoisonné (retour truqué), et le
+    // calcul lu par la suite est resté celui de la SOURCE malgré la ligne
+    // (`require.resolve` rend pourtant un chemin `dist/` — piège aggravant,
+    // c'est un résolveur différent du chemin réellement chargé). Ligne
+    // supprimée : assumé, pas réparé — la parité dist⇔source reste gardée
+    // par `__tests__/lentille/shared-law-dist-parity.test.ts` (46 vecteurs,
+    // import par chemin relatif explicite des deux côtés, discrimination
+    // prouvée dans les deux sens).
     // Strip .js from relative imports: shared source uses ESM .js extensions but jest needs .ts
     '^(\\.{1,2}/.*)\\.js$': '$1',
     // Mock lucide-react to avoid ESM issues - catch both direct and modularized imports
