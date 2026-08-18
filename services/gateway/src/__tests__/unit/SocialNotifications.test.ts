@@ -463,8 +463,14 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.type).toBe('post_repost');
       expect(createArg.data.priority).toBe('normal');
-      // Body is the FR repost phrase « a partagé <noun> » (no English "repost").
-      expect(createArg.data.content).toContain('partagé');
+      // « une seule phrase, l'auteur dedans, et le corps montre la cible » : la
+      // phrase d'action porte désormais le TITRE (auteur compris), et le corps
+      // nomme la CIBLE. Ce témoin gelait l'ancien contrat — il assertait
+      // « partagé » sur le corps, qui ne le porte plus. Les deux moitiés sont
+      // assertées pour que la phrase ne puisse pas DISPARAÎTRE en silence : la
+      // déplacer sans l'écrire nulle part ferait toujours rougir ce témoin.
+      expect(createArg.data.title).toContain('partagé');
+      expect(createArg.data.content).toContain('publication');
     });
 
     it('should include repostId and originalPostId in metadata', async () => {
@@ -783,8 +789,13 @@ describe('Social Notification Methods', () => {
         emoji: '🎉',
       });
 
+      // L'emoji ne vit plus dans le CORPS — celui-ci montre la cible (l'extrait
+      // du commentaire, ou « En réponse à votre commentaire » à défaut). Il est
+      // porté par `metadata.emoji`, d'où les clients le lisent. Assertion
+      // déplacée vers l'endroit qui le porte, et non retirée : l'emoji doit
+      // toujours voyager, et ce témoin tombe encore s'il cesse de le faire.
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content).toContain('🎉');
+      expect(createArg.data.metadata.emoji).toBe('🎉');
     });
   });
 });
