@@ -424,13 +424,13 @@ struct FocalRow: View {
     /// externe à appliquer. Seul l'interligne additif (`1.42`, `.lineSpacing`
     /// est en points côté SwiftUI) et le retrait `29` sont posés ICI.
     ///
-    /// **F-083ter (F06)** : le SWAP de texte était déjà branché
-    /// (`content.translation?.preferredContent`, résolution Prisme
-    /// inchangée) — il manquait le chip `🌐` qui le SIGNALE visuellement
-    /// (présent côté bulle, `BubbleFooter` translate button). Ajouté en
-    /// méta, juste après le texte : `showsTranslationChip` ne fait AUCUNE
-    /// seconde résolution, elle compare deux champs déjà résolus par
-    /// `BubbleContentBuilder` (`activeLangCode`/`originalLangCode`).
+    /// **Signal multi-langue (arbitrage user 2026-08-18)** : ni icône
+    /// translate, ni bande de drapeaux dans la rangée — le menu d'appui
+    /// long demande/affiche les autres langues. Le SEUL indicateur est le
+    /// drapeau de la langue D'ORIGINE, affiché UNIQUEMENT quand le message
+    /// existe en plusieurs versions (`content.translation != nil`). Aucune
+    /// seconde résolution : `originalLangCode` est déjà résolu par
+    /// `BubbleContentBuilder`.
     /// Texte effectif de la rangée (Prisme résolu en amont) — partagé par le
     /// rendu, la sheet « Lire plus » et la clé du cross-fade.
     private var effectiveText: String {
@@ -463,7 +463,7 @@ struct FocalRow: View {
             .id(effectiveText)
             .transition(.opacity)
 
-            translationChip
+            originalLanguageFlag
         }
         .padding(.leading, indent)
         .animation(.easeInOut(duration: 0.15), value: effectiveText)
@@ -482,46 +482,23 @@ struct FocalRow: View {
         )
     }
 
-    /// Chip 🌐 quand le texte affiché EST une traduction — INTERACTIF depuis
-    /// le 2026-08-18 (matrice §5 : « Appui sur 🌐 = V.O., appui long =
-    /// sélecteur de langues existant » — il était purement décoratif). Le tap
-    /// bascule vers la langue d'ORIGINE via l'override existant du ViewModel
-    /// (re-taper revient à la résolution Prisme) ; l'appui long ouvre la vue
-    /// Langue. Aucun état local (contrainte dure §WS-4) : la rangée renvoie
-    /// la cible, le ViewModel tranche.
-    /// `true` quand la rangée montre une TRADUCTION (le tap ramène à la
-    /// V.O.) ; `false` quand un override explicite montre déjà la V.O. (le
-    /// tap rend la main au Prisme). Sans ce second état, le premier tap
-    /// faisait disparaître le chip et la V.O. devenait un cul-de-sac.
-    private var chipShowsTranslation: Bool {
-        (content.translation?.activeLangCode ?? "") != (content.translation?.originalLangCode ?? "")
-    }
-
+    /// Drapeau de la langue D'ORIGINE — le SEUL indicateur multi-langue de
+    /// la rangée (arbitrage user 2026-08-18 : l'icône translate et la bande
+    /// de drapeaux sont retirées ; demander une traduction ou explorer les
+    /// autres langues passe par le menu d'appui long du message). Affiché
+    /// UNIQUEMENT quand plusieurs versions existent (`content.translation`
+    /// non-nil ⟺ au moins une traduction texte/audio, posé par
+    /// `BubbleContentBuilder`). PASSIF : aucun geste — le Prisme reste
+    /// transparent, l'indicateur ne distrait pas.
     @ViewBuilder
-    private var translationChip: some View {
-        if let translation = content.translation,
-           translation.preferredContent != nil,
-           chipShowsTranslation || input.activeDisplayLangCode != nil {
-            Button {
-                actions.onSetActiveDisplayLanguage?(
-                    content.messageId,
-                    chipShowsTranslation ? translation.originalLangCode : nil
-                )
-            } label: {
-                Image(systemName: "globe")
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(chipShowsTranslation ? MeeshyColors.indigo400 : MeeshyColors.indigo400.opacity(0.5))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.4).onEnded { _ in
-                    actions.onShowTranslationDetail?(content.messageId)
-                }
-            )
-            .accessibilityLabel(chipShowsTranslation
-                ? String(localized: "focal.translation.show_original", defaultValue: "Voir la version originale", bundle: .main)
-                : String(localized: "focal.translation.back_to_translation", defaultValue: "Revenir à la traduction", bundle: .main))
+    private var originalLanguageFlag: some View {
+        if let translation = content.translation {
+            Text(LanguageData.info(for: translation.originalLangCode.lowercased())?.flag ?? "\u{1F310}")
+                .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                .accessibilityLabel(String(
+                    format: String(localized: "focal.translation.original_language", defaultValue: "Message multilingue — langue d'origine : %@", bundle: .main),
+                    LanguageData.info(for: translation.originalLangCode.lowercased())?.nativeName ?? translation.originalLangCode
+                ))
         }
     }
 }

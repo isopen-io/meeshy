@@ -71,21 +71,29 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Chip 🌐 interactif (matrice « Traductions qui arrivent »)
+    // MARK: - Drapeau langue d'origine (arbitrage user 2026-08-18)
 
-    func test_translationChip_isAButtonWithLongPressDetail() throws {
+    func test_originalLanguageFlag_isPassive_andGatedOnMultipleVersions() throws {
         let code = try stripped(rowPath)
-        guard let chipStart = code.range(of: "private var translationChip") else {
-            return XCTFail("translationChip introuvable dans FocalRow")
+        guard let flagStart = code.range(of: "private var originalLanguageFlag") else {
+            return XCTFail("originalLanguageFlag introuvable dans FocalRow — le seul indicateur multi-langue de la rangée")
         }
-        let window = String(code[chipStart.lowerBound...].prefix(1800))
+        let window = String(code[flagStart.lowerBound...].prefix(1200))
         XCTAssertTrue(
-            window.contains("Button"),
-            "le chip 🌐 doit être un Button (appui = V.O.) — il était purement décoratif (matrice : « Appui sur 🌐 = V.O. »)"
+            window.contains("if let translation = content.translation"),
+            "le drapeau n'apparaît QUE quand plusieurs versions existent (content.translation non-nil) — jamais sur un message monolingue"
         )
         XCTAssertTrue(
-            window.contains("onShowTranslationDetail"),
-            "l'appui long du chip 🌐 doit ouvrir le sélecteur de langues (matrice : « appui long = sélecteur »)"
+            window.contains("originalLangCode"),
+            "le drapeau est celui de la langue D'ORIGINE — jamais la langue affichée"
+        )
+        XCTAssertFalse(
+            window.contains("Button") || window.contains("onTapGesture") || window.contains("LongPressGesture"),
+            "l'indicateur est PASSIF — demander/afficher les autres langues passe par le menu d'appui long du MESSAGE, pas par le drapeau"
+        )
+        XCTAssertFalse(
+            code.contains("translationChip"),
+            "l'icône translate (chip 🌐) est RETIRÉE de la rangée — arbitrage user 2026-08-18"
         )
     }
 
