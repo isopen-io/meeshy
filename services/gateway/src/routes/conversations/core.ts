@@ -41,6 +41,7 @@ import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
+import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
@@ -1879,16 +1880,20 @@ export function registerCoreRoutes(
       // autres gardaient la ligne dans leur liste et n'apprenaient la fermeture
       // qu'en tapant dessus. Même raison que le renommage ci-dessus : la room
       // personnelle est le seul endroit où joindre un client posé sur la liste.
-      const io = fastify.socketIOHandler?.getManager()?.getIO()
-      if (io) {
-        emitToConversationParticipants({
-          io,
-          conversationId,
-          participants: closedConversation.participants.filter(p => p.isActive),
-          event: SERVER_EVENTS.CONVERSATION_CLOSED,
-          payload: { conversationId, closedBy: userId, closedAt: now.toISOString() }
-        })
-      }
+      //
+      // `announceConversationClosed` et non l'émission directe : fermer un fil
+      // éteint aussi ce qu'il portait de vivant (les partages de position en
+      // cours), et cette décision ne se répète pas sur les trois chemins de
+      // clôture — elle vit dans l'unité qui les sert tous.
+      const closureManager = fastify.socketIOHandler?.getManager()
+      announceConversationClosed({
+        io: closureManager?.getIO(),
+        manager: closureManager,
+        conversationId,
+        participants: closedConversation.participants.filter(p => p.isActive),
+        closedBy: userId,
+        closedAt: now
+      })
 
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
 

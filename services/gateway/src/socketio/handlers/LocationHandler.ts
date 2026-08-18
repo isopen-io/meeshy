@@ -38,6 +38,26 @@
  * `conversation:leave` ne retracte RIEN, à l'inverse de la frappe : côté client
  * il signifie « j'ai quitté cet écran », pas « j'ai quitté le groupe » — un
  * partage légitimement poursuivi en arrière-plan y perdrait la vie.
+ *
+ * ─── La quatrième fin de vie : la CLÔTURE du fil ─────────────────────────────
+ *
+ * Les trois fins ci-dessus sont celles du PARTAGE. Il en manquait une, et c'est
+ * celle du CONTENEUR : `Conversation.closedAt` est documenté par « Conversation
+ * closed for all — no one can write, messages stay readable », et fermer
+ * n'éteignait aucun partage en cours du fil fermé.
+ *
+ * Le coût est exactement celui que l'en-tête chiffre déjà pour le socket mort,
+ * aggravé d'un cran : les clients RETIRENT la conversation de leur cache sur
+ * `conversation:closed` (web `use-socket-cache-sync`, iOS `SocialSocketManager`),
+ * si bien que l'épingle survivait dans un fil que son propriétaire ne peut même
+ * plus ouvrir pour l'arrêter — jusqu'à huit heures, sans recours.
+ *
+ * `endSessionsForClosedConversation` n'invente AUCUN mécanisme : elle avance le
+ * terme à MAINTENANT et diffuse le retrait, c'est-à-dire qu'elle fait de la
+ * clôture une expiration anticipée. Toutes les propriétés du terme sont donc
+ * déjà écrites et déjà gardées — les `live-update` d'après sont tus par la borne
+ * de `handleLiveLocationUpdate`, le rattrapage saute l'entrée, et la
+ * déconnexion la ramasse sans rediffuser une fin déjà annoncée.
  */
 
 import type { Socket } from 'socket.io';
@@ -54,6 +74,7 @@ import type {
   LocationLiveStoppedEventData,
 } from '@meeshy/shared/types/socketio-events';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 
@@ -138,6 +159,16 @@ export class LocationHandler {
       const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) {
         this._sendError(callback, 'Not a participant in this conversation');
+        return;
+      }
+
+      // Posée APRÈS l'appartenance, et c'est le seul ordre défendable : l'état
+      // d'un fil ne se raconte pas à qui n'y est pas. La garde de clôture est
+      // celle des quatre portes d'entrée (cycles 70/71/72) — même prédicat,
+      // même source de vérité, et il lit les DEUX colonnes parce que les fils
+      // fermés par l'ancien `leave.ts` n'ont qu'`isActive: false`.
+      if (await this._isConversationClosed(normalizedId)) {
+        this._sendError(callback, 'Conversation is closed');
         return;
       }
 
@@ -330,6 +361,41 @@ export class LocationHandler {
     }
   }
 
+  /**
+   * Éteint les partages en cours d'une conversation qui vient d'être CLOSE.
+   *
+   * Appelée par `announceConversationClosed` — le point de convergence des
+   * trois chemins de clôture — AVANT que `conversation:closed` ne parte : les
+   * clients retirent le fil de leur cache sur cette annonce, et un
+   * `location:live-stopped` qui arriverait après tomberait sur une
+   * conversation qu'ils ne connaissent plus.
+   *
+   * Avancer le terme plutôt que supprimer l'entrée est ce qui fait tenir les
+   * trois propriétés du cycle de vie sans en écrire une seule (cf. l'en-tête) :
+   * les `live-update` d'après sont tus par la borne de
+   * `handleLiveLocationUpdate`, `replayLiveLocationsTo` saute l'entrée, et
+   * `handleSocketDisconnecting` la ramasse en voyant qu'elle n'est plus vive —
+   * donc sans rediffuser une fin déjà annoncée.
+   *
+   * Un partage DÉJÀ terminé est sauté : son retrait a été diffusé par la
+   * minuterie, et la clôture n'a pas à l'annoncer deux fois.
+   */
+  endSessionsForClosedConversation(conversationId: string): void {
+    const now = new Date();
+    for (const [key, session] of [...this.sessions]) {
+      if (session.conversationId !== conversationId) continue;
+      if (now >= session.expiresAt) continue;
+
+      const timer = this.expiryTimers.get(key);
+      if (timer) {
+        clearTimeout(timer);
+        this.expiryTimers.delete(key);
+      }
+      this.sessions.set(key, { ...session, expiresAt: now });
+      this._broadcastStopped(session);
+    }
+  }
+
   /** Désarme les minuteries — arrêt de la passerelle, et isolation des tests. */
   dispose(): void {
     for (const timer of this.expiryTimers.values()) clearTimeout(timer);
@@ -420,6 +486,27 @@ export class LocationHandler {
       select: { id: true },
     });
     return participant?.id;
+  }
+
+  /**
+   * L'état terminal du fil, sur le seul verbe qui l'interroge.
+   *
+   * Une lecture de plus, et seulement au DÉPART — jamais sur `live-update`, qui
+   * est le chemin chaud (une position par seconde et par partageur). Les mises à
+   * jour d'un partage ouvert AVANT la clôture sont tues par le terme avancé que
+   * `endSessionsForClosedConversation` leur pose, sans interroger la base.
+   *
+   * Le `select` demande les DEUX colonnes : `isConversationClosed` accepte une
+   * ligne qui n'en porte qu'une, si bien qu'en retirer une compile — et laisse
+   * passer toute la population héritée. C'est la garde de REQUÊTE du cycle
+   * 70-bis, et le témoin qui la tient est le seul que la mutation fait tomber.
+   */
+  private async _isConversationClosed(conversationId: string): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { isActive: true, closedAt: true },
+    });
+    return isConversationClosed(conversation);
   }
 
   private _validateCoordinates(latitude: number, longitude: number): boolean {

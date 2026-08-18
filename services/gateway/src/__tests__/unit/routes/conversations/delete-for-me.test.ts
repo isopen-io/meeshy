@@ -122,6 +122,7 @@ async function buildApp(opts: {
   prisma?: any;
   withSocket?: boolean;
   io?: ReturnType<typeof makeMockIO>;
+  endLiveLocations?: jest.Mock;
 } = {}): Promise<FastifyInstance> {
   const { authenticated = true, prisma = makePrisma(), withSocket = false } = opts;
 
@@ -130,10 +131,12 @@ async function buildApp(opts: {
 
   if (withSocket || opts.io) {
     const mockIO = opts.io ?? makeMockIO();
+    const endLiveLocations = opts.endLiveLocations ?? jest.fn();
     app.decorate('socketIOHandler', {
       getManager: jest.fn(() => ({
         getIO: jest.fn(() => mockIO),
         invalidateParticipantCache: jest.fn(),
+        endLiveLocationsForClosedConversation: endLiveLocations,
       })),
     });
   } else {
@@ -358,6 +361,16 @@ describe('DELETE /conversations/:id/delete-for-me — DM vide fermé alors qu\'u
     // posé sur la LISTE a quitté `conversation:<id>` et n'est joignable que là
     // — c'est la raison d'être d'`emitToConversationParticipants`.
     expect(roomsFor(io, 'conversation:closed')).toContain('user:other-user');
+    await app.close();
+  });
+
+  it('éteint les partages de position en cours du fil fermé', async () => {
+    const endLiveLocations = jest.fn();
+    const app = await buildApp({ prisma: makeClosingPrisma(), io: makeMockIO(), endLiveLocations });
+
+    await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(endLiveLocations).toHaveBeenCalledWith('conv-resolved-id');
     await app.close();
   });
 

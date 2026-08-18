@@ -231,7 +231,12 @@ const createMockFastify = () => {
   broadcast.to = mockTo;
   const mockGetIO = jest.fn().mockReturnValue({ to: mockTo });
   const mockJoinRoom = jest.fn().mockResolvedValue(undefined);
-  const mockGetManager = jest.fn().mockReturnValue({ getIO: mockGetIO, joinUserToConversationRoom: mockJoinRoom });
+  const mockEndLiveLocations = jest.fn();
+  const mockGetManager = jest.fn().mockReturnValue({
+    getIO: mockGetIO,
+    joinUserToConversationRoom: mockJoinRoom,
+    endLiveLocationsForClosedConversation: mockEndLiveLocations,
+  });
 
   const fastify: any = {
     get: jest.fn((path: string, opts: any, handler: Function) => {
@@ -265,6 +270,7 @@ const createMockFastify = () => {
     _mockTo: mockTo,
     _mockEmit: mockEmit,
     _mockJoinRoom: mockJoinRoom,
+    _mockEndLiveLocations: mockEndLiveLocations,
   };
   return fastify;
 };
@@ -2087,8 +2093,13 @@ describe('registerCoreRoutes', () => {
     it('happy path: soft-deletes conversation and broadcasts CONVERSATION_CLOSED', async () => {
       prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
       // La clôture ramène ses participants DANS son écriture : le fan-out
-      // nomme leurs rooms personnelles sans seconde requête.
-      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
+      // nomme leurs rooms personnelles sans seconde requête. L'auteur de la
+      // clôture y figure — il est encore ACTIF à l'instant de l'écriture — et
+      // une audience réellement vide est un autre cas, gardé juste en dessous.
+      prisma.conversation.update.mockResolvedValue({
+        id: CONV_ID,
+        participants: [{ id: PARTICIPANT_ID, userId: USER_ID, isActive: true }],
+      });
 
       const req = makeRequest({ params: { id: CONV_ID } });
       const reply = makeReply();
@@ -2102,6 +2113,28 @@ describe('registerCoreRoutes', () => {
       );
       expect(mockSendSuccess).toHaveBeenCalled();
       expect(fastify._mockEmit).toHaveBeenCalledWith('conversation:closed', expect.any(Object));
+    });
+
+    it('éteint les partages de position en cours du fil fermé', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
+      prisma.conversation.update.mockResolvedValue({
+        id: CONV_ID,
+        participants: [{ id: PARTICIPANT_ID, userId: USER_ID, isActive: true }],
+      });
+
+      await getDeleteHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+      expect(fastify._mockEndLiveLocations).toHaveBeenCalledWith(CONV_ID);
+    });
+
+    it('éteint même quand il ne reste PERSONNE à prévenir', async () => {
+      prisma.participant.findFirst.mockResolvedValue({ role: 'creator', id: PARTICIPANT_ID });
+      prisma.conversation.update.mockResolvedValue({ id: CONV_ID, participants: [] });
+
+      await getDeleteHandler(fastify)(makeRequest({ params: { id: CONV_ID } }), makeReply());
+
+      expect(fastify._mockEndLiveLocations).toHaveBeenCalledWith(CONV_ID);
+      expect(fastify._mockEmit).not.toHaveBeenCalledWith('conversation:closed', expect.any(Object));
     });
 
     it('calls sendInternalError on DB error', async () => {

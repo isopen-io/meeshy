@@ -153,10 +153,18 @@ function createMockIO(extraSockets: any[] = []) {
 
 function wireIO(fastify: ReturnType<typeof createMockFastify>, io?: any) {
   const invalidateParticipantCache = jest.fn<any>();
+  const endLiveLocationsForClosedConversation = jest.fn<any>();
   fastify.socketIOHandler = io
-    ? { getManager: () => ({ getIO: () => io, invalidateParticipantCache }) }
+    ? {
+        getManager: () => ({
+          getIO: () => io,
+          invalidateParticipantCache,
+          endLiveLocationsForClosedConversation,
+        }),
+      }
     : undefined;
   (fastify as any)._invalidateParticipantCache = invalidateParticipantCache;
+  (fastify as any)._endLiveLocations = endLiveLocationsForClosedConversation;
 }
 
 function makeRequest(params: Record<string, string>, userId: string, extra: Record<string, any> = {}) {
@@ -275,6 +283,20 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
     expect(io._payloadFor(SERVER_EVENTS.CONVERSATION_CLOSED)).toEqual(
       expect.objectContaining({ conversationId: VALID_CONV_ID, closedBy: VALID_USER_ID })
     );
+  });
+
+  it('éteint les partages de position en cours du fil fermé', async () => {
+    const io = createMockIO();
+    const { prisma, route, reply, fastify } = setup(io);
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
+    prisma.participant.count.mockResolvedValue(0);
+    prisma.conversation.update.mockResolvedValue({
+      participants: [{ id: PARTICIPANT_ID, userId: VALID_USER_ID, isActive: true }],
+    });
+
+    await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
+
+    expect((fastify as any)._endLiveLocations).toHaveBeenCalledWith(VALID_CONV_ID);
   });
 
   it("n'annonce AUCUNE clôture quand un simple membre s'en va", async () => {

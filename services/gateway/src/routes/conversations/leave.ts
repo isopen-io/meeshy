@@ -6,6 +6,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
+import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -197,15 +198,18 @@ export function registerLeaveRoutes(
         // par sa room personnelle. Le chaînage `.to()` garantit au plus une copie
         // par socket, y compris pour un appareil de l'appelant resté dans les
         // deux rooms.
-        if (closedAudience.length > 0) {
-          emitToConversationParticipants({
-            io,
-            conversationId: id,
-            participants: closedAudience,
-            event: SERVER_EVENTS.CONVERSATION_CLOSED,
-            payload: { conversationId: id, closedBy: userId, closedAt: now.toISOString() },
-          })
-        }
+        //
+        // `announceConversationClosed` porte désormais la garde d'audience
+        // vide ET l'extinction des partages de position du fil fermé — voir
+        // l'unité pour l'ordre des deux et pourquoi il compte.
+        announceConversationClosed({
+          io,
+          manager,
+          conversationId: id,
+          participants: closedAudience,
+          closedBy: userId,
+          closedAt: now,
+        })
 
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
         await Promise.all(userSockets.map(s => s.leave(room)))

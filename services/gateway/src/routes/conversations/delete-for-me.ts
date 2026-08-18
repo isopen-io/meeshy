@@ -5,7 +5,7 @@ import { sendSuccess, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
+import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 
 export function registerDeleteForMeRoutes(
   fastify: FastifyInstance,
@@ -203,15 +203,18 @@ export function registerDeleteForMeRoutes(
         // `DELETE /conversations/:id` (`core.ts`) porte déjà — un client posé
         // sur la LISTE a quitté `conversation:<id>` et n'est joignable que par
         // sa room personnelle.
-        if (closedAudience.length > 0) {
-          emitToConversationParticipants({
-            io,
-            conversationId,
-            participants: closedAudience,
-            event: SERVER_EVENTS.CONVERSATION_CLOSED,
-            payload: { conversationId, closedBy: userId, closedAt: now.toISOString() },
-          })
-        }
+        //
+        // `announceConversationClosed` porte désormais la garde d'audience
+        // vide ET l'extinction des partages de position du fil fermé — voir
+        // l'unité pour l'ordre des deux et pourquoi il compte.
+        announceConversationClosed({
+          io,
+          manager,
+          conversationId,
+          participants: closedAudience,
+          closedBy: userId,
+          closedAt: now,
+        })
 
         // Le transfert d'ownership, annoncé ICI et non à l'écriture — même
         // discipline que les deux faits ci-dessus, et il lui manquait. La
