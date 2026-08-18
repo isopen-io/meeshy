@@ -283,3 +283,63 @@ describe('POST /links — DB error', () => {
     await app.close();
   });
 });
+
+// ─── POST /links — conversation terminée ─────────────────────────────────────
+
+/**
+ * Troisième site de la famille nommée au cycle 70-bis (« garde d'ÉCRITURE sans
+ * jumelle sur l'état du FIL ») : la porte contrôlait l'appartenance et le TYPE
+ * de la conversation, jamais sa clôture. On pouvait donc fabriquer un lien de
+ * partage NEUF sur un fil terminé — un lien actif en base, présenté comme vivant
+ * par les écrans d'administration, et qui ne peut rendre que le 410 posé au
+ * cycle 70 à chacun de ceux qui le suivent.
+ */
+describe('POST /links — conversation terminée', () => {
+  it('returns 410 when the conversation is closed by closedAt', async () => {
+    const prisma = makePrisma();
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      id: CONV_ID, type: 'group', title: 'Test Conv',
+      isActive: true, closedAt: new Date('2026-08-18T09:00:00.000Z'),
+    });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  // Les fils fermés par l'ancien `leave.ts` (avant le cycle 67) portent
+  // `isActive: false` et AUCUN `closedAt`, et rien ne les rétro-remplit.
+  it('returns 410 when the conversation is closed by isActive alone', async () => {
+    const prisma = makePrisma();
+    prisma.conversation.findUnique = jest.fn<any>().mockResolvedValue({
+      id: CONV_ID, type: 'group', title: 'Test Conv',
+      isActive: false, closedAt: null,
+    });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    expect(res.statusCode).toBe(410);
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  // La garde de REQUÊTE : `isConversationClosed` accepte une ligne partielle,
+  // donc un `select` amputé compile et rend les deux témoins ci-dessus verts —
+  // le double mocké rend ce qu'on lui dicte, `select` ou pas.
+  it('asks for both terminal columns in its select', async () => {
+    const { app, prisma } = await buildApp();
+    await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    const select = prisma.conversation.findUnique.mock.calls[0][0]?.select;
+    expect(select).toMatchObject({ isActive: true, closedAt: true });
+    await app.close();
+  });
+});
