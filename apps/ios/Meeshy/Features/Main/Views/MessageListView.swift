@@ -45,6 +45,11 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// Résistance du swipe latéral selon le type de contenu. `.resistant`
     /// (audio/vidéo) relève le seuil pour ne pas gêner le scrubber de lecture.
     var resistance: SwipeResistance = .normal
+    /// Rangée plate (Script) : géométrie UNIFORME — reply = glisser à DROITE
+    /// (icône à GAUCHE), forward = glisser à GAUCHE (icône à DROITE),
+    /// indépendant de `isMine` (tous les messages sont alignés pareil,
+    /// directive user 2026-08-18). `false` (bulles) : convention historique.
+    var uniformFlatDirection: Bool = false
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
     /// Long press triggers the message's contextual options (reply, forward,
@@ -71,7 +76,18 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// par aucun call site — la protection scrubbing → swipe était inopérante.
     @State private var isMediaScrubbing: Bool = false
 
-    private var replyDirection: CGFloat { isMine ? -1 : 1 }
+    private var replyDirection: CGFloat {
+        BubbleSwipeResistance.replyDirection(uniformFlatRow: uniformFlatDirection, isMine: isMine)
+    }
+
+    private var indicatorAlignment: Alignment {
+        switch BubbleSwipeResistance.indicatorEdge(
+            uniformFlatRow: uniformFlatDirection, isMine: isMine, offset: offset
+        ) {
+        case .leading: return .leading
+        case .trailing: return .trailing
+        }
+    }
 
     // Pre-formatted on `messageCreatedAt` (a `let`) so the indicator's body
     // re-evaluation during drag doesn't re-run `Date.formatted` 60 times per
@@ -92,7 +108,7 @@ struct BubbleSwipeContainer<Content: View>: View {
         // becomes visible in the freed-up gap. Same pattern as iMessage —
         // indicator never participates in layout sizing, so the cell still
         // adapts to the bubble's intrinsic width.
-        ZStack(alignment: isMine ? .trailing : .leading) {
+        ZStack(alignment: indicatorAlignment) {
             swipeIndicator
                 .padding(.horizontal, 8)
 

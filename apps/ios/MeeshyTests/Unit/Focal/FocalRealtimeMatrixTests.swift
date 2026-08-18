@@ -255,17 +255,22 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// callback) au tap, le lien manquant entre les deux garanties.
     func test_F09_quotedReplyTap_triggersOnReplyTap_theCallbackTheHostLandsOn() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalQuotedReplyView.swift"))
-        guard let start = code.range(of: ".onTapGesture {"),
+        guard let start = code.range(of: "private func jumpToOriginal() {"),
               let end = code.range(of: "\n    }", range: start.upperBound..<code.endIndex)
         else {
-            XCTFail("le geste de tap de FocalQuotedReplyView.swift est introuvable")
+            XCTFail("`jumpToOriginal` est introuvable dans FocalQuotedReplyView.swift")
             return
         }
         let body = code[start.lowerBound..<end.lowerBound]
         XCTAssertTrue(
             body.contains("onReplyTap?(reference.messageId)"),
-            "F09 : le tap sur une citation doit déclencher `onReplyTap(reference.messageId)` — c'est ce " +
-            "callback que l'hôte fait atterrir via scrollToItem(.centeredVertically) — voir test_F12"
+            "F09 : le tap du bloc citation (hors zones nom/média) doit déclencher `onReplyTap(reference.messageId)` — " +
+            "c'est ce callback que l'hôte fait atterrir via scrollToItem(.centeredVertically) — voir test_F12"
+        )
+        XCTAssertTrue(
+            code.contains(".onTapGesture {\n            jumpToOriginal()"),
+            "F09 : le tap GLOBAL du bloc reste le saut à l'original — les zones nom (profil) et média (lecture) " +
+            "sont des enclaves, jamais un remplacement du saut"
         )
     }
 

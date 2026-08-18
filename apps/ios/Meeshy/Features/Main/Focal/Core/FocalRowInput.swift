@@ -263,6 +263,14 @@ struct FocalRowActions {
     var onRetry: ((String) -> Void)?
     var onReplyTap: ((String) -> Void)?
     var onStoryReplyTap: ((String) -> Void)?
+    /// Tap sur le NOM de l'auteur cité — l'hôte résout le message cité
+    /// (store local) et ouvre le profil RÉEL de son auteur ; repli sur une
+    /// fiche nom-seul si le cité n'est plus dans la fenêtre locale.
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)?
+    /// Tap sur la zone MÉDIA de la citation (miniature image/vidéo, glyphe
+    /// audio/document) — l'hôte résout la pièce jointe citée : image/vidéo
+    /// en plein écran, audio en lecture ; repli = saut à l'original.
+    var onQuotedMediaTap: ((ReplyReference) -> Void)?
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Lot 3.2 (2026-08-18) — cartes lieu/fichier réelles en rangée plate :
     /// tap sur la carte lieu → plein écran (présenté par ConversationView,
