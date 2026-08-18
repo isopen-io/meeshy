@@ -1090,6 +1090,49 @@ describe('callRoutes', () => {
       );
     });
 
+    it('allows a moderator to remove an anonymous participant, falling back to resolving the target by Participant.id when the userId lookup misses', async () => {
+      // Anonymous (shared-link) participants have `Participant.userId: null`
+      // (schema.prisma) — the roster key the client sends for them is their
+      // own `Participant.id`, never a `User.id`. The `userId:` lookup below
+      // can therefore never match an anonymous target, and previously that
+      // meant this route rejected EVERY kick of an anonymous guest with
+      // NOT_A_PARTICIPANT, unconditionally. The fallback must resolve them by
+      // `id` directly, still scoped to this call's conversation + isActive so
+      // it stays exactly as safe as the (unresolved-fallback-forbidding)
+      // guard this mirrors.
+      const session = makeCallSession();
+      const modMembership = makeMembership({ role: 'moderator' });
+      const anonymousTargetParticipant = { id: TARGET_PART_ID };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(null) // target resolution by userId — misses (anonymous)
+        .mockResolvedValueOnce(anonymousTargetParticipant); // target resolution by id — hits
+
+      const { routes, reply } = setup({
+        participant: { findFirst: participantFindFirst },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockLeaveCall.mockResolvedValueOnce(session);
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ participantId: anonymousTargetParticipant.id })
+      );
+      expect(reply._body).toMatchObject({ success: true, data: session });
+    });
+
     it('allows an admin to remove another participant, using the TARGET participant id (not the admin\'s own)', async () => {
       const session = makeCallSession();
       const adminMembership = makeMembership({ role: 'admin' });
