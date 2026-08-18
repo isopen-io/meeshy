@@ -5,20 +5,26 @@ const makePrismaMock = () => {
   return {
     rows,
     attachmentReaction: {
+      // Les deux accès par clé portent le TRIPLET depuis les multi-réactions
+      // (2026-08-18) : `attachment_participant_reaction` nomme
+      // (attachmentId, participantId, emoji). Un double qui ignore l'emoji
+      // modélise l'ANCIENNE contrainte — il rendait la ligne d'un autre emoji
+      // sur `findUnique`, donc faisait sortir `addAttachmentReaction` en no-op,
+      // et écrasait l'emoji en place sur `upsert` au lieu d'empiler.
       findUnique: jest.fn(async ({ where }: any) => {
         const key = where.attachment_participant_reaction;
         return rows.find(r => r.attachmentId === key.attachmentId
-          && r.participantId === key.participantId) ?? null;
+          && r.participantId === key.participantId
+          && r.emoji === key.emoji) ?? null;
       }),
       findMany: jest.fn(async ({ where }: any) =>
         rows.filter(r => r.attachmentId === where.attachmentId
           && (where.participantId ? r.participantId === where.participantId : true))),
-      // Mirrors the real Mongo upsert on the (attachmentId, participantId)
-      // compound key (no emoji) — updates the existing row's emoji in place
-      // instead of ever inserting a second row for the same participant.
-      upsert: jest.fn(async ({ create, update }: any) => {
-        const existing = rows.find(r => r.attachmentId === create.attachmentId
-          && r.participantId === create.participantId);
+      upsert: jest.fn(async ({ where, create, update }: any) => {
+        const key = where.attachment_participant_reaction;
+        const existing = rows.find(r => r.attachmentId === key.attachmentId
+          && r.participantId === key.participantId
+          && r.emoji === key.emoji);
         if (existing) {
           Object.assign(existing, update);
           return existing;
@@ -49,28 +55,48 @@ describe('AttachmentReactionService', () => {
     expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual(['❤️']);
   });
 
-  it('caps at 1 emoji per user per attachment (replaces)', async () => {
+  it('empile plusieurs emojis pour le même participant — le second ne remplace plus le premier', async () => {
+    // L'inverse exact de ce que ce témoin affirmait jusqu'au 2026-08-18
+    // (« caps at 1 emoji per user per attachment (replaces) ») : le modèle
+    // 1-emoji-par-personne a été RETIRÉ, pour les pièces jointes comme pour les
+    // messages. Le témoin suit son comportement plutôt que d'être supprimé —
+    // c'est la même question posée à l'envers, et elle a toujours une réponse.
     const prisma = makePrismaMock();
     const svc = new AttachmentReactionService(prisma);
     await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
     await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '👍' });
-    expect(await svc.getReactionSummary('att1')).toEqual({ '👍': 1 });
-    expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual(['👍']);
+    expect(await svc.getReactionSummary('att1')).toEqual({ '❤️': 1, '👍': 1 });
+    expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual(['❤️', '👍']);
   });
 
-  it('never ends up with two rows for the same participant, even racing two different emojis concurrently', async () => {
-    // Regression for the duplicate-reaction race: the old find/deleteMany/upsert
-    // sequence let two concurrent calls with different emojis both pass the
-    // "no existing reaction" check before either committed, each inserting its
-    // own row. The upsert now targets the (attachmentId, participantId) key
-    // with no emoji, so both calls race on the SAME document.
+  it('deux ajouts concurrents du MÊME emoji convergent sur une seule ligne', async () => {
+    // Ce que la course garantit encore, et ce qu'elle ne garantit plus.
+    //
+    // Le témoin d'origine affirmait « jamais deux lignes pour le même
+    // participant, même en course sur deux emojis DIFFÉRENTS » — vrai de la clé
+    // à deux champs, faux et non souhaitable depuis le triplet : deux emojis
+    // distincts DOIVENT créer chacun leur ligne, c'est la fonctionnalité.
+    //
+    // La propriété d'atomicité survit intacte sur ce qu'elle protégeait
+    // vraiment — le double envoi du même emoji (double-tap optimiste, retry
+    // socket, second appareil) — et c'est elle qui est épinglée ici.
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    await Promise.all([
+      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🔥' }),
+      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🔥' }),
+    ]);
+    expect(prisma.rows.filter((r: any) => r.attachmentId === 'att1' && r.participantId === 'p1')).toHaveLength(1);
+  });
+
+  it('deux emojis distincts en course créent chacun leur ligne', async () => {
     const prisma = makePrismaMock();
     const svc = new AttachmentReactionService(prisma);
     await Promise.all([
       svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🎉' }),
       svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🔥' }),
     ]);
-    expect(prisma.rows.filter((r: any) => r.attachmentId === 'att1' && r.participantId === 'p1')).toHaveLength(1);
+    expect(prisma.rows.filter((r: any) => r.attachmentId === 'att1' && r.participantId === 'p1')).toHaveLength(2);
   });
 
   it('removes a reaction', async () => {
@@ -91,7 +117,7 @@ describe('AttachmentReactionService', () => {
       .toEqual({ changed: false });
   });
 
-  it('reports changed=true when swapping to a different emoji', async () => {
+  it('reports changed=true when adding a SECOND, distinct emoji', async () => {
     const prisma = makePrismaMock();
     const svc = new AttachmentReactionService(prisma);
     await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
