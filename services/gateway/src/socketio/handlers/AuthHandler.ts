@@ -237,12 +237,6 @@ export class AuthHandler {
 
     await this._joinUserConversations(socket, user.id, false);
 
-    try {
-      await socket.join('conversation:any');
-    } catch (error) {
-      logger.debug('failed to join conversation:any room (JWT auth)', { userId: user.id, error });
-    }
-
     this._registerUser(user.id, socketUser, socket);
 
     this.statusService.markConnected(user.id, false);
@@ -322,13 +316,25 @@ export class AuthHandler {
       logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
     }
 
-    try {
-      await socket.join(ROOMS.conversation(participant.conversationId));
-    } catch (error) {
-      logger.warn('failed to join conversation room for anonymous user — messages may not be received', {
+    // Même réessai borné que la porte inscrite (`_joinUserConversations`), et
+    // pour la même raison — mais l'enjeu est ici plus grand, pas plus petit.
+    //
+    // La porte de livraison est `connectedUsers.has(clé)`. S'inscrire n'est donc
+    // pas neutre : ça DÉSARME la file hors ligne. Une socket rejetée par
+    // l'adaptateur puis inscrite quand même est vue joignable par
+    // `enqueueForOfflineParticipants`, qui cesse d'enfiler, alors que le
+    // `io.to(ROOMS.conversation(...))` ne l'atteint pas davantage — les messages
+    // ne vont nulle part, sans rejeu ultérieur.
+    //
+    // Un invité de lien partagé n'a qu'UNE conversation : ici, « une room
+    // échouée » vaut la TOTALITÉ de sa livraison temps réel, là où un inscrit
+    // qui en perd une sur trente perd une fraction. La porte qui avait le plus
+    // besoin du réessai était la seule à ne pas l'avoir.
+    const guestJoinFailed = await this._joinConversationRoomsWithRetry(socket, [participant.conversationId]);
+    if (guestJoinFailed.length > 0) {
+      logger.error('conversation room join failed after retries for anonymous user — no live message can reach this session', {
         anonymousId: socketUser.id,
         conversationId: participant.conversationId,
-        error,
       });
     }
 
@@ -586,6 +592,12 @@ export class AuthHandler {
    * (`connectedUsers.has(userId)`) treats the recipient as online and skips the
    * offline queue, yet the missed room means the live `message:new` never
    * arrives either. Retrying closes the common transient case.
+   *
+   * Sert les DEUX portes d'authentification — l'inscrite sur toutes ses
+   * conversations, l'invitée de lien partagé sur son unique room. La porte
+   * invitée a longtemps appelé un `socket.join` nu : la garde de parité de
+   * `AuthHandler.test.ts` compare désormais le nombre de tentatives des deux
+   * portes, pour qu'un réessai ajouté d'un seul côté ne puisse plus tenir.
    */
   private async _joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
     const maxAttempts = 1 + AuthHandler.JOIN_RETRY_ATTEMPTS;
