@@ -120,7 +120,11 @@ describe('contenu localisé par destinataire', () => {
   it('post_like STORY, destinataire en → "reacted ❤️ to your story"', async () => {
     const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });
     await svc.createPostLikeNotification({ actorId: 'a', postId: 'p', postAuthorId: 'r', emoji: '❤️', postType: 'STORY' });
-    expect(created[0].content).toBe('reacted ❤️ to your story');
+    // La phrase d'action vit dans le TITRE (et dans le sous-titre de bannière) ;
+    // le corps montre le contenu visé — ici sans texte ni média, donc le repli
+    // nominal. Les deux sont localisés à la langue du destinataire.
+    expect(created[0].title).toContain('reacted ❤️ to your story');
+    expect(created[0].content).toBe('Your story');
   });
   it('comment_reaction REEL, destinataire en → corps et metadata.postType conscients du réel (F58)', async () => {
     const { svc, created } = makeContentHarness({ r: { systemLanguage: 'en' } });

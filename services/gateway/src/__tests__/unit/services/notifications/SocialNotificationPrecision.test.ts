@@ -124,7 +124,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       const payload = payloadOfType(mockIO, 'post_comment');
       expect(payload).toBeDefined();
       expect(payload.title).toBe('Bob Commentateur');
-      expect(payload.subtitle).toBe('a commenté votre statut · « Journée de ouf au bureau »');
+      expect(payload.subtitle).toBe('a commenté votre statut');
       expect(payload.content).toBe('Trop drôle !');
       // postCreatedAt voyage en contexte → le client en dérive « du JJ/MM/AAAA HH:MM ».
       expect(payload.context.postCreatedAt).toBe(createdAt.toISOString());
@@ -253,8 +253,10 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       const payload = payloadOfType(mockIO, 'comment_like');
-      expect(payload.content).toBe('a réagi 🔥 à votre commentaire');
-      expect(payload.subtitle).toBe('a réagi 🔥 à votre commentaire · « Mon avis sur la question »');
+      // Le corps montre le commentaire visé ; la phrase d'action, portée par
+      // le titre et le sous-titre, n'y est plus recopiée.
+      expect(payload.content).toBe('« Mon avis sur la question »');
+      expect(payload.subtitle).toBe('a réagi 🔥 à votre commentaire');
     });
   });
 
@@ -315,8 +317,8 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       const payload = payloadOfType(mockIO, 'post_repost');
-      expect(payload.content).toBe('a partagé votre story');
-      expect(payload.subtitle).toBe('a partagé votre story · « Coucher de soleil à Douala »');
+      expect(payload.content).toBe('Coucher de soleil à Douala');
+      expect(payload.subtitle).toBe('a partagé votre story');
     });
 
     it('défaut « a partagé votre publication » sans type ni extrait', async () => {
@@ -328,7 +330,8 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       const payload = payloadOfType(mockIO, 'post_repost');
-      expect(payload.content).toBe('a partagé votre publication');
+      // Sans texte ni média, le corps nomme l'entité plutôt que de rester vide.
+      expect(payload.content).toBe('Votre publication');
       expect(payload.subtitle).toBe('a partagé votre publication');
     });
 
@@ -428,8 +431,8 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       await service.createStoryCommentNotificationsBatch(baseParams);
 
       expect(payloadOfType(mockIO, 'story_new_comment').subtitle).toBe('a commenté votre story');
-      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans une story · Story de Alice Autrice');
-      expect(payloadOfType(mockIO, 'friend_story_comment').subtitle).toBe('a commenté une story · Story de Alice Autrice');
+      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans une story de Alice Autrice');
+      expect(payloadOfType(mockIO, 'friend_story_comment').subtitle).toBe('a commenté une story de Alice Autrice');
     });
 
     it('POST : le bucket auteur est sauté (post_comment notifie déjà l\'auteur) et le wording est « publication »', async () => {
@@ -442,7 +445,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       expect(payloadOfType(mockIO, 'story_new_comment')).toBeUndefined();
       const thread = payloadOfType(mockIO, 'story_thread_reply');
       expect(thread.content).toBe('a répondu dans une publication');
-      expect(thread.subtitle).toBe('a répondu dans une publication · Publication de Alice Autrice');
+      expect(thread.subtitle).toBe('a répondu dans une publication de Alice Autrice');
       expect(payloadOfType(mockIO, 'friend_story_comment').content).toBe('a commenté une publication');
     });
 
@@ -454,7 +457,7 @@ describe('Précision des notifications sociales — subtitle + wording typé', (
       });
 
       expect(payloadOfType(mockIO, 'story_thread_reply').content).toBe('a répondu dans un statut');
-      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut · Statut de Alice Autrice');
+      expect(payloadOfType(mockIO, 'story_thread_reply').subtitle).toBe('a répondu dans un statut de Alice Autrice');
     });
   });
 });
