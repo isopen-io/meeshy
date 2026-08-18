@@ -141,49 +141,26 @@ final class MessageListLayoutOffsetTests: XCTestCase {
         )
     }
 
-    /// La cascade fling → SIGTRAP (2026-08-18) : chaque compensation déplace
-    /// la fenêtre, réalise de nouvelles cellules, redéclenche le solveur —
-    /// au-delà de la garde de ré-entrance d'UIKit, l'app tombe. Le plafond
-    /// borne les compensations PAR TRANSACTION ; il se réarme au tour de
-    /// runloop suivant (défilement lent = compensation intégrale conservée).
-    func test_invalidationContext_offsetAdjustments_areCappedPerTransaction_andRearm() {
+    /// La compensation self-sizing N'EST PLUS plafonnée ICI : le plafond vit
+    /// sur l'entonnoir `invalidateLayout(with:)` (un contexte avalé emporte
+    /// sa compensation avec lui). Ce témoin fige la position du garde-fou —
+    /// des compensations successives dans une même transaction restent
+    /// toutes intégrales à CE niveau.
+    func test_invalidationContext_successiveAdjustments_stayIntegralAtThisLevel() {
         let (collectionView, _, _) = makeBatchHarness(nearBottomThreshold: 200, estimated: true)
         let layout = collectionView.collectionViewLayout as! MessageListLayout
         collectionView.contentOffset = CGPoint(x: 0, y: 400)
 
-        for i in 0..<MessageListLayout.maxOffsetAdjustmentsPerTransaction {
+        for i in 0..<5 {
             let context = layout.invalidationContext(
                 forPreferredLayoutAttributes: attributes(y: 50, height: 120),
                 withOriginalAttributes: attributes(y: 50, height: 80)
             )
             XCTAssertEqual(
                 context.contentOffsetAdjustment.y, 40, accuracy: 0.5,
-                "compensation n°\(i + 1) : sous le plafond, la correction reste intégrale"
+                "compensation n°\(i + 1) : intégrale — le plafond anti-récursion vit sur invalidateLayout(with:), jamais ici"
             )
         }
-
-        let capped = layout.invalidationContext(
-            forPreferredLayoutAttributes: attributes(y: 50, height: 120),
-            withOriginalAttributes: attributes(y: 50, height: 80)
-        )
-        XCTAssertEqual(
-            capped.contentOffsetAdjustment.y, 0, accuracy: 0.5,
-            "au-delà du plafond, la compensation est ABANDONNÉE pour la transaction — c'est elle qui nourrissait la récursion `_updateVisibleCellsNow` du fling"
-        )
-
-        // Réarmement : le compteur se remet à zéro au tour de runloop suivant.
-        let rearmed = expectation(description: "rearm")
-        DispatchQueue.main.async { rearmed.fulfill() }
-        wait(for: [rearmed], timeout: 2)
-
-        let next = layout.invalidationContext(
-            forPreferredLayoutAttributes: attributes(y: 50, height: 120),
-            withOriginalAttributes: attributes(y: 50, height: 80)
-        )
-        XCTAssertEqual(
-            next.contentOffsetAdjustment.y, 40, accuracy: 0.5,
-            "à la transaction suivante, la compensation intégrale reprend — le défilement lent ne perd rien"
-        )
     }
 
     func test_invalidationContext_growthInsideWindow_leavesOffsetUntouched() {

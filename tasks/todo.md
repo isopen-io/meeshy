@@ -126,3 +126,22 @@ découverts en vérification :
 - « Crash à l'ouverture » signalé en fin de passe = artefact d'installation
   build-for-testing (dylib widget absente du bundle installé), PAS un défaut
   du code — réinstallé via `meeshy.sh build`, lancement sain vérifié.
+
+## Revue — Retrait du mode Focal iOS (2026-08-18, fin de chantier)
+
+- [x] Mode Focal retiré de la compilation (Scroll/**, contrôles de focus,
+      12 suites de tests) ; Script = mode nominal ; clamp `.focal→.script`
+      à la consommation (`ReadingModeController.clampRetiredModes`), loi
+      partagée + vecteurs TS↔Swift INTACTS ; restauration : `bce87148c`.
+- [x] SIGTRAP fling/repos DÉFINITIVEMENT clos (4 itérations) : entonnoir
+      `MessageListLayout.invalidateLayout(with:)` — invalidations partielles
+      avalées au-delà de 4/transaction, rattrapage complet au tour suivant.
+      Vérifié : 2 × 100 flings violents + 90 s repos, zéro crash.
+- [x] Retours user : chrome de retour DÈS la levée du doigt (isDragging
+      seul) ; pagination haut cache-FIRST (fenêtre GRDB avant REST) ;
+      ouverture conversation mesurée < 1 s (cache-first sain — la lenteur
+      restante vient de la gateway locale éteinte).
+- [x] 568 tests Focal/Lentille + suites touchées verts ; docstrings périmées
+      purgées (aucune suite supprimée citée comme preuve vivante).
+- [x] Documentation : `docs/focal-retrait-ios-2026-08-18.md` +
+      `apps/ios/decisions.md` (entrée 2026-08-18) + mémoire mise à jour.

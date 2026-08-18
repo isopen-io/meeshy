@@ -78,7 +78,9 @@ nonisolated struct LentilleModeMenuModel: Equatable {
         capabilities: ReadingModeOrchestrator.ReadingModeCapabilities,
         currentPreference: ReadingModeOrchestrator.ReadingModePreference
     ) -> LentilleModeMenuModel {
-        let order: [ReadingModeOrchestrator.ReadingModePreference] = [.auto, .focal, .script, .resume, .riviere]
+        // RETRAIT FOCAL iOS (2026-08-18) : « Focal » sort du menu — Script
+        // est le mode nominal du fil (clamp `ReadingModeController`).
+        let order: [ReadingModeOrchestrator.ReadingModePreference] = [.auto, .script, .resume, .riviere]
         let entries = order.map { preference -> Entry in
             let isRiviere = preference == .riviere
             let isDisabled: Bool

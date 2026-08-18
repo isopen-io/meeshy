@@ -153,38 +153,21 @@ nonisolated public enum FocalMetrics {
         public static let surfaceDarkAlpha: CGFloat = 0.10
     }
 
-    // MARK: - Rangée ÉLUE — la magnification (§4.6)
+    // MARK: - Gabarit large de la rangée
 
-    /// Ce que gagne la rangée en focus. §4.6 ne nomme qu'un écart de
-    /// TYPOGRAPHIE (« 15 → 16 ») ; les autres cotes en sont le prolongement
-    /// direct — l'élue doit se lire comme le message qu'on regarde, avec son
-    /// auteur et son horodatage complets, et non comme ses voisines.
-    ///
-    /// **Ce bloc était inatteignable jusqu'ici.** L'hôte appelait déjà
-    /// `reconfigureFocusTypographyAtScrollStop()` sur le changement d'élu,
-    /// mais `FocalRowInput` ne portait aucun champ de focus : la
-    /// reconfiguration reproduisait un contenu identique et le 15→16 n'a
-    /// jamais été rendu depuis que le contrat l'a écrit.
+    /// RETRAIT FOCAL iOS (2026-08-18) : la magnification de l'élue (§4.6) est
+    /// partie avec le pass — restent les DEUX cotes de gabarit devenues la
+    /// règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
+    /// retrait de texte ne varient jamais, la liste ne saute donc jamais.
     nonisolated public enum Focus {
-        /// Le « 16 » de §4.6, en toutes lettres. `Text.size` vaut
-        /// `MeeshyFont.bodySize` (15) — l'écart est de +1, appliqué
-        /// UNIQUEMENT à l'élue et UNIQUEMENT à l'arrêt du défilement.
-        @MainActor public static var textSize: CGFloat { Text.size + 1 }
-
-        /// Pastille agrandie : `22` (`Avatar.size`) → `34`. L'auteur du
-        /// message regardé doit être identifiable sans effort.
+        /// Gabarit de pastille réservé en permanence par l'en-tête
+        /// (`FocalIdentityHeader`, `minHeight`) — la pastille rendue reste
+        /// `Avatar.size` (22) dans ce cadre de 34.
         public static let avatarSize: CGFloat = 34
 
-        /// Le retrait du texte suit la pastille — `avatarSize` + la même
+        /// Le retrait CONSTANT de `FocalRow` — `avatarSize` + la même
         /// gouttière de `7` que `Text.indent` (`22 + 7 = 29`).
         public static let textIndent: CGFloat = avatarSize + 7
-
-        /// Nom de l'auteur, agrandi d'un cran par rapport à `Name.size` (13).
-        @MainActor public static var nameSize: CGFloat { Name.size + 2 }
-
-        /// Espace réservé SOUS le contenu de l'élue pour la barre de
-        /// contrôles, qui chevauche le bord bas de la carte.
-        public static let controlBarReservedHeight: CGFloat = 34
     }
 
     // MARK: - Citation

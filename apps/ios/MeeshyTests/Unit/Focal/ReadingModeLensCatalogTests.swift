@@ -39,11 +39,13 @@ final class ReadingModeLensCatalogTests: XCTestCase {
         )
     }
 
-    func test_displayOrder_containsExactlyFourSelectableModes() {
+    /// RETRAIT FOCAL iOS (2026-08-18) : Focal sort du catalogue sélectionnable
+    /// — Script (même rangée plate, sans perspective) est le mode nominal.
+    func test_displayOrder_containsExactlyThreeSelectableModes() {
         XCTAssertEqual(
             ReadingModeLensCatalog.displayOrder,
-            [.focal, .script, .summary, .river],
-            "Le catalogue doit lister exactement Focal, Script, Résumé, Rivière — dans cet ordre (contrat §WS-7 travail 5)."
+            [.script, .summary, .river],
+            "Le catalogue doit lister exactement Script, Résumé, Rivière — dans cet ordre (retrait Focal 2026-08-18)."
         )
     }
 
@@ -52,7 +54,7 @@ final class ReadingModeLensCatalogTests: XCTestCase {
     func test_river_alwaysPresentInRows_evenWhenIneligible() {
         let caps = capabilities(availableModes: [.focal, .script, .summary], riverEligible: false, current: 3)
         let rows = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal)
-        XCTAssertEqual(rows.count, 4, "Les 4 lignes doivent apparaître même si la Rivière n'est pas ouverte — jamais retirée de la liste.")
+        XCTAssertEqual(rows.count, 3, "Les 3 lignes doivent apparaître même si la Rivière n'est pas ouverte — jamais retirée de la liste.")
         guard let riverRow = rows.last else {
             XCTFail("La ligne Rivière est introuvable en fin de catalogue.")
             return
@@ -112,14 +114,14 @@ final class ReadingModeLensCatalogTests: XCTestCase {
 
     func test_subtitle_forAvailableMode_fallsBackToDefaultSubtitle() {
         let caps = capabilities(availableModes: [.focal, .script, .summary, .river], riverEligible: true, current: 8)
-        let rows = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal)
-        guard let focalRow = rows.first(where: { $0.mode == .focal }) else {
-            XCTFail("Ligne Focal introuvable.")
+        let rows = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .script)
+        guard let scriptRow = rows.first(where: { $0.mode == .script }) else {
+            XCTFail("Ligne Script introuvable.")
             return
         }
         XCTAssertEqual(
-            ReadingModeLensCatalog.subtitle(for: focalRow),
-            ReadingModeLensCatalog.defaultSubtitle(for: .focal),
+            ReadingModeLensCatalog.subtitle(for: scriptRow),
+            ReadingModeLensCatalog.defaultSubtitle(for: .script),
             "Un mode disponible doit afficher son sous-titre par défaut, jamais un texte de seuil (réservé à l'indisponibilité)."
         )
     }

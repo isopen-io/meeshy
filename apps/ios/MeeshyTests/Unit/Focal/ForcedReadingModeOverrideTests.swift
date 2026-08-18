@@ -6,9 +6,14 @@ import XCTest
 /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
 /// amendement produit 2026-08-16).
 ///
+/// RETRAIT FOCAL iOS (2026-08-18) : le court-circuit de forçage est INTACT,
+/// mais `ReadingModeController.clampRetiredModes` rabat toute décision
+/// `.focal` sur `.script` — les témoins de la garantie 1 attestent donc
+/// `.script` (raison `.default`, jamais `.sticky`/`.flagDisabled`).
+///
 /// Trois garanties prouvées ICI, discriminantes (mêmes entrées, forcedMode
 /// présent vs absent) :
-/// 1. **Le forçage GAGNE toujours** — décision `.focal` quel que soit l'état
+/// 1. **Le forçage GAGNE toujours** — décision forcée quel que soit l'état
 ///    du drapeau `reading_modes`, de la préférence collante ou du compte de
 ///    non-lus (`OrchestratorDecisionInput` n'a que ces trois leviers plus le
 ///    catalogue — tous adverses ici).
@@ -59,8 +64,9 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .focal)
-        XCTAssertEqual(controller.decision.mode, .focal)
+        XCTAssertEqual(controller.mode, .script, "Forcé .focal ⇒ clamp retrait 2026-08-18 rabat sur .script — jamais .bubbles : le forçage court-circuite bien le drapeau OFF.")
+        XCTAssertEqual(controller.decision.mode, .script)
+        XCTAssertEqual(controller.decision.reason, .default, "La raison reste celle du court-circuit forcé — pas .flagDisabled.")
     }
 
     /// Préférence collante adverse (`.script`, primerait normalement — RE-PREUVE
@@ -79,7 +85,8 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .focal)
+        XCTAssertEqual(controller.mode, .script)
+        XCTAssertEqual(controller.decision.reason, .default, "Le forçage (raison .default) l'emporte sur la préférence collante (raison .sticky) — le mode .script rendu vient du CLAMP retrait, pas du store.")
     }
 
     /// Non-lus au-dessus du plafond (rendrait `.summary`/`unread-over-cap`
@@ -97,7 +104,8 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .focal)
+        XCTAssertEqual(controller.mode, .script, "Sans forçage : .summary (unread-over-cap) ; forcé .focal ⇒ clampé .script.")
+        XCTAssertEqual(controller.decision.reason, .default)
     }
 
     // MARK: - Garantie 2 : `nil` ⇒ décision inchangée (témoin discriminant)

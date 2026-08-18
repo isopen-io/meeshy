@@ -318,12 +318,10 @@ final class ConversationViewModelTests: XCTestCase {
 
     /// `loadOlderMessages` used to be network-first: the GRDB pagination
     /// slide (`messageStore.loadOlder`) only ran inside the `do` block, right
-    /// after a successful REST `listBefore`. When the REST call fails
-    /// (offline / transient network error) the catch block never touched the
-    /// store, so scrolling up while offline looked like there was nothing
-    /// more to load even though a prior online session had already fetched +
-    /// persisted the older page into GRDB. The catch path must now fall back
-    /// to the cached page so reads keep working offline.
+    /// after a successful REST `listBefore`. Cache-FIRST depuis le
+    /// 2026-08-18 (bible I1, retour user « chargement lent ») : la fenêtre
+    /// GRDB se sert AVANT l'appel réseau — un gateway lent ou mort ne
+    /// retarde plus jamais des rangées déjà sur disque.
     func test_loadOlderMessages_networkFailure_fallsBackToGRDBCachedOlderMessages() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)
@@ -357,12 +355,23 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.listBeforeResult = .failure(
             NSError(domain: "test", code: -1009, userInfo: [NSLocalizedDescriptionKey: "offline"])
         )
+        // Preuve d'ORDRE cache-first : au moment où le REST part, la fenêtre
+        // GRDB doit DÉJÀ avoir glissé (201 rangées publiées) — le réseau ne
+        // gate plus la lecture locale.
+        var messageCountWhenRESTFired: Int?
+        mockMessageService.onListBefore = { [weak sut] in
+            messageCountWhenRESTFired = sut?.messages.count
+        }
 
         await sut.loadOlderMessages()
 
         let grew = await MessageStoreObservationHelper.awaitMessagesCount(equals: 201, in: sut)
-        XCTAssertTrue(grew, "the offline catch path must surface the GRDB-cached older message")
-        XCTAssertEqual(mockMessageService.listBeforeCallCount, 1, "the REST call must still be attempted first")
+        XCTAssertTrue(grew, "the offline path must surface the GRDB-cached older message")
+        XCTAssertEqual(mockMessageService.listBeforeCallCount, 1, "the REST call must still be attempted (to extend the window)")
+        XCTAssertEqual(
+            messageCountWhenRESTFired, 201,
+            "cache-FIRST : la page GRDB doit être servie AVANT l'appel réseau — un gateway mort ne doit jamais retarder des rangées déjà sur disque"
+        )
     }
 
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)

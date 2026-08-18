@@ -22,10 +22,9 @@ import XCTest
 ///   `.bubbles`, raison `.flagDisabled` », qui EST la décision produit ;
 /// - bêta explicitement coupée ⇒ `.bubbles`, INCHANGÉ.
 ///
-/// **Re-preuve §0 (design imposé, point 2 du second amendement)** : les six
-/// sites d'appel du pass de perspective (`MessageListViewController.swift`,
-/// contrat §4.8, gardés par `FocalHostSourceGuardTests`) et `MessageListView
-/// .swift` ne mentionnent NI `LentilleFeatureFlag` NI `BetaFeaturesPreference`
+/// **Re-preuve §0 (design imposé, point 2 du second amendement)** :
+/// `MessageListViewController.swift` et `MessageListView.swift`
+/// ne mentionnent NI `LentilleFeatureFlag` NI `BetaFeaturesPreference`
 /// NI `MeeshyFeatureFlags` — ils consomment uniquement la prop `readingMode`
 /// DÉJÀ décidée par `ConversationView.init` → `ReadingModeController`. Le
 /// chemin normal liste stable → tap → `ConversationView` (RootView/
@@ -162,7 +161,7 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
     /// gratuité-là que la décision produit supprime. Le `setEnabled(true)`
     /// ci-dessous est donc l'amendement : le chemin bout-en-bout reste
     /// intégralement valide POUR QUI L'A DEMANDÉ.
-    func test_betaExplicitlyOn_noStickyPreference_fewUnread_readerPresent_autoResolvesToFocal() {
+    func test_betaExplicitlyOn_noStickyPreference_fewUnread_readerPresent_autoResolvesToScript() {
         let defaults = makeIsolatedDefaults()
         BetaFeaturesPreference.setEnabled(true, defaults: defaults)
 
@@ -189,7 +188,7 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
             now: { now }
         )
 
-        XCTAssertEqual(controller.mode, .focal, "AUTO, données réelles (peu de non-lus, pas d'absence) ⇒ branche par défaut de la loi gelée : .focal.")
+        XCTAssertEqual(controller.mode, .script, "AUTO, branche par défaut de la loi gelée (.focal) CLAMPÉE sur .script — RETRAIT FOCAL iOS 2026-08-18.")
         XCTAssertEqual(controller.decision.reason, .default)
     }
 
@@ -218,14 +217,14 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
         XCTAssertEqual(controller.decision.reason, .unreadOverCap)
     }
 
-    // MARK: - Re-preuve §0(c) — les 6 sites d'appel (§4.8) ne connaissent ni le drapeau ni la préférence
+    // MARK: - Re-preuve §0(c) — l'hôte de liste ne connaît ni le drapeau ni la préférence
 
     func test_messageListViewController_neverMentionsFlagOrPreferenceTypes() throws {
         let code = try source("MessageListViewController.swift")
         for forbidden in ["LentilleFeatureFlag", "BetaFeaturesPreference"] {
             XCTAssertFalse(
                 code.contains(forbidden),
-                "MessageListViewController.swift ne doit JAMAIS mentionner \(forbidden) — les six sites d'appel du pass de perspective (§4.8, gardés par FocalHostSourceGuardTests) consomment uniquement `readingMode`, DÉJÀ décidé en amont par ConversationView.init → ReadingModeController. Le système de modes de lecture ne gagne aucun site de montage avec ce lot."
+                "MessageListViewController.swift ne doit JAMAIS mentionner \(forbidden) — l'hôte consomme uniquement `readingMode`, DÉJÀ décidé en amont par ConversationView.init → ReadingModeController. Le système de modes de lecture ne gagne aucun site de montage avec ce lot."
             )
         }
         // Exception ÉTROITE, constatée rouge sur main (triage 2026-08-18) :

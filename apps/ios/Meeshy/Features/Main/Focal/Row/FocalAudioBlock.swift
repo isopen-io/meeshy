@@ -132,9 +132,6 @@ struct FocalAudioBlock: View, Equatable {
     let content: BubbleContent
     let accentHex: String
     let isDark: Bool
-    /// Élection de la rangée (`FocalRowInput.isFocused`) — décide la tenue
-    /// du bloc plat : minimale (ordinaire) ou enrichie (élue).
-    var isFocused: Bool = false
     /// Contrat §3.6 : `FocalRowInput.allAudioItems`.
     let allAudioItems: [ConversationViewModel.AudioItem]
     let translatedAudios: [MessageTranslatedAudio]
@@ -154,7 +151,6 @@ struct FocalAudioBlock: View, Equatable {
         lhs.content == rhs.content
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
-            && lhs.isFocused == rhs.isFocused
             && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
             && lhs.translatedAudios == rhs.translatedAudios
             && lhs.mentionDisplayNames == rhs.mentionDisplayNames
@@ -163,10 +159,12 @@ struct FocalAudioBlock: View, Equatable {
     }
 
     /// La décision « quelle tenue pour quelle rangée » vit ICI (app), le SDK
-    /// ne fait que rendre la tenue reçue (SDK Purity).
-    nonisolated static func chrome(isFocused: Bool) -> AudioPlayerChrome {
-        isFocused ? .flatFocused : .flatMinimal
-    }
+    /// ne fait que rendre la tenue reçue (SDK Purity). RETRAIT FOCAL iOS
+    /// (2026-08-18) : sans élection, la tenue plate COMPLÈTE (vitesse,
+    /// drapeaux, %, re-transcrire) sert TOUTES les rangées — la matrice §5
+    /// voulait « le player rendu nu dans la rangée », pas une version
+    /// amputée réservée à un élu disparu.
+    nonisolated static let flatChrome: AudioPlayerChrome = .flatFocused
 
     private var mode: FocalAudioMode { FocalAudioRouting.mode(for: content) }
     private var audios: [MessageAttachment] { FocalAudioRouting.audioAttachments(in: content) }
@@ -244,7 +242,7 @@ struct FocalAudioBlock: View, Equatable {
                     visualAttachments: visuals,
                     isDark: isDark,
                     accentColor: accentHex,
-                    chrome: Self.chrome(isFocused: isFocused),
+                    chrome: Self.flatChrome,
                     transcription: audioItem(for: attachment.id)?.transcription,
                     translatedAudios: audioItem(for: attachment.id)?.translatedAudios ?? translatedAudios,
                     allAudioItems: allAudioItems,

@@ -75,22 +75,43 @@ final class ReadingModeController: ObservableObject {
             // pour ce lot dev-only) : conséquence cosmétique acceptée,
             // documentée ici — l'encoche affichera « AUTO · … » plutôt qu'un
             // libellé « forcé » dédié.
-            let forced = ReadingModeOrchestrator.OrchestratorDecision(mode: forcedMode, reason: .default)
+            let forced = Self.clampRetiredModes(
+                ReadingModeOrchestrator.OrchestratorDecision(mode: forcedMode, reason: .default)
+            )
             self.decision = forced
             self.mode = forced.mode
         } else {
             let sticky = store.mode(for: conversationId, scope: scope)
-            let resolved = Self.decide(
+            let resolved = Self.clampRetiredModes(Self.decide(
                 stickyMode: sticky,
                 unreadCount: unreadCount,
                 lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
                 now: now(),
                 capabilities: capabilities,
                 isFlagEnabled: isFlagEnabled
-            )
+            ))
             self.decision = resolved
             self.mode = resolved.mode
         }
+    }
+
+    /// **RETRAIT FOCAL iOS (décision produit 2026-08-18).** Le mode Focal
+    /// (perspective au défilement) est retiré de l'app : trop de bogues de
+    /// défilement — Script (la même rangée plate, uniforme, sans perspective)
+    /// est le mode de lecture nominal. La loi PARTAGÉE
+    /// (`ReadingModeOrchestrator`, miroir de
+    /// `packages/shared/utils/reading-modes.ts`, vecteurs TS↔Swift) reste
+    /// INTACTE — elle peut rendre `.focal` (branche par défaut, clamp de
+    /// capacités) ; ce clamp de CONSOMMATION iOS le rabat sur `.script` :
+    /// préférences collantes `.focal` historiques comprises. Le web garde son
+    /// Focal ; la machinerie iOS du pass est supprimée (voir
+    /// `docs/focal-retrait-ios-2026-08-18.md` — code complet au commit
+    /// `bce87148c` pour restauration).
+    private static func clampRetiredModes(
+        _ decision: ReadingModeOrchestrator.OrchestratorDecision
+    ) -> ReadingModeOrchestrator.OrchestratorDecision {
+        guard decision.mode == .focal else { return decision }
+        return ReadingModeOrchestrator.OrchestratorDecision(mode: .script, reason: decision.reason)
     }
 
     /// Fige un choix manuel — préférence collante (§WS-1 « préférence
@@ -109,14 +130,14 @@ final class ReadingModeController: ObservableObject {
 
     private func recompute() {
         let sticky = store.mode(for: conversationId, scope: scope)
-        let resolved = Self.decide(
+        let resolved = Self.clampRetiredModes(Self.decide(
             stickyMode: sticky,
             unreadCount: unreadCount,
             lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
             now: now(),
             capabilities: capabilities,
             isFlagEnabled: isFlagEnabled
-        )
+        ))
         decision = resolved
         mode = resolved.mode
     }

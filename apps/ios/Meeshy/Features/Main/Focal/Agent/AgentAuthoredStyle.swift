@@ -8,9 +8,8 @@ import MeeshyUI
 ///
 /// Cotes (`FocalMetrics.Agent`, §4.3 des maquettes — « rangée pont/agent bord
 /// pointillé radius 14 ») : `borderWidth` `1.5` réutilisé ICI pour l'anneau
-/// d'avatar — même trait que le bord pointillé de `FocalBridgeRow`, une
-/// seule cote pour toute la grammaire pointillée (garde R15 : aucun `1.5`
-/// littéral hors `FocalMetrics`).
+/// d'avatar — une seule cote pour toute la grammaire pointillée (garde R15 :
+/// aucun `1.5` littéral hors `FocalMetrics`).
 ///
 /// **Résolution PURE, séparée du rendu** (`Descriptor`, `Equatable`) — le
 /// critère d'acceptation « `isAgentGrammarEnabled == false` ⇒ rendu
