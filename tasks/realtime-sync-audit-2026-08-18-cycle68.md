@@ -246,11 +246,18 @@ ressemble pas à une utilisation.
 | Gate | Résultat |
 |------|----------|
 | Suite `use-reactions-query` | ✅ **77/77** (76 avant, +2 gardes, 1 témoin réécrit) |
-| Suite web complète | ✅ **692/692 suites, 13 453 témoins** verts |
-| Seuils de couverture web (`lines: 42`) | ✅ **60,21 %** lignes, 52,11 % branches, 56,22 % fonctions |
-| `tsc` gateway/shared | ✅ 0 erreur |
+| Suite web complète | ✅ **691/691 suites, 13 426 témoins** verts |
+| Seuils de couverture web (`lines: 42`) | ✅ **60,17 %** lignes (60,21 % avant le retrait du hook mort : **−0,04 pt**) |
+| Suite `ReactionService` gateway | ✅ **77/77** (79 avant, **−2** témoins obsolètes) |
+| **Suite gateway complète** | ✅ **747/747 suites, 18 069 témoins** — **rouge avant** (7 en échec, § 2 quater) |
+| `tsc` gateway | ✅ 0 erreur |
+| `tsc` shared | ✅ 0 erreur |
 | Validité JSON des 4 locales | ✅ |
-| Gateway / iOS / Android | **aucun changement** |
+| iOS / Android | **aucun changement** |
+
+Le delta de témoins gateway se vérifie à l'unité : 18 071 avant (18 064 verts +
+7 rouges) − 2 témoins supprimés = **18 069**, tous verts. Aucun témoin n'a été
+perdu au passage.
 
 **Prérequis d'environnement, à ne pas lire comme une régression** : 26 suites
 web échouent à se CHARGER tant que `packages/shared/dist` n'est pas bâti
