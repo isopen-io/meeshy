@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { isValidEmail } from '../utils/email-validator.js';
+import { usernamePatternSource } from './api-schemas.js';
 
 /**
  * Validation stricte du mot de passe
@@ -50,7 +51,7 @@ export const phoneNumberSchema = z.string()
 export const usernameSchema = z.string()
   .min(3, 'Le nom d\'utilisateur doit contenir au moins 3 caracteres')
   .max(32, 'Le nom d\'utilisateur ne peut pas depasser 32 caracteres')
-  .regex(/^[a-zA-Z0-9_-]+$/, 'Le nom d\'utilisateur ne peut contenir que des lettres, chiffres, tirets et underscores')
+  .regex(new RegExp(usernamePatternSource), 'Le nom d\'utilisateur ne peut contenir que des lettres, chiffres, tirets et underscores')
   .trim();
 
 /**

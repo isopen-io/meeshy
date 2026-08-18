@@ -2994,6 +2994,25 @@ export const loginRequestSchema = {
  */
 export const personNamePatternSource = "^(?=.*\\p{L})[\\p{L}\\p{M}\\s'’ʼ.-]+$";
 
+/**
+ * Nom d'utilisateur : ASCII strict — lettres, chiffres, `-`, `_`. Aucun espace.
+ *
+ * Source unique partagée : consommée telle quelle par Ajv (`pattern` ci-dessous,
+ * et body de `PATCH /users/me/username`) et compilée en RegExp par les schémas
+ * Zod (`utils/validation.ts`, `types/validation.ts`, `types/validation/admin-user.ts`)
+ * ainsi que par `normalizeUsername` (gateway/utils/normalize.ts), pour que toutes
+ * les couches rendent le même verdict.
+ *
+ * Ancré (`^…$`) parce que `pattern` en JSON Schema est une recherche PARTIELLE :
+ * sans ancres, Ajv accepterait `"la lionne noire"` (elle contient `"la"`) là où le
+ * Zod, ancré par construction, la refuse. Même raison que `personNamePatternSource`.
+ *
+ * Miroirs clients : `RegistrationViewModel.isUsernameValidLocally` (iOS),
+ * `SignupFieldValidation.isUsernameValidLocally` (Android). Le charset est ASCII
+ * et NON Unicode : `josé` doit être refusé côté client comme côté serveur.
+ */
+export const usernamePatternSource = "^[a-zA-Z0-9_-]+$";
+
 export const registerRequestSchema = {
   type: 'object',
   required: ['username', 'password', 'firstName', 'lastName', 'email'],
@@ -3002,7 +3021,8 @@ export const registerRequestSchema = {
       type: 'string',
       minLength: 2,
       maxLength: 16,
-      description: 'Unique username (2-16 characters, alphanumeric)'
+      pattern: usernamePatternSource,
+      description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces)'
     },
     password: {
       type: 'string',
