@@ -12,6 +12,13 @@ import {
 const CONV_ID = '507f1f77bcf86cd799439011';
 const USER_ID = '507f1f77bcf86cd799439022';
 
+/**
+ * Le conteneur vivant, énoncé plutôt que sous-entendu : chaque cas ci-dessous
+ * dit dans QUELLE conversation il se place, et les décisions qu'ils décrivent
+ * ne valent que dans celle-là.
+ */
+const OPEN_CONVERSATION = { isActive: true, closedAt: null };
+
 type Row = {
   id: string;
   isActive?: boolean | null;
@@ -52,6 +59,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'create' });
@@ -62,6 +70,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision.participantId).toBeUndefined();
@@ -72,6 +81,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([activeRow('p-active')]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'already-member', participantId: 'p-active' });
@@ -82,6 +92,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([departedRow('p-left')]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'rejoin', participantId: 'p-left' });
@@ -92,6 +103,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([bannedRow('p-banned')]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'banned', participantId: 'p-banned' });
@@ -102,6 +114,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([activeRow('p-active'), bannedRow('p-banned')]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'banned', participantId: 'p-banned' });
@@ -112,6 +125,7 @@ describe('resolveConversationEntry', () => {
       prisma: readerOf([departedRow('p-left'), activeRow('p-active')]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'already-member', participantId: 'p-active' });
@@ -125,6 +139,7 @@ describe('resolveConversationEntry', () => {
       ]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'rejoin', participantId: 'p-recent' });
@@ -138,6 +153,7 @@ describe('resolveConversationEntry', () => {
       ]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'rejoin', participantId: 'p-dated' });
@@ -151,6 +167,7 @@ describe('resolveConversationEntry', () => {
       ]),
       conversationId: CONV_ID,
       userId: USER_ID,
+      conversation: OPEN_CONVERSATION,
     });
 
     expect(decision).toEqual({ outcome: 'rejoin', participantId: 'p-first' });
@@ -158,7 +175,7 @@ describe('resolveConversationEntry', () => {
 
   it('interroge la paire SANS filtrer sur `isActive` — c\'est l\'état lu qui décide, pas le `where`', async () => {
     const reader = readerOf([]);
-    await resolveConversationEntry({ prisma: reader, conversationId: CONV_ID, userId: USER_ID });
+    await resolveConversationEntry({ prisma: reader, conversationId: CONV_ID, userId: USER_ID, conversation: OPEN_CONVERSATION });
 
     expect(reader.calls).toHaveLength(1);
     expect(reader.calls[0]).toEqual({
@@ -177,8 +194,97 @@ describe('resolveConversationEntry', () => {
     };
 
     await expect(
-      resolveConversationEntry({ prisma: reader, conversationId: CONV_ID, userId: USER_ID })
+      resolveConversationEntry({ prisma: reader, conversationId: CONV_ID, userId: USER_ID, conversation: OPEN_CONVERSATION })
     ).rejects.toThrow('mongo down');
+  });
+});
+
+describe("resolveConversationEntry — l'état du conteneur", () => {
+  it('refuse l\'entrée dans une conversation fermée par les écrivains actuels (`closedAt` posé)', async () => {
+    const decision = await resolveConversationEntry({
+      prisma: readerOf([]),
+      conversationId: CONV_ID,
+      userId: USER_ID,
+      conversation: { isActive: false, closedAt: new Date('2026-03-01') },
+    });
+
+    expect(decision).toEqual({ outcome: 'closed' });
+  });
+
+  it('refuse aussi sur `isActive: false` SEUL — les lignes fermées par l\'ancien `leave.ts` n\'ont pas de `closedAt`, et rien ne les rétro-remplit', async () => {
+    const decision = await resolveConversationEntry({
+      prisma: readerOf([]),
+      conversationId: CONV_ID,
+      userId: USER_ID,
+      conversation: { isActive: false, closedAt: null },
+    });
+
+    expect(decision).toEqual({ outcome: 'closed' });
+  });
+
+  it('refuse sur `closedAt` SEUL — la seconde colonne n\'est pas de la ceinture, elle décide quand la première ment', async () => {
+    const decision = await resolveConversationEntry({
+      prisma: readerOf([]),
+      conversationId: CONV_ID,
+      userId: USER_ID,
+      conversation: { isActive: true, closedAt: new Date('2026-03-01') },
+    });
+
+    expect(decision).toEqual({ outcome: 'closed' });
+  });
+
+  it('ne peut RENDRE aucune décision d\'écriture sur un fil terminé — ni `create`, ni `rejoin`, ni `already-member`', async () => {
+    const outcomes = await Promise.all(
+      [[], [activeRow('p1')], [departedRow('p1')], [bannedRow('p1')]].map((rows) =>
+        resolveConversationEntry({
+          prisma: readerOf(rows),
+          conversationId: CONV_ID,
+          userId: USER_ID,
+          conversation: { isActive: false, closedAt: new Date('2026-03-01') },
+        }).then((d) => d.outcome)
+      )
+    );
+
+    expect(outcomes).toEqual(['closed', 'closed', 'closed', 'closed']);
+  });
+
+  it('ne lit AUCUNE ligne `Participant` sur un fil terminé — la question « que faire de la ligne déjà là » ne se pose pas', async () => {
+    const reader = readerOf([departedRow('p1')]);
+
+    await resolveConversationEntry({
+      prisma: reader,
+      conversationId: CONV_ID,
+      userId: USER_ID,
+      conversation: { isActive: false, closedAt: new Date('2026-03-01') },
+    });
+
+    expect(reader.calls).toHaveLength(0);
+  });
+
+  it('reste permissif quand l\'appelant n\'a pas trouvé la conversation — c\'est son 404 à lui, pas un refus d\'entrée', async () => {
+    const decision = await resolveConversationEntry({
+      prisma: readerOf([]),
+      conversationId: CONV_ID,
+      userId: USER_ID,
+      conversation: null,
+    });
+
+    expect(decision).toEqual({ outcome: 'create' });
+  });
+
+  it('CONTRE-ÉPREUVE — un conteneur vivant laisse les quatre décisions intactes', async () => {
+    const outcomes = await Promise.all(
+      [[], [activeRow('p1')], [departedRow('p1')], [bannedRow('p1')]].map((rows) =>
+        resolveConversationEntry({
+          prisma: readerOf(rows),
+          conversationId: CONV_ID,
+          userId: USER_ID,
+          conversation: OPEN_CONVERSATION,
+        }).then((d) => d.outcome)
+      )
+    );
+
+    expect(outcomes).toEqual(['create', 'already-member', 'rejoin', 'banned']);
   });
 });
 

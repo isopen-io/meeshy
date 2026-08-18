@@ -5,6 +5,7 @@ import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { generateNickname } from '../utils/anonymous-nickname';
+import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import {
   errorResponseSchema,
@@ -221,7 +222,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         where: { OR: [{ linkId }, { identifier: linkId }] },
         include: {
           conversation: {
-            select: { id: true, title: true, type: true }
+            select: { id: true, title: true, type: true, isActive: true, closedAt: true }
           }
         }
       });
@@ -233,6 +234,22 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       // 2. Verifications de validite du lien
       if (!shareLink.isActive) {
         return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+      }
+
+      // Et de validite de ce vers quoi il POINTE. Les neuf verifications de
+      // cette section portent toutes sur le LIEN ; aucune ne portait sur la
+      // conversation, et une cloture n'eteint aucun lien de partage. Un lien qui
+      // circule restait donc joignable apres la mort du fil, et l'anonyme y
+      // obtenait un 200, une ligne active, puis une conversation absente de sa
+      // liste et un premier message refuse par `conversationWriteAdmission` —
+      // sans recours, ce participant etant sa seule identite.
+      //
+      // La porte enregistree passe par `resolveConversationEntry`, dont le
+      // parametre `conversation` est requis ; celle-ci est keyee sur un
+      // `User.id` que l'anonyme n'a pas, donc elle appelle le predicat
+      // directement. Meme regle, meme deux colonnes.
+      if (isConversationClosed(shareLink.conversation)) {
+        return sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminee' });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {

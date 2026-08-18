@@ -160,6 +160,10 @@ function createMockPrisma() {
       findFirst: jest.fn<any>(),
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>(),
+      // La branche RÉINTÉGRATION de la jointure par lien passe par `update`
+      // (`REJOIN_PARTICIPANT_STATE`) et non par `create` : sans double, aucun
+      // témoin ne pouvait affirmer qu'elle n'a PAS eu lieu.
+      update: jest.fn<any>(),
     },
     user: {
       findUnique: jest.fn<any>(),
@@ -875,6 +879,68 @@ describe('POST /conversations/join/:linkId', () => {
     expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
+  // Une clôture n'éteint AUCUN lien de partage : les quatre écrivains de
+  // clôture n'écrivent que sur `Conversation`. Le lien survit donc au fil, et
+  // les trois validations de cette route portent toutes sur le LIEN.
+  it('n\'ÉCRIT AUCUNE ligne `Participant` quand la conversation visée est close', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({ conversation: { id: CONV_ID, title: 'Test', type: 'group', isActive: false, closedAt: new Date('2026-03-01') } })
+    );
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Dave', username: 'dave' });
+    const req = makeRequest({ params: { linkId: LINK_ID } });
+
+    await route.handler(req, reply);
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(mockSendError).toHaveBeenCalledWith(reply, 410, expect.any(String));
+  });
+
+  it('refuse aussi sur `isActive: false` seul — le lien reste actif, la conversation non', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({ isActive: true, conversation: { id: CONV_ID, title: 'Test', type: 'group', isActive: false, closedAt: null } })
+    );
+    const req = makeRequest({ params: { linkId: LINK_ID } });
+
+    await route.handler(req, reply);
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(mockSendSuccess).not.toHaveBeenCalled();
+  });
+
+  it('ne RÉINTÈGRE pas non plus un ancien membre dans un fil terminé', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({ conversation: { id: CONV_ID, title: 'Test', type: 'group', isActive: false, closedAt: new Date('2026-03-01') } })
+    );
+    prisma.participant.findMany.mockResolvedValue([
+      { id: PART_ID, isActive: false, bannedAt: null, joinedAt: new Date('2026-01-01') },
+    ]);
+    const req = makeRequest({ params: { linkId: LINK_ID } });
+
+    await route.handler(req, reply);
+
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('CONTRE-ÉPREUVE — une conversation vivante laisse la jointure aboutir', async () => {
+    const { prisma, reply, route } = getJoinRoute();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({ conversation: { id: CONV_ID, title: 'Test', type: 'group', isActive: true, closedAt: null } })
+    );
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Dave', username: 'dave' });
+    prisma.participant.create.mockResolvedValue({});
+    prisma.conversationShareLink.update.mockResolvedValue({});
+    const req = makeRequest({ params: { linkId: LINK_ID } });
+
+    await route.handler(req, reply);
+
+    expect(prisma.participant.create).toHaveBeenCalledTimes(1);
+    expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
   it('accepts identifier as linkId (iOS share link format)', async () => {
     const { prisma, reply, route } = getJoinRoute();
     prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
@@ -1192,5 +1258,43 @@ describe('POST /conversations/:id/invite', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
     expect(reply._body?.data?.message).toContain('charlie');
+  });
+
+  // Le rang de l'inviteur SURVIT à la clôture — fermer une conversation
+  // n'écrit sur AUCUNE ligne `Participant`. L'autorisation seule ne pouvait donc
+  // pas fermer cette porte.
+  it('n\'ÉCRIT AUCUNE ligne `Participant` quand la conversation est close, même pour un créateur', async () => {
+    const { fastify, reply, route } = getInviteRoute();
+    fastify.prisma.conversation.findUnique.mockResolvedValue({
+      ...makeConversation([makeInviterParticipant('creator')]),
+      isActive: false,
+      closedAt: new Date('2026-03-01'),
+    });
+    fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
+    const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
+
+    await route.handler(req, reply);
+
+    expect(fastify.prisma.participant.create).not.toHaveBeenCalled();
+    expect(fastify.prisma.participant.update).not.toHaveBeenCalled();
+    expect(mockSendError).toHaveBeenCalledWith(reply, 410, expect.any(String));
+  });
+
+  it('CONTRE-ÉPREUVE — une conversation vivante laisse l\'invitation aboutir', async () => {
+    const { fastify, reply, route } = getInviteRoute();
+    fastify.prisma.conversation.findUnique.mockResolvedValue({
+      ...makeConversation([makeInviterParticipant('admin')]),
+      isActive: true,
+      closedAt: null,
+    });
+    fastify.prisma.user.findUnique
+      .mockResolvedValueOnce(makeTargetUser())
+      .mockResolvedValueOnce(null);
+    fastify.prisma.participant.create.mockResolvedValue({ id: 'np', user: makeTargetUser() });
+    const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
+
+    await route.handler(req, reply);
+
+    expect(fastify.prisma.participant.create).toHaveBeenCalledTimes(1);
   });
 });
