@@ -219,7 +219,6 @@ export function useReactionsQuery({
 }: UseReactionsQueryOptions) {
   const { t } = useI18n('reactions');
   const queryClient = useQueryClient();
-  const MAX_REACTIONS_PER_USER = 3;
 
   // Restaure EXACTEMENT l'état d'avant la mise à jour optimiste, y compris
   // l'absence d'état. `setQueryData(key, undefined)` ne suffit pas : React Query
@@ -427,11 +426,7 @@ export function useReactionsQuery({
       restoreReactionSnapshot(context?.previousData);
 
       const errorMessage = err instanceof Error ? err.message : 'Failed to add reaction';
-      if (errorMessage.includes('Maximum') && errorMessage.includes('different reactions')) {
-        toast.error(t('maxReactionsReached', { max: MAX_REACTIONS_PER_USER }));
-      } else {
-        toast.error(errorMessage);
-      }
+      toast.error(errorMessage);
     },
   });
 
@@ -504,12 +499,8 @@ export function useReactionsQuery({
     // Vérifier si déjà réagi
     if (userReactions.includes(emoji)) return true;
 
-    // Vérifier la limite
-    if (userReactions.length >= MAX_REACTIONS_PER_USER) {
-      toast.error(t('maxReactionsReached', { max: MAX_REACTIONS_PER_USER }));
-      return false;
-    }
-
+    // Multi-réactions (2026-08-18) : aucun cap client — parité messages/
+    // pièces jointes/posts, le serveur accepte tout emoji distinct.
     try {
       await addMutation.mutateAsync(emoji);
       return true;

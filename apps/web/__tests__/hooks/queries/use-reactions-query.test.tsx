@@ -598,18 +598,22 @@ describe('useReactionsQuery', () => {
     });
   });
 
-  describe('Max Reactions Limit', () => {
-    it('should prevent adding more than max reactions', async () => {
-      const { toast } = require('sonner');
+  describe('Multi-réactions — plus aucun cap client', () => {
+    it('stacks a 4th reaction and emits it (no client cap, parité messages/PJ/posts)', async () => {
+      mockSocketEmit.mockImplementation((event: string, data: unknown, callback?: (r: unknown) => void) => {
+        if (callback) {
+          callback({ success: true });
+        }
+      });
 
-      const stateWithMaxReactions = {
+      const stateWithThreeReactions = {
         reactions: mockReactions,
-        userReactions: ['❤️', '👍', '🎉'], // Already at max (3)
+        userReactions: ['❤️', '👍', '🎉'],
       };
 
       const { wrapper, queryClient } = createWrapperWithClient();
 
-      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], stateWithMaxReactions);
+      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], stateWithThreeReactions);
 
       const { result } = renderHook(
         () => useReactionsQuery({
@@ -624,11 +628,15 @@ describe('useReactionsQuery', () => {
       });
 
       const success = await act(async () => {
-        return await result.current.addReaction('😀'); // Try to add 4th
+        return await result.current.addReaction('😀');
       });
 
-      expect(success).toBe(false);
-      expect(toast.error).toHaveBeenCalled();
+      expect(success).toBe(true);
+      expect(mockSocketEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.REACTION_ADD,
+        { messageId: '507f1f77bcf86cd799439011', emoji: '😀' },
+        expect.any(Function)
+      );
     });
   });
 
@@ -831,34 +839,6 @@ describe('useReactionsQuery', () => {
       });
     });
 
-    it('shows maxReactionsReached toast when server returns maximum error', async () => {
-      const { toast } = jest.requireMock('sonner');
-      const { wrapper, queryClient } = createWrapperWithClient();
-
-      queryClient.setQueryData(['reactions', '507f1f77bcf86cd799439011'], {
-        reactions: [],
-        userReactions: [],
-      });
-
-      mockSocketEmit.mockImplementation((event, payload, callback) => {
-        if (event === CLIENT_EVENTS.REACTION_ADD) {
-          callback({ success: false, error: 'Maximum 3 different reactions per user' });
-        }
-      });
-
-      const { result } = renderHook(
-        () => useReactionsQuery({ messageId: '507f1f77bcf86cd799439011', currentUserId: 'user-1' }),
-        { wrapper }
-      );
-
-      await act(async () => {
-        await result.current.addReaction('🎉');
-      });
-
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalled();
-      });
-    });
   });
 
   describe('removeMutation - optimistic update branches', () => {

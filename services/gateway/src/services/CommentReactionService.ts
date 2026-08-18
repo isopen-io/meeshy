@@ -23,7 +23,7 @@ export interface CommentReactionData {
  * est `true` quand la ligne existait déjà (re-fire idempotent) — aucun changement DB.
  * Le handler s'en sert pour NE PAS re-diffuser `comment:reaction-added` ni re-notifier
  * l'auteur sur un no-op. Miroir de `ReactionService.addReaction`, forme aplatie
- * (`MAX_REACTIONS_PER_USER = 1`). Marqueur transitoire — jamais persisté ni diffusé.
+ * (le modèle commentaire n'a jamais eu de swap). Marqueur transitoire — jamais persisté ni diffusé.
  */
 export type AddCommentReactionResult = CommentReactionData & { readonly unchanged: boolean };
 
@@ -108,22 +108,9 @@ export class CommentReactionService {
       throw new Error('Comment has been deleted');
     }
 
-    const MAX_REACTIONS_PER_USER = 1;
-
-    const userExistingReactions = await this.prisma.commentReaction.findMany({
-      where: {
-        commentId,
-        userId
-      },
-      select: { emoji: true }
-    });
-
-    const uniqueEmojis = new Set(userExistingReactions.map(r => r.emoji));
-
-    if (uniqueEmojis.size >= MAX_REACTIONS_PER_USER && !uniqueEmojis.has(sanitized)) {
-      throw new Error(`Maximum ${MAX_REACTIONS_PER_USER} different reactions per comment reached`);
-    }
-
+    // Multi-réactions (2026-08-18) : plus aucun cap applicatif — la clé
+    // unique DB (commentId, userId, emoji) accepte tout emoji distinct par
+    // utilisateur, à parité avec messages, pièces jointes et posts.
     const existingReaction = await this.prisma.commentReaction.findFirst({
       where: {
         commentId,
