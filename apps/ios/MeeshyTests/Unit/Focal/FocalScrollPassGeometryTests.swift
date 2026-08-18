@@ -68,13 +68,19 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     // =========================================================================
 
     /// Composeur masqué (`contentInset.top == 0`) : le plancher `bandLift`
-    /// empêche la bande de coller au bord bas. `bandLift` vient du miroir GELÉ
-    /// (`FocalFocusCurve.focusBandOffset`), jamais d'un littéral.
+    /// empêche la bande de coller au bord bas. `bandLift` vient du miroir de
+    /// la bande du FIL (`FocalFocusCurve.threadFocusBandOffset` = 150, spec
+    /// §5 « focusY = bas − 150 »), jamais d'un littéral — et jamais la bande
+    /// de la LISTE (140), qui reste à la Lentille.
     func test_focusY_composerHidden_floorsOnBandLift() {
         let focusY = geometry.focusY(viewportHeight: 800, bottomClearance: 0)
         XCTAssertEqual(
-            focusY, 800 - FocalFocusCurve.focusBandOffset, accuracy: Self.epsilon,
-            "FocalPerspectiveGeometry.focusY : composeur masqué ⇒ H − FocalFocusCurve.focusBandOffset (plancher de bande, §4.3)"
+            focusY, 800 - FocalFocusCurve.threadFocusBandOffset, accuracy: Self.epsilon,
+            "FocalPerspectiveGeometry.focusY : composeur masqué ⇒ H − FocalFocusCurve.threadFocusBandOffset (plancher de bande, spec §5)"
+        )
+        XCTAssertEqual(
+            focusY, 800 - 150, accuracy: Self.epsilon,
+            "spec §5 : le plancher de la bande du fil est 150 — pas le 140 de la liste"
         )
     }
 
@@ -129,12 +135,12 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     // §4.3 — Échelle / opacité : DÉLÉGUÉES au miroir gelé, jamais recalculées
     // =========================================================================
 
-    /// L'ÉCHELLE ne se réécrit JAMAIS : pour une même distance, le transform
-    /// du pass doit rendre exactement `FocalFocusCurve.focusCurve(_, .thread)`.
-    /// L'ALPHA, lui, n'est PLUS un effet de distance — décision produit
-    /// 2026-08-16 (« enlever l'effet transparent sur les bulles ») : il reste
-    /// au plafond quelle que soit la distance.
-    func test_transform_delegatesScaleToTheFrozenCurve_alphaStaysAtCeiling() {
+    /// L'ÉCHELLE et l'ALPHA ne se réécrivent JAMAIS : pour une même distance,
+    /// le transform du pass doit rendre exactement
+    /// `FocalFocusCurve.focusCurve(_, .thread)` — fondu de distance COMPRIS
+    /// (rétabli 2026-08-18 par le réancrage sur la spec §5 : `alpha =
+    /// min(plafond, 1 − 0.82f)`, plancher 0.18).
+    func test_transform_delegatesScaleAndAlphaToTheFrozenCurve() {
         for distance in [CGFloat(0), 60, 190, 379, 380, 900] {
             let expected = FocalFocusCurve.focusCurve(distance: distance, variant: .thread)
             let transform = geometry.transform(
@@ -146,11 +152,13 @@ final class FocalScrollPassGeometryTests: XCTestCase {
             )
             XCTAssertEqual(
                 transform.scale, expected.scale, accuracy: Self.epsilon,
-                "FocalPerspectiveGeometry.transform (d=\(distance)) doit rendre l'échelle du miroir GELÉ FocalFocusCurve.focusCurve(.thread) — aucune constante recopiée"
+                "FocalPerspectiveGeometry.transform (d=\(distance)) doit rendre l'échelle du miroir FocalFocusCurve.focusCurve(.thread) — aucune constante recopiée"
             )
             XCTAssertEqual(
-                transform.alpha, FocalPassConstants.opaqueAlphaCeiling, accuracy: Self.epsilon,
-                "décision produit 2026-08-16 : AUCUN fondu de distance — la profondeur est portée par l'échelle seule, l'alpha reste au plafond (d=\(distance))"
+                transform.alpha,
+                min(FocalPassConstants.opaqueAlphaCeiling, expected.alpha),
+                accuracy: Self.epsilon,
+                "spec §5 (réancrée 2026-08-18) : alpha = min(plafond, alpha de la courbe) — le fondu de distance est RÉTABLI (d=\(distance))"
             )
         }
     }
@@ -186,19 +194,15 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     ///     0.8 = 1 − scaleDecay · d/maxDistance
     ///     d   = maxDistance · (1 − 0.8) / scaleDecay
     ///
-    /// Sous la loi AMENDÉE (`maxDistance = 520`, `scaleDecay = 0.38`, revue
-    /// REV-1, miroir de `FOCUS_CURVE_CONSTANTS.thread`) :
-    /// `d = 520 · 0.2 / 0.38 = 273.684210…`, et `f = d/520 = 0.526315…`,
-    /// `s = 1 − 0.38 · 0.526315… = 0.8` ✓.
-    ///
-    /// Sous la loi PRÉCÉDENTE (`380` / `0.40`), la même équation donnait
-    /// `d = 380 · 0.2 / 0.40 = 190` — le littéral que ce fichier portait, et
-    /// dont `0612c8ca` a fait tomber la pré-condition (à `d = 190`, la loi
-    /// amendée rend `f = 0.365384…` et `s = 0.861153…`, pas `0.8`).
+    /// Sous la loi SPEC (`maxDistance = 380`, `scaleDecay = 0.40` — spec
+    /// « Focal Grandeur Nature » §5, réancrée 2026-08-18, miroir de
+    /// `FOCUS_CURVE_CONSTANTS.thread`) : `d = 380 · 0.2 / 0.40 = 190`,
+    /// `f = 190/380 = 0.5`, `s = 1 − 0.40 · 0.5 = 0.8` ✓ — le cas coté
+    /// retombe exactement sur le `190` historique du contrat.
     ///
     /// Écrite en formule plutôt qu'en nombre : garde R15, l'attendu se dérive
-    /// du miroir, jamais posé en dur — et un prochain amendement des
-    /// constantes n'aura pas à rouvrir ce fichier.
+    /// du miroir, jamais posé en dur — c'est ce qui a laissé ce test vert à
+    /// travers DEUX amendements de la loi (`380→520` puis `520→380`).
     private static let distanceForScale080: CGFloat =
         FocalFocusCurve.threadMaxDistance * (0.2 / FocalFocusCurve.threadScaleDecay)
 
@@ -299,28 +303,21 @@ final class FocalScrollPassGeometryTests: XCTestCase {
     /// donc recalculé, jamais relâché — et la MAGNITUDE est asserted comme
     /// avant, pas seulement le signe.
     ///
-    /// **Le calcul, à la main, depuis la loi amendée.**
+    /// **Le calcul, à la main, depuis la loi spec.**
     ///
-    /// 1. Distance : `d = distanceForScale080 = 520 · 0.2 / 0.38 = 273.684210…`
-    /// 2. Facteur  : `f = min(1, d/520) = 0.526315…`
-    /// 3. Échelle  : `s = 1 − 0.38 · f = 0.80`, donc `shrink = 1 − s = 0.20`
-    /// 4. Pivot    : `0.5 − threadHorizontalPivot = 0.5 − 0.18 = 0.32`
-    /// 5. `|tx| = w · 0.32 · shrink = 320 · 0.32 · 0.20 = `**`20.48`**
+    /// 1. Distance : `d = distanceForScale080 = 380 · 0.2 / 0.40 = 190`
+    /// 2. Facteur  : `f = min(1, d/380) = 0.5`
+    /// 3. Échelle  : `s = 1 − 0.40 · f = 0.80`, donc `shrink = 1 − s = 0.20`
+    /// 4. Pivot    : `0.5 − threadHorizontalPivot = 0.5 − 0.16 = 0.34`
+    /// 5. `|tx| = w · 0.34 · shrink = 320 · 0.34 · 0.20 = `**`21.76`**
     ///
-    /// À comparer à l'ancien attendu `32` = `(w/2) · shrink` = `160 · 0.20`,
-    /// qui pivotait autour du bord GAUCHE (0 %) : la rangée s'effondrait vers
-    /// l'extrême bord au lieu de se contracter vers sa colonne d'avatar.
-    /// L'écart `32 → 20.48` EST la transposition du pivot, pas une tolérance
-    /// élargie.
-    ///
-    /// **Pourquoi le nombre ET la formule.** `threadHorizontalPivot` est la
-    /// seule constante de `FocalFocusCurve` qui n'ait PAS de contrepartie dans
-    /// `packages/shared/utils/focus-curve.ts` : le pivot est une cote de
-    /// cinématique, pas de courbe, et son domicile normatif est la maquette
-    /// (`docs/design/2026-08-15-conversation-modes-verdict.html:492`,
-    /// `transformOrigin = "18% bottom"`). Les deux assertions n'ancrent donc
-    /// pas au même endroit — le `20.48` tient la production à la MAQUETTE, la
-    /// formule la tient au MIROIR — et il faut les deux : la formule seule
+    /// **Pourquoi le nombre ET la formule.** Le pivot est une cote de
+    /// cinématique, pas de courbe ; son domicile normatif est désormais la
+    /// SPEC (`docs/design/2026-08-15-focal-spec-integration.html` §5,
+    /// `anchorPoint (0.16, 1.0)` — réancrée 2026-08-18, remplace le
+    /// `18% bottom` de la maquette vol. 3). Les deux assertions n'ancrent
+    /// donc pas au même endroit — le `21.76` tient la production à la SPEC,
+    /// la formule la tient au MIROIR — et il faut les deux : la formule seule
     /// laisserait passer un miroir qu'on aurait éloigné de la référence, le
     /// nombre seul laisserait passer une géométrie qui aurait cessé de lire le
     /// miroir. Aucune n'est redondante.
@@ -334,10 +331,10 @@ final class FocalScrollPassGeometryTests: XCTestCase {
         let centered = geometry.transform(distance: distance, cellSize: size, horizontalAnchor: .center,
                                           isRightToLeft: false, alphaCeiling: FocalPassConstants.opaqueAlphaCeiling)
 
-        // 320 · (0.5 − 0.18) · 0.20 — cf. le calcul détaillé ci-dessus.
-        XCTAssertEqual(ltr.translation.width, -20.48, accuracy: Self.epsilon,
-                       "FocalPerspectiveGeometry.transform : tx = −w·(0.5 − pivot)·(1−s) en LTR (§4.3, pivot 18 % de la maquette)")
-        XCTAssertEqual(rtl.translation.width, 20.48, accuracy: Self.epsilon,
+        // 320 · (0.5 − 0.16) · 0.20 — cf. le calcul détaillé ci-dessus.
+        XCTAssertEqual(ltr.translation.width, -21.76, accuracy: Self.epsilon,
+                       "FocalPerspectiveGeometry.transform : tx = −w·(0.5 − pivot)·(1−s) en LTR (spec §5, anchorPoint x = 0.16)")
+        XCTAssertEqual(rtl.translation.width, 21.76, accuracy: Self.epsilon,
                        "FocalPerspectiveGeometry.transform : tx = +w·(0.5 − pivot)·(1−s) en RTL (§4.3)")
         XCTAssertEqual(centered.translation.width, 0, accuracy: Self.epsilon,
                        "FocalPerspectiveGeometry.transform : tx = 0 pour l'ancre .center (§4.3)")
@@ -379,10 +376,11 @@ final class FocalScrollPassGeometryTests: XCTestCase {
                        "§4.4 : le plafond d'alpha ne touche JAMAIS l'échelle")
     }
 
-    /// Loin au-dessus de la bande, le plafond reste la SEULE loi d'alpha —
-    /// décision produit 2026-08-16 : la distance n'estompe plus rien, une
-    /// rangée optimiste reste à 0,7 (état d'envoi), une confirmée à 1.
-    func test_alphaCeiling_farFromBand_ceilingStillHolds() {
+    /// Loin au-dessus de la bande, c'est la COURBE qui domine le plafond —
+    /// `alpha = min(0.7, 1 − 0.82f)` (spec §5, fondu rétabli 2026-08-18) :
+    /// à `d = 380`, la courbe rend son plancher 0.18 < 0.7. Le plafond ne
+    /// RELÈVE jamais une rangée estompée par la distance.
+    func test_alphaCeiling_farFromBand_curveDominatesTheCeiling() {
         let transform = geometry.transform(
             distance: 380,
             cellSize: CGSize(width: 320, height: 100),
@@ -390,8 +388,9 @@ final class FocalScrollPassGeometryTests: XCTestCase {
             isRightToLeft: false,
             alphaCeiling: FocalPassConstants.optimisticAlphaCeiling
         )
-        XCTAssertEqual(transform.alpha, FocalPassConstants.optimisticAlphaCeiling, accuracy: Self.epsilon,
-                       "décision produit 2026-08-16 : loin de la bande, l'alpha reste au plafond — plus aucun fondu de distance")
+        let curve = FocalFocusCurve.focusCurve(distance: 380, variant: .thread)
+        XCTAssertEqual(transform.alpha, curve.alpha, accuracy: Self.epsilon,
+                       "spec §5 : alpha = min(plafond optimiste, alpha de la courbe) — loin de la bande, la courbe (0.18) domine le plafond (0.7)")
     }
 
     /// Le plafond par défaut (rangée confirmée) est l'opacité pleine.
@@ -470,29 +469,37 @@ final class FocalScrollPassGeometryTests: XCTestCase {
         )
     }
 
-    /// Hystérésis : le courant garde la main tant qu'il reste dans la bande,
-    /// dont la demi-hauteur vient du miroir GELÉ (`focusBandHalfHeight`).
+    /// Hystérésis : le courant garde la main tant qu'il reste dans la bande
+    /// du FIL, dont la demi-hauteur vient du miroir
+    /// (`threadFocusBandHysteresis` = 95, spec §5 / recette §7 « sans
+    /// oscillation entre deux rangées (hystérésis 95 px) » — plus jamais le
+    /// 45 de la bande de la LISTE, qui faisait trembler l'élection entre deux
+    /// rangées hautes).
     func test_election_currentKeepsFocusInsideTheHysteresisBand() {
         let focusY = geometry.focusY(viewportHeight: 800, bottomClearance: 0)
         let candidates = [
-            FocalFocusCurve.RowCandidate(id: "m1", midY: focusY + FocalFocusCurve.focusBandHalfHeight),
+            FocalFocusCurve.RowCandidate(id: "m1", midY: focusY + FocalFocusCurve.threadFocusBandHysteresis),
             FocalFocusCurve.RowCandidate(id: "m2", midY: focusY - 1)
         ]
         XCTAssertEqual(
             geometry.electFocus(candidates: candidates, focusY: focusY, current: "m1"), "m1",
-            "hystérésis (§3.4) : le courant garde le focus à la borne INCLUSIVE ±FocalFocusCurve.focusBandHalfHeight — sinon la carte tremble au défilement"
+            "hystérésis (spec §5) : le courant garde le focus à la borne INCLUSIVE ±FocalFocusCurve.threadFocusBandHysteresis — sinon la carte tremble au défilement"
+        )
+        XCTAssertEqual(
+            FocalFocusCurve.threadFocusBandHysteresis, 95, accuracy: Self.epsilon,
+            "recette §7 : l'hystérésis du fil est 95 px — 45 est la demi-bande de la LISTE (Lentille), pas du fil"
         )
     }
 
     func test_election_currentLosesFocusOutsideTheHysteresisBand() {
         let focusY = geometry.focusY(viewportHeight: 800, bottomClearance: 0)
         let candidates = [
-            FocalFocusCurve.RowCandidate(id: "m1", midY: focusY + FocalFocusCurve.focusBandHalfHeight + 1),
+            FocalFocusCurve.RowCandidate(id: "m1", midY: focusY + FocalFocusCurve.threadFocusBandHysteresis + 1),
             FocalFocusCurve.RowCandidate(id: "m2", midY: focusY - 10)
         ]
         XCTAssertEqual(
             geometry.electFocus(candidates: candidates, focusY: focusY, current: "m1"), "m2",
-            "hystérésis (§3.4) : hors bande, le plus proche reprend la carte"
+            "hystérésis (spec §5) : hors bande, le plus proche reprend la carte"
         )
     }
 
@@ -826,8 +833,8 @@ final class FocalScrollPassWriteTests: XCTestCase {
                        "FocalScrollPass.apply doit écrire l'échelle de FocalFocusCurve.focusCurve(.thread) dans m11")
         XCTAssertEqual(target.layer.transform.m22, expected.scale, accuracy: 0.0001,
                        "FocalScrollPass.apply doit écrire la même échelle en Y (échelle pure, symétrique en signe — elle traverse l'inversion parentale, §4.3)")
-        XCTAssertEqual(target.alpha, 1, accuracy: 0.0001,
-                       "décision produit 2026-08-16 : plus aucun fondu de distance — l'alpha d'une rangée confirmée reste 1, seule l'échelle porte la profondeur")
+        XCTAssertEqual(target.alpha, expected.alpha, accuracy: 0.0001,
+                       "spec §5 (réancrée 2026-08-18) : le fondu de distance est RÉTABLI — l'alpha écrit est celui de la courbe gelée (min avec le plafond, ici 1)")
         XCTAssertEqual(
             target.layer.transform.m42,
             -(target.bounds.height / 2) * (1 - expected.scale),

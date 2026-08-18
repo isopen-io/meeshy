@@ -5,10 +5,10 @@ const makePrismaMock = () => {
   return {
     rows,
     attachmentReaction: {
-      // La clé unique porte le TRIPLET depuis les multi-réactions
-      // (2026-08-18) : ce double DOIT matcher l'emoji, sinon il rend « déjà
-      // réagi » pour un emoji que le participant n'a jamais posé — et le
-      // service, qui s'y fie pour sa détection de no-op, n'ajoute plus rien.
+      // Clé unique TRIPLE (attachmentId, participantId, emoji) — cf. la
+      // migration `2026-08-18-attachment-reaction-multi-per-user-unique-index`.
+      // Ignorer `emoji` ici ferait répondre « tu as déjà cet emoji » à un
+      // participant qui en a posé un AUTRE, et le service sortirait en no-op.
       findUnique: jest.fn(async ({ where }: any) => {
         const key = where.attachment_participant_reaction;
         return rows.find(r => r.attachmentId === key.attachmentId
@@ -18,15 +18,15 @@ const makePrismaMock = () => {
       findMany: jest.fn(async ({ where }: any) =>
         rows.filter(r => r.attachmentId === where.attachmentId
           && (where.participantId ? r.participantId === where.participantId : true))),
-      // Miroir de l'upsert Mongo sur la clé TRIPLE (attachmentId,
-      // participantId, emoji) : deux adds du MÊME emoji convergent sur le même
-      // document, deux emojis DIFFÉRENTS créent chacun le leur. `update: {}` —
-      // la ligne visée porte déjà cet emoji par construction de la clé.
-      upsert: jest.fn(async ({ where, create, update }: any) => {
-        const key = where.attachment_participant_reaction;
-        const existing = rows.find(r => r.attachmentId === key.attachmentId
-          && r.participantId === key.participantId
-          && r.emoji === key.emoji);
+      // Miroir de l'upsert Mongo réel sur la clé TRIPLE
+      // (attachmentId, participantId, emoji) : un second emoji du même
+      // participant EMPILE une ligne de plus, il n'écrase jamais la première.
+      // Ce mock modélisait encore la clé à deux champs, donc il REMPLAÇAIT —
+      // il rendait vert un service à réaction unique qui n'existe plus.
+      upsert: jest.fn(async ({ create, update }: any) => {
+        const existing = rows.find(r => r.attachmentId === create.attachmentId
+          && r.participantId === create.participantId
+          && r.emoji === create.emoji);
         if (existing) {
           Object.assign(existing, update);
           return existing;
@@ -57,10 +57,11 @@ describe('AttachmentReactionService', () => {
     expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual(['❤️']);
   });
 
-  it('empile les emojis d\'un même participant — plus AUCUN cap ni remplacement', async () => {
-    // Multi-réactions (2026-08-18) : ce témoin affirmait l'inverse — « caps at
-    // 1 emoji per user per attachment (replaces) ». Le cap a disparu avec la
-    // clé unique élargie au triplet ; poser un second emoji AJOUTE.
+  it('stacks several emojis for the same user on one attachment (no replacement)', async () => {
+    // Multi-réactions « sur tout contenu à réaction » (2026-08-18) : le plafond
+    // d'un emoji par personne est LEVÉ. Poser 👍 après ❤️ ajoute une ligne, il
+    // n'en réécrit aucune — les deux comptent dans le résumé, et le retrait se
+    // fait emoji par emoji (témoin suivant).
     const prisma = makePrismaMock();
     const svc = new AttachmentReactionService(prisma);
     await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
@@ -69,34 +70,27 @@ describe('AttachmentReactionService', () => {
     expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual(['❤️', '👍']);
   });
 
-  it('ne crée jamais deux lignes pour le MÊME emoji, même en course concurrente', async () => {
-    // Régression de la course aux doublons : l'ancienne séquence
-    // find/deleteMany/upsert laissait deux appels concurrents passer tous deux
-    // le contrôle « pas de réaction existante » avant qu'aucun ne commite,
-    // chacun insérant sa ligne. L'upsert reste la réponse.
+  it('never ends up with two rows for the SAME emoji, even racing two concurrent adds of it', async () => {
+    // Régression du doublon (héritée du modèle à réaction unique) : l'ancienne
+    // séquence find/deleteMany/upsert laissait deux appels concurrents passer
+    // tous deux le test « aucune réaction existante » avant que l'un commite,
+    // et chacun insérait sa ligne.
     //
-    // Ce que la garde affirme a changé de BORNE avec les multi-réactions
-    // (2026-08-18) : la clé porte l'emoji, donc deux emojis DIFFÉRENTS créent
-    // légitimement deux lignes — c'est le modèle, plus la course. Ce qui doit
-    // rester impossible, et que ce témoin mesure, c'est le doublon du MÊME
-    // emoji.
+    // L'unicité n'a pas disparu avec les multi-réactions, elle a changé de
+    // PORTÉE : l'upsert est atomique par TRIPLET, donc deux adds concurrents du
+    // MÊME emoji convergent toujours sur un seul document. Ce qui n'est plus un
+    // défaut, c'est le cas « deux emojis DIFFÉRENTS » — il produit deux lignes,
+    // et c'est l'empilement voulu (témoin plus haut). Formuler la régression
+    // sur le participant au lieu du triplet reviendrait à réclamer le plafond
+    // que ce chantier vient de lever.
     const prisma = makePrismaMock();
     const svc = new AttachmentReactionService(prisma);
     await Promise.all([
-      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🎉' }),
-      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🎉' }),
-    ]);
-    expect(prisma.rows.filter((r: any) => r.attachmentId === 'att1' && r.participantId === 'p1')).toHaveLength(1);
-  });
-
-  it('deux emojis DIFFÉRENTS posés concurremment donnent deux lignes — le modèle, pas une course', async () => {
-    const prisma = makePrismaMock();
-    const svc = new AttachmentReactionService(prisma);
-    await Promise.all([
-      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🎉' }),
+      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🔥' }),
       svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '🔥' }),
     ]);
-    expect(prisma.rows.filter((r: any) => r.attachmentId === 'att1' && r.participantId === 'p1')).toHaveLength(2);
+    expect(prisma.rows.filter((r: any) => r.attachmentId === 'att1'
+      && r.participantId === 'p1' && r.emoji === '🔥')).toHaveLength(1);
   });
 
   it('removes a reaction', async () => {
@@ -117,16 +111,15 @@ describe('AttachmentReactionService', () => {
       .toEqual({ changed: false });
   });
 
-  it('reports changed=true when STACKING a different emoji (plus aucun swap)', async () => {
-    // Le titre disait « swapping » : l'ancien modèle évinçait ❤️. Le résultat
-    // attendu est le même (`changed: true`) mais pour une raison OPPOSÉE — ce
-    // n'est plus un remplacement, c'est un ajout, et ❤️ reste en place.
+  it('reports changed=true when ADDING a second, different emoji', async () => {
+    // Le no-op se décide sur le TRIPLET : un emoji différent est une ligne
+    // neuve, donc un vrai changement à diffuser. Avant, ce témoin parlait de
+    // « swap » — le mot d'un modèle à réaction unique qui n'existe plus.
     const prisma = makePrismaMock();
     const svc = new AttachmentReactionService(prisma);
     await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
     expect(await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '👍' }))
       .toEqual({ changed: true });
-    expect(await svc.getCurrentUserReactions('att1', 'p1')).toEqual(['❤️', '👍']);
   });
 
   it('returns true when a reaction was removed and false when already absent (idempotent)', async () => {

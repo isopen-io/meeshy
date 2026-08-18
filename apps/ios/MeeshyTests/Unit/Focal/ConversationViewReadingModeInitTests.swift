@@ -21,6 +21,20 @@ import MeeshySDK
 /// aucun test ci-dessous ne construit `ConversationView` (raison détaillée
 /// plus bas), donc rien ici ne dépendait de la valeur réelle du drapeau.
 ///
+/// **I-075 RETIRÉ le 2026-08-18 (décision produit) — la note historique
+/// redevient vraie.** Le paragraphe ci-dessus décrit l'état du code entre le
+/// 2026-08-16 et le 2026-08-18, conservé pour l'historique. L'étage bêta
+/// n'étant plus consulté que si la préférence est EXPLICITEMENT exprimée, et
+/// ce process de test n'ayant jamais rien écrit au vrai domaine,
+/// `MeeshyFeatureFlags.isReadingModesEnabled` y vaut de nouveau `false` —
+/// preuve injectable équivalente : `FeatureFlagGateTests
+/// .test_isReadingModesEnabled_injectable_defaultsToFalse_afterBetaCascadeWithdrawal`
+/// (le témoin cité ci-dessus, retourné et renommé par ce lot). TOUJOURS sans
+/// conséquence pour CE fichier, et pour la même raison qu'en 2026-08-16 :
+/// aucun test ci-dessous ne construit `ConversationView`, donc aucun ne
+/// dépend de la valeur réelle du drapeau — c'est bien pourquoi ce fichier
+/// n'a QUE sa docstring à amender.
+///
 /// **Ce que cette suite NE reprouve PAS** : la décision « 4 branches + choix
 /// collant qui PRIME + drapeau OFF » est la loi GELÉE
 /// `ReadingModeOrchestrator.resolveOrchestratorDecision`

@@ -146,6 +146,48 @@ const CONVERSATION_SUBTITLE_TYPES = new Set([
   'message_reaction',
 ]);
 
+/** Longueur au-delà de laquelle une bannière iOS 3 lignes coupe de toute façon. */
+const PUSH_SUBTITLE_MAX_LENGTH = 120;
+const PUSH_SUBTITLE_SEPARATOR = ' · ';
+
+/** Forme comparable d'un libellé : sans accents, sans casse, espaces normalisés. */
+function normalizeForCoverage(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Compose le sous-titre de bannière à partir de l'action (« a commenté un
+ * réel ») et du sous-titre d'entité persisté (« Publication de Windie Nh »,
+ * « Votre publication : « aperçu » »).
+ *
+ * L'entité est de la forme `<tête>` éventuellement suivie d'un détail après
+ * ` : ` (aperçu texte) ou ` · ` (résumé média). Quand l'action ÉNONCE DÉJÀ la
+ * tête — « a commenté votre publication » couvre « Votre publication » — la
+ * répéter n'apprendrait rien au lecteur : on ne garde alors que le détail,
+ * qui lui est neuf. La comparaison est faite sur une forme normalisée, donc
+ * insensible à la casse et aux accents.
+ *
+ * Exporté pour les tests — pur et sans effet de bord.
+ */
+export function composePushSubtitle(
+  action?: string | null,
+  entitySubtitle?: string | null,
+): string | undefined {
+  const act = action?.trim() ?? '';
+  const entity = entitySubtitle?.trim() ?? '';
+  if (act === '') return entity === '' ? undefined : entity.slice(0, PUSH_SUBTITLE_MAX_LENGTH);
+  if (entity === '') return act.slice(0, PUSH_SUBTITLE_MAX_LENGTH);
+
+  const split = entity.match(/^(.*?) [:·] (.*)$/s);
+  const head = split ? split[1].trim() : entity;
+  const detail = split ? split[2].trim() : '';
+  const alreadySaid = normalizeForCoverage(act).includes(normalizeForCoverage(head));
+
+  const complement = alreadySaid ? detail : entity;
+  const composed = complement === '' ? act : `${act}${PUSH_SUBTITLE_SEPARATOR}${complement}`;
+  return composed.slice(0, PUSH_SUBTITLE_MAX_LENGTH);
+}
+
 export function buildPushHeader(input: {
   type: string;
   customTitle?: string;
@@ -154,6 +196,18 @@ export function buildPushHeader(input: {
     conversationType?: string | null;
     conversationTitle?: string | null;
   };
+  /**
+   * Fragment d'action localisé, SANS l'acteur (« a commenté un réel ») —
+   * `NotificationDisplay.action`. Présent pour les notifications sociales,
+   * `null` pour les messages / appels / système.
+   *
+   * Il existe parce qu'iOS réécrit le titre d'une Communication Notification
+   * avec le `displayName` de l'`INPerson` expéditeur : le titre riche persisté
+   * n'atteindrait jamais l'écran. L'action passe donc par le subtitle.
+   */
+  action?: string | null;
+  /** Sous-titre d'entité persisté (cible du geste), quand la ligne en porte un. */
+  entitySubtitle?: string | null;
 }): { title: string; subtitle: string | undefined } {
   const isMessage = CONVERSATION_SUBTITLE_TYPES.has(input.type);
   const conversationType = input.context.conversationType?.trim() || '';
@@ -168,9 +222,13 @@ export function buildPushHeader(input: {
   // renommage local (customName) sont résolus CÔTÉ CLIENT (NSE + toast), en
   // Local-First, depuis les préférences locales (cf. ConversationSnapshot App
   // Group). Le gateway ne recompose pas la présentation systématiquement.
-  const subtitle = isGroupMessage && conversationTitle !== ''
+  const conversationSubtitle = isGroupMessage && conversationTitle !== ''
     ? conversationTitle
     : undefined;
+
+  // Ordre : action sociale composée → cible explicite → nom de conversation.
+  const subtitle = composePushSubtitle(input.action, input.entitySubtitle)
+    ?? conversationSubtitle;
 
   return { title, subtitle };
 }
@@ -921,7 +979,14 @@ export class NotificationService {
       // `notification:new` when socket is foreground-connected) needs the same
       // `title`/`subtitle` framing as the native iOS banner so the user sees
       // "<sender> · <conversation>" + body details consistently on both paths.
-      const { title: pushTitle, subtitle: derivedSubtitle } = buildPushHeader({
+      //
+      // `action` + `entitySubtitle` : le titre riche persisté (« elvira ndjiki
+      // a commenté un réel ») ne peut PAS servir de titre de bannière — iOS le
+      // réécrit avec le displayName de l'INPerson sur le chemin Communication
+      // Notification. L'action voyage donc en subtitle, seul champ que le
+      // client peut rendre sous le nom, et la cible s'y ajoute quand elle
+      // apprend quelque chose de plus (cf. `composePushSubtitle`).
+      const { title: pushTitle, subtitle: pushSubtitle } = buildPushHeader({
         type: params.type,
         customTitle: params.title,
         actor: params.actor,
@@ -929,13 +994,9 @@ export class NotificationService {
           conversationType: params.context.conversationType,
           conversationTitle: params.context.conversationTitle,
         },
+        action: display.action,
+        entitySubtitle: persistedSubtitle,
       });
-      // Explicit subtitle (e.g. comment preview for reactions) overrides the
-      // type-based derivation. Trim to keep the iOS banner readable —
-      // anything past ~120 chars on a 3-line banner gets cut anyway.
-      const pushSubtitle = (params.subtitle && params.subtitle.trim() !== '')
-        ? params.subtitle.trim().slice(0, 120)
-        : derivedSubtitle;
 
       // Socket.IO payload carries `title`/`subtitle` so the iOS in-app toast
       // can render sender + conversation context without having to re-derive

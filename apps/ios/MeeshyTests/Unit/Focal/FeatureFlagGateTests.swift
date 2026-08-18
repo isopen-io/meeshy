@@ -12,6 +12,13 @@ import XCTest
 /// ⇒ toute décision rend `.bubbles` » (le mode de repli, contrat
 /// §3.1 `.bubbleLegacy` — RE-PREUVE : rawValue identique, nom de cas réel
 /// `.bubbles` sur la loi gelée).
+///
+/// **I-075 RETIRÉ le 2026-08-18 (décision produit)** — la cascade bêta
+/// SUBSISTE (donc la délégation reste ce que ce fichier prouve), mais son
+/// étage 3 n'est plus consulté que si la préférence bêta est EXPLICITEMENT
+/// exprimée : absence de toute clé ⇒ OFF. Un seul témoin de délégation
+/// changeait de verdict, il est retourné et documenté sur place ; les
+/// témoins « env prime » et « clé explicite » sont INCHANGÉS.
 @MainActor
 final class FeatureFlagGateTests: XCTestCase {
 
@@ -21,18 +28,37 @@ final class FeatureFlagGateTests: XCTestCase {
 
     // MARK: - Délégation, pas de duplication
 
-    /// I-075 (second amendement) — la délégation PORTE la cascade bêta :
-    /// `defaults`/`environment` fraîches ⇒ `true` (pas `false`), puisque
-    /// `LentilleFeatureFlag.readingModes` replie sur `BetaFeaturesPreference
-    /// .isEnabled` (défaut ON) quand sa propre clé n'a jamais été posée.
-    /// Témoin discriminant de la délégation : si `MeeshyFeatureFlags
-    /// .isReadingModesEnabled` recalculait sa propre résolution au lieu de
-    /// déléguer, ce test resterait vert par coïncidence — la paire avec
-    /// `test_isReadingModesEnabled_injectable_matchesUnderlyingFlagForSameInputs`
-    /// (égalité stricte avec `LentilleFeatureFlag.readingModes.isEnabled`)
-    /// referme cette échappatoire.
-    func test_isReadingModesEnabled_injectable_defaultsToTrue_viaBetaCascade() {
+    /// I-075 RETIRÉ le 2026-08-18 (décision produit) — la délégation porte
+    /// désormais le RETRAIT : `defaults`/`environment` fraîches ⇒ `false`.
+    ///
+    /// AVANT (2026-08-16 → 2026-08-18), ce témoin s'appelait
+    /// `…_defaultsToTrue_viaBetaCascade` et affirmait `XCTAssertTrue` sur ce
+    /// décor EXACT, au motif que `readingModes` repliait sur
+    /// `BetaFeaturesPreference.isEnabled` (défaut ON) quand sa propre clé
+    /// n'avait jamais été posée. L'étage bêta n'est plus consulté que si la
+    /// préférence est EXPRIMÉE — ici elle ne l'est pas, donc OFF.
+    ///
+    /// La paire discriminante survit au retrait, mais elle est REDISTRIBUÉE :
+    /// ce test-ci resterait vert même si `MeeshyFeatureFlags` recalculait sa
+    /// propre résolution (`defaults.bool` rendrait `false` lui aussi). Ce
+    /// sont `…_matchesUnderlyingFlagForSameInputs` (égalité stricte) et le
+    /// témoin d'opt-in ci-dessous — que SEULE une vraie délégation peut
+    /// satisfaire — qui referment l'échappatoire.
+    func test_isReadingModesEnabled_injectable_defaultsToFalse_afterBetaCascadeWithdrawal() {
         let defaults = makeIsolatedDefaults()
+        XCTAssertFalse(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
+    }
+
+    /// Témoin d'opt-in de la délégation : la bêta EXPLICITEMENT activée
+    /// suffit encore à allumer les modes de lecture À TRAVERS
+    /// `MeeshyFeatureFlags`. Discriminant vis-à-vis d'une implémentation qui
+    /// aurait dupliqué la résolution en `defaults.bool(forKey:)` — celle-ci
+    /// rendrait `false` ici, la clé `meeshy.flag.reading_modes` n'étant
+    /// jamais posée.
+    func test_isReadingModesEnabled_injectable_betaExplicitlyOn_returnsTrue() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+
         XCTAssertTrue(MeeshyFeatureFlags.isReadingModesEnabled(defaults: defaults, environment: [:]))
     }
 

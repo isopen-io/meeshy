@@ -50,7 +50,21 @@
     --secondary: 220 14.3% 95.9%;
     --secondary-foreground: 220.9 39.3% 11%;
     --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
+    /* Q142-a (2026-08-18, tranchée) — assombri d'un cran (L 46.1 → 45,
+       même teinte/saturation) : sur `--secondary` (fond de la focus card
+       Lentille, WL-108/L11), la paire mesurait 4,393:1, sous les 4,5:1 AA
+       texte normal — voir
+       apps/web/__tests__/a11y/lentille-added-surfaces-contrast-aa.test.ts.
+       Nouveaux ratios : 4,567:1 sur `--secondary`, 5,024:1 sur
+       `--background` (contre 4,830:1 avant — amélioration, jamais de
+       régression : dans TOUT le dépôt, `--muted-foreground` n'est peint
+       QU'EN TEXTE sur des fonds clairs du thème clair — `--background`,
+       `--secondary`, `--muted`, `--card`, `--popover`, `--accent`, tous
+       ≥ 95,9 % de luminosité — donc plus le texte s'assombrit, plus CHAQUE
+       paire s'améliore ; aucune surface ne le peint sur un fond sombre en
+       thème clair). Thème sombre (`.dark`, ligne ~149) inchangé : déjà
+       conforme (5,78:1 sur `--secondary`). */
+    --muted-foreground: 220 8.9% 45%;
     --accent: 220 14.3% 95.9%;
     --accent-foreground: 220.9 39.3% 11%;
     --destructive: 0 84.2% 60.2%;

@@ -74,6 +74,7 @@ import { resolveCapabilities, resolveOrchestratorDecision } from '@meeshy/shared
 import { isCurrentUserAnonymous } from '@/utils/auth';
 import { useReducedMotion } from '@/hooks/use-accessibility';
 import { useRiverModeFlag } from '@/hooks/lentille/use-river-mode-flag';
+import { useReadingModesFlag } from '@/hooks/lentille/use-reading-modes-flag';
 import { useReadingModePreference, useReadingModePreferenceActions } from '@/stores/reading-mode-preference-store';
 import { ConversationActionMenuItems } from '../conversation-item/ConversationItemActions';
 import { useConversationItemActions } from '../conversation-item/use-conversation-item-actions';
@@ -131,6 +132,16 @@ export interface LentillePeekProps {
    */
   readonly isRiverFlagEnabled?: boolean;
   /**
+   * Q142-c (2026-08-18) — drapeau du fil / Focal (WF-110, `useReadingModesFlag`).
+   * Omis ⇒ résolu ICI par `useReadingModesFlag()`, même patron que
+   * `isRiverFlagEnabled` juste au-dessus : l'encoche (`LentilleFocusCard`)
+   * doit savoir si le défaut provisoire « Bulles »
+   * (`use-thread-reading-mode.ts`, `PROVISIONAL_DEFAULT_RENDER`) s'appliquera
+   * à l'ouverture, sans quoi elle annoncerait « AUTO · Focal » à un lecteur
+   * qui verra les bulles. Override conservé pour les tests.
+   */
+  readonly isReadingModesFlagEnabled?: boolean;
+  /**
    * Ce rang porte-t-il la focus card ? (WL-108) — vrai pour l'ÉLU de
    * `LentilleFocusElection` et pour le rang sélectionné (L11). `false` par
    * défaut : une `LentilleRow` rendue hors liste n'a pas de carte.
@@ -172,6 +183,7 @@ export function LentillePeek({
   'data-testid': dataTestId,
   activeParticipantCount = null,
   isRiverFlagEnabled,
+  isReadingModesFlagEnabled,
   isFocused = false,
   onShowDetails,
 }: LentillePeekProps) {
@@ -189,6 +201,12 @@ export function LentillePeek({
   // par défaut (voir la docstring de `isRiverFlagEnabled` ci-dessus).
   const riverModeFlag = useRiverModeFlag();
   const resolvedIsRiverFlagEnabled = isRiverFlagEnabled ?? riverModeFlag.active;
+
+  // Q142-c — même patron, même raison : le SEUL appelant de ce hook, pour
+  // que l'encoche lise le VRAI drapeau du fil (`useReadingModesFlag`) plutôt qu'un défaut
+  // figé.
+  const readingModesFlag = useReadingModesFlag();
+  const resolvedIsReadingModesFlagEnabled = isReadingModesFlagEnabled ?? readingModesFlag.active;
 
   /**
    * REV-4/B3 — les SIX actions historiques du rang (behaviour-matrix L07),
@@ -378,6 +396,7 @@ export function LentillePeek({
           decision={decision}
           t={t}
           reducedMotion={reducedMotion}
+          isReadingModesFlagActive={resolvedIsReadingModesFlagEnabled}
           // Troisième point d'entrée — la MÊME instance de menu que le ⋮ et
           // l'aperçu, donc la MÊME préférence (contrat LWS-8/LWS-11).
           onNotchTap={() => openPeek(false)}

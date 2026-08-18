@@ -26,8 +26,33 @@
  * (`ModePreferenceRoundTripTests` §4-6 : « écrit par le centre Lentille, relu
  * par le magasin Focal — c'est la définition de "un seul magasin" »). Ce
  * fichier prend le même témoin par l'autre bout.
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AMENDÉ PAR D-4 / R5-6 (2026-08-18) — IDENTITÉ ÉTABLIE, MIGRATION → PURGE
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Ce fichier présumait une clé `meeshy:reading-mode:<conversationId>` SANS
+ * préfixe d'identité (littéral aux lignes `STORAGE_KEY_PREFIX` ci-dessous, et
+ * dans le `describe('migration one-shot...')`, qui vérifiait qu'une ancienne
+ * clé était ADOPTÉE). C'est exactement l'ancrage de l'ancien monde que D-4
+ * ferme : la clé porte désormais un `scopeId`, et l'ancienne forme
+ * (n'importe laquelle) est PURGÉE, jamais adoptée (fuite multi-comptes,
+ * `tasks/lentille-cloture-phase1.md` D-4). Amendé ici plutôt que laissé
+ * rouge : voir `reading-mode-identity-scope.test.ts` pour le témoin R5-6
+ * dédié (deux identités, une conversation, un navigateur).
  */
 import { renderHook, act } from '@testing-library/react';
+import { AUTH_STORAGE_KEYS } from '../../constants/auth';
+
+// D-4 / R5-6 — ce fichier établit une identité INSCRITE (voir
+// `setRegisteredIdentity` plus bas) pour exercer la persistance scopée, ce
+// qui déclenche AUSSI l'écriture réseau best-effort de `setReadingMode`
+// (`writeReadingModePreferenceToServer`, G-121). Mockée ici : ce fichier
+// teste la FAÇADE et la persistance locale, pas le réseau (qui a sa propre
+// suite, `stores/__tests__/reading-mode-identity-scope.test.ts`).
+jest.mock('../../services/reading-mode-sync.service', () => ({
+  writeReadingModePreferenceToServer: jest.fn().mockResolvedValue(undefined),
+  fetchServerReadingModePreference: jest.fn().mockResolvedValue(null),
+}));
 import {
   useReadingModeStore,
   useReadingMode,
@@ -47,10 +72,27 @@ const CONVERSATION_A = '507f1f77bcf86cd799439021';
 const CONVERSATION_B = '507f1f77bcf86cd799439022';
 
 const STORAGE_KEY_PREFIX = 'meeshy:reading-mode:';
+const REGISTERED_USER_ID = 'user-facade-A';
+const SCOPED_STORAGE_KEY_A = `${STORAGE_KEY_PREFIX}u-${REGISTERED_USER_ID}:${CONVERSATION_A}`;
+
+/**
+ * D-4 : la persistance exige désormais une identité résolvable
+ * (`resolveReadingModeIdentityScope`). Un compte INSCRIT suffit à faire
+ * fonctionner tout ce que ce fichier vérifiait déjà avant D-4 — c'est le
+ * MÊME comportement observable, sous une clé désormais scopée.
+ */
+function setRegisteredIdentity(): void {
+  window.localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'fake-jwt-for-tests');
+  window.localStorage.setItem(
+    AUTH_STORAGE_KEYS.USER_DATA,
+    JSON.stringify({ id: REGISTERED_USER_ID })
+  );
+}
 
 beforeEach(() => {
   window.localStorage.clear();
   useReadingModePreferenceStore.getState().reset();
+  setRegisteredIdentity();
 });
 
 // ---------------------------------------------------------------------------
@@ -88,15 +130,15 @@ describe('façade — un seul magasin autoritatif', () => {
     expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
   });
 
-  it('la façade N’A PLUS de persistance propre — la clé zustand historique n’est plus jamais écrite', () => {
+  it('la façade N’A PLUS de persistance propre — la clé zustand historique n’est plus jamais écrite ; la clé du contrat est désormais SCOPÉE par identité (D-4)', () => {
     act(() => {
       useReadingModeStore.getState().setMode(CONVERSATION_A, 'bubble');
     });
 
     expect(window.localStorage.getItem(LEGACY_READING_MODE_STORAGE_KEY)).toBeNull();
-    expect(window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${CONVERSATION_A}`)).toBe(
-      'bulles'
-    );
+    expect(window.localStorage.getItem(SCOPED_STORAGE_KEY_A)).toBe('bulles');
+    // Et JAMAIS sous l'ancienne forme non scopée — la fuite que D-4 ferme.
+    expect(window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${CONVERSATION_A}`)).toBeNull();
   });
 
   it('`useReadingMode` se ré-abonne au magasin autoritatif (un changement du menu re-rend le fil)', async () => {
@@ -186,81 +228,102 @@ describe('traduction préférence ⇄ lentille du rendu historique', () => {
 });
 
 // ---------------------------------------------------------------------------
-// TÉMOIN (c) — MIGRATION ONE-SHOT de l'ancienne clé
+// TÉMOIN (c), AMENDÉ PAR D-4 — PURGE ONE-SHOT, JAMAIS ADOPTION
 // ---------------------------------------------------------------------------
+//
+// AVANT D-4 : une ancienne clé était ADOPTÉE dans le magasin autoritatif —
+// défendable tant que ce magasin lui-même n'était pas scopé (les deux étaient
+// « d'appareil », rien n'aggravait rien). D-4 scope le magasin de
+// destination ; adopter reviendrait alors à attribuer à UNE identité un choix
+// qu'un AUTRE compte du même navigateur a pu faire. La politique change :
+// SUPPRESSION, jamais adoption (`tasks/lentille-cloture-phase1.md` D-4,
+// §"MIGRATION — LA SÉCURITÉ PRIME SUR LA CONTINUITÉ").
+//
+// Deux formes d'ancienne clé sont purgées : l'antique `meeshy-reading-mode`
+// (zustand/persist, pré-REV-4bis) ET la clé DE CE MAGASIN d'avant D-4
+// (`meeshy:reading-mode:<conversationId>`, non scopée). Aucune des deux
+// n'est jamais lue pour son contenu — la purge ne les PARSE même pas.
 
-describe('migration one-shot de `meeshy-reading-mode`', () => {
-  const writeLegacy = (modes: Record<string, string>) => {
+describe('purge one-shot des clés non scopées (D-4 / R5-6)', () => {
+  const writeLegacyV1 = (modes: Record<string, string>) => {
     window.localStorage.setItem(
       LEGACY_READING_MODE_STORAGE_KEY,
       JSON.stringify({ state: { modes }, version: 1 })
     );
   };
 
-  it('reprend les choix déjà écrits — le lecteur ne perd pas ses modes', () => {
-    writeLegacy({ [CONVERSATION_A]: 'script', [CONVERSATION_B]: 'bubble' });
+  const writePreD4UnscopedKey = (conversationId: string, rawValue: string) => {
+    window.localStorage.setItem(`${STORAGE_KEY_PREFIX}${conversationId}`, rawValue);
+  };
 
-    runLegacyReadingModeMigration();
-
-    expect(
-      useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)
-    ).toBe('script');
-    expect(
-      useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_B)
-    ).toBe('bulles');
-  });
-
-  it('les valeurs reprises sont PERSISTÉES dans le magasin autoritatif, pas seulement en mémoire', () => {
-    writeLegacy({ [CONVERSATION_A]: 'script' });
-
-    runLegacyReadingModeMigration();
-
-    expect(window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${CONVERSATION_A}`)).toBe(
-      'script'
-    );
-  });
-
-  it("neutralise l'ancienne clé — elle ne peut plus être relue par personne", () => {
-    writeLegacy({ [CONVERSATION_A]: 'script' });
+  it("l'antique clé zustand/persist (`meeshy-reading-mode`) est SUPPRIMÉE, jamais adoptée", () => {
+    writeLegacyV1({ [CONVERSATION_A]: 'script', [CONVERSATION_B]: 'bubble' });
 
     runLegacyReadingModeMigration();
 
     expect(window.localStorage.getItem(LEGACY_READING_MODE_STORAGE_KEY)).toBeNull();
+    // Ni adoptée pour l'identité qui a déclenché la purge...
+    expect(useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)).toBe('auto');
+    expect(useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_B)).toBe('auto');
+    // ...ni fabriquée dans les entrées en mémoire d'aucune façon.
+    expect(useReadingModePreferenceStore.getState().entries.size).toBe(0);
+  });
+
+  it("la clé PRÉ-D4 de CE magasin (`meeshy:reading-mode:<conversationId>`, sans scope) est SUPPRIMÉE, jamais adoptée", () => {
+    writePreD4UnscopedKey(CONVERSATION_A, 'script');
+
+    runLegacyReadingModeMigration();
+
+    expect(window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${CONVERSATION_A}`)).toBeNull();
+    expect(useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)).toBe('auto');
+  });
+
+  it('une clé DÉJÀ SCOPÉE (post-D4, un autre compte de ce navigateur) survit à la purge — elle ne lui appartient pas', () => {
+    const otherAccountKey = `${STORAGE_KEY_PREFIX}u-someone-else:${CONVERSATION_A}`;
+    window.localStorage.setItem(otherAccountKey, 'script');
+
+    runLegacyReadingModeMigration();
+
+    expect(window.localStorage.getItem(otherAccountKey)).toBe('script');
+  });
+
+  it('pose le marqueur de purge — une réécriture n’est jamais fabriquée sans lui', () => {
+    runLegacyReadingModeMigration();
     expect(window.localStorage.getItem(READING_MODE_MIGRATION_MARKER_KEY)).not.toBeNull();
   });
 
-  it('ONE-SHOT : une seconde exécution ne réécrit rien, même si une ancienne clé réapparaît', () => {
-    writeLegacy({ [CONVERSATION_A]: 'script' });
+  it('ONE-SHOT : une seconde exécution ne retente rien — une clé réapparue reste (idempotence par marqueur)', () => {
+    writePreD4UnscopedKey(CONVERSATION_A, 'script');
+    runLegacyReadingModeMigration();
+    expect(window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${CONVERSATION_A}`)).toBeNull();
+
+    // Un autre onglet, resté ouvert sur l'ancien code, ré-écrit la clé morte.
+    writePreD4UnscopedKey(CONVERSATION_A, 'bubble');
     runLegacyReadingModeMigration();
 
-    // Un autre onglet, resté ouvert sur l'ancien code, ré-hydrate sa clé.
-    writeLegacy({ [CONVERSATION_A]: 'bubble' });
-    runLegacyReadingModeMigration();
-
-    expect(
-      useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)
-    ).toBe('script');
+    // Le marqueur bloque la seconde passe : la clé réapparue n'est PAS
+    // re-purgée cette fois-ci (comportement documenté, cf. docstring de
+    // `runLegacyReadingModeMigration`) — mais elle n'est pas non plus lue.
+    expect(window.localStorage.getItem(`${STORAGE_KEY_PREFIX}${CONVERSATION_A}`)).toBe('bubble');
+    expect(useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)).toBe('auto');
   });
 
-  it("n'ÉCRASE JAMAIS une valeur déjà présente dans le magasin autoritatif — le contrat gagne sur l'héritage", async () => {
+  it("n'ÉCRASE JAMAIS une valeur déjà présente dans le magasin autoritatif — la purge n'en pose de toute façon aucune", async () => {
     await act(async () => {
       await useReadingModePreferenceStore
         .getState()
         .setReadingMode(CONVERSATION_A, 'resume');
     });
-    writeLegacy({ [CONVERSATION_A]: 'bubble', [CONVERSATION_B]: 'script' });
+    writeLegacyV1({ [CONVERSATION_A]: 'bubble' });
+    writePreD4UnscopedKey(CONVERSATION_B, 'script');
 
     runLegacyReadingModeMigration();
 
-    expect(
-      useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)
-    ).toBe('resume');
-    expect(
-      useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_B)
-    ).toBe('script');
+    expect(useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_A)).toBe('resume');
+    expect(useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_B)).toBe('auto');
   });
 
-  it('une ancienne clé illisible (JSON cassé, forme inattendue) est NEUTRALISÉE sans rien fabriquer', () => {
+  it('un contenu illisible (JSON cassé) dans l’antique clé ne fait PAS lever la purge — elle ne le parse même pas', () => {
     window.localStorage.setItem(LEGACY_READING_MODE_STORAGE_KEY, '{ pas du json');
 
     expect(() => runLegacyReadingModeMigration()).not.toThrow();
@@ -269,20 +332,7 @@ describe('migration one-shot de `meeshy-reading-mode`', () => {
     expect(window.localStorage.getItem(LEGACY_READING_MODE_STORAGE_KEY)).toBeNull();
   });
 
-  it("une lentille hors énumération n'est jamais devinée — l'entrée est SAUTÉE, pas repliée sur un défaut", () => {
-    writeLegacy({ [CONVERSATION_A]: 'scene', [CONVERSATION_B]: 'script' });
-
-    runLegacyReadingModeMigration();
-
-    expect(useReadingModePreferenceStore.getState().entries.has(CONVERSATION_A)).toBe(
-      false
-    );
-    expect(
-      useReadingModePreferenceStore.getState().getReadingMode(CONVERSATION_B)
-    ).toBe('script');
-  });
-
-  it('aucune ancienne clé ⇒ aucune entrée fabriquée (le cas du nouvel appareil)', () => {
+  it('aucune ancienne clé ⇒ rien à supprimer, rien de fabriqué (le cas du nouvel appareil)', () => {
     runLegacyReadingModeMigration();
 
     expect(useReadingModePreferenceStore.getState().entries.size).toBe(0);

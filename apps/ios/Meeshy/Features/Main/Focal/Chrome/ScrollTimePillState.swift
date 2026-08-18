@@ -68,7 +68,13 @@ final class ScrollTimePillState: ObservableObject {
     }
 
     private func recomputeVisibility() {
-        isVisible = !isHeaderExpanded && ScrollTimePillLaw.isVisible(state: lawState, at: lastKnownAt)
+        let next = !isHeaderExpanded && ScrollTimePillLaw.isVisible(state: lawState, at: lastKnownAt)
+        // Garde d'égalité : `note(.scrolled)` arrive à CHAQUE frame de
+        // défilement — sans elle, chaque frame publiait un `objectWillChange`
+        // pour une valeur inchangée (audit perf 2026-08-18, même règle que
+        // `FocalTimestampRevealState`).
+        guard next != isVisible else { return }
+        isVisible = next
     }
 }
 

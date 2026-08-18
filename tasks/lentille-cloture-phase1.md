@@ -20,6 +20,26 @@
 
 ---
 
+## DÉCISIONS DU 2026-08-18
+
+> Arbitrages produit rendus le 2026-08-18 sur les questions que ce document avait laissées
+> ouvertes. Ils **ne réécrivent rien** de ce qui suit : les verdicts d'origine restent
+> lisibles, annotés « à la lumière de » l'amendement. Consignés en miroir dans
+> `tasks/lentille-focal-workshop.md` §9.1-AMENDEMENT, et à leur source dans
+> `tasks/lentille-implementation-contract.md` (§4.1, §5, §5.2) et
+> `tasks/focal-implementation-contract.md` (LWS-13).
+
+- **②** La grille qui fait foi est la grille **amendée par REV-4ter** (« chaque `id`/point classé : couvert avec preuve OU non couvert avec raison typée re-prouvée ») ⇒ **la phase 1 est CLOSE-AVEC-RÉSERVES**. La grille littérale de §9.1 est conservée comme trace historique, annotée, jamais réécrite en douce.
+- **⑥** **R13 / L13** (bannière d'appel en cours) est **retiré de la grille de recette** : le contrat §8 prime (« la liste affiche l'existence de la Scène ; elle ne l'implémente pas »). La **capacité** d'affichage reste prouvée (`test_L13_liveCallBanner_isConsumedByTheRow` demeure) ; le câblage rejoint le **backlog de la Scène**. À mentionner dans les **notes de version du palier 2**.
+- **⑦** La clause « **en Focal ET en Script** » du point 4 est **amendée** : Script hérite des preuves de Focal (même hôte, même moteur, seule la densité diffère). **Risque résiduel nommé** : un défaut spécifique à la densité (troncature, espacement) n'a pas de témoin dédié.
+- **⑧** Le contrat de perf est **amendé** : « zéro allocation dans la passe » devient « **allocation bornée O(rangs visibles), jamais O(liste)** », mesure à l'appui (1 + 2N objets/frame, N = rangs visibles, banc Q-143). L'optimisation **pool** reste une option si une mesure device/profiler la justifie un jour. La mesure Instruments/profiler reste due (D-6).
+- **⑨** **`agent_grammar`** : décision produit écrite (celle que §5.2 exige) = **« pas maintenant »** — réexamen après le **palier 3** et l'audit R6-7/D-14 (étage mono-langue). Le chemin technique reste prouvé et prêt.
+- **⑪** **L03 / L05 / L09** (position du dernier message, `hasPendingSync`, glyphes de kind) : consignés **« iOS seulement pour la phase 1 »** — écarts `absent-structurel` assumés ; l'ouverture du chantier modèle web reste au backlog (**D-16**), **non planifiée**.
+- **⑫** **Phase 2 Android : no-go pour l'instant** — priorité à la stabilisation des paliers 1-3 ; réexamen ensuite. **D-17** reste estimée, **fermée**.
+- **Errata de comptes, actés** : 7 fichiers de vecteurs → **12** réels ; 28 lignes → **17** (`L01`..`L17`) ; 16 lignes → **15** (`F01`..`F15`) ; « 44 `id` » → **32** (§9.1 point 7 **et** §9.2 Android).
+
+---
+
 ## 0. Verdict global
 
 **PHASE 1 NON-CLOSE au sens littéral de §9.1 — 4 des 10 points sont rouges (2, 4, 6, 7).**
@@ -377,6 +397,13 @@ seule implication — `defaultIsOn && !isMounted ⇒ échec`. Basculer la Riviè
 casse la build tant que R-137 n'a pas monté l'écran. Le verrou tombe de lui-même le jour où
 elle le monte.
 
+> **LEVÉE le 2026-08-18** — la réserve ci-dessous décrit l'état du code entre le 2026-08-16
+> et le 2026-08-18. Le palier 0 a été soldé : la cascade bêta est **RETIRÉE**, `reading_modes`
+> est de nouveau **OFF** en l'absence d'opt-in explicite, et la clause « le bundle n'est pas
+> servi à qui ne l'a pas demandé » redevient vraie sur iOS. Voir §2.2 point 1 et §2.4
+> palier 0. Le texte d'origine est conservé tel quel — il documente ce qui a motivé la
+> décision.
+
 **La réserve, et elle est réelle : sur iOS, `reading_modes` est DÉJÀ ON pour tout le
 monde.** La cascade I-075 (`LentilleFeatureFlag.isEnabled`, second amendement produit du
 2026-08-16) résout, pour `.readingModes` : environnement absent → clé
@@ -400,15 +427,15 @@ l'objet du palier 0 du §2.
 | # | Point de §9.1 | Verdict |
 |---|---|---|
 | 1 | Vecteurs verts dans deux suites, même commit `fixtures/` | **tenu-avec-réserve** (TS re-exécuté vert ; XCTest CI-only, pas vert sur `81e93f3a` à ce jour) |
-| 2 | R1 → R13 sur iOS et web | **non-tenu** (10 prouvés, R2/R7 device, **R13 jamais câblé**) |
+| 2 | R1 → R13 sur iOS et web | **non-tenu** (10 prouvés, R2/R7 device, **R13 jamais câblé**) → **amendé le 2026-08-18 (⑥) : R13 retiré de la grille, reste R2/R7 device** ⇒ **tenu-avec-réserve** au sens amendé |
 | 3 | Matrice `list` identique drapeau ON | **tenu-avec-réserve** (iOS 17/17 ; web 11/17 `≡`, 6 écarts typés) |
-| 4 | Matrice `thread` idem, en Focal **et** en Script | **non-tenu** (iOS 15/15 ; web 6/15 ; Script sans aucun témoin) |
+| 4 | Matrice `thread` idem, en Focal **et** en Script | **non-tenu** (iOS 15/15 ; web 6/15 ; Script sans aucun témoin) → **amendé le 2026-08-18 (⑦) : Script hérite des preuves de Focal, risque densité nommé** ; reste la parité web 6/15 (D-9) ⇒ **non-tenu au titre de la parité web seule** |
 | 5 | Drapeaux OFF ⇒ bit-à-bit identique | **prouvé** |
-| 6 | < 1 ms/frame, zéro allocation, zéro invalidation — **mesuré** | **non-tenu** (aucune mesure Instruments/profiler ; allocation mesurée O(N) ≠ 0) |
+| 6 | < 1 ms/frame, zéro allocation, zéro invalidation — **mesuré** | **non-tenu** (aucune mesure Instruments/profiler ; allocation mesurée O(N) ≠ 0) → **amendé le 2026-08-18 (⑧) : critère d'allocation = « bornée O(rangs visibles), jamais O(liste) » ⇒ TENU** ; **reste rouge** au titre de la mesure Instruments/profiler jamais faite (D-6) |
 | 7 | Cotes == tokens **et** 32 id en parité `id` par `id` | **non-tenu** (cotes tenues ; parité 17/32 ; **garde d'ensemble rouge au timeout par défaut**) |
 | 8 | Portes franchies dans l'ordre | **tenu-avec-réserve** (ordre tenu ; « et parité » satisfait au sens amendé seulement) |
 | 9 | Bascule des substituts neutre | **prouvé** |
-| 10 | `main` jamais mis en danger | **tenu-avec-réserve** (mécanismes prouvés ; **iOS `reading_modes` déjà ON par la cascade bêta**) |
+| 10 | `main` jamais mis en danger | **tenu** depuis le 2026-08-18 (mécanismes prouvés ; la réserve « iOS `reading_modes` déjà ON par la cascade bêta » est **levée** — cascade retirée, palier 0 soldé, §2.2 point 1) |
 
 ---
 
@@ -422,9 +449,9 @@ l'objet du palier 0 du §2.
 | **`reading_modes`** (web) | `hooks/lentille/resolve-reading-modes-flag.ts` | `?reading_modes=1\|0` > cookie `meeshy_reading_modes` > `NEXT_PUBLIC_READING_MODES_DEFAULT` > OFF | **OFF** |
 | **`riviere_mode`** (web) | `hooks/lentille/resolve-river-mode-flag.ts` | `?riviere_mode=1\|0` > cookie `meeshy_riviere_mode` > `NEXT_PUBLIC_RIVIERE_MODE_DEFAULT` > OFF | **OFF, et VERROUILLÉ** (R6-3) |
 | **`LentilleFeatureFlag.lentilleList`** (iOS) | `Lentille/Core/LentilleFeatureFlag.swift` | `MEESHY_FLAG_LENTILLE_LIST` (`"1"`/`"0"`) > `UserDefaults["meeshy.flag.lentille_list"]` > OFF | **OFF** |
-| **`LentilleFeatureFlag.readingModes`** (iOS) | idem, cascade I-075 à 3 étages | `MEESHY_FLAG_READING_MODES` > clé `meeshy.flag.reading_modes` **si explicitement posée** > `BetaFeaturesPreference` | **ON** — absence de clé ⇒ bêta ⇒ `true` |
+| **`LentilleFeatureFlag.readingModes`** (iOS) | idem, cascade I-075 à 3 étages, **étage 3 restreint le 2026-08-18** | `MEESHY_FLAG_READING_MODES` > clé `meeshy.flag.reading_modes` **si explicitement posée** > `BetaFeaturesPreference` **si explicitement exprimée** | **OFF** — absence de toute clé ⇒ `false` (retrait I-075, 2026-08-18) ; opt-in explicite ⇒ ON |
 | **`LentilleFeatureFlag.riviereMode`** (iOS) | idem, 2 étages, jamais la cascade bêta | `MEESHY_FLAG_RIVIERE_MODE` > `UserDefaults["meeshy.flag.riviere_mode"]` > OFF | **OFF, VERROUILLÉ (R6-3) et inerte** (aucun site ne câble `isRiverFlagEnabled`) |
-| *(support)* **`BetaFeaturesPreference`** (iOS) | `Lentille/Core/BetaFeaturesPreference.swift` | `MEESHY_FLAG_BETA_FEATURES` > `UserDefaults["meeshy.pref.beta_features_enabled"]` **si écrite** > **TRUE** | **ON** — toggle « Bêta » des Réglages |
+| *(support)* **`BetaFeaturesPreference`** (iOS) | `Lentille/Core/BetaFeaturesPreference.swift` | `MEESHY_FLAG_BETA_FEATURES` > `UserDefaults["meeshy.pref.beta_features_enabled"]` **si écrite** > **TRUE** | **ON, INCHANGÉ par le retrait du 2026-08-18** — toggle « Bêta » des Réglages ; ne gate plus que l'item « Focal (bêta) » du menu d'appui long, sauf opt-in explicite |
 | *(hors périmètre)* **`agent_grammar`** (iOS) | `MeeshyFeatureFlags.isAgentGrammarEnabled` | env > `UserDefaults` > OFF | **OFF** — décision produit ÉCRITE exigée par §5.2, non prise |
 
 **Rien n'est posé nulle part.** Aucun `.env`, aucun `docker-compose`, aucun workflow CI, aucun
@@ -441,6 +468,25 @@ aujourd'hui** :
 1. **iOS — `reading_modes` ON par défaut** (I-075, 2026-08-16). Tout appareil qui installe
    l'app et ne touche à rien ouvre ses conversations par l'orchestrateur. C'est le plus gros
    levier du chantier, et il est déjà tiré.
+   → **DÉCISION PRISE le 2026-08-18 : RETIRÉE.** La cascade bêta ne vaut plus opt-in
+   implicite. Sémantique exacte du retrait, telle qu'implémentée :
+   - **Absence de toute clé ⇒ OFF.** Ni `MEESHY_FLAG_READING_MODES`, ni
+     `meeshy.flag.reading_modes`, ni `meeshy.pref.beta_features_enabled` ⇒ `false` : une
+     installation neuve ouvre ses conversations en **Bulles** (comportement historique).
+   - **Les choix explicites survivent, dans les deux sens.** L'environnement
+     (`"1"`/`"0"`) prime toujours ; la clé `meeshy.flag.reading_modes` posée explicitement
+     est respectée à `true` **comme** à `false`. Étages 1 et 2 de la cascade : INCHANGÉS.
+   - **L'opt-in bêta volontaire n'est pas retiré.** Le toggle « Bêta » des Réglages
+     EXPLICITEMENT basculé à `true` (clé présente) allume toujours les modes de lecture ;
+     explicitement à `false`, il les coupe. Seule l'**ABSENCE** de ce choix ne vaut plus
+     opt-in.
+
+   Implémentation : la restriction vit dans la cascade de `LentilleFeatureFlag.isEnabled`
+   (nouveau prédicat `BetaFeaturesPreference.isExplicitlySet`), **pas** dans la polarité de
+   défaut de `BetaFeaturesPreference` — celle-ci reste ON parce que son autre client, la
+   visibilité de l'item « Focal (bêta) » du menu d'appui long, n'est pas visé par la
+   décision. Sur les 144 combinaisons de la cascade, **4 seulement changent de verdict** :
+   exactement celles où rien n'a jamais été exprimé.
 2. **Web — « Bulles » par défaut, PROVISOIRE** (`e87886a9`, 2026-08-17). Sans choix
    explicite du lecteur, le fil ouvert rend les bulles **y compris drapeau ON**, là où
    l'orchestrateur résolvait `auto → focal`. La décision vit à UN SEUL endroit
@@ -462,10 +508,10 @@ web, pas après (c'est Q142-c).
 | **R6-4** « Bulles » ON sans effet | REV-5 couture (d) | **SOLDÉE** — `6efc56ac`, l'entrée `bubble` du `LensSwitcher` est BRANCHÉE (et non masquée : masquer aurait fait du défaut provisoire un aller simple) | plus rien |
 | **R6-5** `suggestedMode` 0 consommateur | REV-5 couture (b), Q-141 §4 | **SOLDÉE** — `b62bc163` (web) + `784f3c16` (iOS) : l'encoche de la focus card lit la décision du serveur au lieu de la recalculer. Critère produit A6 satisfait | plus rien |
 | **R6-3** Rivière non montée | REV-5 couture (c) | **VERROU EN PLACE** — `95a499a1`, `defaultIsOn && !isMounted ⇒ build rouge`, les deux plateformes | `riviere_mode` ON par défaut, jusqu'à **R-137** |
-| **R5-6** scope web sans identité | REV-4ter, « **condition** : LWS-3/G-121 avant activation multi-comptes » | **OUVERTE** | toute activation web de `reading_modes` sur un navigateur multi-comptes |
+| **R5-6** scope web sans identité | REV-4ter, « **condition** : LWS-3/G-121 avant activation multi-comptes » | **SOLDÉE le 2026-08-18** — `feat(web): [A-157] R5-6 soldée — le magasin de mode de lecture a une identité, la route G-121 est branchée`, voir `git log --oneline -- apps/web/stores/reading-mode-preference-store.ts` | plus rien |
 | **Q142-a** contraste 4,393:1 | Q-142 croisé, `81e93f3a` | **OUVERTE — décision design** | rien techniquement ; un critère AA du contrat |
-| **Q142-b** Dynamic Type rangée Lentille | Q-142 | **OUVERTE — aucun substitut** | rien techniquement ; un critère explicite de LWS-13 |
-| **Q142-c** défaut Bulles non reflété | Q-142 / `e87886a9` | **OUVERTE — décision produit** | la cohérence de ce que le web montrera au palier 3 |
+| **Q142-b** Dynamic Type rangée Lentille | Q-142 | **SOLDÉE le 2026-08-18** — commit `test(ios): [A-154] D-1 soldée — Dynamic Type accessibility5 prouvé sur les 8 branches de la rangée Lentille`, harnais `FocalDynamicTypeTests` appliqué à `LentilleConversationRow` (`LentilleRowDynamicTypeTests.swift`, garde de source, 8 branches de ligne 2) | plus rien |
+| **Q142-c** défaut Bulles non reflété | Q-142 / `e87886a9` | **TRANCHÉE le 2026-08-18** — gardé et assumé, `LensSwitcher`/l'encoche le reflètent (D-5) | plus rien |
 
 **R5-6, en clair, parce que c'est la seule condition qui doit gouverner un palier.** La clé
 web est `meeshy:reading-mode:<conversationId>` — **sans préfixe d'identité**. iOS a le
@@ -479,14 +525,55 @@ dans son magasin scopé (`MeeshyApp` branche `onReadingModePreferenceChanged`, g
 `readingMode` dans `apps/web` (grep 2026-08-17). Le levier de sortie existe et n'est pas
 tiré côté web : c'est une tâche, pas un chantier.
 
+> **SOLDÉE le 2026-08-18 (D-4, commit `feat(web): [A-157] R5-6 soldée`).** Clé désormais
+> `meeshy:reading-mode:<scopeId>:<conversationId>` — `scopeId` = `u-<userId>` (compte
+> inscrit, `authManager.getCurrentUser()`) ou `a-<participantId>` (session anonyme,
+> `authManager.getAnonymousSession()`), résolu et injecté dans
+> `apps/web/stores/reading-mode-preference-store.ts` SEUL ; le type partagé gelé
+> `ReadingModePreferenceScope` n'a pas bougé (le préfixe reste une affaire de clé de
+> stockage web, comme le mandat l'exigeait). **Politique de migration : SUPPRESSION
+> one-shot, jamais adoption.** Une ancienne clé non scopée — l'antique `meeshy-reading-mode`
+> (zustand/persist, pré-REV-4bis) ou la clé DE CE MAGASIN d'avant D-4
+> (`meeshy:reading-mode:<conversationId>`, sans scope) — peut appartenir à n'importe lequel
+> des comptes ayant utilisé ce navigateur ; l'adopter pour le premier lecteur venu aurait
+> reproduit la fuite. Perte acceptée et documentée : le lecteur re-choisit son mode une fois.
+> iOS avait affronté la même question pour SA propre ancienne clé (`meeshy.readingMode.*`,
+> `LentilleScopedReadingModePreferenceStore`) et avait choisi de ne RIEN migrer (ni adopter,
+> ni supprimer — laisser en friche, motivé par le fait que cette clé n'a jamais été écrite en
+> production sur cet OS). Le web va un cran plus loin — SUPPRIMER plutôt qu'orpheliner — pour
+> l'hygiène de `localStorage` (la clé non scopée EST la clé de production d'avant ce commit,
+> contrairement au cas iOS) ; les deux politiques REFUSENT l'adoption, ce qui est le seul
+> point qui comptait pour R5-6. La route G-121 est désormais branchée dans les trois sens du
+> mandat : précédence serveur au chargement d'un fil (arbitrage par version, le serveur
+> l'emporte dès qu'il porte `version >= 1`), écriture fire-and-forget d'un choix explicite
+> (identité INSCRITE seulement — aucune route pour les comptes anonymes), et consommation du
+> broadcast versionné `USER_PREFERENCES_UPDATED`, gardée par le drapeau web du fil
+> (`useReadingModesFlag`) — le pendant exact de `MeeshyApp.swift:
+> onReadingModePreferenceChanged` côté iOS. RED-GREEN rejoué : contre le code d'avant ce
+> commit, le témoin R5-6 (`apps/web/stores/__tests__/reading-mode-identity-scope.test.ts`)
+> rougit 9/12 sur la fuite exacte nommée ci-dessus (`Expected: "auto", Received: "focal"`
+> quand le compte B relit le choix du compte A) ; vert après ce commit.
+
 **Q142-a, en clair.** Sur un rang portant la focus card, en thème **clair**, le point médian
-et l'heure (`text-muted-foreground` sur `--secondary`) mesurent **4,393:1** contre 4,5:1
+et l'heure (`text-muted-foreground` sur `--secondary`) mesuraient **4,393:1** contre 4,5:1
 exigés pour du texte normal — l'heure est cotée 12 px. Déficit **0,107**. Thème sombre :
-5,78, tenu. Fond ordinaire : 4,83 clair / 7,93 sombre, tenu. Ce n'est pas une régression
-(la couleur préexistait) : ce qui est neuf, c'est la mesure, et le témoin **verrouille le
-chiffre mesuré** au lieu d'affirmer une conformité. Trois issues : assombrir d'un cran le
-token sur le fond `--secondary` ; monter l'heure à 14 px (elle devient « texte large », seuil
-3:1) ; ou consigner l'écart comme accepté et daté. **Aucune n'est prise ici.**
+5,78, tenu. Fond ordinaire : 4,83 clair / 7,93 sombre, tenu. Ce n'était pas une régression
+(la couleur préexistait) : ce qui était neuf, c'est la mesure, et le témoin **verrouillait
+le chiffre mesuré** au lieu d'affirmer une conformité.
+
+**TRANCHÉE le 2026-08-18 : assombrie, ratio recalculé 4,567:1.** `--muted-foreground`
+(thème clair uniquement, `apps/web/app/globals.css`) assombri d'un cran, `220 8.9% 46.1%` →
+`220 8.9% 45%` — même teinte/saturation. Nouveau ratio sur `--secondary` (fond de la focus
+card) : **4,567:1**, AA tenu. Sur le fond ordinaire (`--background`) : 5,024:1 (amélioré
+aussi, contre 4,83 avant). Thème sombre inchangé (déjà conforme, 5,78:1). Changement sûr
+pour les 180+ autres consommateurs de `--muted-foreground` : dans tout le dépôt le token
+n'est peint qu'en texte sur des fonds clairs du thème clair, donc l'assombrir ne peut que
+faire monter chaque ratio, jamais descendre (vérifié par grep, aucune exception). Témoin
+amendé : `apps/web/__tests__/a11y/lentille-added-surfaces-contrast-aa.test.ts` affirme
+désormais la conformité au lieu de verrouiller le déficit. iOS : la paire jumelle
+(`MeeshyColors.textMuted`/`backgroundSecondary`) n'est pas un token gris — c'est un tint
+indigo semi-transparent, sans témoin qui la verrouille ; non touchée ici (voir le rapport de
+la tâche Q142-a du 2026-08-18 pour la mesure et la justification).
 
 **Q142-b, en clair.** `grep -l 'DynamicTypeSize\|accessibility5'` sur
 `apps/ios/MeeshyTests/Unit/Lentille/` → **0 fichier**. Le contrat
@@ -505,7 +592,7 @@ remède est purement mécanique.
 > réversible par **une seule** variable d'environnement ou **une seule** écriture
 > `UserDefaults` — aucun ne demande un déploiement de code pour revenir en arrière.
 
-**Palier 0 — DÉCIDER, ne rien allumer. Aujourd'hui.**
+**Palier 0 — DÉCIDER, ne rien allumer. ~~Aujourd'hui.~~ FAIT le 2026-08-18.**
 Confirmer ou retirer la cascade bêta iOS (§2.2 point 1). C'est la seule activation déjà en
 cours, et elle porte le levier le plus lourd du chantier.
 *Si CONFIRMÉE* : rien à faire, mais l'écrire dans ce document — pour que la mise en
@@ -514,6 +601,25 @@ production ne la découvre pas.
 prime sur tout), ou une écriture explicite de `meeshy.flag.reading_modes` à `false` au
 premier lancement. Coût : une ligne.
 **Retour arrière** : symétrique, une ligne.
+
+**→ DÉCISION PRISE le 2026-08-18 : RETIRÉE.** Trois points, détaillés au §2.2 point 1 :
+- **Absence de toute clé ⇒ OFF** — installation neuve ⇒ ouverture en **Bulles**.
+- **Les choix explicites survivent, dans les deux sens** — env `MEESHY_FLAG_READING_MODES`
+  (`"1"`/`"0"`) et clé `meeshy.flag.reading_modes` (`true` comme `false`) : INCHANGÉS.
+- **L'opt-in bêta volontaire n'est pas retiré** — toggle « Bêta » explicitement ON ⇒ modes
+  de lecture ON ; explicitement OFF ⇒ OFF. Seule l'ABSENCE de ce choix cesse de valoir
+  opt-in.
+
+Le retrait a été **porté dans le code**, pas dans le schéma de build : ni
+`MEESHY_FLAG_READING_MODES=0` ni écriture au premier lancement n'ont été nécessaires. La
+cascade de `LentilleFeatureFlag.isEnabled` ne consulte plus l'étage bêta que si la
+préférence est explicitement exprimée (`BetaFeaturesPreference.isExplicitlySet`). Deux
+avantages sur la variante « une ligne dans le schéma » : le défaut est le même pour TOUTES
+les builds (App Store, TestFlight, dev) au lieu de dépendre du schéma utilisé, et la
+surcharge process `MEESHY_FLAG_READING_MODES` **reste libre** pour les tests UI et
+TestFlight au lieu d'être consommée par le retrait lui-même.
+**Retour arrière** : `MEESHY_FLAG_READING_MODES=1` (surcharge process, prime sur tout), ou
+revert du commit `[P0-150]`. Le palier 2 ci-dessous en tient compte.
 
 **Palier 1 — Équipe interne, web, opt-in par URL. Rien à déployer.**
 `https://…/conversations?lentille=1` et `?reading_modes=1`. Le cookie persiste pour ce
@@ -527,7 +633,11 @@ conditions réelles. **Faire cette mesure ici**, pas plus tard.
 
 **Palier 2 — Bêta iOS TestFlight, liste comprise.**
 `MEESHY_FLAG_LENTILLE_LIST=1` dans l'environnement du schéma de build TestFlight
-uniquement. `reading_modes` reste sur la cascade bêta (déjà ON). `riviere_mode` reste OFF.
+uniquement. `reading_modes` reste sur la cascade bêta — **désormais OFF en l'absence
+d'opt-in explicite** (retrait du 2026-08-18, palier 0) : pour que la population TestFlight
+voie les modes de lecture, il faut ajouter `MEESHY_FLAG_READING_MODES=1` au schéma
+TestFlight, ou compter sur le toggle « Bêta » que chaque testeur bascule lui-même. À
+trancher au moment d'ouvrir ce palier. `riviere_mode` reste OFF.
 **Pré-conditions, dans cet ordre** :
   (a) CI macOS vert sur le SHA embarqué (point 1 — ce n'est pas une formalité : quatre
   commits Swift ont atterri depuis le dernier run complet vert connu) ;
@@ -602,23 +712,24 @@ Tailles : **S** ≈ une micro-tâche Sonnet · **M** ≈ 2-4 micro-tâches · **
 
 | # | Dette | Origine | Bloque | Propriétaire suggéré | Taille |
 |---|---|---|---|---|---|
-| **D-1** | **Q142-b — Dynamic Type `.accessibility5` sur les 8 branches de la rangée Lentille.** Le harnais existe (`FocalDynamicTypeTests`, `MeeshyUITests/.../DynamicTypeTests.swift`) ; il n'a jamais été pointé sur `LentilleConversationRow`. 0 fichier sous `MeeshyTests/Unit/Lentille` ne cite `DynamicTypeSize`. | Q-142 / contrat §LWS-13 | **palier 2** | Sonnet (iOS) | **S** |
-| **D-2** | **Q142-a — contraste 4,393:1 (point médian + heure sur focus card, thème clair).** Déficit 0,107. Trois issues chiffrées au §2.3. **Décision design** puis, le cas échéant, un token à bouger. | Q-142 / `81e93f3a` | **palier 2** | Design + Sonnet (web/iOS) | **S** |
+| **D-1** | **SOLDÉE le 2026-08-18** — commit `test(ios): [A-154] D-1 soldée — Dynamic Type accessibility5 prouvé sur les 8 branches de la rangée Lentille`. Q142-b — Dynamic Type `.accessibility5` sur les 8 branches de la rangée Lentille. Le harnais existant (`FocalDynamicTypeTests`) est désormais appliqué à `LentilleConversationRow` par `MeeshyTests/Unit/Lentille/LentilleRowDynamicTypeTests.swift` (garde de source : 8 branches de ligne 2 — `typing`/`draft`/`bridge`/`expired`/`hidden`/`viewOnce`/`ephemeralActive`/`standard`). | Q-142 / contrat §LWS-13 | **plus rien** | Sonnet (iOS) | **S** |
+| **D-2** | **SOLDÉE (2026-08-18)** — Q142-a — contraste 4,393:1 (point médian + heure sur focus card, thème clair). Décision : assombrir. `--muted-foreground` (clair) `220 8.9% 46.1%` → `220 8.9% 45%`, ratio recalculé **4,567:1** (AA tenu). Témoin amendé, thème sombre intact. | Q-142 / `81e93f3a` | — | Sonnet (web) | **S** |
 | **D-3** | **Garde d'ensemble `behaviour-matrix` rouge au timeout par défaut de vitest.** Rouge 2/2 en suite complète, verte isolée et à `--testTimeout=60000`. Porter le correctif V4bis `588b585f` (index en process, 0,96 s à froid) au jumeau vitest — ou, a minima, un `testTimeout` explicite sur ce seul `it`. La garde porte le point 7 et R18 : un rouge parasite la rend ignorable. | **Q-145 (cette revue)** — récurrence de REV-4/B5 | rien formellement, **la crédibilité du point 7** | Sonnet (shared) | **S** |
-| **D-4** | **R5-6 — le magasin web de mode de lecture n'a pas d'identité.** Clé `meeshy:reading-mode:<conversationId>`, sans préfixe. La colonne (G-120) et la route (G-121) existent ; iOS consomme déjà le broadcast ; le web n'appelle jamais la route. | REV-4ter | **palier 3** | Sonnet (web + gateway) | **M** |
-| **D-5** | **Q142-c — le défaut « Bulles » provisoire n'est reflété ni par l'encoche ni par `LensSwitcher`.** L'écran fait une chose, les affordances en annoncent une autre. **Décision produit** : garder le défaut (et l'annoncer), ou le retirer (une constante et une branche, procédure écrite dans `use-thread-reading-mode.ts`). | `e87886a9` / Q-142 | **palier 3** | Produit, puis Sonnet (web) | **S** (après décision) |
+| **D-4** | **SOLDÉE le 2026-08-18** — commit `feat(web): [A-157] R5-6 soldée — le magasin de mode de lecture a une identité, la route G-121 est branchée`. R5-6 — le magasin web de mode de lecture n'avait pas d'identité (clé `meeshy:reading-mode:<conversationId>`, sans préfixe). Clé désormais `meeshy:reading-mode:<scopeId>:<conversationId>` (`scopeId` = `u-<userId>` inscrit ou `a-<participantId>` anonyme, résolu dans `apps/web/stores/reading-mode-preference-store.ts` seul) ; ancienne clé non scopée PURGÉE one-shot, jamais adoptée (politique de sécurité, détail au §2.3) ; route G-121 branchée dans les trois sens (précédence serveur au chargement, écriture explicite fire-and-forget identité inscrite seulement, broadcast versionné consommé gardé par `reading_modes`). Comptes anonymes : aucune route serveur (`fastify.authenticate` l'exige) — le scope local anonyme suffit, aucun appel fabriqué. | REV-4ter | **plus rien** | Sonnet (web) | fait |
+| **D-5** | **Q142-c — SOLDÉE, 2026-08-18.** Décision produit : le défaut « Bulles » provisoire est **GARDÉ et assumé** — les affordances le reflètent désormais. `useThreadActiveReadingMode` (`use-thread-reading-mode.ts`) traduit ce que le fil rend RÉELLEMENT (pas la préférence brute) vers `LensSwitcher` ; `notchText` (`lentille-mode-labels.ts`, param `isReadingModesFlagActive`) fait de même pour l'encoche de la focus card (`LentilleFocusCard`/`LentillePeek`). Défaut `false` sur ce paramètre : zéro régression sur R6-4/R6-5. Commit `ab4eb50e` (`feat/q142c-encoche-defaut`). | `e87886a9` / Q-142 | plus rien | — | fait |
 | **D-6** | **Point 6 — la mesure qui n'a jamais eu lieu.** Aucune trace Instruments (iOS), aucune trace de profiler navigateur (web). Le palier 1 la rend possible sans rien déployer. Neuf items device-only recensés en Q-143 §2. | §9.1 point 6 / Q-143 | **la clôture littérale** | QA + Sonnet | **M** |
-| **D-7** | **« Zéro allocation » : l'énoncé du contrat §4.1 est faux.** Mesuré : 1 + 2N objets par frame, N = rangs visibles. Amender le texte (« allocation bornée O(rangs visibles) ») **ou** poser un pool. L'amendement est le geste honnête tant que D-6 n'a rien mesuré. | Q-143 §1.b | rien | Rédacteur du contrat | **S** (amendement) / **M** (pool) |
-| **D-8** | **R13 / L13 — l'appel en cours n'est câblé nulle part.** `liveCall: nil` en dur sur les deux OS ; `LocalLiveCallProvider` existe et n'est appelé par aucun fichier de production. **Contradiction à trancher** : §8 du workshop met la Scène hors périmètre, §9.1 point 2 exige R13. Soit on câble, soit on retire R13 de la grille — mais pas les deux. | Q-140, Q-141, REV-3 | **le point 2** | Produit (arbitrage) puis Sonnet ×2 | **M** |
+| **D-7** | **« Zéro allocation » : l'énoncé du contrat §4.1 est faux.** Mesuré : 1 + 2N objets par frame, N = rangs visibles. Amender le texte (« allocation bornée O(rangs visibles) ») **ou** poser un pool. L'amendement est le geste honnête tant que D-6 n'a rien mesuré. **SOLDÉE le 2026-08-18 (décision ⑧) — par amendement** : le contrat §4.1 lit désormais « allocation bornée O(rangs visibles), jamais O(liste) », note datée avec citation du texte originel (`tasks/lentille-implementation-contract.md` §4.1, renvoi en R2 de §5) ; le pool reste une **option** non ouverte, conditionnée à une mesure device/profiler. **D-6 n'est pas soldée pour autant.** | Q-143 §1.b | rien | Rédacteur du contrat | **S** (amendement) / **M** (pool) |
+| **D-8** | **R13 / L13 — l'appel en cours n'est câblé nulle part.** `liveCall: nil` en dur sur les deux OS ; `LocalLiveCallProvider` existe et n'est appelé par aucun fichier de production. **Contradiction à trancher** : §8 du workshop met la Scène hors périmètre, §9.1 point 2 exige R13. Soit on câble, soit on retire R13 de la grille — mais pas les deux. **TRANCHÉE le 2026-08-18 (décision ⑥) : R13/L13 est RETIRÉ de la grille de recette** — le contrat §8 prime, la liste affichera la Scène le jour où la Scène existera. La **capacité** reste prouvée (`test_L13_liveCallBanner_isConsumedByTheRow` demeure, à ne pas supprimer) ; le **câblage** de `ConversationLiveCallProviding` rejoint le **backlog de la Scène**, hors phase 1. À mentionner dans les notes de version du **palier 2**. | Q-140, Q-141, REV-3 | **le point 2** | Produit (arbitrage) puis Sonnet ×2 | **M** |
 | **D-9** | **Parité `thread` web : 9 lignes sur 15 manquantes.** F15 (effets bitfield, absents), F10 (menu long-press + rangée fantôme), F11 (3 badges sur 4, et « transféré » mal placé — sous le contenu au lieu d'au-dessus de l'identité), F12 (saut recherche → bande de focus), F01/F02 (insertion live, typing), F05 (habillage des réactions non restylé), F08 (géométrie des slots). F14 est **légitimement** absent (DOM non inversé). | Q-140, REV-4ter | **le point 4** | Vague web dédiée | **L** |
-| **D-10** | **Matrice en mode Script : aucun témoin, aucune plateforme.** §9.1 point 4 exige « en Focal **et** en Script ». Script partage l'hôte de Focal ; la question est de savoir si la matrice doit être rejouée ou si la clause doit disparaître. | §9.1 point 4 | **le point 4** | Sonnet ×2 (ou amendement) | **M** |
+| **D-10** | **Matrice en mode Script : aucun témoin, aucune plateforme.** §9.1 point 4 exige « en Focal **et** en Script ». Script partage l'hôte de Focal ; la question est de savoir si la matrice doit être rejouée ou si la clause doit disparaître. **SOLDÉE le 2026-08-18 (décision ⑦) — par amendement** : Script **hérite des preuves de Focal** (même hôte, même moteur, seule la densité diffère) ; la matrice n'est pas rejouée. Amendement porté à sa source (`tasks/focal-implementation-contract.md`, LWS-13) avec citation du texte originel. **Risque résiduel nommé, non couvert** : un défaut spécifique à la densité (troncature, espacement) n'a aucun témoin dédié. | §9.1 point 4 | **le point 4** | Sonnet ×2 (ou amendement) | **M** |
 | **D-11** | **R-137 — montage de la Rivière au fil.** Choisir Rivière au menu ⇒ voir Focal. Le verrou R6-3 tient la porte fermée et tombe le jour du montage. Les trois lois (`river-lanes`/`river-step`/`river-headers`, 53 vecteurs, 2 miroirs) et les deux peaux (Canvas iOS, SVG web) sont **déjà là** : c'est un montage, pas une conception. | REV-5 couture (c) | **palier 5** | Vague dédiée | **L** |
-| **D-12** | **L14 — l'heure relative du web ne vit pas.** iOS a son `TimelineView(.periodic(by: 60))` ; le web calcule `time` une fois par rendu. Une liste laissée ouverte affiche une heure périmée. | Q-140 | **palier 4** (cosmétique) | Sonnet (web) | **S** |
-| **D-13** | **Le mapper Jest mort — décision d'équipe pendante.** `apps/web/jest.config.js:33` mappe `@meeshy/shared/*` vers `dist/` ; `next/jest` régénère son propre mapper depuis les `paths` du `tsconfig.json`, qui pointent vers la SOURCE, **et cette génération l'emporte**. Toute suite web qui importe `@meeshy/shared/...` charge la source, jamais le build — le contraire de ce que dit le commentaire. Piège aggravant : `require.resolve` rend pourtant un chemin `dist/`. **Deux issues** : réparer le mapper (⇒ toutes les suites web basculent sur `dist/`, casse potentiellement large) ou retirer la ligne et assumer « le web teste la source ». La parité `dist/` elle-même est déjà garantie par ailleurs (`shared-law-dist-parity.test.ts`, 46 vecteurs, import par chemin relatif explicite, discrimination prouvée dans les deux sens). | Cycle 61 / REV-4ter | rien (mensonge de configuration) | Équipe web | **S** (retrait) / **M** (réparation) |
+| **D-12** | **L14 — l'heure relative du web ne vit pas.** iOS a son `TimelineView(.periodic(by: 60))` ; le web calcule `time` une fois par rendu. Une liste laissée ouverte affiche une heure périmée. **SOLDÉE (2026-08-18)** — tick mutualisé UN SEUL `setInterval` de 60s (`apps/web/hooks/lentille/use-lentille-live-tick.ts`, patron R6-6), consommé par `LentilleRow` (`useLentilleLiveTick()`), compteur d'abonnés (pas de fuite en navigation). RED-GREEN jest fake timers (`LentilleRow.live-time.test.tsx`) : libellé gelé sur le code d'avant, vivant après. Commit `005eaa63` (`fix(web): [A-155] D-12 soldée — l'heure relative de la liste vit, un seul tick partagé de 60 s`). | Q-140 | **palier 4** (cosmétique) | Sonnet (web) | **S** |
+| **D-13** | **Le mapper Jest mort — décision d'équipe pendante.** `apps/web/jest.config.js:33` mappe `@meeshy/shared/*` vers `dist/` ; `next/jest` régénère son propre mapper depuis les `paths` du `tsconfig.json`, qui pointent vers la SOURCE, **et cette génération l'emporte**. Toute suite web qui importe `@meeshy/shared/...` charge la source, jamais le build — le contraire de ce que dit le commentaire. Piège aggravant : `require.resolve` rend pourtant un chemin `dist/`. **Deux issues** : réparer le mapper (⇒ toutes les suites web basculent sur `dist/`, casse potentiellement large) ou retirer la ligne et assumer « le web teste la source ». La parité `dist/` elle-même est déjà garantie par ailleurs (`shared-law-dist-parity.test.ts`, 46 vecteurs, import par chemin relatif explicite, discrimination prouvée dans les deux sens). **TRANCHÉE-RETIRÉE (2026-08-18)** — décision produit : la ligne est retirée, « le web teste la source » assumé. Re-preuve avant retrait : suite `hooks/lentille/__tests__/use-lentille-sections.test.ts` rejouée ligne présente puis ligne retirée, MÊME résultat les deux fois (1 suite / 4 tests verts) ; discrimination par poison du `dist/` compilé — le calcul lu reste celui de la source dans les deux cas, `require.resolve` seul continue de rendre un chemin `dist/`. Commentaire menteur remplacé par la vérité. Commit `chore(web/tests): [A-156] D-13 tranchée — le mapper mort retiré, la config dit la vérité` (ce commit — un hash littéral s'auto-invaliderait à l'amend, voir `git log --oneline -- apps/web/jest.config.js`). | Cycle 61 / REV-4ter | rien (mensonge de configuration) | Équipe web | **S** (retrait) / **M** (réparation) |
 | **D-14** | **R6-7 — l'étage agent est mono-langue de fait.** Réserve neuve de REV-5, jamais instruite depuis. À qualifier avant d'être chiffrée. | REV-5 | rien | Sonnet (agent) — audit d'abord | **S** (audit) |
-| **D-15** | **`agent_grammar` — décision produit ÉCRITE manquante.** La condition technique du contrat §5.2 (chemin serveur C3 non écrivant) est **TENUE** depuis G-126 (`03b4eaea`, clôture d'imports prouvée, durcie en allowlist exacte par Q-146/R6-1). Le site d'appel iOS lit enfin le vrai drapeau (R6-2, `1f32b312`). Il ne manque **que** la décision écrite — que ni Q-143 ni Q-145 ne prennent à la place de l'équipe. | Contrat §5.2 / #3010 WS-10 | l'activation d'`agent_grammar` | Produit | **S** |
-| **D-16** | **L03 / L05 / L09 web — écarts `absent-structurel` du modèle.** `lastMessageLocation`, `hasPendingSync` et les glyphes de kind n'existent pas dans le modèle `Conversation` web. Ce ne sont pas des oublis d'UI : ce sont des données absentes. À ouvrir avec le modèle, pas avec la peau. | Q-140 | rien | Backlog produit | **M** |
-| **D-17** | **Phase 2 — Android, LWS-12.** Fermée par construction tant que Q-145 n'est pas actée. Sur un cœur figé, l'estimation du plan tient : **~15 tâches Sonnet + 1 revue Opus**. Les cinq critères de §9.2 n'ont **rien de neuf à décider** — miroirs Kotlin sur les mêmes vecteurs, `LentilleDimens` == tokens, 32 id en JUnit, R1→R20 rejouée, et les deux divergences Android connues (sectionnement `PINNED/CATEGORY/ALL` → loi partagée ; miroir manquant du résolveur d'aperçu du Prisme). **Point d'attention** : §9.2 hérite du compte faux (« les 44 id ») — le corriger dans l'avenant, pas au milieu de la vague. | Contrat LWS-12 / §9.2 | — | Vague Android | **L** |
+| **D-15** | **`agent_grammar` — décision produit ÉCRITE manquante.** La condition technique du contrat §5.2 (chemin serveur C3 non écrivant) est **TENUE** depuis G-126 (`03b4eaea`, clôture d'imports prouvée, durcie en allowlist exacte par Q-146/R6-1). Le site d'appel iOS lit enfin le vrai drapeau (R6-2, `1f32b312`). Il ne manque **que** la décision écrite — que ni Q-143 ni Q-145 ne prennent à la place de l'équipe. **SOLDÉE le 2026-08-18 (décision ⑨) : la décision écrite est « PAS MAINTENANT »** — `agent_grammar` reste OFF par choix, non par défaut technique. **Réexamen après le palier 3 et après l'audit R6-7/D-14** (étage mono-langue). Le chemin technique reste prouvé et prêt. Décision consignée à sa source, `tasks/lentille-implementation-contract.md` §5.2. | Contrat §5.2 / #3010 WS-10 | l'activation d'`agent_grammar` | Produit | **S** |
+| **D-16** | **L03 / L05 / L09 web — écarts `absent-structurel` du modèle.** `lastMessageLocation`, `hasPendingSync` et les glyphes de kind n'existent pas dans le modèle `Conversation` web. Ce ne sont pas des oublis d'UI : ce sont des données absentes. À ouvrir avec le modèle, pas avec la peau. **CONSIGNÉE le 2026-08-18 (décision ⑪) : « iOS seulement pour la phase 1 »** — les trois écarts `absent-structurel` sont **assumés** ; l'ouverture du chantier modèle web reste au **backlog, non planifiée**. | Q-140 | rien | Backlog produit | **M** |
+| **D-17** | **Phase 2 — Android, LWS-12.** Fermée par construction tant que Q-145 n'est pas actée. Sur un cœur figé, l'estimation du plan tient : **~15 tâches Sonnet + 1 revue Opus**. Les cinq critères de §9.2 n'ont **rien de neuf à décider** — miroirs Kotlin sur les mêmes vecteurs, `LentilleDimens` == tokens, 32 id en JUnit, R1→R20 rejouée, et les deux divergences Android connues (sectionnement `PINNED/CATEGORY/ALL` → loi partagée ; miroir manquant du résolveur d'aperçu du Prisme). **Point d'attention** : §9.2 hérite du compte faux (« les 44 id ») — le corriger dans l'avenant, pas au milieu de la vague ; l'erratum **32 id** est acté au §9.1-AMENDEMENT du workshop. **NO-GO daté du 2026-08-18 (décision ⑫)** : la phase 2 n'est **pas** ouverte — priorité à la stabilisation des paliers 1-3, réexamen ensuite. La dette reste **estimée** (~15 tâches Sonnet + 1 revue Opus) et **fermée** en l'état. | Contrat LWS-12 / §9.2 | — | Vague Android | **L** |
+| **D-18** | **SOLDÉE le 2026-08-18** — commit `fix(ios): [A-158] D-18 soldée — l'heure de la rangée Lentille passe AA, le tint indigo assombri au cran minimal, témoin de ratio posé`. Mesure propre re-jouée (composition alpha PUIS luminance relative WCAG, patron Q142-a) : **la mesure corrige le finding d'origine** — le déficit n'était pas limité au clair, les DEUX thèmes étaient rouges (`indigo500.opacity(0.4)` sur `backgroundSecondary(light)` `#F8F7FF` : **1,673:1**, pas «≈1,67» approximatif ; `indigo400.opacity(0.5)` sur `backgroundSecondary(dark)` `#13111C` : **2,456:1**, jamais consigné avant). Fonds réels re-prouvés : `LentilleConversationRow` ne porte aucune carte — le rang plat se lit sur le fond ambiant (`ThemeManager.backgroundGradient`), dont le point le plus sombre en clair est EXACTEMENT `backgroundSecondary(light)` ; `LentilleFocusCard` peint `backgroundSecondary(isDark:)` en overlay à la même position — les deux convergent vers la même paire de couleurs. Corrigé en assombrissant/opacifiant au cran minimal, dans la famille indigo (jamais un gris neutre) : `MeeshyColors.textMuted(isDark:)` passe de `indigo500.opacity(0.4)`/`indigo400.opacity(0.5)` à **`indigo700.opacity(0.8)` (clair) / `indigo300.opacity(0.7)` (sombre)** (`packages/MeeshySDK/Sources/MeeshyUI/Theme/MeeshyColors.swift:110-126`). Nouveaux ratios sur le fond réel de la rangée : **4,763:1 clair / 5,128:1 sombre** — AA tenu avec marge sur TOUS les fonds clairs déclarés du design system (`backgroundSecondary`, `backgroundPrimary`, `backgroundTertiary`, les trois arrêts du dégradé ambiant, `inputBackground`, deux thèmes : 4,597:1 à 5,262:1). Témoin de ratio posé — `apps/ios/MeeshyTests/Unit/Lentille/LentilleTextMutedContrastAATests.swift` (7 tests : conformité calculée depuis `MeeshyColors.textMuted(isDark:)` sur 7 fonds clairs/5 fonds sombres déclarés, mesure exacte sur le fond réel de la rangée, garde-fou historique verrouillant les DEUX anciennes formules < 4,5:1, garde de source liant le commentaire aux littéraux réels). RED prouvé (réplique Node du calcul WCAG, `/tmp` non commité) : anciennes valeurs 1,673:1/2,456:1 < 4,5:1 — le témoin tel qu'écrit aurait rougi. | Q142-a (finding, 2026-08-18) / **Q-145** (mesure et correctif) | **plus rien** | Sonnet (iOS) | fait |
 
 ---
 

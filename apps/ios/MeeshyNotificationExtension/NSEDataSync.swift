@@ -310,6 +310,15 @@ nonisolated enum NSEDataSync {
     private static let defaultApiBaseURL = "https://gate.meeshy.me"
     private static let apiBaseURLDefaultsKey = "meeshy_api_base_url"
 
+    /// L'origine API de confiance, telle que résolue par l'allowlist ci-dessus.
+    ///
+    /// Exposée parce que le NSE en a besoin AILLEURS que pour ses propres
+    /// requêtes : les URLs média du payload push (avatar de l'auteur, pièce
+    /// jointe du message) arrivent en chemin relatif et doivent être résolues
+    /// contre cette même origine — jamais contre une base dictée par le
+    /// payload, qui n'est pas une source de confiance.
+    static var trustedApiBaseURL: String { resolveApiBaseURL() }
+
     private static func resolveApiBaseURL() -> String {
         guard let defaults = UserDefaults(suiteName: appGroupId),
               let stored = defaults.string(forKey: apiBaseURLDefaultsKey),

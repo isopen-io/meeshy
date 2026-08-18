@@ -89,6 +89,37 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// d'insertion tant que l'hôte ne l'a pas posé — comportement historique.
     var nearBottomThreshold: CGFloat = .greatestFiniteMagnitude
 
+    /// **Plafond de compensations d'offset PAR TRANSACTION CoreAnimation.**
+    ///
+    /// Chaque `contentOffsetAdjustment` posé pendant la passe de cellules
+    /// visibles DÉPLACE la fenêtre → de nouvelles cellules se réalisent →
+    /// nouvelles corrections estimé/réel → nouvelle passe. Sur un fling
+    /// violent (des dizaines de cellules réalisées par frame), la cascade
+    /// dépasse la garde de ré-entrance d'UIKit : assertion SIGTRAP dans
+    /// `_setNeedsVisibleCellsUpdate` (`_updateVisibleCellsNow` ×7) — trois
+    /// crashs reproduits 2026-08-18 (08:11, 08:15 ×2) sur long défilement.
+    ///
+    /// Au-delà du plafond, la correction est ABANDONNÉE pour la transaction
+    /// courante : le contenu glisse du delta non compensé — invisible en
+    /// mouvement rapide (les rangées concernées sont sous la fenêtre, et à
+    /// cette vitesse l'œil ne suit pas 60 pt) — et le défilement lent, qui ne
+    /// réalise qu'une ou deux cellules par frame, garde sa compensation
+    /// intégrale. Le compteur se réarme au tour de runloop suivant.
+    static let maxOffsetAdjustmentsPerTransaction = 3
+
+    private var offsetAdjustmentsThisTransaction = 0
+    private var offsetAdjustmentResetScheduled = false
+
+    private func noteOffsetAdjustment() {
+        offsetAdjustmentsThisTransaction += 1
+        guard !offsetAdjustmentResetScheduled else { return }
+        offsetAdjustmentResetScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            self?.offsetAdjustmentsThisTransaction = 0
+            self?.offsetAdjustmentResetScheduled = false
+        }
+    }
+
     private var pendingBatchAdjustment: CGFloat = 0
     private var stashedDeletionHeight: CGFloat = 0
 
@@ -116,7 +147,9 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
             heightDelta: preferredAttributes.frame.height - originalAttributes.frame.height,
             contentOffsetY: collectionView.contentOffset.y
         )
-        if adjustment != 0 {
+        if adjustment != 0,
+           offsetAdjustmentsThisTransaction < Self.maxOffsetAdjustmentsPerTransaction {
+            noteOffsetAdjustment()
             context.contentOffsetAdjustment = CGPoint(
                 x: context.contentOffsetAdjustment.x,
                 y: adjustment

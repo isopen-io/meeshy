@@ -114,12 +114,21 @@ final class FocalScrollPassSourceGuardTests: XCTestCase {
         for symbol in [
             "FocalFocusCurve.focusCurve(",
             "FocalFocusCurve.electFocusRow(",
-            "FocalFocusCurve.focusBandOffset",
-            "FocalFocusCurve.focusBandHalfHeight"
+            // Bande du FIL (spec §5, 150 ± 95) — plus jamais la bande de la
+            // LISTE (focusBandOffset/focusBandHalfHeight, 140 ± 45), qui
+            // reste le domaine de la Lentille.
+            "FocalFocusCurve.threadFocusBandOffset",
+            "FocalFocusCurve.threadFocusBandHysteresis"
         ] {
             XCTAssertTrue(
                 code.contains(symbol),
-                "FocalPerspectiveGeometry.swift doit consommer `\(symbol)` du miroir GELÉ — la courbe, la bande et l'hystérésis ne se recalculent jamais ici"
+                "FocalPerspectiveGeometry.swift doit consommer `\(symbol)` du miroir — la courbe, la bande et l'hystérésis ne se recalculent jamais ici"
+            )
+        }
+        for listSymbol in ["FocalFocusCurve.focusBandOffset", "FocalFocusCurve.focusBandHalfHeight"] {
+            XCTAssertFalse(
+                code.contains(listSymbol),
+                "FocalPerspectiveGeometry.swift consomme `\(listSymbol)` — c'est la bande de la LISTE (Lentille) ; le fil lit threadFocusBand* (spec §5)"
             )
         }
     }

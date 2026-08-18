@@ -147,6 +147,21 @@ jest.mock('@meeshy/shared/utils/sender-identity', () => ({
   getSenderUserId: (sender: any) => sender?.userId ?? sender?.id ?? null,
 }));
 
+// D-4 / R5-6, point 3(c) — ce fichier teste le CÂBLAGE (le socket appelle-t-il
+// le bon point d'entrée avec le bon état de drapeau ?), pas la logique
+// d'application elle-même — celle-ci a sa propre suite dédiée
+// (`lib/conversations/__tests__/reading-mode-broadcast.test.ts`).
+const applyReadingModePreferenceBroadcastMock = jest.fn();
+jest.mock('@/lib/conversations/reading-mode-broadcast', () => ({
+  applyReadingModePreferenceBroadcast: (...args: any[]) =>
+    applyReadingModePreferenceBroadcastMock(...args),
+}));
+
+let readingModesFlagActive = false;
+jest.mock('@/hooks/lentille/use-reading-modes-flag', () => ({
+  useReadingModesFlag: () => ({ active: readingModesFlagActive }),
+}));
+
 import { useSocketCacheSync, mergeConversationUpdate } from '../use-socket-cache-sync';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
 
@@ -1017,6 +1032,8 @@ describe('useSocketCacheSync — user:preferences-updated', () => {
   beforeEach(() => {
     capturedPreferencesListener = null;
     applyRemotePreferencesMock.mockClear();
+    applyReadingModePreferenceBroadcastMock.mockClear();
+    readingModesFlagActive = false;
     jest.clearAllMocks();
   });
 
@@ -1085,6 +1102,69 @@ describe('useSocketCacheSync — user:preferences-updated', () => {
     });
 
     expect(applyRemotePreferencesMock).not.toHaveBeenCalled();
+  });
+});
+
+// D-4 / R5-6, point 3(c) — le MÊME événement `user:preferences-updated`
+// (scope conversation) nourrit AUSSI le magasin scopé de mode de lecture,
+// gardé par `reading_modes` — pendant web de
+// `MeeshyApp.swift:onReadingModePreferenceChanged`.
+describe('useSocketCacheSync — user:preferences-updated forwards to the reading-mode broadcast handler (D-4)', () => {
+  beforeEach(() => {
+    capturedPreferencesListener = null;
+    applyReadingModePreferenceBroadcastMock.mockClear();
+    jest.clearAllMocks();
+  });
+
+  const conversationScopeEvent = {
+    userId: 'current-user',
+    conversationId: 'conv-1',
+    version: 4,
+    reset: false,
+    preferences: {
+      isPinned: true,
+      isMuted: false,
+      mentionsOnly: false,
+      isArchived: false,
+      tags: [],
+      categoryId: null,
+      orderInCategory: null,
+      customName: null,
+      reaction: null,
+      readingMode: 'focal',
+      deletedForUserAt: null,
+      clearHistoryBefore: null,
+    },
+  };
+
+  it('forwards the conversation scope, with the CURRENT flag state, drapeau ALLUMÉ', () => {
+    readingModesFlagActive = true;
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!(conversationScopeEvent); });
+
+    expect(applyReadingModePreferenceBroadcastMock).toHaveBeenCalledWith(conversationScopeEvent, true);
+  });
+
+  it('forwards the conversation scope, with the CURRENT flag state, drapeau ÉTEINT', () => {
+    readingModesFlagActive = false;
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!(conversationScopeEvent); });
+
+    expect(applyReadingModePreferenceBroadcastMock).toHaveBeenCalledWith(conversationScopeEvent, false);
+  });
+
+  it('does not forward the category scope', () => {
+    readingModesFlagActive = true;
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!({ userId: 'current-user', category: 'notifications' }); });
+
+    expect(applyReadingModePreferenceBroadcastMock).not.toHaveBeenCalled();
   });
 });
 

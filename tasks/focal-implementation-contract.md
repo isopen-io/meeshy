@@ -544,6 +544,7 @@ extension ConversationAnalysisService: ConversationAnalysisProviding {}
 - **Garde de police fixe** : aucun fichier de `Focal/**` ne contient `.font(.system(size:`.
 - **Contraste** : `WCAGContrast` sur les 6 paires du design (texte/fond en clair et sombre, ✓✓ lu, méta, nom) ≥ 4,5:1.
 - **Matrice temps réel §5** : 16 lignes, chacune un test de comportement en Focal **et** en Script.
+  > **Amendé le 2026-08-18** (décision produit ⑦). **Texte originel** : « Matrice temps réel §5 : 16 lignes, chacune un test de comportement en Focal **et** en Script. » Se lit désormais : **la matrice est jouée en Focal ; Script hérite des preuves de Focal** — même hôte, même moteur, seule la densité diffère ; elle n'est pas rejouée une seconde fois. **Risque résiduel nommé** : un défaut spécifique à la densité (troncature, espacement) n'a **aucun témoin dédié**. Erratum de compte joint : la matrice compte **15** lignes (`F01`..`F15`), pas 16. Renvois : `tasks/lentille-focal-workshop.md` §9.1-AMENDEMENT ⑦ ; `tasks/lentille-cloture-phase1.md` §1 point 4 et §3 D-10.
 - **Perf** : `FocalScrollPassPerfTests` exclue du gate (comme `MessageListPerformanceTests`), lancée à la main.
 
 **Critères d'acceptation (§7 intégral).** Ce workstream est la traduction 1:1 des six paragraphes de §7 de la spec. Il est le dernier merge, et rien ne ferme le chantier tant qu'il est rouge.

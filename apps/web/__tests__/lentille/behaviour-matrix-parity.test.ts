@@ -170,10 +170,15 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
   L14: {
     covered: false,
     reason:
-      "justifié-absent — aucun mécanisme de tick indépendant construit dans `LentilleRow` : `time` (`LentilleRow.tsx:229`) est calculé UNE fois par rendu " +
-      "(`formatConversationDate`, pas de `setInterval`/`TimelineView`-équivalent) ; re-preuve `grep -n 'setInterval|useEffect' " +
-      "apps/web/components/conversations/lentille/LentilleRow.tsx` → aucune horloge. La branche « durée d'appel » est de toute façon sans support " +
-      "puisque L13 (liveCall) est structurellement absente aujourd'hui (mêmes citations). Infra temps réel non reprise par ce lot, comme F01 côté Focal.",
+      "PARTIELLEMENT tenu depuis D-12/[A-155] (`tasks/lentille-cloture-phase1.md` §3, 2026-08-18) — la MOITIÉ ticker de cet id est désormais réelle : " +
+      "`LentilleRow` s'abonne à `useLentilleLiveTick` (`hooks/lentille/use-lentille-live-tick.ts`), UN SEUL `setInterval` de 60s mutualisé au niveau " +
+      "module (compteur d'abonnés, jamais un minuteur par rang), qui force le rang à relire l'horloge (`time`, `LentilleRow.tsx`) — équivalent " +
+      "fonctionnel du `TimelineView(.periodic(by: 60))` iOS. RED-GREEN : `LentilleRow.live-time.test.tsx` (heure gelée sur le code d'avant, vivante " +
+      "après). Reste `covered: false` ICI, boolean, car la classification `covered:true` de ce fichier exige un jeton `behaviour-matrix:L14` posé " +
+      "(aucun posé par D-12, hors périmètre — correctif minimal) ET parce que la SECONDE moitié du comportement décrit par la matrice — « sert aussi " +
+      "à la durée d'appel » — reste justifiée-absente : `liveCall` reste `null` sur TOUTES les plateformes (`hooks/lentille/use-lentille-sections.ts:10`, " +
+      "`components/conversations/hooks/useConversationSorting.ts:41`), donnée hors périmètre WL-100..108 tant que G-123/G-124 (Rampe gateway) n'ont pas " +
+      "livré la source — voir dette D-8 de `tasks/lentille-cloture-phase1.md`. Infra temps réel de la durée d'appel non reprise par ce lot.",
   },
   L15: {
     covered: true,

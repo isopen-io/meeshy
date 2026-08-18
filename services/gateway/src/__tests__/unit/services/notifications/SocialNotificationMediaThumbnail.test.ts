@@ -149,7 +149,9 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       });
 
       const payload = payloadOfType(mockIO, 'post_like');
-      expect(payload.subtitle).toBe('Votre publication : « Mon plus beau voyage »');
+      // Sous-titre de bannière : l'action, puis ce que la cible ajoute encore
+      // (l'aperçu). « Votre publication » est déjà énoncé par l'action.
+      expect(payload.subtitle).toBe('a réagi 😍 à votre publication · « Mon plus beau voyage »');
       // La vignette voyage quand même (push + in-app).
       expect(payload.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/p.jpg');
       expect(payload.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/p.jpg');

@@ -63,6 +63,26 @@ export function registerDeleteForMeRoutes(
       // gratuit, qui rendrait 500 une opération intégralement réussie.
       let closedAudience: Array<{ id: string; userId: string | null }> = []
 
+      // Le transfert d'ownership est ANNONCÉ plus bas, avec les autres, et pour
+      // la raison que le bloc ci-dessus énonce déjà : « un événement émis ici,
+      // suivi d'un échec du masquage de l'appelant, laisserait les autres tenir
+      // un fait que la réponse HTTP vient de nier ». La règle valait pour la
+      // clôture et pas pour la promotion, qui partait au milieu du geste — un
+      // successeur proclamé créateur auprès de tout le fil, pendant que le 500
+      // affirmait que rien n'avait eu lieu.
+      let promotedSuccessor: { userId: string | null } | null = null
+
+      // Le masquage de l'appelant, DÉCRIT une fois et committé par chaque
+      // branche AVEC son écriture jumelle. Les deux moitiés du geste ne peuvent
+      // plus atterrir séparément : ni une conversation fermée dont l'appelant
+      // reste membre actif, ni deux créateurs — la promotion committée et le
+      // départ perdu laissaient l'ancien créateur en place à côté du nouveau,
+      // état qu'un réessai aggrave en promouvant un troisième participant.
+      const hideSelf = {
+        where: { id: participant.id },
+        data: { deletedForMe: now, isActive: false },
+      }
+
       // If caller is CREATOR, transfer ownership
       if (participant.role === 'creator') {
         // Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien
@@ -86,11 +106,14 @@ export function registerDeleteForMeRoutes(
           // since`. Une clôture qui n'écrit que `isActive: false` n'est portée
           // par AUCUN delta — le participant restant garderait la ligne dans
           // son cache persistant jusqu'à une réconciliation complète.
-          const closed = await prisma.conversation.update({
-            where: { id: conversationId },
-            data: { isActive: false, closedAt: now, closedBy: userId },
-            include: { participants: { select: { id: true, userId: true, isActive: true } } },
-          })
+          const [closed] = await prisma.$transaction([
+            prisma.conversation.update({
+              where: { id: conversationId },
+              data: { isActive: false, closedAt: now, closedBy: userId },
+              include: { participants: { select: { id: true, userId: true, isActive: true } } },
+            }),
+            prisma.participant.update(hideSelf),
+          ])
           closedAudience = (closed.participants ?? []).filter(p => p.isActive)
         } else {
           // Try moderator first, then oldest active member
@@ -116,43 +139,34 @@ export function registerDeleteForMeRoutes(
           }
 
           if (successor) {
-            await prisma.participant.update({
-              where: { id: successor.id },
-              data: { role: 'creator' },
-            })
-
-            const io = socketIOHandler?.getManager()?.getIO()
-            if (io) {
-              io.to(ROOMS.conversation(conversationId)).emit(
-                SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
-                {
-                  conversationId,
-                  userId: successor.userId,
-                  newRole: 'creator',
-                  updatedBy: userId,
-                }
-              )
-            }
+            await prisma.$transaction([
+              prisma.participant.update({
+                where: { id: successor.id },
+                data: { role: 'creator' },
+              }),
+              prisma.participant.update(hideSelf),
+            ])
+            promotedSuccessor = { userId: successor.userId }
           } else {
             // No other active members — close conversation. Personne à
             // prévenir ici (c'est la condition même de cette branche), mais la
             // clôture doit rester ENREGISTRÉE : même écriture que la branche
             // jumelle ci-dessus, pour la même raison de rattrapage.
-            const closed = await prisma.conversation.update({
-              where: { id: conversationId },
-              data: { isActive: false, closedAt: now, closedBy: userId },
-              include: { participants: { select: { id: true, userId: true, isActive: true } } },
-            })
+            const [closed] = await prisma.$transaction([
+              prisma.conversation.update({
+                where: { id: conversationId },
+                data: { isActive: false, closedAt: now, closedBy: userId },
+                include: { participants: { select: { id: true, userId: true, isActive: true } } },
+              }),
+              prisma.participant.update(hideSelf),
+            ])
             closedAudience = (closed.participants ?? []).filter(p => p.isActive)
           }
         }
+      } else {
+        // Aucune écriture jumelle à accorder : le masquage est tout le geste.
+        await prisma.participant.update(hideSelf)
       }
-
-      // Mark as deleted for this user
-      await prisma.participant.update({
-        where: { id: participant.id },
-        data: { deletedForMe: now, isActive: false },
-      })
       invalidateParticipantLookup(participant.id, conversationId)
 
       // Remove user from socket room silently
@@ -197,6 +211,28 @@ export function registerDeleteForMeRoutes(
             event: SERVER_EVENTS.CONVERSATION_CLOSED,
             payload: { conversationId, closedBy: userId, closedAt: now.toISOString() },
           })
+        }
+
+        // Le transfert d'ownership, annoncé ICI et non à l'écriture — même
+        // discipline que les deux faits ci-dessus, et il lui manquait. La
+        // promotion partait entre les deux écritures : si le masquage de
+        // l'appelant échouait ensuite, tout le fil avait déjà appris un
+        // successeur que le 500 démentait, et que la transaction annule
+        // désormais.
+        //
+        // La room de conversation seule est CONSERVÉE ici : contrairement à la
+        // clôture, un rang ne se rend sur aucun écran de liste — le cycle 67 l'a
+        // vérifié plutôt que déduit sur ce même événement.
+        if (promotedSuccessor) {
+          io.to(ROOMS.conversation(conversationId)).emit(
+            SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
+            {
+              conversationId,
+              userId: promotedSuccessor.userId,
+              newRole: 'creator',
+              updatedBy: userId,
+            }
+          )
         }
 
         // Invalidate the 5-minute participantId cache so the now-inactive user
