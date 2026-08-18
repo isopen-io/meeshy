@@ -77,6 +77,14 @@ export interface LentilleFocusCardProps {
   readonly onNotchTap: () => void;
   /** `prefers-reduced-motion` ⇒ fond SEUL (ring supprimé). Fourni par le montage. */
   readonly reducedMotion?: boolean;
+  /**
+   * Q142-c (2026-08-18) — drapeau du fil / Focal (WF-110, `useReadingModesFlag`),
+   * résolu par le montage (`LentillePeek`, `useReadingModesFlag`), jamais
+   * ici : cette carte reste une peau qui CONSOMME. `false` par défaut —
+   * même défaut que `notchText`, pour qu'aucun appelant existant ne change
+   * de comportement tant qu'il ne fournit pas cette prop.
+   */
+  readonly isReadingModesFlagActive?: boolean;
 }
 
 /**
@@ -107,14 +115,23 @@ export function LentilleFocusCard({
   t,
   onNotchTap,
   reducedMotion = false,
+  isReadingModesFlagActive = false,
 }: LentilleFocusCardProps) {
   const TypeIcon = TYPE_ICON[conversation.type] ?? Users;
   const showTypeChip = conversation.type !== 'direct';
   // R6-5 — le SEUL branchement attendu : `conversation.bridge?.suggestedMode`
   // (le champ précalculé par le serveur/le substitut, cf. `notchText`) prime
   // sur `decision` (le recalcul local que `LentillePeek` continue de fournir
-  // en repli) — jamais un second calcul dans cette carte.
-  const label = notchText(decision, preference, t, conversation.bridge?.suggestedMode);
+  // en repli) — jamais un second calcul dans cette carte. Q142-c —
+  // `isReadingModesFlagActive` fait primer le défaut « Bulles » sur les deux ;
+  // voir la docstring de `notchText`.
+  const label = notchText(
+    decision,
+    preference,
+    t,
+    conversation.bridge?.suggestedMode,
+    isReadingModesFlagActive
+  );
 
   return (
     <>
