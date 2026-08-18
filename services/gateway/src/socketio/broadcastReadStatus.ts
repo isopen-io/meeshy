@@ -6,6 +6,7 @@ import {
   emitToConversationParticipants,
   type ConversationRoomEmitter,
 } from './emitToConversationParticipants.js';
+import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 
 /**
  * Les deux lectures dont la diffusion a besoin, nommées par ce qu'elles
@@ -196,14 +197,24 @@ export async function broadcastReadStatus(
   const actorReadSync = actorRead?.sync;
 
   /**
-   * Le pont ✦ de CETTE conversation pour CE lecteur, ou `undefined`.
+   * Le pont ✦ de CETTE conversation pour CE lecteur — rendu comme le CHAMP
+   * DÉCLARÉ du contrat (cycle 63), jamais comme un `ConversationBridge |
+   * undefined` : cet optionnel-là confondait « il n'y a pas de pont » et « je
+   * n'ai pas calculé », et les deux clients recopient ce champ autoritairement.
    *
-   * Trois gardes de coût, dans l'ordre où elles éliminent :
-   *   1. pas de constructeur ⇒ forme courte, comportement d'avant G-123 ;
-   *   2. compteur à ZÉRO ⇒ aucune requête. C'est le cas dominant (lire une
-   *      conversation la vide) et l'effacement y est correct — contrat gelé
-   *      §3.2 : un compteur nul n'a pas de pont ;
-   *   3. la passe tombe ⇒ on rend `undefined`, l'appelant émet le compteur seul.
+   * Trois gardes de coût, dans l'ordre où elles éliminent — et chacune déclare
+   * ce qu'elle SAIT :
+   *   1. pas de constructeur ⇒ on ne sait rien, donc `bridgeNotComputed()` :
+   *      le client garde le pont qu'il a. C'est le comportement d'avant G-123,
+   *      enfin exprimé comme un silence plutôt que comme un effacement ;
+   *   2. compteur à ZÉRO ⇒ aucune requête, et pourtant un fait CONNU. C'est le
+   *      cas dominant (lire une conversation la vide) et l'effacement y est
+   *      correct — contrat gelé §3.2 : un compteur nul n'a pas de pont. On
+   *      l'AFFIRME (`bridgeComputed(undefined)` ⇒ `null`) ;
+   *   3. la passe TOMBE ⇒ `bridgeNotComputed()`. C'est la moitié que le
+   *      recalcul seul ne pouvait pas exprimer : rendre `undefined` ici
+   *      effaçait le pont en cache sur la foi d'un incident, et démentait la
+   *      posture best-effort que les quatre émetteurs revendiquent.
    *
    * Le curseur n'est PAS relu : celui que la passe irait chercher est celui que
    * `actorRead` vient de lire. La map est donc TOUJOURS fournie, y compris VIDE
@@ -214,8 +225,12 @@ export async function broadcastReadStatus(
    * vide » là où il n'y a rien — dans les deux cas la passe retombe sur
    * `joinedAt`, mais seule la map vide le fait sans repayer la lecture.
    */
-  const buildActorBridge = async (): Promise<ConversationBridge | undefined> => {
-    if (!bridgeService || !actorRead || actorRead.sync.unreadCount <= 0) return undefined;
+  const buildActorBridge = async (): Promise<{ readonly bridge?: ConversationBridge | null }> => {
+    // Ne pas AVOIR de constructeur, c'est ne rien savoir — donc ne rien dire.
+    if (!bridgeService || !actorRead) return bridgeNotComputed();
+    // Un compteur nul, en revanche, est un FAIT connu sans requête (contrat
+    // gelé §3.2) : le lecteur a tout lu, son pont doit tomber. On l'affirme.
+    if (actorRead.sync.unreadCount <= 0) return bridgeComputed(undefined);
     try {
       const bridges = await bridgeService.buildBridgeData({
         viewerId: personalRoomKey,
@@ -226,11 +241,12 @@ export async function broadcastReadStatus(
           actorRead.cursorRow ? [[args.participantId, actorRead.cursorRow]] : []
         ),
       });
-      return bridges.get(args.conversationId)?.bridge;
+      return bridgeComputed(bridges.get(args.conversationId)?.bridge);
     } catch {
       // Best-effort, même posture que les trois émetteurs frères : le pont est
-      // un confort, la pastille est le produit.
-      return undefined;
+      // un confort, la pastille est le produit. Et depuis le cycle 63, un
+      // incident de passe ne détruit plus le pont déjà en cache : on se tait.
+      return bridgeNotComputed();
     }
   };
 
@@ -242,7 +258,7 @@ export async function broadcastReadStatus(
   // du SITE d'appel, disjointe de celle du callee (§ Critical Gotchas, `void
   // p`) : la promesse peut n'être jamais attendue (aucun `read`), et un rejet
   // sans écouteur tue le process sous Node 22.
-  const actorBridgePromise = buildActorBridge().catch(() => undefined);
+  const actorBridgePromise = buildActorBridge().catch(() => bridgeNotComputed());
 
   // Synchro interne, pas une divulgation : le badge se recale sur les appareils
   // de l'acteur quelle que soit sa préférence — et le pont qui le qualifie part
@@ -250,13 +266,19 @@ export async function broadcastReadStatus(
   // dur — une lecture exacte ou partielle n'avance le curseur que sur le
   // préfixe contigu déjà lu, donc des messages peuvent légitimement rester non
   // lus, et un zéro viderait à tort le badge sur TOUS ses appareils.
+  //
+  // Le champ `bridge` DÉCLARE lequel des trois états il porte (cycle 63) : un
+  // pont recalculé, un `null` qui affirme qu'il n'y en a pas, ou RIEN quand la
+  // passe n'a pas tourné. Ce dernier cas — pas de constructeur, ou passe tombée
+  // — était jusqu'ici indistinguable du deuxième, et effaçait donc le pont que
+  // le lecteur avait en cache sur la foi d'un incident.
   const emitUnreadUpdate = async () => {
     if (!actorReadSync) return;
-    const bridge = await actorBridgePromise;
+    const bridgeField = await actorBridgePromise;
     io.to(ROOMS.user(personalRoomKey)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
       conversationId: args.conversationId,
       unreadCount: actorReadSync.unreadCount,
-      ...(bridge ? { bridge } : {}),
+      ...bridgeField,
     });
   };
 

@@ -44,7 +44,7 @@ let conversationClosedCallback: ((data: { conversationId: string; closedBy: stri
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
 let pendingMessagesDeliveredCallback: ((data: { count: number; conversationIds: string[] }) => void) | null = null;
-let unreadUpdatedCallback: ((data: { conversationId: string; unreadCount: number }) => void) | null = null;
+let unreadUpdatedCallback: ((data: { conversationId: string; unreadCount: number; bridge?: unknown }) => void) | null = null;
 let linkMessageNewCallback: ((data: { message: Record<string, unknown> }) => void) | null = null;
 let conversationJoinErrorCallback: ((data: { conversationId: string; reason: string; message: string }) => void) | null = null;
 let messagePinnedCallback: ((data: { messageId: string; conversationId: string; pinnedBy: string; pinnedAt: string }) => void) | null = null;
@@ -126,7 +126,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       translationCallback = callback;
       return mockUnsubscribeTranslation;
     },
-    onUnreadUpdated: (callback: (data: { conversationId: string; unreadCount: number }) => void) => {
+    onUnreadUpdated: (callback: (data: { conversationId: string; unreadCount: number; bridge?: unknown }) => void) => {
       unreadUpdatedCallback = callback;
       return jest.fn();
     },
@@ -2190,6 +2190,99 @@ describe('useSocketCacheSync — suite', () => {
       expect(rows.find((c) => c.id === 'conv-a')?.lastMessage?.id).toBe('msg-9');
 
       useNotificationStore.getState().setActiveConversationId(null);
+    });
+  });
+
+  /**
+   * Le pont ✦ sur `conversation:unread-updated` — LES TROIS ÉTATS (cycle 63).
+   *
+   * Ce handler recopiait `data.bridge` INCONDITIONNELLEMENT, `undefined`
+   * compris, et son commentaire le revendiquait : « un pont ABSENT du payload
+   * wire DOIT effacer un pont déjà en cache ». La règle était juste pour
+   * l'émetteur qu'elle avait en tête — le fan-out d'envoi, qui calcule
+   * toujours — et fausse pour les trois autres, qui ne calculent pas toujours.
+   *
+   * Le serveur distingue désormais ses deux silences, et ce témoin monte le
+   * VRAI handler sur le VRAI cache pour prouver que le client les entend :
+   *
+   *   `bridge: {...}` → remplace
+   *   `bridge: null`  → efface
+   *   (clé absente)   → NE TOUCHE À RIEN
+   *
+   * Le troisième cas est le seul qui change de comportement, et c'est celui
+   * qui rend une reconnexion, un incident de passe ou un accusé de lecture
+   * incapables de détruire un pont que le serveur n'a jamais recalculé.
+   */
+  describe('le pont ✦ — les trois états du fil', () => {
+    const A_BRIDGE = {
+      kind: 'fallback' as const,
+      unreadCount: 3,
+      suggestedMode: 'focal' as const,
+      data: { authors: ['Alice'], extraAuthorCount: 0, messageCount: 3 },
+    };
+
+    function mountWithCachedBridge() {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [{ ...mockConversation, id: 'conv-x', unreadCount: 3, bridge: A_BRIDGE }],
+            pagination: { limit: 20, offset: 0, total: 1, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-other', enabled: true }), {
+        wrapper,
+      });
+      const rowBridge = () => {
+        const cached = queryClient.getQueryData(['conversations', 'infinite']) as {
+          pages: Array<{ conversations: Conversation[] }>;
+        };
+        return cached.pages.flatMap((page) => page.conversations).find((c) => c.id === 'conv-x');
+      };
+      return { rowBridge };
+    }
+
+    it('GARDE le pont en cache quand la clé est ABSENTE — le serveur n’a pas calculé', async () => {
+      const { rowBridge } = mountWithCachedBridge();
+
+      await act(async () => {
+        unreadUpdatedCallback?.({ conversationId: 'conv-x', unreadCount: 3 });
+        await Promise.resolve();
+      });
+
+      expect(rowBridge()?.bridge).toEqual(A_BRIDGE);
+      expect(rowBridge()?.unreadCount).toBe(3);
+    });
+
+    it('EFFACE le pont sur un `null` explicite — le serveur a calculé, il n’y en a pas', async () => {
+      const { rowBridge } = mountWithCachedBridge();
+
+      await act(async () => {
+        unreadUpdatedCallback?.({ conversationId: 'conv-x', unreadCount: 1, bridge: null });
+        await Promise.resolve();
+      });
+
+      expect(rowBridge()?.bridge).toBeUndefined();
+      expect(rowBridge()?.unreadCount).toBe(1);
+    });
+
+    it('REMPLACE le pont quand le serveur en annonce un neuf', async () => {
+      const { rowBridge } = mountWithCachedBridge();
+      const fresher = { ...A_BRIDGE, unreadCount: 9, data: { ...A_BRIDGE.data, messageCount: 9 } };
+
+      await act(async () => {
+        unreadUpdatedCallback?.({ conversationId: 'conv-x', unreadCount: 9, bridge: fresher });
+        await Promise.resolve();
+      });
+
+      expect(rowBridge()?.bridge).toEqual(fresher);
     });
   });
 });

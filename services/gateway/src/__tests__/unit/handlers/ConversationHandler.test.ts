@@ -321,6 +321,9 @@ describe('ConversationHandler', () => {
       expect(socket.emit).toHaveBeenCalledWith('conversation:unread-updated', {
         conversationId: CONV_ID,
         unreadCount: 7,
+        // Ouvrir une conversation CONSOMME son pont ✦ : effacement VOULU, donc
+        // affirmé (cycle 63) — jamais laissé au silence de la forme courte.
+        bridge: null,
       });
     });
 

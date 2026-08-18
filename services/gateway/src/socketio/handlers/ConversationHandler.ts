@@ -13,6 +13,7 @@ import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import type { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { bridgeComputed } from '../unreadBridgeField.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -226,7 +227,18 @@ export class ConversationHandler {
         // le chemin anonyme comme le cas courant).
         try {
           const unreadCount = await this.readStatusService.getUnreadCount(participationId, normalizedId);
-          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId: normalizedId, unreadCount });
+          // Pont ✦ : `null` EXPLICITE (cycle 63). On rejoint une conversation
+          // pour la LIRE — l'ouvrir CONSOMME le pont, et c'est un fait que ce
+          // handler connaît sans rien calculer. L'effacement est donc voulu
+          // ici, à la différence de l'instantané de reconnexion qui, lui,
+          // s'abstient. Depuis que l'absence du champ signifie « je n'ai pas
+          // calculé », ne rien dire aurait laissé le pont en place sur une
+          // conversation qu'on vient précisément d'ouvrir.
+          socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+            conversationId: normalizedId,
+            unreadCount,
+            ...bridgeComputed(undefined),
+          });
         } catch (err) {
           logger.warn('unread count fetch failed on join (non-blocking)', { conversationId: normalizedId, error: err });
         }

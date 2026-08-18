@@ -931,13 +931,38 @@ export interface ConversationUnreadUpdatedEventData {
   readonly conversationId: string;
   readonly unreadCount: number;
   /**
-   * Le pont ✦ recalculé POUR CE destinataire (G-123). OPTIONNEL — un client
-   * qui l'ignore garde son comportement d'avant ; absent quand `unreadCount`
-   * retombe à zéro ou que le serveur n'a rien à annoncer (contrat gelé §3.2).
-   * Le pont est PAR lecteur : deux destinataires du même événement source
-   * (un `message:new`) ne portent jamais le même `bridge`.
+   * Le pont ✦ recalculé POUR CE destinataire (G-123). Le pont est PAR lecteur :
+   * deux destinataires du même événement source (un `message:new`) ne portent
+   * jamais le même `bridge`.
+   *
+   * TROIS ÉTATS, et c'est le cœur du contrat (cycle 63). Ce champ a longtemps
+   * eu deux formes de fil pour exprimer trois faits, et le troisième —
+   * « je n'ai pas calculé » — n'avait aucun mot. Les émetteurs qui ne
+   * calculaient pas empruntaient donc le mot de « il n'y en a pas », et les
+   * deux clients, qui recopient ce champ AUTORITAIREMENT, lisaient un ORDRE
+   * D'EFFACEMENT là où le serveur ne voulait dire que son silence.
+   *
+   * | Fil | Sens | Le client doit |
+   * |-----|------|----------------|
+   * | objet | « voici le pont » | remplacer |
+   * | `null` | « j'ai calculé : il n'y en a pas » | EFFACER |
+   * | absent | « je n'ai pas calculé » | GARDER ce qu'il a |
+   *
+   * L'ABSENCE EST DÉSORMAIS INOFFENSIVE, et c'est délibéré : le défaut du
+   * cycle 62 est né d'un émetteur qui se taisait sans savoir que son silence
+   * détruisait. Un émetteur futur qui ignore tout du pont ne peut plus, par sa
+   * seule omission, effacer celui d'un lecteur. L'effacement devient un ACTE
+   * EXPLICITE (`bridge: null`), qu'on ne pose qu'en sachant ce qu'on dit.
+   *
+   * Compatibilité : `null` reproduit EXACTEMENT ce que faisaient les clients
+   * déployés face à l'omission (ils effaçaient). Un client ancien reste donc
+   * correct partout où l'effacement est voulu, et ne perd que le bénéfice du
+   * troisième état.
+   *
+   * @see services/gateway/src/socketio/unreadBridgeField.ts — les quatre
+   *      émetteurs et le fait que chacun déclare.
    */
-  readonly bridge?: ConversationBridge;
+  readonly bridge?: ConversationBridge | null;
 }
 
 /**
