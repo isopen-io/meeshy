@@ -101,6 +101,37 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
     }
 
+    /// Arbitrage user 2026-08-18 (bis) : le drapeau vit EN BAS de la rangée,
+    /// juste avant les réactions — commun aux messages texte et aux
+    /// attachements audio porteurs de traductions — et plus jamais dans le
+    /// fil du texte.
+    func test_versionFlag_sharesTheReactionsLine_flagFirst_notInsideTheTextBlock() throws {
+        let code = try stripped(rowPath)
+        guard let rowStart = code.range(of: "private var flagAndReactionsRow") else {
+            return XCTFail("`flagAndReactionsRow` introuvable — drapeau + réactions vivent sur LA MÊME ligne, en bas de la rangée")
+        }
+        let rowBody = String(code[rowStart.lowerBound...].prefix(1400))
+        guard let flagPos = rowBody.range(of: "originalLanguageFlag"),
+              let reactionsPos = rowBody.range(of: "BubbleReactionsOverlay")
+        else { return XCTFail("drapeau ou réactions absents de flagAndReactionsRow") }
+        XCTAssertTrue(
+            flagPos.lowerBound < reactionsPos.lowerBound,
+            "le drapeau vient EN PREMIER, avant les réactions, sur la même ligne (HStack) — user 2026-08-18"
+        )
+        XCTAssertTrue(
+            rowBody.contains("HStack"),
+            "drapeau et réactions partagent une HStack — jamais deux lignes empilées"
+        )
+        guard let textBlockStart = code.range(of: "private var textBlock"),
+              let textBlockEnd = code.range(of: "private var readMorePayload")
+        else { return XCTFail("bornes du textBlock introuvables") }
+        let textBlockBody = code[textBlockStart.lowerBound..<textBlockEnd.lowerBound]
+        XCTAssertFalse(
+            textBlockBody.contains("originalLanguageFlag"),
+            "le drapeau ne vit PLUS dans le fil du texte — il est descendu sur la ligne des réactions"
+        )
+    }
+
     /// Sans ce réalignement, le toggle changeait `activeLangCode` sans jamais
     /// changer le texte : la rangée préférait `preferredContent` (la
     /// traduction) à `text.raw` (le contenu RÉSOLU par le builder, bascule
@@ -118,6 +149,20 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         XCTAssertFalse(
             window.contains("preferredContent ??"),
             "préférer preferredContent court-circuite la bascule V.O. — c'est le défaut qui rendait le toggle inopérant en rangée plate"
+        )
+    }
+
+    // MARK: - Le scroll VOULU traverse le verrou de scène (user 2026-08-18)
+
+    func test_scrollToBottom_declaresItselfIntentional_toTheSceneLock() throws {
+        let code = try stripped(hostPath)
+        guard let start = code.range(of: "func scrollToBottom(animated: Bool = true) {") else {
+            return XCTFail("scrollToBottom introuvable dans l'hôte")
+        }
+        let body = String(code[start.lowerBound...].prefix(600))
+        XCTAssertTrue(
+            body.contains("isIntentionalProgrammaticScroll = true"),
+            "scrollToBottom doit se déclarer INTENTIONNEL — sans ce drapeau, le verrou de scène annule chaque frame de l'animation et le bouton « aller au dernier message » ne fait rien"
         )
     }
 

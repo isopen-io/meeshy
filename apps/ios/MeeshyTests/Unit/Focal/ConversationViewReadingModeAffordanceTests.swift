@@ -59,18 +59,16 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         )
     }
 
-    /// Garde de non-régression : cette insertion ne doit pas faire déraper le
-    /// compte d'occurrences de « headerButtonsCluster » que
-    /// `ConversationViewHeaderButtonsClusterTests` fixe à 3 (1 déclaration +
-    /// 2 sites d'appel) — la grappe Aa est un NOUVEAU nom de propriété
-    /// (`readingModeAffordanceCluster`), jamais une référence supplémentaire
-    /// au nom existant.
+    /// Garde de non-régression : 1 déclaration + 1 SEUL site d'appel (l'état
+    /// PLIÉ). Arbitrage user 2026-08-18 : la bande DÉPLIÉE ne porte plus la
+    /// grappe (ni mode, ni recherche, ni appel) — le second site historique
+    /// est retiré, et aucun nouveau site inline ne doit apparaître.
     func test_headerButtonsClusterOccurrenceCount_remainsUnaffectedByTheNewCluster() throws {
         let code = try conversationViewSource()
         let occurrences = code.components(separatedBy: "headerButtonsCluster").count - 1
         XCTAssertEqual(
-            occurrences, 3,
-            "ConversationView.swift référence « headerButtonsCluster » \(occurrences) fois — 3 attendues (1 déclaration + 2 sites d'appel). L'ajout de la grappe Aa doit passer par un NOM DE PROPRIÉTÉ DISTINCT, jamais un quatrième site inline."
+            occurrences, 2,
+            "ConversationView.swift référence « headerButtonsCluster » \(occurrences) fois — 2 attendues (1 déclaration + 1 site d'appel, l'état PLIÉ ; la bande dépliée n'en porte plus, user 2026-08-18)."
         )
     }
 

@@ -1942,6 +1942,23 @@ final class MessageListViewController: UIViewController {
 
     func scrollToBottom(animated: Bool = true) {
         guard collectionView.numberOfItems(inSection: 0) > 0 else { return }
+        // Scroll VOULU : le verrou de scène doit le laisser passer (sans ce
+        // drapeau, l'ancre annulait chaque frame de l'animation — le bouton
+        // « aller au dernier message » ne fonctionnait plus, user 2026-08-18).
+        // Posé APRÈS le guard (revue adversariale : une sortie précoce le
+        // laissait fuir à true). Animé : retombe à
+        // `scrollViewDidEndScrollingAnimation`, ET à `settleAtRest` — un
+        // doigt qui rattrape la liste en vol TUE l'animation sans livrer le
+        // callback UIKit, le geste se termine alors par
+        // didEndDragging/Decelerating → settleAtRest. Non animé : l'offset
+        // est posé synchrone, on retombe au tour suivant.
+        isIntentionalProgrammaticScroll = true
+        if !animated {
+            DispatchQueue.main.async { [weak self] in
+                self?.isIntentionalProgrammaticScroll = false
+                self?.captureSceneLockAnchor()
+            }
+        }
         collectionView.scrollToItem(at: IndexPath(item: 0, section: 0), at: .top, animated: animated)
         // RC2.4 — a programmatic scroll does not reliably fire
         // `scrollViewDidScroll` (no drag/decelerate phase), so the near-bottom
@@ -2466,6 +2483,12 @@ extension MessageListViewController: UICollectionViewDelegate {
     /// (2026-08-18) : plus d'élection, plus de nudge, plus de typographie de
     /// focus ; il ne reste que le chrome et les reconfigures différés.
     private func settleAtRest() {
+        // Filet de la revue adversariale 2026-08-18 : une animation
+        // programmatique interrompue AU DOIGT ne livre jamais
+        // `scrollViewDidEndScrollingAnimation` — le geste qui l'a tuée se
+        // termine ICI. Sans cette retombée, le drapeau fuyait à true et le
+        // verrou de scène restait désarmé pour la session.
+        isIntentionalProgrammaticScroll = false
         setScrollingActive(false)
         setChromeHiddenForScroll(false)
         captureSceneLockAnchor()

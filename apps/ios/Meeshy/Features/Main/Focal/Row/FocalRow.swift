@@ -170,7 +170,7 @@ struct FocalRow: View {
             }
 
             failedRetrySection
-            reactionsSection
+            flagAndReactionsRow
 
             if !input.isFirstInGroup {
                 FocalMetaRow(
@@ -234,25 +234,8 @@ struct FocalRow: View {
     /// (le bouton `(+)` d'ajout rapide ne s'affiche donc jamais côté Focal
     /// pour l'instant — `FocalRowInput`, figé, ne porte pas ce signal de
     /// position de défilement ; écart signalé, pas une extension inventée).
-    @ViewBuilder
-    private var reactionsSection: some View {
-        if !content.reactions.isEmpty {
-            BubbleReactionsOverlay(
-                messageId: content.messageId,
-                summaries: content.reactions,
-                isMe: content.isMe,
-                isDark: input.isDark,
-                isLastReceivedMessage: false,
-                accentHex: input.accentHex,
-                onAddReaction: actions.onAddReaction,
-                onToggleReaction: actions.onToggleReaction,
-                onOpenReactPicker: actions.onOpenReactPicker,
-                onShowReactions: actions.onShowReactions
-            )
-            .equatable()
-            .padding(.leading, indent)
-        }
-    }
+    // (réactions : fusionnées dans `flagAndReactionsRow` — drapeau premier,
+    // même ligne, arbitrage user 2026-08-18)
 
     // RETRAIT FOCAL iOS (2026-08-18) : la barre de contrôles de l'élue et
     // sa RÉSERVE de hauteur permanente sont supprimées avec l'élection — la
@@ -444,6 +427,9 @@ struct FocalRow: View {
 
     private var textBlock: some View {
         HStack(alignment: .top, spacing: 4) {
+            // Le drapeau-toggle ne vit plus ICI : il est posé en BAS de la
+            // rangée, avant les réactions (`versionFlagSection`, arbitrage
+            // user 2026-08-18) — commun au texte et à l'audio traduit.
             BubbleExpandableText(
                 content: effectiveText,
                 isMe: content.isMe,
@@ -467,8 +453,6 @@ struct FocalRow: View {
             // d'opacité pur, toléré sous Reduce Motion (doctrine effets).
             .id(effectiveText)
             .transition(.opacity)
-
-            originalLanguageFlag
         }
         .padding(.leading, indent)
         .animation(.easeInOut(duration: 0.15), value: effectiveText)
@@ -503,6 +487,44 @@ struct FocalRow: View {
     /// nil), le drapeau d'origine reste un simple indicateur multi-versions.
     private func flagEmoji(_ code: String) -> String {
         LanguageData.info(for: code.lowercased())?.flag ?? "\u{1F310}"
+    }
+
+    /// Drapeau-toggle + réactions sur LA MÊME LIGNE, le drapeau en PREMIER
+    /// (arbitrage user 2026-08-18, précision : jamais sur une ligne à part).
+    /// Rendue pour tout message multi-versions (texte traduit ET attachement
+    /// audio porteur de traductions — le builder pose `content.translation`
+    /// dès que `translations` OU `translatedAudios` est non vide) et/ou
+    /// porteur de réactions.
+    @ViewBuilder
+    private var flagAndReactionsRow: some View {
+        if (content.translation != nil && !content.isBlurred) || !content.reactions.isEmpty {
+            HStack(alignment: .center, spacing: 6) {
+                // Jamais de drapeau EN CLAIR sur un message protégé (revue
+                // adversariale 2026-08-18) : la bulle floute sa bande de
+                // drapeaux avec le contenu — révéler la langue d'origine
+                // d'un message voilé fuirait une information. Les réactions,
+                // elles, restent hors voile (parité bulle historique).
+                if content.translation != nil, !content.isBlurred {
+                    originalLanguageFlag
+                }
+                if !content.reactions.isEmpty {
+                    BubbleReactionsOverlay(
+                        messageId: content.messageId,
+                        summaries: content.reactions,
+                        isMe: content.isMe,
+                        isDark: input.isDark,
+                        isLastReceivedMessage: false,
+                        accentHex: input.accentHex,
+                        onAddReaction: actions.onAddReaction,
+                        onToggleReaction: actions.onToggleReaction,
+                        onOpenReactPicker: actions.onOpenReactPicker,
+                        onShowReactions: actions.onShowReactions
+                    )
+                    .equatable()
+                }
+            }
+            .padding(.leading, indent)
+        }
     }
 
     private var isShowingOriginal: Bool {

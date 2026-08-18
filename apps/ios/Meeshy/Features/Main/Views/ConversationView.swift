@@ -2147,19 +2147,19 @@ struct ConversationView: View {
     }
 
     /// Title + tags column shown when the composer-options drawer is open.
+    ///
+    /// Arbitrage user 2026-08-18 : la bande DÉPLIÉE ne porte AUCUN bouton
+    /// d'action (ni mode d'affichage, ni recherche, ni appel — ils vivent
+    /// dans l'état plié) : titre + tags/catégorie seulement, l'avatar-view
+    /// montrant déjà les membres les plus actifs d'un groupe. Le tap du
+    /// titre ouvre les détails ; en conversation DIRECTE, l'appui long
+    /// propose détails OU profil de l'utilisateur.
     @ViewBuilder
     private var expandedHeaderTitleAndTags: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
             HStack(alignment: .top, spacing: MeeshySpacing.xs) {
-                Button { composerState.showConversationInfo = true } label: {
-                    expandedHeaderTitleLabel
-                        .meeshyTapTarget()
-                }
-                .accessibilityLabel(conversation?.name ?? "Conversation")
-                .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
-
+                expandedHeaderTitleButton
                 Spacer(minLength: 4)
-                headerButtonsCluster
             }
 
             // Tags row: aligned with title, scrolls under the search icon
@@ -2174,6 +2174,38 @@ struct ConversationView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
         }
         .transition(.move(edge: .trailing).combined(with: .opacity))
+    }
+
+    /// Le bouton-titre de la bande dépliée — tap = détails de la
+    /// conversation ; en DIRECT, appui long = choix détails / profil
+    /// (arbitrage user 2026-08-18).
+    @ViewBuilder
+    private var expandedHeaderTitleButton: some View {
+        let titleButton = Button { composerState.showConversationInfo = true } label: {
+            expandedHeaderTitleLabel
+                .meeshyTapTarget()
+        }
+        .accessibilityLabel(conversation?.name ?? "Conversation")
+        .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
+
+        if conversation?.type == .direct {
+            titleButton.contextMenu {
+                Button {
+                    composerState.showConversationInfo = true
+                } label: {
+                    Label(String(localized: "conversation.view.details", defaultValue: "Détails de la conversation", bundle: .main), systemImage: "info.circle.fill")
+                }
+                Button {
+                    if let conv = conversation, let profileUser = ProfileSheetUser.from(conversation: conv) {
+                        router.deepLinkProfileUser = profileUser
+                    }
+                } label: {
+                    Label(String(localized: "conversation.view.view_profile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.circle.fill")
+                }
+            }
+        } else {
+            titleButton
+        }
     }
 
     /// Title text + optional revalidation sparkle. Splitting this off keeps

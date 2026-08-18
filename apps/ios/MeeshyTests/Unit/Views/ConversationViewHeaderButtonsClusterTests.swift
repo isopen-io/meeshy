@@ -42,18 +42,23 @@ final class ConversationViewHeaderButtonsClusterTests: XCTestCase {
         )
     }
 
-    func test_bothHeaderStates_useHeaderButtonsCluster_notInlineDuplication() throws {
-        // Comments stripped: the 2026-08-17 AnyView-erasure doc comments
-        // mention "headerButtonsCluster" by name several times and would
-        // otherwise inflate this count (feedback_source_guard_tests_must_strip_comments).
+    /// Arbitrage user 2026-08-18 : la bande DÉPLIÉE ne porte plus la grappe
+    /// (ni mode, ni recherche, ni appel — titre + tags seulement). L'unique
+    /// site d'appel restant est l'état PLIÉ ; l'invariant anti-duplication
+    /// demeure : toute évolution de spacing ne doit exiger qu'une édition.
+    func test_collapsedHeaderState_usesHeaderButtonsCluster_notInlineDuplication() throws {
+        // Comments stripped: the AnyView-erasure doc comments mention
+        // "headerButtonsCluster" by name several times and would otherwise
+        // inflate this count (feedback_source_guard_tests_must_strip_comments).
         let view = AppSourceGuard.stripComments(try source())
         let occurrences = view.components(separatedBy: "headerButtonsCluster").count - 1
-        // 1 declaration + 2 call sites (collapsed-header state, expanded-options state).
+        // 1 declaration + 1 call site (collapsed-header state only —
+        // the options-expanded band carries no action buttons since 2026-08-18).
         XCTAssertEqual(
-            occurrences, 3,
-            "headerButtonsCluster must be referenced from both header states (collapsed " +
-            "and options-expanded) rather than duplicating the HStack(spacing: 0) { ... } " +
-            "inline in each — a future spacing tweak must only need one edit."
+            occurrences, 2,
+            "headerButtonsCluster must be referenced from the collapsed header state only " +
+            "(1 declaration + 1 call site) — the expanded band carries no action buttons " +
+            "(user 2026-08-18), and the cluster must never be duplicated inline."
         )
     }
 }

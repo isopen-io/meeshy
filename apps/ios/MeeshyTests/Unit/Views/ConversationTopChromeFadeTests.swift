@@ -191,6 +191,36 @@ final class ConversationTopChromeFadeTests: XCTestCase {
         )
     }
 
+    // MARK: - Bande DÉPLIÉE sans boutons d'action (user 2026-08-18)
+
+    func test_expandedBand_carriesNoActionButtons_titleOpensDetails_directLongPressOffersProfile() throws {
+        let viewSource = try conversationViewSource()
+        guard let start = viewSource.range(of: "private var expandedHeaderTitleAndTags"),
+              let end = viewSource.range(of: "private var expandedHeaderTitleButton")
+        else { return XCTFail("bornes de la bande dépliée introuvables") }
+        let band = viewSource[start.lowerBound..<end.lowerBound]
+        XCTAssertFalse(
+            band.contains("headerButtonsCluster"),
+            "La bande DÉPLIÉE ne porte AUCUN bouton d'action (mode/recherche/appel) — titre + tags seulement, les membres actifs vivant dans l'avatar-view (arbitrage user 2026-08-18)."
+        )
+        guard let btnStart = viewSource.range(of: "private var expandedHeaderTitleButton"),
+              let btnEnd = viewSource.range(of: "private var expandedHeaderTitleLabel")
+        else { return XCTFail("bornes du bouton-titre introuvables") }
+        let button = viewSource[btnStart.lowerBound..<btnEnd.lowerBound]
+        XCTAssertTrue(
+            button.contains("showConversationInfo = true"),
+            "Le tap du titre ouvre les DÉTAILS de la conversation."
+        )
+        XCTAssertTrue(
+            button.contains("conversation?.type == .direct") && button.contains(".contextMenu"),
+            "En conversation DIRECTE, l'appui long du titre propose détails OU profil — le menu n'existe qu'en direct."
+        )
+        XCTAssertTrue(
+            button.contains("ProfileSheetUser.from(conversation:"),
+            "Le profil proposé est celui de l'interlocuteur (résolution existante ProfileSheetUser.from)."
+        )
+    }
+
     // MARK: - La règle, sans passer par le rendu
 
     func test_hidesHeaderActions_whileScrolling_isTrue() {
