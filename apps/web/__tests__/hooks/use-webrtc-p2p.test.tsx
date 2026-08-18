@@ -459,6 +459,41 @@ describe('useWebRTCP2P', () => {
       expect(mockClose).toHaveBeenCalled();
       expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
     });
+
+    // Vague 148: `handleAnswer` is the third negotiation-completing function
+    // alongside `createOffer` and `handleOffer` above — a peer connection is
+    // already created + registered (via the earlier `createOffer` call) by
+    // the time `service.setRemoteDescription(answer)` throws. Unlike its two
+    // siblings, `handleAnswer`'s catch block never called `removeParticipant`,
+    // leaving the failed peer connection open and registered forever, and its
+    // stale `WebRTCService` cached in `webrtcServicesRef` for any retry offer
+    // to reuse instead of a fresh instance.
+    it('closes and deregisters the orphaned peer connection when handling an answer fails', async () => {
+      mockSetRemoteDescription.mockRejectedValueOnce(new Error('setRemoteDescription failed'));
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      // The offerer's peer connection is created + registered here.
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      mockClose.mockClear();
+      mockRemovePeerConnection.mockClear();
+
+      const signalHandler = getSignalHandler();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp' },
+        });
+      });
+
+      expect(mockClose).toHaveBeenCalled();
+      expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+    });
   });
 
   describe('Handle Answer stamps the caller\'s answeredAt/active (Vague 113)', () => {
