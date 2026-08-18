@@ -40,6 +40,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 interface ProfileSettingsProps {
   onAccountDeleted?: () => void;
@@ -278,7 +279,7 @@ export function ProfileSettings({ onAccountDeleted }: ProfileSettingsProps) {
       return false;
     }
 
-    if (passwordData.newPassword.length < 6) {
+    if (passwordData.newPassword.length < PASSWORD_MIN_LENGTH) {
       toast.error(t('security.password.errors.tooShort'));
       return false;
     }

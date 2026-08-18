@@ -2983,6 +2983,10 @@ export const loginRequestSchema = {
       maxLength: 50,
       description: 'Username, email, or phone number'
     },
+    // Borne alignée sur `PASSWORD_MIN_LENGTH` (utils/validation.ts). Ce
+    // schéma est celui que Fastify applique AVANT le handler : c'est lui qui
+    // rendait « body/password must NOT have fewer than 8 characters » à la
+    // dernière étape du wizard web, qui en acceptait 6.
     password: {
       type: 'string',
       minLength: 1,
@@ -3039,10 +3043,14 @@ export const registerRequestSchema = {
       pattern: usernamePatternSource,
       description: 'Unique username (2-16 chars: letters, digits, - and _ only — no spaces)'
     },
+    // Borne alignée sur `PASSWORD_MIN_LENGTH` (utils/validation.ts). C'est CE
+    // schéma que Fastify applique avant le handler : il rendait
+    // « body/password must NOT have fewer than 8 characters » à la dernière
+    // étape du wizard web, lequel ouvrait le pas suivant dès 6.
     password: {
       type: 'string',
-      minLength: 8,
-      description: 'Password (minimum 8 characters)'
+      minLength: 6,
+      description: 'Password (minimum 6 characters)'
     },
     firstName: {
       type: 'string',
@@ -3228,8 +3236,8 @@ export const changePasswordRequestSchema = {
     },
     newPassword: {
       type: 'string',
-      minLength: 8,
-      description: 'New password (minimum 8 characters)'
+      minLength: 6,
+      description: 'New password (minimum 6 characters)'
     }
   }
 } as const;
@@ -3248,8 +3256,8 @@ export const resetPasswordRequestSchema = {
     },
     newPassword: {
       type: 'string',
-      minLength: 8,
-      description: 'New password (minimum 8 characters)'
+      minLength: 6,
+      description: 'New password (minimum 6 characters)'
     }
   }
 } as const;

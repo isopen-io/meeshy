@@ -25,6 +25,7 @@ import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { unsetOrNull } from '../utils/prisma-unset';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -641,8 +642,8 @@ export class PasswordResetService {
     const errors: string[] = [];
 
     // Basic requirements
-    if (password.length < 8) {
-      errors.push('minimum 8 characters');
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      errors.push(`minimum ${PASSWORD_MIN_LENGTH} characters`);
     }
 
     if (!/[a-z]/.test(password)) {

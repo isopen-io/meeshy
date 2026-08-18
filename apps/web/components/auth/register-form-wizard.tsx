@@ -31,6 +31,7 @@ import {
 } from './wizard-steps';
 import { WizardProgress } from './wizard-steps/WizardProgress';
 import { ExistingAccountAlert } from './wizard-steps/ExistingAccountAlert';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 interface RegisterFormWizardProps {
   onSuccess?: (user: User, token: string) => void;
@@ -283,7 +284,7 @@ export function RegisterFormWizard({
       case 'username':
         return validation.validateUsername(formData.username) && usernameCheckStatus === 'available';
       case 'security':
-        return formData.password.length >= 6 && formData.password === confirmPassword;
+        return formData.password.length >= PASSWORD_MIN_LENGTH && formData.password === confirmPassword;
       case 'preferences':
         return acceptTerms;
       default:

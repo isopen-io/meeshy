@@ -27,6 +27,27 @@ const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
  */
 const USERNAME_PATTERN = new RegExp(usernamePatternSource);
 
+/**
+ * Longueur minimale d'un mot de passe — UNE règle, pour toutes les portes.
+ *
+ * Elle a valu onze déclarations indépendantes, et trois valeurs différentes :
+ * le wizard web ouvrait le pas suivant dès 6, la checklist affichée à
+ * l'utilisateur en promettait 8, et les schémas serveur en exigeaient 8. Une
+ * saisie de 6 caractères franchissait donc tout le formulaire pour se faire
+ * rejeter à la DERNIÈRE étape par un message Ajv brut, trois écrans après le
+ * champ fautif.
+ *
+ * La borne s'applique aux mots de passe qu'on DÉFINIT. Un mot de passe qu'on
+ * PROUVE (`currentPassword`) n'a qu'à être non vide : c'est le hash qui
+ * l'arbitre, et lui imposer une longueur enfermerait tout compte créé sous une
+ * borne plus basse.
+ *
+ * Garde : `__tests__/password-min-length-parity.test.ts`.
+ */
+export const PASSWORD_MIN_LENGTH = 6;
+
+const passwordTooShort = `Mot de passe trop court (min ${PASSWORD_MIN_LENGTH} caractères)`;
+
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
 
@@ -389,7 +410,7 @@ export const updateBannerSchema = z.object({
  */
 export const updatePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Mot de passe actuel requis'),
-  newPassword: z.string().min(8, 'Nouveau mot de passe requis (min 8 caractères)'),
+  newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
   confirmPassword: z.string().min(1, 'Confirmation du mot de passe requise')
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: 'Les mots de passe ne correspondent pas',
@@ -429,7 +450,7 @@ export const AuthSchemas = {
       .max(16, 'Username trop long (max 16)')
       .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
     password: z.string()
-      .min(8, 'Mot de passe trop court (min 8 caractères)'),
+      .min(PASSWORD_MIN_LENGTH, passwordTooShort),
     firstName: z.string().min(1).max(50)
       .regex(PERSON_NAME_PATTERN, 'Le prénom doit contenir au moins une lettre'),
     lastName: z.string().min(1).max(50)
@@ -480,13 +501,13 @@ export const AuthSchemas = {
 
   resetPassword: z.object({
     token: z.string().min(1),
-    newPassword: z.string().min(8),
+    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
   }),
 
   // Change password (authenticated)
   changePassword: z.object({
     currentPassword: z.string().min(1),
-    newPassword: z.string().min(8),
+    newPassword: z.string().min(PASSWORD_MIN_LENGTH, passwordTooShort),
   }),
 };
 

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 interface PasswordRequirementsChecklistProps {
   password: string;
@@ -29,9 +30,12 @@ export function PasswordRequirementsChecklist({
     return [
       {
         id: 'minLength',
-        label: t('resetPassword.requirements.minLength', 'At least 8 characters'),
-        test: (pwd: string) => pwd.length >= 8,
-        met: password.length >= 8,
+        // Cette ligne ne valide rien : elle ANNONCE la règle. Elle promettait
+        // 8 pendant que le wizard ouvrait à 6 et que le serveur exigeait 8 —
+        // trois chiffres pour une seule question.
+        label: t('resetPassword.requirements.minLength', `At least ${PASSWORD_MIN_LENGTH} characters`),
+        test: (pwd: string) => pwd.length >= PASSWORD_MIN_LENGTH,
+        met: password.length >= PASSWORD_MIN_LENGTH,
       },
       {
         id: 'uppercase',

@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 /**
  * Password Reset Service
@@ -182,8 +183,8 @@ class PasswordResetService {
   validatePasswordStrength(password: string): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    if (password.length < 8) {
-      errors.push('Password must be at least 8 characters long');
+    if (password.length < PASSWORD_MIN_LENGTH) {
+      errors.push(`Password must be at least ${PASSWORD_MIN_LENGTH} characters long`);
     }
 
     if (!/[a-z]/.test(password)) {

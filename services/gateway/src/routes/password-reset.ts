@@ -23,6 +23,7 @@ import {
 } from '../utils/rate-limiter.js';
 import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types';
 import { disconnectRevokedSessions } from '../socketio/disconnectRevokedSessions';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 // Zod schemas for request validation
 // Note: captchaToken is now optional as we use built-in bot protection instead
@@ -34,8 +35,8 @@ const forgotPasswordSchema = z.object({
 
 const resetPasswordSchema = z.object({
   token: z.string().min(1, 'Reset token is required'),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(128),
-  confirmPassword: z.string().min(8, 'Password confirmation is required').max(128),
+  newPassword: z.string().min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`).max(128),
+  confirmPassword: z.string().min(PASSWORD_MIN_LENGTH, 'Password confirmation is required').max(128),
   twoFactorCode: z.string().regex(/^[0-9]{6}$/, '2FA code must be 6 digits').optional(),
   deviceFingerprint: z.string().optional()
 }).refine(data => data.newPassword === data.confirmPassword, {
@@ -208,7 +209,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/reset-password', {
     schema: {
-      description: 'Complete password reset using the token received via email. The new password must be at least 8 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
+      description: 'Complete password reset using the token received via email. The new password must be at least 6 characters and include uppercase, lowercase, digit, and special character. If 2FA is enabled, a valid 2FA code must be provided.',
       tags: ['auth'],
       summary: 'Complete password reset',
       body: {
@@ -223,14 +224,14 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           },
           newPassword: {
             type: 'string',
-            minLength: 8,
+            minLength: 6,
             maxLength: 128,
-            description: 'New password (minimum 8 characters, must include uppercase, lowercase, digit, and special character)',
+            description: 'New password (minimum 6 characters — PASSWORD_MIN_LENGTH)',
             example: 'MyS3cur3P@ssw0rd!'
           },
           confirmPassword: {
             type: 'string',
-            minLength: 8,
+            minLength: 6,
             maxLength: 128,
             description: 'Password confirmation - must match newPassword exactly',
             example: 'MyS3cur3P@ssw0rd!'

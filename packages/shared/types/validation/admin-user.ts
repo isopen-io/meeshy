@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { usernamePatternSource } from '../api-schemas.js';
+import { PASSWORD_MIN_LENGTH } from '../../utils/validation.js';
 
 const USERNAME_PATTERN = new RegExp(usernamePatternSource);
 
@@ -11,7 +12,7 @@ export const createUserValidationSchema = z.object({
   firstName: z.string().min(1).max(50),
   lastName: z.string().min(1).max(50),
   email: z.email(),
-  password: z.string().min(8),
+  password: z.string().min(PASSWORD_MIN_LENGTH),
   displayName: z.string().max(50).nullable().optional(),
   bio: z.string().max(500).optional(),
   phoneNumber: z.string().max(20).nullable().optional(),
@@ -48,7 +49,7 @@ export const updateStatusValidationSchema = z.object({
  * Schéma pour réinitialiser le mot de passe
  */
 export const resetPasswordValidationSchema = z.object({
-  newPassword: z.string().min(8),
+  newPassword: z.string().min(PASSWORD_MIN_LENGTH),
   sendEmail: z.boolean().optional(),
   reason: z.string().optional()
 });

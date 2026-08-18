@@ -529,8 +529,8 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         type: 'object',
         required: ['currentPassword', 'newPassword'],
         properties: {
-          currentPassword: { type: 'string', minLength: 8, description: 'Current password for verification' },
-          newPassword: { type: 'string', minLength: 8, description: 'New password (min 8 characters)' }
+          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification — no length bound: a bound would lock out accounts created under a lower one' },
+          newPassword: { type: 'string', minLength: 6, description: 'New password (min 6 characters — PASSWORD_MIN_LENGTH)' }
         }
       },
       response: {

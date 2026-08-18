@@ -6,6 +6,7 @@ import { Lock, Eye, EyeOff, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import type { WizardFormData } from '@/hooks/use-registration-wizard';
+import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 interface SecurityStepProps {
   formData: WizardFormData;
@@ -119,9 +120,13 @@ export const SecurityStep = forwardRef<HTMLInputElement, SecurityStepProps>(({
           ))}
         </div>
         <p className="text-xs text-center text-muted-foreground">
-          {formData.password.length < 6
+          {/* Paliers de FORCE, pas une règle d'acceptation : la borne
+              d'acceptation est PASSWORD_MIN_LENGTH, au-dessus de laquelle on
+              gradue. Exprimés depuis la constante pour qu'un changement de
+              borne ne laisse pas un seuil orphelin derrière lui. */}
+          {formData.password.length < PASSWORD_MIN_LENGTH
             ? t('register.wizard.passwordWeak')
-            : formData.password.length < 8
+            : formData.password.length < PASSWORD_MIN_LENGTH + 2
             ? t('register.wizard.passwordMedium')
             : t('register.wizard.passwordStrong')
           }
