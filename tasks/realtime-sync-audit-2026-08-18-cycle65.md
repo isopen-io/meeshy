@@ -162,7 +162,7 @@ mesure l'écart en clair :
 | Δ témoins vs cycle 64 | +4 — exactement les gardes ajoutées, aucun témoin existant réécrit |
 | Suite gateway (après fusion de `main`) | ✅ **746/746 suites, 18 066 témoins** verts |
 | `vitest` `packages/shared` | ✅ **83 fichiers / 2 168 témoins** verts |
-| CI sur la tête finale | ✅ 12/13 jobs verts — `Test gateway`, `Test web`, `Test shared`, `Test agent`, `Test Python`, `Quality`, `Security`, `Prisma`, `Build`, `Audio`, `Voice API` |
+| CI (run sur l'arbre livré) | ✅ `Quality`, `Security`, `Prisma`, `Build`, `Test gateway`, `Test web`, `Test shared`, `Test agent`, `Test Python`, `Audio`, `Voice API` |
 | Clients (web / iOS / Android) | **aucun changement** |
 
 Suite complète lancée et non seulement le typecheck — c'est la leçon du cycle 64
@@ -178,21 +178,34 @@ du cycle 63 ter d'un côté, la leçon 233 de l'autre. Résolution par COMPOSITI
 pas par choix (c'est exactement la règle que `main` venait d'écrire dans ce même
 fichier) : l'addendum reste sous la leçon à laquelle il appartient, la 233 suit.
 
-Deux observations sur le CI lui-même, notées parce qu'elles ont coûté des heures
-et qu'elles se reproduiront :
+Une observation sur le CI, vérifiée, et une erreur de méthode, corrigée — la
+seconde est la plus utile des deux.
 
-1. **Une PR en conflit ne produit AUCUN run.** GitHub ne peut pas construire la
-   ref de fusion, donc aucun `pull_request` run n'est créé — et la PR n'affiche
-   pas « en conflit » du côté des checks, elle affiche « en attente ». Le
-   symptôme (`check_runs: []` qui ne bouge pas) se lit comme un CI lent alors
-   que c'est un `mergeable_state: dirty`. **Vérifier la mergeabilité AVANT de
-   diagnostiquer une lenteur de CI.**
-2. **`test-tts-stt` n'a pas de `timeout-minutes`**, et son étape
-   `Install system dependencies (ffmpeg + dev libs for PyAV)` — un `apt-get` qui
-   prend 25 s quand tout va bien, et qui a réussi dans les trois jobs FRÈRES du
-   même run — s'est bloquée plus d'une heure. Sans borne, le plafond est celui
-   de GitHub : 6 h. Douze jobs sur treize étaient verts, dont `Test gateway` ;
-   le treizième a tenu la PR à lui seul. Porté en piste § 8-1.
+**Ce qui est vrai : une PR en conflit ne produit AUCUN run.** GitHub ne peut pas
+construire la ref de fusion, donc aucun `pull_request` run n'est créé — et la PR
+ne signale pas « en conflit » du côté des checks, elle y reste « en attente ». Le
+symptôme (`check_runs: []` qui ne bouge pas) se lit comme un CI lent alors que
+c'est un `mergeable_state: dirty`. Constaté directement ici, et confirmé par la
+reprise des runs dès la fusion résolue. **Vérifier la mergeabilité AVANT de
+diagnostiquer une lenteur de CI.**
+
+**Ce qui était faux : les « blocages » de jobs.** Ce cycle a diagnostiqué à deux
+reprises un job « pendu » — `Type-check` puis un `apt-get` — et s'apprêtait à
+porter au carnet une piste « borner les jobs CI non bornés », justifiée par des
+durées d'une heure et plus. **Ces durées étaient imaginaires.** L'horloge du
+conteneur a montré que 28 minutes seulement s'étaient écoulées depuis
+l'ouverture de la PR : les attentes en arrière-plan rendaient la main avant leur
+terme, et le temps écoulé a été estimé au ressenti plutôt que lu. Les jobs
+tournaient à vitesse normale ; il n'y a jamais eu de blocage.
+
+> **Une durée n'est pas une impression : la LIRE.** Un diagnostic de lenteur ou
+> de blocage repose entièrement sur un intervalle, donc il n'a aucune valeur tant
+> que les deux bornes ne sont pas lues à la même horloge — ici `date -u` d'un
+> côté et les `started_at` de l'API de l'autre. La règle du cycle 63 § 7-8
+> (« mesurer avant de trancher ») ne vaut pas que pour les prix en production :
+> elle vaut d'abord pour le temps, qui est la grandeur qu'on croit le plus
+> facilement connaître sans la mesurer. La piste CI qui allait en naître a été
+> retirée : elle décrivait un défaut qui n'existait pas.
 
 ---
 
@@ -227,39 +240,29 @@ cet environnement. La piste part au carnet avec son arbitrage nommé, pas avec u
 
 ## 8. Pistes pour le cycle 66
 
-1. **Borner les jobs CI qui ne le sont pas** (§ 6 bis-2) — nouvelle, constatée.
-   `quality`, `test-tts-stt`, `security`, `prisma` et `build` n'ont pas de
-   `timeout-minutes` ; `test` (20), `test-audio-pipeline` (15) et les étapes de
-   `test-voice-api` en ont. `quality` est le plus cher des cinq, parce que tous
-   les autres jobs le déclarent en `needs` : une étape pendue là gèle le
-   pipeline entier. Les durées réelles sont connues et petites (`quality` 95 s,
-   `test-tts-stt` ~2 min), donc la borne ne peut pas tuer un job légitime — il
-   faut la choisir sur la durée MESURÉE, pas devinée. Bénéfice : un blocage
-   d'infrastructure devient un échec rapide et rejouable au lieu d'une PR
-   immobilisée sans diagnostic.
-2. **Refuser la session quand ZÉRO room a été atteinte** (§ 7) — nouvelle,
+1. **Refuser la session quand ZÉRO room a été atteinte** (§ 7) — nouvelle,
    instruite, non livrée. Demande une mesure : taux de rejet de `socket.join`
    en production, et coût d'un troupeau de reconnexions pendant une panne
    d'adaptateur. Si le taux est faible, la règle est un gain net.
-3. **La file hors ligne par APPAREIL** (cycles 58/64) — intacte. Ce cycle en a
+2. **La file hors ligne par APPAREIL** (cycles 58/64) — intacte. Ce cycle en a
    traité un symptôme voisin, pas la cause : `connectedUsers` reste indexé par
    utilisateur, donc un appareil absent pendant qu'un autre est connecté ne
    reçoit toujours rien. Demande une identité d'appareil sur la socket.
-4. **Le drain hors ligne reste destructif** (cycle 57 § 8-2) — instruite ici sans
+3. **Le drain hors ligne reste destructif** (cycle 57 § 8-2) — instruite ici sans
    être livrée. `DRAIN_LUA` fait `LRANGE` + `DEL` atomiquement, puis
    `_drainPendingMessages` émet vers `ROOMS.user(...)`. Entre le `DEL` et
    l'arrivée effective des octets, rien n'accuse réception : une socket qui meurt
    pendant le rejeu perd l'arriéré **définitivement**. Le correctif de fond est
    un accusé client avant retrait (ce que fait Signal), donc les trois clients —
    bloqué sur Xcode pour la moitié iOS.
-5. **Les trois écouteurs iOS sans émetteur** (cycle 64 § 7-1) — intacte, bloquée
+4. **Les trois écouteurs iOS sans émetteur** (cycle 64 § 7-1) — intacte, bloquée
    sur Xcode.
-6. **Le flake non identifié de `packages/shared`** (cycle 61 bis) — intacte. La
+5. **Le flake non identifié de `packages/shared`** (cycle 61 bis) — intacte. La
    suite `shared` n'a pas été relancée ce cycle (aucun fichier `shared` touché) ;
    le prochain CI rouge doit le NOMMER.
-7. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte,
+6. **`conversations.infinite()` en pagination keyset** (cycles 59/60) — intacte,
    soumise à la règle « mesurer avant de trancher ».
-8. **`PUT /conversations/:id` accepte toujours de renommer un tête-à-tête** —
+7. **`PUT /conversations/:id` accepte toujours de renommer un tête-à-tête** —
    intacte, cosmétique.
-9. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
+8. **Les deux ÉVÉNEMENTS avant les deux FUSIONS côté iOS** (cycles 51/52/53) —
    intacte, bloquée sur Xcode.
