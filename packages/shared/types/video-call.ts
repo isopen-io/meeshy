@@ -1056,6 +1056,13 @@ export const CALL_ERROR_CODES = {
   MEDIA_PERMISSION_DENIED: 'MEDIA_PERMISSION_DENIED',
   CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
   NOT_A_PARTICIPANT: 'NOT_A_PARTICIPANT',
+  /**
+   * Le fil est TERMINÉ (`Conversation.isActive === false` ou `closedAt` posé) —
+   * « no one can write », et un appel écrit : bulle d'appel en cours puis résumé
+   * terminal, plus l'éventail de sonnerie. Refusé à l'OUVERTURE seulement ; un
+   * appel déjà en cours va à son terme. Cf. `CallService.initiateCall`.
+   */
+  CONVERSATION_CLOSED: 'CONVERSATION_CLOSED',
 
   // Call state errors
   CALL_NOT_FOUND: 'CALL_NOT_FOUND',

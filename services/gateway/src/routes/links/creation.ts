@@ -7,7 +7,8 @@ import {
   sendForbidden,
   sendBadRequest,
   sendNotFound,
-  sendInternalError
+  sendInternalError,
+  sendError
 } from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import {
@@ -16,6 +17,7 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import {
   generateInitialLinkId,
   generateConversationIdentifier,
@@ -84,6 +86,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           description: 'Conversation not found',
           ...errorResponseSchema
         },
+        410: {
+          description: 'Conversation is closed — no new share link can be minted for a terminated thread',
+          ...errorResponseSchema
+        },
         500: {
           description: 'Internal server error',
           ...errorResponseSchema
@@ -133,13 +139,31 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
 
         // Récupérer les informations de la conversation pour vérifier le type
+        // ET son état terminal. Les deux colonnes font partie du contrat de ce
+        // `select` : `isConversationClosed` accepte une ligne partielle, si bien
+        // qu'en retirer une compile — et les fils fermés par l'ancien `leave.ts`
+        // (avant le cycle 67) portent `isActive: false` sans `closedAt`, tandis
+        // que ceux fermés depuis portent les deux.
         const conversation = await fastify.prisma.conversation.findUnique({
           where: { id: conversationId },
-          select: { id: true, type: true, title: true }
+          select: { id: true, type: true, title: true, isActive: true, closedAt: true }
         });
 
         if (!conversation) {
           return sendNotFound(reply, 'Conversation non trouvée');
+        }
+
+        // Un fil terminé n'admet plus personne (cycle 70) : les quatre portes
+        // d'entrée rendent 410. Fabriquer un lien NEUF dessus produirait donc un
+        // lien actif en base — présenté comme vivant par les écrans de gestion —
+        // dont la seule issue possible est ce même 410 pour chacun de ceux qui
+        // le suivent. Le refus se pose ici, à la source, plutôt qu'à l'arrivée.
+        //
+        // AVANT la garde de type : un fil terminé l'est quel que soit son type,
+        // et « pas de lien pour une conversation directe » décrirait la mauvaise
+        // cause.
+        if (isConversationClosed(conversation)) {
+          return sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminée' });
         }
 
         const conversationType = conversation.type;

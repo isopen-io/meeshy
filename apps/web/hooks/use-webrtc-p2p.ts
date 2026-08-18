@@ -806,13 +806,21 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       } catch (error) {
         logger.error('[useWebRTCP2P]', 'Failed to handle answer', { error });
 
+        // See createOffer's/handleOffer's matching comment — the peer
+        // connection is already created + registered (by the earlier
+        // createOffer call) by the time setRemoteDescription()/the ICE
+        // drain throws; without this it leaks, open and registered forever,
+        // and its stale WebRTCService stays cached for any retry offer to
+        // reuse instead of a fresh instance.
+        removeParticipant(fromUserId);
+
         const message = error instanceof Error ? error.message : 'Failed to handle answer';
         setError(message);
         toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, setError, onError, drainIceCandidateQueue, trackIncomingNegotiationId]
+    [callId, setError, onError, drainIceCandidateQueue, trackIncomingNegotiationId, removeParticipant]
   );
 
   /**

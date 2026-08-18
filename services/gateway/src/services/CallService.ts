@@ -21,6 +21,7 @@ import {
 } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
+import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import {
   buildCallHistoryItem,
   type CallHistoryItem,
@@ -998,15 +999,42 @@ export class CallService {
 
     logger.info('📞 Initiating call', { conversationId, initiatorId, type });
 
-    // Validate conversation exists
+    // Validate conversation exists.
+    //
+    // Les deux colonnes terminales font PARTIE du contrat de ce `select`, pas de
+    // son confort : `isConversationClosed` accepte une ligne partielle, si bien
+    // qu'en retirer une compile et laisse rentrer toute une population. Les fils
+    // fermés par l'ancien `leave.ts` (avant le cycle 67) portent `isActive:
+    // false` et AUCUN `closedAt` ; ceux fermés depuis portent les deux. Une
+    // seule colonne lue = la moitié des fils morts redevient appelable.
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
-      select: { id: true, type: true, identifier: true }
+      select: { id: true, type: true, identifier: true, isActive: true, closedAt: true }
     });
 
     if (!conversation) {
       logger.error('❌ Conversation not found', { conversationId });
       throw new Error(`${CALL_ERROR_CODES.CONVERSATION_NOT_FOUND}: Conversation not found`);
+    }
+
+    // « Conversation closed for all — no one can write, messages stay readable »
+    // (`schema.prisma`). Un appel ÉCRIT : `postLiveCallMessage` pose une ligne
+    // `Message` dans le fil dès la sonnerie, le résumé terminal une seconde, et
+    // l'éventail réveille tous les membres (socket + push VoIP `bypassDnd`).
+    // La phrase du schéma ne connaissait que le texte, l'édition et la réaction ;
+    // elle vaut ici pour la même raison, et sur le point de passage UNIQUE des
+    // deux transports d'ouverture (`call:initiate`, `POST /calls`).
+    //
+    // AVANT la garde de type : un fil terminé l'est quel que soit son type, et
+    // répondre « les appels ne sont pas supportés ici » à une conversation
+    // `direct` close décrirait la mauvaise cause.
+    //
+    // OUVERTURE seulement. Un appel déjà en cours quand la clôture tombe va à
+    // son terme : ses messages sont déjà écrits, et raccrocher au nez de gens
+    // qui se parlent serait une régression, pas une garde.
+    if (isConversationClosed(conversation)) {
+      logger.warn('❌ Conversation is closed — call refused', { conversationId, initiatorId });
+      throw new Error(`${CALL_ERROR_CODES.CONVERSATION_CLOSED}: Conversation is closed`);
     }
 
     // Validate conversation type (only DIRECT and GROUP support video calls)

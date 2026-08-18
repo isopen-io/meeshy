@@ -76,7 +76,7 @@ jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
 }));
 // Captured so tests can drive the component's own onError callback directly
-// (Vague 148) — the mock previously ignored the config object entirely.
+// (Vague 149) — the mock previously ignored the config object entirely.
 let capturedWebRTCConfig: { onError?: (error: Error) => void } = {};
 jest.mock('@/hooks/use-webrtc-p2p', () => ({
   useWebRTCP2P: (config: { onError?: (error: Error) => void }) => {
@@ -1492,7 +1492,7 @@ describe('VideoCallInterface (container)', () => {
     });
   });
 
-  describe('handleWebRTCError — known internal error codes get a translated toast, not the raw code (Vague 148)', () => {
+  describe('handleWebRTCError — known internal error codes get a translated toast, not the raw code (Vague 149)', () => {
     it('translates PEER_CONNECTION_FAILED instead of leaking the raw code', () => {
       render(<VideoCallInterface callId="call1" />);
 
