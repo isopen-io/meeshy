@@ -12,6 +12,19 @@ import type {
   ReactionUpdateEvent
 } from '@meeshy/shared/types';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
+
+/**
+ * Le motif « le conteneur est terminé », sous forme de CONSTANTE et non de
+ * littéral dispersé.
+ *
+ * `routes/reactions.ts` trie les erreurs de ce service par comparaison de
+ * chaînes, et tout motif qu'il ne reconnaît pas retombe sur un **500**. Un refus
+ * légitime annoncé comme une panne serveur ferait réessayer le client
+ * indéfiniment — et un littéral recopié des deux côtés diverge au premier
+ * reformulage. La constante rend la paire indissociable.
+ */
+export const CLOSED_CONVERSATION_REACTION_ERROR = 'Cannot react in a closed conversation';
 
 export interface AddReactionOptions {
   messageId: string;
@@ -98,6 +111,38 @@ export class ReactionService {
       throw new Error('Cannot react to a system message');
     }
 
+    // L'état TERMINAL du CONTENEUR — la garde qui manquait à une liste qui
+    // couvrait déjà tout le reste.
+    //
+    // `packages/shared/prisma/schema.prisma` documente `Conversation.closedAt`
+    // par « Conversation closed for all — **no one can write**, messages stay
+    // readable ». Le cycle 31 a fait respecter cette phrase sur UN verbe,
+    // *envoyer* (`conversationWriteAdmission`, câblé au point de convergence des
+    // envois). Réagir est un verbe d'écriture comme un autre : il crée une
+    // ligne, il diffuse `reaction:added`, il notifie l'auteur. Aucun des QUATRE
+    // transports de réaction — socket `reaction:add`, `POST /conversations/:id/
+    // messages/:mid/reactions`, `POST /reactions`, chemin agent — ne posait la
+    // question, et tous la posent maintenant en un seul point puisque tous
+    // convergent ici.
+    //
+    // **Ce que ça coûtait.** `GET /conversations` filtre `isActive: true` et les
+    // clients retirent la conversation de leur cache sur `conversation:closed` :
+    // la réaction partait donc vers une room que plus personne n'écoute, et sa
+    // notification vers un fil introuvable dans la liste — exactement le
+    // symptôme que le cycle 31 a corrigé pour l'envoi.
+    //
+    // **Coût de la garde : ZÉRO lecture.** L'`include` ci-dessus ramenait déjà
+    // la conversation entière ; son état terminal était en main à chaque appel,
+    // et personne ne le regardait. Les DEUX colonnes sont lues
+    // (`isConversationClosed`) parce que `leave.ts` a posé pendant trente-sept
+    // cycles `isActive: false` SEUL : ces lignes existent et rien ne les
+    // rétro-remplit.
+    //
+    // Le RETRAIT reste ouvert, délibérément — voir `removeReaction`.
+    if (isConversationClosed(message.conversation)) {
+      throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
+    }
+
     const isParticipant = message.conversation.participants.some(p => p.id === participantId);
     if (!isParticipant) {
       throw new Error('User is not a participant of this conversation');
@@ -128,6 +173,21 @@ export class ReactionService {
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
   }
 
+  /**
+   * **Pas de garde de clôture ici, et c'est une DÉCISION.**
+   *
+   * `addReaction` refuse un fil terminé ; ce jumeau l'accepte. Un conteneur mort
+   * n'admet plus de contenu NEUF, il continue d'admettre le RETRAIT de ce qu'il
+   * porte déjà. La clôture étant IRRÉVERSIBLE — aucun écrivain du dépôt ne
+   * rallume `Conversation.isActive` —, refuser la rétraction enfermerait
+   * quelqu'un dans une réaction qu'il ne pourrait plus jamais reprendre.
+   *
+   * La règle vaut pour la famille entière : `admitMessageDelete` n'est pas gardé
+   * non plus, pour la même raison. Le témoin qui gèle ce choix vit dans
+   * `__tests__/unit/services/messaging/conversationClosedWriteVerbs.test.ts` § 3 —
+   * s'il rougit, c'est qu'on a étendu la garde au retrait, ce qui demande un
+   * arbitrage produit et non un correctif.
+   */
   async removeReaction(options: RemoveReactionOptions): Promise<boolean> {
     const { messageId, participantId, emoji } = options;
 

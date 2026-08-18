@@ -27,6 +27,10 @@ const mockSendInternalError = jest.fn<any>((reply: any, msg: any) => {
   reply._body = { success: false, error: msg };
   return reply;
 });
+const mockSendError = jest.fn<any>((reply: any, status: any, msg: any) => {
+  reply._body = { success: false, status, error: msg };
+  return reply;
+});
 
 const mockProcessExplicitLinksInContent = jest.fn<any>().mockResolvedValue({
   processedContent: 'processed content',
@@ -96,6 +100,7 @@ jest.mock('../../../utils/response', () => ({
   sendForbidden: (...args: any[]) => mockSendForbidden(...args),
   sendNotFound: (...args: any[]) => mockSendNotFound(...args),
   sendInternalError: (...args: any[]) => mockSendInternalError(...args),
+  sendError: (...args: any[]) => mockSendError(...args),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -384,6 +389,32 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getEditHandler(fastify)(req, reply);
 
       expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
+    });
+
+    /**
+     * Le conteneur terminé, traduit par CE transport.
+     *
+     * L'unité rend `conversation-closed` ; sans branche propre, le refus
+     * retombait dans le `else` et sortait en **403 « vous n'êtes pas autorisé »**
+     * — un motif d'autorisation pour un état qui n'en est pas un. 410 dit ce
+     * qu'il en est : plus personne, plus jamais.
+     */
+    it.each([
+      ['closedAt posé', { isActive: true, closedAt: new Date() }],
+      ['isActive: false seul', { isActive: false, closedAt: null }],
+    ])('returns 410 when the conversation is closed (%s)', async (_label, conversation) => {
+      prisma.message.findFirst.mockResolvedValue(makeExistingMessage({ conversation }));
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { content: 'New content' },
+      });
+      const reply = makeReply();
+
+      await getEditHandler(fastify)(req, reply);
+
+      expect(mockSendError).toHaveBeenCalledWith(reply, 410, 'Cette conversation est terminée');
+      expect(prisma.message.update).not.toHaveBeenCalled();
     });
 
     it('returns 403 when author exceeds 24h limit without special role', async () => {
