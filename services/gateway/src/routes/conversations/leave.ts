@@ -2,11 +2,12 @@ import { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
+import { endConversationMembership } from '../../socketio/endConversationMembership'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -126,7 +127,6 @@ export function registerLeaveRoutes(
       invalidateParticipantLookup(participant.id, id)
 
       const io = socketIOHandler?.getManager()?.getIO()
-      const room = ROOMS.conversation(id)
 
       const manager = socketIOHandler?.getManager()
       if (io) {
@@ -211,10 +211,12 @@ export function registerLeaveRoutes(
           closedAt: now,
         })
 
-        const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
-        await Promise.all(userSockets.map(s => s.leave(room)))
-
-        manager?.invalidateParticipantCache?.(userId, id)
+        // La fin d'appartenance, en un seul geste : `endConversationMembership`
+        // éteint ce que le partant tenait de vivant dans le fil — son partage de
+        // position — AVANT de sortir ses sockets de la room, parce que c'est par
+        // cette room que son propre appareil apprend qu'il doit couper le GPS.
+        // Voir l'unité pour l'ordre des trois et pourquoi il compte.
+        await endConversationMembership({ io, manager, conversationId: id, userId })
       }
 
       return sendSuccess(reply, { conversationId: id, leftAt: now.toISOString() })

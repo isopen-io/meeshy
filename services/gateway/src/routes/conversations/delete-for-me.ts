@@ -6,6 +6,7 @@ import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
+import { endConversationMembership } from '../../socketio/endConversationMembership'
 
 export function registerDeleteForMeRoutes(
   fastify: FastifyInstance,
@@ -173,8 +174,19 @@ export function registerDeleteForMeRoutes(
       const manager = socketIOHandler?.getManager()
       const io = manager?.getIO()
       if (io) {
-        const userSockets = await io.in(ROOMS.user(userId)).fetchSockets()
-        await Promise.all(userSockets.map(s => s.leave(ROOMS.conversation(conversationId))))
+        // La fin d'appartenance, en un seul geste : `endConversationMembership`
+        // éteint le partage de position que l'appelant tenait dans le fil AVANT
+        // de sortir ses sockets de la room, parce que c'est par cette room que
+        // son propre appareil apprend qu'il doit couper le GPS — et il en sort
+        // ICI, en tête de bloc, donc l'ordre n'y était pas rattrapable plus bas.
+        // Voir l'unité pour l'ordre des trois et pourquoi il compte.
+        //
+        // Elle porte aussi l'invalidation du cache d'appartenance, qui fermait
+        // auparavant ce bloc. Sur les branches de clôture, l'extinction de
+        // l'appelant précède donc celle du fil entier
+        // (`announceConversationClosed`) : la seconde saute une session dont le
+        // terme est déjà avancé, et n'annonce pas deux fois la même fin.
+        await endConversationMembership({ io, manager, conversationId, userId })
         // Notify the user's other devices so they drop the conversation from
         // their local store/list (per-user soft delete). Consumed iOS-side by
         // ConversationStore.applyConversationDeleted.
@@ -238,9 +250,6 @@ export function registerDeleteForMeRoutes(
           )
         }
 
-        // Invalidate the 5-minute participantId cache so the now-inactive user
-        // cannot send messages to this conversation during the cache window.
-        manager?.invalidateParticipantCache?.(userId, conversationId)
       }
 
       return sendSuccess(reply, { conversationId, deletedAt: now.toISOString() })

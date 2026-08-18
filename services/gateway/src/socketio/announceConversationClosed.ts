@@ -39,6 +39,12 @@
  * ouverte (cycle 72, § 6, piste 1) et non un oubli : raccrocher au nez de gens
  * qui se parlent serait une régression, là où une épingle de position figée dans
  * un fil mort est le défaut de sécurité que `LocationHandler` documente déjà.
+ *
+ * Elle ne couvre pas non plus la fin d'APPARTENANCE — le membre qui sort d'un
+ * fil qui, lui, continue de vivre. C'est une fin distincte, ni celle de l'objet
+ * ni celle du conteneur mais celle du LIEN entre les deux, et elle a son propre
+ * point de convergence : `endConversationMembership.ts`, unité jumelle de
+ * celle-ci, dont l'ordre est contraint pour l'autre raison.
  */
 
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';

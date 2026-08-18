@@ -12,6 +12,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
+import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
   resolveConversationEntry,
@@ -663,10 +664,17 @@ export function registerParticipantsRoutes(
             }
           });
 
-          const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
-          await Promise.all(userSockets.map((s: { leave: (room: string) => void }) => s.leave(ROOMS.conversation(conversationId))));
-
-          socketManager.invalidateParticipantCache?.(userId, conversationId);
+          // La fin d'appartenance, en un seul geste : `endConversationMembership`
+          // éteint le partage de position que le retiré tenait dans le fil AVANT
+          // de sortir ses sockets de la room, parce que c'est par cette room que
+          // son propre appareil apprend qu'il doit couper le GPS. Voir l'unité
+          // pour l'ordre des trois et pourquoi il compte.
+          await endConversationMembership({
+            io,
+            manager: socketManager,
+            conversationId,
+            userId,
+          });
         }
       } catch (socketError) {
         logger.error('Socket eviction error for removed participant', socketError as Error);

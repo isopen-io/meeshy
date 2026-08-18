@@ -58,6 +58,31 @@
  * déjà écrites et déjà gardées — les `live-update` d'après sont tus par la borne
  * de `handleLiveLocationUpdate`, le rattrapage saute l'entrée, et la
  * déconnexion la ramasse sans rediffuser une fin déjà annoncée.
+ *
+ * ─── La cinquième : la fin de l'APPARTENANCE ────────────────────────────────
+ *
+ * La quatrième est la mort du conteneur. Reste celle qui ne tue NI le partage NI
+ * le conteneur, mais en sort le partageur : quitter, être banni, être retiré par
+ * un modérateur, supprimer le fil pour soi. Le fil VIT, les autres membres
+ * restent dans la room — et le partage y survivait.
+ *
+ * Son coût est celui de la clôture, obtenu par le chemin inverse. Là, le fil
+ * disparaissait des écrans avec, dedans, l'unique commande d'arrêt. Ici l'écran
+ * disparaît de la même façon, mais la commande est déjà morte AVANT :
+ * `handleLiveLocationStop` commence par `_resolveParticipantId`, qui exige
+ * `isActive: true`. La sortie fait donc taire le SEUL verbe capable de retirer
+ * l'épingle, et il tombe en silence — un `return` sans callback ni erreur. La
+ * position réelle du sortant restait affichée au groupe qui vient de l'exclure,
+ * figée sur sa dernière valeur (les `live-update` d'après butent sur la même
+ * garde), jusqu'à huit heures. Son appareil, lui, n'apprenait jamais rien : il
+ * gardait le GPS allumé pour un partage que le serveur jette.
+ *
+ * `endSessionsForDepartedMember` n'invente pas davantage : même avance du terme,
+ * mais sur UNE entrée — le fil vit, et les partages des membres restants avec
+ * lui. Elle est appelée par `socketio/endConversationMembership.ts`, le point de
+ * convergence des quatre chemins de sortie, AVANT que les sockets du partant ne
+ * quittent la room : c'est par cette room que passe le seul signal capable de
+ * couper son GPS.
  */
 
 import type { Socket } from 'socket.io';
@@ -384,16 +409,67 @@ export class LocationHandler {
     const now = new Date();
     for (const [key, session] of [...this.sessions]) {
       if (session.conversationId !== conversationId) continue;
-      if (now >= session.expiresAt) continue;
-
-      const timer = this.expiryTimers.get(key);
-      if (timer) {
-        clearTimeout(timer);
-        this.expiryTimers.delete(key);
-      }
-      this.sessions.set(key, { ...session, expiresAt: now });
-      this._broadcastStopped(session);
+      this._expireSessionNow(key, session, now);
     }
+  }
+
+  /**
+   * Éteint le partage qu'un membre tenait dans un fil dont il vient de SORTIR.
+   *
+   * La cinquième fin de vie, et la seule qui ne touche ni le partage ni le fil :
+   * quitter, être banni, être retiré par un admin, supprimer le fil pour soi. Le
+   * fil VIT, les autres membres restent dans la room — et le partage y survivait.
+   *
+   * Ce qu'elle coûtait est le symétrique exact de la clôture : le sortant perd
+   * en sortant le seul pouvoir d'arrêter. `handleLiveLocationStop` commence par
+   * `_resolveParticipantId`, qui exige `isActive: true` ; la sortie fait donc
+   * taire le SEUL verbe capable de retirer l'épingle, et il tombe en silence —
+   * un `return` sans callback ni erreur. L'épingle reste plantée dans un groupe
+   * dont il ne fait plus partie, figée sur sa dernière position (les
+   * `live-update` d'après sont refusés par la même garde), jusqu'à huit heures.
+   *
+   * `userId` est l'identifiant qui NOMME la room personnelle — `User.id` pour un
+   * compte, `Participant.id` pour un invité de lien partagé. C'est exactement la
+   * clé sous laquelle le registre range ses sessions (`SocketUser.id`, posé par
+   * `AuthHandler` sous les deux formes) et exactement ce que les quatre routes
+   * de sortie passent à `ROOMS.user()`. Les trois se lisent donc sans conversion.
+   *
+   * Appelée par `endConversationMembership` — le point de convergence des quatre
+   * chemins — AVANT que les sockets du sortant ne quittent la room : la
+   * diffusion vise `ROOMS.conversation(...)`, et c'est le seul point d'accroche
+   * par lequel son propre appareil apprend qu'il doit couper le GPS.
+   */
+  endSessionsForDepartedMember(conversationId: string, userId: string): void {
+    const key = sessionKey(conversationId, userId);
+    const session = this.sessions.get(key);
+    if (!session) return;
+    this._expireSessionNow(key, session, new Date());
+  }
+
+  /**
+   * Avance le terme à MAINTENANT et diffuse le retrait — l'extinction, en un
+   * seul geste et pour les deux fins qui l'exigent.
+   *
+   * Avancer le terme plutôt que supprimer l'entrée est ce qui fait tenir les
+   * trois propriétés du cycle de vie sans en écrire une seule : les
+   * `live-update` d'après sont tus par la borne de `handleLiveLocationUpdate`,
+   * `replayLiveLocationsTo` saute l'entrée, et `handleSocketDisconnecting` la
+   * ramasse en voyant qu'elle n'est plus vive — donc sans rediffuser une fin
+   * déjà annoncée.
+   *
+   * Un partage DÉJÀ terminé est sauté : son retrait a été diffusé par la
+   * minuterie, et rien n'a à l'annoncer deux fois.
+   */
+  private _expireSessionNow(key: string, session: LiveLocationSession, now: Date): void {
+    if (now >= session.expiresAt) return;
+
+    const timer = this.expiryTimers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.expiryTimers.delete(key);
+    }
+    this.sessions.set(key, { ...session, expiresAt: now });
+    this._broadcastStopped(session);
   }
 
   /** Désarme les minuteries — arrêt de la passerelle, et isolation des tests. */

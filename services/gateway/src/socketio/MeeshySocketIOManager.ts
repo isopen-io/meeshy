@@ -967,6 +967,18 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Éteint le partage de position qu'un membre tenait dans un fil dont il vient
+   * de SORTIR — le fil, lui, continue de vivre.
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * quatre chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI
+   * l'extinction précède l'éviction des rooms.
+   */
+  public endLiveLocationForDepartedMember(conversationId: string, userId: string): void {
+    this.locationHandler.endSessionsForDepartedMember(conversationId, userId);
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {

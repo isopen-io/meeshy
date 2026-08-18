@@ -49,6 +49,7 @@ function makeSocketIO() {
   const mockManager = {
     getIO: jest.fn().mockReturnValue(mockIo),
     invalidateParticipantCache: jest.fn(),
+    endLiveLocationForDepartedMember: jest.fn(),
   };
   return { mockIo, mockManager, mockFetchSockets };
 }
@@ -224,6 +225,17 @@ describe('PATCH /conversations/:id/participants/:userId/ban — success', () => 
     expect(socket.mockIo.emit).toHaveBeenCalledWith(
       'conversation:participant-banned',
       expect.objectContaining({ userId: TARGET_USER_ID }),
+    );
+  });
+
+  it("éteint le partage de position du banni — le fil VIT, et il n'a plus le pouvoir de l'arrêter", () => {
+    // Le bannissement retire l'appartenance, et `location:live-stop` la résout
+    // avant tout (`isActive: true`) : le seul verbe capable de retirer
+    // l'épingle tombe donc en silence. Sans cette extinction, la position réelle
+    // du banni reste affichée au groupe qui vient de l'exclure.
+    expect(socket.mockManager.endLiveLocationForDepartedMember).toHaveBeenCalledWith(
+      CONV_ID,
+      TARGET_USER_ID,
     );
   });
 });

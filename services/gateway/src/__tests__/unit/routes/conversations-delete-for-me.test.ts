@@ -53,6 +53,7 @@ function makeSocketIO() {
   const mockManager = {
     getIO: jest.fn<any>().mockReturnValue(mockIo),
     invalidateParticipantCache: jest.fn<any>(),
+    endLiveLocationForDepartedMember: jest.fn<any>(),
   };
   return { mockIo, mockManager, mockFetchSockets, mockEmit, mockLeave };
 }
@@ -134,10 +135,11 @@ describe('DELETE /conversations/:id/delete-for-me — participant not found', ()
 describe('DELETE /conversations/:id/delete-for-me — regular member', () => {
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
+  let socket: ReturnType<typeof makeSocketIO>;
 
   beforeAll(async () => {
     (resolveConversationId as jest.MockedFunction<any>).mockResolvedValue(CONV_ID);
-    ({ app, prisma } = await buildApp({
+    ({ app, prisma, socket } = await buildApp({
       prismaOverrides: {
         participant: {
           findFirst: jest.fn<any>().mockResolvedValue({
@@ -167,6 +169,16 @@ describe('DELETE /conversations/:id/delete-for-me — regular member', () => {
         where: { id: PARTICIPANT_ID },
         data: expect.objectContaining({ isActive: false }),
       })
+    );
+  });
+
+  it("éteint le partage de position de l'appelant — le fil VIT sans lui, et il n'a plus le pouvoir de l'arrêter", () => {
+    // Supprimer le fil pour soi met fin à l'appartenance sans fermer le fil :
+    // `location:live-stop` la résout avant tout (`isActive: true`) et tombe donc
+    // en silence, tandis que les membres restants gardent l'épingle en room.
+    expect(socket.mockManager.endLiveLocationForDepartedMember).toHaveBeenCalledWith(
+      CONV_ID,
+      USER_ID
     );
   });
 });

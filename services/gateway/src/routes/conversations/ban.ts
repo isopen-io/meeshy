@@ -2,12 +2,13 @@ import { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
+import { endConversationMembership } from '../../socketio/endConversationMembership'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
 
@@ -93,7 +94,6 @@ export function registerBanRoutes(
       invalidateParticipantLookup(targetParticipant.id, id)
 
       const io = socketIOHandler?.getManager()?.getIO()
-      const room = ROOMS.conversation(id)
 
       const manager = socketIOHandler?.getManager()
       if (io) {
@@ -136,10 +136,17 @@ export function registerBanRoutes(
           },
         })
 
-        const userSockets = await io.in(ROOMS.user(targetUserId)).fetchSockets()
-        await Promise.all(userSockets.map(s => s.leave(room)))
-
-        manager?.invalidateParticipantCache?.(targetUserId, id)
+        // La fin d'appartenance, en un seul geste : `endConversationMembership`
+        // éteint le partage de position que le banni tenait dans le fil AVANT de
+        // sortir ses sockets de la room, parce que c'est par cette room que son
+        // propre appareil apprend qu'il doit couper le GPS. Voir l'unité pour
+        // l'ordre des trois et pourquoi il compte.
+        //
+        // Appelée même quand `membershipEnded` est faux : bannir un ex-membre
+        // n'éteint rien qui vive (le départ l'a déjà fait), et l'extinction est
+        // idempotente — c'est ce qui permet de ne pas gater ici, exactement comme
+        // pour l'annonce ci-dessus.
+        await endConversationMembership({ io, manager, conversationId: id, userId: targetUserId })
       }
 
       return sendSuccess(reply, { userId: targetUserId, bannedAt: now.toISOString() })
