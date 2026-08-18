@@ -200,6 +200,30 @@ describe('POST /anonymous/join/:linkId', () => {
     expect(res.statusCode).toBe(201);
     expect((app as any).prisma.participant.create).toHaveBeenCalledTimes(1);
   });
+
+  // Les trois témoins ci-dessus portent sur la RÉPONSE qu'on souffle au double,
+  // jamais sur la REQUÊTE : le double rend le `conversation` qu'on lui dicte,
+  // `select` ou pas. Ils ne peuvent donc pas voir une régression du `select`.
+  //
+  // Le typage en couvre la moitié : retirer les DEUX colonnes fait échouer la
+  // compilation, `isConversationClosed` n'acceptant pas une ligne sans aucune
+  // propriété commune avec `ConversationTerminalStateRow` (TS2559 — vérifié).
+  //
+  // L'autre moitié passe. Retirer UNE seule colonne compile, et c'est la
+  // régression qui coûte : sans `isActive`, les conversations fermées par
+  // l'ancien `leave.ts` — `isActive: false`, `closedAt` absent, et rien ne les
+  // rétro-remplit — redeviennent « ouvertes » pour cette porte. Mutation
+  // mesurée : les 24 autres témoins de ce fichier restent VERTS, seul celui-ci
+  // tombe.
+  it('DEMANDE les deux colonnes au lien — seul témoin qui tombe si le `select` en perd une', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockClear();
+
+    await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+
+    const select = (app as any).prisma.conversationShareLink.findFirst.mock.calls[0][0]
+      ?.include?.conversation?.select;
+    expect(select).toMatchObject({ isActive: true, closedAt: true });
+  });
 });
 
 // ─── POST /anonymous/refresh ──────────────────────────────────────────────────
