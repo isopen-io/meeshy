@@ -61,8 +61,7 @@ final class FocalScrollTimePillMountGuardTests: XCTestCase {
             "`updateScrollTimePillMounting` doit se réduire au démontage INCONDITIONNEL — la pilule flottante n'est plus montée nulle part (`85cf1ec4`), et un contrôleur recyclé depuis un mode antérieur ne doit pas en garder une à l'écran."
         )
 
-        // 2. Le monteur survit en CODE MORT (restauration en une ligne, même
-        //    discipline que `FocalFocusDecoration.drawsFocusCard`) : il ne
+        // 2. Le monteur survit en CODE MORT (restauration en une ligne) : il ne
         //    doit avoir AUCUN site d'appel. C'est la forme la plus dure de
         //    « flag off ⇒ aucun UIHostingController enfant supplémentaire »
         //    que portait l'ancien témoin — plus dure, car elle vaut pour TOUS

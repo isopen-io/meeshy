@@ -96,12 +96,11 @@ final class FocalRowSourceGuardTests: XCTestCase {
 
     // MARK: - Script = même rangée, zéro perspective conditionnelle
 
-    /// « Densité Script comprise » (mission F-083) : `FocalRow` ne doit
-    /// JAMAIS lire `input.density` pour brancher un effet visuel — la seule
-    /// différence Focal/Script est un transform de compositing appliqué
-    /// PAR-DESSUS par `FocalScrollPass` (WS-5, hors périmètre). Une lecture
-    /// de `input.density` dans `FocalRow.swift` serait un début de
-    /// perspective conditionnelle câblée au mauvais endroit.
+    /// « Densité uniforme » : `FocalRow` ne doit JAMAIS lire `input.density`
+    /// pour brancher un effet visuel. RETRAIT FOCAL iOS (2026-08-18) : le
+    /// pass de perspective est supprimé — une lecture de `input.density`
+    /// dans `FocalRow.swift` serait un début de perspective conditionnelle
+    /// réintroduite au mauvais endroit.
     func test_focalRow_neverReadsDensity_uniformRowRegardlessOfMode() throws {
         let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
         XCTAssertFalse(
@@ -112,7 +111,7 @@ final class FocalRowSourceGuardTests: XCTestCase {
 
     func test_focalRow_neverAppliesVisualEffectOrScaleConditionally() throws {
         let stripped = AppSourceGuard.stripComments(try source("FocalRow.swift"))
-        XCTAssertFalse(stripped.contains(".visualEffect"), "la perspective est WS-5 (FocalScrollPass), jamais posée dans la rangée elle-même")
-        XCTAssertFalse(stripped.contains(".scaleEffect"), "aucune échelle conditionnelle dans FocalRow — la carte de focus est une décoration CALayer posée par WS-5")
+        XCTAssertFalse(stripped.contains(".visualEffect"), "aucune perspective — le pass est retiré (2026-08-18), rien ne doit en repousser dans la rangée")
+        XCTAssertFalse(stripped.contains(".scaleEffect"), "aucune échelle conditionnelle dans FocalRow — la rangée Script est plate par construction")
     }
 }

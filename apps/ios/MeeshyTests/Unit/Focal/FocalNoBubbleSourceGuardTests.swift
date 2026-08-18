@@ -4,7 +4,6 @@ import XCTest
 /// F-090 (WS-11) — gardes de source PLEIN ARBRE sur `Focal/**` (contrat §WS-11,
 /// registre §7-R15, §5.1, règle §8-9). Complémentaire aux gardes PAR DOSSIER
 /// déjà livrées par WS-3..WS-10 (`FocalRowSourceGuardTests`,
-/// `FocalScrollPassSourceGuardTests`, `FocalHostSourceGuardTests`,
 /// `ScrollTimePillSourceGuardTests`, …) : celles-ci ne balaient chacune QUE
 /// leur propre sous-dossier. Quatre invariants du contrat sont au contraire
 /// posés sur `Focal/**` ENTIER — aucun agent WS-3..WS-10 n'a de raison de les
@@ -28,9 +27,9 @@ import XCTest
 /// 4. « Zéro constante de loi » (garde R15, alignée sur
 ///    `scripts/check-law-literals.sh`) — les littéraux de
 ///    `FocalFocusCurve`/`ScrollTimePillLaw` interdits partout SAUF `Core/**`
-///    (les miroirs GELÉS eux-mêmes) et `Scroll/FocalPassConstants.swift` (le
-///    domicile documenté des « cotes hors-token », `FocalScrollPassSourceGuardTests`
-///    l'exclut déjà de son propre balayage pour la même raison).
+///    (les miroirs GELÉS eux-mêmes). RETRAIT FOCAL iOS (2026-08-18) :
+///    `Scroll/FocalPassConstants.swift`, ancienne seconde exemption, est
+///    supprimé avec le pass.
 ///
 /// Leçon 257 : un scan qui trouve ZÉRO fichier ne doit jamais passer au vert
 /// silencieusement — chaque garde affirme un plancher de fichiers balayés.
@@ -166,7 +165,7 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 4. Zéro constante de loi hors Core/FocalPassConstants (garde R15)
+    // MARK: - 4. Zéro constante de loi hors Core (garde R15)
 
     /// Même liste de littéraux que `scripts/check-law-literals.sh` (mission
     /// F-090 : « aligne sur check-law-literals.sh ») — HARD (bannis partout)
@@ -213,14 +212,14 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
     /// avait besoin d'une entrée ici.
     private static let knownUnfixedLiteralSites: [String: Set<String>] = [:]
 
-    func test_r15_noLawLiteralAnywhereInFocalOutsideCoreAndPassConstants() throws {
+    func test_r15_noLawLiteralAnywhereInFocalOutsideCore() throws {
         let files = try swiftSources(
             excludingTopLevelDirectories: ["Core"],
-            excludingRelativePaths: ["Scroll/FocalPassConstants.swift"]
+            excludingRelativePaths: []
         )
         XCTAssertGreaterThan(
             files.count, 15,
-            "le balayage R15 (hors Core/, hors FocalPassConstants.swift) ne trouve presque aucun " +
+            "le balayage R15 (hors Core/) ne trouve presque aucun " +
             "fichier — la garde passerait au vert par omission (leçon 257)"
         )
 
@@ -240,7 +239,7 @@ final class FocalNoBubbleSourceGuardTests: XCTestCase {
             offenders.isEmpty,
             "ces fichiers de Focal/** portent un littéral de loi en dur (garde R15, alignée sur " +
             "scripts/check-law-literals.sh) — la constante doit venir de FocalFocusCurve/ScrollTimePillLaw " +
-            "(Core/, GELÉS) ou de FocalPassConstants.swift (domicile documenté des cotes hors-token) : " +
+            "(Core/, GELÉS) : " +
             offenders.map { "\($0.key) [\($0.value.joined(separator: ", "))]" }
                 .sorted().joined(separator: " ; ")
         )

@@ -15,7 +15,8 @@ import {
   userSchema,
   userMinimalSchema,
   updateUserRequestSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  usernamePatternSource
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, UsernameParams } from './types';
 import { formatUserResponse } from '../auth/types';
@@ -614,6 +615,26 @@ export async function updateUserPassword(fastify: FastifyInstance) {
 }
 
 /**
+ * Body de `PATCH /users/me/username`, extrait de la déclaration de route pour
+ * être montable dans un test sans booter le service entier — le contrat Ajv est
+ * ainsi vérifié par le vrai compilateur, pas par une copie du schéma.
+ */
+export const updateUsernameBodySchema = {
+  type: 'object',
+  required: ['newUsername', 'currentPassword'],
+  properties: {
+    newUsername: {
+      type: 'string',
+      minLength: 2,
+      maxLength: 16,
+      pattern: usernamePatternSource,
+      description: 'New username (2-16 chars: letters, digits, - and _ only — no spaces)'
+    },
+    currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification' }
+  }
+} as const;
+
+/**
  * Change username with history tracking
  */
 export async function updateUsername(fastify: FastifyInstance) {
@@ -623,14 +644,7 @@ export async function updateUsername(fastify: FastifyInstance) {
       description: 'Change the authenticated user username. Requires password confirmation. Username changes are limited to once every 30 days and history is tracked (max 10 entries).',
       tags: ['users'],
       summary: 'Change username',
-      body: {
-        type: 'object',
-        required: ['newUsername', 'currentPassword'],
-        properties: {
-          newUsername: { type: 'string', minLength: 2, maxLength: 16, description: 'New username (2-16 chars, alphanumeric, - and _ only)' },
-          currentPassword: { type: 'string', minLength: 1, description: 'Current password for verification' }
-        }
-      },
+      body: updateUsernameBodySchema,
       response: {
         200: {
           type: 'object',

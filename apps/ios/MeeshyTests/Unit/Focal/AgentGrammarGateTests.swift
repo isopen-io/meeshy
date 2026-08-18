@@ -86,7 +86,8 @@ final class AgentGrammarGateTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    private static let agentFiles = ["NullAgentAssistProvider.swift", "AgentAuthoredStyle.swift", "FocalBridgeRow.swift"]
+    // RETRAIT FOCAL iOS (2026-08-18) : FocalBridgeRow supprimé (vue morte, jamais montée).
+    private static let agentFiles = ["NullAgentAssistProvider.swift", "AgentAuthoredStyle.swift"]
 
     /// Aucune chaîne littérale de plus de 20 caractères — la limite du
     /// critère §WS-10 littéral. Une clé passée en argument `localized:` est

@@ -37,10 +37,10 @@ final class MessageListViewControllerTests: XCTestCase {
 
     /// `readingMode` n'est JAMAIS touché dans ce test (reste à son défaut
     /// `.bubbles`) : `scrollToBottom` doit se comporter EXACTEMENT comme
-    /// avant F-085 — aucun crash, `focalPass` reste `.off` de bout en bout.
+    /// avant F-085 — aucun crash (le pass Focal est retiré, 2026-08-18).
     /// Store SEEDÉ (un message) pour dépasser le garde `numberOfItems > 0`
     /// de `scrollToBottom` et exercer réellement le site 4 (§4.8).
-    func test_scrollToBottom_readingModeUntouched_focalPassStaysOff() async throws {
+    func test_scrollToBottom_readingModeUntouched_doesNotCrash() async throws {
         let store = try await makeSeededStore()
         let vc = makeSUT(store: store)
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
@@ -50,10 +50,7 @@ final class MessageListViewControllerTests: XCTestCase {
 
         vc.scrollToBottom(animated: false)
 
-        XCTAssertEqual(
-            vc.focalPass.rendering, .off,
-            "readingMode par défaut (.bubbles) : scrollToBottom() ne doit JAMAIS faire sortir focalPass.rendering de .off — sans quoi le flag OFF ne serait plus bit-à-bit identique à l'existant (contrat §WS-6)."
-        )
+        XCTAssertNotNil(vc.view) // RETRAIT FOCAL iOS (2026-08-18) : plus de pass — témoin no-crash
     }
 
     /// `scrollToMessage`/`scrollToMessageFast` conservent `.centeredVertically`
@@ -69,10 +66,7 @@ final class MessageListViewControllerTests: XCTestCase {
 
         vc.scrollToMessage(localId: "does-not-exist")
 
-        XCTAssertEqual(
-            vc.focalPass.rendering, .off,
-            "readingMode par défaut (.bubbles) : scrollToMessage() ne doit jamais engager le pass (garde « flag off ⇒ zéro appel »)."
-        )
+        XCTAssertNotNil(vc.view) // RETRAIT FOCAL iOS (2026-08-18) : plus de pass — témoin no-crash
     }
 
     // MARK: - Helpers

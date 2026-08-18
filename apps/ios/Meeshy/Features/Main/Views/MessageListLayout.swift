@@ -105,19 +105,67 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// cette vitesse l'œil ne suit pas 60 pt) — et le défilement lent, qui ne
     /// réalise qu'une ou deux cellules par frame, garde sa compensation
     /// intégrale. Le compteur se réarme au tour de runloop suivant.
-    static let maxOffsetAdjustmentsPerTransaction = 3
+    /// **Plafond d'invalidations PARTIELLES par transaction CoreAnimation —
+    /// posé sur l'ENTONNOIR `invalidateLayout(with:)`.**
+    ///
+    /// Quatre itérations du même SIGTRAP (2026-08-18 : flings du matin,
+    /// 11:36 au repos, 11:43/11:50/12:00/12:10) ont éliminé les autres
+    /// leviers un à un : plafonner `contentOffsetAdjustment` puis
+    /// `shouldInvalidateLayout(forPreferredLayoutAttributes:)` n'a jamais
+    /// suffi, car le redimensionnement self-sizing des cellules
+    /// `UIHostingConfiguration` (iOS 16+, `invalidateIntrinsicContentSize`
+    /// → `_setNeedsVisibleCellsUpdate:withLayoutAttributes:`) NE consulte
+    /// AUCUN de ces deux hooks. La pile du crash prouve en revanche que
+    /// CHAQUE invalidation de la tempête traverse
+    /// `-[UICollectionViewLayout invalidateLayoutWithContext:]` — c'est-à-dire
+    /// CE point d'override.
+    ///
+    /// Au-delà du plafond, une invalidation PARTIELLE (ni
+    /// `invalidateEverything` ni `invalidateDataSourceCounts` — la signature
+    /// des corrections self-sizing) est AVALÉE pour la transaction : la
+    /// passe de cellules visibles converge au lieu de franchir la garde de
+    /// ré-entrance d'UIKit (assertion à ~7 passes imbriquées). Les cellules
+    /// concernées gardent leur hauteur estimée UNE frame — invisible à
+    /// vitesse de fling — et se rattrapent au tour suivant : une invalidation
+    /// COMPLÈTE est planifiée (jamais avalée, budget réarmé). Les
+    /// invalidations complètes (rotation, reload, notre rattrapage) passent
+    /// TOUJOURS.
+    static let maxPartialInvalidationsPerTransaction = 4
 
-    private var offsetAdjustmentsThisTransaction = 0
-    private var offsetAdjustmentResetScheduled = false
+    private(set) var partialInvalidationsThisTransaction = 0
+    private var transactionResetScheduled = false
+    private var recoveryInvalidationScheduled = false
 
-    private func noteOffsetAdjustment() {
-        offsetAdjustmentsThisTransaction += 1
-        guard !offsetAdjustmentResetScheduled else { return }
-        offsetAdjustmentResetScheduled = true
+    private func scheduleTransactionReset() {
+        guard !transactionResetScheduled else { return }
+        transactionResetScheduled = true
         DispatchQueue.main.async { [weak self] in
-            self?.offsetAdjustmentsThisTransaction = 0
-            self?.offsetAdjustmentResetScheduled = false
+            self?.partialInvalidationsThisTransaction = 0
+            self?.transactionResetScheduled = false
         }
+    }
+
+    private func scheduleRecoveryInvalidation() {
+        guard !recoveryInvalidationScheduled else { return }
+        recoveryInvalidationScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.recoveryInvalidationScheduled = false
+            self.invalidateLayout()
+        }
+    }
+
+    override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
+        let isPartial = !context.invalidateEverything && !context.invalidateDataSourceCounts
+        if isPartial {
+            guard partialInvalidationsThisTransaction < Self.maxPartialInvalidationsPerTransaction else {
+                scheduleRecoveryInvalidation()
+                return
+            }
+            partialInvalidationsThisTransaction += 1
+            scheduleTransactionReset()
+        }
+        super.invalidateLayout(with: context)
     }
 
     private var pendingBatchAdjustment: CGFloat = 0
@@ -138,7 +186,9 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
             withOriginalAttributes: originalAttributes
         )
         // Si le layout de base a déjà posé sa propre compensation (certains
-        // chemins iOS le font), ne jamais la doubler.
+        // chemins iOS le font), ne jamais la doubler. Aucun budget ICI : la
+        // tempête est bornée à l'entonnoir `invalidateLayout(with:)` — un
+        // contexte avalé emporte sa compensation avec lui.
         guard let collectionView, abs(context.contentOffsetAdjustment.y) < 0.5 else {
             return context
         }
@@ -147,9 +197,7 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
             heightDelta: preferredAttributes.frame.height - originalAttributes.frame.height,
             contentOffsetY: collectionView.contentOffset.y
         )
-        if adjustment != 0,
-           offsetAdjustmentsThisTransaction < Self.maxOffsetAdjustmentsPerTransaction {
-            noteOffsetAdjustment()
+        if adjustment != 0 {
             context.contentOffsetAdjustment = CGPoint(
                 x: context.contentOffsetAdjustment.x,
                 y: adjustment

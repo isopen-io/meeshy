@@ -287,14 +287,10 @@ struct ConversationContextMenuView: View {
                 ) { onBlock(); onDismiss() }
             }
 
-            // Focal (bêta) — I-075, même item que le menu natif (parité).
-            if isFocalBetaPreviewEnabled {
-                divider
-                actionRow(
-                    icon: "viewfinder",
-                    label: String(localized: "context.focal_beta_preview", defaultValue: "Focal (bêta)", bundle: .main)
-                ) { onOpenFocalBetaPreview(); onDismiss() }
-            }
+            // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
+            // (I-075) est retiré avec le mode — Script est le mode nominal.
+            // Le paramètre `onOpenFocalBetaPreview` reste dans l'API (site
+            // d'appel inchangé) mais n'est plus jamais monté.
         }
     }
 

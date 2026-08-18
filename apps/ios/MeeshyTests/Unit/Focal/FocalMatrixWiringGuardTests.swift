@@ -6,8 +6,9 @@ import XCTest
 /// Gardes de CÂBLAGE des correctifs de matrice §5 (audit 2026-08-18) — le
 /// patron « mount guard » du dépôt (leçon 257) : chaque correctif de la
 /// passe « Focal Grandeur Nature » a un témoin qui rougit si son montage
-/// disparaît. Les LOIS pures ont leurs propres suites (`FocalSpecCurveTests`,
-/// `FocalScrollPassGeometryTests`) ; ici on épingle les branchements que
+/// disparaît. RETRAIT FOCAL iOS (2026-08-18) : les suites de lois du pass
+/// (`FocalSpecCurveTests`, `FocalScrollPassGeometryTests`) sont parties avec
+/// lui ; ici restent épinglés les branchements Script/temps réel que
 /// l'audit a trouvés morts ou absents :
 /// effets jamais fournis, flou ignoré, retry sans consommateur, chip 🌐
 /// inerte, présence figée, reconfigure ciblé non différé, pose
@@ -111,48 +112,12 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Pose d'atterrissage programmatique (§4.7)
-
-    func test_landingInFlight_isHandledAtAnimationEnd() throws {
-        let code = try stripped(hostPath)
-        guard let start = code.range(of: "func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {") else {
-            return XCTFail("scrollViewDidEndScrollingAnimation introuvable")
-        }
-        let body = String(code[start.lowerBound...].prefix(2400))
-        XCTAssertTrue(
-            body.contains("isFocalLandingInFlight"),
-            "la fin d'animation doit gérer l'atterrissage programmatique — sans ce drapeau, un saut de citation laissait la rangée d'atterrissage élue SANS tenue jusqu'au geste suivant"
-        )
-        XCTAssertTrue(
-            body.contains("landingContentOffsetY"),
-            "la pose doit RE-VISER une fois si les hauteurs estimées ont dérivé pendant l'animation (tolérance landingTolerance)"
-        )
-    }
-
     // MARK: - Badge non-lus (matrice « Message entrant temps réel »)
 
     func test_unreadBadge_neverCountsOwnMessages() throws {
         XCTAssertTrue(
             try stripped(hostPath).contains("newestIsOwnMessage"),
             "le badge non-lus ne doit jamais compter un message dont l'utilisateur est l'auteur — un envoi optimiste depuis l'historique incrémentait la pilule (audit 2026-08-18)"
-        )
-    }
-
-    // MARK: - Fantômes exclus de l'élection (matrice « Suppression »)
-
-    func test_descriptor_excludesDeletedAndSystemRowsFromElection() throws {
-        let code = try stripped(hostPath)
-        guard let start = code.range(of: "private func focalCellDescriptor(for item: MessageListItem)") else {
-            return XCTFail("focalCellDescriptor introuvable")
-        }
-        let body = String(code[start.lowerBound...].prefix(1400))
-        XCTAssertTrue(
-            body.contains("record.deletedAt == nil"),
-            "un message supprimé ne concourt ni à l'élection ni à la carte — élire un fantôme posait la bande sur du vide"
-        )
-        XCTAssertTrue(
-            body.contains("record.messageType != \"system\""),
-            "une notice système/appel ne concourt ni à l'élection ni à la carte"
         )
     }
 
@@ -170,13 +135,4 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Chrome de focus fantôme (bug n°1 de l'audit)
-
-    func test_isFocusedInput_isGatedOffDuringScroll() throws {
-        let code = try stripped(hostPath)
-        XCTAssertTrue(
-            code.contains("&& !self.store.isUserScrolling"),
-            "isFocused à la config de cellule doit être gaté hors défilement — une cellule recyclée mi-geste gardait la tenue de focus d'un élu périmé (chrome fantôme)"
-        )
-    }
 }

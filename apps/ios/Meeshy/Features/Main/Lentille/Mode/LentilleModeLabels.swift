@@ -94,7 +94,11 @@ nonisolated enum LentilleModeLabels {
         from suggestedMode: ConversationBridge.SuggestedMode
     ) -> ReadingModeOrchestrator.ConversationReadingMode {
         switch suggestedMode {
-        case .focal: return .focal
+        // RETRAIT FOCAL iOS (2026-08-18) : la projection du pont suggère le
+        // fil — qui s'ouvre désormais en Script (clamp
+        // `ReadingModeController.clampRetiredModes`). Le chip de la Lentille
+        // dit ce que l'ouverture FERA, jamais un mode retiré.
+        case .focal: return .script
         case .resume: return .summary
         }
     }

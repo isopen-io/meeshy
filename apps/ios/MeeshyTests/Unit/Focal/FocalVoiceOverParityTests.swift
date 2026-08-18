@@ -187,7 +187,8 @@ final class FocalVoiceOverParityTests: XCTestCase {
     /// inchangé : VoiceOver ne doit JAMAIS annoncer le nom système brut d'un
     /// SF Symbol.**
     ///
-    /// Ce commit a monté `FocalFocusControlBar`, dont deux icônes — `plus`
+    /// Ce commit a monté `FocalFocusControlBar` (barre RETIRÉE avec le mode
+    /// Focal, 2026-08-18 — l'historique reste vrai), dont deux icônes — `plus`
     /// (ouvrir le sélecteur de réactions) et `ellipsis` (le menu complet) —
     /// n'étaient ni cachées ni absorbées, et que le témoin dénonçait donc.
     /// Elles ne sont pourtant jamais annoncées « plus » ni « ellipsis » :
@@ -213,9 +214,9 @@ final class FocalVoiceOverParityTests: XCTestCase {
     /// ne peut plus emprunter la mitigation de sa VOISINE. `FocalQuotedReplyView`
     /// en porte deux à treize lignes d'écart — sous l'ancienne fenêtre de 1100
     /// caractères, le `.accessibilityHidden(true)` de la seconde couvrait la
-    /// première. Vérifié sur les sept icônes réelles de `Focal/Row/**` : les
-    /// sept restent conformes fenêtre coupée, et les deux seules à dépendre de
-    /// la troisième forme sont bien celles de `FocalFocusControlBar`.
+    /// première. Vérifié sur les icônes réelles de `Focal/Row/**` : toutes
+    /// restent conformes fenêtre coupée (les deux icônes qui dépendaient de
+    /// la troisième forme vivaient dans `FocalFocusControlBar`, retirée).
     func test_decorativeIcons_inFocalRow_areHiddenOrAbsorbedByACombinedLabel() throws {
         let root = rowRoot()
         let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))

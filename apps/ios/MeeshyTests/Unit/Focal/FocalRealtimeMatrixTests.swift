@@ -11,10 +11,11 @@ import MeeshySDK
 /// **Principe : un test par id, mais AUCUNE duplication de ce qui est déjà
 /// prouvé.** La plupart des lois du fil (courbe, hystérésis, plafond
 /// d'alpha, hôte, grilles média, routage audio) sont déjà couvertes de
-/// façon exhaustive par les suites WS-3..WS-6
-/// (`FocalScrollPassGeometryTests`, `FocalHostInsetCompositionTests`,
-/// `FocalMediaGridLayoutTests`, `FocalAudioRoutingTests`,
-/// `FocalMediaProtectionTests`, …). Pour ces id, ce fichier ajoute un
+/// façon exhaustive par les suites WS-3..WS-6 encore vivantes
+/// (`FocalMediaGridLayoutTests`, `FocalAudioRoutingTests`,
+/// `FocalMediaProtectionTests`, …) — les suites du pass
+/// (`FocalScrollPassGeometryTests`, `FocalHostInsetCompositionTests`) sont
+/// parties avec le RETRAIT FOCAL iOS (2026-08-18). Pour ces id, ce fichier ajoute un
 /// ANCRAGE frais — un scénario, des entrées ou une combinaison différents
 /// de ce qui existe déjà — plutôt que de recopier une assertion, ET cite la
 /// suite qui porte la preuve exhaustive. Pour les id où la recette F-090 a
@@ -30,10 +31,8 @@ import MeeshySDK
 /// contenu de la rangée est donc IDENTIQUE en Focal et en Script PAR
 /// CONSTRUCTION pour tout ce qui vit dans `Focal/Row/**` (F02, F04-F11,
 /// F13, F15 : rien à re-tester en Script, la garde de densité couvre déjà
-/// la parité). Seule la PERSPECTIVE (WS-5, F01/F13 alpha) est
-/// spécifique à `.focal` — son absence en `.script`/`.bubbles` est déjà
-/// prouvée par `FocalHostInsetCompositionTests.
-/// test_focalPass_rendering_isOff_whenBubbles` et la garde `usesPerspective`.
+/// la parité). La PERSPECTIVE (WS-5, F01) n'existe plus : le pass est
+/// supprimé du dépôt (RETRAIT FOCAL iOS 2026-08-18).
 @MainActor
 final class FocalRealtimeMatrixTests: XCTestCase {
 
@@ -53,9 +52,9 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     // MARK: - F01 — message entrant temps réel, focus suit si au fond
     // behaviour-matrix:F01
 
-    /// Preuve exhaustive de l'élection : `FocalScrollPassGeometryTests`
-    /// (`test_election_picksTheClosestCandidateWhenNoCurrent`, etc.).
-    /// Ancrage frais ici : un candidat qui vient de NAÎTRE (aucun
+    /// RETRAIT FOCAL iOS (2026-08-18) : l'élection du pass est supprimée —
+    /// reste la LOI GELÉE `FocalFocusCurve.electFocusRow` (consommée par la
+    /// Lentille), exercée ici. Ancrage : un candidat qui vient de NAÎTRE (aucun
     /// `currentId`, un seul candidat au fond, PILE sur la ligne de focus —
     /// scénario « nouveau message, focus vide ») doit être élu sans
     /// hésitation ; c'est exactement la condition « la nouvelle rangée naît
@@ -88,10 +87,8 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     // MARK: - F02 — typing indicator plat, exclu de la perspective
     // behaviour-matrix:F02
 
-    /// Preuve exhaustive : `FocalScrollPassGeometryTests.
-    /// test_apply_ineligibleCells_areResetToIdentity` (une cellule
-    /// `.typingIndicator` — `localId nil` — reste `scale == 1`/`alpha == 1`)
-    /// et `test_election_noCandidates_yieldsNil`. Ancrage frais : la rangée
+    /// RETRAIT FOCAL iOS (2026-08-18) : plus aucun transform nulle part — la
+    /// perspective est partie avec le pass. Ancrage conservé : la rangée
     /// typing n'appartient PAS à `Focal/Row/**` (contrat §0 écart #7 :
     /// composant existant, non modifié) — cette garde confirme qu'aucun
     /// fichier Focal/Row/** ne réimplémente de pastille/dots de typing (ce
@@ -251,12 +248,11 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// Preuve exhaustive du rendu : `FocalDynamicTypeTests.
     /// test_quotedReply_lineLimitOneIsDocumentedPolicy_notAnOmission` (F-090)
     /// + `FocalRichBlockEquatableTests` (railWidth). Ancrage frais F09 : le
-    /// SAUT vers l'original passe par `onReplyTap`, qui atterrit dans la
-    /// bande de focus via `landOnFocusBand` — déjà prouvé par
-    /// `FocalHostSourceGuardTests.test_landingBand_isGuardedToFocalOnly`.
-    /// Ce test confirme que `FocalQuotedReplyView` déclenche bien
-    /// `onReplyTap` (et non un autre callback) au tap, le lien manquant
-    /// entre les deux garanties.
+    /// SAUT vers l'original passe par `onReplyTap`, que l'hôte fait atterrir
+    /// via `scrollToItem(.centeredVertically)` (mécanisme partagé avec la
+    /// recherche — voir `test_F12`). Ce test confirme que
+    /// `FocalQuotedReplyView` déclenche bien `onReplyTap` (et non un autre
+    /// callback) au tap, le lien manquant entre les deux garanties.
     func test_F09_quotedReplyTap_triggersOnReplyTap_theCallbackTheHostLandsOn() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalQuotedReplyView.swift"))
         guard let start = code.range(of: ".onTapGesture {"),
@@ -269,7 +265,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         XCTAssertTrue(
             body.contains("onReplyTap?(reference.messageId)"),
             "F09 : le tap sur une citation doit déclencher `onReplyTap(reference.messageId)` — c'est ce " +
-            "callback que WS-6 fait atterrir dans la bande de focus (landOnFocusBand)"
+            "callback que l'hôte fait atterrir via scrollToItem(.centeredVertically) — voir test_F12"
         )
     }
 
@@ -354,67 +350,55 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     // behaviour-matrix:F12
 
     /// La bannière épinglée (`ConversationView`, hors Focal/**) reste
-    /// inchangée par construction — WS-7 ne la touche pas (aucun fichier
-    /// listé au contrat §1.2 ne la mentionne). Le saut de recherche PARTAGE
-    /// le même mécanisme d'atterrissage que F09 (`landOnFocusBand`), déjà
-    /// couvert par `FocalHostSourceGuardTests`. Ancrage : les DEUX sites
-    /// (`scrollToMessage`, `scrollToMessageFast` — recherche ET citation)
-    /// convergent bien vers UNE fonction partagée, jamais deux implémentations
-    /// divergentes — cité, pas recreusé (déjà prouvé par
-    /// `test_landingBand_isGuardedToFocalOnly`, « une seule occurrence de
-    /// .centeredVertically »).
+    /// inchangée par construction. RETRAIT FOCAL iOS (2026-08-18) :
+    /// `landOnFocusBand` (bande de focus) est parti avec la perspective — le
+    /// saut de recherche ET le saut de citation atterrissent désormais tous
+    /// deux via le MÊME mécanisme UIKit natif `.centeredVertically`, jamais
+    /// deux implémentations divergentes.
     func test_F12_searchAndQuoteJump_shareTheSameLandingMechanism() throws {
-        // Documentation-only anchor : la preuve vit déjà dans
-        // FocalHostSourceGuardTests (F-085) — ce test affirme juste que la
-        // fonction partagée existe sous son nom attendu, pour qu'un
-        // renommage silencieux fasse échouer LES DEUX suites, pas une seule.
         let root = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Views/MessageListViewController.swift")
         let code = try source(root)
-        XCTAssertTrue(
-            code.contains("private func landOnFocusBand(indexPath: IndexPath, animated: Bool) {"),
-            "F12 : `landOnFocusBand` doit exister — c'est la fonction PARTAGÉE par la recherche et le saut " +
-            "de citation (F09) vers la bande de focus"
+        XCTAssertFalse(
+            code.contains("landOnFocusBand"),
+            "F12 : `landOnFocusBand` appartient au pass retiré — il ne doit pas réapparaître dans l'hôte."
+        )
+        let jumps = code.components(separatedBy: "scrollToItem(at: indexPath, at: .centeredVertically").count - 1
+        XCTAssertEqual(
+            jumps, 2,
+            "F12 : les DEUX sauts (scrollToMessage — recherche — et scrollToMessageFast — citation) doivent " +
+            "atterrir via le même `scrollToItem(.centeredVertically)` — \(jumps) site(s) trouvé(s)."
         )
     }
 
     // MARK: - F13 — rangée optimiste : alpha = min(0.7, alphaPerspective)
     // behaviour-matrix:F13
 
-    /// Preuve exhaustive : `FocalScrollPassGeometryTests` (`test_alphaCeiling_*`,
-    /// 3 tests : plafonnement dans la bande, courbe gagnante loin de la
-    /// bande, opaque hors optimiste). Ancrage frais : le plafond CONFIRMÉ
-    /// (`opaqueAlphaCeiling = 1`) ne restreint JAMAIS l'alpha en dessous de
-    /// la courbe — vérifié ici avec `min(opaqueAlphaCeiling, curve.alpha)`
-    /// à `distance = 0` (alpha de courbe maximal, cas jamais exercé par les
-    /// tests `alphaCeiling_*` existants, qui portent tous sur l'optimiste).
-    func test_F13_confirmedRow_ceilingNeverRestrictsBelowTheCurve() {
-        let transform = FocalPerspectiveGeometry.standard.transform(
-            distance: 0, cellSize: CGSize(width: 300, height: 60),
-            horizontalAnchor: .leading, isRightToLeft: false,
-            alphaCeiling: FocalPassConstants.opaqueAlphaCeiling
+    /// RETRAIT FOCAL iOS (2026-08-18) : le pass et son plafond d'alpha sont
+    /// supprimés — l'opacité d'un envoi optimiste appartient désormais à la
+    /// RANGÉE (`FocalRow`, `.opacity(input.isOptimistic ? 0.7 : 1)`).
+    func test_F13_optimisticOpacity_isOwnedByTheRow() throws {
+        let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
+        XCTAssertTrue(
+            code.contains("input.isOptimistic ? 0.7 : 1"),
+            "F13 : la rangée plate rend l'envoi en vol à 0,7 — sans ce site, l'état optimiste n'a plus aucun rendu depuis le retrait du pass"
         )
-        XCTAssertEqual(transform.alpha, 1, accuracy: 0.0001, "F13 : une rangée CONFIRMÉE à distance 0 doit rester à alpha 1 — le plafond confirmé ne restreint jamais")
     }
 
     // MARK: - F14 — chargement vers le haut ; inset de tête seulement si première page atteinte
     // behaviour-matrix:F14
 
-    /// Preuve exhaustive : `FocalHostInsetCompositionTests`
-    /// (`test_headInset_isPositive_whenFocalAndHasReachedOldest`,
-    /// `test_headInset_isZero_whenFocalButNotYetReachedOldest`). Cité, pas
-    /// recreusé — F14 est déjà entièrement démontré par cette suite (WS-6,
-    /// F-085), y compris la préservation d'offset au prepend
-    /// (`test_applyBottomInset_recomputesHeadInset_whenComposerHeightChanges`).
-    /// Ancrage minimal ici : le drapeau qui gouverne l'inset porte bien le
-    /// nom attendu par F14 (« MessageStore confirme la première page »).
-    func test_F14_headInsetIsGovernedByHasReachedOldest_theNameF14Expects() throws {
+    /// RETRAIT FOCAL iOS (2026-08-18) : l'inset de tête est parti avec la
+    /// perspective — F14 se réduit à la préservation d'offset au prepend,
+    /// démontrée par `MessageListLayoutOffsetTests` (compensation sous la
+    /// fenêtre + plafond par transaction). Ancrage : le layout est bien
+    /// MessageListLayout.
+    func test_F14_offsetPreservation_isCarriedByMessageListLayout() throws {
         let root = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Views/MessageListView.swift")
-        let code = try source(root)
+        let code = try source(root.appendingPathComponent("Views/MessageListViewController.swift"))
         XCTAssertTrue(
-            code.contains("var hasReachedOldest: Bool = false"),
-            "F14 : MessageListView doit exposer `hasReachedOldest` — c'est le signal (MessageStore, « première page atteinte ») qui gouverne l'inset de tête"
+            code.contains("MessageListLayout {"),
+            "F14 : l'hôte doit construire MessageListLayout — c'est lui qui préserve le champ visuel au prepend de pagination"
         )
     }
 

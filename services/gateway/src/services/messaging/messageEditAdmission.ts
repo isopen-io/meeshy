@@ -43,6 +43,11 @@
  * sans écran pour le dire. Voir `tasks/lessons.md`, leçon 88.
  */
 
+import {
+  isConversationClosed,
+  type ConversationTerminalStateRow,
+} from './conversationWriteAdmission.js';
+
 /**
  * Les rôles GLOBAUX (`User.role`, en MAJUSCULES) qui ouvrent une porte de
  * modération sur le message d'autrui.
@@ -56,7 +61,12 @@ export const PRIVILEGED_GLOBAL_ROLES = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']
 /** 24 heures. La fenêtre ne vaut QUE pour l'auteur (voir `admitMessageEdit`). */
 export const MESSAGE_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-export type MessageEditRefusal = 'not-author' | 'not-a-member' | 'edit-window-expired';
+export type MessageEditRefusal =
+  | 'not-author'
+  | 'not-a-member'
+  | 'edit-window-expired'
+  /** Le conteneur porte son état terminal — son contenu est gelé pour tous. */
+  | 'conversation-closed';
 
 export type MessageEditAdmission =
   | {
@@ -69,6 +79,19 @@ export type MessageEditAdmission =
   | { readonly admitted: false; readonly reason: MessageEditRefusal };
 
 export type MessageEditRefused = Extract<MessageEditAdmission, { admitted: false }>;
+
+/**
+ * Ce qu'on DIT quand le conteneur est terminé — en UN exemplaire, et c'est déjà
+ * la phrase du dépôt : `sharing.ts` et `participants.ts` refusent l'entrée dans
+ * un fil clos avec ces mots exacts depuis le cycle 70. Même état, même phrase,
+ * quel que soit le verbe refusé.
+ *
+ * Les autres motifs gardent le vocabulaire de LEUR transport, délibérément :
+ * `PUT /messages/:messageId` rend un 404 volontairement indistinct pour ne pas
+ * devenir un oracle d'existence (cf. `admitMessageEdit`), et unifier ses phrases
+ * avec celles des routes conversation-scopées lui retirerait cette propriété.
+ */
+export const CONVERSATION_CLOSED_EDIT_MESSAGE = 'Cette conversation est terminée';
 
 /**
  * Le gateway compile en `strict: false`, où TypeScript ne rétrécit PAS une
@@ -117,6 +140,20 @@ export interface MessageEditAdmissionParams {
     /** `User.id` de l'auteur — PAS le `Participant.id` que porte `senderId`. */
     authorUserId: string | null | undefined;
     conversationId: string;
+    /**
+     * L'état TERMINAL du conteneur — **exigé**, jamais optionnel.
+     *
+     * Les quatre transports d'édition chargent déjà le message ; élargir leur
+     * `select` de deux colonnes ne coûte aucun aller-retour. Le rendre optionnel
+     * rendrait la règle silencieusement INERTE chez le transport qui l'oublie —
+     * et chez le CINQUIÈME, qui n'existe pas encore. Requis, il fait échouer la
+     * compilation de toute entrée qui n'y répond pas (cf. le paramètre jumeau de
+     * `resolveConversationEntry`, cycle 70).
+     *
+     * `null` reste permissif : une conversation absente de la projection de
+     * l'appelant ne ferme rien — même contrat qu'`isConversationClosed`.
+     */
+    conversation: ConversationTerminalStateRow | null | undefined;
     createdAt: Date | string | null | undefined;
   };
   /** Injectable pour les tests ; `Date.now()` en production. */
@@ -167,6 +204,8 @@ async function readActiveMembership(
  *   ET qu'il y porte un rôle global privilégié — les deux en UNE lecture. La
  *   fenêtre de 24h ne le concerne pas : un modérateur corrige précisément ce
  *   qui traîne depuis longtemps.
+ * - **Personne**, quel que soit son rang, quand le CONTENEUR porte son état
+ *   terminal (§ ci-dessous).
  *
  * Chaque branche coûte AU PLUS une lecture, et le chemin nominal (l'auteur,
  * dans sa fenêtre) n'en déclenche aucune. Toute lecture échoue FERMÉE : une
@@ -175,8 +214,37 @@ async function readActiveMembership(
  * Un `createdAt` absent ou illisible n'a jamais bloqué personne (`NaN > w` est
  * faux) et ne bloque toujours pas : la comparaison est écrite dans ce sens
  * exprès, et la borne est inclusive (« 24h pile » est encore éditable).
+ *
+ * ─── L'ÉTAT TERMINAL PASSE EN DERNIER, ET C'EST DE LA SÉCURITÉ ───────────────
+ *
+ * `admitConversationWriteFor` tranche la clôture EN PREMIER ; cette unité la
+ * tranche EN DERNIER, sur la seule décision qui allait être admise. L'écart est
+ * délibéré, et tient au périmètre de l'appelant : le point de convergence de
+ * l'envoi ne s'atteint qu'avec une conversation déjà résolue et une
+ * appartenance déjà prouvée, quand `PUT /messages/:messageId` s'atteint avec un
+ * `messageId` NU.
+ *
+ * Cette route rend **404** sur tout refus non temporel EXPRÈS, pour ne pas
+ * devenir un oracle d'existence à qui sonde des ObjectIds. Trancher la clôture
+ * avant l'autorisation lui rendrait exactement cet oracle — « ce message
+ * existe, et son fil est clos » — à un inconnu, et le lui rendrait sur les
+ * QUATRE transports d'un coup. Placée en dernier, la clôture ne se révèle qu'à
+ * qui aurait été admis sans elle : aucun transport n'a de vocabulaire à
+ * inventer pour la cacher, et chacun peut en dire le vrai motif.
  */
 export async function admitMessageEdit(
+  params: MessageEditAdmissionParams
+): Promise<MessageEditAdmission> {
+  const decision = await decideMessageEdit(params);
+
+  if (decision.admitted && isConversationClosed(params.message.conversation)) {
+    return REFUSE('conversation-closed');
+  }
+
+  return decision;
+}
+
+async function decideMessageEdit(
   params: MessageEditAdmissionParams
 ): Promise<MessageEditAdmission> {
   const { prisma, editorUserId, message, now = Date.now(), onError } = params;

@@ -1868,6 +1868,16 @@ class ConversationViewModel: ObservableObject {
 
         let beforeValue = nextMessageCursor ?? oldestId
 
+        // Cache-FIRST (bible I1 « Offline Graceful Degradation », retour
+        // user 2026-08-18 « chargement lent ») : la fenêtre GRDB suivante se
+        // sert IMMÉDIATEMENT quand elle existe — scroller vers le haut ne
+        // doit JAMAIS attendre le réseau pour des rangées déjà sur disque.
+        // Le REST part ensuite pour ÉTENDRE la fenêtre (pages jamais
+        // téléchargées) ; `loadOlder(before:)` est idempotent pour une même
+        // ancre, le double glissement est donc sans effet.
+        let cacheServedFirst = await messageStore.loadOlder(before: oldestCreatedAt)
+        if cacheServedFirst { prefetchRecentMedia() }
+
         do {
             // Direct REST + GRDB persistence path. We DO NOT route through
             // ConversationSyncEngine.fetchOlderMessages because it only writes
@@ -1917,16 +1927,10 @@ class ConversationViewModel: ObservableObject {
                 ?? (response.data.count >= olderPageLimit)
         } catch {
             // Transient failure — keep hasOlderMessages so the next scroll
-            // retries. Debounce prevents tight retry loops.
+            // retries. Debounce prevents tight retry loops. La page GRDB a
+            // DÉJÀ été servie avant le réseau (cache-first ci-dessus) — rien
+            // à re-servir ici.
             Logger.messages.error("loadOlderMessages failed: \(error.localizedDescription)")
-
-            // Offline graceful degradation (reads must keep working without
-            // network): surface any older page already cached in GRDB from a
-            // prior online session. Without this, scrolling up while offline
-            // looked like there was nothing more to load even when the rows
-            // were sitting right there on disk.
-            let cacheDidLoad = await messageStore.loadOlder(before: oldestCreatedAt)
-            if cacheDidLoad { prefetchRecentMedia() }
         }
 
         isLoadingOlder = false

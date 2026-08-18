@@ -1332,7 +1332,7 @@ struct ConversationView: View {
                     conversationId: viewModel.conversationId,
                     isDark: isDark,
                     onReplyToPerson: { entry in
-                        readingModeController.select(.focal)
+                        readingModeController.select(.script)
                         guard let targetId = entry.evidenceMessageIds.first,
                               let msg = viewModel.messages.first(where: { $0.id == targetId }) else { return }
                         triggerReply(for: msg)
@@ -1340,13 +1340,13 @@ struct ConversationView: View {
                         scrollState.scrollToMessageTrigger += 1
                     },
                     onOpenEpisode: { episode in
-                        readingModeController.select(.focal)
+                        readingModeController.select(.script)
                         guard let targetId = episode.messageIds.first else { return }
                         scrollState.scrollToMessageId = targetId
                         scrollState.scrollToMessageTrigger += 1
                     },
                     onResumeThread: {
-                        readingModeController.select(.focal)
+                        readingModeController.select(.script)
                         if let firstUnread = viewModel.messages.first(where: { !$0.isMe })?.id {
                             scrollState.scrollToMessageId = firstUnread
                             scrollState.scrollToMessageTrigger += 1
@@ -1391,14 +1391,6 @@ struct ConversationView: View {
                 // `ReadingModeOrchestrator.ConversationReadingMode`,
                 // F-080) — aucune conversion.
                 readingMode: readingModeController.mode,
-                // « Piège connu » (contrat §4.5) : une conversation courte
-                // jamais paginée ne verrait `hasOlderMessages` passer à
-                // `false` qu'après le premier aller-retour REST —
-                // `messages.count < 200` couvre l'intervalle avant ce
-                // premier chargement.
-                hasReachedOldest: !viewModel.hasOlderMessages
-                    || (viewModel.messages.count < 200 && !viewModel.isLoadingInitial && !viewModel.isRevalidating),
-                isReduceMotionEnabled: meeshyForceReduceMotion,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count
                 },
@@ -1829,14 +1821,13 @@ struct ConversationView: View {
         isScrollingList && !isSearchOpen
     }
 
-    /// **En Focal, c'est le header ENTIER qui s'efface** — retour, avatar,
-    /// titre, recherche, appel et bascule de vue compris — là où le mode
-    /// bulles n'efface que sa grappe de boutons d'action.
+    /// **En rangée plate (Script), c'est le header ENTIER qui s'efface** —
+    /// retour, avatar, titre, recherche, appel et bascule de vue compris —
+    /// là où le mode bulles n'efface que sa grappe de boutons d'action.
     ///
-    /// La raison est le mode lui-même : Focal met le message regardé au
-    /// centre et lui donne ses propres contrôles, sur le bord de sa carte
-    /// (`FocalFocusControlBar`). Garder au-dessus une barre d'outils
-    /// concurrente pendant qu'on lit contredit toute l'intention.
+    /// La raison est le mode lui-même : la lecture plate met le fil au
+    /// centre ; garder au-dessus une barre d'outils concurrente pendant
+    /// qu'on lit contredit l'intention.
     ///
     /// **Toujours une porte de sortie** : le header revient dès l'ARRÊT du
     /// défilement (ce n'est pas un masquage permanent), et le geste de retour
@@ -1860,12 +1851,11 @@ struct ConversationView: View {
         )
     }
 
-    /// **En Focal, le défilement escamote TOUT le chrome** — composeur et
-    /// bouton de retour au bas compris, en plus du header (`hidesEntireHeader`)
-    /// et de la pilule de jour (côté hôte, `MessageDayStickyState.isSuppressed`).
-    /// Le fil occupe l'écran entier le temps du mouvement ; tout revient dès
-    /// la pose — après l'atterrissage d'élection (§4.7bis), qui garantit que
-    /// l'élu n'est plus jamais recouvert par la zone de saisie.
+    /// **En rangée plate (Script), le défilement escamote TOUT le chrome** —
+    /// composeur et bouton de retour au bas compris, en plus du header
+    /// (`hidesEntireHeader`) et de la pilule de jour (côté hôte,
+    /// `MessageDayStickyState.isSuppressed`). Le fil occupe l'écran entier le
+    /// temps du mouvement ; tout revient dès la pose.
     ///
     /// Une saisie ACTIVE échappe à la règle : panneau emoji ouvert ou
     /// suggestions de mention affichées, le composeur est l'outil en main —

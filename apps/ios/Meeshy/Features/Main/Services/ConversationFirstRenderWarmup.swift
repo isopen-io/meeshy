@@ -158,7 +158,7 @@ enum ConversationFirstRenderWarmup {
     /// ouvert par l'utilisateur) le trouve déjà chaud.
     private static func warmUpReadingModeController() {
         let capabilities = ReadingModeOrchestrator.ReadingModeCapabilities(
-            availableModes: [.focal],
+            availableModes: [.script],
             riverEligible: false,
             riverEligibilityReason: ReadingModeOrchestrator.RiverEligibilityReason(
                 threshold: ReadingModeOrchestrator.riverEligibilityThreshold,

@@ -341,6 +341,7 @@ private fun PseudoStepBody(state: RegistrationUiState, viewModel: RegistrationVi
             value = state.fields.username,
             onValueChange = viewModel::onUsernameChange,
             label = { Text(stringResource(R.string.registration_username_label)) },
+            supportingText = { Text(stringResource(R.string.registration_username_hint)) },
             singleLine = true,
             enabled = !state.isSubmitting,
             modifier = Modifier.fillMaxWidth().padding(top = MeeshySpacing.md),

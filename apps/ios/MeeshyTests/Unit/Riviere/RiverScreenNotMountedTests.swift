@@ -3,9 +3,8 @@ import XCTest
 
 /// Témoin de structure — R-133 livrait « l'écran n'existe pas drapeau OFF,
 /// aucun modificateur monté » ; **R-135 recalibre en CONSCIENCE, sans
-/// affaiblir** (même discipline à deux positions que `drawsFocusCard` dans
-/// `FocalFocusDecorationTests` : deux états, chacun prouvé par son propre
-/// témoin, jamais un seul gardien qui s'efface).
+/// affaiblir** (discipline à deux positions : deux états, chacun prouvé par
+/// son propre témoin, jamais un seul gardien qui s'efface).
 ///
 /// **Position A — le MENU ne grise plus Rivière en dur (R-135, livré).**
 /// `LentilleModeMenuModel.build` dérive désormais `isDisabled` pour Rivière
@@ -28,8 +27,9 @@ import XCTest
 /// mécaniquement, à monter l'écran : ce sont deux fichiers différents
 /// (`LentilleReadingModeContext` pour la liste, `ConversationView` pour le
 /// fil ouvert), et seul le premier a été touché par R-135. Une sélection
-/// « Rivière » reste donc CLAMPÉE à `.focal` (`clamped-unavailable`,
-/// `resolveOrchestratorDecision`) dès l'ouverture d'une conversation — la
+/// « Rivière » reste donc CLAMPÉE (`clamped-unavailable`,
+/// `resolveOrchestratorDecision` rend `.focal`, que le clamp du RETRAIT
+/// FOCAL iOS 2026-08-18 rabat sur `.script`) dès l'ouverture d'une conversation — la
 /// loi documente elle-même ce cas : « un choix collant `riviere` mémorisé
 /// avant l'extinction du drapeau Rivière rendrait un mode que personne ne
 /// sait dessiner ». Monter `RiverStreamHost` (calculer une

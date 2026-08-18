@@ -7,7 +7,7 @@ import XCTest
 /// construire un `ConversationView` réel — voir la note de ce fichier sur
 /// le risque GRDB/réseau non vérifiable ici, R5).
 ///
-/// Même patron que `FocalHostSourceGuardTests` (F-085).
+/// Patron « garde de source » du dossier (lecture stripped, F-085).
 final class ConversationViewReadingModeSourceGuardTests: XCTestCase {
 
     private func hostRoot() -> URL {
@@ -94,44 +94,16 @@ final class ConversationViewReadingModeSourceGuardTests: XCTestCase {
 
     // MARK: - Le mode décidé ATTEINT réellement l'hôte (WS-6)
 
-    /// Sans ce câblage, F-085 (readingMode/hasReachedOldest/isReduceMotionEnabled)
-    /// resterait à jamais sur ses défauts (`.bubbles`/`false`/`false`) — la
-    /// décision de l'orchestrateur serait prise pour rien.
+    /// Sans ce câblage, la décision de l'orchestrateur serait prise pour
+    /// rien. RETRAIT FOCAL iOS (2026-08-18) : `hasReachedOldest` et
+    /// `isReduceMotionEnabled` sont partis avec le pass — seule la prop
+    /// `readingMode` subsiste.
     func test_messageListView_receivesTheDecidedReadingMode() throws {
         let code = try strippedSource("ConversationView.swift")
         XCTAssertTrue(
             code.contains("readingMode: readingModeController.mode"),
-            "MessageListView(...) doit recevoir `readingMode: readingModeController.mode` — sinon la décision de l'orchestrateur (§WS-7) n'atteint jamais l'hôte de défilement (§WS-6, F-085)."
+            "MessageListView(...) doit recevoir `readingMode: readingModeController.mode` — sinon la décision de l'orchestrateur (§WS-7) n'atteint jamais l'hôte de défilement."
         )
-        XCTAssertTrue(
-            code.contains("isReduceMotionEnabled: meeshyForceReduceMotion"),
-            "MessageListView(...) doit recevoir `isReduceMotionEnabled: meeshyForceReduceMotion` — l'override in-app Reduce Motion (§4.9)."
-        )
-        XCTAssertTrue(
-            code.contains("hasReachedOldest:"),
-            "MessageListView(...) doit recevoir `hasReachedOldest:` — sans lui, `headInset` (§4.5) reste à 0 même en `.focal`."
-        )
-    }
-
-    // MARK: - Ordre des props (contrainte d'ordre de l'init memberwise, §WS-6 travail 10)
-
-    /// `readingMode`/`hasReachedOldest`/`isReduceMotionEnabled` doivent
-    /// apparaître, au CALL SITE, dans le MÊME ordre relatif que leur
-    /// déclaration dans `MessageListView.swift` (Swift n'autorise pas de
-    /// réordonner des arguments étiquetés à l'appel).
-    func test_callSite_ordersTheThreePropsConsistently() throws {
-        let code = try strippedSource("ConversationView.swift")
-        guard let readingModeRange = code.range(of: "readingMode: readingModeController.mode"),
-              let hasReachedOldestRange = code.range(of: "hasReachedOldest:"),
-              let isReduceMotionRange = code.range(of: "isReduceMotionEnabled: meeshyForceReduceMotion")
-        else {
-            XCTFail("Une des trois props est introuvable au site d'appel de MessageListView(...).")
-            return
-        }
-        XCTAssertTrue(readingModeRange.upperBound < hasReachedOldestRange.lowerBound,
-                      "`readingMode:` doit précéder `hasReachedOldest:` au site d'appel — même ordre que leur déclaration dans MessageListView.swift.")
-        XCTAssertTrue(hasReachedOldestRange.upperBound < isReduceMotionRange.lowerBound,
-                      "`hasReachedOldest:` doit précéder `isReduceMotionEnabled:` au site d'appel.")
     }
 
     // MARK: - Le mux de rangée (WS-6, F-086 « le mux de cellule se fait là »)
@@ -152,12 +124,10 @@ final class ConversationViewReadingModeSourceGuardTests: XCTestCase {
         )
     }
 
-    /// Script = même FocalRow, densité `.script` — jamais `.focal` — donc
-    /// zéro perspective : `usesPerspective` (extension F-085) ne vaut `true`
-    /// QUE pour `.focal`, garde déjà vérifiée par
-    /// `FocalHostCallSiteMountGuardTests`/`FocalHostSourceGuardTests` (F-085).
-    /// Ici : la densité TRANSMISE à `FocalRowInput` bascule bien sur
-    /// `readingMode`.
+    /// Script = même FocalRow, densité `.script`. RETRAIT FOCAL iOS
+    /// (2026-08-18) : `usesPerspective` et le pass sont supprimés — zéro
+    /// perspective par construction. Ici : la densité TRANSMISE à
+    /// `FocalRowInput` bascule bien sur `readingMode`.
     func test_focalRowInput_densityTracksReadingMode() throws {
         let code = try strippedSource("MessageListViewController.swift")
         XCTAssertTrue(

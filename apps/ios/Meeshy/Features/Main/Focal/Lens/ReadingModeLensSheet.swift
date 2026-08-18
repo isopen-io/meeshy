@@ -48,7 +48,9 @@ enum ReadingModeLensCatalog {
     /// repli drapeau OFF (`resolveCapabilities` ne le rend que si le
     /// drapeau est OFF — cas où cette feuille n'est de toute façon jamais
     /// présentée, le chip qui l'ouvre étant lui-même sous drapeau).
-    static let displayOrder: [ConversationReadingMode] = [.focal, .script, .summary, .river]
+    /// RETRAIT FOCAL iOS (2026-08-18) : `.focal` sort du catalogue — Script
+    /// est le mode nominal (clamp `ReadingModeController.clampRetiredModes`).
+    static let displayOrder: [ConversationReadingMode] = [.script, .summary, .river]
 
     /// Rivière TOUJOURS présente (amendement R du workshop) — grisée avec sa
     /// raison et son seuil RÉELS quand `resolveCapabilities` ne l'a pas

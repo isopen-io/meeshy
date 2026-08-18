@@ -66,21 +66,16 @@ final class FocalAudioFlatTests: XCTestCase {
 
     // MARK: - Décision de tenue (app — FocalAudioBlock)
 
-    func test_focalAudioBlock_chrome_ordinaryRow_isFlatMinimal() {
+    /// RETRAIT FOCAL iOS (2026-08-18) : sans élection, la tenue plate
+    /// COMPLÈTE (vitesse/drapeaux/%/re-transcrire) sert TOUTES les rangées —
+    /// la matrice voulait « le player rendu nu dans la rangée », pas une
+    /// version amputée réservée à un élu disparu.
+    func test_focalAudioBlock_flatChrome_isTheFullFlatDress() {
         XCTAssertEqual(
-            FocalAudioBlock.chrome(isFocused: false), .flatMinimal,
-            "rangée ordinaire ⇒ bande minimale — la décision de tenue vit côté app, jamais dans le SDK"
+            FocalAudioBlock.flatChrome, .flatFocused,
+            "toutes les rangées plates reçoivent la tenue plate complète — la décision de tenue vit côté app, jamais dans le SDK"
         )
     }
-
-    func test_focalAudioBlock_chrome_focusedRow_isFlatFocused() {
-        XCTAssertEqual(
-            FocalAudioBlock.chrome(isFocused: true), .flatFocused,
-            "rangée élue ⇒ tenue enrichie (vitesse/drapeaux/%/re-transcrire)"
-        )
-    }
-
-    // MARK: - Equatable : l'élection doit re-rendre le bloc
 
     private func makeAudioContent() -> BubbleContent {
         BubbleContent(
@@ -94,39 +89,16 @@ final class FocalAudioFlatTests: XCTestCase {
         )
     }
 
-    func test_focalAudioBlock_equatable_distinguishesFocus() {
+    func test_focalAudioBlock_equatable_sameInputs_areEqual() {
         let content = makeAudioContent()
-        let ordinary = FocalAudioBlock(
-            content: content, accentHex: "#31B6BA", isDark: false, isFocused: false,
+        let a = FocalAudioBlock(
+            content: content, accentHex: "#31B6BA", isDark: false,
             allAudioItems: [], translatedAudios: [], mentionDisplayNames: [:], conversationName: "Conv"
         )
-        let focused = FocalAudioBlock(
-            content: content, accentHex: "#31B6BA", isDark: false, isFocused: true,
+        let b = FocalAudioBlock(
+            content: content, accentHex: "#31B6BA", isDark: false,
             allAudioItems: [], translatedAudios: [], mentionDisplayNames: [:], conversationName: "Conv"
         )
-        XCTAssertNotEqual(
-            ordinary, focused,
-            "un changement d'élection doit invalider le gate Equatable — sinon la rangée élue garderait la tenue minimale jusqu'au prochain re-render fortuit"
-        )
-    }
-
-    // MARK: - Câblage : FocalRow transmet l'élection au bloc audio
-
-    func test_focalRow_passesElectionToAudioBlock() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Focal
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        let stripped = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-        guard let callStart = stripped.range(of: "FocalAudioBlock(") else {
-            return XCTFail("FocalRow doit toujours construire FocalAudioBlock")
-        }
-        let window = String(stripped[callStart.lowerBound...].prefix(1200))
-        XCTAssertTrue(
-            window.contains("isFocused: input.isFocused"),
-            "FocalRow doit transmettre input.isFocused au bloc audio — sans ce câblage les deux tenues n'existent pas à l'écran"
-        )
+        XCTAssertEqual(a, b, "mêmes entrées ⇒ égal — le gate Equatable ne doit pas re-rendre pour rien")
     }
 }
