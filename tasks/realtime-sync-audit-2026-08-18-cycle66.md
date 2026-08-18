@@ -169,6 +169,22 @@ Le balayage de maintenance qui passe N utilisateurs hors ligne d'un coup paie
 donc deux requêtes par utilisateur au lieu d'une. Borné, et dit ici plutôt que
 découvert plus tard.
 
+**Second prix, moins évident : la LISTE de rooms grossit.** L'emit passe de « une
+room par conversation » à « une room par conversation + une par participant
+distinct ». Pour quelqu'un ayant 30 conversations de 10 personnes, la liste passe
+d'environ 30 noms à environ 300, et l'adaptateur Redis publie cette liste dans
+son message de diffusion. Le nombre de SOCKETS touchés, lui, ne change pas.
+
+La liste pourrait être réduite d'un tiers : les rooms de conversation sont en
+théorie redondantes, puisque toute socket assise dans `conversation:<id>` siège
+aussi dans sa propre room personnelle (`AuthHandler` joint les deux). Elles sont
+gardées quand même, et c'est un choix : les retirer ferait perdre l'événement à
+une socket restée dans une room de conversation dont la ligne `Participant` n'est
+plus active — un cas de bord, mais une SOUSTRACTION, alors que toute la sûreté de
+ce correctif tient à ce qu'il n'en fasse aucune. La règle du cycle 63 s'applique
+telle quelle : on ne troque pas une propriété de sûreté contre une économie
+supposée tant que l'économie n'est pas mesurée.
+
 ---
 
 ## 4. Les gardes, et laquelle compte
