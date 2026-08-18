@@ -30,9 +30,12 @@ export interface PostReactionData {
  * est `true` quand la ligne existait déjà (re-fire d'un like : double-fire optimiste,
  * retry socket, second appareil) — aucun état n'a changé en base. Le handler s'en
  * sert pour NE PAS re-diffuser `post:liked`/`post:reaction-added` ni re-notifier
- * l'auteur sur un no-op. Miroir de `ReactionService.addReaction` (`{ reaction,
- * replacedEmojis, unchanged }`), forme aplatie ici (le modèle
- * post n'a jamais eu de swap). Marqueur transitoire — jamais persisté ni diffusé.
+ * l'auteur sur un no-op. Miroir de `ReactionService.addReaction`
+ * (`{ reaction, unchanged }`), forme aplatie ici (le modèle post n'a jamais eu
+ * de swap). Marqueur transitoire — jamais persisté ni diffusé.
+ *
+ * `replacedEmojis` a disparu du miroir avec le swap lui-même (2026-08-18) :
+ * le nommer ici décrirait `ReactionService` par une forme qu'il n'a plus.
  */
 export type AddPostReactionResult = PostReactionData & { readonly unchanged: boolean };
 

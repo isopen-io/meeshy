@@ -25,7 +25,6 @@ import {
   RATE_LIMIT_REFUSAL_MESSAGE,
   REACTION_SYNC_BUDGET,
 } from '@meeshy/shared/types/socketio-events';
-import { useI18n } from '@/hooks/useI18n';
 
 // Étendre les query keys pour les réactions
 const reactionKeys = {
@@ -217,7 +216,6 @@ export function useReactionsQuery({
   initialReactionSummary,
   initialCurrentUserReactions,
 }: UseReactionsQueryOptions) {
-  const { t } = useI18n('reactions');
   const queryClient = useQueryClient();
 
   // Restaure EXACTEMENT l'état d'avant la mise à jour optimiste, y compris
@@ -425,6 +423,11 @@ export function useReactionsQuery({
       // survivait au refus du serveur.
       restoreReactionSnapshot(context?.previousData);
 
+      // Erreur serveur VERBATIM. Le remap qui traduisait « Maximum N different
+      // reactions » visait une erreur que PLUS AUCUN service de réaction
+      // n'émet : message, pièce jointe, post et commentaire sont tous additifs
+      // depuis le 2026-08-18. Le garder ne pouvait plus que présenter une
+      // erreur voisine comme une limite inexistante.
       const errorMessage = err instanceof Error ? err.message : 'Failed to add reaction';
       toast.error(errorMessage);
     },
@@ -507,7 +510,7 @@ export function useReactionsQuery({
     } catch {
       return false;
     }
-  }, [enabled, messageId, isPersisted, userReactions, addMutation, t]);
+  }, [enabled, messageId, isPersisted, userReactions, addMutation]);
 
   const removeReaction = useCallback(async (emoji: string): Promise<boolean> => {
     if (!enabled || !messageId || !isPersisted) return false;
