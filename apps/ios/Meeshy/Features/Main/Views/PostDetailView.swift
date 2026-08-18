@@ -633,6 +633,44 @@ struct PostDetailView: View {
         }
     }
 
+    /// Contenu introuvable : expiré, retiré, ou jamais accessible à cette
+    /// personne. On ne distingue pas — le serveur répond la même chose dans les
+    /// trois cas, et prétendre le contraire serait inventer.
+    private var unavailableState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "clock.badge.xmark")
+                .font(.system(size: 40))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
+            Text(String(localized: "feed.post.detail.unavailable.title",
+                        defaultValue: "Ce contenu n'est plus disponible", bundle: .main))
+                .font(MeeshyFont.relative(17, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .multilineTextAlignment(.center)
+            Text(String(localized: "feed.post.detail.unavailable.body",
+                        defaultValue: "Il a peut-être expiré ou été retiré par son auteur.", bundle: .main))
+                .font(MeeshyFont.relative(14))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                // Même geste que la flèche de l'en-tête (`postDetailHeader`) —
+                // et le seul disponible ici : l'en-tête ne se rend qu'avec un
+                // post, donc cette branche n'en a aucun.
+                HapticFeedback.light()
+                router.pop()
+            } label: {
+                Text(String(localized: "feed.post.detail.unavailable.back",
+                            defaultValue: "Retour", bundle: .main))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+            }
+            .buttonStyle(.bordered)
+            .padding(.top, 4)
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             if let post = displayPost {
@@ -708,21 +746,36 @@ struct PostDetailView: View {
                 Spacer()
                 ProgressView()
                 Spacer()
+            } else {
+                // Ni post, ni chargement : la cible n'existe plus. Cette branche
+                // n'existait pas — l'écran rendait une PAGE BLANCHE surmontée
+                // d'un composeur de commentaire, sans en-tête donc sans bouton
+                // retour. C'est exactement où atterrit un `/l/<token>` de story
+                // expirée, le cas le plus fréquent de ces liens (toute story
+                // meurt à 24 h) : le lien ouvre enfin la bonne destination, il
+                // fallait encore que la destination dise quelque chose.
+                Spacer()
+                unavailableState
+                Spacer()
             }
 
-            VStack(spacing: 0) {
-                if mentionController.activeQuery != nil {
-                    MentionSuggestionPanel(
-                        controller: mentionController,
-                        accentColor: accentColor,
-                        currentText: composerText,
-                        onSelect: { updated in composerText = updated }
-                    )
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            // Le composeur ne survit pas à l'absence de post : commenter ce qui
+            // n'existe plus n'aboutirait jamais.
+            if displayPost != nil || viewModel.isLoading {
+                VStack(spacing: 0) {
+                    if mentionController.activeQuery != nil {
+                        MentionSuggestionPanel(
+                            controller: mentionController,
+                            accentColor: accentColor,
+                            currentText: composerText,
+                            onSelect: { updated in composerText = updated }
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                    composer
                 }
-                composer
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
         .navigationBarHidden(true)

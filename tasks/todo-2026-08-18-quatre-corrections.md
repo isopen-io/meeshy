@@ -58,6 +58,16 @@ le fond blanc du `fullScreenCover` transparaît.
    fin de piste. 8 gardes réécrites (supersession de la règle 2026-08-14).
 4. **Appel** — racine bord à bord ; `chromeTopInset` partagé. 6 tests.
 
+### Vérification bout-en-bout (simulateur, liens de PRODUCTION)
+- `meeshy://l/45SIKm` (réel ACTIF) → ouvre le réel « Good Sunday, family. » de
+  Windie Nh, vidéo + likes + commentaires. ✅
+- `meeshy://l/Wi3vGV` (story EXPIRÉE, `isActive:false` en prod) → ouvrait
+  « Lien introuvable » ; ouvre maintenant l'écran de destination. Celui-ci
+  rendait une PAGE BLANCHE surmontée d'un composeur de commentaire, sans
+  en-tête donc sans retour — `PostDetailView` n'avait aucune branche `else`
+  après `if let post` / `else if isLoading`. État vide explicite ajouté
+  (titre + explication + retour), composeur masqué sans post. ✅
+
 ### Hors périmètre, corrigé au passage
 `MentionComposerControllerTests` était FLAKY avant toute modification (2 à 4
 échecs par exécution, vérifié sur la version HEAD non modifiée) : cinq
