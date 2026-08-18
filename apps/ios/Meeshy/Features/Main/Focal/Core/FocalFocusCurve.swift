@@ -34,11 +34,12 @@ nonisolated enum FocalFocusCurve {
 
     /// Miroir de `FocusCurveVariant` (TS `'thread' | 'list'`).
     enum Variant: Sendable {
-        /// Fil (Focal) : `f = min(1, d/520)`, `scale = 1 − 0.38f`, `alpha = 1 − 0.78f`.
-        /// (Cotes transposées de la maquette de référence par `0612c8ca`, dans
-        /// la loi partagée comme dans ce miroir — cette ligne décrivait encore
-        /// `380 / 0.40 / 0.82`, c'est-à-dire l'inverse de ce que déclarent les
-        /// trois constantes gelées vingt lignes plus bas.)
+        /// Fil (Focal) : `f = min(1, d/380)`, `scale = 1 − 0.40f` (plancher
+        /// 0.60), `alpha = 1 − 0.82f` (plancher 0.18) — spec « Focal Grandeur
+        /// Nature » §3/§5 (`docs/design/2026-08-15-focal-spec-integration.html`),
+        /// réancrée comme contrat le 2026-08-18. Les cotes 520/0.38/0.78
+        /// transposées de la maquette vol. 3 (`0612c8ca`) sont retirées : le
+        /// vol. 4 fait foi — amendé dans la loi partagée PUIS dans ce miroir.
         case thread
         /// Liste (Lentille) : `f = min(1, d/520)`, `alpha = 1 − 0.45f`, `scale = 1 − 0.04f`.
         case list
@@ -52,14 +53,16 @@ nonisolated enum FocalFocusCurve {
 
     // MARK: - Constantes gelées (miroir de FOCUS_CURVE_CONSTANTS)
 
-    /// Miroir de `FOCUS_CURVE_CONSTANTS.thread` — RÉSERVE 1, revue REV-1.
-    static let threadMaxDistance: CGFloat = 520
-    static let threadScaleDecay: CGFloat = 0.38
-    static let threadAlphaDecay: CGFloat = 0.78
-    /// Pivot HORIZONTAL de l'échelle, en fraction de largeur — `transform-origin:
-    /// "18% bottom"` de la maquette de référence
-    /// (`docs/design/2026-08-15-conversation-modes-verdict.html`).
-    static let threadHorizontalPivot: CGFloat = 0.18
+    /// Miroir de `FOCUS_CURVE_CONSTANTS.thread` — amendé 2026-08-18 sur la
+    /// spec « Focal Grandeur Nature » §5 (`380 / 0.40 / 0.82`).
+    static let threadMaxDistance: CGFloat = 380
+    static let threadScaleDecay: CGFloat = 0.40
+    static let threadAlphaDecay: CGFloat = 0.82
+    /// Pivot HORIZONTAL de l'échelle, en fraction de largeur — le `x` de
+    /// l'`anchorPoint (0.16, 1.0)` de la spec §5. Le mécanisme reste la
+    /// translation équivalente dans le même `CATransform3D`
+    /// (`FocalPerspectiveGeometry`, écart #2) ; seule la fraction vient d'ici.
+    static let threadHorizontalPivot: CGFloat = 0.16
 
     /// Miroir de `FOCUS_CURVE_CONSTANTS.list`.
     static let listMaxDistance: CGFloat = 520
@@ -88,6 +91,17 @@ nonisolated enum FocalFocusCurve {
     /// Miroir de `FOCUS_BAND_HALF_HEIGHT`. Demi-hauteur de la bande de
     /// focus, c'est-à-dire l'hystérésis passée à `electFocusRow`.
     static let focusBandHalfHeight: CGFloat = 45
+
+    // MARK: - Bande de focus du FIL (miroir de THREAD_FOCUS_BAND_*)
+
+    /// Miroir de `THREAD_FOCUS_BAND_OFFSET` — spec §5 : `focusY = bas − 150`.
+    /// La bande de la LISTE (`focusBandOffset` 140 ± 45) ne bouge pas :
+    /// Lentille et Rivière la conservent — deux vues, deux bandes, une loi.
+    static let threadFocusBandOffset: CGFloat = 150
+
+    /// Miroir de `THREAD_FOCUS_BAND_HYSTERESIS` — recette §7 : « sans
+    /// oscillation entre deux rangées (hystérésis 95 px) ».
+    static let threadFocusBandHysteresis: CGFloat = 95
 
     private static func clampUnit(_ value: CGFloat) -> CGFloat {
         min(1, max(0, value))

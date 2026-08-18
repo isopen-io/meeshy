@@ -34,12 +34,18 @@ export type FocusCurveResult = {
  * introspecter les constantes sans les redéclarer en dur (garde R15).
  */
 export const FOCUS_CURVE_CONSTANTS = {
-  thread: { maxDistance: 520, scaleDecay: 0.38, alphaDecay: 0.78 },
+  thread: { maxDistance: 380, scaleDecay: 0.4, alphaDecay: 0.82 },
   list: { maxDistance: 520, alphaDecay: 0.45, scaleDecay: 0.04 },
   belowBand: { distance: 160, alphaCap: 0.35 },
 } as const
 
-/** Fil (Focal) : `f = min(1, d/520)`, `scale = 1 − 0.38f`, `alpha = 1 − 0.78f`. */
+/**
+ * Fil (Focal) : `f = min(1, d/380)`, `scale = 1 − 0.40f` (plancher 0.60),
+ * `alpha = 1 − 0.82f` (plancher 0.18) — spec « Focal Grandeur Nature » §3/§5
+ * (`docs/design/2026-08-15-focal-spec-integration.html`), réancrée comme
+ * contrat le 2026-08-18. Les cotes 520/0.38/0.78 transposées de la maquette
+ * vol. 3 (`0612c8ca`) sont retirées : le vol. 4 fait foi.
+ */
 export const THREAD_MAX_DISTANCE = FOCUS_CURVE_CONSTANTS.thread.maxDistance
 export const THREAD_SCALE_DECAY = FOCUS_CURVE_CONSTANTS.thread.scaleDecay
 export const THREAD_ALPHA_DECAY = FOCUS_CURVE_CONSTANTS.thread.alphaDecay
@@ -70,6 +76,16 @@ export const LIST_BELOW_BAND_ALPHA_CAP = FOCUS_CURVE_CONSTANTS.belowBand.alphaCa
  */
 export const FOCUS_BAND_OFFSET = 140
 export const FOCUS_BAND_HALF_HEIGHT = 45
+
+/**
+ * Bande de focus du FIL (Focal) — spec « Focal Grandeur Nature » §5 :
+ * `focusY = bas − 150`, élu = le plus proche avec hystérésis 95 px
+ * (recette §7 : « sans oscillation entre deux rangées (hystérésis 95 px) »).
+ * DISTINCTE de la bande de la LISTE (`FOCUS_BAND_OFFSET` 140 ± 45), que la
+ * Lentille et la Rivière conservent — deux vues, deux bandes, une seule loi.
+ */
+export const THREAD_FOCUS_BAND_OFFSET = 150
+export const THREAD_FOCUS_BAND_HYSTERESIS = 95
 
 const clampUnit = (value: number): number => Math.min(1, Math.max(0, value))
 

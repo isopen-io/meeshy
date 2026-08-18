@@ -111,7 +111,9 @@ final class FocalPerspectiveCell: UICollectionViewCell {
         matrix.m41 = focalTransform.translation.width
         matrix.m42 = focalTransform.translation.height
         layer.transform = matrix
-        layer.zPosition = focalTransform.zPosition
+        // `zPosition` remis à 0 : l'élévation appartenait à la loupe retirée
+        // (spec §5 réancrée 2026-08-18) — aucun recyclage n'en hérite.
+        layer.zPosition = 0
         alpha = focalTransform.alpha
         CATransaction.commit()
     }

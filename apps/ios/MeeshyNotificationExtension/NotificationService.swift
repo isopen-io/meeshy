@@ -150,9 +150,17 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         var avatarData: Data?
         nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
 
+        // Les URLs du payload sont RELATIVES quand le média est servi par le
+        // gateway (`/api/v1/attachments/file/…`) : `URL(string:)` les accepte
+        // mais produit une URL sans hôte, que `URLSession` refuse. On les
+        // résout contre l'origine API de confiance (allowlist NSE) — sans quoi
+        // l'avatar n'arrive jamais et la bannière retombe sur l'icône de l'app.
+        let apiBaseURL = NSEDataSync.trustedApiBaseURL
+
         if let avatarURLString = userInfo["imageURL"] as? String,
-           !avatarURLString.isEmpty,
-           let avatarURL = URL(string: avatarURLString) {
+           let avatarURL = NotificationPayloadHelpers.resolveRemoteMediaURL(
+               avatarURLString, apiBaseURL: apiBaseURL
+           ) {
             group.enter()
             downloadData(from: avatarURL) { data in
                 avatarData = data
@@ -161,8 +169,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         }
 
         if let attachmentURLString = userInfo["attachmentUrl"] as? String,
-           !attachmentURLString.isEmpty,
-           let attachmentURL = URL(string: attachmentURLString) {
+           let attachmentURL = NotificationPayloadHelpers.resolveRemoteMediaURL(
+               attachmentURLString, apiBaseURL: apiBaseURL
+           ) {
             let mime = userInfo["attachmentMimeType"] as? String ?? ""
             group.enter()
             downloadData(from: attachmentURL) { [weak self] data in
@@ -573,10 +582,25 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         )
 
         let conversationType = userInfo["conversationType"] as? String ?? ""
-        let isGroup = !conversationType.isEmpty && conversationType != "direct"
+
+        // Cadrage : une notification SOCIALE n'a pas de conversation et tombait
+        // donc en 1:1, mode où iOS n'affiche que le nom et le corps — son
+        // sous-titre (« a commenté un réel · Publication de Windie Nh »)
+        // n'atteignait jamais l'écran. On la cadre en groupe pour que l'action
+        // devienne le `speakableGroupName`, seul champ rendu sous le nom.
+        let framing = NotificationPayloadHelpers.communicationFraming(
+            conversationId: conversationId,
+            conversationType: conversationType,
+            postId: userInfo["postId"] as? String ?? "",
+            notificationId: userInfo["notificationId"] as? String ?? "",
+            subtitle: content.subtitle
+        )
+        let isGroup = framing.usesGroupFraming
 
         let speakableGroupName: INSpeakableString?
-        if isGroup {
+        if let socialGroupName = framing.groupName {
+            speakableGroupName = INSpeakableString(spokenPhrase: socialGroupName)
+        } else if isGroup {
             // iOS renders `speakableGroupName` as the group line in the Communication
             // Notification subtitle (and IGNORES content.subtitle there). So we carry
             // the FULLY DECORATED name here — type glyph + favorite emoji + customName
@@ -606,15 +630,19 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // requires ≥2 recipients. With recipients:nil iOS renders a 1:1 banner
         // (sender as title, no group subtitle) and IGNORES any manually-set
         // content.subtitle — confirmed empirically on iOS 26.3.1. We synthesize
-        // neutral members keyed by conversationId purely to trigger group mode;
+        // neutral members keyed by the framing key purely to trigger group mode;
         // the displayed name comes from speakableGroupName, not these handles.
+        // La clé vient du cadrage (conversation, sinon `post:<id>`, sinon
+        // l'identifiant de notification) : la chaîne vide que TOUTES les
+        // notifications sociales partageaient les fondait en un seul fil.
+        let intentKey = framing.intentKey
         let groupRecipients: [INPerson]? = isGroup ? [
-            INPerson(personHandle: INPersonHandle(value: "\(conversationId)#m1", type: .unknown),
+            INPerson(personHandle: INPersonHandle(value: "\(intentKey)#m1", type: .unknown),
                      nameComponents: nil, displayName: "", image: nil,
-                     contactIdentifier: nil, customIdentifier: "\(conversationId)#m1"),
-            INPerson(personHandle: INPersonHandle(value: "\(conversationId)#m2", type: .unknown),
+                     contactIdentifier: nil, customIdentifier: "\(intentKey)#m1"),
+            INPerson(personHandle: INPersonHandle(value: "\(intentKey)#m2", type: .unknown),
                      nameComponents: nil, displayName: "", image: nil,
-                     contactIdentifier: nil, customIdentifier: "\(conversationId)#m2")
+                     contactIdentifier: nil, customIdentifier: "\(intentKey)#m2")
         ] : nil
 
         let intent = INSendMessageIntent(
@@ -622,7 +650,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             outgoingMessageType: .unknown,
             content: content.body,
             speakableGroupName: speakableGroupName,
-            conversationIdentifier: conversationId,
+            conversationIdentifier: intentKey,
             serviceName: nil,
             sender: sender,
             attachments: nil
