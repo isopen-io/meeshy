@@ -226,8 +226,12 @@ class RegistrationViewModel @Inject constructor(
     }
 
     fun onUsernameChange(value: String) {
-        usernameInput.value = value
-        editFields { it.copy(username = value, usernameAvailable = null, usernameSuggestions = emptyList()) }
+        // Point d'étranglement unique : le champ Compose est piloté par l'état, donc
+        // filtrer ici renvoie la valeur épurée au `OutlinedTextField` — frappe et
+        // collage passent tous deux par là.
+        val sanitized = SignupFieldValidation.sanitizedUsername(value)
+        usernameInput.value = sanitized
+        editFields { it.copy(username = sanitized, usernameAvailable = null, usernameSuggestions = emptyList()) }
     }
 
     fun onEmailChange(value: String) {
