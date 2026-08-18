@@ -153,9 +153,17 @@ describe('behaviour-matrix.json — intégrité structurelle', () => {
 // naturel (commentaire au-dessus d'un test XCTest, nom d'un test Vitest…).
 // ───────────────────────────────────────────────────────────────────────
 
+// `.claude` héberge les worktrees git d'agents (`.claude/worktrees/<branche>/`),
+// c'est-à-dire des CHECKOUTS COMPLETS de ce même dépôt. Les balayer y trouve un
+// second exemplaire de CHAQUE fichier de test — dont ce fichier de garde, sous un
+// chemin absolu que `SELF_TEST_FILE_PATH` ne peut pas connaître : ses fixtures
+// ZZ0x remontaient alors dans `extra` et rougissaient la garde en permanence.
+// L'exclusion est de la même nature que `node_modules` ou `.git` : de l'état
+// d'outillage, jamais du source produit.
 const DEFAULT_EXCLUDED_DIRS: ReadonlySet<string> = new Set([
   'node_modules',
   '.git',
+  '.claude',
   'dist',
   'build',
   '.next',
@@ -319,6 +327,27 @@ describe('scanBehaviourMatrixCoverage — mécanique de scan (fixture temporaire
 
       const covered = scanBehaviourMatrixCoverage(root);
       expect(covered).toEqual(new Set(['ZZ05']));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('IGNORE un CHECKOUT IMBRIQUÉ du dépôt sous .claude/worktrees', () => {
+    // Bug réel : `.claude/worktrees/<branche>/` héberge des worktrees git, donc
+    // des COPIES COMPLÈTES du dépôt — y compris une copie de CE fichier de garde.
+    // L'auto-exclusion ne connaît que le chemin absolu de l'original
+    // (`SELF_TEST_FILE_PATH`), si bien que les fixtures ZZ0x de la copie étaient
+    // comptées comme de vraies références et tombaient dans `extra` : un rouge
+    // permanent, apparu le jour où un worktree d'agent a été créé, et sans aucun
+    // rapport avec la couverture réelle de la matrice.
+    const root = mkdtempSync(join(tmpdir(), 'meeshy-behaviour-matrix-scan-'));
+    try {
+      mkdirSync(join(root, '.claude', 'worktrees', 'branche', 'packages'), { recursive: true });
+      writeFileSync(join(root, '.claude', 'worktrees', 'branche', 'packages', 'copie.test.ts'), '// behaviour-matrix:ZZ98\n');
+      writeFileSync(join(root, 'real.test.ts'), '// behaviour-matrix:ZZ99\n');
+
+      const covered = scanBehaviourMatrixCoverage(root);
+      expect(covered).toEqual(new Set(['ZZ99']));
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

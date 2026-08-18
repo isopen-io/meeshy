@@ -177,17 +177,19 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    /// **Trou réel découvert par F-090, corrigé par F-083ter.** `FocalRow.translationChip`
-    /// rend `Image(systemName: "globe")` en méta quand `translation.activeLangCode
-    /// != translation.originalLangCode` (les deux déjà résolus, aucune
-    /// seconde résolution Prisme). Invariant INCHANGÉ.
-    func test_F06_globeChipSignalsTranslation_inFocalRow() throws {
+    /// Arbitrage user 2026-08-18 : le chip 🌐 et la bande de drapeaux sont
+    /// RETIRÉS de la rangée — le signal multi-langue est le drapeau de la
+    /// langue D'ORIGINE (`LanguageData.info(for:)`), affiché seulement quand
+    /// plusieurs versions existent ; le menu d'appui long porte l'exploration.
+    func test_F06_originalLanguageFlagSignalsMultilingual_inFocalRow() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(
-            code.contains("🌐") || code.lowercased().contains("globe"),
-            "F06 : aucun chip 🌐 dans FocalRow.swift — la traduction change le TEXTE mais rien ne le " +
-            "signale visuellement sur le Fil (contrairement à BubbleFooter côté bulle). Trou réel de " +
-            "WS-4/F-083, non corrigé par F-090 — voir rapport F-090."
+            code.contains("LanguageData.info(for: translation.originalLangCode"),
+            "F06 : le drapeau de la langue d'origine doit signaler le message multilingue — sans lui, aucune trace visuelle du Prisme sur le Fil"
+        )
+        XCTAssertFalse(
+            code.lowercased().contains("systemname: \"globe\""),
+            "F06 : l'icône translate (globe) est retirée de la rangée — arbitrage user 2026-08-18"
         )
     }
 
