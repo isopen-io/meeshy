@@ -568,18 +568,40 @@ export function registerMessagesAdvancedRoutes(
         }
       }
 
-      // Supprimer les traductions du message (vider le JSON)
+      // UNE écriture, et c'est le même argument que la ROUTE D'ÉDITION de ce
+      // fichier porte trois cents lignes plus haut — « `translations: null`
+      // appartient à CETTE écriture ». La famille d'édition a été balayée en
+      // entier ; celle de suppression est restée coupée en deux.
+      //
+      // Séparées, elles ouvraient une fenêtre où la ligne est VIVANTE et
+      // dépouillée de ses traductions. Deux prix, et le second est le vrai :
+      //
+      //   • pendant la fenêtre, tout lecteur d'une autre langue retombe sur
+      //     l'original — le Prisme rompu le temps d'un aller-retour ;
+      //   • si la SECONDE écriture échoue, cet état est DÉFINITIF. Le message
+      //     reste vivant, sans aucune traduction, et rien ne les recalcule :
+      //     `MessageTranslationService` le dit de lui-même — « la traduction
+      //     correcte était perdue DÉFINITIVEMENT : aucun chemin ne retente une
+      //     traduction absente ».
+      //
+      // L'ordre choisi faisait donc échouer du MAUVAIS côté : l'écriture
+      // destructrice committait la première, celle qui la rend inoffensive
+      // ensuite. Le dépôt raisonne partout dans l'autre sens (« Échouer ICI
+      // laisse le lien ACTIF : c'est le sens sûr »). Fusionner supprime la
+      // question plutôt que de choisir un ordre.
+      //
+      // Elle ferme aussi une course avec l'édition : la garde optimiste de
+      // l'édition (`where: { id, deletedAt: null }`) voyait `deletedAt` encore
+      // nul dans la fenêtre, acceptait donc l'édition, répondait succès et
+      // diffusait `message:edited` — pour une ligne que la seconde écriture
+      // effaçait juste après.
+      //
+      // Forme reprise du handler socket, qui la porte déjà et l'annonce :
+      // « Soft delete: atomically clear translations and set deletedAt in one
+      // write ».
       await prisma.message.update({
         where: { id: messageId },
-        data: { translations: null }
-      });
-
-      // Soft delete du message
-      await prisma.message.update({
-        where: { id: messageId },
-        data: {
-          deletedAt: new Date()
-        }
+        data: { translations: null, deletedAt: new Date() }
       });
 
       // Les effets DURABLES du retrait — recalcul de `lastMessageAt` et

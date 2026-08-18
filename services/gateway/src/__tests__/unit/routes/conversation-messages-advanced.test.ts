@@ -1602,6 +1602,63 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockDeleteAttachment).toHaveBeenCalledWith('attach-2');
     });
 
+    // Jumelle exacte de la garde de `DELETE /messages/:messageId`
+    // (`messages.test.ts`), et c'est le point : les deux routes REST portaient
+    // la MÊME suppression en deux écritures, quand le handler socket la porte
+    // en une seule et l'annonce (« atomically clear translations and set
+    // deletedAt in one write »).
+    //
+    // Séparées, elles laissaient la ligne VIVANTE et sans traductions entre les
+    // deux. Le prix n'est pas la fenêtre mais son échec : la seconde écriture
+    // ratée fige cet état DÉFINITIVEMENT — « aucun chemin ne retente une
+    // traduction absente » (`MessageTranslationService`).
+    it('committe la suppression en UNE écriture, traductions comprises', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: USER_ID },
+        attachments: [],
+      });
+      prisma.message.update.mockResolvedValue({});
+      prisma.message.update.mockClear();
+
+      await getDeleteMsgHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeReply()
+      );
+
+      const writes = prisma.message.update.mock.calls;
+      expect(writes).toHaveLength(1);
+      expect(writes[0][0].data).toEqual(
+        expect.objectContaining({ translations: null, deletedAt: expect.any(Date) })
+      );
+    });
+
+    // Le même fait énoncé comme une INTERDICTION d'état plutôt qu'un compte
+    // d'écritures : aucun état committé ne porte « vivante ET sans traductions ».
+    // Un refactor qui repasserait à deux écritures dans l'ordre inverse
+    // satisferait encore la garde ci-dessus sur sa première écriture.
+    it('ne committe jamais un état « vivante et sans traductions »', async () => {
+      prisma.message.findFirst.mockResolvedValue({
+        ...makeExistingMessage(),
+        sender: { id: PART_ID, userId: USER_ID },
+        attachments: [],
+      });
+      prisma.message.update.mockResolvedValue({});
+      prisma.message.update.mockClear();
+
+      await getDeleteMsgHandler(fastify)(
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID } }),
+        makeReply()
+      );
+
+      const row: Record<string, unknown> = { ...makeExistingMessage() };
+      const forbidden = prisma.message.update.mock.calls.filter((call: any[]) => {
+        Object.assign(row, call[0].data);
+        return row.translations === null && row.deletedAt == null;
+      });
+      expect(forbidden).toHaveLength(0);
+    });
+
     it('continues deleting other attachments when one fails', async () => {
       mockDeleteAttachment
         .mockRejectedValueOnce(new Error('delete error'))
