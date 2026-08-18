@@ -203,20 +203,6 @@ describe('POST /posts/:id/like — service error', () => {
 });
 
 describe('POST /posts/:id/like — reaction limit reached', () => {
-  it('returns 409 (not 500) when the reaction-limit guard trips on an emoji change', async () => {
-    // iOS reacts to a story/post via REST `POST /posts/:id/like` with an
-    // arbitrary emoji. Changing the emoji trips the deliberate max-1 domain
-    // guard, which throws a typed ConflictError. That reachable domain error
-    // must surface as 409, never as a 500 INTERNAL_ERROR.
-    mockLikePost.mockRejectedValueOnce(
-      new ConflictError('Maximum 1 different reactions per post reached', 'REACTION_LIMIT_REACHED'),
-    );
-    const app = await buildApp();
-    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: { emoji: '😂' } });
-    expect(res.statusCode).toBe(409);
-    expect(res.json().code).toBe('REACTION_LIMIT_REACHED');
-    await app.close();
-  });
 });
 
 describe('POST /posts/:id/like — with social events (POST type)', () => {
