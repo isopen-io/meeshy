@@ -60,7 +60,7 @@ export const CallSystemMessage = memo(function CallSystemMessage({
   });
   const requestJoin = useCallStore((s) => s.requestJoin);
   const conversationSupportsCalls = conversationType === 'direct' || conversationType === 'group';
-  const canCallBack = !isLive && conversationSupportsCalls;
+  const canCallBack = !isLive && conversationSupportsCalls && !isAnonymous;
   const canJoin = isLive && conversationSupportsCalls && !isAnonymous;
 
   // Unknown future outcome → neutral (indigo) tint instead of a TypeError.

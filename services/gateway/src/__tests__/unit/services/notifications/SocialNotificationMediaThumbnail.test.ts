@@ -4,7 +4,8 @@
  * Une réaction / un commentaire / un partage sur une publication, un réel ou
  * une story doit identifier QUEL contenu est visé — y compris quand le contenu
  * n'a PAS de texte (story photo). Le service résout alors le 1er média du post :
- *  - le sous-titre gagne un résumé média localisé (« Votre story · 📷 Photo ») ;
+ *  - le CORPS montre le contenu visé — résumé média localisé (« 📷 Photo »),
+ *    extrait texte, ou les deux ; le sous-titre se borne à le nommer ;
  *  - la metadata porte `mediaType` + `postThumbnailUrl` (vignette in-app) ;
  *  - le contexte porte `firstAttachmentUrl`/`firstAttachmentMimeType` (absolutisés)
  *    → l'extension iOS attache la miniature au push (UNNotificationAttachment).
@@ -101,7 +102,8 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       });
 
       const created = createdDataOfType(prisma, 'story_reaction');
-      expect(created.subtitle).toBe('Votre story · 📷 Photo');
+      expect(created.subtitle).toBe('Votre story');
+      expect(created.content).toBe('📷 Photo');
       expect(created.metadata.mediaType).toBe('image');
       // Image → on attache le fichier lui-même, absolutisé pour l'extension iOS.
       expect(created.metadata.postThumbnailUrl).toBe('https://gate.meeshy.me/api/v1/static/story-bg.jpg');
@@ -125,7 +127,8 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       });
 
       const created = createdDataOfType(prisma, 'post_like');
-      expect(created.subtitle).toBe('Votre réel · 🎬 Vidéo');
+      expect(created.subtitle).toBe('Votre réel');
+      expect(created.content).toBe('🎬 Vidéo');
       expect(created.metadata.mediaType).toBe('video');
       expect(created.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/reel-thumb.jpg');
       expect(created.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/reel-thumb.jpg');
@@ -149,9 +152,11 @@ describe('Notifications sociales — vignette média du contenu visé', () => {
       });
 
       const payload = payloadOfType(mockIO, 'post_like');
-      // Sous-titre de bannière : l'action, puis ce que la cible ajoute encore
-      // (l'aperçu). « Votre publication » est déjà énoncé par l'action.
-      expect(payload.subtitle).toBe('a réagi 😍 à votre publication · « Mon plus beau voyage »');
+      // Sous-titre de bannière : l'action, et rien d'autre. Le détail du
+      // contenu visé occupe le corps — texte ici, média sinon, les deux si
+      // les deux existent.
+      expect(payload.subtitle).toBe('a réagi 😍 à votre publication');
+      expect(payload.content).toBe('📷 Photo · Mon plus beau voyage');
       // La vignette voyage quand même (push + in-app).
       expect(payload.context.firstAttachmentUrl).toBe('https://cdn.meeshy.me/p.jpg');
       expect(payload.metadata.postThumbnailUrl).toBe('https://cdn.meeshy.me/p.jpg');

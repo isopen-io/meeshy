@@ -389,7 +389,7 @@ final class MessageListViewController: UIViewController {
             // Le pass lit accent/isDark pour la carte de focus : poussés ICI
             // (événement), plus jamais à chaque frame de défilement.
             syncFocalPassTheme()
-            applySnapshot(animated: false)
+            applySnapshot(animated: false, reconfigure: .allItems)
         }
     }
 
@@ -651,7 +651,9 @@ final class MessageListViewController: UIViewController {
         if hasDeferredGlobalReconfigure {
             hasDeferredGlobalReconfigure = false
             deferredTargetedReconfigureIds.removeAll()
-            applySnapshot(animated: false)
+            let scope = deferredReconfigureScope
+            deferredReconfigureScope = .changedRecords
+            applySnapshot(animated: false, reconfigure: scope)
             return
         }
         guard !deferredTargetedReconfigureIds.isEmpty else { return }
@@ -1648,7 +1650,37 @@ final class MessageListViewController: UIViewController {
 
     // MARK: - Snapshot
 
-    private func applySnapshot(animated: Bool = true) {
+    /// Portée du `reconfigureItems` d'un `applySnapshot`.
+    ///
+    /// `.changedRecords` (défaut, chemin CHAUD `messagesDidChange`) : seuls
+    /// les messages dont le `changeVersion` a bougé depuis la dernière pose
+    /// re-passent par la registration — l'égalité O(1) de `MessageRecord`
+    /// (invariant grdb-04 : toute écriture visible bumpe la version) est le
+    /// pivot. AVANT (audit film user 2026-08-18) : TOUTES les cellules
+    /// visibles re-hébergeaient leur SwiftUI à CHAQUE mutation du store — la
+    /// file hors-ligne en boucle de retry faisait donc tressauter la scène
+    /// ENTIÈRE au repos (re-mesures ± sous-point, pulsation 0,7↔1,0 des
+    /// rangées en vol), l'élu compris.
+    ///
+    /// `.allItems` : bascules GLOBALES qui changent le rendu de toutes les
+    /// rangées sans toucher aux records — thème, terme de recherche,
+    /// révision de langue préférée, consentement voix.
+    enum SnapshotReconfigureScope {
+        case changedRecords
+        case allItems
+    }
+
+    /// Versions posées à la DERNIÈRE pose non différée — la base du diff
+    /// `.changedRecords`. PAS mise à jour quand le reconfigure est différé
+    /// (§4.7ter) : le flush à la pose retrouve ainsi l'intégralité du delta.
+    private var lastReconfigureBaseline: [String: Int64] = [:]
+    private var lastTypingRosterFingerprint = ""
+    private var lastConversationStartFingerprint = ""
+    /// Portée à rejouer au flush §4.7ter — `.allItems` domine si une bascule
+    /// globale est arrivée pendant le geste.
+    private var deferredReconfigureScope: SnapshotReconfigureScope = .changedRecords
+
+    private func applySnapshot(animated: Bool = true, reconfigure: SnapshotReconfigureScope = .changedRecords) {
         let _spState = PerfSignpost.signposter.beginInterval("applySnapshot")
         defer { PerfSignpost.signposter.endInterval("applySnapshot", _spState) }
         // Sous-segments pour pinpointer le coût des 75ms mesurés sur device :
@@ -1732,7 +1764,38 @@ final class MessageListViewController: UIViewController {
         // apply). Inserted items are configured fresh anyway, so excluding them
         // here is both correct and sufficient.
         let previousItems = Set(dataSource.snapshot().itemIdentifiers)
-        var itemsToReconfigure = items.filter { previousItems.contains($0) }
+        let typingRosterFingerprint = (conversationViewModel?.typingUsernames ?? []).joined(separator: "|")
+        let startFingerprint = (conversationViewModel?.currentConversationName ?? "")
+            + "|" + (reversedMessages.last?.localId ?? "")
+        var itemsToReconfigure: [MessageListItem]
+        switch reconfigure {
+        case .allItems:
+            itemsToReconfigure = items.filter { previousItems.contains($0) }
+        case .changedRecords:
+            // Seuls les records dont la VERSION a bougé depuis la base — les
+            // séparateurs de jour ne se reconfigurent jamais ici (leur libellé
+            // ne dépend que de la date ; le passage de minuit est rattrapé par
+            // les poses `.allItems`), la cellule typing suit son roster, la
+            // rangée « Début de la conversation » son empreinte nom + plus
+            // ancien message.
+            var changed: [MessageListItem] = []
+            for record in reversedMessages {
+                let item = MessageListItem.message(localId: record.localId)
+                guard previousItems.contains(item) else { continue }
+                if lastReconfigureBaseline[record.localId] != record.changeVersion {
+                    changed.append(item)
+                }
+            }
+            if showTyping, previousItems.contains(.typingIndicator),
+               typingRosterFingerprint != lastTypingRosterFingerprint {
+                changed.append(.typingIndicator)
+            }
+            if items.last == .conversationStart, previousItems.contains(.conversationStart),
+               startFingerprint != lastConversationStartFingerprint {
+                changed.append(.conversationStart)
+            }
+            itemsToReconfigure = changed
+        }
         // §4.7ter — en Focal, AUCUN reconfigure global pendant le geste.
         //
         // Reconfigurer une cellule VISIBLE en plein défilement la fait
@@ -1744,11 +1807,22 @@ final class MessageListViewController: UIViewController {
         // appliquées immédiatement (la pagination doit matérialiser ses
         // cellules avant que le doigt n'atteigne le bord) — elles
         // n'affectent que le bout non visible du fil. Le reconfigure, lui,
-        // attend la pose : `flushDeferredReconfigureAtSettle`.
-        if readingMode != .bubbles, !itemsToReconfigure.isEmpty,
-           collectionView.isDragging || collectionView.isDecelerating || isFocalSettleNudgeInFlight {
+        // attend la pose : `flushDeferredReconfigureAtSettle`. La BASE du
+        // diff n'est PAS avancée pendant le report — le flush retrouve tout
+        // le delta — et la portée demandée est retenue (`.allItems` domine).
+        let isDeferringReconfigure = readingMode != .bubbles
+            && !itemsToReconfigure.isEmpty
+            && (collectionView.isDragging || collectionView.isDecelerating || isFocalSettleNudgeInFlight)
+        if isDeferringReconfigure {
             hasDeferredGlobalReconfigure = true
+            if reconfigure == .allItems { deferredReconfigureScope = .allItems }
             itemsToReconfigure = []
+        } else {
+            lastReconfigureBaseline = Dictionary(
+                uniqueKeysWithValues: reversedMessages.map { ($0.localId, $0.changeVersion) }
+            )
+            lastTypingRosterFingerprint = typingRosterFingerprint
+            lastConversationStartFingerprint = startFingerprint
         }
         if !itemsToReconfigure.isEmpty {
             snapshot.reconfigureItems(itemsToReconfigure)
@@ -1876,7 +1950,7 @@ final class MessageListViewController: UIViewController {
             .dropFirst()
             .sink { [weak self] _ in
                 // Preferred language revision change requires full reconfigure of all items
-                self?.applySnapshot(animated: false)
+                self?.applySnapshot(animated: false, reconfigure: .allItems)
             }
             .store(in: &cancellables)
 
@@ -1885,7 +1959,7 @@ final class MessageListViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applySnapshot(animated: false)
+                self?.applySnapshot(animated: false, reconfigure: .allItems)
             }
             .store(in: &cancellables)
 
@@ -1901,7 +1975,7 @@ final class MessageListViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applySnapshot(animated: false)
+                self?.applySnapshot(animated: false, reconfigure: .allItems)
             }
             .store(in: &cancellables)
 

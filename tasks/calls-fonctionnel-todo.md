@@ -9844,3 +9844,114 @@ scopé web (TypeScript pur), aucun edit Swift/Kotlin non testable.
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct).
+
+## Vague 145 — kicking an anonymous group-call guest failed unconditionally (gateway) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Vague 144
+(ICE-restart backoff/rate-limit scoping, PR #3197) mergée sur `main` juste avant cette vague — pas
+de section dédiée dans ce fichier (à noter pour la prochaine passe de rattrapage doc). Toolchains
+iOS/Android toujours hors d'atteinte dans ce sandbox ; fix scopé gateway (TypeScript pur).
+
+- **Root cause** : `DELETE /calls/:callId/participants/:participantId` (`routes/calls.ts`), la
+  route unique qui sert à la fois le self-leave et le kick modérateur, résolvait TOUJOURS la cible
+  (quand `participantId !== userId`) via `prisma.participant.findFirst({ where: { conversationId,
+  userId: participantId, isActive: true } })` — une recherche par `Participant.userId`. Un
+  participant anonyme (invité de lien partagé) a `Participant.userId: null`
+  (`schema.prisma:569`, « null for anonymous/bot participants ») ; la clé de roster que le client
+  envoie pour lui est son PROPRE `Participant.id`, jamais un `User.id`. La recherche par `userId:`
+  ne peut donc JAMAIS matcher une cible anonyme — `targetParticipant` est toujours `null`, et la
+  route répond inconditionnellement `403 NOT_A_PARTICIPANT`, pour tout modérateur, à chaque essai.
+- **Scénario de défaillance concret** : appel de groupe avec un invité de lien partagé, une
+  configuration Meeshy ordinaire. `VideoCallInterface.tsx` affiche le bouton « retirer » à
+  l'identique sur CHAQUE vignette distante dès que `canKickParticipants` est vrai (modérateur/admin
+  d'une conversation `group`) — aucune distinction visuelle ou fonctionnelle pour une cible
+  anonyme. Le clic aboutit systématiquement à un toast d'échec générique ; l'invité n'est jamais
+  retiré. Il n'existe, avant ce correctif, AUCUN chemin par lequel cette action précise puisse
+  réussir pour une cible anonyme — un contrôle affiché comme fonctionnel qui échoue à coup sûr.
+- **Fix** : ajout d'un second lookup en repli, uniquement quand le premier échoue —
+  `prisma.participant.findFirst({ where: { conversationId: call.conversationId, id: participantId,
+  isActive: true } })`. Toujours scopé à LA conversation de cet appel et `isActive: true` — exactement
+  aussi sûr que le lookup par `userId:` qu'il complète, donc une résolution VÉRIFIÉE et non le repli
+  brut sur la chaîne non résolue que le commentaire voisin (garde de sécurité 2026-07-10, PR
+  antérieure) interdit toujours explicitement. Le chemin `participantId === userId` (self-leave,
+  y compris pour un invité anonyme qui se retire lui-même) était déjà correct — il utilise
+  `authContext.participantId`, jamais ce lookup — donc hors périmètre de ce fix.
+- **Tests** (TDD, RED confirmé avant le fix — le test neuf échouait avec « Number of calls: 0 » sur
+  `mockLeaveCall`) : 1 cas neuf dans `calls-routes.test.ts`, describe « DELETE
+  .../participants/:participantId — leaveCall » — « allows a moderator to remove an anonymous
+  participant, falling back to resolving the target by Participant.id when the userId lookup
+  misses » : mock `participant.findFirst` enchaîné (rôle modérateur → hit ; lookup `userId:` →
+  `null` ; lookup `id:` → hit) ; assertion que `leaveCall` reçoit bien l'id de la cible résolue.
+  81/81 verts (fichier ciblé, 0 régression sur les cas existants — moderator/admin/self-leave/
+  non-membre tous encore couverts par les mocks `mockResolvedValueOnce` existants, aucun test
+  préexistant n'a eu besoin d'être modifié). Sweep gateway `--testPathPatterns="[Cc]all"` : **56
+  suites / 1238 tests** verts (+1 net, 0 régression). `npx tsc --noEmit` (services/gateway) : **0
+  erreur**. Suite gateway COMPLÈTE (`bun run test:coverage`) : voir résultat rapporté dans le corps
+  de la PR.
+- **Non fait volontairement** : gate client (`VideoCallInterface.tsx`) — le bouton « retirer »
+  reste identique visuellement pour une cible anonyme ; ce fix restaure la fonctionnalité serveur
+  plutôt que de masquer le bouton, ce qui est le comportement produit désirable (le kick doit
+  MARCHER, pas disparaître). Reconduits (inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors
+  d'atteinte dans ce sandbox ; `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous`
+  (toujours latent, aucun scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans
+  filtre `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ;
+  gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` (dont S1/S2,
+  toujours ouverts — cap dur à 2 participants actifs côté serveur et `mode: p2p` codé en dur) ;
+  suspend/resume audio-only par-pair (Vague 143) ; dette lint systémique
+  `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée — chantier distinct).
+
+## Vague 146 — `canCallBack` gagne le garde-fou `!isAnonymous` que `canJoin` avait déjà (web) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en "Non fait volontairement" par la Vague 144 (`CallSystemMessage.tsx:63
+canCallBack sans garde !isAnonymous`), qualifié à l'époque de "toujours latent, aucun scénario réel"
+— vérifié faux cette vague : le chemin est bien atteignable (`isAnonymous` est correctement enfilé
+depuis `BubbleMessageNormalView` jusqu'à `CallSystemMessage` pour tout spectateur invité par lien
+partagé d'une conversation directe/groupe), et c'est exactement la même classe de défaut que la
+Vague 145 vient de corriger côté serveur (un contrôle qui a l'air fonctionnel et échoue à coup sûr).
+
+- **Root cause** : `CallSystemMessage.tsx` calculait deux affordances d'appel à partir des mêmes
+  garde-fous conversation/live, mais seule `canJoin` (`isLive && conversationSupportsCalls &&
+  !isAnonymous`) portait le garde `!isAnonymous` — documenté dans son propre commentaire ("Anonymous
+  ... viewers cannot join calls — the gateway refuses them; showing 'Rejoindre' would be a lying
+  button"). `canCallBack` (`!isLive && conversationSupportsCalls`), qui rend le bouton « Rappeler »
+  sur toute bulle de résumé d'appel TERMINÉ, ne le portait pas : un invité anonyme (lien partagé)
+  voyant l'historique d'un appel terminé dans une conversation directe/groupe se voyait proposer un
+  bouton « Rappeler » identique à celui d'un utilisateur inscrit — bouton qui appelle `startCall()`
+  (`useVideoCall`), lequel le gate serveur refuse pour tout participant anonyme exactement comme il
+  refuse un `join`. Même mensonge d'UI que celui documenté pour `canJoin`, jamais fermé pour son
+  jumeau.
+- **Fix** : `canCallBack = !isLive && conversationSupportsCalls && !isAnonymous` — un seul opérande
+  ajouté, symétrique à `canJoin`. `isAnonymous` était déjà une prop du composant (défaut `false`),
+  zéro changement de signature, zéro impact pour un utilisateur inscrit (comportement identique).
+- **Tests** (TDD, RED confirmé — la nouvelle assertion échouait avant le fix, bouton trouvé alors
+  qu'attendu absent) : 2 cas neufs dans `CallSystemMessage.test.tsx`, describe « « Rappeler » masqué
+  pour un utilisateur anonyme (Vague 146) » — masqué pour `isAnonymous: true` sur un appel terminé,
+  toujours présent pour `isAnonymous: false` (non-régression explicite). 16/16 verts après fix (14
+  existants inchangés + 2 neufs). Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites /
+  774 tests** verts, 0 régression (seul point d'usage de `canCallBack`/`Rappeler` dans `apps/web`,
+  confirmé par grep — pas de second site à corriger). `npx tsc --noEmit` (apps/web) : **0 erreur
+  ajoutée** — 1264 erreurs `error TS` préexistantes (aucune sur `CallSystemMessage.tsx`), comparées
+  par grep ciblé sur le fichier touché. `eslint` non exécuté cette vague : le binaire local du
+  projet (`./node_modules/.bin/eslint`, ESLint 10.8.1) plante sur `eslint-plugin-react` PARTOUT dans
+  le dépôt (`react/display-name` : `contextOrFilename.getFilename is not a function`), y compris sur
+  un fichier non touché (`use-video-call.ts`) — confirmé pré-existant et environnemental (pas
+  introduit par ce changement), délégué au gate CI `Quality (bun)` qui tourne dans un environnement
+  résolu différemment.
+- **Non fait volontairement** : le jumeau iOS potentiel (`BubbleCallNoticeView.swift` /
+  `CallSummaryDetailSheet.callBackButton`, gardé uniquement par `onCallBack != nil` — la chaîne
+  d'enfilage jusqu'à `ConversationView.swift:969 → viewModel.callBack(for:)` n'a pas été auditée
+  jusqu'au bout pour confirmer ou infirmer un gate anonyme côté `CallManager`/`ConversationViewModel`)
+  n'a pas été corrigé : toolchains iOS/Android toujours hors d'atteinte dans ce sandbox (pas de
+  `xcodebuild`/`swift`), et un edit Swift non compilé/testé serait pure spéculation — laissé en
+  suivi dédié pour une session avec accès device/Xcode. Reconduits (inchangés) : dead code /
+  god-object `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ;
+  `mergeEntries`/`upsertRemoteSegment` sans filtre `targetLanguage` explicite côté client (racine
+  déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure groupe
+  (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ;
+  dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, non corrigée —
+  chantier distinct, décision d'équipe requise). Vague 145 (kick anonyme, PR #3200/#3203, doublons
+  sur le même correctif serveur) mergée juste après cette vague — `Test gateway` y échouait
+  temporairement sur `ReactionService.test.ts`/`AttachmentReactionService.test.ts` (multi-réactions,
+  cycle 68, hors périmètre calling), résolu par le rebase post-merge de #3201.
