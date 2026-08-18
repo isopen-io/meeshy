@@ -107,7 +107,7 @@ settings:
   # (Ne vaut QUE pour la version commerciale : le build number, lui, est imposé
   # par le compteur CI_BUILD_NUMBER de Xcode Cloud — cf. le bloc
   # CURRENT_PROJECT_VERSION ci-dessus.)
-  MARKETING_VERSION: "1.0.4"
+  MARKETING_VERSION: "1.0.5"
 
   # Équipe de signature (Automatic). Indispensable pour `meeshy.sh device`
   # (déploiement sur appareil réel) : sans DEVELOPMENT_TEAM, la signature
