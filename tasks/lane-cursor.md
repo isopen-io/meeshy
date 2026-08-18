@@ -1,1 +1,1 @@
-lane=ANDROID android_streak=1 last_run=notification-swipe-actions
+lane=ANDROID android_streak=4 last_run=chat-scroll-offline-indicator

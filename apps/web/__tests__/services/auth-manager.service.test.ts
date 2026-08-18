@@ -260,11 +260,28 @@ describe('AuthManager.setAnonymousSession', () => {
     expect(raw.expiresAt).toBeGreaterThanOrEqual(before + 2 * 3600 * 1000);
   });
 
-  it('also stores token in AUTH_TOKEN key', () => {
-    authManager.setAnonymousSession('anon-tok', 'p-1');
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('anon-tok');
+  // Un jeton de session anonyme (`anon_…`) N'EST PAS un JWT. Posé dans
+  // l'emplacement du JWT, tout ce qui lit `getAuthToken()` le présente en
+  // `Authorization: Bearer` — que la passerelle refuse — et le juge expiré,
+  // `isJWTExpired` répondant `true` sur tout ce qu'il ne sait pas décoder.
+  // Un emplacement, une nature de justificatif.
+  it('never puts the anonymous token in the JWT slot', () => {
+    authManager.setAnonymousSession('anon_1755_abc', 'p-1');
+
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBeNull();
+    expect(authManager.getSessionToken()).toBe('anon_1755_abc');
   });
 
+  // Auto-réparation : un navigateur qui porte encore un `anon_…` déposé dans
+  // l'emplacement JWT par une version précédente doit s'en débarrasser en
+  // ouvrant une session anonyme — sinon il y reste bloqué.
+  it('evicts a leftover credential from the JWT slot', () => {
+    localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'anon_ancien_jeton');
+
+    authManager.setAnonymousSession('anon_1755_abc', 'p-1');
+
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBeNull();
+  });
 });
 
 describe('AuthManager.getAnonymousSession', () => {

@@ -82,6 +82,27 @@ const actorUserId = isAnonymous ? null : authContext.userId; // champ du contrat
 const personalRoomKey = actorUserId ?? membership.id;        // clé de room
 ```
 
+**Corollaire : une requête `Participant` sur cette clé doit choisir sa COLONNE.**
+`where: { userId: readerKey }` ne matche RIEN quand `readerKey` porte un
+`Participant.id`, et le symptôme est une liste VIDE, pas une erreur — donc un
+`return` silencieux, donc un signal qui disparaît sans trace. Toujours brancher
+sur la nature de la clé :
+
+```typescript
+where: isAnonymous ? { id: readerKey, isActive: true } : { userId: readerKey, isActive: true }
+```
+
+Ne JAMAIS enterrer l'incomplétude sous un `if (!isAnonymous)` au site d'appel :
+le gate donne l'omission pour une règle produit, et le brancher plus tard sans
+corriger la lecture reste un no-op muet. Cas réel :
+`_emitUnreadCountsSnapshot` (cycle 61) a privé de pastille exacte à la
+reconnexion TOUTE la population des invités de lien partagé — sans recours sur
+iOS/Android, qui n'ont aucun lecteur pour `message:pending-delivered` — alors que
+l'instantané de présence, vingt lignes plus haut dans la MÊME méthode, résolvait
+déjà les deux identités correctement. `getUnreadCountsForUser` et
+`socketio/utils/participant-resolver.ts` sont les références : les deux résolvent
+sous les deux colonnes.
+
 ## Socket.IO Conventions
 
 ### Event Naming: `entity:action-word` (colons + hyphens)
@@ -104,6 +125,33 @@ une room qui existe. Ne pas réécrire la règle : utiliser `participantUserRoom
 ou `emitToConversationParticipants()` (`socketio/emitToConversationParticipants.ts`).
 Le `select` Prisma doit charger `id` **et** `userId`. Détail et exceptions :
 `src/socketio/README.md` § « Quel `id` passer a `ROOMS.user()` ? ».
+
+### Un champ que le client lit AUTORITATIVEMENT n'est plus optionnel pour l'émetteur
+
+Quand un client recopie un champ de payload INCONDITIONNELLEMENT dans son cache, tout émetteur du
+même événement qui l'omet **écrit** — il n'est pas muet. Le contrat doit alors porter autant d'états
+que l'émetteur a de choses à dire, sans quoi « je n'ai pas calculé » sort sur le fil sous la forme de
+« il n'y en a pas », et détruit.
+
+Cas de référence, `conversation:unread-updated` et son pont ✦
+(`ConversationUnreadUpdatedEventData.bridge`, 4 émetteurs) :
+
+| forme | phrase | le client |
+|-------|--------|-----------|
+| `bridge: {…}` | voici le pont de CE lecteur | écrit |
+| `bridge: null` | j'ai calculé, il n'y en a pas | efface |
+| clé absente | je n'ai pas calculé | garde le sien |
+
+`bridgeComputed()` / `bridgeNotComputed()` (`socketio/unreadBridgeField.ts`) sont les deux seules
+façons d'écrire ce champ — un émetteur ne construit jamais l'objet à la main. `bridgeComputed(x)`
+déclare un savoir (`x` ou `null`) ; `bridgeNotComputed()` déclare l'ignorance et n'émet aucune clé.
+Un `unreadCount` à zéro relève du PREMIER : le contrat gelé §3.2 prouve l'absence de pont sans
+ouvrir de requête. Une passe qui TOMBE, ou une conversation hors de la borne de l'instantané de
+reconnexion, relèvent du second — se taire ne coûte rien, et `null` y ordonnerait un effacement sur
+la foi d'une panne.
+
+Corollaire de lot : **quand on rend un champ autoritatif côté client, on énumère TOUS les émetteurs
+serveur du même événement dans le même lot.**
 
 ### Connection Maps
 ```typescript
@@ -238,6 +286,42 @@ GET /api/v1/static/:filename   (JWT-protected)
 - MessageTranslationService emits `translatedAudio` (singular) - check data shape
 - Anonymous users have NO encryption
 - Admin audit trail required for all admin actions
+
+## Tests — un témoin qui ne peut pas tomber n'est pas un témoin
+
+**Ne JAMAIS ré-implémenter le corps d'une méthode de production dans un helper de
+test pour ensuite tester la copie.** Aucune assertion portée par une copie ne peut
+passer au ROUGE quand la production change : les deux dérivent en silence et les
+témoins continuent d'attester la copie, verts.
+
+Cas réel, supprimé au cycle 62 :
+`__tests__/unit/socketio/MeeshySocketIOManager.presenceSnapshot.test.ts` recopiait
+`_emitPresenceSnapshot` et `_emitUnreadCountsSnapshot` dans des helpers `*Impl`.
+Coût mesuré, en deux temps :
+
+1. La copie avait dérivé sur le point le plus cher du contrat — elle plaçait le
+   drain de la file hors-ligne et l'instantané de pastille DANS le `try`, soit
+   l'inverse exact de la production, qui les place APRÈS pour qu'un accroc Mongo
+   sur l'instantané (cosmétique) n'échoue jamais le rejeu (destructif).
+2. Elle a laissé `_emitUnreadCountsSnapshot` priver de pastille toute la
+   population des invités de lien partagé pendant des mois AVEC des témoins verts
+   (cycle 61) : deux exemplaires du même témoin gelaient le symptôme, et le fix de
+   la production n'en a fait tomber aucun.
+
+Le harnais `src/socketio/__tests__/MeeshySocketIOManager.test.ts` construit un
+VRAI `MeeshySocketIOManager` (ZMQ / Redis / Firebase déjà mockés par fabriques) :
+toute garde de comportement du manager y va. Le prétexte historique de la copie
+(« l'import du manager pend en test ») est faux depuis que ce harnais existe.
+
+**Toujours prouver le ROUGE.** Une garde se livre en montrant qu'elle tombe sous
+la mutation qu'elle nomme — c'est la seule mesure qui distingue un témoin d'une
+décoration.
+
+**Un `.catch` sur promesse détachée se prouve par le runtime, pas par le retour de
+l'appelant** (§ Critical Gotchas, `void p`) : la promesse étant abandonnée,
+l'appelant résout `undefined` qu'elle soit gardée ou non. Écouter
+`process.on('unhandledRejection')` autour de l'appel, puis franchir la phase
+« check » (`setImmediate`) — cf. `captureUnhandledRejections` dans le harnais.
 
 ## Caching Patterns (Obligatoire)
 

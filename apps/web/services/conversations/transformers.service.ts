@@ -18,6 +18,7 @@ import type {
   Attachment,
   ConversationType,
 } from '@meeshy/shared/types';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import type {
   AttachmentTranscription,
   AttachmentTranslations,
@@ -491,6 +492,14 @@ export class TransformersService {
       lastMessageOriginalLanguage: typeof conv.lastMessageOriginalLanguage === 'string'
         ? conv.lastMessageOriginalLanguage
         : undefined,
+
+      // Le pont ✦ (G-123) et l'horloge de son curseur — cycle 61 : « tout ce
+      // qui n'est pas copié explicitement ici est perdu pour TOUT le web ».
+      // Le gateway les porte déjà ABSENTS (jamais `null`) hors du cas utile
+      // (`conversations.bridge.test.ts`, `api-schemas.ts`) : simple passage,
+      // typé depuis la loi gelée `ConversationBridge`, jamais un `any`.
+      bridge: conv.bridge as ConversationBridge | undefined,
+      lastReadAt: conv.lastReadAt ? new Date(String(conv.lastReadAt)) : undefined,
 
       // Unread count
       unreadCount: Number(conv.unreadCount) || 0,

@@ -754,11 +754,24 @@
         "yesterday": "Yesterday",
         "thisWeek": "This week",
         "older": "Older"
+      },
+      "a11y": {
+        "unreadOne": "{count} unread message",
+        "unreadOther": "{count} unread messages",
+        "openProfile": "View {name}'s profile",
+        "openConversationInfo": "Conversation info for {name}"
       }
     },
     "focal": {
       "row": {
-        "you": "You"
+        "you": "You",
+        "emptyContent": "Message with no displayable content",
+        "forwarded": "Forwarded",
+        "edited": "Edited",
+        "translated": "Translated",
+        "openProfile": "View profile",
+        "callSummary": "Call summary",
+        "attachments": "Attachments"
       }
     },
     "lens": {

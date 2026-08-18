@@ -116,8 +116,16 @@
   --lentille-thread-focus-card-padding-horizontal: 8px;
   --lentille-thread-focus-card-padding-vertical: 12px;
 
-  /* thread.quote */
+  /* thread.quote — maquette `.fquote`
+     (docs/design/2026-08-15-focal-spec-integration.html) : filet 2.5 à la
+     couleur de l'auteur cité, fond léger, coins arrondis du SEUL côté opposé
+     au filet, une ligne tronquée en 11.5. Ces trois dernières cotes vivaient
+     dans la maquette et nulle part dans le code : les poser en tokens est ce
+     qui permet à la peau de les citer sans littéral (garde R15). */
   --lentille-thread-quote-border-size: 2.5px;
+  --lentille-thread-quote-radius: 0 9px 9px 0;
+  --lentille-thread-quote-padding: 3px 9px;
+  --lentille-thread-quote-size: 11.5px;
 
   /* thread.media */
   --lentille-thread-media-radius: 16px;

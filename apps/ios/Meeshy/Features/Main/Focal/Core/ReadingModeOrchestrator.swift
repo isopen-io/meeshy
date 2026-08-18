@@ -46,12 +46,38 @@ nonisolated public enum ReadingModeOrchestrator {
 
     /// Ce que l'utilisateur a choisi (mots du menu). `.auto` rend la main aux
     /// branches numériques de `resolveOrchestratorDecision`.
+    ///
+    /// AMENDEMENT S1 (REV-4bis/B2, 2026-08-17) — `.bulles` est le sixième cas,
+    /// miroir de `ReadingModePreferenceSchema` (`packages/shared/types/
+    /// reading-modes.ts`, qui porte la justification COMPLÈTE de la
+    /// réouverture du gel). Il naît d'un besoin WEB : le sélecteur historique
+    /// (`LensSwitcher`) offre « Bulles » depuis le volume 3, et ce choix
+    /// n'avait AUCUNE image dans l'énumération — le web le mémorisait donc
+    /// dans un SECOND magasin, disjoint du magasin du contrat. Exactement le
+    /// défaut que REV-3/B2 a fermé de CE côté-ci (`ModePreferenceRoundTripTests`
+    /// §4-6) ; la façade REV-4bis/B2 le ferme de l'autre.
+    ///
+    /// iOS N'OFFRE PAS ce choix : `LentilleModeMenu.build` garde son ordre à
+    /// CINQ entrées. Le cas existe ici pour deux raisons, toutes deux
+    /// vérifiables — décoder sans perte une valeur venue du canal serveur
+    /// (`readingMode` est déjà persistée côté gateway,
+    /// `services/gateway/src/routes/conversation-preferences.ts`, dont
+    /// l'énumération OpenAPI est `ReadingModePreferenceSchema.options`), et
+    /// rejouer les vecteurs partagés (`orchestrator.vectors.json`, cas
+    /// `sticky-bulles-hors-catalogue-clampe`, `OrchestratorVectorTests`).
+    ///
+    /// Son POUVOIR est nul drapeau-on : son image `.bubbles` n'appartient à
+    /// aucun catalogue servi par `resolveCapabilities` hors de la branche
+    /// drapeau-éteint, donc `clampToCapabilities` la rabat sur
+    /// `.focal`/`.clampedUnavailable` — le traitement exact d'un `.riviere`
+    /// mémorisé hors catalogue.
     nonisolated public enum ReadingModePreference: String, Codable, CaseIterable, Sendable, Equatable {
         case auto
         case focal
         case script
         case resume
         case riviere
+        case bulles
     }
 
     /// Miroir de `ConversationType` (`packages/shared/types/conversation.ts`) —
@@ -205,6 +231,10 @@ nonisolated public enum ReadingModeOrchestrator {
         case .script: return .script
         case .resume: return .summary
         case .riviere: return .river
+        // AMENDEMENT S1 (REV-4bis/B2) — image de `.bulles`, hors de tout
+        // catalogue drapeau-on : le clamp la rabat systématiquement sur
+        // `.focal`/`.clampedUnavailable`. Voir la docstring de l'énumération.
+        case .bulles: return .bubbles
         }
     }
 

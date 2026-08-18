@@ -141,16 +141,27 @@ export function participantUserRoomTargets<T extends ParticipantRoomTarget>(
  *
  * Returns the rooms actually reached, in chain order, so a caller can log them
  * without rebuilding the set.
+ *
+ * `event` est au SINGULIER, et c'en est la troisième propriété. Le paramètre a
+ * été pluriel tant qu'un appelant dual-émettait l'accusé de lecture sous deux
+ * noms (`read-status:updated` + `message:read-status-updated`) : la boucle
+ * rejouait alors la MÊME chaîne de rooms pour chaque nom, soit exactement deux
+ * fois les octets et deux réveils radio par socket destinataire. L'alias n'a
+ * jamais eu de client (cycle 64), et une fois retiré les douze appelants
+ * passaient tous un tableau d'UN élément — c'est-à-dire que le pluriel ne
+ * servait plus qu'à rendre le doublement exprimable en un caractère, sur le
+ * fan-out le plus fréquent de la messagerie. Un second nom se réintroduit
+ * maintenant par un second appel, qui se voit en revue.
  */
 export function emitToConversationParticipants(params: {
   io: ConversationRoomEmitter | null | undefined;
   conversationId: string;
   participants: ReadonlyArray<ParticipantRoomTarget>;
-  events: ReadonlyArray<string>;
+  event: string;
   payload: unknown;
   exceptRoom?: string | null;
 }): string[] {
-  const { io, conversationId, participants, events, payload, exceptRoom } = params;
+  const { io, conversationId, participants, event, payload, exceptRoom } = params;
   if (!io) return [];
 
   const conversationRoom = ROOMS.conversation(conversationId);
@@ -167,7 +178,7 @@ export function emitToConversationParticipants(params: {
   for (const room of rooms.slice(1)) emitter = emitter.to(room);
   if (exceptRoom) emitter = emitter.except(exceptRoom);
 
-  for (const event of events) emitter.emit(event, payload);
+  emitter.emit(event, payload);
 
   return rooms;
 }

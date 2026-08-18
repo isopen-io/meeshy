@@ -19,7 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
-import type { LinkMessageNewEventData, MessageRestoredForMeEventData } from '@meeshy/shared/types/socketio-events';
+import type { LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -126,7 +126,7 @@ export class SocketIOOrchestrator {
   /**
    * A refreshed token just landed. Open the socket only if there is none —
    * a socket that already exists re-reads the credentials by itself at its
-   * next handshake (ConnectionService.resolveHandshakeToken), so tearing a
+   * next handshake (ConnectionService.resolveHandshakeCredentials), so tearing a
    * live one down would drop its rooms for nothing.
    */
   private onTokensUpdated(): void {
@@ -784,7 +784,7 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationLeft(listener);
   }
 
-  onUnreadUpdated(listener: (data: { conversationId: string; unreadCount: number }) => void): UnsubscribeFn {
+  onUnreadUpdated(listener: (data: ConversationUnreadUpdatedEventData) => void): UnsubscribeFn {
     return this.presenceService.onUnreadUpdated(listener);
   }
 

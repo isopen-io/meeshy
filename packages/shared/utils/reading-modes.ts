@@ -45,6 +45,18 @@ export const ORCHESTRATOR_ABSENCE_WINDOW_MS = 24 * 60 * 60 * 1000;
  * `ReadingModePreference` est ce que l'utilisateur a choisi (mots du menu) ;
  * `ConversationReadingMode` est le mode réellement rendu. `auto` n'a pas
  * d'image ici : il rend la main aux branches numériques de la loi.
+ *
+ * AMENDEMENT S1 (REV-4bis/B2) — `bulles: 'bubbles'`. La table devient TOTALE
+ * sur l'énumération de préférence amendée, et c'est tout ce qu'elle change :
+ * `'bubbles'` n'appartenant à AUCUN catalogue drapeau-on
+ * (`FLAG_DISABLED_AVAILABLE_MODES` est le seul à le porter), un `bulles`
+ * mémorisé passe systématiquement par `clampToCapabilities` et ressort en
+ * `focal`/`'clamped-unavailable'` — le traitement EXACT d'un `riviere`
+ * mémorisé hors catalogue. Rien de neuf n'est atteignable ; ce qui change,
+ * c'est qu'un choix jusque-là INEXPRIMABLE a maintenant un nom, donc une
+ * persistance unique et une raison de clamp honnête au lieu d'un `undefined`
+ * silencieux. La justification complète de l'amendement (et la re-preuve de
+ * l'absence de chemin légal) vit dans `types/reading-modes.ts`.
  */
 const STICKY_MODE_BY_PREFERENCE: Readonly<
   Record<Exclude<ReadingModePreference, 'auto'>, ConversationReadingMode>
@@ -53,6 +65,7 @@ const STICKY_MODE_BY_PREFERENCE: Readonly<
   script: 'script',
   resume: 'summary',
   riviere: 'river',
+  bulles: 'bubbles',
 };
 
 export type OrchestratorDecisionInput = {

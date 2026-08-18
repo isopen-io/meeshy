@@ -101,6 +101,25 @@ export const Component = memo(function Component({ prop }: Props) {
 - Mocks in `__mocks__/` for ESM packages (lucide, tone, mermaid)
 - `jest.setup.js`: crypto mocks, window mocks, console suppression
 
+**`jest.mock('@meeshy/shared/<sous-chemin>', factory)` est INERTE ici.** La
+fabrique n'intercepte pas le module que le code charge : le `moduleNameMapper`
+réécrit `^@meeshy/shared/(.*)$` vers `packages/shared/dist/$1`, et l'importateur
+reçoit la valeur COMPILÉE. Vérifié minimalement, sous `--no-cache` (cycle 62) : un
+fichier de 8 lignes qui mocke `@meeshy/shared/types/socketio-events` puis en lit
+`SERVER_EVENTS.PRESENCE_SNAPSHOT` reçoit `'presence:snapshot'`, pas la valeur de
+sa fabrique.
+
+Conséquence : **ne pas recopier de contrat partagé dans une fabrique.** Ce n'est
+pas seulement du code mort — une table recopiée se lit comme une source de vérité
+et dérive du vrai contrat en silence. Tourner contre `packages/shared/dist` est le
+comportement SOUHAITABLE (meilleure référence possible) ; il suffit de ne pas
+prétendre le contraire. Pour vraiment substituer un module partagé, mapper le
+chemin `dist` résolu, pas le spécifieur `@meeshy/shared/*`.
+
+Reste **24 fichiers** portant une telle fabrique morte (`grep -rl
+"jest.mock('@meeshy/shared"`) — dépouillement à faire, aucun n'est un défaut de
+justesse.
+
 ## Critical Gotchas
 - Firebase optional - graceful degradation without it
 - Audio only via WebSocket `message:send-with-attachments` (not REST)
@@ -157,6 +176,49 @@ L'ÉGALITÉ d'horodatage n'est pas un recul (c'est une édition), et l'IDENTITÉ
 nomme le message de la ligne n'est jamais périmé. Miroir exact de
 `ConversationStore.merging` (`packages/MeeshySDK/.../Store/ConversationStore.swift`) — toute
 évolution touche les deux.
+
+### La pastille de non-lus vient du SERVEUR, jamais d'une lecture cliente
+`conversation:unread-updated` est le seul signal qui déplace un compteur de non-lus, et
+`handleUnreadUpdated` (`use-socket-cache-sync.ts`) son unique écrivain côté liste — il porte la garde
+de conversation OUVERTE (le gateway calcule la pastille pour TOUS les destinataires, lecteur
+compris : sans clamp, le badge se rallume sur la conversation qu'on a sous les yeux).
+
+**Ne jamais rebâtir de lecture REST de rattrapage sur `message:pending-delivered`.** Le gateway
+pousse déjà le compteur sur le chemin de CONNEXION (`_emitUnreadCountsSnapshot` →
+`conversation:unread-updated`), pour TOUTES les conversations du lecteur, en UNE requête batchée et
+**sans plafond** — un sur-ensemble de ce que la file hors-ligne nomme. Une compensation cliente a
+existé (`refreshUnreadCountsFromServer`, retirée au cycle 61) : N `GET /conversations/:id` plafonnés
+à 10, sur le lien le plus contraint qui existe — un mobile qui vient de revenir — avec abandon
+explicite des pastilles au-delà de la dixième, et un troisième exemplaire du clamp de conversation
+ouverte. Si une pastille manque après un reconnect, le défaut est côté serveur (résolution du
+lecteur), pas côté client.
+
+`handlePendingMessagesDelivered` ne garde donc qu'un rôle : invalider
+`messages.infinite(convId)` pour les conversations nommées. Jamais la liste, jamais le réseau.
+
+**Le pont ✦ du même événement se lit en TROIS états, jamais deux.**
+`ConversationUnreadUpdatedEventData.bridge` n'a pas de valeur « je ne sais pas » implicite : trois
+des quatre émetteurs serveur ne CALCULENT pas le pont (resynchro du lecteur après lecture partielle,
+`conversation:join`, instantané de reconnexion au-delà de sa borne ou dont la passe tombe). La clé
+ABSENTE est leur silence, et un silence n'efface rien :
+
+| forme sur le fil | ce que le client fait |
+|------------------|------------------------|
+| `bridge: {…}` | écrit le pont |
+| `bridge: null` | EFFACE le pont en cache |
+| clé absente / `undefined` | GARDE le pont en cache |
+
+Le discriminant est **`'bridge' in data`** — la PRÉSENCE de la clé, jamais sa valeur : `undefined` et
+l'absence sont indiscernables à la lecture d'une propriété, et c'est précisément la distinction à
+tenir. Conséquence à connaître en test : un payload construit à la main avec `bridge: undefined`
+porte la clé, donc il EFFACE. Sur le fil la question ne se pose pas (Socket.IO sérialise en JSON, où
+`undefined` ne voyage pas) — elle ne se pose que pour un objet fabriqué en mémoire.
+
+`null` est traduit en `undefined` au passage : le cache ne stocke que « pont ou rien », le troisième
+état est une grammaire de FIL, jamais un état de cache. `BridgeCacheUpdate`
+(`lib/conversations/unread-cache.ts`) porte la même distinction côté cache (enveloppe absente =
+garde, enveloppe présente = écrit, `undefined` compris). Jumeau iOS :
+`ConversationSyncEngine.handleUnreadUpdated` — toute évolution touche les deux.
 
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains

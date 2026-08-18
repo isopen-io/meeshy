@@ -2,6 +2,165 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-17 **Chat scroll-to-bottom offline indicator shipped** (slice
+> `chat-scroll-offline-indicator`, feature-parity's scroll-control composite line, "offline
+> indicator" sub-gap). `gh pr list --state open --search "apps/android OR apps/ios"` showed two
+> unrelated open PRs. `df -h /` showed 22 Gi free.
+>
+> **Pivoted away from the Explore agent's #2-ranked candidate (drag-to-dismiss on the fullscreen
+> image viewer) after re-assessing the risk, not the reward**: composing THREE independent Compose
+> gesture detectors on one node (existing tap + existing pinch/pan/zoom + a new vertical
+> drag-to-dismiss, active only at rest scale) carries a real risk of pointer-event-consumption
+> conflicts between sibling `pointerInput` blocks — this session has no established way to
+> interactively verify an Android gesture on-device or in an emulator (unlike iOS's idb+simulator
+> tooling), and this exact codebase's own memory index documents a cluster of gesture bugs that
+> shipped fully broken without unit tests catching them. Chose the mechanically safer #3 candidate
+> instead — no gesture composition, a pure sealed-interface extension over already-established
+> infrastructure.
+>
+> **Re-proved the gap and the exact iOS priority by reading the SDK source directly**, not an
+> agent's paraphrase: `ChatViewModel` already computed `isOffline` from `NetworkConditionMonitor`
+> but only fed it into `toBubbles` (the per-message hourglass, already shipped) — never exposed at
+> the `ChatUiState` top level, never passed to `ScrollControlContent.of`. Read
+> `ConversationScrollControlsView.swift` end to end: the real priority is
+> `isSearchingQuotedMessage > hasUnreadContent (unread OR typing) > isOffline > plain chevron` —
+> Android has no quoted-message-search state, so only the Typing/Unread > Offline > Plain tier
+> applies, which slots in exactly at the position the already-shipped Typing-over-Unread rule
+> already established.
+>
+> **New `ScrollControlContent.Offline`** variant + `of(affordance, typing, isOffline: Boolean =
+> false)` (default preserves every existing call site/test unchanged). **`ChatUiState.isOffline`**
+> fed from the exact same collector that already computes the reading for the hourglass — zero new
+> plumbing, just one more field on an existing `.copy()`. New **`OfflinePill`** composable mirrors
+> `TypingPill`'s structure exactly, but deliberately neutral-tinted (`textSecondary`, not the
+> conversation accent) since offline signals connectivity, not conversation identity — matches
+> iOS's own `contentColor`/`tint` special-casing for the offline branch.
+>
+> **Surpasses iOS, worth flagging explicitly**: iOS's `ConversationScrollControlsView` fully
+> implements and tests the `isOffline` branch, but its ONE call site
+> (`ConversationView+ScrollIndicators.swift`) hardcodes `isOffline: false` — the indicator is
+> dead code in the shipped iOS app today. Android wires it to a real, live
+> `NetworkConditionMonitor` reading, so this is a case where faithfully porting the SDK component's
+> tested behavior produces MORE functionality than iOS currently exposes, not less.
+>
+> **+5 `ScrollControlContentTest`** (offline alone shows the state, unread beats offline, typing
+> beats offline, online with nothing else shows Plain not Offline, hidden even while offline) **+ 2
+> `ChatViewModelTest`** (`state.isOffline` mirrors the same network reading already tested for the
+> hourglass, both offline and online cases). Strings ×4 (`chat_offline`) across EN/FR/ES/PT.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=4 last_run=chat-scroll-offline-indicator`. **streak reaches 4 → the NEXT ANDROID
+> run will be the last before the IOS_DETTE bascule (streak=5).**
+
+> On 2026-08-17 **Email notification toggle shipped** (slice
+> `settings-email-notification-toggle`, feature-parity's notification-preferences composite line,
+> "still open" email-channel-toggle sub-gap). `gh pr list --state open --search "apps/android OR
+> apps/ios"` showed two unrelated open PRs (#3180 — Android perf, different files; #3182 — web),
+> no collision. `df -h /` showed 6.6 Gi free.
+>
+> **Found via a fresh Explore agent sweep of `[~]` lines** (no candidate held in reserve from a
+> prior run this time — both previously-known candidates, notification swipe-actions and chat
+> header presence dot, are now shipped), ranked 3 candidates and chose the smallest: the agent
+> also flagged one near-miss worth noting — story reactions' "pending: full picker/animation/heart
+> bounce" note is itself **stale**, all three already shipped 2026-08-11 before the note's last
+> edit; correctly not proposed as a candidate.
+>
+> **Re-proved before coding**: `UserNotificationPreferences.emailEnabled` already existed and
+> already flowed end-to-end through `NotificationPreferenceSyncBody`/the sync pipeline — the field
+> itself was never the gap, only the `SettingsViewModel` intent + `SettingsScreen` row were
+> missing. Read iOS `NotificationSettingsView.swift:84-85` directly: `notifToggle(...keyPath:
+> \.emailEnabled)` sits right after Push, before Sound/Vibration. Also checked `notifToggle`'s own
+> signature (`NotificationSettingsView.swift:326-341`) — it has NO `enabled:`/push-dependency
+> parameter for ANY row, unlike Android's existing Sound/Vibration/NewMessage rows (which the
+> Android UI itself gates on `pushEnabled`, a pre-existing Android-only refinement not present on
+> iOS). Decision: leave the new Email row un-gated, matching iOS exactly and matching the more
+> sensible semantics (email is an independent delivery channel from push).
+>
+> **`SettingsViewModel.setEmailEnabled(enabled)`** — a one-line mirror of `setSoundEnabled`'s
+> `updateNotifications { it.copy(...) }` shape; `updateNotifications` already persists the whole
+> block to the device-local store instantly then enqueues the durable sync, so this new toggle
+> automatically inherits the same offline-queued PATCH behavior with zero new plumbing.
+> **`SettingsScreen`** gains one new `NotificationToggleRow` between Push and New-message. +1 test
+> (`setEmailEnabled_persists`, mirroring `setVibrationEnabled_persists`). 1 new string
+> (`settings_email_notifications`) across EN/FR/ES/PT.
+>
+> **Process note**: branch created FIRST this run, before any edit — the prior iteration's
+> reminder (created the branch only mid-way through, caught before any commit) applied
+> immediately.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> **CI incident, unrelated to this diff**: GitHub itself had a ~5h platform-wide outage
+> (`githubstatus.com` confirmed `impact: critical`, "Incident with GitHub.com", 13:40→~18:23 UTC)
+> that blocked `gh pr create` entirely — every attempt (GraphQL and REST) 503'd until "Git
+> Operations" was reported mitigated, at which point PR #3185 finally went through on the first
+> retry. Separately, once open, PR #3185's `Test gateway` check came back red — verified this was
+> **pre-existing on `main` itself**, not caused by this diff: `git diff origin/main...HEAD --stat`
+> confirms zero gateway/TypeScript files touched, and `main`'s own most recent completed CI run
+> (commit `782dc3225`) fails the exact same test with a byte-for-byte identical error
+> (`personal-history-hiding-surface-guard.test.ts`, a `ConversationBridgeService.ts` drift from an
+> unrelated concurrent gateway session). `Android (assemble + unit tests)` — the actual merge gate
+> for this routine's PRs — was green throughout; merged in squash despite the red `Test gateway`,
+> confirming it isn't a required check for this branch (same pattern as the `Test shared` false
+> negative documented earlier this session).
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=3 last_run=settings-email-notification-toggle`.
+
+> On 2026-08-17 **Chat header presence dot shipped** (slice `chat-header-presence-dot`,
+> feature-parity's "Live presence dot on a direct conversation's row/header" composite line — the
+> last open half, the row dot having shipped earlier this session). `gh pr list --state open
+> --search "apps/android OR apps/ios"` showed three unrelated open PRs (#3177/#3179/#3180 — web
+> and an Android perf cycle from a concurrent session, none touching `ChatScreen.kt`/
+> `ChatViewModel.kt`). `df -h /` showed 15 Gi free.
+>
+> **Re-confirmed a candidate flagged in a prior iteration's summary but not yet attempted**: grepped
+> `ChatScreen.kt`/`ChatViewModel.kt` for "presence" — zero matches, confirming the gap was still
+> real. `ConversationListViewModel` already had every reusable piece (`presenceByUserId`,
+> `observePresence()`, `presenceStateFor`), built for the row dot earlier this session — this slice
+> is a near-verbatim port of that same machinery into `ChatViewModel`, not new design.
+>
+> **Process note**: started writing this slice's code directly on `ops/android-ios-parity-routine`
+> before creating a dedicated branch — caught while drafting the mid-run status note (before any
+> push), confirmed via `git log -1`/`git status` that no commit had landed on the ops branch in the
+> meantime, then `git checkout -b claude/apps/android/chat-header-presence-dot` carried the
+> uncommitted working-tree changes onto the new branch cleanly. No harm done, but a reminder to
+> create the branch as literally the first action of a slice, before opening any editor.
+>
+> **Adaptation from iOS, not a literal port**: iOS's `ConversationView.headerPresenceState` dots
+> `ThemedAvatarButton` — Android's chat header has no avatar at all. The existing 10dp circle next
+> to the title is a DIFFERENT thing (an unconditional conversation-accent identity marker, present
+> on every conversation type) — repurposing it for presence would conflate two meanings in one
+> element and be wrong for group chats. Added a separate, small 8dp dot ADJACENT to it instead:
+> shown only for a direct conversation, using the central `meeshyPresenceDotColor` mapping (`null`
+> = offline = no dot, same rule as every other presence surface in the app).
+>
+> **`ChatUiState`** gains `directPeerUserId` (computed via `ApiConversation
+> .otherParticipantUserId(currentUserId)`, the exact same pure extension the row-dot slice built and
+> tested) + `presenceByUserId: Map<String, UserStatusEvent>` + `headerPresence(nowEpochMillis):
+> PresenceState?`, a byte-for-byte mirror of `ConversationListUiState.presenceStateFor`.
+> **`ChatViewModel.observePresence()`** is the same mirror of `ConversationListViewModel`'s
+> identically-named function (subscribes to `MessageSocketManager.userStatus`/`.presenceSnapshot`),
+> called eagerly from `init` for the same reason: those are hot `SharedFlow`s with no replay, so a
+> late subscriber genuinely misses events.
+>
+> **+3 `ChatViewModelTest`** (live presence resolves for the other participant in a direct
+> conversation, stays null for a group conversation even when live presence data exists for that
+> userId, stays null before any presence data has arrived). Required extending the test file's
+> `socketManager()`/`harness()` helpers with injectable `userStatus`/`presenceSnapshot` flows — the
+> exact same extension `ConversationListViewModelTest.kt` already has, applied to the chat test file
+> for the first time.
+>
+> **Verified**: `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules)
+> green before push.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=2 last_run=chat-header-presence-dot`.
+
 > On 2026-08-17 **Notification swipe actions shipped** (slice `notification-swipe-actions`,
 > feature-parity's "Mark read" composite line). First ANDROID run after this session's first
 > IOS_DETTE bascule (`android_streak` reset to 0). `gh pr list --state open --search

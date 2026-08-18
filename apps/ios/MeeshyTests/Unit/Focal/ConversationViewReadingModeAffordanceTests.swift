@@ -33,7 +33,10 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_readingModeAffordanceCluster_isInsertedInsideTheHStack_afterTheSearchButton() throws {
         let code = try conversationViewSource()
-        guard let range = code.range(of: "private var headerButtonsCluster: some View {") else {
+        // `AnyView` (not `some View`) since 2026-08-17 — erasure at the
+        // DECLARATION was required to stop a Swift metadata-decoder stack
+        // overflow at first render (see ConversationFirstRenderWarmup.swift).
+        guard let range = code.range(of: "private var headerButtonsCluster: AnyView {") else {
             XCTFail("headerButtonsCluster introuvable dans ConversationView.swift.")
             return
         }
@@ -75,44 +78,108 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     func test_readingModeAffordanceCluster_isGuardedByModeNotBubbles() throws {
         let code = try conversationViewSource()
+        // `guard … else { return AnyView(EmptyView()) }` (not `if`) since
+        // 2026-08-17 — same erasure campaign, same guarantee: drapeau OFF
+        // (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa.
         XCTAssertTrue(
-            code.contains("private var readingModeAffordanceCluster: some View {\n        if readingModeController.mode != .bubbles {"),
+            code.contains("private var readingModeAffordanceCluster: AnyView {\n        guard readingModeController.mode != .bubbles else { return AnyView(EmptyView()) }"),
             "La grappe Aa doit être entièrement gardée par `readingModeController.mode != .bubbles` — drapeau OFF (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa, bit-à-bit identique à avant ce lot."
         )
     }
 
-    // MARK: - Bouton Aa : uniquement Focal/Script, bascule `select(mode.toggledDensity)`
+    // MARK: - P2 (spec 17/08) : PLUS de bouton Aa, nulle part
 
-    func test_densityButton_isShownOnlyForFocalOrScript() throws {
+    func test_aaDensityButton_isGone() throws {
         let code = try conversationViewSource()
-        XCTAssertTrue(
-            code.contains("if readingModeController.mode == .focal || readingModeController.mode == .script {"),
-            "Le bouton Aa doit être masqué en Résumé/Rivière — ils n'ont pas de densité (contrat §WS-7 travail 4)."
+        XCTAssertFalse(
+            code.contains("ReadingModeDensityButton"),
+            "P2 : le bouton Aa est SUPPRIMÉ — le chip unique porte le cycle (tap) et le menu (appui long), plus aucune seconde affordance."
         )
+        XCTAssertFalse(
+            code.contains("toggledDensity"),
+            "P2 : la bascule de densité Aa disparaît avec son bouton — le cycle du chip parcourt TOUS les modes disponibles, pas seulement Focal⇄Script."
+        )
+        let chip = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift")
+        XCTAssertFalse(chip.contains("struct ReadingModeDensityButton"), "le type Aa lui-même est retiré — jamais de code mort monté nulle part.")
     }
 
-    func test_densityButton_callsSelectWithToggledDensity() throws {
-        let code = try conversationViewSource()
-        XCTAssertTrue(
-            code.contains("readingModeController.select(readingModeController.mode.toggledDensity)"),
-            "Le bouton Aa doit appeler `readingModeController.select(mode.toggledDensity)` — la MÊME préférence collante que la feuille Lentille, jamais un état local dupliqué (critère §7 : bascule instantanée)."
-        )
-    }
+    // MARK: - P2 : tap = CYCLE des modes disponibles (préférence collante)
 
-    // MARK: - Chip : ouvre la feuille, jamais une bascule directe
-
-    func test_chip_opensTheLensSheet() throws {
+    func test_chipTap_cyclesThroughAvailableModes_viaTheController() throws {
         let code = try conversationViewSource()
-        guard let range = code.range(of: "ReadingModeChip(model: readingModeChipModel) {") else {
-            XCTFail("ReadingModeChip(model:) introuvable — le chip doit être construit avec `readingModeChipModel`.")
-            return
+        guard let range = code.range(of: "private var readingModeAffordanceCluster: AnyView {") else {
+            return XCTFail("readingModeAffordanceCluster introuvable.")
         }
-        let windowEnd = code.index(range.upperBound, offsetBy: 120, limitedBy: code.endIndex) ?? code.endIndex
-        let onTapBody = code[range.upperBound..<windowEnd]
+        let windowEnd = code.index(range.lowerBound, offsetBy: 1600, limitedBy: code.endIndex) ?? code.endIndex
+        let window = code[range.lowerBound..<windowEnd]
         XCTAssertTrue(
-            onTapBody.contains("isReadingModeLensPresented = true"),
-            "Le tap du chip doit ouvrir la feuille Lentille (`isReadingModeLensPresented = true`) — jamais une bascule directe de mode (réservée au bouton Aa)."
+            window.contains("ReadingModeCycle.next("),
+            "le tap du chip doit passer par la loi pure ReadingModeCycle.next — jamais un switch inline recopié."
         )
+        XCTAssertTrue(
+            window.contains("readingModeController.select("),
+            "le cycle écrit la préférence collante via le contrôleur GELÉ (F-080) — jamais un état local dupliqué."
+        )
+    }
+
+    // MARK: - P2 : appui long = menu listant les modes (même câblage contrôleur)
+
+    func test_chipMenu_isWiredToTheController() throws {
+        let code = try conversationViewSource()
+        XCTAssertTrue(
+            code.contains("onSelect: { readingModeController.select($0) }"),
+            "le menu du chip sélectionne via readingModeController.select(_:) — même préférence collante que l'ancienne feuille."
+        )
+        XCTAssertTrue(
+            code.contains("onAuto: { readingModeController.resetToAuto() }"),
+            "« Automatique » du menu réengage l'orchestrateur via resetToAuto()."
+        )
+    }
+
+    func test_chip_presentsItsMenuOnLongPress_viaContextMenu() throws {
+        let chip = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift")
+        XCTAssertTrue(
+            chip.contains(".contextMenu"),
+            "l'appui long présente le menu natif (.contextMenu — rendu Liquid Glass sur iOS 26) listant les modes."
+        )
+        XCTAssertTrue(
+            chip.contains(".disabled("),
+            "un mode indisponible reste LISTÉ mais désactivé — jamais retiré (amendement R : un mode indisponible n'est pas un écran vide)."
+        )
+    }
+
+    // MARK: - P2 : la feuille Lentille est REMPLACÉE par le menu
+
+    func test_lensSheet_isGone() throws {
+        let code = try conversationViewSource()
+        XCTAssertFalse(
+            code.contains("isReadingModeLensPresented"),
+            "P2 : le chip ne présente plus de feuille — tap = cycle, appui long = menu. L'état de présentation disparaît avec elle."
+        )
+        let sheet = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift")
+        XCTAssertFalse(
+            sheet.contains("struct ReadingModeLensSheet: View"),
+            "la vue de la feuille est supprimée (code mort sinon) — le CATALOGUE (LensRowModel + ReadingModeLensCatalog) reste, consommé par le menu."
+        )
+    }
+
+    // MARK: - Loi pure du cycle
+
+    func test_readingModeCycle_advancesInOrderAndWraps() {
+        XCTAssertEqual(ReadingModeCycle.next(after: .focal, availableInOrder: [.focal, .script, .summary]), .script)
+        XCTAssertEqual(ReadingModeCycle.next(after: .summary, availableInOrder: [.focal, .script, .summary]), .focal, "le cycle boucle — dernier mode disponible ⇒ retour au premier.")
+    }
+
+    func test_readingModeCycle_currentAbsentFallsBackToFirst() {
+        XCTAssertEqual(
+            ReadingModeCycle.next(after: .bubbles, availableInOrder: [.focal, .script]), .focal,
+            "un mode courant hors liste (ex. .bubbles résiduel) repart au premier mode disponible."
+        )
+    }
+
+    func test_readingModeCycle_singleOrEmptyListIsANoop() {
+        XCTAssertNil(ReadingModeCycle.next(after: .focal, availableInOrder: [.focal]), "un seul mode disponible ⇒ le tap est un no-op, jamais une réécriture inutile de préférence.")
+        XCTAssertNil(ReadingModeCycle.next(after: .focal, availableInOrder: []))
     }
 
     // MARK: - Capacités : UNE SEULE résolution, réutilisée par la feuille
@@ -130,29 +197,11 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
         )
     }
 
-    func test_lensSheet_readsStoredCapabilities_notASecondResolution() throws {
+    func test_chipMenu_readsStoredCapabilities_notASecondResolution() throws {
         let code = try conversationViewSource()
         XCTAssertTrue(
             code.contains("capabilities: readingModeCapabilities,"),
-            "`ReadingModeLensSheet` doit recevoir `readingModeCapabilities` (propriété stockée) — jamais un second appel à `resolveCapabilities`."
-        )
-    }
-
-    // MARK: - Sélection / retour-auto passent PAR le contrôleur gelé (F-080)
-
-    func test_lensSheet_onSelect_isWiredToTheController() throws {
-        let code = try conversationViewSource()
-        XCTAssertTrue(
-            code.contains("onSelect: { readingModeController.select($0) }"),
-            "`onSelect` de la feuille doit appeler `readingModeController.select(_:)` — la préférence collante GELÉE F-080, jamais un état local dupliqué."
-        )
-    }
-
-    func test_lensSheet_onResetToAuto_isWiredToTheController() throws {
-        let code = try conversationViewSource()
-        XCTAssertTrue(
-            code.contains("onResetToAuto: { readingModeController.resetToAuto() }"),
-            "« Revenir en mode auto » doit appeler `readingModeController.resetToAuto()` — réengage l'orchestrateur (§WS-1)."
+            "les lignes du menu doivent être bâties depuis `readingModeCapabilities` (propriété stockée) — jamais un second appel à `resolveCapabilities`."
         )
     }
 
@@ -161,7 +210,7 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     func test_lensTypes_areNotRedeclaredInConversationView() throws {
         let code = try conversationViewSource()
         XCTAssertFalse(code.contains("struct ReadingModeChip"), "ReadingModeChip doit vivre dans Focal/Lens/, jamais redéclaré dans ConversationView.swift.")
-        XCTAssertFalse(code.contains("struct ReadingModeLensSheet"), "ReadingModeLensSheet doit vivre dans Focal/Lens/, jamais redéclaré dans ConversationView.swift.")
+
         XCTAssertFalse(code.contains("struct LensRowModel"), "LensRowModel doit vivre dans Focal/Lens/, jamais redéclaré dans ConversationView.swift.")
     }
 
@@ -170,12 +219,10 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
     func test_lensFolder_declaresExpectedTypes() throws {
         let chip = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeChip.swift")
         XCTAssertTrue(chip.contains("struct ReadingModeChip: View"))
-        XCTAssertTrue(chip.contains("struct ReadingModeDensityButton: View"))
         XCTAssertTrue(chip.contains("struct ReadingModeChipModel: Equatable"))
-        XCTAssertTrue(chip.contains("var toggledDensity: ConversationReadingMode"))
+        XCTAssertTrue(chip.contains("enum ReadingModeCycle"))
 
         let sheet = try strippedSource("Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift")
-        XCTAssertTrue(sheet.contains("struct ReadingModeLensSheet: View"))
         XCTAssertTrue(sheet.contains("struct LensRowModel: Equatable, Identifiable"))
         XCTAssertTrue(sheet.contains("enum ReadingModeLensCatalog"))
     }

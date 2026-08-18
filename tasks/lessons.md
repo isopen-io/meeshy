@@ -10016,3 +10016,418 @@ relectures au lieu d'une famille. **Une refactorisation qui sérialise des
 chemins jusque-là indépendants promeut leurs gardes existantes en gardes
 critiques** — il faut alors leur donner un témoin, même si aucune ligne de la
 garde n'a bougé.
+### Un champ optionnel devient obligatoire le jour où un client le lit autoritairement
+
+`bridge` est OPTIONNEL sur `conversation:unread-updated`. Les deux clients le
+recopient inconditionnellement, `undefined`/`nil` compris — donc un émetteur qui
+l'omet n'est pas muet : il ORDONNE UN EFFACEMENT. Le cycle qui a rendu le champ
+autoritatif côté web n'a instruit qu'UN des quatre émetteurs serveur ; les trois
+autres se sont mis à effacer sans qu'une seule de leurs lignes ne change, et sans
+qu'un seul témoin ne rougisse — chaque émetteur a ses propres tests, et aucun ne
+connaît la règle de l'autre.
+
+Règle : **quand on rend un champ wire autoritatif côté client, on énumère TOUS les
+émetteurs serveur du même événement dans le MÊME lot**, et on statue explicitement
+sur chacun (attache / n'attache pas, et pourquoi). Un `grep` sur la constante
+d'événement suffit à produire la liste ; ne pas la produire, c'est livrer un
+défaut par émetteur non instruit.
+
+Corollaire sur les témoins : un `toHaveBeenCalledWith` sur le payload ENTIER gèle
+la forme courte comme un acquis. Quand la forme longue existe ailleurs pour le
+même événement, ce témoin ne protège plus — il garantit la divergence.
+
+## Leçon 231 — un témoin qui ne peut pas tomber ne protège rien : il ATTESTE, et son attestation survit au démenti (2026-08-17, routine messagerie, cycle 62)
+
+Numérotée 231 et non 228 : `tasks/lessons.md` s'arrête à la 227, mais six sites de
+code citent une « Leçon 230 » (et un une 222) absentes du carnet. Sauter au-dessus
+des numéros réservés évite d'écrire un doublon de texte différent.
+
+Le cycle 61 a réparé un défaut vieux de plusieurs mois — la pastille de
+reconnexion refusée à toute la population des invités de lien partagé — et **la
+suite censée le garder est restée VERTE après le fix**, en attestant l'ancien
+comportement, dans DEUX témoins jumeaux du même fichier. Le fichier
+ré-implémentait le corps des méthodes de production dans des helpers `*Impl` et
+testait ces copies.
+
+Ce que le cycle 62 mesure en le retirant : la copie n'était pas seulement
+incapable de tomber, elle avait **dérivé jusqu'à prouver le contraire de la
+production sur le point le plus cher du contrat**. La production place le rejeu de
+la file hors-ligne (destructif) APRÈS le `try` qui entoure la construction de
+l'instantané de présence (cosmétique), pour qu'un accroc Mongo ne l'échoue jamais ;
+la copie les plaçait DEDANS — l'inverse exact de la régression que son propre
+en-tête annonçait garder. Deux témoins du même contrat s'opposaient donc à deux
+répertoires d'écart, et rien ne pouvait le signaler puisque l'un ne peut pas
+tomber.
+
+Trois règles, du particulier au général :
+
+1. **Ne jamais tester une copie.** Ré-implémenter une méthode dans le test crée un
+   second système qui dérive en silence, avec les honneurs du vert. Le prétexte
+   habituel — « le vrai objet ne s'importe pas en test » — a une date de
+   péremption : ici un harnais construisant un vrai manager existait déjà.
+2. **Livrer une garde en prouvant son ROUGE.** Mettre chaque témoin en face de la
+   mutation qu'il nomme, sur la production, puis restaurer. C'est la seule mesure
+   qui distingue un témoin d'une décoration — et elle a un corollaire : *vérifier
+   qu'aucun autre témoin ne tombe*, sans quoi la mutation prouve trop.
+3. **Une garde ne peut pas se prouver par un canal que le dommage n'emprunte
+   pas.** Un `.catch` sur promesse DÉTACHÉE ne se voit pas dans le retour de son
+   appelant (la promesse est abandonnée : l'appelant résout `undefined` gardé ou
+   non) ; il se voit dans le verdict du runtime,
+   `process.on('unhandledRejection')`. Le témoin « swallowed » de la copie
+   attestait un `try/catch` là où seul le `.catch` compte. Demander « par quel
+   canal le dommage se manifesterait-il ? » AVANT d'écrire l'assertion.
+
+La forme la plus dangereuse de cette classe : un dispositif de test qui se lit
+comme une source de vérité. Même famille, retirée au même cycle : une table de 21
+constantes recopiée dans une fabrique `jest.mock('@meeshy/shared/*')` d'`apps/web`
+qui n'intercepte rien (vérifié : une valeur remplacée par une chaîne absurde ne
+fait tomber aucun des 53 témoins). Un contrat recopié dérive ; recopié dans un
+dispositif inerte, il dérive ET fait autorité.
+
+
+## Leçon 232 — un prix consigné sans témoin qui le compte est une hypothèse, pas une donnée (2026-08-17, routine messagerie, cycle 63)
+
+Le cycle 62 a fermé trois des quatre émetteurs de `conversation:unread-updated`
+et rangé le quatrième — `broadcastReadStatus` — en **arbitrage de coût** :
+« le corriger coûterait les 5 requêtes de la passe à CHAQUE accusé de lecture,
+sur l'un des chemins les plus chauds du service ». Consigné comme un fait,
+formulé comme un fait, et il a tenu un cycle entier.
+
+Mesuré au cycle suivant, il était faux **deux fois**, et les deux erreurs sont
+génériques :
+
+1. **« à chaque appel » ignorait les gardes du site d'appel.** Le gate à zéro
+   non-lu — que les deux émetteurs frères portaient déjà — range le cas
+   DOMINANT du côté gratuit : lire une conversation la vide, la passe n'est pas
+   appelée, et l'effacement y est correct. Seul le cas RARE paie.
+2. **« 5 requêtes » était le coût NOMINAL de la passe, pas le coût de son appel
+   ICI.** L'appelant lisait déjà le curseur pour calculer le compteur qu'il
+   émet — exactement celui que la passe irait relire. Passé en paramètre, il
+   fait tomber le prix à 4, et donne au passage une garantie qu'aucune des deux
+   lectures séparées n'offrait : pont et compteur du même événement calculés sur
+   le MÊME instantané de curseur.
+
+La règle :
+
+> **Le coût nominal d'une opération n'est pas le coût de son appel sur un chemin
+> donné.** Les gardes du site d'appel et ce que l'appelant tient DÉJÀ en main en
+> font partie. Un prix estimé hors de son site d'appel surcompte
+> systématiquement — et il surcompte dans le sens qui fait NE PAS livrer.
+
+Corollaire opérationnel, et c'est lui qui coûte le moins cher à appliquer :
+**quand un carnet de pistes porte un chiffre qui a servi à ne pas livrer, le
+cycle qui reprend la piste commence par écrire le témoin qui compte.** Un témoin
+de compteurs Prisma coûte une heure ; il a ici renversé un arbitrage vieux d'un
+cycle, et il reste ensuite comme garde de non-régression — la mesure ne se perd
+pas, contrairement à l'estimation.
+
+Deux notes de méthode, tirées du même lot :
+
+- **Vérifier qu'un témoin de coût garde bien ce qu'il semble garder.** Celui du
+  cas gratuit ne tombe PAS quand on retire le gate du site d'appel : la
+  gratuité tient par deux gardes indépendantes (le site d'appel, et le premier
+  étage de la passe). Le témoin reste juste — le prix EST nul — mais c'est le
+  témoin de COMPORTEMENT qui garde l'intention. Mesuré sous mutation, consigné
+  dans le fichier, plutôt que laissé à découvrir.
+- **Une économie de requête peut valoir surtout par sa cohérence.** Ne pas
+  relire une donnée qu'on tient supprime aussi la fenêtre pendant laquelle une
+  écriture concurrente ferait diverger les deux lectures. L'argument de
+  justesse survit à l'argument de performance ; le citer d'abord.
+
+### Quand deux sites doivent choisir entre deux mensonges, le défaut est dans le VOCABULAIRE
+
+La piste n°1 du cycle 62 était formulée comme un arbitrage de PRIX : « le pont
+devrait être recalculé ici, il est effacé à la place ; le corriger coûterait la
+passe à chaque accusé de lecture ». Trois cycles auraient pu se perdre à mesurer
+ce coût. La vraie question était ailleurs : **le contrat savait-il seulement
+dire ce que ce site voulait dire ?** Il ne le savait pas — `bridge` avait deux
+formes de fil (présent / absent) pour trois faits (voici / il n'y en a pas / je
+n'ai pas calculé). Chaque émetteur était donc forcé de choisir entre deux
+mensonges, et le débat glissait naturellement vers le prix du moins pire.
+
+Règle : devant une piste énoncée comme « corriger ici coûterait N requêtes »,
+poser d'abord « que SAIT-ON, au juste, et le contrat peut-il l'exprimer ? ».
+Ici la réponse a fermé la piste à ZÉRO requête — le serveur n'a besoin d'aucune
+lecture pour savoir que l'acte qu'il diffuse vient d'invalider le pont qu'il
+annonce.
+
+### Le sens du SILENCE doit être le sens INOFFENSIF
+
+Corollaire structurel du même lot. Un protocole où l'OMISSION détruit fabrique
+un défaut à chaque émetteur qui n'a pas été mis au courant — et ces émetteurs-là
+ne se signalent JAMAIS, puisque leur code ne change pas et que leurs témoins
+restent verts. Le cycle 62 a corrigé un émetteur ; il en restait quatre.
+
+Inverser la polarité (l'effacement devient un ACTE EXPLICITE, `null` ; le
+silence ne fait plus rien) ne corrige pas un défaut de plus : ça retire à la
+classe entière son terrain. Un émetteur futur qui ignore tout du champ ne peut
+plus détruire par omission. Préférer systématiquement cette inversion à la
+correction site par site — elle coûte le même lot et elle ferme la classe.
+
+Compatibilité, au passage : la valeur EXPLICITE doit reproduire ce que les
+clients déployés faisaient déjà face au silence. Ici `null` = « efface », ce que
+les clients faisaient de l'omission — donc aucune migration, aucun drapeau, et
+un client ancien reste correct partout où l'effacement est voulu.
+
+### Un correctif qui BORNE son travail doit dire ce qu'il advient de ce qui est HORS borne
+
+Le cycle 62 a plafonné sa passe de ponts à une page de liste, et a écrit — dans
+le code et dans son carnet — que « les conversations plus anciennes gardent leur
+compteur exact ; seul leur pont attend le prochain `GET /conversations` ».
+Le code ne différait pas ce travail : il l'ANNULAIT. Hors borne, l'émission
+sortait la forme courte, que les clients lisent comme un ordre d'effacement.
+La borne avait donc troqué un effacement GLOBAL contre un effacement de la
+QUEUE — sans qu'aucun témoin ne puisse le voir, la charge émise étant
+RIGOUREUSEMENT identique dans les deux cas.
+
+Règle : quand on pose une borne, le témoin à écrire n'est pas « ce qui est DANS
+la borne est traité » — c'est **« ce qui est DEHORS est INTACT »**. Et si les
+deux cas produisent la même sortie observable, la borne n'est pas bornée : elle
+est destructrice, et il manque un état au contrat.
+
+### Un flake qui ne rougit jamais SEUL est un budget, pas une régression
+
+Piste ouverte quatre cycles (« le flake non identifié de `packages/shared` »),
+fermée en trois runs. `behaviour-matrix.test.ts` parcourt le dépôt ENTIER en
+synchrone : ~4,2 s de temps de test contre le `testTimeout` de 5 s par défaut de
+Vitest. Seul il passe ; en suite complète, les 82 autres fichiers se disputent le
+CPU et il dépasse.
+
+Deux marqueurs suffisent à reconnaître la classe et à éviter la chasse au
+fantôme : (1) le message est « Test timed out », qui ne désigne AUCUNE
+assertion ; (2) le test passe isolément, de façon reproductible. Alors ne pas
+chercher une régression — MESURER le temps du test seul et le comparer au
+timeout. Et retenir que la marge de ces témoins-là se resserre à CHAQUE fichier
+de test ajouté au dépôt : un lot un peu large les fait tomber sans les toucher.
+
+### Deux passes sur la même piste : intégrer les DEUX moitiés, pas choisir un gagnant
+
+Le 2026-08-17, deux passes de la routine ont traité la piste n°1 du cycle 62 le
+même jour, sans se voir. L'une (`…-ndx3vw`) a RECALCULÉ le pont de la lecture
+partielle sur le curseur qui venait de bouger ; l'autre (`…-mz6seg`) a donné au
+contrat le VOCABULAIRE qui lui manquait (le troisième état, « je n'ai pas
+calculé »). Le conflit git portait sur cinq lignes du même émetteur.
+
+Le réflexe — garder « sa » version, ou prendre celle d'en face en bloc — aurait
+perdu la moitié du travail dans les deux sens. Elles répondaient à des questions
+différentes qui se ressemblaient :
+
+- le recalcul montre qu'un pont JUSTE vaut mieux que pas de pont ;
+- le vocabulaire montre qu'un incident de passe ne doit RIEN détruire.
+
+Sans le premier, le site rendait `null` là où un pont exact était calculable
+pour quatre requêtes. Sans le second, `undefined` sur une passe TOMBÉE effaçait
+le pont en cache — la posture best-effort revendiquée par les quatre émetteurs
+(« le pont est un confort, la pastille est le produit ») n'était pas tenue.
+
+Règle : devant un conflit entre deux lots qui visaient la même piste, ne pas
+arbitrer sur l'auteur ni sur l'ancienneté. Écrire ce que CHAQUE version rend
+possible et que l'autre ne rend pas — si les deux listes sont non vides, la
+résolution est une composition, pas un choix. Ici : implémentation de l'un,
+grammaire de l'autre.
+
+Corollaire, sur son propre raisonnement : ce lot avait argumenté que garder
+l'ancien pont est faux (vrai, le pont porte son propre `unreadCount`) et en
+avait conclu qu'il fallait l'effacer. La démonstration était juste et la
+conclusion trop courte — **montrer qu'une option est mauvaise ne prouve pas que
+la sienne est la meilleure**, seulement qu'il en reste au moins une autre.
+
+### Les deux discriminants qui trahissent un troisième état (addendum, cycle 63 ter)
+
+Le troisième état ne tient que si les LECTEURS savent le lire. Deux pièges, un
+par plateforme, et aucun ne se signale à la compilation :
+
+1. **Swift — `decodeIfPresent` seul ne peut PAS porter la distinction.** Il rend
+   `nil` pour une clé absente comme pour un `null` explicite : il aplatit
+   exactement les deux formes qu'on vient de séparer. Le discriminant est
+   `container.contains(.bridge)`.
+2. **JS — le discriminant est la PRÉSENCE de la clé (`'bridge' in data`), pas sa
+   valeur.** `undefined` et l'absence sont indiscernables à la lecture d'une
+   propriété. Corollaire de test, à connaître : un payload fabriqué en mémoire
+   avec `bridge: undefined` PORTE la clé, donc il efface — sur le fil la
+   question ne se pose pas, JSON ne transportant pas `undefined`.
+
+Et un corollaire de témoins, jumeau de la leçon 231 : un témoin qui fige le
+payload ENTIER alors qu'il parle de la room, du lecteur ou du compteur **gèle une
+forme dont il ne parle pas**. C'est le mécanisme exact qui a laissé la forme
+courte devenir destructrice sans qu'aucune couleur ne change. `objectContaining`
+pour ce dont le témoin parle ; la forme du contrat a ses propres témoins.
+
+## Leçon 233 — un durcissement posé sur UNE des deux portes jumelles n'est pas une correction, et seule une garde de PARITÉ le dit (2026-08-18, routine messagerie, cycle 65)
+
+`AuthHandler` a deux portes qui font le même geste : rejoindre les rooms de
+conversation avant d'inscrire la socket dans `connectedUsers`. La porte inscrite
+(JWT) a reçu, dans un cycle antérieur, un réessai borné —
+`_joinConversationRoomsWithRetry` — avec le commentaire qui en donne la raison :
+« a failed-and-un-retried join is silent message loss ». La porte invitée (lien
+partagé), dans la même classe, à quatre-vingts lignes de là, appelait toujours un
+`socket.join` nu.
+
+C'est la Leçon 225 dans l'autre sens. Là, une dérogation manquait sur un membre
+d'une paire ; ici, c'est un DURCISSEMENT qui n'a été posé que d'un côté. Le
+symptôme est le même et le réflexe qui le rate aussi : on lit le mécanisme, on
+voit qu'il existe, et on coche « traité » sans compter ses appelants. **Un
+mécanisme de sûreté présent dans un fichier n'est pas un mécanisme appliqué :
+compter ses SITES D'APPEL contre le nombre de chemins qui en ont besoin.**
+
+### Ce qui rendait l'écart pire que la moyenne : l'asymétrie penchait contre la sévérité
+
+Le réflexe, devant deux portes, est de supposer que la plus riche mérite le plus
+de soin. C'était l'inverse. Un inscrit qui perd une room sur trente perd une
+FRACTION de sa livraison ; un invité de lien partagé n'a qu'UNE conversation, où
+la même panne vaut la TOTALITÉ de son temps réel pour toute la session. La porte
+qui avait le plus besoin du réessai était la seule à ne pas l'avoir.
+
+Corollaire à chercher ailleurs : quand deux chemins traitent N objets et 1 objet,
+le chemin à 1 objet n'est pas le cas facile — c'est celui où une panne unitaire
+n'a aucune redondance pour l'absorber.
+
+### Le point de fond : s'inscrire comme connecté n'est pas un acte NEUTRE
+
+Ce qui transforme un accroc d'adaptateur en perte est que la porte de livraison
+(`connectedUsers.has(clé)`, `offlineParticipantQueue.ts`) traite « inscrit »
+comme « joignable ». S'inscrire **désarme la file hors ligne**. Une socket qui a
+raté sa room et s'inscrit quand même coupe les DEUX chemins du même geste : pas
+d'émission vivante (absente de la room), pas d'entrée en file (crue en ligne), et
+donc pas de rejeu ultérieur — rien n'a été enfilé à rejouer.
+
+À généraliser : avant d'écrire un état « prêt / connecté / enregistré », demander
+ce que cet état DÉSACTIVE en aval. Un drapeau qui n'active que des choses peut
+être posé optimistement ; un drapeau qui éteint un filet de sécurité doit être
+posé sur preuve, jamais sur intention.
+
+### La garde : elle doit porter sur la RELATION, pas sur la valeur
+
+Deux témoins « la porte invitée réessaie » et « le réessai est borné » décrivent
+fidèlement le correctif — et resteraient VERTS si un cycle futur portait la porte
+inscrite à cinq tentatives en laissant l'invitée à trois. C'est-à-dire sous la
+récidive exacte du dossier, qui n'est pas « il manque un réessai » mais **« un
+réessai n'a été ajouté que d'un côté »**. La garde livrée ne nomme donc aucun
+nombre : elle fait rejeter la même room sur les deux portes et compare les
+tentatives entre elles. Elle tombe dès qu'elles divergent, dans un sens comme
+dans l'autre.
+
+Même famille que la Leçon 231 et que le cycle 64 : **quand le défaut est un
+ÉCART, le témoin doit mesurer l'écart.** Un témoin qui fixe la bonne valeur d'un
+seul côté re-gèle la moitié du problème qu'il prétend garder. Le ROUGE l'a
+d'ailleurs affiché en clair — `Expected: 3` (porte inscrite), `Received: 1`
+(porte invitée) : la garde de parité ne s'écrit pas seulement pour l'avenir, elle
+CHIFFRE le défaut au présent.
+
+### Trouvé en passant, même famille : « joint, jamais adressé »
+
+L'inventaire des adhésions a rendu `conversation:any` — rejointe à chaque
+connexion inscrite, jamais visée par une émission, à AUCUN commit de
+l'historique. Le cycle 64 avait retiré la symétrique (« émis, jamais écouté »).
+Les deux se trouvent de la même façon et pour un coût de recherche quasi nul :
+**pour chaque nom de room ou d'événement, compter ses deux extrémités.** Une
+extrémité à zéro est soit du code mort, soit un contrat non honoré ; les deux
+méritent une décision, aucune ne mérite d'être supposée.
+
+---
+
+## Leçon 234 — compter les deux extrémités d'un événement ne suffit pas : demander où il est REGARDÉ (2026-08-18, routine messagerie, cycle 66)
+
+La Leçon 233 laissait une méthode : « pour chaque nom de room ou d'événement,
+compter ses deux extrémités ; une extrémité à zéro est du code mort ou un
+contrat non honoré ». Passée sur les douze `eventType` de la file de livraison
+hors ligne, elle rend **zéro défaut** — les deux bouts existent partout. Passée
+sur `user:status`, elle rend zéro défaut aussi : un émetteur, un écouteur iOS qui
+alimente `PresenceManager`.
+
+Et pourtant l'événement n'arrivait pas.
+
+**Parce que compter les extrémités du CODE ne dit rien de leur rendez-vous.** Une
+room est un rendez-vous entre un émetteur et un ÉCRAN. `user:status` était
+adressé aux rooms `conversation:<id>` ; or la pastille de présence se regarde
+très majoritairement HORS du fil — liste de conversations, écrans de contacts,
+en-têtes. L'émetteur et l'écouteur existaient tous les deux, dans deux endroits
+qui ne se croisaient pas.
+
+> La question qui trouve ce que le comptage rate : **où ce signal est-il REGARDÉ,
+> et est-ce là qu'il est adressé ?** Un événement dont l'écran consommateur n'est
+> pas celui qui a fait joindre la room est perdu, quel que soit le nombre de ses
+> extrémités.
+
+### Le mécanisme : refermer une vue démonte une adresse
+
+Ce qui transformait l'écart en perte est un geste que rien ne présente comme
+destructeur. `AuthHandler` joint `conversation:<id>` à la connexion **pour
+atteindre le participant** ; le client la quitte en refermant le fil
+(`ConversationSocketHandler.deinit` → `conversation:leave` → `socket.leave`) pour
+dire « je ne regarde plus ce fil ». Une room portait donc DEUX sens — « sockets
+des participants » et « sockets qui regardent » — et le second démontait le
+premier.
+
+C'est la Leçon 233 (« demander ce qu'un état DÉSACTIVE en aval ») appliquée non
+pas à un drapeau mais à une APPARTENANCE. À généraliser : avant d'autoriser un
+client à quitter une room, énumérer tout ce qui adresse cette room — pas ce que
+le client croit y recevoir.
+
+### Le vrai test de gravité : qu'est-ce qui RECONVERGE ?
+
+Un signal manqué n'est un défaut que si rien ne le rattrape. Les trois candidats
+ont dû être instruits un par un, et c'est ce qui a fait passer le dossier de
+« cosmétique » à « livrable » :
+
+1. `user:status` ne marque que des TRANSITIONS — un pair déjà en ligne n'émettra
+   plus rien ;
+2. `presence:snapshot`, le seul autre porteur, n'est envoyé qu'à
+   l'authentification ;
+3. iOS ne SONDE jamais la présence — son minuteur de 30 s ne fait que recalculer
+   la décroissance 1/3/5 min depuis `lastActiveAt`.
+
+D'où un symptôme plus dur que « une pastille figée » : **le pair ne se rallume
+jamais**, sa décroissance locale l'ayant éteint pendant que la transition qui
+l'aurait rallumé n'avait plus d'adresse. Vérifier la reconvergence AVANT de
+classer un signal manqué, dans les deux sens : elle décide de la gravité, et une
+décroissance côté client transforme un signal manqué en état FAUX, pas en état
+vieux.
+
+### Le correctif qui ne retire rien : « purement additif » est une propriété qui se pose exprès
+
+Élargir une audience est le genre de correctif qui casse par ce qu'il ENLÈVE.
+Garder les rooms de conversation en TÊTE de chaîne et n'ajouter que les rooms
+personnelles rend le changement additif par construction : même population
+atteinte, seule l'adresse change, aucun destinataire d'aujourd'hui retiré.
+
+Le témoin de cette propriété n'est pas un nouveau test — c'est que les **quatre
+témoins d'audience existants sont restés verts sans être touchés**. Un correctif
+d'élargissement qui fait tomber les témoins d'audience existants est un
+correctif qui retire des destinataires : le vert des anciens témoins est
+l'information, pas la formalité.
+
+### L'erreur de méthode du cycle : grepper une chaîne dans un dépôt qui interdit les chaînes
+
+Le premier balayage a conclu « défaut propre à iOS, le web n'émet pas
+`conversation:leave` ». Faux. La recherche portait sur la CHAÎNE littérale, que
+le web n'écrit nulle part — il passe par `CLIENT_EVENTS.CONVERSATION_LEAVE`,
+comme la convention du dépôt l'exige (`socketio-events.ts` source de vérité). La
+conclusion inverse a tenu presque jusqu'au commit, et elle aurait fait livrer un
+correctif juste avec une portée fausse dans sa documentation.
+
+> **Chercher un nom d'événement par sa chaîne dans un dépôt qui interdit les
+> chaînes brutes revient à chercher exactement ce que la convention a
+> supprimé** — la recherche ne rend alors que les VIOLATIONS de la convention, et
+> son silence se lit à l'envers : « personne ne le fait » au lieu de « tout le
+> monde le fait correctement ». Grepper le SYMBOLE (`CONVERSATION_LEAVE`), jamais
+> sa valeur ; et quand une recherche rend zéro, se demander d'abord si la
+> convention du dépôt ne vient pas d'être interrogée par sa forme interdite.
+
+Corollaire sur la gravité, trouvé en réparant l'erreur : les deux clients
+quittaient bien la room, mais seul le web possède un filet REST
+(`use-user-status-realtime.ts` resynchronise `GET /users/presence` au focus
+d'onglet). **Le défaut était commun, la reconvergence non.** Séparer les deux
+questions — « qui est touché ? » et « chez qui ça se répare tout seul ? » — au
+lieu de les fondre dans un seul verdict par plateforme.
+
+### Le corollaire du chemin à 1 objet, appliqué AVANT que l'écart existe
+
+La Leçon 233 finissait sur : « quand deux chemins traitent N objets et 1 objet,
+le chemin à 1 objet n'est pas le cas facile ». Ici les deux portes de présence
+(inscrite / anonyme) étaient exactement cette paire, et l'invité de lien partagé
+n'a QU'UNE conversation — « la room refermée » y vaut la totalité de sa présence.
+Les deux ont donc été corrigées ensemble, et la garde de PARITÉ (celle qui ne
+nomme aucune valeur et compare les deux portes entre elles) a été écrite avant
+que l'écart n'ait eu le temps d'exister. Une leçon sert à ça : la deuxième fois,
+elle est un réflexe de conception et non un diagnostic.

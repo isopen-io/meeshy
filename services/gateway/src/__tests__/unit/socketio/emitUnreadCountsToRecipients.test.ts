@@ -244,7 +244,7 @@ describe('emitUnreadCountsToRecipients — source des participants', () => {
 
 describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)', () => {
   function makeBridgeService(map: Map<string, { bridge: unknown; lastReadAt?: Date }>) {
-    return { buildBridgeData: jest.fn<any>().mockResolvedValue(map) };
+    return { buildBridgeDataForViewers: jest.fn<any>().mockResolvedValue(map) };
   }
 
   it('enrichit le payload du destinataire dont le service rend un pont', async () => {
@@ -255,7 +255,7 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       suggestedMode: 'focal',
       data: { authors: ['Bob'], extraAuthorCount: 0, messageCount: 3 },
     };
-    const bridgeService = makeBridgeService(new Map([[CONV_ID, { bridge }]]));
+    const bridgeService = makeBridgeService(new Map([[PEER_USER_ID, { bridge }]]));
 
     await emitUnreadCountsToRecipients({
       io,
@@ -266,11 +266,11 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       bridgeService,
     });
 
-    // Candidat SINGLETON — une conversation, jamais la liste entière : le
-    // pont d'UN destinataire ne recalcule que CE destinataire.
-    expect(bridgeService.buildBridgeData).toHaveBeenCalledWith({
-      viewerId: PEER_USER_ID,
-      candidates: [{ conversationId: CONV_ID, unreadCount: 3 }],
+    // UNE conversation, le LOT des destinataires : le pont reste calculé par
+    // lecteur, mais il n'est plus demandé lecteur par lecteur (REV-5/B2).
+    expect(bridgeService.buildBridgeDataForViewers).toHaveBeenCalledWith({
+      conversationId: CONV_ID,
+      viewers: [{ viewerId: PEER_USER_ID, unreadCount: 3 }],
     });
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONV_ID,
@@ -292,10 +292,13 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       bridgeService,
     });
 
-    expect(bridgeService.buildBridgeData).not.toHaveBeenCalled();
+    expect(bridgeService.buildBridgeDataForViewers).not.toHaveBeenCalled();
+    // Ne PAS appeler la passe n'est pas ne rien savoir : un compteur nul n'a
+    // pas de pont, contrat gelé §3.2. Le serveur l'affirme (cycle 63).
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONV_ID,
       unreadCount: 0,
+      bridge: null,
     });
   });
 
@@ -319,7 +322,9 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
   it("n'ajoute pas bridge, et n'empêche pas l'émission du compteur, quand le pont échoue", async () => {
     const { io, emit } = makeIO();
     const onError = jest.fn();
-    const bridgeService = { buildBridgeData: jest.fn<any>().mockRejectedValue(new Error('bridge down')) };
+    const bridgeService = {
+      buildBridgeDataForViewers: jest.fn<any>().mockRejectedValue(new Error('bridge down')),
+    };
 
     await emitUnreadCountsToRecipients({
       io,
@@ -338,14 +343,16 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
     });
   });
 
-  it('recalcule un pont DISTINCT par destinataire — le pont est par lecteur, jamais partagé', async () => {
+  // Un pont par lecteur, jamais partagé — mais UN SEUL appel pour tout
+  // l'événement : c'est ce couple (par lecteur, en un lot) que REV-5/B2
+  // exige. Un lecteur absent de la map rendue n'a rien à annoncer et repart
+  // avec son compteur nu.
+  it('demande les ponts de TOUS les destinataires en UN appel, et les rend distincts', async () => {
     const { io, emit } = makeIO();
     const bridgeForPeer = { kind: 'fallback', unreadCount: 1, suggestedMode: 'focal', data: { authors: [], extraAuthorCount: 0, messageCount: 1 } };
-    const buildBridgeData = jest
+    const buildBridgeDataForViewers = jest
       .fn<any>()
-      .mockImplementation(async ({ viewerId }: { viewerId: string }) =>
-        viewerId === PEER_USER_ID ? new Map([[CONV_ID, { bridge: bridgeForPeer }]]) : new Map()
-      );
+      .mockResolvedValue(new Map([[PEER_USER_ID, { bridge: bridgeForPeer }]]));
 
     await emitUnreadCountsToRecipients({
       io,
@@ -353,13 +360,21 @@ describe('emitUnreadCountsToRecipients — le pont ✦ par destinataire (G-123)'
       readStatusService: makeReadStatusService({ [PEER_PART_ID]: 1, [ANON_PART_ID]: 1 }),
       conversationId: CONV_ID,
       senderId: SENDER_PART_ID,
-      bridgeService: { buildBridgeData },
+      bridgeService: { buildBridgeDataForViewers },
     });
 
-    expect(buildBridgeData).toHaveBeenCalledWith({ viewerId: PEER_USER_ID, candidates: [{ conversationId: CONV_ID, unreadCount: 1 }] });
-    expect(buildBridgeData).toHaveBeenCalledWith({ viewerId: ANON_PART_ID, candidates: [{ conversationId: CONV_ID, unreadCount: 1 }] });
+    expect(buildBridgeDataForViewers).toHaveBeenCalledTimes(1);
+    expect(buildBridgeDataForViewers).toHaveBeenCalledWith({
+      conversationId: CONV_ID,
+      viewers: [
+        { viewerId: PEER_USER_ID, unreadCount: 1 },
+        { viewerId: ANON_PART_ID, unreadCount: 1 },
+      ],
+    });
     expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: bridgeForPeer });
-    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1 });
+    // L'invité est absent de la map RENDUE par une passe qui a bien tourné :
+    // « il n'y en a pas », donc `null` explicite — jamais le silence.
+    expect(emit).toHaveBeenCalledWith('conversation:unread-updated', { conversationId: CONV_ID, unreadCount: 1, bridge: null });
   });
 });
 

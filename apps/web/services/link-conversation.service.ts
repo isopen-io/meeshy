@@ -213,6 +213,79 @@ export class LinkConversationService {
   }
 
   /**
+   * Les données de l'écran partagé — y compris quand la LECTURE est refusée.
+   *
+   * `GET /links/:identifier` sert la conversation entière, messages compris, et
+   * la refuse en 403 dès que le lien n'autorise pas la lecture de l'historique
+   * (`allowViewHistory: false`). Ce refus ne dit RIEN du droit de REJOINDRE :
+   * `allowViewHistory` masque le passé de la conversation, il ne ferme pas la
+   * porte. La page `/join/:linkId` — que `/chat/:linkId` a remplacée — lisait
+   * d'ailleurs ses métadonnées sur `GET /anonymous/link/:identifier`, une route
+   * publique qui n'a jamais rien exigé ; en n'appelant plus que la route
+   * complète, l'écran partagé traitait ces liens en « lien invalide » et un
+   * visiteur n'avait plus AUCUNE porte d'entrée.
+   *
+   * On y retombe donc : aperçu vide derrière, modale de jonction devant.
+   */
+  static async getSharedAccessData(
+    identifier: string,
+    options: LinkConversationOptions = {}
+  ): Promise<LinkConversationData> {
+    try {
+      return await this.getConversationData(identifier, options);
+    } catch (error) {
+      const info = await this.getLinkInfo(identifier).catch(() => null);
+
+      // Le lien est réellement introuvable, expiré ou désactivé (404 / 410) :
+      // c'est bien une impasse, on rend l'échec d'origine.
+      if (!info?.data?.conversation) throw error;
+
+      const link = info.data;
+
+      return {
+        conversation: {
+          id: link.conversation.id,
+          title: link.conversation.title,
+          description: link.conversation.description,
+          type: link.conversation.type,
+          // La route publique sert `createdAt` et rien d'autre ; la route
+          // complète recopie déjà `createdAt` dans `updatedAt` (retrieval.ts),
+          // on ne s'en écarte pas.
+          createdAt: link.conversation.createdAt ?? '',
+          updatedAt: link.conversation.createdAt ?? '',
+        },
+        link: {
+          id: link.id,
+          linkId: link.linkId,
+          name: link.name,
+          description: link.description,
+          // Aucune valeur inventée : l'historique vient de nous être refusé, et
+          // les permissions d'envoi ne sont pas servies par la route publique —
+          // un droit qui n'a pas été accordé n'est pas un droit.
+          allowViewHistory: false,
+          allowAnonymousMessages: link.allowAnonymousMessages ?? false,
+          allowAnonymousFiles: link.allowAnonymousFiles ?? false,
+          allowAnonymousImages: link.allowAnonymousImages ?? false,
+          requireAccount: link.requireAccount,
+          requireEmail: link.requireEmail,
+          requireNickname: link.requireNickname,
+          requireBirthday: link.requireBirthday,
+          expiresAt: link.expiresAt,
+          // La route publique répond 410 sur un lien inactif : y arriver en 200
+          // suffit à l'établir.
+          isActive: true,
+        },
+        userType: 'anonymous',
+        messages: [],
+        stats: { totalMessages: 0, totalMembers: 0, hasMore: false },
+        members: [],
+        anonymousParticipants: [],
+        currentUser: null,
+      };
+    }
+  }
+
+  /**
    * Récupère les informations de base d'un lien (endpoint public)
    */
   static async getLinkInfo(linkId: string): Promise<{
@@ -237,6 +310,7 @@ export class LinkConversationService {
         title: string;
         description: string;
         type: string;
+        createdAt?: string;
       };
     };
   }> {

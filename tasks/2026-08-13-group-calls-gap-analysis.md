@@ -431,3 +431,106 @@ toujours, direct inchangé), `CallEventsHandler.test.ts` (2 cas — fast-path
 broadcast REST, no-op défensif). Tous vérifiés ROUGE sans le fix serveur,
 VERT avec. Suites `CallService`/`CallEventsHandler`/`calls-routes` complètes
 vertes, `tsc --noEmit` propre.
+
+## Mise à jour 2026-08-17 — S3 corrigé : la première réponse tuait la notification manquée du reste du groupe
+
+**S3 levé.** `ringingTimeouts` (`CallService.ts`) est une `Map<callId, Timer>`
+— un timer PAR APPEL, pas par paire. `buildRingingTimeoutHandler`
+(`CallEventsHandler.ts`) est bien scopé `initiated`/`ringing` pour ne pas
+tuer un appel devenu `active` (rappel du verdict d'origine), mais le
+handler `call:signal` de type `answer` appelait
+`this.callService.clearRingingTimeout(data.callId)` **sans condition**, dès
+la PREMIÈRE négociation SDP réussie entre N'IMPORTE QUELLE paire. Dans un
+appel mesh à 3+ invités, dès qu'UN callee décrochait, le timer de TOUT
+l'appel était annulé — le seul mécanisme qui aurait fini par notifier les
+AUTRES invités n'ayant jamais répondu (`createMissedCallNotifications` via
+`getUnrespondedParticipants`, déjà câblé côté `handleMissedCall`) ne se
+déclenchait plus jamais pour cet appel. Concrètement : appel de groupe à
+Alice/Bob/Charlie, Bob décroche en 3s, Charlie ne décroche jamais (offline,
+app tuée, pas de wake VoIP) → Charlie ne reçoit AUCUNE notification d'appel
+manqué, alors que l'appel continue normalement pour Alice/Bob.
+
+**Fix** — deux changements complémentaires, aucun ne touche à l'état de
+l'appel actif :
+1. `call:signal` (answer) ne clear le timer QUE pour une conversation
+   `direct` (rien à attendre de plus une fois le seul callee décroché) ;
+   pour `group`, le timer reste armé jusqu'à son échéance d'origine.
+2. `buildRingingTimeoutHandler` : sa branche `updateMany.count === 0`
+   (« déjà transitionné ») ne fait plus un `return` silencieux — chaque
+   site qui appelle `clearRingingTimeout` correspond à une écriture
+   TERMINALE réelle (leaveCall dernier participant/endCall/markCallAsMissed/
+   les sweeps GC), donc atteindre cette branche avec un timer qui a
+   réellement sonné signifie que l'appel est non-terminal
+   (active/connecting/reconnecting) — le cas visé. Elle appelle maintenant
+   `createMissedCallNotifications(callId)` en best-effort : aucune écriture
+   de statut, aucun broadcast `ENDED`/`MISSED`, aucune libération de claim —
+   l'appel en cours pour qui a répondu est totalement inchangé. No-op
+   silencieux (`getUnrespondedParticipants` vide) une fois que tout le monde
+   a rejoint.
+
+Ne construit PAS de UI (badge « appel manqué » pour un membre resté hors
+d'un appel de groupe actif) — c'est un bug serveur pur qui rend la
+notification existante (push + `Notification` persistée, déjà utilisées par
+tous les autres chemins missed) enfin atteignable pour ce cas précis.
+
+Tests : nouveau `CallEventsHandler-group-ring-timeout-missed.test.ts` (5 cas
+— timer non cleared en groupe / cleared en direct, notifie les non-répondants
+sans toucher l'état, no-op si tout le monde a rejoint, pas de double
+notification quand la branche gagnante existante tourne). Suites
+`CallEventsHandler`/`CallService` complètes (43 suites / 898 tests) vertes,
+`tsc --noEmit` propre.
+
+## Mise à jour 2026-08-17 — première moitié de W6 traitée : bouton « exclure » web branché sur le kick REST
+
+**W6 (partiel) levé** : le prérequis serveur (2026-08-15, diffusion
+`PARTICIPANT_LEFT` sur `DELETE /calls/:callId/participants/:participantId`)
+n'avait toujours aucun appelant côté web — `onRemove` restait un nettoyage
+purement local déclenché par le timeout de déconnexion, jamais par une
+action de modération. Ajouté :
+
+- `callsService.removeParticipant(callId, userId)` — wrapper REST manquant
+  (`calls.service.ts` n'exposait que `getActiveCall`), miroir de
+  `participantsService.removeParticipant` pour la conversation.
+- Rôle de modération résolu via `useConversationQuery` + `isParticipantModerator`
+  (même idiome que `useParticipantManagement`) — **jamais** lu depuis
+  `CallParticipant.role`, qui est le rôle de session d'appel
+  (`initiator`/`participant`), sans rapport avec le rôle de conversation.
+  Gate double : `conversation.type === 'group'` (jamais en direct — y
+  retirer l'autre partie équivaut à raccrocher, chemin déjà couvert) ET
+  modérateur/admin de la conversation.
+- UI : bouton « retirer » (icône `UserMinus`, confirmation `AlertDialog` —
+  même pattern que `DeliveryQueueItemCard`) ajouté dans `VideoStream` (donc
+  disponible aussi bien sur la tuile plein écran que sur les vignettes
+  `DraggableParticipantOverlay`, un seul site de rendu) — visible seulement
+  quand `onKickParticipant` est fourni, jamais pour la tuile locale.
+- Aucune mutation locale du store au succès : la diffusion serveur
+  `SERVER_EVENTS.CALL_PARTICIPANT_LEFT` (déjà écoutée) reconcilie l'état pour
+  tout le monde, y compris l'auteur du kick — exactement le pattern déjà en
+  place pour un départ volontaire.
+- i18n groupe (W7, partiel) : `stream.removeParticipant*` + `toasts.participantRemoved`/
+  `removeParticipantFailed` ajoutés aux 4 locales (en/fr/es/pt), clés
+  identiques vérifiées par script.
+
+**Limite connue, non traitée ici** : la cible passée à `removeParticipant`
+est la clé de `remoteStreams` (`participant.userId || participant.participantId`,
+côté offre WebRTC) — pour un participant anonyme sans `userId`, la route
+REST (`where: { userId: participantId }`) ne peut pas le résoudre. Aucune UI
+existante (y compris `conversation-participants-drawer.tsx`) ne permet
+aujourd'hui de retirer un participant anonyme non plus — pas une régression
+introduite ici, juste un périmètre encore non couvert.
+
+**Reste du W6** : grille adaptative multi-participants, roster dédié,
+`CallNotification`/timeout déjà traités (2026-08-14). **Reste du W7** : i18n
+groupe pour le roster/toasts join-leave restants. Mesh iOS mono-PC (I1-I7)
+et SFU toujours hors périmètre (nécessitent le toolchain Xcode, absent de
+cet environnement).
+
+Tests : `calls.service.test.ts` (nouveau, 6 cas — `getActiveCall` +
+`removeParticipant`, jusque-là non testé du tout), `VideoStream.test.tsx`
+(+6 cas), `DraggableParticipantOverlay.test.tsx` (+2 cas, transmission de
+prop), `VideoCallInterface.test.tsx` (+8 cas — gate modérateur/type de
+conversation, appel REST avec le bon id, pas de mutation locale au succès,
+toast d'échec). Suite complète `apps/web` : 644 suites / 12 953 tests verts.
+`tsc --noEmit` et `eslint` sans régression (mêmes 11 erreurs tsc et 5
+findings eslint pré-existants, aucun nouveau, vérifié par diff avant/après
+via `git stash`).

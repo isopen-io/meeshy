@@ -17,6 +17,21 @@ export type LentilleLiveEntry = {
   readonly name: string;
   readonly avatarUrl?: string;
   readonly isLive: boolean;
+  /**
+   * Famille de « ça vit maintenant » (`lentille-rail-entries.ts`). La maquette
+   * pose un badge par famille (rendu `railHtml` : `LIVE` pour une Scène, `✦`
+   * pour une salve de non-lus, `…` pour quelqu'un qui écrit). Optionnelle :
+   * un appelant qui ne compose pas ses entrées (test, aperçu) garde un rail
+   * sans badge.
+   */
+  readonly kind?: 'live' | 'typing' | 'bridge';
+};
+
+/** Badge de la maquette (`railHtml`) — un glyphe par famille, jamais un chiffre. */
+const RAIL_BADGE: Readonly<Record<NonNullable<LentilleLiveEntry['kind']>, string>> = {
+  live: 'LIVE',
+  bridge: '✦',
+  typing: '…',
 };
 
 export interface LivesRailProps {
@@ -40,7 +55,13 @@ export function LivesRail({ entries, label }: LivesRailProps) {
       className="flex gap-3 overflow-x-auto px-4 py-2"
     >
       {capped.map((entry) => (
-        <div key={entry.id} role="listitem" data-testid="lentille-lives-rail-entry" className="flex flex-col items-center gap-1 shrink-0">
+        <div
+          key={entry.id}
+          role="listitem"
+          data-testid="lentille-lives-rail-entry"
+          data-kind={entry.kind}
+          className="flex flex-col items-center gap-1 shrink-0"
+        >
           <div
             className="relative rounded-full overflow-hidden bg-muted flex items-center justify-center text-xs font-semibold"
             style={{
@@ -58,6 +79,15 @@ export function LivesRail({ entries, label }: LivesRailProps) {
               entry.name.slice(0, 2).toUpperCase()
             )}
             {entry.isLive && <span className="absolute inset-0 rounded-full animate-pulse" aria-hidden="true" />}
+            {entry.kind && (
+              <span
+                aria-hidden="true"
+                data-testid="lentille-lives-rail-badge"
+                className="absolute -bottom-0.5 -right-1 rounded-full bg-primary px-1 text-[8.5px] font-extrabold leading-none text-primary-foreground"
+              >
+                {RAIL_BADGE[entry.kind]}
+              </span>
+            )}
           </div>
           <span className="text-[10px] text-muted-foreground truncate max-w-full">{entry.name}</span>
         </div>

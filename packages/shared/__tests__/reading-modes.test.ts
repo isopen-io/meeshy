@@ -143,6 +143,75 @@ describe('resolveOrchestratorDecision — choix collant PRIME toujours (drapeau 
       }),
     ).toEqual({ mode: 'river', reason: 'sticky' });
   });
+
+  /**
+   * AMENDEMENT S1 (REV-4bis/B2) — `bulles` a une image, `'bubbles'`, et elle
+   * n'est SÉLECTIONNABLE dans AUCUN catalogue drapeau-on (`resolveCapabilities`
+   * ne sert `'bubbles'` que sur la branche drapeau ÉTEINT). La conséquence est
+   * donc CONNUE d'avance et voulue : drapeau on, un `bulles` mémorisé se fait
+   * rabattre exactement comme un `riviere` mémorisé avant l'ouverture de la
+   * Rivière — `focal` / `'clamped-unavailable'`, jamais un silence.
+   */
+  it("stickyChoice='bulles' se mappe sur 'bubbles' — hors de TOUT catalogue drapeau-on, donc toujours clampé (amendement S1)", () => {
+    const catalogues = [baseCapabilities, anonymousCapabilities, riverCapabilities];
+
+    catalogues.forEach((capabilities) => {
+      expect(capabilities.availableModes).not.toContain('bubbles');
+      expect(
+        resolveOrchestratorDecision({
+          unreadCount: 2,
+          lastOpenedAt: NOW,
+          now: NOW,
+          stickyChoice: 'bulles',
+          capabilities,
+          isFlagEnabled: true,
+        }),
+      ).toEqual({ mode: 'focal', reason: 'clamped-unavailable' });
+    });
+  });
+
+  /**
+   * DISCRIMINANT de l'amendement (leçon 266) : les deux témoins ci-dessus
+   * seraient VERTS même sans amendement — une préférence absente de
+   * `STICKY_MODE_BY_PREFERENCE` produit `undefined`, qu'aucun catalogue ne
+   * contient, donc le clamp les rend `focal` par ACCIDENT. Ce témoin-ci force
+   * la table à porter réellement l'image : sur un catalogue qui contient
+   * `'bubbles'`, `bulles` doit rendre `bubbles`/`sticky`, jamais un clamp.
+   * (Un tel catalogue n'existe pas dans la loi — `resolveCapabilities` ne
+   * sert `['bubbles']` que drapeau ÉTEINT, branche qui court-circuite le
+   * collant : ce catalogue est donc une SONDE de la table, pas un état
+   * atteignable.)
+   */
+  it("l'image de 'bulles' est bien 'bubbles' dans la table de correspondance (sonde discriminante)", () => {
+    const bubblesCatalogue: ReadingModeCapabilities = {
+      ...baseCapabilities,
+      availableModes: ['focal', 'script', 'bubbles'],
+    };
+
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: 2,
+        lastOpenedAt: NOW,
+        now: NOW,
+        stickyChoice: 'bulles',
+        capabilities: bubblesCatalogue,
+        isFlagEnabled: true,
+      }),
+    ).toEqual({ mode: 'bubbles', reason: 'sticky' });
+  });
+
+  it("stickyChoice='bulles' n'a AUCUN pouvoir drapeau éteint non plus — la branche flag-disabled précède le collant", () => {
+    expect(
+      resolveOrchestratorDecision({
+        unreadCount: 2,
+        lastOpenedAt: NOW,
+        now: NOW,
+        stickyChoice: 'bulles',
+        capabilities: baseCapabilities,
+        isFlagEnabled: false,
+      }),
+    ).toEqual({ mode: 'bubbles', reason: 'flag-disabled' });
+  });
 });
 
 // -----------------------------------------------------------------------------
@@ -221,7 +290,7 @@ describe('resolveOrchestratorDecision — clamp sur availableModes (drapeau on)'
       anonymousCapabilities,
       riverCapabilities,
     ];
-    const stickyChoices = ['auto', 'focal', 'script', 'resume', 'riviere'] as const;
+    const stickyChoices = ['auto', 'focal', 'script', 'resume', 'riviere', 'bulles'] as const;
     const unreadCounts = [0, 10, 26];
 
     catalogues.forEach((capabilities) => {

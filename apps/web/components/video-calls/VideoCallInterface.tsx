@@ -8,6 +8,9 @@
 import React, { useEffect, useCallback, useMemo, useRef, useState } from 'react';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
+import { useConversationQuery } from '@/hooks/queries/use-conversations-query';
+import { isParticipantModerator } from '@/utils/participant-helpers';
+import { callsService } from '@/services/calls.service';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
@@ -21,6 +24,7 @@ import {
   useAdaptiveDegradation,
   type AdaptiveDegradationActions,
 } from '@/hooks/use-adaptive-degradation';
+import { usePerPeerVideoTier } from '@/hooks/use-per-peer-video-tier';
 import { useCallDuration } from '@/hooks/use-call-duration';
 import { useDraggable } from '@/hooks/use-draggable';
 import { VideoStream } from './VideoStream';
@@ -101,7 +105,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTier, removeParticipant } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTierToPeer, removeParticipant } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -136,7 +140,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Monitor call quality. callId is required for the server-side quality
   // report (call:quality-report) that drives congestion alerts and persists
   // "data spent / network quality" on the call summary.
-  const { qualityStats } = useCallQuality({
+  const { qualityStats, perPeerStats } = useCallQuality({
     peerConnections,
     callId,
     updateInterval: 2000,
@@ -250,15 +254,24 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   }, []);
 
-  // Adaptive compression + graceful-degradation control loop. Feeds observed
-  // connection quality into a hysteresis state machine that (1) sheds the
-  // encoder down the bitrate ladder under congestion, (2) DROPS outbound video
-  // to audio-only after sustained 'poor' quality so the call survives a link
-  // that can't carry even minimal video, and (3) brings video back once the
-  // link has clearly recovered. The user's camera intent (controls.videoEnabled)
-  // is authoritative — the controller never re-enables video the user turned off.
+  // Call-wide audio-only survival. Feeds the worst-of-the-call aggregate
+  // quality into a hysteresis state machine that DROPS outbound video to
+  // audio-only after sustained 'poor' quality (so the call survives a link
+  // that can't carry even minimal video for whoever is struggling) and
+  // brings it back once the link has clearly recovered. The user's camera
+  // intent (controls.videoEnabled) is authoritative — the controller never
+  // re-enables video the user turned off.
+  //
+  // applyTier is intentionally a no-op here: per-peer bitrate/tier shedding
+  // is now owned by usePerPeerVideoTier below (Vague 143) — applying the
+  // SAME tier call-wide, from the worst-of-the-call aggregate, would
+  // immediately fight/override the more precise per-peer tiers it just set.
+  // This hook still computes the action internally (harmlessly discarded)
+  // because its 'poorSince' bookkeeping also drives the suspend decision
+  // above, which DOES stay call-wide — see the hook's own doc comment for
+  // why per-peer suspend/resume is a deliberate follow-up, not done here.
   const degradationActions = useMemo<AdaptiveDegradationActions>(() => ({
-    applyTier: (tier) => { applyQualityTier(tier).catch(() => { /* best effort */ }); },
+    applyTier: () => { /* per-peer tier controller owns bitrate shedding now */ },
     suspend: () => runGuardedVideoToggle(async () => {
       await disableVideo();
       emitVideoToggle(false);
@@ -269,12 +282,27 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       emitVideoToggle(true);
       toast.success(t('toasts.videoResumed'));
     }),
-  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, runGuardedVideoToggle, t]);
+  }), [disableVideo, enableVideo, emitVideoToggle, runGuardedVideoToggle, t]);
 
   const { videoSuspended } = useAdaptiveDegradation({
     qualityStats,
     userWantsVideo: controls.videoEnabled,
     actions: degradationActions,
+  });
+
+  // Per-peer bitrate/tier shedding (Vague 143): each peer's OWN link quality
+  // drives its OWN outbound encoder tier, independent of every other peer —
+  // a single struggling peer in a group call no longer drags everyone else's
+  // video down to the same tier. Orthogonal to (and unsynchronized with) the
+  // call-wide suspend/resume survival above: applyQualityTierToPeer is a
+  // pure setParameters() call with no track mutation, so it cannot race the
+  // manual-toggle/camera-switch guards that suspend()/resume() go through.
+  usePerPeerVideoTier({
+    perPeerStats,
+    userWantsVideo: controls.videoEnabled,
+    applyTierToPeer: (peerId, tier) => {
+      applyQualityTierToPeer(peerId, tier).catch(() => { /* best effort */ });
+    },
   });
 
   // Initialize local stream on mount
@@ -717,6 +745,40 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       ? currentCall?.participants?.find((p) => (p.userId || p.participantId) === participantId)?.username
       : undefined) || '';
 
+  // Group calls — moderator "remove participant" (W6,
+  // `tasks/2026-08-13-group-calls-gap-analysis.md`). Conversation role is
+  // NOT on `CallParticipant` (that `role` field is call-session
+  // initiator/participant, unrelated) — same idiom as
+  // `useParticipantManagement`, cross-referenced against the conversation's
+  // own participant roster.
+  const { data: conversation } = useConversationQuery(currentCall?.conversationId);
+  const canKickParticipants = useMemo(() => {
+    if (!conversation || !user || conversation.type !== 'group') return false;
+    const membership = conversation.participants?.find((p) => p.userId === user.id);
+    return isParticipantModerator(membership?.role || 'member');
+  }, [conversation, user]);
+
+  const handleKickParticipant = useCallback(
+    async (participantId: string) => {
+      if (!currentCall) return;
+      try {
+        await callsService.removeParticipant(currentCall.id, participantId);
+        toast.success(t('toasts.participantRemoved'));
+        // No local store mutation here on purpose: the gateway broadcasts
+        // `SERVER_EVENTS.CALL_PARTICIPANT_LEFT` on success (fixed
+        // 2026-08-15), reconciled by the existing listener above for every
+        // participant, including this one.
+      } catch (error) {
+        logger.error('[VideoCallInterface]', 'Failed to remove participant', {
+          participantId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        toast.error(t('toasts.removeParticipantFailed'));
+      }
+    },
+    [currentCall, t]
+  );
+
   // Toggle fullscreen for a participant
   const handleToggleFullscreen = (participantId: string) => {
     setFullscreenParticipantId((current) => (current === participantId ? null : participantId));
@@ -839,6 +901,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                 removeRemoteStream(displayParticipant[0]);
                 removePeerConnection(displayParticipant[0]);
               }}
+              onKickParticipant={
+                canKickParticipants
+                  ? () => handleKickParticipant(displayParticipant[0])
+                  : undefined
+              }
             />
           </div>
         ) : (
@@ -883,6 +950,9 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
                 removeRemoteStream(participantId);
                 removePeerConnection(participantId);
               }}
+              onKickParticipant={
+                canKickParticipants ? () => handleKickParticipant(participantId) : undefined
+              }
             />
           );
         })}

@@ -38,6 +38,21 @@ import MeeshySDK
 /// cours de démontage. Corrompait le tas au point de faire sauter l'exécution
 /// dans une page non signée (`SIGKILL`/`CODESIGNING`) pendant
 /// `AG::Graph::UpdateStack::update()`, reproduit à 100 % au lancement.
+///
+/// **Campagne d'érasure `AnyView`, `ConversationView.swift`/`+Header.swift`
+/// (2026-08-17).** Le warm-up ci-dessous a cessé de suffire : le rendu forcé
+/// de `ConversationView` débordait TOUJOURS la pile, cette fois dans
+/// `bodyContent` (branches `messageSkeletonOverlay`/`LivingSummaryHost`) et
+/// dans la chaîne header (`floatingHeaderSection` → `expandedHeaderBand` →
+/// `expandedHeaderMidContent` → `headerButtonsCluster` →
+/// `readingModeAffordanceCluster`/`headerCallButtons`). Chaque maillon
+/// déclaré `some View` propage sa complexité au TYPE COMPOSITE de son
+/// appelant — un `AnyView` posé seulement au SITE D'APPEL ne suffit pas,
+/// l'appelant doit quand même résoudre le type concret avant de le boxer.
+/// Seule l'érasure à la DÉCLARATION de chaque maillon coupe la chaîne. Les
+/// six propriétés ci-dessus sont maintenant toutes `AnyView` — vérifié par
+/// 20+ relances consécutives sur device sans crash, drapeau `reading_modes`
+/// actif (mode réel, pas de contournement `.bubbles`).
 @MainActor
 enum ConversationFirstRenderWarmup {
     private static var done = false
@@ -59,6 +74,7 @@ enum ConversationFirstRenderWarmup {
         let start = CFAbsoluteTimeGetCurrent()
 
         warmUpViewModelKeyPaths()
+        warmUpReadingModeController()
 
         let epoch = Date(timeIntervalSince1970: 1_700_000_000)
         let conversation = MeeshyConversation(
@@ -124,6 +140,42 @@ enum ConversationFirstRenderWarmup {
         _ = vm.isRevalidating
         _ = vm.otherConversationsUnread
         NSLog("[ConversationFirstRenderWarmup] viewmodel keypaths warmed")
+    }
+
+    /// Même patron que `warmUpViewModelKeyPaths`, pour `ReadingModeController`
+    /// (2026-08-17, `Meeshy-2026-08-17-181310` env.) : `readingModeChipModel`
+    /// (`ConversationView`, section chip de mode) lit `readingModeController
+    /// .decision.reason` — première matérialisation du KeyPath `@Published
+    /// decision` (subscript `_enclosingInstance`) jamais vue avant ce lot
+    /// Focal (chip livré après le warm-up v1/v2). Sans ce troisième étage,
+    /// cette résolution de métadonnées avait lieu pour la première fois ~90
+    /// frames sous `layoutIfNeeded()` (traversée SwiftUI + AttributeGraph
+    /// jusqu'à `headerButtonsCluster`) : marge de pile insuffisante,
+    /// `EXC_BAD_ACCESS` dans le décodeur de mangling récursif
+    /// (`swift_getTypeByMangledName`/`Node`). Ici l'accès est à pile plate,
+    /// comme `warmUpViewModelKeyPaths` — le cache de métadonnées est global
+    /// au process, donc le rendu réel (celui du warm-up ET celui de l'écran
+    /// ouvert par l'utilisateur) le trouve déjà chaud.
+    private static func warmUpReadingModeController() {
+        let capabilities = ReadingModeOrchestrator.ReadingModeCapabilities(
+            availableModes: [.focal],
+            riverEligible: false,
+            riverEligibilityReason: ReadingModeOrchestrator.RiverEligibilityReason(
+                threshold: ReadingModeOrchestrator.riverEligibilityThreshold,
+                current: nil,
+                riverReason: .neverEligible
+            )
+        )
+        let controller = ReadingModeController(
+            conversationId: "metadata-warmup",
+            scope: .anonymous(participantId: "warmup"),
+            unreadCount: 0,
+            capabilities: capabilities,
+            isFlagEnabled: false
+        )
+        _ = controller.decision
+        _ = controller.mode
+        NSLog("[ConversationFirstRenderWarmup] reading mode controller warmed")
     }
 }
 #endif

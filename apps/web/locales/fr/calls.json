@@ -78,7 +78,12 @@
       "videoSuspended": "Vidéo en pause",
       "videoSuspendedHint": "Connexion faible · reprise auto",
       "fullscreen": "Plein écran",
-      "dragToMove": "Glisser pour déplacer"
+      "dragToMove": "Glisser pour déplacer",
+      "removeParticipant": "Retirer de l'appel",
+      "removeParticipantConfirmTitle": "Retirer {name} de l'appel ?",
+      "removeParticipantConfirmDescription": "{name} sera immédiatement déconnecté·e de cet appel. Cette personne pourra le rejoindre à nouveau tant qu'il reste actif.",
+      "removeParticipantConfirmAction": "Retirer",
+      "cancel": "Annuler"
     },
     "toasts": {
       "connectionError": "Erreur de connexion",
@@ -99,7 +104,9 @@
       "micPermissionDenied": "Accès à la caméra/au microphone refusé.",
       "micNotFound": "Aucune caméra ou microphone trouvé.",
       "micAccessFailed": "Impossible d'accéder à la caméra/au microphone : {message}",
-      "micAccessFailedGeneric": "Impossible d'accéder à la caméra/au microphone"
+      "micAccessFailedGeneric": "Impossible d'accéder à la caméra/au microphone",
+      "participantRemoved": "Participant retiré",
+      "removeParticipantFailed": "Échec du retrait du participant"
     },
     "permissions": {
       "title": {

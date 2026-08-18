@@ -316,10 +316,6 @@ struct ConversationView: View {
     /// retirée de la liste (critère §7 « un mode indisponible n'est jamais
     /// un écran vide »).
     let readingModeCapabilities: ReadingModeOrchestrator.ReadingModeCapabilities
-    /// Présentation de la feuille Lentille (§WS-7 travail 5, arbitrage
-    /// F-086bis) — ouverte par `ReadingModeChip`, jamais par le bouton Aa
-    /// (qui bascule Focal⇄Script directement, sans feuille).
-    @State private var isReadingModeLensPresented = false
     /// « Lire plus » Focal (spec Magnificence §3) — présentée par item :
     /// l'identité du payload est le message.
     @State private var focalReadMorePayload: FocalReadMorePayload?
@@ -848,17 +844,6 @@ struct ConversationView: View {
             .sheet(item: $focalReadMorePayload) { payload in
                 FocalReadMoreSheet(payload: payload)
             }
-            .sheet(isPresented: $isReadingModeLensPresented) {
-                ReadingModeLensSheet(
-                    rows: ReadingModeLensCatalog.rows(
-                        capabilities: readingModeCapabilities,
-                        currentMode: readingModeController.mode
-                    ),
-                    isDark: isDark,
-                    onSelect: { readingModeController.select($0) },
-                    onResetToAuto: { readingModeController.resetToAuto() }
-                )
-            }
     }
 
     private var bodyWithCovers: some View {
@@ -1282,9 +1267,17 @@ struct ConversationView: View {
             // the (empty) MessageListView so the layout stays stable
             // when the first batch lands and the placeholder fades out.
             if viewModel.paginationPhase.isBlockingSpinnerNeeded && viewModel.messages.isEmpty {
-                messageSkeletonOverlay
-                    .transition(.opacity)
-                    .zIndex(1)
+                // AnyView : `bodyContent` — même débordement de pile Swift au
+                // décodage de mangled name que la chaîne header (commentaires
+                // sur `floatingHeaderSection` plus haut), cette fois porté par
+                // le nombre de branches conditionnelles du ZStack top-level
+                // (2026-08-17). Chaque branche erasée réduit le type composite
+                // que `bodyContent` doit résoudre au 1er rendu.
+                AnyView(
+                    messageSkeletonOverlay
+                        .transition(.opacity)
+                        .zIndex(1)
+                )
             }
 
             // WS-9 (F-088) — le mode `.summary` route vers un HÔTE DÉDIÉ
@@ -1298,7 +1291,9 @@ struct ConversationView: View {
             // (100, toujours joignable) et de la barre d'erreur/quick-reaction
             // (97/99, sans objet en mode résumé).
             if readingModeController.mode == .summary {
-                LivingSummaryHost(
+                // AnyView : même coupe que ci-dessus (contribue au débordement
+                // de pile de `bodyContent`, 2026-08-17).
+                AnyView(LivingSummaryHost(
                     messages: viewModel.messages,
                     viewerId: viewModel.currentUserIdForView,
                     viewerUsername: AuthManager.shared.currentUser?.username,
@@ -1327,7 +1322,7 @@ struct ConversationView: View {
                             scrollState.scrollToMessageTrigger += 1
                         }
                     }
-                )
+                ))
                 .zIndex(80)
                 .transition(.opacity)
             }
@@ -1880,8 +1875,19 @@ struct ConversationView: View {
     // thread (dump segv du 2026-07-30 21:12, `__swift_instantiate…` dans la
     // closure du VStack). Même famille que expandedHeaderMidContent — couper
     // au niveau des ENFANTS du type décodé (leçon 5cdde93c4).
+    // AnyView à la déclaration (2026-08-17) : la coupe aux ENFANTS
+    // (`AnyView` sur chaque branche, commentaire ci-dessus) ne suffisait
+    // toujours pas — `floatingHeaderSection` elle-même reste un maillon
+    // `some View` dans le type composite de `bodyContent`, qui doit la
+    // résoudre en entier. Dernière coupe de la chaîne
+    // bodyContent→floatingHeaderSection→expandedHeaderBand→…→
+    // readingModeAffordanceCluster.
+    private var floatingHeaderSection: AnyView {
+        AnyView(floatingHeaderSectionBody)
+    }
+
     @ViewBuilder
-    private var floatingHeaderSection: some View {
+    private var floatingHeaderSectionBody: some View {
         VStack {
             if isAnonymous {
                 AnyView(anonymousHeaderBar)
@@ -1894,7 +1900,18 @@ struct ConversationView: View {
                 // les touches au-dessus des messages.
                 AnyView(EmptyView())
             } else {
-                expandedHeaderBand
+                // Oubliée lors de la coupe "leçon 5cdde93c4" (commentaire
+                // ci-dessus) : seule branche de ce VStack encore renvoyée en
+                // `some View` nu. `expandedHeaderBand` a depuis grossi (chip
+                // de mode de lecture, §WS-7/Focal) jusqu'à redevenir la
+                // branche la plus complexe — et donc la nouvelle cause du
+                // même débordement de pile au décodage de mangled name
+                // (2026-08-17, `ReadingModeController.decision` puis
+                // `__swift_instantiateConcreteTypeFromMangledNameV2`,
+                // toujours sous `expandedHeaderBand → … →
+                // readingModeAffordanceCluster`). Même traitement que ses
+                // branches sœurs.
+                AnyView(expandedHeaderBand)
             }
 
             if headerState.showSearch {
@@ -2026,13 +2043,26 @@ struct ConversationView: View {
     /// `floatingHeaderSection`). Le retour, l'avatar et le titre ne la
     /// suivent pas — on doit pouvoir quitter la conversation et savoir où on
     /// est, même en plein défilement.
-    private var headerButtonsCluster: some View {
-        HStack(spacing: 0) {
-            headerCallButtons.layoutPriority(1)
-            expandedHeaderSearchButton
-            readingModeAffordanceCluster
-        }
-        .hiddenWhileScrolling()
+    // AnyView : `some View` nu ici gardait la porte ouverte au même débordement
+    // que `expandedHeaderBand`/`expandedHeaderMidContent` (commentaires
+    // ci-dessus) — érasé un cran plus bas (le seul enfant
+    // `readingModeAffordanceCluster`) ne suffisait pas : l'APPELANT
+    // (`expandedHeaderMidContent`) doit quand même résoudre le type opaque
+    // COMPOSITE de `headerButtonsCluster` — TOUS ses enfants combinés,
+    // `headerCallButtons`/`expandedHeaderSearchButton` compris — avant de
+    // pouvoir appeler `AnyView(HStack { … headerButtonsCluster })` un cran
+    // plus haut. Seule l'érasure à LA DÉCLARATION de `headerButtonsCluster`
+    // coupe la chaîne au bon endroit (2026-08-17, même récursion
+    // `swift_getTypeByMangledName` malgré la première coupe).
+    private var headerButtonsCluster: AnyView {
+        AnyView(
+            HStack(spacing: 0) {
+                headerCallButtons.layoutPriority(1)
+                expandedHeaderSearchButton
+                readingModeAffordanceCluster
+            }
+            .hiddenWhileScrolling()
+        )
     }
 
     /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
@@ -2041,25 +2071,41 @@ struct ConversationView: View {
     /// contrat). Sous drapeau uniquement : `ReadingModeController` résout
     /// TOUJOURS `.bubbles` drapeau OFF (§WS-1), donc ce bloc disparaît
     /// intégralement — bit-à-bit identique à avant ce lot.
-    @ViewBuilder
-    private var readingModeAffordanceCluster: some View {
-        if readingModeController.mode != .bubbles {
-            ReadingModeChip(model: readingModeChipModel) {
-                HapticFeedback.light()
-                isReadingModeLensPresented = true
-            }
-            if readingModeController.mode == .focal || readingModeController.mode == .script {
-                // Bouton Aa — bascule DIRECTE Focal⇄Script, sans passer par la
-                // feuille (critère §7 : « Aa bascule Focal ⇄ Script
-                // instantanément »). `select` écrit la préférence collante ET
-                // publie le mode dans la même boucle (ReadingModeController,
-                // GELÉ F-080).
-                ReadingModeDensityButton(isDark: isDark) {
+    ///
+    /// AnyView à la DÉCLARATION (pas seulement au site d'appel) : la coupe
+    /// posée sur `headerButtonsCluster` seul ne suffisait pas — l'appelant
+    /// devait quand même résoudre CE type composite (deux branches
+    /// conditionnelles, `ReadingModeChip` + `ReadingModeDensityButton`)
+    /// avant de pouvoir le boxer, et le décodage de mangled name débordait
+    /// toujours la pile au 1er rendu (2026-08-17).
+    private var readingModeAffordanceCluster: AnyView {
+        guard readingModeController.mode != .bubbles else { return AnyView(EmptyView()) }
+        // P2 (spec Magnificence 17/08) : UN SEUL chip — tap = CYCLE des modes
+        // disponibles (loi pure ReadingModeCycle), appui long = menu natif
+        // listant tous les modes. Le bouton Aa a disparu avec sa bascule de
+        // densité : le cycle parcourt TOUS les modes ouverts par les
+        // capacités, et le menu remplace la feuille Lentille.
+        return AnyView(
+            ReadingModeChip(
+                model: readingModeChipModel,
+                menuRows: ReadingModeLensCatalog.rows(
+                    capabilities: readingModeCapabilities,
+                    currentMode: readingModeController.mode
+                ),
+                onCycle: {
                     HapticFeedback.light()
-                    readingModeController.select(readingModeController.mode.toggledDensity)
-                }
-            }
-        }
+                    guard let next = ReadingModeCycle.next(
+                        after: readingModeController.mode,
+                        availableInOrder: ReadingModeLensCatalog.displayOrder.filter {
+                            readingModeCapabilities.availableModes.contains($0)
+                        }
+                    ) else { return }
+                    readingModeController.select(next)
+                },
+                onSelect: { readingModeController.select($0) },
+                onAuto: { readingModeController.resetToAuto() }
+            )
+        )
     }
 
     /// Modèle pur du chip — `isAuto` distingue une décision de

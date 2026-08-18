@@ -201,6 +201,25 @@ type ScanOptions = {
   readonly excludedFiles?: ReadonlySet<string>;
 };
 
+// Borne de LECTURE (Q-145, 2026-08-17) : le jumeau jest de cette garde avait
+// été rendu déterministe par V4bis/B5 (« borner, pas relever le seuil ») —
+// ce fichier vitest ne l'avait jamais été, et le run complet le tuait au
+// timeout de 5 s (vert isolé à 2,9 s : contenu juste, budget faux). Un jeton
+// `behaviour-matrix:<id>` ne vit que dans du code ou de la doc de code —
+// lire bun.lock, les images ou les .jsonl d'audit ne peut RIEN découvrir.
+// Sens de sûreté : si un jeton vivait dans un type exclu, son id tomberait
+// dans `missing` et la garde ROUGIRAIT — l'exclusion ne peut pas verdir à
+// tort.
+const SCANNED_EXTENSIONS: ReadonlySet<string> = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
+  '.swift', '.kt', '.kts', '.md', '.sh', '.yml', '.yaml',
+]);
+
+function hasScannedExtension(fileName: string): boolean {
+  const dot = fileName.lastIndexOf('.');
+  return dot >= 0 && SCANNED_EXTENSIONS.has(fileName.slice(dot).toLowerCase());
+}
+
 /**
  * Parcourt récursivement `rootDir` et collecte tous les ids référencés via
  * le motif `behaviour-matrix:<id>`, tous fichiers confondus (hors
@@ -233,6 +252,7 @@ function scanBehaviourMatrixCoverage(rootDir: string, options: ScanOptions = {})
         continue;
       }
       if (!entry.isFile()) continue;
+      if (!hasScannedExtension(entry.name)) continue; // borne Q-145 — voir SCANNED_EXTENSIONS
 
       const path = join(dir, entry.name);
       if (excludedFiles.has(path)) continue; // le fichier de la garde lui-même — voir SELF_TEST_FILE_PATH
@@ -415,5 +435,23 @@ describe('behaviour-matrix — garde d\'ensemble déclarés == couverts (ARMÉE 
 
     expect(missing, `ids déclarés mais NON couverts par un test : ${missing.join(', ')}`).toEqual([]);
     expect(extra, `ids référencés par un test mais absents de behaviour-matrix.json : ${extra.join(', ')}`).toEqual([]);
-  });
+    // Budget explicite : ce témoin PARCOURT LE DÉPÔT ENTIER en synchrone
+    // (`walk` + `readFileSync` sur chaque fichier de test) — ~4,2 s seul sur un
+    // runner de CI, contre le `testTimeout` de 5 s par défaut de Vitest. La
+    // marge était donc de quelques centaines de millisecondes, et elle
+    // s'évapore dès que la suite complète tourne : les 82 autres fichiers se
+    // disputent le CPU, et ce test-ci dépasse.
+    //
+    // C'est le flake `packages/shared` que le cycle 61 bis n'avait pas su
+    // nommer (piste n°3, restée ouverte quatre cycles) : il ne rougissait
+    // jamais seul, seulement en suite, et son message — « Test timed out » —
+    // ne désignait aucune régression. Il n'y en avait pas : le témoin fait un
+    // travail d'I/O que 5 s ne payent pas.
+    //
+    // Le budget se resserre à CHAQUE fichier de test ajouté au dépôt, ce qui
+    // en fait une bombe à retardement pour tout lot un peu large — celui du
+    // cycle 63 en ajoute quatre. 60 s laissent la marge d'un ordre de
+    // grandeur, sans masquer une vraie régression : un balayage qui prendrait
+    // une minute signalerait un tout autre problème.
+  }, 60_000);
 });

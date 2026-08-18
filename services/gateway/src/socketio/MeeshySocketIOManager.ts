@@ -37,9 +37,11 @@ import { buildTranslationEvent } from './buildTranslationEvent';
 import { enqueueOfflineReactionEvent, type ReactionOfflineQueueParams } from './reactionOfflineQueue';
 import { enqueueForOfflineParticipants, type OfflineParticipantQueueParams } from './offlineParticipantQueue';
 import { emitUnreadCountsToRecipients } from './emitUnreadCountsToRecipients';
+import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
+  participantUserRooms,
   participantUserRoomTargets,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
@@ -52,6 +54,7 @@ import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { ConversationBridgeService } from '../services/ConversationBridgeService';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
@@ -87,6 +90,18 @@ import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
+
+/**
+ * Combien de conversations au plus reçoivent leur pont ✦ dans l'instantané de
+ * reconnexion (`_emitUnreadCountsSnapshot`).
+ *
+ * 30 — la taille de page par DÉFAUT de `GET /conversations`, délibérément, et
+ * pas un chiffre rond choisi au jugé : le pont ne se voit que sur une ligne
+ * affichée, et la première page est ce que le lecteur a sous les yeux quand le
+ * réseau revient. Le COMPTEUR, lui, n'est jamais borné — il part pour toutes
+ * les conversations du lecteur, comme avant.
+ */
+const BRIDGE_SNAPSHOT_LIMIT = 30;
 
 // Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
 // event replayed on reconnect for that offline-queue entry.
@@ -746,7 +761,7 @@ export class MeeshySocketIOManager {
           io: this.io,
           conversationId,
           participants: convParticipants.get(conversationId) ?? [],
-          events: [SERVER_EVENTS.READ_STATUS_UPDATED, SERVER_EVENTS.MESSAGE_READ_STATUS_UPDATED],
+          event: SERVER_EVENTS.READ_STATUS_UPDATED,
           payload: drainPayload,
         });
         logger.debug('drain delivery receipt emitted', { readerKey, isAnonymous, conversationId, latestMessageId, rooms });
@@ -1080,27 +1095,159 @@ export class MeeshySocketIOManager {
     this._drainPendingMessages(userId, isAnonymous).catch(err => {
       logger.warn('Failed to drain pending messages on connect', { userId, error: err });
     });
-    if (!isAnonymous) {
-      this._emitUnreadCountsSnapshot(socket, userId).catch(err => {
-        logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, error: err });
-      });
-    }
+    // Les DEUX identités, comme l'instantané de présence vingt lignes plus haut.
+    // Le `if (!isAnonymous)` qui se tenait ici n'exprimait aucune règle produit :
+    // il masquait une résolution de participant qui ne lisait que la colonne
+    // `userId`, donc rendait zéro ligne pour un invité de lien partagé. Le
+    // brancher sans corriger la lecture aurait été un no-op silencieux — la
+    // raison pour laquelle le trou a survécu à ses propres témoins.
+    this._emitUnreadCountsSnapshot(socket, userId, isAnonymous).catch(err => {
+      logger.warn('Failed to emit unread counts snapshot on reconnect', { userId, isAnonymous, error: err });
+    });
   }
 
-  private async _emitUnreadCountsSnapshot(socket: Socket, userId: string): Promise<void> {
+  /**
+   * Remet les pastilles d'aplomb à la reconnexion — le SEUL signal qui le
+   * fasse. La file hors-ligne rejoue l'aperçu, le rang et la promotion en tête
+   * de chaque ligne (`_drainedEventName` ne mappe que des événements de
+   * message) ; le COMPTEUR, lui, ne se calcule que côté serveur, depuis les
+   * curseurs de lecture.
+   *
+   * `readerKey` porte la CLÉ DE CONNEXION, pas un `User.id` : c'est `userId`
+   * pour un inscrit et `Participant.id` pour un invité de lien partagé — même
+   * convention que la file (`enqueueForOfflineParticipants` enfile sous
+   * `p.userId ?? p.id`), que `_dropEndedMemberships` et que
+   * `_emitDeliveryForDrainedMessages`. La résolution lisait auparavant la seule
+   * colonne `userId`, donc rendait ZÉRO ligne pour un invité, donc sortait en
+   * silence ; le site d'appel enterrait le trou sous un `if (!isAnonymous)` qui
+   * donnait l'omission pour délibérée. L'instantané de PRÉSENCE, dans la même
+   * méthode appelante, résolvait pourtant déjà les deux identités correctement.
+   *
+   * Ça privait de pastille exacte la population DOMINANTE d'une conversation
+   * ouverte par lien — et sans recours sur iOS/Android, qui n'ont aucun lecteur
+   * pour `message:pending-delivered`.
+   */
+  private async _emitUnreadCountsSnapshot(
+    socket: Socket,
+    readerKey: string,
+    isAnonymous: boolean
+  ): Promise<void> {
     try {
       const participantRows = await this.prisma.participant.findMany({
-        where: { userId, isActive: true },
-        select: { conversationId: true },
+        where: isAnonymous
+          ? { id: readerKey, isActive: true }
+          : { userId: readerKey, isActive: true },
+        // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
+        // de ponts ci-dessous sur les conversations que le lecteur va
+        // réellement voir. Cf. `BRIDGE_SNAPSHOT_LIMIT`.
+        select: { conversationId: true, conversation: { select: { lastMessageAt: true } } },
       });
       if (participantRows.length === 0) return;
       const conversationIds = participantRows.map(p => p.conversationId);
-      const unreadCounts = await this.readStatusService.getUnreadCountsForUser(userId, conversationIds);
+      // `getUnreadCountsForUser` résout DÉJÀ les deux identités en interne
+      // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
+      // au-dessus qui ne connaissait qu'une colonne.
+      const unreadCounts = await this.readStatusService.getUnreadCountsForUser(readerKey, conversationIds);
+
+      // Le pont ✦ voyage sur CE même événement (G-123). Il manquait ici, et
+      // l'omission n'était pas neutre : les deux clients recopient
+      // INCONDITIONNELLEMENT `bridge`, `undefined`/`nil` compris
+      // (`ConversationSyncEngine.handleUnreadUpdated`, et côté web
+      // `setConversationUnreadInCache(..., { bridge: data.bridge })` depuis
+      // REV-5/B1). La forme courte n'était donc pas un silence mais un ORDRE
+      // D'EFFACEMENT : chaque reconnexion — bascule réseau, retour d'arrière-
+      // plan, déploiement — retirait le pont de TOUTES les lignes du lecteur,
+      // y compris celles où il a des non-lus et où le pont est précisément ce
+      // qu'il cherche. Rien ne le remettait avant le prochain message reçu
+      // (la liste web tourne en `staleTime: Infinity`).
+      //
+      // Passe par CONVERSATIONS (`buildBridgeData`) et non par lecteurs : ici
+      // UN lecteur et N conversations, l'image miroir du fan-out d'envoi. Coût
+      // CONSTANT, celui que `GET /conversations` paie déjà — jamais une passe
+      // par conversation (le N+1 que REV-5/B2 a dû retirer du fan-out).
+      //
+      // Aucun `agent` (G-127) : l'étage agent reste réservé à
+      // `GET /conversations`. Une reconnexion touche toutes les conversations
+      // du lecteur d'un coup ; lui ouvrir un aller-retour HTTP par pont ferait
+      // payer le réveil du réseau au moment exact où il est le plus fragile.
+      // BORNÉE, et c'est la différence essentielle avec le fan-out d'envoi.
+      // Le fan-out porte UNE conversation ; cet instantané en porte TOUTES
+      // celles du lecteur — un compte qui suit 300 conversations soumettrait
+      // 300 branches `OR` à la fenêtre du service, à chaque reconnexion, alors
+      // que `GET /conversations` ne lui en soumet jamais plus d'une page.
+      // Le tri est celui de la LISTE elle-même (`lastMessageAt` décroissant) :
+      // les ponts construits sont exactement ceux des lignes que le lecteur a
+      // sous les yeux au retour du réseau. Les conversations plus anciennes
+      // gardent leur compteur exact — seul leur pont attend le prochain
+      // `GET /conversations`, qui le rendra en même temps que leur ligne.
+      const lastMessageAtByConversation = new Map(
+        participantRows.map(row => [
+          row.conversationId,
+          (row as { conversation?: { lastMessageAt?: Date } }).conversation?.lastMessageAt ?? null,
+        ])
+      );
+      const bridgeCandidates = [...unreadCounts]
+        .map(([conversationId, unreadCount]) => ({ conversationId, unreadCount }))
+        .filter(candidate => candidate.unreadCount > 0)
+        .sort(
+          (a, b) =>
+            (lastMessageAtByConversation.get(b.conversationId)?.getTime() ?? 0) -
+            (lastMessageAtByConversation.get(a.conversationId)?.getTime() ?? 0)
+        )
+        .slice(0, BRIDGE_SNAPSHOT_LIMIT);
+
+      // Les conversations RÉELLEMENT soumises à la passe. C'est cet ensemble —
+      // et non le résultat de la passe — qui décide de la forme de fil
+      // (cycle 63) : une conversation au-delà de la borne n'a pas été
+      // interrogée, le serveur n'a donc RIEN à en dire.
+      //
+      // Sans cette distinction, la borne posée au cycle 62 ne différait PAS son
+      // travail comme son commentaire l'annonçait (« seul leur pont attend le
+      // prochain `GET /conversations` ») : elle l'ANNULAIT. Les conversations
+      // hors page émettaient la forme courte, que les deux clients lisaient
+      // comme un ordre d'effacement — si bien que le correctif du cycle 62
+      // avait troqué un effacement GLOBAL contre un effacement de la QUEUE, à
+      // chaque reconnexion, sans que son propre témoin puisse le voir : la
+      // forme émise était identique dans les deux cas.
+      const submittedToPass = new Set(bridgeCandidates.map(candidate => candidate.conversationId));
+
+      let bridgeByConversation: ReadonlyMap<string, { bridge: ConversationBridge }> = new Map();
+      let bridgePassRan = true;
+      if (bridgeCandidates.length > 0) {
+        try {
+          bridgeByConversation = await this.bridgeService.buildBridgeData({
+            viewerId: readerKey,
+            candidates: bridgeCandidates,
+          });
+        } catch (error) {
+          // Best-effort, même posture que le fan-out et que la liste REST : un
+          // pont qui ne se calcule pas ne doit priver personne de sa pastille
+          // — ni, depuis le cycle 63, du pont qu'il a déjà en cache.
+          bridgePassRan = false;
+          logger.warn('bridge attach failed on reconnect snapshot, serving counts alone', {
+            readerKey,
+            error,
+          });
+        }
+      }
+
       for (const [conversationId, unreadCount] of unreadCounts) {
-        socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, { conversationId, unreadCount });
+        // Un compteur à ZÉRO n'entre jamais dans la passe (contrat gelé §3.2),
+        // et pourtant le serveur sait parfaitement qu'il n'a pas de pont : tout
+        // a été lu. Il l'affirme, il ne s'abstient pas — sinon un pont périmé
+        // survivrait à la lecture complète de sa conversation.
+        const knowsThereIsNoBridge = unreadCount === 0;
+        const answered = bridgePassRan && submittedToPass.has(conversationId);
+        socket.emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+          conversationId,
+          unreadCount,
+          ...(knowsThereIsNoBridge || answered
+            ? bridgeComputed(bridgeByConversation.get(conversationId)?.bridge)
+            : bridgeNotComputed()),
+        });
       }
     } catch (error) {
-      logger.warn('unread counts snapshot failed on reconnect', { userId, error });
+      logger.warn('unread counts snapshot failed on reconnect', { readerKey, isAnonymous, error });
     }
   }
 
@@ -2147,8 +2294,48 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * CORRECTION: Broadcaster le changement de statut d'un utilisateur à tous les clients
-   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen
+   * Diffuse une transition de présence (connexion / déconnexion) aux pairs qui
+   * AFFICHENT la pastille de cette personne.
+   *
+   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen, et le
+   * blocage bidirectionnel — même règle que `GET /users/presence`.
+   *
+   * **L'audience est faite de PERSONNES, pas de fils ouverts.** La pastille de
+   * présence se regarde très majoritairement HORS du fil : liste de
+   * conversations, écrans de contacts, en-têtes (`PRESENCE_DOT_CLASS` web,
+   * `PresenceState.dotColor` iOS). `conversation:<id>` ne pouvait donc pas être
+   * la seule adresse de l'événement, parce qu'un client la QUITTE en refermant
+   * le fil tout en restant connecté — `conversation:leave` →
+   * `ConversationHandler.handleConversationLeave` → `socket.leave(...)`, émis par
+   * `ConversationSocketHandler.deinit` (iOS) dès qu'une vue de conversation
+   * disparaît. La room que `AuthHandler` avait jointe à la connexion pour
+   * ATTEINDRE ce participant était démontée par un geste qui ne voulait dire que
+   * « je ne regarde plus ce fil ».
+   *
+   * Ce que ça coûtait, et pourquoi rien ne le rattrapait : `user:status` ne se
+   * répète pas, il ne marque que des TRANSITIONS. Un pair qui se connecte
+   * pendant que je suis ailleurs n'émettra plus rien tant qu'il reste en ligne,
+   * et `presence:snapshot` — le seul autre porteur de cette information — n'est
+   * envoyé qu'à l'authentification. Côté iOS, `PresenceManager` ne sonde jamais
+   * le réseau : son minuteur de 30 s ne fait que recalculer la DÉCROISSANCE
+   * 1/3/5 min depuis `lastActiveAt`. Une transition manquée ne se rattrapait
+   * donc pas d'elle-même : le pair restait éteint sur ma liste jusqu'à la
+   * prochaine reconnexion de socket — et ce, précisément pour les conversations
+   * que j'avais ouvertes, c'est-à-dire les miennes.
+   *
+   * Le remède suit la doctrine déjà écrite dans `emitToConversationParticipants` :
+   * un participant s'adresse par `userId ?? id`, dans une room personnelle que
+   * `AuthHandler` joint à la connexion et que RIEN ne fait quitter. Les rooms de
+   * conversation restent en tête de chaîne — l'élargissement n'est qu'ADDITIF,
+   * il ne retire aucun destinataire d'aujourd'hui — et le chaînage `.to()`
+   * garantit au plus une copie par socket, y compris pour celui qui siège dans
+   * les deux.
+   *
+   * Le prix est une requête `participant` de plus par transition, sur un chemin
+   * de connexion / déconnexion (jamais par message). C'est la MÊME requête que
+   * `_emitPresenceSnapshot` fait déjà à la connexion ; elle n'est délibérément
+   * pas mutualisée avec son cache, dont le TTL rendrait la LIVRAISON de la
+   * présence tributaire de la fraîcheur d'un cache cosmétique.
    */
   private async _broadcastUserStatus(userId: string, isOnline: boolean, isAnonymous: boolean): Promise<void> {
     try {
@@ -2180,12 +2367,26 @@ export class MeeshySocketIOManager {
           // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
           const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
 
-          // Broadcaster uniquement dans la conversation du participant anonyme
-          this.io.to(ROOMS.conversation(participant.conversationId)).emit(SERVER_EVENTS.USER_STATUS, {
-            userId: participant.id,
-            username: displayName,
-            isOnline,
-            lastActiveAt
+          // L'invité de lien partagé n'a QU'UNE conversation : « la room
+          // refermée » y vaut la totalité de sa présence, là où un inscrit n'en
+          // perdrait qu'une sur N. Le chemin à 1 objet n'est pas le cas facile,
+          // c'est celui qu'aucune redondance n'absorbe — d'où le même
+          // élargissement qu'à la porte inscrite, et non un raccourci.
+          const peers = await this.prisma.participant.findMany({
+            where: { conversationId: participant.conversationId, isActive: true },
+            select: { id: true, userId: true },
+          });
+          emitToConversationParticipants({
+            io: this.io,
+            conversationId: participant.conversationId,
+            participants: peers,
+            event: SERVER_EVENTS.USER_STATUS,
+            payload: {
+              userId: participant.id,
+              username: displayName,
+              isOnline,
+              lastActiveAt
+            },
           });
 
         }
@@ -2214,8 +2415,20 @@ export class MeeshySocketIOManager {
             select: { conversationId: true }
           });
 
-          // Broadcaster dans toutes les conversations de l'utilisateur (batch: 1 emit au lieu de N)
-          const rooms = participantRows.map(p => ROOMS.conversation(p.conversationId));
+          // Un seul emit pour toute l'audience (chaînage `.to()`), et une
+          // audience faite de personnes : les rooms de conversation amorcent la
+          // chaîne — aucun destinataire d'aujourd'hui n'est retiré — puis
+          // `participantUserRooms` y ajoute la room personnelle de chaque
+          // participant, seule adresse qui survive à la fermeture d'un fil.
+          const conversationIds = participantRows.map(p => p.conversationId);
+          const conversationRooms = conversationIds.map(id => ROOMS.conversation(id));
+          const peers = conversationIds.length > 0
+            ? await this.prisma.participant.findMany({
+                where: { conversationId: { in: conversationIds }, isActive: true },
+                select: { id: true, userId: true },
+              })
+            : [];
+          const rooms = participantUserRooms(peers, conversationRooms);
           if (rooms.length > 0) {
             // PRIVACY: exclure les sockets des viewers en relation de blocage
             // bidirectionnel avec ce user — même règle que GET /users/presence

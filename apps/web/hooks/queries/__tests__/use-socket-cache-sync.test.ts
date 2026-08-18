@@ -13,6 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { Message, Conversation } from '@/types';
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 
 // Capture the new-message listener registered by the hook
 let capturedMessageListener: ((message: Message) => void) | null = null;
@@ -34,6 +35,8 @@ let capturedLinkMessageNewListener: ((data: any) => void) | null = null;
 // Capture the preferences listener — `user:preferences-updated` is a three-scope union
 let capturedPreferencesListener: ((data: any) => void) | null = null;
 let capturedPreferencesReorderedListener: ((data: any) => void) | null = null;
+// Capture the unread-updated listener — REV-5/B1, maillon 3 (le pont ✦ voyage sur cet événement)
+let capturedUnreadUpdatedListener: ((data: any) => void) | null = null;
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -54,7 +57,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
       capturedTranslationListener = listener;
       return () => { capturedTranslationListener = null; };
     }),
-    onUnreadUpdated: jest.fn(() => () => {}),
+    onUnreadUpdated: jest.fn((listener: (data: any) => void) => {
+      capturedUnreadUpdatedListener = listener;
+      return () => { capturedUnreadUpdatedListener = null; };
+    }),
     onTranscription: jest.fn((listener: (data: any) => void) => {
       capturedTranscriptionListener = listener;
       return () => { capturedTranscriptionListener = null; };
@@ -1369,5 +1375,91 @@ describe('useSocketCacheSync — la ligne de liste ne recule pas sur un `message
     const cached = cachedConversations(queryClient);
     expect(cached.map((c) => c.id)).toEqual(['conv-1', 'conv-2']);
     expect(cached[0].lastMessage?.id).toBe('m-newer');
+  });
+});
+
+/**
+ * REV-5/B1 — maillon 3 : `conversation:unread-updated` porte désormais le
+ * pont ✦ (G-123, `ConversationUnreadUpdatedEventData.bridge`,
+ * `emitUnreadCountsToRecipients.ts:150-154`). Jumeau exact de
+ * `ConversationSyncEngine.handleUnreadUpdated` (`ConversationSyncEngine.swift`,
+ * `updated[idx].bridge = event.bridge`) : le champ est recopié
+ * INCONDITIONNELLEMENT — `undefined` compris, qui EFFACE un pont déjà en
+ * cache plutôt que de le laisser périmer.
+ */
+describe('useSocketCacheSync — le pont ✦ voyage sur `conversation:unread-updated`', () => {
+  beforeEach(() => {
+    capturedUnreadUpdatedListener = null;
+    jest.clearAllMocks();
+  });
+
+  const bridge: ConversationBridge = {
+    kind: 'fallback',
+    unreadCount: 4,
+    suggestedMode: 'focal',
+    data: { authors: ['Alice'], extraAuthorCount: 0, messageCount: 4 },
+  };
+
+  it('un événement porteur de `bridge` écrit le pont dans la ligne de liste', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-1', type: 'group', unreadCount: 0 } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
+
+    expect(capturedUnreadUpdatedListener).not.toBeNull();
+
+    act(() => {
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 4, bridge });
+    });
+
+    const [row] = cachedConversations(queryClient);
+    expect(row.unreadCount).toBe(4);
+    expect(row.bridge).toEqual(bridge);
+  });
+
+  it('un `bridge: null` EXPLICITE efface un pont déjà en cache (jumeau Swift : `.cleared`)', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
+
+    act(() => {
+      // Le gateway AFFIRME l'absence de pont — `bridge: null` — quand
+      // `unreadCount` retombe à 0 ou que sa passe a tourné sans rien annoncer
+      // pour ce lecteur (contrat gelé §3.2).
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 0, bridge: null });
+    });
+
+    const [row] = cachedConversations(queryClient);
+    expect(row.unreadCount).toBe(0);
+    expect(row.bridge).toBeUndefined();
+  });
+
+  /**
+   * Cycle 63 — le témoin ci-dessus s'appelait « un événement SANS `bridge`
+   * EFFACE un pont déjà en cache », et il gelait la règle qui a coûté au
+   * cycle 62 le pont de TOUTES les lignes du lecteur à chaque reconnexion.
+   *
+   * L'omission n'a jamais voulu dire « il n'y a pas de pont » chez trois des
+   * quatre émetteurs serveur : elle voulait dire « je ne l'ai pas calculé »
+   * (instantané au-delà de sa borne, passe tombée, accusé de lecture). Le fil
+   * sépare désormais les deux, et le silence ne détruit plus rien.
+   */
+  it('un événement sans la CLÉ `bridge` ne touche pas au pont en cache — le serveur n’a pas calculé', () => {
+    const { queryClient, wrapper } = createTestHarness('conv-1');
+    seedConversations(queryClient, [
+      { id: 'conv-1', type: 'group', unreadCount: 4, bridge } as unknown as Conversation,
+    ]);
+    renderHook(() => useSocketCacheSync({ conversationId: 'other-conv', enabled: true }), { wrapper });
+
+    act(() => {
+      capturedUnreadUpdatedListener!({ conversationId: 'conv-1', unreadCount: 2 });
+    });
+
+    const [row] = cachedConversations(queryClient);
+    expect(row.unreadCount).toBe(2);
+    expect(row.bridge).toEqual(bridge);
   });
 });

@@ -110,3 +110,69 @@ export function resolveOtherDirectParticipantUser(
     }
   );
 }
+
+/**
+ * Cible du geste d'AVATAR — behaviour-matrix:L12 (« … exclusion avatar 70 pt
+ * … conservée » : cette zone d'exclusion n'existe que parce que l'avatar
+ * porte un geste à lui).
+ *
+ * Parité littérale avec le jumeau iOS déjà bâti sur la maquette normative
+ * (`apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift:778` et
+ * l'énumération `ConversationAvatarMenu` du même fichier) :
+ *
+ *   - conversation DIRECTE ⇒ `profile` : l'avatar ouvre le profil de l'AUTRE
+ *     participant (iOS : `onViewProfile` → `ConversationListView.swift:734`
+ *     `handleProfileView`, feuille de profil ; web : DIRECTIVE PRODUIT DU
+ *     2026-08-17 — `UserProfileModal` (`components/profile/UserProfileModal.tsx`),
+ *     avec le lien `/u/{username}` conservé comme `href` réel de repli — voir
+ *     `AvatarAffordance` dans `LentilleRow.tsx`).
+ *   - tout autre type ⇒ `conversationInfo` : les infos de la conversation,
+ *     « jamais d'entrée profil (un avatar de groupe n'ouvre pas un profil
+ *     unique) » — `ConversationAvatarMenu.groupRoles`.
+ *
+ * `null` quand rien n'est atteignable (DM sans autre participant résoluble,
+ * ou groupe dont l'appelant ne branche pas les infos) : l'appelant ne rend
+ * alors AUCUNE affordance plutôt qu'un contrôle inerte — un bouton qui ne
+ * fait rien ment au clavier et au lecteur d'écran.
+ */
+export type LentilleAvatarTarget =
+  | { readonly kind: 'profile'; readonly href: string; readonly name: string; readonly username: string }
+  | { readonly kind: 'conversationInfo'; readonly name: string };
+
+/** Segment de route du profil — `username` d'abord (l'idiome du dépôt), `id` en repli. */
+function profileRouteSegment(user: { id?: string; username?: string }): string | null {
+  const segment = user.username ?? user.id;
+  return segment ? encodeURIComponent(segment) : null;
+}
+
+export function resolveLentilleAvatarTarget(input: {
+  readonly conversation: Pick<Conversation, 'type' | 'participants'>;
+  readonly currentUserId: string | null | undefined;
+  readonly conversationName: string;
+  readonly hasConversationInfo: boolean;
+}): LentilleAvatarTarget | null {
+  const { conversation, currentUserId, conversationName, hasConversationInfo } = input;
+
+  if (conversation.type === 'direct') {
+    const other = resolveOtherDirectParticipantUser(conversation, currentUserId) as
+      | { id?: string; username?: string; displayName?: string }
+      | null;
+    if (!other) return null;
+    const segment = profileRouteSegment(other);
+    if (!segment) return null;
+    return {
+      kind: 'profile',
+      href: `/u/${segment}`,
+      // Décodé — `segment` est `encodeURIComponent`é pour l'URL, mais
+      // `UserProfileModal.userId` (donc `usersService.getUserProfile`) veut
+      // le username/id BRUT, exactement ce que `/u/[id]/page.tsx` reçoit de
+      // `useParams` (Next.js décode déjà le segment de route). Un double
+      // encodage ferait chercher un utilisateur `%40bob` inexistant.
+      username: decodeURIComponent(segment),
+      name: other.displayName ?? other.username ?? conversationName,
+    };
+  }
+
+  if (!hasConversationInfo) return null;
+  return { kind: 'conversationInfo', name: conversationName };
+}

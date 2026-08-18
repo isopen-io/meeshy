@@ -576,6 +576,25 @@ export class CallEventsHandler {
           }
         });
         if (result.count === 0) {
+          // Group-calls gap analysis S3 — every clearRingingTimeout() call
+          // site pairs with a genuine terminal write (leaveCall/endCall/
+          // markCallAsMissed/the GC sweeps), so reaching this branch with a
+          // timer that actually fired means the call is non-terminal
+          // (active/connecting/reconnecting) — most commonly a GROUP call
+          // where one pair answered (the `call:signal` answer handler
+          // deliberately leaves this timer armed past the first answer for
+          // `conversation.type === 'group'`, see its comment) while other
+          // invited members never joined at all. Notify those unresponded
+          // members without touching the call itself: no status write, no
+          // ENDED/MISSED broadcast, no active-call-claim release — the
+          // ongoing call for whoever did answer is completely unaffected.
+          // No-ops harmlessly (via createMissedCallNotifications' own
+          // unresponded-empty guard) once every invited member has joined.
+          await this.createMissedCallNotifications(callId).catch((err: unknown) => {
+            logger.error('createMissedCallNotifications failed for a still-active call past its ring deadline', {
+              callId, err: callErrorMessageOf(err, String(err))
+            });
+          });
           return; // already transitioned
         }
         const missedContext = await this.prisma.callSession.findUnique({
@@ -1289,6 +1308,7 @@ export class CallEventsHandler {
     userId: string,
     callId: string
   ): Promise<{
+    id: string;
     participantId: string;
     userId: string;
     mode: Awaited<ReturnType<CallService['getCallSession']>>['mode'];
@@ -1302,6 +1322,7 @@ export class CallEventsHandler {
       );
       if (!activeParticipant) return null;
       return {
+        id: activeParticipant.id,
         participantId: activeParticipant.participantId,
         userId: activeParticipant.participant?.userId ?? activeParticipant.participantId,
         mode: callSession.mode,
@@ -3456,8 +3477,25 @@ export class CallEventsHandler {
 
         // Transition to active on first successful signal exchange
         if (data.signal.type === 'answer') {
-          // Phase 1 fix P2 — answer signal transitions ringing → active
-          this.callService.clearRingingTimeout(data.callId);
+          // Phase 1 fix P2 — answer signal transitions ringing → active.
+          //
+          // Calling-stack audit (group-calls gap analysis S3) — this must NOT
+          // clear the call-wide ring timer for a GROUP call. `ringingTimeouts`
+          // is keyed by callId, not by pair: in a mesh call to N callees, the
+          // FIRST pair to complete SDP negotiation used to cancel the timer
+          // for the entire call, so every callee who never answered at all
+          // (never even opened the app) permanently lost their missed-call
+          // notification — the ring-timeout callback that would eventually
+          // run `createMissedCallNotifications` via `getUnrespondedParticipants`
+          // simply never fired again for that call. Direct 1:1 calls keep the
+          // original immediate clear (nothing left to wait for once the only
+          // callee answers). For a group call the timer is left armed; when
+          // it fires at its original deadline `buildRingingTimeoutHandler`'s
+          // now-active branch runs the notify-only path (no call-state
+          // mutation) — a no-op once everyone has actually joined.
+          if (callSession.conversation?.type !== 'group') {
+            this.callService.clearRingingTimeout(data.callId);
+          }
           // §4.6 — negotiation between the answerer (userId) and the offerer
           // (targetUserId) is complete, so any buffered offer left over on
           // EITHER of their own two slots is now stale. Vague 139 — this used
@@ -3690,9 +3728,21 @@ export class CallEventsHandler {
             // authoritative endCall()→leaveCall() delegation below performs
             // the actual DB/state cleanup; this is purely the instant,
             // in-memory notification for the room.
+            //
+            // Identity-space fix (Vague 142, 2026-08-17): `participantId`
+            // here MUST be `CallParticipant.id` (this row's own primary
+            // key) — the same identity space `call:leave`/`call:force-leave`
+            // use (see `participant.id` a few dozen lines above/below) and
+            // the one every client's `removeParticipant`/roster lookup is
+            // keyed on (doc comment above this class, "call:participant-left's
+            // participantId porte authentiquement CallParticipant.id").
+            // `endParticipantId` (used everywhere else in this branch, for
+            // `endCall()`/`clearBufferedOfferFor`) is deliberately the OTHER
+            // identity space — `CallParticipant.participantId`, the FK to
+            // `Participant.id` — and must not be reused here.
             socket.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.PARTICIPANT_LEFT, {
               callId: data.callId,
-              participantId: endParticipantId,
+              participantId: endParticipantDetail!.id,
               userId,
               mode: endParticipantDetail!.mode
             } as CallParticipantLeftEvent);

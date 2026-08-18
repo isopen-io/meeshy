@@ -86,6 +86,24 @@ const LONG_PRESS_DURATION_MS = 420;
 /** "Annulé par... mouvement (>quelques px)" — pas de cote normative connue ; seuil documenté ici. */
 const LONG_PRESS_CANCEL_DISTANCE_PX = 8;
 
+/**
+ * behaviour-matrix:L12 — « … exclusion avatar 70 pt … conservée ».
+ *
+ * Zone d'exclusion des DEUX gestes d'aperçu (appui long ET clic droit) : un
+ * descendant qui porte ce marqueur possède son propre geste, et l'aperçu du
+ * rang ne doit pas le lui voler. Posé aujourd'hui par l'affordance d'avatar
+ * de `LentilleRow` (profil d'un DM / infos de conversation) — la transposition
+ * web des 70 pt d'iOS, qui sont une géométrie de zone tactile sans équivalent
+ * ici : un marqueur suit l'élément quel que soit son habillage, une mesure en
+ * pixels dériverait au premier changement de gabarit.
+ */
+const PRESS_EXEMPT_ATTRIBUTE = 'data-lentille-press-exempt';
+
+function isPressExempt(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest(`[${PRESS_EXEMPT_ATTRIBUTE}]`) !== null;
+}
+
 export interface LentillePeekProps {
   readonly conversation: Conversation;
   readonly t: LentilleRowTranslate;
@@ -128,27 +146,20 @@ export interface LentillePeekProps {
 }
 
 /**
- * ÉCART CONTRAT↔CODE, signalé et non contourné (même classe que le
- * `activeParticipantCount: null` d'iOS) : le modèle `Conversation` du web ne
- * porte AUCUNE date de dernière lecture — re-prouvé, `packages/shared/types/
- * conversation.ts` n'expose `lastReadAt` que sur `ConversationReadCursor`, et
- * `apps/web/lib/conversations/delta-sync.ts` le dit noir sur blanc (« une
- * frontière LOCALE que le modèle web ne porte pas »). iOS lit
- * `conversation.userState.lastReadAt` (`LentilleReadingModeContext.swift`).
- *
- * Lu ici DÉFENSIVEMENT — exactement le patron de `resolveRowBridge`
- * (`LentilleConversationListMount.tsx`) pour le champ `bridge` : le jour où
- * le payload le porte, la valeur arrive sans qu'aucune signature ne change ;
- * d'ici là, `null`, que la loi traite comme une absence (documenté dans
- * `resolveOrchestratorDecision`). CONSÉQUENCE HONNÊTE, à porter en revue
- * REV-4 : `null` n'est PAS neutre pour cette loi — au-delà du plancher de
- * non-lus de la branche d'absence, l'encoche annoncera « AUTO · Résumé » là
- * où iOS, qui connaît la date, annoncerait « AUTO · Focal ». Aucune décision
- * de LECTURE n'en dépend aujourd'hui (le mux de fil web est un autre
- * chantier) : seul le LIBELLÉ prédictif est concerné.
+ * REV-5/B1 — le modèle `Conversation` du web porte désormais `lastReadAt`
+ * (`packages/shared/types/conversation.ts`, jumeau de
+ * `conversation.userState.lastReadAt` côté iOS,
+ * `LentilleReadingModeContext.swift`) : `transformConversationData` le copie
+ * depuis le fil au même titre que le pont ✦ (`transformers.service.ts`).
+ * L'écart REV-4 (« null n'est pas neutre pour cette loi, l'encoche annonce
+ * "AUTO · Résumé" quand iOS annoncerait "AUTO · Focal" ») se referme donc
+ * ici de lui-même — SANS branche nouvelle : `null` reste le repli honnête
+ * tant qu'aucun curseur n'existe pour cette conversation (compte non lu
+ * jamais ouvert), exactement le cas que `resolveOrchestratorDecision`
+ * documente déjà comme une absence légitime.
  */
 function resolveLastOpenedAt(conversation: Conversation): Date | null {
-  return (conversation as { lastReadAt?: Date }).lastReadAt ?? null;
+  return conversation.lastReadAt ?? null;
 }
 
 export function LentillePeek({
@@ -282,6 +293,9 @@ export function LentillePeek({
   const handlePointerDown = useCallback(
     (event: React.PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return;
+      // Zone d'exclusion (L12) — la pression commence sur un élément qui a
+      // son propre geste : rien n'est armé, donc rien n'est à annuler.
+      if (isPressExempt(event.target)) return;
       pointerStartRef.current = { x: event.clientX, y: event.clientY };
       attachScrollCancel();
       longPressTimerRef.current = setTimeout(() => {
@@ -311,6 +325,10 @@ export function LentillePeek({
 
   const handleContextMenu = useCallback(
     (event: React.MouseEvent) => {
+      // Zone d'exclusion (L12) — sur l'avatar, le clic droit reste celui du
+      // navigateur (ouvrir le profil dans un nouvel onglet, copier le lien) :
+      // ni `preventDefault`, ni aperçu.
+      if (isPressExempt(event.target)) return;
       event.preventDefault();
       clearLongPressTimer();
       openPeek(false);
@@ -375,6 +393,10 @@ export function LentillePeek({
             onClick={(event) => event.stopPropagation()}
             className={cn(
               'absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full',
+              // Q-142/R5-7 — AU-DESSUS de la couverture d'ouverture du rang
+              // (`LentilleRow`, `ROW_CONTROL_Z`) : le ⋮ garde son geste alors
+              // que la couverture recouvre toute la boîte du rang.
+              'z-20',
               'opacity-0 group-hover:opacity-100 hover:bg-accent focus-visible:opacity-100 transition-opacity'
             )}
           >

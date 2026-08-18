@@ -1,5 +1,136 @@
 # @meeshy/gateway
 
+## 1.29.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - la présence n'était adressée qu'au fil, où la pastille ne se regarde pas [cycle 66]
+  - l'invité de lien partagé rejoignait sa seule room sans réessai [cycle 65]
+  - l'accusé de lecture ne part plus deux fois — l'alias sans client est retiré [cycle 64] (#3195)
+  - lire le compteur par `userState`, le proxy legacy n'existe plus
+  - per-peer adaptive bitrate/tier degradation [Vague 143] (#3192)
+  - le pont ✦ avait deux formes pour trois phrases — « je n'ai pas calculé » effaçait [cycle 63]
+  - la garde de matrice vitest borne enfin sa lecture — B5 porté au jumeau (trouvaille Q-145)
+  - group-hangup fast path leaked the participant FK into PARTICIPANT_LEFT [Vague 142] (#3187)
+  - `try?` aplatit l'optionnel — la liaison conditionnelle en trop ne compilait pas
+  - l'encoche lit la décision du serveur — suggestedMode branché [R6-5]
+  - drop stale/replayed renegotiation offers and answers (security audit) (#3182)
+  - le pont ✦ gagne un troisième état — le silence ne détruit plus [cycle 63]
+  - le lecteur d'écran entend le pont ✦ que l'œil voit [Q-140/L16-iOS]
+  - scroll-to-bottom control surfaces an offline pill (#3189)
+  - le profil s'ouvre en modale depuis l'auteur d'un message [profile-modal]
+  - borner la passe de ponts de la reconnexion à une page de liste [cycle 62]
+  - wire the email notification toggle (#3185)
+  - la reconnexion effaçait le pont ✦ de TOUTES les lignes [cycle 62]
+  - le rail des vivants s'alimente enfin — typing et salve ✦ [lentille-fidelity]
+  - ligne 2 — le non-lu se lit, la sourdine grise le pont [lentille-fidelity]
+  - ligne 1 du rang — grammaire « Nom · heure », favori et pastilles de tags [lentille-fidelity]
+  - l'avatar du rang Lentille ouvre le profil, jamais la conversation [lentille-fidelity]
+  - « Bulles » par défaut, décision produit provisoire du 2026-08-17 [default-bubbles]
+  - le fil Focal/Script affiche toutes les données du message [focal-parity]
+  - le pont ✦ traverse enfin du payload au rang [REV-5/B1]
+  - P2 — le chip de mode unique : tap = cycle, appui long = menu ; le bouton Aa et la feuille Lentille tirent leur reverence
+  - aucun type de message ne rend une rangée vide [focal-empty]
+  - la pastille de reconnexion existait, et le serveur la refusait aux invités (#3183)
+  - un lien à l'historique privé garde sa porte de jonction [anon-join]
+  - le handshake socket nomme la session anonyme [anon-join]
+  - l'identité anonyme n'occupe plus l'emplacement du jeton JWT [anon-join]
+  - ConversationView — débordement de pile Swift au 1er rendu (démarrage app cassé)
+  - wire moderator "remove from call" to the REST kick endpoint (W6) (#3177)
+  - la loupe obeit a une regle STRICTE — zone exacte, plafond absolu, messages seuls
+  - live presence dot on a direct conversation's header (#3181)
+  - first answer in a group call silenced the rest's missed-call notification (#3173)
+  - le pont ✦ survit à une lecture PARTIELLE — dernier émetteur instruit (#3191)
+  - le pont ✦ survit à une lecture PARTIELLE [cycle 63]
+  - le pont du fan-out socket cesse de payer 5 requêtes par destinataire [REV-5/B2]
+
+## 1.28.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - ScrollTimePill consomme la loi d'activité de défilement [V4ter/B3]
+  - la garde R15 voit la peau de lecture du tronc [V4ter/B3-RED]
+  - isDisabled manquant dans Entry(...) — régression introduite par R-135
+  - identité hors bulle, contour sérialisé sans découpe [R-136/§7ter-A5-A6]
+  - dégrise Rivière dans les menus quand éligible [R-135]
+  - swipe-to-delete and swipe-to-mark-read (#3178)
+  - ConversationFirstRenderWarmup — démontage synchrone, plus de course avec le premier rendu réel
+  - la Magnificence — loupe continue, fond accentue sans bord, Lire plus scrollable
+  - les clés Rivière entrent au catalogue — plus de français par défaut échappé [R-133 erratum]
+  - GatewayBridgeProvider — NSLock async-context lock/unlock interdits par Swift 6
+  - le memo de LentilleRow refuse enfin quelque chose [V4bis/R4-6]
+  - la passe de perspective et l'élection démarrent en prod [V4bis/B1]
+  - MeeshyAudioSignature stops swallowing real FileManager failures (#3175)
+  - peau Rivière — rendu SVG overlay, grille rang-majeur, mêmes lois, mêmes tokens [R-134]
+  - les 6 actions du ⋮ atteignables sous drapeau Lentille [V4bis/B3]
+  - pagination et branches vides rendues au chemin Lentille [V4bis/B2]
+  - la liste rejouait toutes ses pages sur trois déclencheurs socket [cycle 60]
+  - tokens `river` + peau iOS Canvas/Path — la Rivière devient visible [R-131+R-133]
+  - audio a plat fidele maquette — deux tenues decidees par l'election
+  - main ne compilait plus — ISO8601DateFormatter statiques non Sendable
+  - la garde de matrice devient déterministe à froid [V4bis/B5]
+  - débouché de lecture non écrivant adossé à l'observer, sans generator ni livraison [G-126]
+  - check-law-literals ne confond plus docstring et code — S-003 durci [V4bis/B4]
+  - RiverLaneResolver — miroir Swift de la loi Rivière, 53 vecteurs rejoués [R-132]
+  - rejoinActiveCall() gates on microphone permission like answerCall() (#3159)
+  - résumé de l'observer borné à une plage de messages, format une ligne [G-125]
+  - invite by SMS from the Discover tab (#3172)
+  - la ligne de liste reculait quand un message arrivait dans le désordre [cycle 60]
+  - le témoin d'index 0 de la carte ignorait le halo posé dessous
+  - replying to a reply now prefills @username in the composer (#3169)
+  - la liste de conversations rejouait toutes ses pages à chaque retour de réseau [cycle 59]
+  - paginate the notification list (#3162)
+  - le lien partagé ouvre la conversation dans la vue courante (#3157) [skip ci]
+  - le masquage personnel d'un message n'atteignait jamais les autres appareils [cycle 54] (#3113)
+  - show a live presence dot on direct conversation rows (#3161)
+  - la socket des notifications pouvait mourir définitivement, en silence [cycle 58]
+  - track mood status impressions and views (#3158)
+  - ESLint plantait avant de lire une ligne — trois causes empilées
+  - le rattrapage des réactions dépensait le budget dont il dépend [cycle 57] (#3154)
+  - MediaSaveCoordinator no longer swallows a real removeItem failure (#3155)
+  - record post views and show author-only reach stats (#3153)
+  - userId-change teardown left reconnect-signal refs stale, unlike cleanup() (#3152)
+  - le lien partagé ouvre la conversation dans la vue courante, la jonction passe en modale
+  - let viewers delete their own comments and replies (#3151)
+  - editing the last message left the Prism card translating the pre-edit text (#3101)
+  - main ne compilait plus — NSLock.lock/unlock sont noasync dans bridgeFor async
+  - le defilement suit enfin la courbe — compensation d'offset des corrections de layout sous la fenetre
+  - invite friends by email from Discover (#3149)
+  - le serveur promet cinq fois que « les pairs se réalignent au prochain sync » — il n'y en avait pas [cycle 56] (#3143)
+  - 14 échecs du flux Focal triés (0 régression code, 14 témoins recalibrés)
+  - la décoration de focus redevient éprouvable derrière son interrupteur
+  - GatewayBridgeProvider — injection au point de composition [G-124]
+  - décode et relaie le pont ✦ et la préférence de lecture serveur [G-124]
+  - call:media-toggled's remote mute/camera indicator never updated for a registered peer (#3123)
+  - answerCallReady() gates on microphone permission like answerCall() (#3128)
+  - câblage focus card — trois points d'entrée, une préférence [WL-108]
+  - focus card + encoche « AUTO · <décision> » [WL-108]
+  - élection de la focus card côté liste [WL-108]
+  - focal — citation, médias, capsule date, rangée pont [WF-112]
+  - perspective .thread, élection, pilule jour·heure [WF-111]
+  - FocalRow — rangée plate du fil, densité Script [WF-110]
+  - ReadingModeMenu + LentillePeek — 3 chemins, une préférence [LWS-11/WL-106]
+  - useLentillePerspective + useScrollActivity [LWS-10/WL-104]
+  - stickers, pilule, rail, squelette Lentille [LWS-10/WL-103]
+  - LentilleRow + LentilleBridgeLine — rang plat, pont ✦ [LWS-10/WL-102]
+  - mux Lentille sous drapeau — dynamic, boundary, typing [LWS-10/WL-101]
+  - resolveLentilleFlag — résolveur pur du drapeau, unique décideur [LWS-10/WL-100]
+  - étage agent du pont ✦ — intersection exacte, repli déterministe C2, paire E7 [G-127]
+  - le mode lent d'une conversation est enfin APPLIQUÉ (#3154)
+  - une partie d'un tête-à-tête pouvait faire TAIRE l'autre [cycle 56]
+  - retire `USER_STATUS` de CLIENT_EVENTS — déclaration parasite [cycle 60]
+  - la Rivière borne son axe, nomme la ligne qu'on lit, et porte le message en entier [R-130/R3]
+  - la Rivière navigue sur deux axes, ses branches naissent et meurent [R-130/R2]
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.12.0
+
 ## 1.27.0
 
 ### Minor Changes

@@ -22,12 +22,21 @@
  *     §5, lignes WF-110..113 ne citent que rangée/perspective/citation/
  *     médias/capsule/pont) — documenté ici comme écart de périmètre assumé,
  *     pas un oubli. Le rapport WF-113 le reprend.
+ *
+ * PROFIL EN MODALE — directive produit du 2026-08-17. L'état d'ouverture
+ * (« quel username la modale montre-t-elle ? ») vit ICI, UNE SEULE fois pour
+ * tout le fil — jamais une `UserProfileModal` montée par `FocalRow` (patron
+ * déjà établi par `LentillePeek`/`ReadingModeMenu` côté liste : un menu
+ * unique, pas un par rangée). `onOpenProfile` descend, STABLE
+ * (`useCallback`, aucune dépendance), jusqu'à `FocalIdentityHeader` via
+ * `FocalRow` — la fermeture littérale y romprait le `memo` de `FocalRow`.
  */
 'use client';
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Message } from '@meeshy/shared/types';
 import { useI18n } from '@/hooks/use-i18n';
+import { useAuth } from '@/hooks/use-auth';
 import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { useScrollActivity } from '@/hooks/lentille/use-scroll-activity';
 import { useFocalPerspective } from '@/hooks/lentille/use-focal-perspective';
@@ -35,6 +44,7 @@ import { FocalRow, type FocalDensity } from './FocalRow';
 import { FocalDateCapsule } from './FocalDateCapsule';
 import { FocalTimePill } from './FocalTimePill';
 import { formatDayTimePillLabel, formatFocalDateCapsuleLabel, isNewCalendarDay } from './focal-row-utils';
+import { UserProfileModal } from '@/components/profile/UserProfileModal';
 
 /**
  * Duck-typée à dessein (mêmes 5 champs que `LentilleRow`/`ConversationView`
@@ -58,6 +68,20 @@ export interface FocalThreadProps {
   readonly density?: FocalDensity;
   readonly scrollContainerRef: React.RefObject<HTMLDivElement | null>;
   readonly onNavigateToMessage?: (messageId: string) => void;
+  /**
+   * Parité de données 2026-08-17 — l'identité de conversation et du lecteur,
+   * portée jusqu'aux composants du tronc que la rangée monte désormais
+   * (réactions, accusés, pièces jointes, rappel d'appel). `ConversationMessages`
+   * les tient déjà et les passe VERBATIM à `MessagesDisplay` sur le chemin
+   * historique : la branche Focal reçoit exactement les mêmes, ni plus ni
+   * moins — sans quoi un lecteur anonyme perdait ses réactions et la
+   * suppression de pièce jointe n'avait pas de jeton.
+   */
+  readonly conversationId?: string;
+  readonly conversationType?: React.ComponentProps<typeof FocalRow>['conversationType'];
+  readonly isAnonymous?: boolean;
+  readonly currentAnonymousUserId?: string;
+  readonly onImageClick?: (attachmentId: string) => void;
 }
 
 function isOptimisticMessage(message: Message): boolean {
@@ -70,8 +94,18 @@ export function FocalThread({
   density = 'focal',
   scrollContainerRef,
   onNavigateToMessage,
+  conversationId,
+  conversationType,
+  isAnonymous,
+  currentAnonymousUserId,
+  onImageClick,
 }: FocalThreadProps) {
   const { t, locale } = useI18n('conversations');
+  // Jeton porté jusqu'à `MessageAttachments` (suppression de pièce jointe) —
+  // MÊME lecture que la vue Bulles (`BubbleMessageNormalView`,
+  // `bubble-message/FocalRow`) : un magasin d'auth, jamais une requête (la
+  // garde WF-113 « aucun useQuery dans la peau Focal » reste vraie).
+  const { token } = useAuth();
 
   // Cast ciblé : `getUserLanguagePreferences` est typé contre l'alias `User`
   // de `@/types` (un troisième alias, distinct de `SocketIOUser` ET du
@@ -134,6 +168,19 @@ export function FocalThread({
     [onNavigateToMessage]
   );
 
+  // Directive produit 2026-08-17 — un seul état d'ouverture pour tout le
+  // fil (voir docstring de fichier). `null` ⇒ modale fermée ; le username
+  // survit à la fermeture (pas de flash de contenu vide pendant l'animation
+  // de sortie de Radix) puisque `UserProfileModal` ne monte son contenu que
+  // `open && userId`.
+  const [profileModalUsername, setProfileModalUsername] = useState<string | null>(null);
+  const handleOpenProfile = useCallback((username: string) => {
+    setProfileModalUsername(username);
+  }, []);
+  const handleProfileModalOpenChange = useCallback((open: boolean) => {
+    if (!open) setProfileModalUsername(null);
+  }, []);
+
   return (
     <div data-testid="focal-thread" data-density={density}>
       <FocalTimePill label={pillLabel} visible={pillVisible} />
@@ -167,10 +214,23 @@ export function FocalThread({
               registerRow={registerRow}
               setAlphaCeiling={setAlphaCeiling}
               onQuoteJump={onQuoteJump}
+              conversationId={conversationId}
+              conversationType={conversationType}
+              isAnonymous={isAnonymous}
+              currentAnonymousUserId={currentAnonymousUserId}
+              token={token || undefined}
+              onImageClick={onImageClick}
+              onOpenProfile={handleOpenProfile}
             />
           </div>
         );
       })}
+
+      <UserProfileModal
+        open={profileModalUsername !== null}
+        onOpenChange={handleProfileModalOpenChange}
+        userId={profileModalUsername}
+      />
     </div>
   );
 }

@@ -1694,7 +1694,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (1 sélection → direct sans titre ; ≥2 → groupe avec titre saisi) →
       `ConversationRepository.create` → navigation vers le chat créé
       (popUpTo conversations). 14 tests verts (6 logique + 8 VM)
-- [~] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
+- [x] Live presence dot on a direct conversation's row/header (parity iOS `ConversationListView`'s
       `presenceManager.presenceState(for: conversation.participantUserId)`) — **data plumbing done
       (2026-08-12, slice `conversation-list-live-presence`)**; **row dot shipped 2026-08-17** (slice
       `conversation-list-presence-dot`). Confirmed a real, categorical gap: `ApiConversation.participants`
@@ -1717,9 +1717,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       shape as the earlier `contacts-mood-emoji-presence` slice). Pure Compose glue — no new logic to
       test (`TDD-COVERAGE.md`'s documented exemption: `@Composable` param threading is out of the JVM
       gate; the testable decision, `presenceStateFor`, already has its 5 dedicated `ConversationListViewModelTest`
-      cases from the foundation slice). **Chat header dot remains open** — a separate call site, not
-      attempted this run. +9 tests carried over unchanged from the foundation slice (4 `ConversationAccentTest`,
-      5 `ConversationListViewModelTest`), mutation-proven on the direct-type gate and the snapshot merge.
+      cases from the foundation slice). +9 tests carried over unchanged from the foundation slice (4
+      `ConversationAccentTest`, 5 `ConversationListViewModelTest`), mutation-proven on the direct-type
+      gate and the snapshot merge. **Chat header dot shipped 2026-08-17** (slice
+      `chat-header-presence-dot`) — port of iOS `ConversationView.headerPresenceState`; unlike iOS,
+      Android's chat header has no avatar to dot (`ChatScreen`'s existing 10dp circle next to the
+      title is an unconditional conversation-accent identity marker, not a presence indicator), so a
+      new small 8dp dot is added ADJACENT to it — additive, never replacing the accent dot — shown
+      only for a direct conversation and only while `meeshyPresenceDotColor` returns non-null (offline
+      = no dot, same rule everywhere else). `ChatUiState` gains `directPeerUserId` (computed via the
+      same `otherParticipantUserId(currentUserId)` reused verbatim) + `presenceByUserId` +
+      `headerPresence(nowEpochMillis): PresenceState?`, mirroring `ConversationListUiState
+      .presenceStateFor` exactly. `ChatViewModel.observePresence()` is a byte-for-byte mirror of
+      `ConversationListViewModel`'s identically-named function, called from `init`. +3
+      `ChatViewModelTest` (live presence resolves in a direct conversation, null for a group even
+      with live data, null before any presence data arrives).
 - [x] Story tray + per-conversation story rings — `StoryTray` (ring gradient si non-vu, gris sinon,
       badge sur sa propre story) wired as the conversation list's `header` (`MeeshyApp.kt`).
       Re-verified 2026-08-15 — already fully documented under the `:feature:stories` bullet above
@@ -2578,8 +2590,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `AffordanceMessageMappingTest` 5 mapping). Typing-in-control now live: pure `ScrollControlContent.of`
       (Hidden/Typing/Unread/Plain) folds the typing roster into the control with **typing taking priority
       over the unread count** (iOS `ConversationScrollControlsView` rule), rendered as a `TypingPill`
-      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Pending:** offline
-      indicator (needs a `NetworkMonitor` flow — iOS hard-codes `false`), slow-scroll search state.
+      (slice `chat-typing-in-control`, 2026-07-07, +10 tests). **Offline indicator shipped
+      2026-08-17** (slice `chat-scroll-offline-indicator`): `ChatViewModel` already computed
+      `isOffline` from `NetworkConditionMonitor`, but only fed it to `toBubbles` (the per-message
+      hourglass) — never exposed at the top level or passed to `ScrollControlContent.of`. New
+      `ScrollControlContent.Offline` variant, priority confirmed by reading iOS
+      `ConversationScrollControlsView.swift` directly (not a paraphrase): `isSearchingQuotedMessage
+      > hasUnreadContent (unread OR typing) > isOffline > plain chevron` — Android has no
+      quoted-message-search state, so the relevant tier is Typing/Unread > Offline > Plain,
+      consistent with the already-shipped Typing-over-Unread rule. `ChatUiState.isOffline` fed from
+      the SAME collector that already computes it for the hourglass. New `OfflinePill` (mirrors
+      `TypingPill`, `Icons.Filled.WifiOff`, neutral `textSecondary` tint rather than accent — signals
+      connectivity, not conversation identity). **Surpasses iOS**: the SDK's `ConversationScrollControlsView`
+      fully supports `isOffline`, but its one call site (`ConversationView+ScrollIndicators.swift`)
+      hardcodes `false` — the indicator never actually shows in the live iOS app today; Android wires
+      it to a real `NetworkConditionMonitor` reading. +5 `ScrollControlContentTest` + 2
+      `ChatViewModelTest`. Strings ×4 EN/FR/ES/PT. **Still open:** slow-scroll search state (a
+      separate, unrelated sub-gap — the search TopAppBar's own local-vs-remote posture, not
+      attempted this run).
 - [~] Typing indicators (header + inline) — inline indicator live via pure `:feature:chat` `TypingParticipants`
       keyed roster SSOT (userId-keyed dedup so two same-named typists stay distinct + refresh-to-tail +
       self-exclusion + blank-name→userId fallback) + `TypingLabel` presentation (None/One/Two/Many), driven
@@ -5141,7 +5169,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `UPDATE_SETTINGS` sender. `SettingsViewModel.updateNotifications` now persists to the device-local store
       instantly (UI SSOT) **then** enqueues the sync + wakes the worker on a real `cmid`. The PATCH is idempotent,
       so a delivery retry is harmless (no rollback needed). +15 tests. Surpasses iOS, whose preference write is
-      online-only. **Still open:** the email channel toggle wiring (the field syncs, the UI row is pending).
+      online-only. **Email channel toggle shipped 2026-08-17** (slice
+      `settings-email-notification-toggle`): `UserNotificationPreferences.emailEnabled` already
+      synced end-to-end through `NotificationPreferenceSyncBody` — the field just had no
+      `SettingsViewModel` intent and no `SettingsScreen` row. New `setEmailEnabled(enabled)`
+      (mirrors `setSoundEnabled`'s `updateNotifications { it.copy(...) }` shape) + a
+      `NotificationToggleRow` placed right after Push, matching iOS `NotificationSettingsView`'s
+      order (Push → Email → Sound → Vibration). Unlike Sound/Vibration/NewMessage on Android
+      (gated `enabled = notifications.pushEnabled`), the Email row is **not** gated on push —
+      iOS's `notifToggle` helper carries no such dependency for any of its rows, and email is a
+      genuinely independent delivery channel. +1 test (`setEmailEnabled_persists`). 1 new string
+      across EN/FR/ES/PT.
 - [x] Privacy settings (visibility, contacts, media/data, encryption preference) — **shipped**
       (slice `settings-privacy-preferences`, 2026-07-11). Port of iOS `PrivacySettingsView` +
       the visibility/contacts/media legs of `PrivacyPreferences`. **Reuses the existing**

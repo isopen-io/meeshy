@@ -623,10 +623,43 @@ prochain refetch complet — mais la liste de conversations du web tourne en
 `staleTime: Infinity` : sans poussee, la pastille garde sa valeur precedente
 INDEFINIMENT. Elle ne vieillit pas, elle ment.
 
-Un seul emetteur, `emitUnreadCountsToRecipients` (`emitUnreadCountsToRecipients.ts`),
-partage par tous les appelants. L'exclusion porte sur l'AUTEUR du message, jamais
-sur l'acteur : c'est la seule identite dont le compteur ne peut pas bouger (ses
-propres messages ne comptent jamais dans ses non-lus).
+Un seul emetteur POUR L'ENVOI, `emitUnreadCountsToRecipients`
+(`emitUnreadCountsToRecipients.ts`), partage par tous les appelants d'envoi.
+L'exclusion porte sur l'AUTEUR du message, jamais sur l'acteur : c'est la seule
+identite dont le compteur ne peut pas bouger (ses propres messages ne comptent
+jamais dans ses non-lus).
+
+**Mais l'evenement lui-meme a QUATRE emetteurs**, et cette ligne a longtemps dit
+le contraire — c'est ce qui a permis a trois d'entre eux de diverger en silence
+(cycles 62 et 63). Les trois autres ne poussent pas un compteur qui BOUGE, ils
+le RESYNCHRONISENT :
+
+| Emetteur | Quand | Calcule-t-il le pont ✦ ? |
+|---|---|---|
+| `emitUnreadCountsToRecipients` | envoi / suppression (table ci-dessus) | oui, en UN appel pour tous les destinataires |
+| `MeeshySocketIOManager._emitUnreadCountsSnapshot` | reconnexion, toutes conversations du lecteur | oui, borne aux 30 lignes les plus recentes |
+| `broadcastReadStatus` | accuse de lecture, vers les autres appareils de l'acteur | oui, seulement si la lecture est PARTIELLE |
+| `ConversationHandler` | `conversation:join` | non |
+
+### Le champ `bridge` porte TROIS etats, pas deux
+
+Les deux clients recopient `bridge` INCONDITIONNELLEMENT dans leur cache de
+liste. Ce qui arrive ECRIT, y compris quand rien n'arrive — un emetteur qui omet
+le champ n'est donc pas muet, il ordonne un effacement. Le contrat porte les
+trois phrases qu'un emetteur peut avoir a tenir :
+
+| forme sur le fil | ce que ca veut dire | ce que le client fait |
+|---|---|---|
+| `bridge: {…}` | voici le pont de CE lecteur | il l'ecrit |
+| `bridge: null` | j'ai calcule, il n'y en a pas | il EFFACE |
+| cle ABSENTE | je n'ai pas calcule | il GARDE le sien |
+
+`bridgeComputed()` / `bridgeNotComputed()` (`unreadBridgeField.ts`) sont les deux
+seules facons d'ecrire ce champ — aucun emetteur ne construit l'objet a la main.
+`unreadCount === 0` releve du PREMIER : le contrat gele §3.2 prouve l'absence de
+pont sans ouvrir de requete. Une passe qui TOMBE, ou une conversation au-dela de
+la borne de l'instantane de reconnexion, relevent du second — se taire ne coute
+rien, et `null` y ordonnerait un effacement qu'aucun calcul ne justifie.
 
 | Instant | Appelant | Ce qui bouge |
 |---|---|---|

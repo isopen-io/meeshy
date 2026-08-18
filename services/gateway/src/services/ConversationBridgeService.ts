@@ -22,6 +22,17 @@
  * plafond est GLOBAL (`windowLimit`) et la troncature se DÉCLARE
  * (`isComplete: false`) au lieu de se taire.
  *
+ * Cette loi vaut pour les DEUX passes que ce service expose, qui sont
+ * exactement l'image l'une de l'autre :
+ *   - `buildBridgeData`           — N conversations × 1 lecteur (liste REST) ;
+ *   - `buildBridgeDataForViewers` — 1 conversation × N lecteurs (fan-out
+ *     socket, REV-5/B2).
+ * La seconde existe parce qu'un fan-out qui appelait la PREMIÈRE une fois par
+ * destinataire payait ses 5 requêtes PAR destinataire — un N+1 reconstitué
+ * par l'appelant, à chaque message envoyé. Les deux passes lisent le même
+ * ensemble de messages et rendent la même forme ; elles ne diffèrent que par
+ * l'axe qu'elles batchent.
+ *
  * ── 2. Droits de lecture ────────────────────────────────────────────────────
  * Les clauses de filtre ne sont pas réécrites ici : ce sont celles de
  * `MessageReadStatusService.getUnreadCountsForUser` — `deletedAt: null`,
@@ -93,7 +104,9 @@ import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridg
 import {
   NO_PERSONAL_HIDING,
   applyPersonalHistoryHiding,
+  exclusiveFloorMsFor,
   loadPersonalHistoryHidingByConversation,
+  loadPersonalHistoryHidingByUser,
   type PersonalHistoryHiding,
 } from './personalHistoryFilter';
 import { resolveAttachmentType } from './ConversationMessageStatsService';
@@ -180,6 +193,17 @@ export interface BuildBridgeDataParams {
    * même convention que le chargeur batché.
    */
   readonly hidingByConversation?: ReadonlyMap<string, PersonalHistoryHiding>;
+  /**
+   * Curseurs DÉJÀ chargés par la passe, par `Participant.id` du lecteur —
+   * R6-6 : `routes/conversations/core.ts` lit déjà `conversationReadCursor`
+   * pour peupler `orchestratorInputs.lastOpenedAt` (mêmes participants,
+   * même table) ; fourni ⇒ la requête interne n'est pas rejouée. Absent ⇒
+   * comportement inchangé (la passe lit elle-même, comme avant R6-6).
+   */
+  readonly cursorsByParticipant?: ReadonlyMap<
+    string,
+    { readonly lastReadAt: Date | null; readonly lastReadMessageCreatedAt: Date | null }
+  >;
   /** Entrées d'orchestrateur par conversation (facultatif, cf. ci-dessus). */
   readonly orchestratorInputs?: ReadonlyMap<string, BridgeOrchestratorInput>;
   /** Plafond global de la fenêtre agrégée. Défaut : `DEFAULT_BRIDGE_WINDOW_LIMIT`. */
@@ -199,6 +223,39 @@ export interface BuildBridgeDataParams {
   readonly agent?: BridgeAgentRangeSummaryClient;
 }
 
+/**
+ * Un LECTEUR candidat au pont sur UNE conversation — l'image miroir de
+ * `BridgeCandidate` (REV-5/B2).
+ */
+export interface BridgeViewer {
+  /**
+   * `User.id` du lecteur — ou `Participant.id` pour un anonyme, exactement le
+   * même contrat que `viewerId` de `BuildBridgeDataParams`. C'est aussi la
+   * CLÉ de la map rendue : le fan-out adresse ses destinataires par cet
+   * identifiant (`ROOMS.user(userId ?? id)`), pas par `Participant.id`.
+   */
+  readonly viewerId: string;
+  /** Compteur AUTORITATIF de CE lecteur. Jamais recalculé ici. */
+  readonly unreadCount: number;
+}
+
+export interface BuildBridgeDataForViewersParams {
+  readonly conversationId: string;
+  /** Lecteurs + compteurs, tels que le fan-out les possède déjà. */
+  readonly viewers: readonly BridgeViewer[];
+  /** Entrées d'orchestrateur PAR LECTEUR (facultatif), clés = `viewerId`. */
+  readonly orchestratorInputs?: ReadonlyMap<string, BridgeOrchestratorInput>;
+  /** Plafond global de la fenêtre. Défaut : `DEFAULT_BRIDGE_WINDOW_LIMIT`. */
+  readonly windowLimit?: number;
+  /**
+   * Volontairement ABSENT de cette passe — il n'y a pas de paramètre `agent`
+   * ici, et ce n'est pas un oubli. Le chemin qui l'appelle est le fan-out
+   * socket, sur l'ACK d'envoi : lui ouvrir l'étage agent (G-127) ferait payer
+   * un aller-retour réseau par message envoyé. `GET /conversations` reste le
+   * SEUL appelant à pouvoir le fournir, via `buildBridgeData`.
+   */
+}
+
 type WindowMessageRow = {
   id: string;
   conversationId: string;
@@ -211,6 +268,14 @@ type WindowMessageRow = {
   } | null;
   attachments?: ReadonlyArray<{ mimeType?: string | null }> | null;
 };
+
+/**
+ * La même ligne, plus l'horodatage — la passe par LECTEURS compare les
+ * planchers en mémoire (un plancher par lecteur, aucun ne pouvant s'exprimer
+ * dans la clause commune), donc elle a besoin du `createdAt` que la passe par
+ * conversations laisse à la base.
+ */
+type ViewerWindowMessageRow = WindowMessageRow & { createdAt: Date };
 
 const isNonBlank = (value?: string | null): value is string =>
   typeof value === 'string' && value.trim() !== '';
@@ -298,12 +363,20 @@ export class ConversationBridgeService {
 
       // ── Requêtes 2 (+3, 4) : curseurs et masquage personnel, batchés ──────
       // Le masquage n'est rechargé QUE si la passe ne l'a pas déjà : l'attache
-      // G-123 doit pouvoir le lui passer et ne payer que la fenêtre.
+      // G-123 doit pouvoir le lui passer et ne payer que la fenêtre. R6-6 :
+      // les curseurs suivent la MÊME règle — `core.ts` les a déjà lus pour
+      // `orchestratorInputs.lastOpenedAt` sur ces mêmes participants.
       const [cursors, hidingByConversation] = await Promise.all([
-        this.prisma.conversationReadCursor.findMany({
-          where: { participantId: { in: participantIds } },
-          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
-        }),
+        params.cursorsByParticipant
+          ? Promise.resolve(
+              participantIds
+                .filter((id: string) => params.cursorsByParticipant!.has(id))
+                .map((id: string) => ({ participantId: id, ...params.cursorsByParticipant!.get(id)! }))
+            )
+          : this.prisma.conversationReadCursor.findMany({
+              where: { participantId: { in: participantIds } },
+              select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+            }),
         params.hidingByConversation
           ? Promise.resolve(params.hidingByConversation)
           : loadPersonalHistoryHidingByConversation(this.prisma, {
@@ -461,6 +534,246 @@ export class ConversationBridgeService {
       // rend une map VIDE — chaque ligne perd son pont, aucune n'affiche un
       // pont faux.
       logger.warn('[ConversationBridgeService] bridge pass failed, serving no bridge', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return new Map();
+    }
+  }
+
+  /**
+   * Construit le pont ✦ d'UNE conversation pour PLUSIEURS lecteurs en un
+   * nombre constant de requêtes — l'image miroir de `buildBridgeData`
+   * (REV-5/B2).
+   *
+   * ── Pourquoi elle existe ────────────────────────────────────────────────
+   * `emitUnreadCountsToRecipients` attachait le pont en appelant
+   * `buildBridgeData` UNE FOIS PAR DESTINATAIRE, avec un candidat singleton.
+   * Chaque appel payait honnêtement ses 5 requêtes ; le fan-out en payait
+   * donc 5×N, sur le chemin d'envoi, avant de rendre la main. Le service
+   * n'était pas N+1 : son APPELANT le reconstituait, une conversation à la
+   * fois. Batcher l'autre axe supprime la croissance à la source.
+   *
+   * ── Le même nombre de requêtes, quel que soit N ─────────────────────────
+   *   1. `participant.findMany`            — les participants du lot, sur LA conversation
+   *   2. `conversationReadCursor.findMany` — les curseurs, sur ces participants
+   *   3. + 4. `loadPersonalHistoryHidingByUser` — masquage PAR LECTEUR, batché
+   *           (zéro requête si tous les destinataires sont anonymes — la forme
+   *            normale derrière un lien de partage)
+   *   5. `message.findMany`                — UNE fenêtre, la queue de la conversation
+   *
+   * ── Ce qui rend ce batch non trivial, et comment il est tenu ────────────
+   * Les droits de lecture diffèrent PAR LECTEUR : plancher de curseur,
+   * `clearHistoryBefore`, messages effacés pour lui seul, et l'exclusion de
+   * ses PROPRES messages. Aucun de ces quatre ne s'exprime dans une clause
+   * commune. Ils sont donc appliqués EN MÉMOIRE sur la fenêtre partagée,
+   * exactement comme `MessageReadStatusService.getUnreadCountsForParticipants`
+   * — le compteur qui accompagne ce pont — le fait déjà sur le même chemin,
+   * avec les MÊMES aides (`exclusiveFloorMsFor` fond la coupure d'historique
+   * dans le plancher de lecture, `hiddenMessageIds` reste un ensemble). Ce
+   * n'est pas une réécriture des règles : c'est la même réduction, partagée,
+   * donc le pont et le badge ne peuvent pas diverger.
+   *
+   * La requête, elle, ne porte que ce qui est COMMUN — `conversationId`,
+   * `deletedAt: null`, et le plus BAS des planchers. Elle ne filtre ni par
+   * `senderId` ni par message masqué : ces deux coupes appartiennent à un
+   * lecteur, et une clause qui les porterait retirerait à un lecteur des
+   * lignes qu'un autre a le droit de voir. Une clause plus LARGE que le droit
+   * de chacun, resserrée ensuite par lecteur, ne peut que montrer moins —
+   * jamais plus.
+   *
+   * ── Plafond ─────────────────────────────────────────────────────────────
+   * `windowLimit` est un PLAFOND de lignes, pas une taille de lecture : la
+   * queue d'une conversation calme en rend une poignée. Au-delà, la fenêtre
+   * est tronquée pour tout le monde et chaque lecteur dont la fenêtre retenue
+   * couvre moins que son compteur le DÉCLARE (`isComplete: false`) — même
+   * règle, mot pour mot, que la passe par conversations.
+   *
+   * Un lecteur sans rien à annoncer est ABSENT de la map (contrainte 3),
+   * et la map est indexée par `viewerId`, jamais par `Participant.id`.
+   */
+  async buildBridgeDataForViewers(
+    params: BuildBridgeDataForViewersParams
+  ): Promise<Map<string, ConversationBridgeEntry>> {
+    const result = new Map<string, ConversationBridgeEntry>();
+
+    // Contrainte 3, premier étage : un lecteur à jour n'entre pas dans la
+    // passe — il ne coûte AUCUNE requête et ne peut pas en ressortir.
+    const unread = params.viewers.filter((viewer) => viewer.unreadCount > 0);
+    if (unread.length === 0) return result;
+
+    const unreadByViewer = new Map(unread.map((viewer) => [viewer.viewerId, viewer.unreadCount]));
+    const viewerIds = [...unreadByViewer.keys()];
+
+    try {
+      // ── Requête 1 : les participants du lot, sur LA conversation ─────────
+      // Même résolution que la passe sœur : un `viewerId` est un `User.id`
+      // (inscrit) ou un `Participant.id` (anonyme). L'appartenance et
+      // `isActive` sont vérifiés ICI et pas délégués à l'appelant — un
+      // service qui nomme les auteurs de messages non lus ne délègue pas le
+      // droit de les lire (cf. l'injection refusée, en tête de fichier).
+      const participants = await this.prisma.participant.findMany({
+        where: {
+          conversationId: params.conversationId,
+          isActive: true,
+          OR: [{ id: { in: viewerIds } }, { userId: { in: viewerIds } }],
+        },
+        select: { id: true, userId: true, joinedAt: true },
+      });
+
+      if (participants.length === 0) return result;
+
+      const participantByViewer = new Map<string, (typeof participants)[number]>();
+      for (const participant of participants) {
+        if (unreadByViewer.has(participant.id)) participantByViewer.set(participant.id, participant);
+        if (participant.userId && unreadByViewer.has(participant.userId)) {
+          participantByViewer.set(participant.userId, participant);
+        }
+      }
+      if (participantByViewer.size === 0) return result;
+
+      const resolved = [...participantByViewer.values()];
+      const participantIds = [...new Set(resolved.map((p: any) => p.id))];
+
+      // ── Requêtes 2 (+3, 4) : curseurs et masquage PAR LECTEUR, batchés ───
+      // `loadPersonalHistoryHidingByUser` est le frère batché taillé pour
+      // cette forme exacte : UNE conversation, BEAUCOUP d'utilisateurs.
+      const [cursors, hidingByUser] = await Promise.all([
+        this.prisma.conversationReadCursor.findMany({
+          where: { participantId: { in: participantIds } },
+          select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true },
+        }),
+        loadPersonalHistoryHidingByUser(this.prisma, {
+          userIds: resolved.map((p: any) => p.userId),
+          conversationId: params.conversationId,
+        }),
+      ]);
+
+      // Position CHRONOLOGIQUE du curseur, jamais l'horloge murale — clause
+      // identique à `MessageReadStatusService` et à la passe sœur.
+      const cursorFloorById = new Map<string, Date | null>(
+        cursors.map((c: any) => [c.participantId, c.lastReadMessageCreatedAt ?? c.lastReadAt ?? null])
+      );
+      const lastReadAtById = new Map<string, Date | null>(
+        cursors.map((c: any) => [c.participantId, c.lastReadAt ?? null])
+      );
+
+      // Plancher de comptage PAR LECTEUR, en millisecondes : curseur (ou
+      // `joinedAt`) RELEVÉ par sa coupure d'historique, qui n'est rien
+      // d'autre qu'un plancher plus strict une fois dite en borne exclusive.
+      const windows = [...participantByViewer.entries()].map(([viewerId, participant]: [string, any]) => {
+        const hiding =
+          (participant.userId ? hidingByUser.get(participant.userId) : undefined) ?? NO_PERSONAL_HIDING;
+        const readFloorMs =
+          ((cursorFloorById.get(participant.id) ?? participant.joinedAt)?.getTime() ?? null) as number | null;
+        const cutoffMs = exclusiveFloorMsFor(hiding);
+        const floorMs =
+          cutoffMs === null
+            ? readFloorMs
+            : readFloorMs === null
+              ? cutoffMs
+              : Math.max(readFloorMs, cutoffMs);
+        return {
+          viewerId,
+          participant,
+          floorMs,
+          hiddenMessageIds:
+            hiding.hiddenMessageIds.length > 0 ? new Set(hiding.hiddenMessageIds) : null,
+          unreadCount: unreadByViewer.get(viewerId) ?? 0,
+        };
+      });
+
+      // Un plancher `null` (jamais lu, pas de `joinedAt`) retire la borne
+      // basse : la fenêtre commune doit alors couvrir toute l'histoire — sous
+      // le plafond. `reduce` et non `Math.min(...spread)`, pour la raison que
+      // `getUnreadCountsForParticipants` documente : ce chemin est le plus
+      // chaud du service et un groupe public peut faire exploser la pile.
+      const hasUnboundedFloor = windows.some((w) => w.floorMs === null);
+      const minFloorMs = hasUnboundedFloor
+        ? null
+        : windows.reduce((min, w) => ((w.floorMs as number) < min ? (w.floorMs as number) : min), Infinity);
+
+      const take = params.windowLimit ?? DEFAULT_BRIDGE_WINDOW_LIMIT;
+      if (take <= 0) return result;
+
+      // ── Requête 5 : UNE fenêtre commune, ordre ascendant ─────────────────
+      // Ni `senderId` ni `id.notIn` ici : les deux coupes sont par lecteur
+      // (cf. doc-comment). `id` est sélectionné parce que le masquage
+      // individuel se lit dessus.
+      const rows: ViewerWindowMessageRow[] = await this.prisma.message.findMany({
+        where: {
+          conversationId: params.conversationId,
+          deletedAt: null,
+          ...(minFloorMs !== null ? { createdAt: { gt: new Date(minFloorMs) } } : {}),
+        },
+        orderBy: { createdAt: 'asc' },
+        take,
+        select: {
+          id: true,
+          conversationId: true,
+          createdAt: true,
+          senderId: true,
+          messageType: true,
+          sender: {
+            select: {
+              displayName: true,
+              nickname: true,
+              user: { select: { displayName: true } },
+            },
+          },
+          attachments: { select: { mimeType: true } },
+        },
+      });
+
+      // ── Resserrement PAR LECTEUR, puis appel de la LOI ───────────────────
+      for (const viewerWindow of windows) {
+        const messages: BridgeMessage[] = [];
+        for (const row of rows) {
+          // Le lecteur n'a besoin que de ses `unreadCount` premiers non-lus —
+          // exactement ce que le `take: min(unreadCount, limit)` de la passe
+          // sœur lui rendait.
+          if (messages.length >= viewerWindow.unreadCount) break;
+          if (viewerWindow.floorMs !== null && row.createdAt.getTime() <= viewerWindow.floorMs) continue;
+          if (row.senderId === viewerWindow.participant.id) continue;
+          if (viewerWindow.hiddenMessageIds?.has(row.id)) continue;
+
+          const senderName = resolveAuthorName(row.sender);
+          if (senderName === null) continue; // innommable ⇒ écarté, jamais inventé
+          messages.push({
+            senderId: row.senderId,
+            senderName,
+            attachments: bridgeAttachmentsOf(row),
+          });
+        }
+
+        const data = buildSharedBridgeData({
+          messages,
+          viewerId: viewerWindow.participant.id,
+          unreadCount: viewerWindow.unreadCount,
+        });
+        if (data === null) continue; // ABSENT, jamais un pont vide
+
+        const lastReadAt = lastReadAtById.get(viewerWindow.participant.id) ?? null;
+        result.set(viewerWindow.viewerId, {
+          bridge: {
+            kind: 'fallback',
+            unreadCount: viewerWindow.unreadCount,
+            suggestedMode: this.resolveSuggestedMode(
+              viewerWindow.unreadCount,
+              params.orchestratorInputs?.get(viewerWindow.viewerId)
+            ),
+            data,
+            ...(messages.length < viewerWindow.unreadCount ? { isComplete: false } : {}),
+          },
+          ...(lastReadAt ? { lastReadAt } : {}),
+        });
+      }
+
+      return result;
+    } catch (error) {
+      // Même posture d'échec que la passe sœur : une map VIDE. Chaque
+      // destinataire perd son pont, aucun n'en reçoit un faux.
+      logger.warn('[ConversationBridgeService] viewer bridge pass failed, serving no bridge', {
+        conversationId: params.conversationId,
         error: error instanceof Error ? error.message : String(error),
       });
       return new Map();

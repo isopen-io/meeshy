@@ -54,7 +54,6 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
     READ_STATUS_UPDATED: 'read-status:updated',
-    MESSAGE_READ_STATUS_UPDATED: 'message:read-status-updated',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   },
   ROOMS: {
@@ -488,7 +487,6 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockEmit).toHaveBeenCalledWith('read-status:updated', expect.any(Object));
-    expect(mockEmit).toHaveBeenCalledWith('message:read-status-updated', expect.any(Object));
   });
 
   // Cette route portait la QUATRIÈME copie verbatim du fan-out d'accusés, et la
@@ -502,20 +500,39 @@ describe('POST /messages/:messageId/status — with socketIO manager', () => {
   // room reste donc nommée, mais par une autre chaîne, plus bas.
   it('adresse un participant sans compte par son participant id', async () => {
     (app as any).prisma.message.findFirst.mockResolvedValueOnce(readMessage());
-    (app as any).prisma.participant.findMany.mockResolvedValueOnce([
-      { id: PART_ID, userId: USER_ID },
-      { id: 'part-anonyme', userId: null },
-    ]);
+
+    // Le double distingue les DEUX lectures de participants que cette route
+    // fait maintenant : l'éventail des accusés (`{conversationId, isActive}`)
+    // et la résolution du lecteur par la passe de pont ✦ (`OR: [{id},
+    // {userId}]`, cycle 63). Un `mockResolvedValueOnce` servait la première
+    // lecture ARRIVÉE — la passe de pont partant en parallèle, l'éventail
+    // retombait sur le défaut et le témoin accusait un défaut d'adressage qui
+    // n'existait pas. Un double qui ne regarde pas sa clause décrit un autre
+    // programme dès qu'un second appelant apparaît.
+    const findMany = (app as any).prisma.participant.findMany;
+    const previous = findMany.getMockImplementation();
+    findMany.mockImplementation(async (args: any) =>
+      args?.where?.OR
+        ? [] // la passe de pont ne résout aucun participant ⇒ aucun pont, hors sujet ici
+        : [
+            { id: PART_ID, userId: USER_ID },
+            { id: 'part-anonyme', userId: null },
+          ]
+    );
     rooms.length = 0;
 
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
+    try {
+      const res = await app.inject({
+        method: 'POST', url: '/messages/' + MSG_ID + '/status',
+        payload: { status: 'read' },
+      });
 
-    expect(res.statusCode).toBe(200);
-    expect(rooms).toContain(`conversation:${CONV_ID}`);
-    expect(rooms).toContain('user:part-anonyme');
+      expect(res.statusCode).toBe(200);
+      expect(rooms).toContain(`conversation:${CONV_ID}`);
+      expect(rooms).toContain('user:part-anonyme');
+    } finally {
+      findMany.mockImplementation(previous ?? (async () => [{ userId: USER_ID }]));
+    }
   });
 });
 

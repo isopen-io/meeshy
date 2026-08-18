@@ -84,9 +84,26 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
     ...overrides,
   }) as unknown as Conversation;
 
+/**
+ * V4ter/B1 — behaviour-matrix:L16. Étendu au-delà de `lentille.typing.one` :
+ * l'aria-label (`LentilleRow.tsx`) route désormais AUSSI par ce `t` pour le
+ * segment non-lus (`lentille.a11y.unreadOne/Other`) et pour le pont
+ * (`resolveLentilleBridgeAriaText`, qui appelle `formatBridge`/
+ * `lentille.bridge.*` avec CE MÊME `t`). En production, ce `t` ET le `t` que
+ * `LentilleBridgeLine` obtient via `useI18n('conversations')` (mocké
+ * séparément plus haut dans ce fichier, pour le rendu VISIBLE) sont la MÊME
+ * fonction réelle (`useI18n.ts` réexporte `use-i18n.ts`) — les deux doubles
+ * de test sont donc étendus en miroir pour rester fidèles à cette égalité.
+ */
 const t = (key: string, params?: Record<string, unknown> | string) => {
-  if (typeof params === 'object' && params && 'name' in params) {
-    return key === 'lentille.typing.one' ? `${(params as any).name} écrit…` : key;
+  if (typeof params === 'object' && params) {
+    if (key === 'lentille.typing.one') return `${(params as any).name} écrit…`;
+    if (key === 'lentille.bridge.authorsOne') return String((params as any).name ?? '');
+    if (key === 'lentille.bridge.messagesOne') return `${(params as any).count} message`;
+    if (key === 'lentille.bridge.messagesOther') return `${(params as any).count} messages`;
+    if (key === 'lentille.a11y.unreadOne') return `${(params as any).count} message non lu`;
+    if (key === 'lentille.a11y.unreadOther') return `${(params as any).count} messages non lus`;
+    return key;
   }
   return key;
 };
@@ -96,7 +113,15 @@ describe('LentilleRow — rang', () => {
   // (rappel STABLE + donnée, pour que le `memo` du rang serve à quelque chose).
   // Le témoin y gagne : il vérifie désormais AUSSI que le rang referme sur SA
   // conversation, ce que l'ancienne fermeture littérale rendait invérifiable.
-  it('rend role=button avec tabIndex, et déclenche onSelect(conversation) au clic', () => {
+  /**
+   * Q-142/R5-7 — la RACINE n'est plus le contrôle : elle est un conteneur
+   * muet, et l'ouverture vit dans la couverture (`lentille-row-open`, patron
+   * « card action »). Ce témoin figure les DEUX faces du changement : ce qui
+   * a DISPARU de la racine (le rôle, l'arrêt de tabulation, le label — sans
+   * quoi `nested-interactive` reviendrait le jour où on les remettrait), et
+   * ce qui est APPARU sur la couverture, à l'identique.
+   */
+  it('Q-142/R5-7 — la racine est un conteneur MUET, la couverture est le vrai bouton', () => {
     const onSelect = jest.fn();
     const conversation = makeConversation();
     render(
@@ -110,14 +135,52 @@ describe('LentilleRow — rang', () => {
     );
 
     const row = screen.getByTestId('lentille-row');
-    expect(row).toHaveAttribute('role', 'button');
-    expect(row).toHaveAttribute('tabindex', '0');
-    row.click();
+    expect(row).not.toHaveAttribute('role');
+    expect(row).not.toHaveAttribute('tabindex');
+    expect(row).not.toHaveAttribute('aria-label');
+
+    const cover = screen.getByTestId('lentille-row-open');
+    expect(cover.tagName).toBe('BUTTON');
+    expect(cover).toHaveAttribute('type', 'button');
+    expect(cover.getAttribute('aria-label') ?? '').toContain('Équipe produit');
+    cover.click();
     expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(conversation);
   });
 
-  it('Enter et Espace déclenchent onSelect(conversation) (a11y clavier)', () => {
+  /**
+   * Q-142/R5-7 — la couverture rend la boîte du RANG ENTIER, padding compris.
+   * jsdom ne fait pas de mise en page : ce qui est vérifiable ici, c'est la
+   * PRESCRIPTION (insets négatifs par les tokens du padding, rayon du rang) —
+   * sans elle la zone cliquable rétrécirait silencieusement du padding.
+   */
+  it('Q-142/R5-7 — la couverture couvre la boîte du rang, padding compris (insets négatifs par les tokens)', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation()}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+
+    const cover = screen.getByTestId('lentille-row-open');
+    expect(cover.className).toContain('absolute');
+    const style = cover.getAttribute('style') ?? '';
+    expect(style).toContain('calc(-1 * var(--lentille-list-row-padding-vertical))');
+    expect(style).toContain('calc(-1 * var(--lentille-list-row-padding-horizontal))');
+    expect(style).toContain('var(--lentille-list-row-radius)');
+  });
+
+  /**
+   * Q-142/R5-7 — Entrée et Espace restent opérants, désormais par le
+   * comportement NATIF du `<button>` : le navigateur les convertit en un
+   * `click` sur l'élément, ce que jsdom reproduit par `HTMLElement.click()`.
+   * Le `onKeyDown` réécrit de l'ancienne racine a disparu AVEC elle — le
+   * témoin ci-dessus prouve qu'il n'en reste aucun fantôme.
+   */
+  it('Entrée et Espace déclenchent onSelect(conversation) (a11y clavier, bouton NATIF)', () => {
     const onSelect = jest.fn();
     const conversation = makeConversation();
     render(
@@ -129,10 +192,11 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const row = screen.getByTestId('lentille-row');
-    row.focus();
-    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    row.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+    const cover = screen.getByTestId('lentille-row-open');
+    cover.focus();
+    expect(document.activeElement).toBe(cover);
+    cover.click();
+    cover.click();
     expect(onSelect).toHaveBeenCalledTimes(2);
     expect(onSelect).toHaveBeenLastCalledWith(conversation);
   });
@@ -181,15 +245,40 @@ describe('LentilleRow — rang', () => {
   });
 
   /**
+   * V4ter/R4-3 — behaviour-matrix:L02. Le label « ✎ Brouillon » est en
+   * couleur d'erreur, `draft.content` reste tertiaire (hérité du
+   * `text-muted-foreground` du conteneur ligne 2) — deux spans distincts,
+   * plus le span unique `text-destructive` d'avant ce lot qui couvrait les
+   * deux. Solde la réserve R4-3 (`WEB_COVERAGE.L02`).
+   */
+  it('behaviour-matrix:L02 — R4-3 : le label est en erreur, le texte du brouillon reste tertiaire', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Hello', createdAt: new Date(), attachments: [] } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        draft={{ content: 'en cours de rédaction' }}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row-draft-label');
+    const content = screen.getByTestId('lentille-row-draft-content');
+    expect(label).toHaveClass('text-destructive');
+    expect(content).not.toHaveClass('text-destructive');
+    expect(content.textContent).toContain('en cours de rédaction');
+  });
+
+  /**
    * V4bis/R4-1 — behaviour-matrix:L02.
    *
    * « Les brouillons gardent leur précédence actuelle typing > brouillon >
    * préview et s'affichent « ✎ Brouillon » en couleur d'erreur … » — la
-   * précédence ET le label sont réels (vérifiés ici). L'écart connu (le
-   * `text-destructive` couvre aussi `draft.content`, pas seulement le label
-   * — la matrice veut ce dernier en tertiaire) est documenté dans la
-   * classification `WEB_COVERAGE.L02` (`__tests__/lentille/behaviour-matrix-parity.test.ts`),
-   * réserve R4-3.
+   * précédence ET le label sont réels (vérifiés ici). Le label/texte est
+   * couvert plein depuis R4-3 (test ci-dessus) : la réserve R4-3 est
+   * SOLDÉE, `WEB_COVERAGE.L02` n'y renvoie plus.
    */
   it('behaviour-matrix:L02 — précédence : brouillon prime sur pont et préview', () => {
     const bridge: ConversationBridge = {
@@ -289,12 +378,108 @@ describe('LentilleRow — rang', () => {
     expect(row.textContent).toContain('800×600');
   });
 
-  it('behaviour-matrix:L16 — aria-label = "{nom}, {heure}, {n} non lus, {pont ou préview}"', () => {
+  /**
+   * V4ter/B1 — behaviour-matrix:L16, format COMPLET (plus de simples
+   * `toContain` épars) : « {nom}, {heure}, {n non lus}, {pont ou préview} »,
+   * les quatre segments joints par `, `, dans cet ordre exact.
+   */
+  it('behaviour-matrix:L16 — aria-label = format complet "{nom}, {heure}, {n non lus}, {préview}"', () => {
     render(
       <LentilleRow
         conversation={makeConversation({
           title: 'Équipe produit',
           unreadCount: 3,
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Salut !', createdAt: new Date('2026-06-01T10:00:00.000Z'), attachments: [] } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
+    // L'heure est lue par SON marqueur, non par sa position : `h3.nextSibling`
+    // valait tant que la ligne 1 était « nom | heure » ; la grammaire
+    // « Nom · heure » de la maquette (§3) y intercale le point médian.
+    const time = screen.getByTestId('lentille-row-time').textContent ?? '';
+    expect(label).toBe(`Équipe produit, ${time}, 3 messages non lus, Salut !`);
+  });
+
+  /**
+   * V4ter/B1 — discrimination #1 (mensonge #2 du verdict REV-4bis) :
+   * traduction Prisme disponible ⇒ l'aria contient la TRADUCTION et ne
+   * contient JAMAIS l'original. Avant ce lot, `typeof previewNode ===
+   * 'string'` portait sur le fragment JSX enveloppant (toujours faux) et
+   * l'aria retombait TOUJOURS sur `conversation.lastMessage?.content`
+   * (l'original) — ce témoin rougissait sur le code d'avant ce lot.
+   */
+  it('behaviour-matrix:L16 — discrimination : traduction Prisme disponible ⇒ aria = traduction, JAMAIS l\'original', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          title: 'Équipe produit',
+          unreadCount: 0,
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Hello team', createdAt: new Date(), attachments: [] } as any,
+          lastMessageTranslations: { fr: 'Bonjour équipe' },
+          lastMessageOriginalLanguage: 'en',
+        })}
+        currentUser={makeUser({ systemLanguage: 'fr' })}
+        isSelected={false}
+        onSelect={() => {}}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
+    expect(label).toContain('Bonjour équipe');
+    expect(label).not.toContain('Hello team');
+  });
+
+  /**
+   * V4ter/B1 — discrimination #2 (mensonge #3 du verdict REV-4bis) : le pont
+   * présent ⇒ l'aria contient le libellé du pont (`LentilleBridgeLine`, via
+   * `resolveLentilleBridgeAriaText`), jamais la préview du dernier message
+   * qu'il remplace visuellement. Avant ce lot, l'aria rendait TOUJOURS
+   * `lastMessage.content` même quand `hasBridge` — ce témoin rougissait sur
+   * le code d'avant ce lot.
+   */
+  it('behaviour-matrix:L16 — discrimination : pont présent ⇒ aria = libellé du pont, jamais la préview', () => {
+    const bridge: ConversationBridge = {
+      kind: 'fallback',
+      unreadCount: 2,
+      suggestedMode: 'focal',
+      data: { authors: ['Zoe'], extraAuthorCount: 0, messageCount: 2 },
+    };
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          title: 'Équipe produit',
+          unreadCount: 2,
+          lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Preview jamais annoncée', createdAt: new Date(), attachments: [] } as any,
+        })}
+        currentUser={makeUser()}
+        isSelected={false}
+        onSelect={() => {}}
+        bridge={bridge}
+        t={t}
+      />
+    );
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
+    expect(label).toContain('Zoe');
+    expect(label).toContain('2 messages');
+    expect(label).not.toContain('Preview jamais annoncée');
+  });
+
+  /**
+   * V4ter/B1 — mensonge #1 du verdict REV-4bis : le nombre nu, émis MÊME à
+   * 0 (iOS n'annonce les non-lus que si `> 0`). `unreadCount: 0` ⇒ AUCUNE
+   * mention (ni "0", ni la clé `lentille.a11y.unreadOne/Other`).
+   */
+  it('behaviour-matrix:L16 — unreadCount 0 ⇒ aucune mention de non-lus dans l\'aria', () => {
+    render(
+      <LentilleRow
+        conversation={makeConversation({
+          title: 'Équipe produit',
+          unreadCount: 0,
           lastMessage: { id: 'm1', conversationId: 'conv-1', senderId: 'u2', content: 'Salut !', createdAt: new Date(), attachments: [] } as any,
         })}
         currentUser={makeUser()}
@@ -303,10 +488,13 @@ describe('LentilleRow — rang', () => {
         t={t}
       />
     );
-    const label = screen.getByTestId('lentille-row').getAttribute('aria-label') ?? '';
-    expect(label).toContain('Équipe produit');
-    expect(label).toContain('3');
-    expect(label).toContain('Salut !');
+    const label = screen.getByTestId('lentille-row-open').getAttribute('aria-label') ?? '';
+    expect(label).not.toContain('non lu');
+    expect(label).not.toContain('lentille.a11y.unread');
+    // Format complet réduit à trois segments (nom, heure, préview) — pas
+    // quatre : le trou laissé par le segment non-lus absent n'apparaît pas
+    // comme une virgule vide.
+    expect(label.split(', ').filter((part) => part.trim() !== '')).toHaveLength(3);
   });
 });
 

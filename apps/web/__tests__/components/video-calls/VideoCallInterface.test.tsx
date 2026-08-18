@@ -9,7 +9,7 @@ const webrtc = {
   enableVideo: jest.fn().mockResolvedValue(undefined),
   disableVideo: jest.fn().mockResolvedValue(undefined),
   switchCamera: jest.fn().mockResolvedValue(undefined),
-  applyQualityTier: jest.fn().mockResolvedValue(undefined),
+  applyQualityTierToPeer: jest.fn().mockResolvedValue(undefined),
   removeParticipant: jest.fn(),
 };
 
@@ -60,11 +60,16 @@ jest.mock('@/hooks/useI18n', () => ({
 // off `isLocal` — LocalVideoTile renders this same component (always muted, self-view)
 // and would otherwise collide with the remote instance under the same fixed testid.
 jest.mock('@/components/video-calls/VideoStream', () => ({
-  VideoStream: (props: { muted?: boolean; isLocal?: boolean }) => (
+  VideoStream: (props: { muted?: boolean; isLocal?: boolean; onKickParticipant?: () => void }) => (
     <div
       data-testid={props.isLocal ? 'local-video-stream' : 'remote-video-stream'}
       data-muted={String(props.muted)}
-    />
+      data-has-kick={String(!!props.onKickParticipant)}
+    >
+      {props.onKickParticipant && (
+        <button onClick={props.onKickParticipant}>mock-kick</button>
+      )}
+    </div>
   ),
 }));
 jest.mock('@/hooks/use-auth', () => ({
@@ -85,7 +90,7 @@ jest.mock('@/hooks/use-audio-effects', () => ({
   useAudioEffects: (...args: unknown[]) => useAudioEffectsMock(...(args as [])),
 }));
 jest.mock('@/hooks/use-call-quality', () => ({
-  useCallQuality: () => ({ qualityStats: null }),
+  useCallQuality: () => ({ qualityStats: null, perPeerStats: new Map() }),
 }));
 jest.mock('@/hooks/use-remote-call-alerts', () => ({
   useRemoteCallAlerts: (...args: unknown[]) => useRemoteCallAlertsMock(...(args as [])),
@@ -104,6 +109,12 @@ jest.mock('@/hooks/use-peer-connections', () => ({
 }));
 jest.mock('@/hooks/use-adaptive-degradation', () => ({
   useAdaptiveDegradation: (...args: unknown[]) => useAdaptiveDegradationMock(...(args as [])),
+}));
+jest.mock('@/hooks/queries/use-conversations-query', () => ({
+  useConversationQuery: jest.fn(() => ({ data: undefined })),
+}));
+jest.mock('@/services/calls.service', () => ({
+  callsService: { removeParticipant: jest.fn() },
 }));
 jest.mock('sonner', () => ({
   toast: {
@@ -131,6 +142,8 @@ jest.mock('@/stores/call-store', () => {
 
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useConversationQuery } from '@/hooks/queries/use-conversations-query';
+import { callsService } from '@/services/calls.service';
 import { toast } from 'sonner';
 
 // Capture keyed by event name, never by registration order: the component may
@@ -1363,6 +1376,111 @@ describe('VideoCallInterface (container)', () => {
         await Promise.resolve();
       });
       await suspendPromise;
+    });
+  });
+
+  // W6 (`tasks/2026-08-13-group-calls-gap-analysis.md`) — moderator "remove
+  // from call". Conversation role lives on `useConversationQuery`'s
+  // `Participant[]`, never on `CallParticipant` (that `role` is call-session
+  // initiator/participant, unrelated to conversation membership).
+  describe('moderator "remove from call" (W6)', () => {
+    const groupModeratorConversation = {
+      id: 'conv1',
+      type: 'group',
+      participants: [
+        { userId: 'u1', role: 'moderator' },
+        { userId: 'peer1', role: 'member' },
+      ],
+    };
+
+    beforeEach(() => {
+      storeState.remoteStreams = new Map([['peer1', {} as MediaStream]]);
+      storeState.currentCall = {
+        id: 'call1',
+        conversationId: 'conv1',
+        startedAt: new Date().toISOString(),
+        initiatorId: 'other',
+        participants: [
+          { userId: 'u1', username: 'Me', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+          { userId: 'peer1', username: 'Peer', leftAt: null, isAudioEnabled: true, isVideoEnabled: true },
+        ],
+      };
+      (callsService.removeParticipant as jest.Mock).mockResolvedValue({ success: true, data: {} });
+    });
+
+    afterEach(() => {
+      storeState.remoteStreams = new Map();
+      (useConversationQuery as jest.Mock).mockReturnValue({ data: undefined });
+    });
+
+    it('does not expose a kick control while the conversation role has not resolved yet', () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({ data: undefined });
+      render(<VideoCallInterface callId="call1" />);
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-has-kick', 'false');
+    });
+
+    it('does not expose a kick control for a plain member', () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({
+        data: {
+          ...groupModeratorConversation,
+          participants: [
+            { userId: 'u1', role: 'member' },
+            { userId: 'peer1', role: 'member' },
+          ],
+        },
+      });
+      render(<VideoCallInterface callId="call1" />);
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-has-kick', 'false');
+    });
+
+    it('does not expose a kick control in a direct conversation, even for a moderator role', () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({
+        data: { ...groupModeratorConversation, type: 'direct' },
+      });
+      render(<VideoCallInterface callId="call1" />);
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-has-kick', 'false');
+    });
+
+    it('exposes a kick control for a group-call moderator', () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({ data: groupModeratorConversation });
+      render(<VideoCallInterface callId="call1" />);
+      expect(screen.getByTestId('remote-video-stream')).toHaveAttribute('data-has-kick', 'true');
+    });
+
+    it('calls callsService.removeParticipant with the call id and the target user id', async () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({ data: groupModeratorConversation });
+      render(<VideoCallInterface callId="call1" />);
+
+      fireEvent.click(screen.getByText('mock-kick'));
+
+      await waitFor(() => {
+        expect(callsService.removeParticipant).toHaveBeenCalledWith('call1', 'peer1');
+      });
+    });
+
+    it('shows a success toast and does not itself mutate the call store — the existing PARTICIPANT_LEFT listener reconciles state for everyone', async () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({ data: groupModeratorConversation });
+      render(<VideoCallInterface callId="call1" />);
+
+      fireEvent.click(screen.getByText('mock-kick'));
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('toasts.participantRemoved');
+      });
+      expect(storeState.removeRemoteStream).not.toHaveBeenCalled();
+      expect(storeState.removePeerConnection).not.toHaveBeenCalled();
+    });
+
+    it('shows an error toast when the removal request is rejected (e.g. permission denied)', async () => {
+      (useConversationQuery as jest.Mock).mockReturnValue({ data: groupModeratorConversation });
+      (callsService.removeParticipant as jest.Mock).mockRejectedValue(new Error('PERMISSION_DENIED'));
+      render(<VideoCallInterface callId="call1" />);
+
+      fireEvent.click(screen.getByText('mock-kick'));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith('toasts.removeParticipantFailed');
+      });
     });
   });
 });

@@ -756,11 +756,24 @@
         "yesterday": "Ontem",
         "thisWeek": "Esta semana",
         "older": "Mais antigo"
+      },
+      "a11y": {
+        "unreadOne": "{count} mensagem não lida",
+        "unreadOther": "{count} mensagens não lidas",
+        "openProfile": "Ver o perfil de {name}",
+        "openConversationInfo": "Informações da conversa {name}"
       }
     },
     "focal": {
       "row": {
-        "you": "Você"
+        "you": "Você",
+        "emptyContent": "Mensagem sem conteúdo exibível",
+        "forwarded": "Encaminhado",
+        "edited": "Editado",
+        "translated": "Traduzido",
+        "openProfile": "Ver perfil",
+        "callSummary": "Resumo da chamada",
+        "attachments": "Anexos"
       }
     },
     "lens": {

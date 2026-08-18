@@ -1441,7 +1441,10 @@ describe('MessageHandler — handleMessageDelete', () => {
 
     expect(emitsTo(deps.io, `user:${recipientUserId}`)).toContainEqual([
       'conversation:unread-updated',
-      { conversationId: VALID_CONV_ID, unreadCount: 2 },
+      // La passe de ponts a tourné et n'annonce rien pour ce destinataire :
+      // `null` AFFIRMÉ, jamais la forme courte, qui signifie désormais « je
+      // n'ai pas calculé » (cycle 63).
+      { conversationId: VALID_CONV_ID, unreadCount: 2, bridge: null },
     ]);
   });
 

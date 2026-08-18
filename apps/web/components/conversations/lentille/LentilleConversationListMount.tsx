@@ -19,10 +19,18 @@
  * par une loi partagée — c'est de la présentation pure, elle vit ici en
  * dur : `updateActiveSection` compare les positions des stickers au bord
  * haut du conteneur de défilement.
+ *
+ * PROFIL EN MODALE — directive produit du 2026-08-17. L'état d'ouverture
+ * (« quel username la modale montre-t-elle ? ») vit ICI, UNE SEULE fois pour
+ * toute la liste — jamais une `UserProfileModal` par rang (même patron que
+ * `LentillePeek`/`ReadingModeMenu` : un menu unique, monté une fois, pas un
+ * par rangée). `onOpenProfile` descend, STABLE (`useCallback`, aucune
+ * dépendance), jusqu'à `AvatarAffordance` via `LentilleRow`.
  */
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UserProfileModal } from '@/components/profile/UserProfileModal';
 import type { Conversation, SocketIOUser as User } from '@meeshy/shared/types';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import type { UserConversationCategory, UserConversationPreferences } from '@meeshy/shared/types/user-preferences';
@@ -37,7 +45,8 @@ import { EmptyConversations } from '../conversation-groups/EmptyConversations';
 import { LentilleRow, type LentilleRowTranslate } from './LentilleRow';
 import { LentilleSticker } from './LentilleSticker';
 import { SectionScrollPill } from './SectionScrollPill';
-import { LivesRail, type LentilleLiveEntry } from './LivesRail';
+import { LivesRail } from './LivesRail';
+import { resolveLentilleRailEntries, type LentilleRailEntry } from './lentille-rail-entries';
 import { LentilleSkeletonRow } from './LentilleSkeletonRow';
 
 export interface LentilleConversationListMountProps {
@@ -87,19 +96,17 @@ function sectionLabel(section: LentilleSection, categories: readonly UserConvers
 }
 
 /**
- * Résout le pont d'un rang — `conversation.bridge` (le fil, une fois LWS-4
- * livré côté gateway) est PRIORITAIRE ; `bridgesByConversation` (substitut
- * local, `useLentilleBridges`) est le repli honnête tant qu'il ne l'est pas.
- * Le champ n'existe pas encore sur le type `Conversation` du web (re-prouvé,
- * LWS-2 ne l'a porté que côté SDK Swift) — lu ici de façon défensive plutôt
- * que d'étendre un type possédé par un autre workstream.
+ * Résout le pont d'un rang — `conversation.bridge` (le fil, G-123 côté
+ * gateway) est PRIORITAIRE ; `bridgesByConversation` (substitut local,
+ * `useLentilleBridges`) est le repli honnête tant qu'aucun pont serveur
+ * n'est arrivé pour cette conversation (REV-5/B1 — le champ voyage
+ * désormais jusqu'au type `Conversation` du web, `transformConversationData`).
  */
 function resolveRowBridge(
   conversation: Conversation,
   bridgesByConversation: ReadonlyMap<string, ConversationBridge | null>
 ): ConversationBridge | null | undefined {
-  const wireBridge = (conversation as { bridge?: ConversationBridge }).bridge;
-  return wireBridge ?? bridgesByConversation.get(conversation.id) ?? null;
+  return conversation.bridge ?? bridgesByConversation.get(conversation.id) ?? null;
 }
 
 export function LentilleConversationListMount({
@@ -132,16 +139,26 @@ export function LentilleConversationListMount({
   const sections = useLentilleSections({ conversations, preferencesMap, categories, now, locale, timeZone });
   const bridgesByConversation = useLentilleBridges(conversations, currentUserId);
 
+  /**
+   * Rail des vivants — maquette §3, ligne « Rail stories & vivants » :
+   * « d'abord les conversations où il se passe quelque chose MAINTENANT
+   * (Scène live, typing, salve ✦) ». La composition vit dans une fonction
+   * PURE (`resolveLentilleRailEntries`) ; le montage ne fait que lui passer ce
+   * qu'il a déjà en main, et `LivesRail` garde le plafond de 6. Auparavant,
+   * seule la section `live` l'alimentait — structurellement vide côté web
+   * (behaviour-matrix:L13, `liveCall` sans source), donc un rail qui ne
+   * s'affichait jamais en production.
+   */
   const liveSection = sections.find((section) => section.kind === 'live');
-  const liveEntries: readonly LentilleLiveEntry[] = useMemo(
+  const railEntries: readonly LentilleRailEntry[] = useMemo(
     () =>
-      (liveSection?.conversations ?? []).map((conversation) => ({
-        id: conversation.id,
-        name: conversation.title || 'Conversation',
-        avatarUrl: conversation.avatar || conversation.image,
-        isLive: true,
-      })),
-    [liveSection]
+      resolveLentilleRailEntries({
+        liveConversations: liveSection?.conversations ?? [],
+        conversations,
+        typingByConversation,
+        bridgeByConversation: (conversation) => resolveRowBridge(conversation, bridgesByConversation),
+      }),
+    [liveSection, conversations, typingByConversation, bridgesByConversation]
   );
 
   /**
@@ -222,13 +239,23 @@ export function LentilleConversationListMount({
   // filtrage »), même composant, même distinction recherche/vide.
   const showEmptyBranch = !showSkeleton && conversations.length === 0;
 
+  // Directive produit 2026-08-17 — un seul état d'ouverture pour toute la
+  // liste (voir docstring de fichier).
+  const [profileModalUsername, setProfileModalUsername] = useState<string | null>(null);
+  const handleOpenProfile = useCallback((username: string) => {
+    setProfileModalUsername(username);
+  }, []);
+  const handleProfileModalOpenChange = useCallback((open: boolean) => {
+    if (!open) setProfileModalUsername(null);
+  }, []);
+
   return (
     <div ref={rootRef} data-testid="lentille-list-mount">
       {sections.length > 0 && (
         <SectionScrollPill label={activeSectionLabel} visible={pillVisible} />
       )}
 
-      <LivesRail entries={liveEntries} label={t('lentille.sections.live')} />
+      <LivesRail entries={railEntries} label={t('lentille.sections.live')} />
 
       {showSkeleton ? (
         <div role="status" aria-busy="true" aria-label={t('loadingConversations')} data-testid="lentille-list-skeleton">
@@ -272,12 +299,19 @@ export function LentilleConversationListMount({
                   perspectiveRef={registerRow(conversation.id)}
                   election={election}
                   onShowDetails={onShowDetails}
+                  onOpenProfile={handleOpenProfile}
                 />
               ))}
             </div>
           );
         })
       )}
+
+      <UserProfileModal
+        open={profileModalUsername !== null}
+        onOpenChange={handleProfileModalOpenChange}
+        userId={profileModalUsername}
+      />
 
       {/* behaviour-matrix:L17 — le pied de pagination historique, monté par
           la peau : même bouton, même indicateur, même CIBLE de sentinelle.

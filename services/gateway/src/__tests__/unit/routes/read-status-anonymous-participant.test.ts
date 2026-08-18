@@ -378,15 +378,18 @@ describe('read-status:updated — comment l\'événement nomme un acteur sans co
     expect(payload.participantId).toBe(ANONYMOUS_PARTICIPANT_ID);
   });
 
-  it('le nom canonique de l\'événement porte la même identité que l\'historique', async () => {
+  it('n\'annonce l\'invité que sous UN nom d\'événement', async () => {
     await socketApp.inject({
       method: 'POST',
       url: `/conversations/${CONVERSATION_ID}/mark-as-read`
     });
 
-    // Les deux noms voyagent en parallèle et transportent LE MÊME objet — un
-    // client migré n'écoute plus que le second.
-    expect(payloadOf('message:read-status-updated')).toBe(payloadOf('read-status:updated'));
+    // L'alias `message:read-status-updated` doublait cette annonce depuis le
+    // 2026-07-05 sans qu'aucun client ne l'écoute — retiré au cycle 64
+    // (tasks/socketio-events-cleanup.md § 3). La garde porte sur le NOMBRE de
+    // noms, donc un troisième alias la ferait rougir aussi.
+    const names = emits.map((e) => e.event).filter((e) => String(e).includes('read-status'));
+    expect(new Set(names)).toEqual(new Set(['read-status:updated']));
   });
 
   it('mark-as-received nomme l\'invité de la même façon', async () => {

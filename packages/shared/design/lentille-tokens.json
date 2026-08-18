@@ -132,6 +132,7 @@
     },
     "quote": {
       "borderSize": 2.5,
+      "size": 11.5,
       "colorFromAuthor": true
     },
     "media": {

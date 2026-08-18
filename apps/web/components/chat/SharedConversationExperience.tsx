@@ -89,7 +89,11 @@ export function SharedConversationExperience({ linkId }: SharedConversationExper
 
       try {
         const anonymousSession = authManager.getAnonymousSession();
-        const payload = await LinkConversationService.getConversationData(linkId, {
+        // `getSharedAccessData` : la conversation complète quand la lecture est
+        // permise, sinon les métadonnées publiques du lien — de quoi peindre la
+        // modale de jonction. Un lien qui cache son historique reste un lien
+        // qu'on peut rejoindre.
+        const payload = await LinkConversationService.getSharedAccessData(linkId, {
           sessionToken: anonymousSession?.token || undefined,
           authToken: authManager.getAuthToken() || undefined,
         });

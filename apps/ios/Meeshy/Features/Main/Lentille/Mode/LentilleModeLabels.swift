@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Libellés des modes de lecture — source UNIQUE pour les trois surfaces qui
 /// les affichent (contrat LWS-8) : l'encoche/chip de la focus card (I-071),
@@ -44,6 +45,14 @@ nonisolated enum LentilleModeLabels {
             return String(localized: "lentille.mode.name.resume", defaultValue: "Résumé", bundle: .main)
         case .riviere:
             return String(localized: "lentille.mode.name.riviere", defaultValue: "Rivière", bundle: .main)
+        // AMENDEMENT S1 (REV-4bis/B2) — jamais affiché sur iOS : `.bulles` est
+        // hors de l'ordre du menu (`LentilleModeMenu.build`, cinq entrées).
+        // RÉUTILISE la clé du mode RENDU `.bubbles` (cf. `decisionModeTitle`
+        // ci-dessous) plutôt que d'en créer une sixième : c'est le même mot
+        // pour le lecteur, et une clé i18n neuve pour un libellé jamais rendu
+        // serait une dette gratuite dans les 12 catalogues de localisation.
+        case .bulles:
+            return String(localized: "lentille.mode.name.bubbles", defaultValue: "Bulles", bundle: .main)
         }
     }
 
@@ -71,19 +80,51 @@ nonisolated enum LentilleModeLabels {
 
     // MARK: - Texte de l'encoche
 
+    /// R6-5 — projection INVERSE de `toBridgeSuggestedMode`
+    /// (`packages/shared/utils/reading-modes.ts`) : `ConversationBridge
+    /// .SuggestedMode` n'est PAS une nouvelle loi, c'est déjà un mode RENDU
+    /// légal (le sous-ensemble `.focal | .resume` que la loi projette), reçu
+    /// tel quel du wire (ou du substitut `LocalBridgeProvider`, même seuil).
+    /// Cette fonction ne fait que le reconvertir vers le vocabulaire de
+    /// `decisionModeTitle` (`ReadingModeOrchestrator.ConversationReadingMode`)
+    /// pour partager EXACTEMENT les mêmes clés `lentille.mode.name.*` que le
+    /// recalcul local — jamais un second nommage. `.resume` → `.summary`
+    /// (même mot, deux catalogues voisins) ; `.focal` → `.focal`, identité.
+    private static func renderedMode(
+        from suggestedMode: ConversationBridge.SuggestedMode
+    ) -> ReadingModeOrchestrator.ConversationReadingMode {
+        switch suggestedMode {
+        case .focal: return .focal
+        case .resume: return .summary
+        }
+    }
+
     /// « AUTO · <décision> » quand la préférence est `.auto` (l'utilisateur
     /// voit ce qui VA se passer, contrat LWS-8) ; le nom du mode forcé SEUL
     /// quand un mode est mémorisé (M-048) — c'est alors un CHIP, pas une
     /// prévision.
+    ///
+    /// R6-5 — HIÉRARCHIE SERVEUR PUIS LOCAL, jamais l'inverse : `suggestedMode`
+    /// (`conversation.bridge?.suggestedMode`, précalculé par les 3
+    /// producteurs — gateway `ConversationBridgeService`, substitut
+    /// `LocalBridgeProvider`, iOS `LentilleProviders` — via la MÊME loi que
+    /// `decision`) PRIME quand il est PRÉSENT (non-`nil`). `decision.mode` (le
+    /// recalcul LOCAL, `LentilleReadingModeContext.decision` rejoué sur les
+    /// données déjà en main) reste le SEUL repli quand `suggestedMode` est
+    /// ABSENT (aucun pont sur cette conversation) — jamais un vide, jamais une
+    /// valeur inventée : c'est exactement ce que la loi aurait rendu ici de
+    /// toute façon, avant ce branchement.
     static func notchText(
         decision: ReadingModeOrchestrator.OrchestratorDecision,
-        preference: ReadingModeOrchestrator.ReadingModePreference
+        preference: ReadingModeOrchestrator.ReadingModePreference,
+        suggestedMode: ConversationBridge.SuggestedMode? = nil
     ) -> String {
         guard preference == .auto else {
             return menuTitle(for: preference)
         }
+        let mode = suggestedMode.map(renderedMode(from:)) ?? decision.mode
         let format = String(localized: "lentille.mode.notch.auto", defaultValue: "AUTO · %@", bundle: .main)
-        return String(format: format, decisionModeTitle(for: decision.mode))
+        return String(format: format, decisionModeTitle(for: mode))
     }
 
     // MARK: - Raison Rivière — seuils VIVANTS, jamais un texte fixe

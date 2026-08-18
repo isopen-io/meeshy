@@ -127,6 +127,13 @@ class SettingsViewModel @Inject constructor(
         updateNotifications { it.copy(pushEnabled = enabled) }
     }
 
+    /** Toggles email notifications — an independent delivery channel from push,
+     * never gated on [setPushEnabled] (mirrors iOS `NotificationSettingsView`'s
+     * `emailEnabled` toggle, which carries no push dependency either). */
+    fun setEmailEnabled(enabled: Boolean) {
+        updateNotifications { it.copy(emailEnabled = enabled) }
+    }
+
     /** Toggles the notification sound. */
     fun setSoundEnabled(enabled: Boolean) {
         updateNotifications { it.copy(soundEnabled = enabled) }

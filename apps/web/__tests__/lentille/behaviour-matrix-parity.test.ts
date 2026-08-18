@@ -79,11 +79,12 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
   L02: {
     covered: true,
     reason:
-      "précédence typing > brouillon > pont/préview RÉELLE et testée (LentilleRow.tsx:199, test « précédence : brouillon prime sur pont et préview ») ; " +
-      "label « ✎ Brouillon » en couleur d'erreur RÉEL. Écart VÉRIFIÉ contre la matrice : celle-ci exige le label en erreur AVEC le texte du brouillon en " +
-      "tertiaire, or le span `text-destructive` couvre le label ET `draft.content` (LentilleRow.tsx:370-371) — la couleur d'erreur déborde sur le contenu. " +
-      "Trou COSMÉTIQUE documenté, pas caché : réserve R4-3 (« L02 brouillon tout-destructive », tasks/lentille-workshop-execution.md §8 ligne V4), non " +
-      "soldée par ce lot (hors périmètre R4-1, qui porte sur la garde de matrice, pas sur cette correction).",
+      "précédence typing > brouillon > pont/préview RÉELLE et testée (LentilleRow.tsx, test « précédence : brouillon prime sur pont et préview ») ; " +
+      "label « ✎ Brouillon » en couleur d'erreur AVEC le texte du brouillon en tertiaire — RÉEL, plus un écart : deux spans distincts désormais " +
+      "(LentilleRow.tsx, `lentille-row-draft-label` en `text-destructive`, `lentille-row-draft-content` hérite `text-muted-foreground` du conteneur " +
+      "ligne 2), là où un unique span `text-destructive` couvrait auparavant le label ET `draft.content`. Réserve R4-3 (« L02 brouillon tout-destructive », " +
+      "tasks/lentille-workshop-execution.md §8 ligne V4) SOLDÉE par V4ter/R4-3 — testé « behaviour-matrix:L02 — R4-3 : le label est en erreur, le texte " +
+      "du brouillon reste tertiaire » (LentilleRow.test.tsx).",
   },
   L03: {
     covered: false,
@@ -130,10 +131,13 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
     covered: true,
     reason:
       "badge de type absorbé par la focus card (chip groupe/canal/bot + memberCount, anneau accent) : réel et testé (`LentilleFocusCard.tsx`, " +
-      "`LentilleFocusCard.test.tsx`). Écart VÉRIFIÉ : les tags utilisateur (≤3 pastilles 6px après le nom) NE sont PAS construits — re-preuve " +
-      "`grep -rn 'tags' apps/web/components/conversations/lentille/LentilleRow.tsx` → 0 rendu de pastille (2026-08-17) ; le token `list.tags` existe " +
-      "(`lentille-tokens.json`) et vit côté iOS (`LentilleMetrics.Tags`) mais reste mort côté web. Trou documenté, réserve R4-2 (« L08 tags non " +
-      "implémentés (tokens morts) », workshop §8 ligne V4), non soldée par ce lot.",
+      "`LentilleFocusCard.test.tsx`). SECONDE part — les tags utilisateur, « au plus 3 pastilles de 6 px après le nom » — désormais RÉELLE : réserve " +
+      "R4-2 (« L08 tags non implémentés (tokens morts) », workshop §8 ligne V4) SOLDÉE le 2026-08-17. `LentilleRow.tsx` lit les tags du MÊME magasin que " +
+      "pin/sourdine/favori (`useConversationPreference` — aucune prop neuve à faire traverser le montage, aucune seconde source), les plafonne par " +
+      "`LENTILLE_LIST_TAGS_MAX_COUNT` (miroir de `list.tags.maxCount`, gardé contre la dérive par `lentille-tags-max-count.parity.test.ts`) et les rend " +
+      "à la cote `--lentille-list-tags-size` : les tokens `list.tags.{size,maxCount,emojiSize}`, vivants côté iOS (`LentilleMetrics.Tags`) et morts côté " +
+      "web, sont branchés. Teinte par `getTagColor`, le MÊME hachage que le rang historique — une seule loi de couleur de tag dans le dépôt. Testé : " +
+      "`LentilleRow.line1-grammar.test.tsx`, describe « pastilles de tags » (plafond, cote, teintes distinctes, absence sans tag).",
   },
   L09: {
     covered: false,
@@ -182,7 +186,21 @@ const WEB_COVERAGE: Readonly<Record<string, { readonly covered: boolean; readonl
   },
   L16: {
     covered: true,
-    reason: 'aria-label « {nom}, {heure}, {n} non lus, {pont ou préview} » (LentilleRow.tsx, LentilleRow.test.tsx).',
+    reason:
+      "aria-label « {nom}, {heure}, {n non lus}, {pont ou préview} », RÉELLEMENT produit et éprouvé — V4ter/B1 a corrigé trois mensonges du verdict " +
+      "REV-4bis, re-prouvés RED puis GREEN (LentilleRow.test.tsx). (1) Nombre nu émis même à 0 : désormais mention SEULEMENT si `unreadCount > 0`, " +
+      "localisée/pluralisée (`resolveUnreadAriaSegment`, `lentille.a11y.unreadOne/Other`, 4 locales) — précédent iOS " +
+      "`ThemedConversationRow.swift:290-291`. (2) `typeof previewNode === 'string'` portait sur le FRAGMENT JSX enveloppant (toujours faux, donc l'aria " +
+      "retombait TOUJOURS sur `conversation.lastMessage?.content`, l'original, jamais la traduction Prisme) : `formatLastMessage(...)` est désormais " +
+      "calculé UNE fois (`lastMessagePreview`) et sa forme texte réutilisée par l'aria (`lastMessagePreviewText`) — témoin de discrimination « traduction " +
+      "Prisme disponible ⇒ aria = traduction, JAMAIS l'original ». (3) Le pont n'était jamais annoncé (aria = `lastMessage.content` même sous " +
+      "`hasBridge`) : l'aria appelle désormais `resolveLentilleBridgeAriaText` (LentilleBridgeLine.tsx, EXPORTÉE par ce lot — MÊME fonction que le rendu " +
+      "visuel, jamais un second chemin) — témoin « pont présent ⇒ aria = libellé du pont, jamais la préview ». « Ignore la perspective décorative » : " +
+      "vrai par construction, `perspectiveRef`/`useLentillePerspective` n'écrivent que `opacity`/`transform` sur le WRAPPER interne, jamais sur la racine " +
+      "porteuse de `aria-label`. Écart VÉRIFIÉ et assumé, HORS `LentilleRow` : « lit les stickers comme des en-têtes de section » demande l'INVERSE de ce " +
+      "que porte `LentilleSticker.tsx` (l'en-tête de section sticky, PAS le rang) — `aria-hidden=\"true\"` explicite, contrat LWS-10 « pilule et stickers " +
+      "`aria-hidden` » (`LentilleSticker.tsx:9-12`, re-prouvé 2026-08-17). Sous-trou réel, documenté, pas caché — hors périmètre de ce lot (V4ter/B1 ne " +
+      "touche que `LentilleRow`) ; le format aria-label DU RANG (nom/heure/non-lus/pont-ou-préview) est lui intégralement réel et éprouvé.",
   },
   L17: {
     covered: true,

@@ -142,9 +142,20 @@ export class ConnectionService {
    * As a callback, each handshake asks again. Nothing has to remember to push
    * a new token in — and nothing may pin one back onto `socket.auth`, which
    * would replace this resolver and restore the old failure.
+   *
+   * Le NOM du champ fait partie du justificatif. La passerelle lit deux clés
+   * distinctes (`socketio/utils/socket-helpers.ts`) : `auth.token` part au
+   * vérificateur JWT, `auth.sessionToken` est résolu en participant anonyme par
+   * l'empreinte du jeton. Un jeton `anon_…` annoncé sous `token` échouait donc
+   * en `jwt malformed` — la passerelle émettait « Authentication failed » et
+   * coupait la socket, laissant tout participant anonyme sans temps réel.
    */
-  private resolveHandshakeToken(): string | undefined {
-    return authManager.getAuthToken() || authManager.getAnonymousSession()?.token;
+  private resolveHandshakeCredentials(): Record<string, string> {
+    const token = authManager.getAuthToken();
+    if (token) return { token };
+
+    const sessionToken = authManager.getAnonymousSession()?.token;
+    return sessionToken ? { sessionToken } : {};
   }
 
   initializeConnection(): TypedSocket | null {
@@ -164,7 +175,7 @@ export class ConnectionService {
 
     const socketUrl = getWebSocketUrl();
     const socket = io(socketUrl, {
-      auth: (cb: (data: Record<string, unknown>) => void) => cb({ token: this.resolveHandshakeToken() }),
+      auth: (cb: (data: Record<string, unknown>) => void) => cb(this.resolveHandshakeCredentials()),
       transports: ['websocket', 'polling'],
       autoConnect: false,
       reconnection: true,
@@ -307,7 +318,7 @@ export class ConnectionService {
 
     socket.on(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, () => {
       logger.info('[Socket]', 'auth token expired — refreshing and reconnecting');
-      // No token is pushed onto the socket here: `resolveHandshakeToken()`
+      // No token is pushed onto the socket here: `resolveHandshakeCredentials()`
       // reads storage at the handshake, so the reconnect below already carries
       // whatever the refresh just stored. Assigning `socket.auth` would swap
       // the resolver out for a literal and re-pin the socket.

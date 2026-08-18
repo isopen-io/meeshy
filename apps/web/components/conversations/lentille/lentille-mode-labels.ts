@@ -29,17 +29,31 @@
  * @see tasks/lentille-implementation-contract.md LWS-8
  * @see apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift
  */
+import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import type { ConversationReadingMode, ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { OrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
 import type { LentilleRowTranslate } from './LentilleRow';
 
-/** Clé i18n du nom d'une PRÉFÉRENCE (mots du menu, chip d'un mode forcé). */
+/**
+ * Clé i18n du nom d'une PRÉFÉRENCE (mots du menu, chip d'un mode forcé).
+ *
+ * AMENDEMENT S1 (REV-4bis/B2) — `bulles` RÉUTILISE `lentille.modes.bubbles`,
+ * la clé que WL-108 avait déjà posée pour le mode RENDU homonyme (voir
+ * `DECISION_LABEL_KEY` ci-dessous, et la note de tête de ce fichier). Aucune
+ * clé neuve n'est créée : c'est le même mot pour le lecteur, et `bulles`
+ * n'est offert par AUCUN des trois chemins d'entrée du menu de mode
+ * (`ReadingModeMenu`, catalogue inchangé) — seul le sélecteur historique
+ * `LensSwitcher` l'écrit, drapeau éteint. La table reste TOTALE sur
+ * l'énumération amendée, ce qui est sa seule raison d'exister :
+ * `preferenceLabel` ne doit jamais rendre `undefined`.
+ */
 const PREFERENCE_LABEL_KEY: Readonly<Record<ReadingModePreference, string>> = {
   auto: 'lentille.modes.auto',
   focal: 'lentille.modes.focal',
   script: 'lentille.modes.script',
   resume: 'lentille.modes.resume',
   riviere: 'lentille.modes.riviere',
+  bulles: 'lentille.modes.bubbles',
 };
 
 /**
@@ -68,6 +82,22 @@ export function decisionModeLabel(mode: ConversationReadingMode, t: LentilleRowT
 }
 
 /**
+ * R6-5 — projection INVERSE de `toBridgeSuggestedMode`
+ * (`packages/shared/utils/reading-modes.ts`) : `bridge.suggestedMode` n'est
+ * PAS une nouvelle loi, c'est déjà un mode RENDU légal (le sous-ensemble
+ * `'focal' | 'resume'` que la loi projette), reçu tel quel du wire. Cette
+ * fonction ne fait que le reconvertir vers le vocabulaire de
+ * `decisionModeLabel` (`ConversationReadingMode`) pour partager EXACTEMENT
+ * les mêmes clés i18n que le recalcul local — jamais un second nommage.
+ * `'resume'` → `'summary'` (même mot, deux catalogues voisins,
+ * cf. `ConversationReadingMode` vs `ConversationBridge.suggestedMode`) ;
+ * `'focal'` → `'focal'`, identité.
+ */
+function bridgeSuggestedRenderMode(suggestedMode: ConversationBridge['suggestedMode']): ConversationReadingMode {
+  return suggestedMode === 'resume' ? 'summary' : 'focal';
+}
+
+/**
  * Texte de l'encoche (critère LWS-8 : « elle affiche "AUTO · <décision
  * courante>" — l'utilisateur voit ce qui VA se passer, pas une étiquette
  * générique »).
@@ -75,12 +105,25 @@ export function decisionModeLabel(mode: ConversationReadingMode, t: LentilleRowT
  * Préférence `auto` ⇒ prévision « AUTO · <décision> ». Mode mémorisé ⇒ le
  * nom du mode SEUL : ce n'est plus une prévision mais un CHIP, l'orchestrateur
  * étant débrayé pour cette conversation.
+ *
+ * R6-5 — HIÉRARCHIE SERVEUR PUIS LOCAL, jamais l'inverse : `suggestedMode`
+ * (`conversation.bridge?.suggestedMode`, précalculé par les 3 producteurs —
+ * gateway `ConversationBridgeService`, substitut `LocalBridgeProvider`, iOS
+ * `LentilleProviders` — via la MÊME loi que `decision`) PRIME quand il est
+ * PRÉSENT. `decision.mode` (le recalcul LOCAL de ce composant,
+ * `resolveOrchestratorDecision` rejoué sur les données déjà en main) reste le
+ * SEUL repli quand `suggestedMode` est ABSENT (aucun pont sur cette
+ * conversation) — jamais un vide, jamais une valeur inventée : c'est
+ * exactement ce que `resolveOrchestratorDecision` aurait rendu ici de toute
+ * façon, avant ce branchement.
  */
 export function notchText(
   decision: OrchestratorDecision,
   preference: ReadingModePreference,
-  t: LentilleRowTranslate
+  t: LentilleRowTranslate,
+  suggestedMode?: ConversationBridge['suggestedMode'] | null
 ): string {
   if (preference !== 'auto') return preferenceLabel(preference, t);
-  return t('lentille.modes.autoBadge', { decision: decisionModeLabel(decision.mode, t) });
+  const mode = suggestedMode != null ? bridgeSuggestedRenderMode(suggestedMode) : decision.mode;
+  return t('lentille.modes.autoBadge', { decision: decisionModeLabel(mode, t) });
 }

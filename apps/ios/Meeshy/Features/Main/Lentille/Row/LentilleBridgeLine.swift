@@ -63,11 +63,17 @@ struct LentilleBridgeLine: View {
 
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
 
-    private var partialFormat: String {
-        String(localized: "lentille.bridge.partial", defaultValue: "sur les %d derniers messages", bundle: .main)
-    }
+    private var partialFormat: String { Self.partialFormat }
 
     private var resolvedText: String {
+        Self.resolvePhrase(bridge: bridge, preferredLanguages: preferredLanguages)
+    }
+
+    /// Q-140/L16-iOS — phrase du pont, factorisée hors de `resolvedText` pour
+    /// être appelable statiquement par `resolveAriaText` ci-dessous SANS
+    /// dupliquer le `switch` (une seule loi, deux appelants : le rendu
+    /// d'instance et l'aria statique).
+    nonisolated static func resolvePhrase(bridge: ConversationBridge, preferredLanguages: [String]) -> String {
         switch bridge.kind {
         case .fallback:
             guard let data = bridge.data else { return "" }
@@ -75,6 +81,37 @@ struct LentilleBridgeLine: View {
         case .agent:
             return Self.resolveAgentText(bridge: bridge, preferredLanguages: preferredLanguages) ?? ""
         }
+    }
+
+    nonisolated static var partialFormat: String {
+        String(localized: "lentille.bridge.partial", defaultValue: "sur les %d derniers messages", bundle: .main)
+    }
+
+    /// Même garde que le second `Text` du corps ci-dessus (`isComplete ==
+    /// false`, `data?.messageCount`) — factorisée pour que
+    /// `resolveAriaText` compose EXACTEMENT le même suffixe que ce que
+    /// l'œil voit, jamais un second calcul.
+    nonisolated static func resolvePartialSuffix(bridge: ConversationBridge) -> String? {
+        guard bridge.isComplete == false, let count = bridge.data?.messageCount else { return nil }
+        return String(format: partialFormat, count)
+    }
+
+    /// Q-140/L16-iOS (précédent web V4ter/B1, même défaut symétrique : le
+    /// lecteur d'écran doit entendre ce que l'œil voit) — forme TEXTE
+    /// complète de ce que cette vue AFFICHE : `resolvedText` + le suffixe de
+    /// partialité s'il est visible, glyphe ✦ excepté (le point de tête est
+    /// purement décoratif, déjà absorbé par `.accessibilityElement(children:
+    /// .combine)` ci-dessus — jamais un second glyphe à lire). `nonisolated
+    /// static` pour rester appelable sans construire de vue (même discipline
+    /// que `resolveAgentText`) — consommée par
+    /// `LentilleConversationRow.accessibilityLabel`, MÊME résolution que le
+    /// rendu visuel, jamais une seconde loi de langue (contrat §5.2,
+    /// conséquence 2).
+    nonisolated static func resolveAriaText(bridge: ConversationBridge, preferredLanguages: [String]) -> String {
+        let phrase = resolvePhrase(bridge: bridge, preferredLanguages: preferredLanguages)
+        guard !phrase.isEmpty else { return "" }
+        guard let partial = resolvePartialSuffix(bridge: bridge) else { return phrase }
+        return "\(phrase) · \(partial)"
     }
 
     /// Preuve E7 côté rendu — voir le commentaire d'en-tête. `nonisolated

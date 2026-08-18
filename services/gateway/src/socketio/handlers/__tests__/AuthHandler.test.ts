@@ -1395,4 +1395,106 @@ describe('AuthHandler', () => {
       expect(() => authHandler.handleEnginePong(createMockSocket())).not.toThrow();
     });
   });
+
+  // Les deux portes d'authentification rejoignent les mêmes rooms de
+  // conversation, mais une seule des deux a reçu le réessai. Ces gardes lient
+  // les deux plutôt que de décrire chacune séparément : c'est la PARITÉ qui
+  // s'est perdue, pas le réessai lui-même.
+  describe('room joins — parité entre la porte inscrite et la porte invitée', () => {
+    // Un `join` qui rejette les `failures` premières fois pour la room visée,
+    // puis résout. Compte les tentatives PAR room.
+    const createFlakyJoin = (failures: number) => {
+      const attempts = new Map<string, number>();
+      const join = jest.fn().mockImplementation(async (room: string) => {
+        const n = (attempts.get(room) ?? 0) + 1;
+        attempts.set(room, n);
+        if (room.startsWith('conversation:') && n <= failures) {
+          throw new Error('adapter hiccup');
+        }
+      });
+      return { join, attempts };
+    };
+
+    const authenticateGuest = async (join: jest.Mock, conversationId = 'conv-guest') => {
+      const socket = createMockSocket({
+        handshake: { auth: { sessionToken: 'anon-session-123' } },
+        join,
+      });
+      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
+        id: 'anon-123',
+        displayName: 'Anonymous',
+        language: 'en',
+        conversationId,
+      } as any);
+      await authHandler.handleTokenAuthentication(socket);
+      return socket;
+    };
+
+    const authenticateRegistered = async (join: jest.Mock, conversationId = 'conv-guest') => {
+      const socket = createMockSocket({
+        handshake: { auth: { token: 'valid-jwt-token' } },
+        join,
+      });
+      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
+        id: 'user-123', systemLanguage: 'en',
+        regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+      } as any);
+      jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
+        { conversationId },
+      ]);
+      await authHandler.handleTokenAuthentication(socket);
+      return socket;
+    };
+
+    it("réessaie la room de l'invité de lien quand l'adaptateur bronche une fois", async () => {
+      const { join, attempts } = createFlakyJoin(1);
+
+      await authenticateGuest(join);
+
+      // Une seule tentative signifie que l'invité est INSCRIT comme connecté
+      // (la porte de la file hors ligne le croit joignable) tout en étant
+      // absent de la seule room qui lui porte ses messages.
+      expect(attempts.get('conversation:conv-guest')).toBe(2);
+    });
+
+    it("borne le réessai de l'invité — un adaptateur durablement cassé ne fait pas tourner la boucle", async () => {
+      const { join, attempts } = createFlakyJoin(Number.POSITIVE_INFINITY);
+
+      await authenticateGuest(join);
+
+      expect(attempts.get('conversation:conv-guest')).toBe(3);
+      // L'échec définitif ne doit pas priver l'invité de sa session : la
+      // décision « refuser la session » est instruite au carnet, pas prise ici.
+      expect(connectedUsers.has('anon-123')).toBe(true);
+    });
+
+    it('les deux portes accordent le MÊME nombre de tentatives à une room qui rejette', async () => {
+      const guest = createFlakyJoin(Number.POSITIVE_INFINITY);
+      await authenticateGuest(guest.join);
+
+      connectedUsers.clear();
+      socketToUser.clear();
+      userSockets.clear();
+
+      const registered = createFlakyJoin(Number.POSITIVE_INFINITY);
+      await authenticateRegistered(registered.join);
+
+      expect(guest.attempts.get('conversation:conv-guest')).toBe(
+        registered.attempts.get('conversation:conv-guest')
+      );
+    });
+
+    it("n'inscrit la socket dans aucune room que rien n'adresse", async () => {
+      const { join } = createFlakyJoin(0);
+
+      await authenticateRegistered(join);
+
+      // `conversation:any` a été rejointe à chaque connexion inscrite sans
+      // qu'aucun émetteur ne l'ait jamais visée, à aucun commit de
+      // l'historique. Une room jointe et jamais adressée coûte une entrée
+      // d'adaptateur par socket et un aller-retour par connexion.
+      const joinedRooms = join.mock.calls.map(([room]) => room);
+      expect(joinedRooms).not.toContain('conversation:any');
+    });
+  });
 });

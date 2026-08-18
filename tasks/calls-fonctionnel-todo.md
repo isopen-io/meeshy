@@ -9604,3 +9604,163 @@ toujours hors d'atteinte dans ce sandbox (pas de `xcodebuild`/`swift`/`kotlinc`)
   groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; le seul balayage total restant
   de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
   construction (Vague 139).
+
+## Vague 142 — `call:end`'s group-hangup fast path leaked the participant FK into `PARTICIPANT_LEFT`, not the `CallParticipant` row id (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(subagent lecture directe, périmètre gateway `CallEventsHandler.ts`/`CallService.ts` + web
+`hooks/use-webrtc-p2p.ts`/`useCallSignaling.ts`/`components/video-call*/**` + `stores/call-store.ts`,
+exclusion explicite des Vagues 1-141). Toolchains iOS/Android toujours hors d'atteinte dans ce
+sandbox (pas de `xcodebuild`/`swift`/`kotlinc`) ; fix scopé gateway (TypeScript pur), aucun edit
+Swift/Kotlin non testable.
+
+- **Root cause** : la branche « fast-path » de `call:end` (`willContinueAsGroupLeave` — un appel de
+  groupe qui continue pour les autres participants, calling-stack audit 2026-08-16) émettait
+  `participantId: endParticipantId` — la valeur renvoyée par `resolveActiveCallParticipantDetailed`,
+  c'est-à-dire `CallParticipant.participantId`, la FK vers `Participant.id`. Tous les AUTRES
+  émetteurs de `CALL_EVENTS.PARTICIPANT_LEFT` (`call:leave` : `participant.id` ;
+  `call:force-leave` : `participant.id` ; `CallService.broadcastParticipantLeft`) émettent
+  `CallParticipant.id` — la clé primaire de la ligne elle-même, l'espace d'identité que le
+  doc-comment de la classe déclare explicitement (« call:participant-left's participantId porte
+  authentiquement CallParticipant.id ») et sur lequel `call-store.ts`'s `removeParticipant` filtre
+  ses entrées de roster (`.id`, jamais `.participantId`). Un cinquième site du même bug de fond que
+  les Vagues 137-140 (mismatch d'espace d'identité), sur le SIXIÈME champ `participantId` de la
+  classe (le premier depuis la Vague 140).
+- **Scénario de défaillance concret** : appel de groupe A + B + C, mesh réel. B raccroche via le
+  bouton web (`apps/web/hooks/conversations/use-video-call.ts` n'émet QUE `call:end`, jamais
+  `call:leave`, pour le raccrochage — donc ce chemin buggé est le chemin de production, pas un cas
+  rare). Le gateway calcule `willContinueAsGroupLeave = true` (A et C restent actifs), diffuse
+  `PARTICIPANT_LEFT` à A et C avec `participantId` = FK de B. Côté A et C :
+  `VideoCallInterface`'s propre écouteur (keyed `userId || participantId`) coupe bien la connexion
+  WebRTC de B — sa tuile vidéo disparaît. Mais `CallManager.tsx`'s `removeParticipant(event.participantId)`
+  ne matche AUCUNE entrée du roster (toutes keyed `.id`) → la ligne de B dans `currentCall.participants`
+  n'est JAMAIS retirée. Le badge de comptage (`VideoCallInterface.tsx:980`,
+  `participants.filter(p => !p.leftAt).length + 1`) reste gonflé d'une unité pour le reste de
+  l'appel. Si B rejoint plus tard, `joinCall` crée une NOUVELLE ligne `CallParticipant` (nouvel
+  `.id`) ; `addParticipant` (dédupliqué sur `.id`) l'ajoute À CÔTÉ de l'ancienne jamais retirée — B
+  apparaît deux fois dans le roster.
+- **Preuve indépendante** : la suite `CallEventsHandler-end.test.ts`'s `describe('group hang-up: ...')`
+  portait déjà le fixture exact nécessaire (`{ id: 'call-participant-row-caller', participantId:
+  PARTICIPANT_ID, ... }`, `.id !== .participantId`) mais n'asserait QUE sur l'état
+  `bufferedOffers`, jamais sur le payload `PARTICIPANT_LEFT` diffusé — un grep sur tous les tests
+  gateway/web pour `willContinueAsGroupLeave` croisé avec une assertion de payload
+  `PARTICIPANT_LEFT` n'a rien trouvé avant cette vague.
+- **Fix** : `CallEventsHandler.ts` — `resolveActiveCallParticipantDetailed` gagne un champ
+  `id: activeParticipant.id` (zéro requête supplémentaire, `activeParticipant.id` est déjà lu pour
+  `hasOtherActiveParticipants`). La diffusion fast-path (branche `willContinueAsGroupLeave`) émet
+  désormais `participantId: endParticipantDetail!.id` au lieu de `endParticipantId`.
+  `endParticipantId` (la FK) reste INCHANGÉ partout ailleurs dans cette branche — c'est la valeur
+  correcte pour `endCall()`/`leaveCall()` et `clearBufferedOfferFor()`, qui attendent bien la FK, pas
+  l'id de ligne.
+- **Tests** (TDD, RED confirmé — `git stash` du seul fichier de production, suite rejouée,
+  `git stash pop`) : 1 cas neuf dans `CallEventsHandler-end.test.ts`, describe « group hang-up » —
+  « broadcasts PARTICIPANT_LEFT with the CallParticipant row id, not the participantId FK ». RED
+  confirmé (payload reçu portait la FK `'participant-abc'` au lieu de l'id de ligne
+  `'call-participant-row-caller'`). **1/1 vert** après fix. Sweep gateway
+  `--testPathPatterns="[Cc]all"` : **56 suites / 1237 tests** verts (+1 net, 0 régression). Suite
+  gateway COMPLÈTE (`bun run test:coverage`) : **743 suites / 18024 tests**, 100% vert, seuils de
+  couverture globaux atteints. `npx tsc --noEmit` (services/gateway) : **0 erreur**.
+- **Effet de bord corrigé en route** : la suite complète a révélé un garde-fou gateway déjà rouge
+  sur `main` (`personal-history-hiding-surface-guard.test.ts`, sans rapport avec les appels) —
+  REV-5/B2 (fan-out socket, mergé juste avant le rebase de cette branche) avait ajouté une deuxième
+  lecture `prisma.message.findMany` à `ConversationBridgeService.ts`
+  (`buildBridgeDataForViewers`) sans mettre à jour la table déclarative du garde. Vérifié qu'il ne
+  s'agit PAS d'une fuite de confidentialité avant de toucher le garde : la nouvelle requête bâtit
+  UNE fenêtre partagée par plusieurs lecteurs (donc pas de clause `where` individuelle possible) et
+  resserre le masquage PAR LECTEUR en mémoire en aval (`hiddenMessageIds?.has(row.id)`,
+  `exclusiveFloorMsFor`) — même patron déjà déclaré pour `MessageReadStatusService.ts`. Mis à jour
+  `SERVICE_LAYER_SURFACES` (`reads: 1→2`) et `IN_MEMORY_HIDING_SURFACES` (nouvelle entrée) pour que
+  le garde couvre ce que le code fait réellement au lieu de se taire. Nécessaire pour que le gate
+  complet de cette branche (`bun run test:coverage`, prérequis de tout merge) passe au vert — sans
+  rapport avec le calling stack, corrigé ici parce qu'il bloquait le seul gate dont ce merge dépend.
+- **Non fait volontairement** : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; le seul balayage total restant
+  de `clearBufferedOffer` côté gateway (`call:end` branche terminale) reste correct par
+  construction (Vague 139).
+
+## Vague 143 — per-peer adaptive bitrate/tier degradation (web, follow-up to W5 / PR #3182) (2026-08-17)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend le
+follow-up explicitement noté par PR #3182 (« ICE-restart backoff/rate-limit scoping and per-peer
+adaptive bitrate degradation (call-wide today) were also flagged by the same audit pass and are
+left for follow-up PRs to keep this change reviewable ») — la seconde moitié de cette note,
+bitrate/tier. Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox ; fix scopé web
+(TypeScript pur).
+
+- **Root cause** : `useCallQuality` (W5) agrège déjà correctement à travers les pairs pour la
+  décision de survie audio-only call-wide (pire RTT/perte/jitter — un pair qui souffre ne doit
+  jamais être masqué par des pairs sains). Mais ce MÊME agrégat pire-cas était aussi l'unique
+  entrée de `useAdaptiveDegradation`, dont `applyTier` appelait `useWebRTCP2P.applyQualityTier`
+  (`Promise.all` sur TOUS les pairs). Concrètement : appel de groupe à 3, deux pairs sur un lien
+  excellent, un pair sur un lien pauvre → le pire-cas fait chuter le niveau agrégé à `poor`, et
+  les DEUX pairs sains voient leur encodeur cisaillé à la tier `low` alors que leur propre lien
+  supporterait `high` sans effort — gaspillage de qualité pur, sur le cas d'usage le plus commun
+  d'un appel de groupe (liens hétérogènes).
+- **Fix** : `useCallQuality` retourne désormais aussi `perPeerStats` (`Map<peerId,
+  ConnectionQualityStats>`), réduit individuellement depuis les MÊMES `rates` par pair déjà
+  calculés en interne (zéro requête `getStats()` supplémentaire) — jamais replié dans le pire-cas
+  agrégé. Nouveau hook `usePerPeerVideoTier` : chaque pair reçoit sa PROPRE tier via
+  `useWebRTCP2P.applyQualityTierToPeer(peerId, tier)` (nouveau — `applyVideoEncoding()` sur LE
+  service de ce pair seul, un `setParameters()` pur sans renégociation ni mutation de piste, donc
+  structurellement incapable d'affecter un autre pair). `useAdaptiveDegradation` (agrégat)
+  conserve la décision de survie audio-only call-wide inchangée ; son action `applyTier` devient
+  un no-op documenté côté `VideoCallInterface.tsx` — sinon elle réappliquerait la tier pire-cas
+  par-dessus les tiers par-pair que le nouveau contrôleur vient de poser, à chaque tick.
+  `deriveVideoTier(level)` — extrait de `reduceDegradation` (comportement identique, vérifié par
+  la suite existante inchangée) — est la seule échelle qualité→tier, partagée par les deux
+  contrôleurs.
+- **Périmètre délibérément exclu** : la survie audio-only (suspend/resume) reste call-wide. La
+  généraliser par-pair est réelle et désirable (un pair qui coupe la vidéo pour UN pair en
+  difficulty pendant que les autres restent en vidéo) mais réclame de refaire, par pair, la
+  synchronisation de concurrence que `videoToggleInFlightRef`/`cameraSwitchInFlightRef`
+  (Vagues 76/82/92) ont mis plusieurs cycles à établir correctement contre EXACTEMENT cette classe
+  de bug (pistes caméra aliasées/orphelines) — risque disproportionné pour cette vague, laissé en
+  suivi dédié. `applyQualityTier` (agrégat, désormais mort — plus aucun appelant après ce
+  changement) est retiré de `use-webrtc-p2p.ts` (dead code, cf. principe CLAUDE.md).
+- **Tests** (TDD, RED confirmé — `git stash` fichier par fichier, suite rejouée, `git stash pop`) :
+  - `adaptive-degradation.test.ts` : 1 cas neuf (`deriveVideoTier`), 17/17 verts, **suite
+    existante inchangée et verte** (refactor comportement-neutre vérifié).
+  - `use-call-quality.test.ts` : 2 cas neufs — `perPeerStats` rapporte chaque pair à SON niveau
+    (jamais le pire-cas de l'appel), et est une Map vide (jamais `null`/`undefined`) sans pair,
+    vidée à la fin d'appel. RED confirmé (`perPeerStats` `undefined`), 56/56 verts après fix.
+  - `use-per-peer-video-tier.test.tsx` (nouveau fichier, module inexistant → RED par construction) :
+    4 cas — tier appliquée par pair indépendamment (le sain reste `high`, le pauvre tombe `low`,
+    même tick) ; dédup d'une tier inchangée (évite le churn `setParameters`) ; ré-application au
+    retour d'un pair reparti (l'entrée de dédup ne doit pas survivre au départ) ; idle + oubli des
+    tiers quand la caméra utilisateur est coupée. 4/4 verts.
+  - `use-webrtc-p2p.test.tsx` : 2 cas neufs pour `applyQualityTierToPeer` — applique au SEUL pair
+    nommé ; no-op silencieux pour un peerId sans service vivant. RED confirmé (fonction
+    inexistante), 67/67 verts après fix.
+  - `VideoCallInterface.test.tsx` : mock `useCallQuality`/`webrtc` mis à jour (`perPeerStats`,
+    `applyQualityTierToPeer` remplace `applyQualityTier`) — 199/199 verts, 0 régression.
+  - Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites / 765 tests** verts, 0
+    régression. Suite `apps/web` COMPLÈTE (`bun run test`) : **688 suites / 13395 tests** (21
+    skip préexistants), 100% vert. `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** — 1815
+    préexistantes, comparées fichier par fichier avant/après (`git stash`) sur chaque fichier
+    touché, compte et nature identiques (VideoCallInterface.tsx : 11→11 ; use-webrtc-p2p.ts :
+    3→3 ; use-call-quality.ts/adaptive-degradation.ts/use-per-peer-video-tier.ts : 0). `eslint`
+    (binaire du projet, `^9.39.5` — `npx eslint` résout un ESLint 10 global incompatible,
+    contourné en appelant `./node_modules/.bin/eslint` directement) : comptes identiques
+    avant/après sur chaque fichier touché (adaptive-degradation.ts 0→0, use-call-quality.ts 6→6,
+    use-webrtc-p2p.ts 4→4, VideoCallInterface.tsx 4→4) ; le seul fichier neuf
+    (`use-per-peer-video-tier.ts`) porte 1 finding `react-hooks/refs` — vérifié PRÉEXISTANT et
+    systémique (même classe trouvée dans 3 fichiers non touchés cette vague,
+    `use-adaptive-degradation.ts`/`use-remote-call-alerts.ts`/`use-call-analytics-reporter.ts` —
+    le pattern `xRef.current = x` hors effet est utilisé PARTOUT dans `hooks/`), provenant du bump
+    `eslint-plugin-react-hooks@7.1.1` (nouvelles règles React Compiler) — mesuré, pas corrigé ici
+    (gate `continue-on-error: true` en CI, même politique que la dette `no-explicit-any`
+    documentée cycle 62/Leçon 222).
+- **Non fait volontairement** : suspend/resume audio-only par-pair (raison ci-dessus). Reconduits
+  (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR
+  `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce sandbox ;
+  `CallSystemMessage.tsx:63` `canCallBack` sans garde `!isAnonymous` (toujours latent, aucun
+  scénario réel) ; `mergeEntries`/`upsertRemoteSegment` (web + iOS) sans filtre `targetLanguage`
+  explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure
+  groupe documentés dans `2026-08-13-group-calls-gap-analysis.md` ; ICE-restart backoff/rate-limit
+  scoping (l'autre moitié du follow-up PR #3182, non traitée ici) ; dette lint systémique
+  `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (mesurée cette vague, non corrigée — chantier
+  distinct, décision d'équipe requise sur la portée du refactor).

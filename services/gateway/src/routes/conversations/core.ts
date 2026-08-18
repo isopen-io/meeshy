@@ -789,15 +789,28 @@ export function registerCoreRoutes(
             .map(([, participantId]) => participantId);
 
           const lastOpenedAtByConversation = new Map<string, Date | null>();
+          // R6-6 — mutualisée avec `ConversationBridgeService.buildBridgeData` :
+          // cette lecture couvre les MÊMES participants que sa propre requête
+          // `conversationReadCursor` interne (même conversations, même
+          // lecteur) ; `lastReadMessageCreatedAt` est lu en plus, pour rien de
+          // plus, afin que la map ci-dessous puisse servir aux DEUX besoins.
+          const cursorsByParticipant = new Map<
+            string,
+            { lastReadAt: Date | null; lastReadMessageCreatedAt: Date | null }
+          >();
           if (viewerParticipantIds.length > 0) {
             const participantToConversation = new Map(
               [...currentUserParticipantIdMap.entries()].map(([convId, participantId]) => [participantId, convId])
             );
             const cursors = await prisma.conversationReadCursor.findMany({
               where: { participantId: { in: viewerParticipantIds } },
-              select: { participantId: true, lastReadAt: true }
+              select: { participantId: true, lastReadAt: true, lastReadMessageCreatedAt: true }
             });
             for (const cursor of cursors) {
+              cursorsByParticipant.set(cursor.participantId, {
+                lastReadAt: cursor.lastReadAt ?? null,
+                lastReadMessageCreatedAt: cursor.lastReadMessageCreatedAt ?? null
+              });
               const convId = participantToConversation.get(cursor.participantId);
               if (convId) lastOpenedAtByConversation.set(convId, cursor.lastReadAt ?? null);
             }
@@ -853,6 +866,9 @@ export function registerCoreRoutes(
             viewerId: userId,
             candidates: bridgeCandidates,
             orchestratorInputs,
+            // R6-6 — évite la seconde lecture de `conversationReadCursor`
+            // que le service ferait sinon lui-même sur ces mêmes participants.
+            cursorsByParticipant,
             ...(agentClient ? { agent: agentClient } : {})
           });
         } catch (error) {
@@ -1764,7 +1780,7 @@ export function registerCoreRoutes(
           io,
           conversationId: id,
           participants: updatedConversation.participants.filter(p => p.isActive),
-          events: [SERVER_EVENTS.CONVERSATION_UPDATED],
+          event: SERVER_EVENTS.CONVERSATION_UPDATED,
           payload: {
             conversationId: id,
             ...changedFields,
@@ -1869,7 +1885,7 @@ export function registerCoreRoutes(
           io,
           conversationId,
           participants: closedConversation.participants.filter(p => p.isActive),
-          events: [SERVER_EVENTS.CONVERSATION_CLOSED],
+          event: SERVER_EVENTS.CONVERSATION_CLOSED,
           payload: { conversationId, closedBy: userId, closedAt: now.toISOString() }
         })
       }

@@ -16,6 +16,17 @@
  * fichier suit le contrat gelé et réutilise son schéma Zod plutôt que de
  * dupliquer une énumération divergente en dur.
  *
+ * AMENDEMENT S1 (REV-4bis/B2, 2026-08-17) — l'énumération porte désormais un
+ * SIXIÈME mot, `bulles` (justification complète dans
+ * `packages/shared/types/reading-modes.ts`). Ce fichier n'a rien eu à changer
+ * pour l'absorber, et c'est précisément le point : ses cas paramétrés itèrent
+ * `ReadingModePreferenceSchema.options`, jamais une copie littérale — la
+ * discipline que la NOTE ci-dessus impose est ce qui rend l'amendement
+ * couvert par construction. La route accepte `bulles` comme tout autre
+ * membre ; côté loi, l'orchestrateur le rabat sur `focal`/`clamped-unavailable`
+ * drapeau-on, `'bubbles'` n'appartenant à aucun catalogue hors branche
+ * drapeau-éteint.
+ *
  * @see tasks/lentille-implementation-contract.md LWS-3 (§"Préférence de mode de lecture")
  */
 

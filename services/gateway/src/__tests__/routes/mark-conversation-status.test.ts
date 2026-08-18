@@ -260,6 +260,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONVERSATION_ID,
       unreadCount: expect.any(Number),
+      bridge: null,
     });
   });
 
@@ -279,11 +280,10 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONVERSATION_ID,
       unreadCount: expect.any(Number),
+      bridge: null,
     });
-    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false —
-    // neither the legacy name nor the dual-emitted message:read-status-updated.
+    // read-status:updated (peer disclosure) must NOT fire when showReadReceipts=false.
     expect(mockEmit2).not.toHaveBeenCalledWith('read-status:updated', expect.anything());
-    expect(mockEmit2).not.toHaveBeenCalledWith('message:read-status-updated', expect.anything());
   });
 
   // Exact-read (spec 2026-07-24-read-exactness-design.md): a partial read reports only
@@ -308,6 +308,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     expect(mockEmit2).toHaveBeenCalledWith('conversation:unread-updated', {
       conversationId: CONVERSATION_ID,
       unreadCount: 3,
+      bridge: null,
     });
   });
 });
