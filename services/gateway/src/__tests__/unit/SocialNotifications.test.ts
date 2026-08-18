@@ -463,8 +463,28 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.type).toBe('post_repost');
       expect(createArg.data.priority).toBe('normal');
-      // Body is the FR repost phrase « a partagé <noun> » (no English "repost").
-      expect(createArg.data.content).toContain('partagé');
+      // Le corps montre la CIBLE, pas le geste : la phrase d'action
+      // (« a partagé ») est portée par le titre et la bannière depuis
+      // `targetPreviewBody` — l'y répéter dupliquait corps et sous-titre. Sans
+      // extrait ni média, le corps nomme l'entité partagée.
+      expect(createArg.data.content).toContain('publication');
+      expect(createArg.data.content).not.toContain('partagé');
+    });
+
+    it('montre l\'extrait du contenu partagé dans le corps quand il y en a un', async () => {
+      const repostPrefs = { repostEnabled: true };
+      setupSuccessMocks(mockPrisma, { type: 'post_repost', priority: 'normal' }, repostPrefs);
+
+      await service.createPostRepostNotification({
+        actorId: ACTOR_ID,
+        originalPostId: POST_ID,
+        postAuthorId: AUTHOR_ID,
+        repostId: REPOST_ID,
+        postPreview: 'Le texte du post repris',
+      });
+
+      const createArg = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.content).toContain('Le texte du post repris');
     });
 
     it('should include repostId and originalPostId in metadata', async () => {
@@ -771,7 +791,11 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.context.postId).toBe(POST_ID);
     });
 
-    it('should include emoji in the notification content', async () => {
+    // L'emoji a quitté le CORPS pour les métadonnées : le corps montre la cible
+    // (l'extrait du commentaire aimé), la phrase d'action et son emoji étant
+    // déjà portés par le titre et la bannière. Les y répéter dupliquait corps et
+    // sous-titre mot pour mot.
+    it('porte l\'emoji dans les métadonnées, plus dans le corps', async () => {
       const commentLikePrefs = { commentLikeEnabled: true };
       setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' }, commentLikePrefs);
 
@@ -784,7 +808,25 @@ describe('Social Notification Methods', () => {
       });
 
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
-      expect(createArg.data.content).toContain('🎉');
+      expect(createArg.data.metadata.emoji).toBe('🎉');
+      expect(createArg.data.content).not.toContain('🎉');
+    });
+
+    it('montre l\'extrait du commentaire aimé dans le corps', async () => {
+      const commentLikePrefs = { commentLikeEnabled: true };
+      setupSuccessMocks(mockPrisma, { type: 'comment_like', priority: 'low' }, commentLikePrefs);
+
+      await service.createCommentLikeNotification({
+        actorId: ACTOR_ID,
+        postId: POST_ID,
+        commentId: COMMENT_ID,
+        commentAuthorId: AUTHOR_ID,
+        emoji: '👍',
+        commentPreview: 'Bien vu pour la migration',
+      });
+
+      const createArg = mockPrisma.notification.create.mock.calls[0][0];
+      expect(createArg.data.content).toContain('Bien vu pour la migration');
     });
   });
 });
