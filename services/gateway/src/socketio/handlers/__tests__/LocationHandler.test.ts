@@ -66,6 +66,10 @@ function makePrisma(participantResult: unknown = { id: PARTICIPANT_ID }): any {
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue(participantResult),
     },
+    // Conversation OUVERTE par défaut — l'état terminal a sa propre suite.
+    conversation: {
+      findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }),
+    },
   };
 }
 

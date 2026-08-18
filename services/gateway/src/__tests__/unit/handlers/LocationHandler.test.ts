@@ -26,6 +26,10 @@ function createMockPrisma() {
     participant: {
       findFirst: jest.fn(),
     },
+    // Conversation OUVERTE par défaut — l'état terminal a sa propre suite.
+    conversation: {
+      findUnique: jest.fn().mockResolvedValue({ isActive: true, closedAt: null }),
+    },
   } as any;
 }
 

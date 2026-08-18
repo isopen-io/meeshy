@@ -84,8 +84,11 @@ function makeIo() {
   } as any;
 }
 
+// La conversation est OUVERTE par défaut : cette suite parle du cycle de vie
+// du PARTAGE, pas de l'état du fil, qui a sa propre suite.
 const makePrisma = () => ({
   participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'participant-1' }) },
+  conversation: { findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }) },
 });
 
 function makeHandler() {

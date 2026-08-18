@@ -955,6 +955,18 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Éteint les partages de position en cours d'un fil qui vient d'être clos.
+   *
+   * Unique appelant : `announceConversationClosed`, le point de convergence des
+   * trois chemins de clôture — c'est là qu'est écrit POURQUOI l'extinction
+   * précède l'annonce. Le registre vit dans `LocationHandler` ; le gestionnaire
+   * n'en est que le porteur, comme pour `invalidateParticipantCache`.
+   */
+  public endLiveLocationsForClosedConversation(conversationId: string): void {
+    this.locationHandler.endSessionsForClosedConversation(conversationId);
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {
