@@ -17,6 +17,29 @@ import XCTest
 /// plus dire « readingModes OFF », elle veut dire « readingModes suit la
 /// bêta ») — la cascade complète est prouvée à part, § « Cascade
 /// readingModes → BetaFeaturesPreference » en fin de fichier.
+///
+/// **I-075 RETIRÉ le 2026-08-18 (décision produit).** Le paragraphe
+/// ci-dessus est conservé pour l'historique : il décrit ce que ce fichier
+/// verrouillait entre le 2026-08-16 et le 2026-08-18. Ce qui est verrouillé
+/// AUJOURD'HUI, et que ce lot amende :
+/// 1. **Absence de toute clé ⇒ OFF** — une `defaults` fraîche redevient
+///    « readingModes OFF » (installation neuve ⇒ ouverture en Bulles).
+///    L'ancien témoin discriminant
+///    `test_readingModes_envAbsent_keyNeverWritten_betaNeverWritten_returnsTrue`
+///    affirmait littéralement l'inverse (`XCTAssertTrue` sur ce décor
+///    exact) ; il est retourné en `…_returnsFalse` ci-dessous.
+/// 2. **Les choix explicites survivent, dans les deux sens** — env
+///    `"1"`/`"0"`, clé `meeshy.flag.reading_modes` `true`/`false` : étages 1
+///    et 2 INCHANGÉS, leurs témoins ne bougent pas d'une ligne.
+/// 3. **L'opt-in bêta volontaire n'est pas retiré** — toggle « Bêta »
+///    EXPLICITEMENT ON ⇒ readingModes ON ; EXPLICITEMENT OFF ⇒ OFF. Seule
+///    l'ABSENCE de ce choix ne vaut plus opt-in. Les témoins de l'étage 3
+///    qui s'appuyaient sur une bêta ON *implicite* posent désormais le choix
+///    explicitement — c'est le seul décor qui change.
+///
+/// Preuve que le retrait est SURGICAL : sur les 144 combinaisons
+/// (env readingModes × clé readingModes × env bêta × clé bêta), 4 seulement
+/// changent de verdict — exactement celles où RIEN n'a jamais été exprimé.
 final class LentilleFlagGateTests: XCTestCase {
 
     // MARK: - Fabriques
@@ -135,11 +158,13 @@ final class LentilleFlagGateTests: XCTestCase {
 
     func test_setForDebug_doesNotAffectTheOtherFlag() {
         let defaults = makeIsolatedDefaults()
-        // readingModes posée explicitement à false pour que ce test reste
-        // discriminant sous l'amendement (une `defaults` fraîche résoudrait
-        // maintenant readingModes à `true` via la cascade bêta, masquant ce
-        // que ce test veut prouver : `setForDebug(.lentilleList, …)` n'écrit
-        // QUE la clé lentilleList).
+        // readingModes posée explicitement à false : décor hérité du second
+        // amendement I-075 (où une `defaults` fraîche résolvait readingModes
+        // à `true` via la cascade bêta). Le retrait du 2026-08-18 rendrait
+        // cette écriture facultative — elle est CONSERVÉE parce qu'elle rend
+        // le test explicite sur ce qu'il prouve (`setForDebug(.lentilleList,
+        // …)` n'écrit QUE la clé lentilleList) au lieu de le faire reposer
+        // sur un défaut d'absence.
         LentilleFeatureFlag.setForDebug(.readingModes, enabled: false, defaults: defaults)
 
         LentilleFeatureFlag.setForDebug(.lentilleList, enabled: true, defaults: defaults)
@@ -147,20 +172,81 @@ final class LentilleFlagGateTests: XCTestCase {
         XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
     }
 
-    // MARK: - Cascade readingModes → BetaFeaturesPreference (I-075, second amendement 2026-08-16)
+    // MARK: - Cascade readingModes → BetaFeaturesPreference (I-075 RETIRÉ le 2026-08-18)
     //
-    // Trois étages : env (INCHANGÉ) → clé readingModes EXPLICITE → bêta
-    // (défaut ON). `lentilleList` n'a QUE deux étages (env → defaults.bool,
-    // INCHANGÉ) — jamais de troisième étage bêta, prouvé ci-dessus.
+    // Trois étages : env (INCHANGÉ) → clé readingModes EXPLICITE → bêta,
+    // ce dernier consulté UNIQUEMENT si la préférence bêta est EXPRIMÉE
+    // (retrait du 2026-08-18). `lentilleList`/`riviereMode` n'ont QUE deux
+    // étages (env → defaults.bool, INCHANGÉ) — jamais d'étage bêta.
 
-    /// LE test discriminant du second amendement : env absent, clé
-    /// `reading_modes` JAMAIS posée, bêta JAMAIS posée (donc bêta à son
-    /// propre défaut ON) ⇒ `readingModes.isEnabled` doit être `true` — à
-    /// l'installation, le système de modes de lecture est actif par défaut.
-    func test_readingModes_envAbsent_keyNeverWritten_betaNeverWritten_returnsTrue() {
+    /// LE test discriminant du RETRAIT : env absent, clé `reading_modes`
+    /// JAMAIS posée, bêta JAMAIS posée ⇒ `readingModes.isEnabled` doit être
+    /// `false`. Installation neuve, personne n'a rien demandé ⇒ ouverture en
+    /// BULLES (comportement historique).
+    ///
+    /// AVANT (2026-08-16 → 2026-08-18) ce même décor était verrouillé à
+    /// `true` par `…_betaNeverWritten_returnsTrue` : « à l'installation, le
+    /// système de modes de lecture est actif par défaut ». C'est CE verrou
+    /// que la décision produit du 2026-08-18 retire.
+    ///
+    /// Le décor est ré-affirmé plutôt que supposé : la bêta est bien à son
+    /// défaut ON (elle N'A PAS changé de polarité — son autre client, l'item
+    /// « Focal (bêta) », en dépend), et pourtant `readingModes` rend `false`.
+    /// Sans cette assertion de décor, le test resterait vert même si
+    /// quelqu'un basculait `BetaFeaturesPreference` à OFF par défaut — il ne
+    /// prouverait plus que le retrait vit dans la CASCADE.
+    func test_readingModes_envAbsent_keyNeverWritten_betaNeverWritten_returnsFalse() {
         let defaults = makeIsolatedDefaults()
+        XCTAssertTrue(
+            BetaFeaturesPreference.isEnabled(defaults: defaults, environment: [:]),
+            "Décor : la bêta garde son défaut ON — le retrait vit dans la cascade readingModes, pas dans la polarité de BetaFeaturesPreference."
+        )
+        XCTAssertFalse(
+            BetaFeaturesPreference.isExplicitlySet(defaults: defaults, environment: [:]),
+            "Décor : rien n'a été exprimé — c'est CE cas que le retrait fait basculer à OFF."
+        )
 
-        XCTAssertTrue(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
+        XCTAssertFalse(
+            LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]),
+            "Absence de toute clé ⇒ OFF (décision produit 2026-08-18) : une installation neuve ouvre en Bulles."
+        )
+    }
+
+    /// Le pendant de l'opt-in : la MÊME absence de clé `reading_modes`, mais
+    /// la bêta EXPLICITEMENT activée par l'utilisateur ⇒ `true`. L'opt-in
+    /// volontaire n'est pas retiré — seule l'ABSENCE de choix cesse de valoir
+    /// opt-in. Paire discriminante avec le test ci-dessus : mêmes entrées à
+    /// une écriture explicite près, verdicts opposés.
+    func test_readingModes_keyNeverWritten_betaExplicitlyTrue_returnsTrue() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+
+        XCTAssertTrue(
+            LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]),
+            "Toggle « Bêta » explicitement ON ⇒ modes de lecture ON, comme avant le retrait."
+        )
+    }
+
+    /// Même opt-in, exprimé par la SURCHARGE PROCESS de la bêta plutôt que
+    /// par la clé — `MEESHY_FLAG_BETA_FEATURES=1` est un choix explicite de
+    /// plein droit (tests UI, TestFlight), donc il rouvre l'étage 3.
+    func test_readingModes_keyNeverWritten_betaEnvOne_returnsTrue() {
+        let defaults = makeIsolatedDefaults()
+        let environment = [BetaFeaturesPreference.environmentKey: "1"]
+
+        XCTAssertTrue(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: environment))
+    }
+
+    /// Une valeur d'environnement PARASITE n'exprime rien : `isEnabled` de la
+    /// bêta la traite déjà comme absente (repli `UserDefaults`), donc le
+    /// retrait la traite comme « aucun choix » ⇒ OFF. Sans ce témoin, une
+    /// implémentation qui testerait `environment[betaKey] != nil` au lieu de
+    /// `"1"/"0"` passerait inaperçue.
+    func test_readingModes_keyNeverWritten_betaEnvUnrecognized_returnsFalse() {
+        let defaults = makeIsolatedDefaults()
+        let environment = [BetaFeaturesPreference.environmentKey: "yes"]
+
+        XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: environment))
     }
 
     /// Bêta explicitement OFF (clé `reading_modes` toujours absente) ⇒
@@ -174,12 +260,20 @@ final class LentilleFlagGateTests: XCTestCase {
     }
 
     /// Clé `reading_modes` posée EXPLICITEMENT à `false` ⇒ `false`, MÊME si
-    /// la bêta est ON (implicitement, `defaults` fraîche) — seul moyen de
-    /// couper `reading_modes` seul sans toucher au reste du programme bêta.
-    func test_readingModes_keyExplicitlyFalse_betaOn_returnsFalse() {
+    /// la bêta est ON — seul moyen de couper `reading_modes` seul sans
+    /// toucher au reste du programme bêta.
+    ///
+    /// Amendé par le retrait du 2026-08-18 : la bêta est désormais posée
+    /// EXPLICITEMENT à `true` au lieu de compter sur son défaut ON implicite.
+    /// Sans ce changement de décor le test resterait vert mais cesserait
+    /// d'être discriminant — l'étage 3 rendrait OFF de toute façon (bêta non
+    /// exprimée), si bien que le test ne prouverait plus que l'étage 2 GAGNE
+    /// sur l'étage 3, seulement qu'ils concordent.
+    func test_readingModes_keyExplicitlyFalse_betaExplicitlyOn_returnsFalse() {
         let defaults = makeIsolatedDefaults()
         defaults.set(false, forKey: LentilleFeatureFlag.readingModes.userDefaultsKey)
-        XCTAssertTrue(BetaFeaturesPreference.isEnabled(defaults: defaults, environment: [:]), "Décor : la bêta doit être ON (implicite) pour que ce test soit discriminant.")
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+        XCTAssertTrue(BetaFeaturesPreference.isEnabled(defaults: defaults, environment: [:]), "Décor : la bêta doit être ON (explicite) pour que ce test soit discriminant.")
 
         XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
     }
@@ -195,14 +289,24 @@ final class LentilleFlagGateTests: XCTestCase {
         XCTAssertTrue(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]))
     }
 
-    /// Round-trip complet des trois étages sur la MÊME `defaults` : bêta ON
-    /// implicite (readingModes suit, `true`) → bêta coupée (readingModes suit,
-    /// `false`) → clé readingModes EXPLICITE posée à `true` malgré la bêta
-    /// coupée (readingModes gagne, `true`) — chaque transition isole l'étage
-    /// qu'elle teste.
-    func test_readingModes_cascadeRoundTrip_allThreeStages() {
+    /// Round-trip complet sur la MÊME `defaults`, réécrit pour le retrait du
+    /// 2026-08-18 — le parcours part maintenant de OFF au lieu de partir de
+    /// ON :
+    /// 1. rien n'est posé ⇒ `false` (le retrait lui-même) ;
+    /// 2. bêta EXPLICITEMENT ON ⇒ `true` (l'opt-in volontaire, préservé) ;
+    /// 3. bêta EXPLICITEMENT coupée ⇒ `false` (l'opt-out, préservé) ;
+    /// 4. clé readingModes EXPLICITE à `true` malgré la bêta coupée ⇒ `true`
+    ///    (étage 2 gagne sur étage 3, inchangé).
+    ///
+    /// AVANT, l'étape 1 était `XCTAssertTrue(…, "Étage 3 (bêta ON
+    /// implicite).")` — c'est exactement l'assertion que la décision produit
+    /// retourne.
+    func test_readingModes_cascadeRoundTrip_allStages() {
         let defaults = makeIsolatedDefaults()
-        XCTAssertTrue(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]), "Étage 3 (bêta ON implicite).")
+        XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]), "Rien d'exprimé ⇒ OFF (retrait 2026-08-18).")
+
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+        XCTAssertTrue(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]), "Étage 3 — opt-in bêta EXPLICITE, préservé par le retrait.")
 
         BetaFeaturesPreference.setEnabled(false, defaults: defaults)
         XCTAssertFalse(LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:]), "Étage 3 (bêta coupée).")

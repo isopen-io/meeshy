@@ -377,6 +377,13 @@ seule implication — `defaultIsOn && !isMounted ⇒ échec`. Basculer la Riviè
 casse la build tant que R-137 n'a pas monté l'écran. Le verrou tombe de lui-même le jour où
 elle le monte.
 
+> **LEVÉE le 2026-08-18** — la réserve ci-dessous décrit l'état du code entre le 2026-08-16
+> et le 2026-08-18. Le palier 0 a été soldé : la cascade bêta est **RETIRÉE**, `reading_modes`
+> est de nouveau **OFF** en l'absence d'opt-in explicite, et la clause « le bundle n'est pas
+> servi à qui ne l'a pas demandé » redevient vraie sur iOS. Voir §2.2 point 1 et §2.4
+> palier 0. Le texte d'origine est conservé tel quel — il documente ce qui a motivé la
+> décision.
+
 **La réserve, et elle est réelle : sur iOS, `reading_modes` est DÉJÀ ON pour tout le
 monde.** La cascade I-075 (`LentilleFeatureFlag.isEnabled`, second amendement produit du
 2026-08-16) résout, pour `.readingModes` : environnement absent → clé
@@ -408,7 +415,7 @@ l'objet du palier 0 du §2.
 | 7 | Cotes == tokens **et** 32 id en parité `id` par `id` | **non-tenu** (cotes tenues ; parité 17/32 ; **garde d'ensemble rouge au timeout par défaut**) |
 | 8 | Portes franchies dans l'ordre | **tenu-avec-réserve** (ordre tenu ; « et parité » satisfait au sens amendé seulement) |
 | 9 | Bascule des substituts neutre | **prouvé** |
-| 10 | `main` jamais mis en danger | **tenu-avec-réserve** (mécanismes prouvés ; **iOS `reading_modes` déjà ON par la cascade bêta**) |
+| 10 | `main` jamais mis en danger | **tenu** depuis le 2026-08-18 (mécanismes prouvés ; la réserve « iOS `reading_modes` déjà ON par la cascade bêta » est **levée** — cascade retirée, palier 0 soldé, §2.2 point 1) |
 
 ---
 
@@ -422,9 +429,9 @@ l'objet du palier 0 du §2.
 | **`reading_modes`** (web) | `hooks/lentille/resolve-reading-modes-flag.ts` | `?reading_modes=1\|0` > cookie `meeshy_reading_modes` > `NEXT_PUBLIC_READING_MODES_DEFAULT` > OFF | **OFF** |
 | **`riviere_mode`** (web) | `hooks/lentille/resolve-river-mode-flag.ts` | `?riviere_mode=1\|0` > cookie `meeshy_riviere_mode` > `NEXT_PUBLIC_RIVIERE_MODE_DEFAULT` > OFF | **OFF, et VERROUILLÉ** (R6-3) |
 | **`LentilleFeatureFlag.lentilleList`** (iOS) | `Lentille/Core/LentilleFeatureFlag.swift` | `MEESHY_FLAG_LENTILLE_LIST` (`"1"`/`"0"`) > `UserDefaults["meeshy.flag.lentille_list"]` > OFF | **OFF** |
-| **`LentilleFeatureFlag.readingModes`** (iOS) | idem, cascade I-075 à 3 étages | `MEESHY_FLAG_READING_MODES` > clé `meeshy.flag.reading_modes` **si explicitement posée** > `BetaFeaturesPreference` | **ON** — absence de clé ⇒ bêta ⇒ `true` |
+| **`LentilleFeatureFlag.readingModes`** (iOS) | idem, cascade I-075 à 3 étages, **étage 3 restreint le 2026-08-18** | `MEESHY_FLAG_READING_MODES` > clé `meeshy.flag.reading_modes` **si explicitement posée** > `BetaFeaturesPreference` **si explicitement exprimée** | **OFF** — absence de toute clé ⇒ `false` (retrait I-075, 2026-08-18) ; opt-in explicite ⇒ ON |
 | **`LentilleFeatureFlag.riviereMode`** (iOS) | idem, 2 étages, jamais la cascade bêta | `MEESHY_FLAG_RIVIERE_MODE` > `UserDefaults["meeshy.flag.riviere_mode"]` > OFF | **OFF, VERROUILLÉ (R6-3) et inerte** (aucun site ne câble `isRiverFlagEnabled`) |
-| *(support)* **`BetaFeaturesPreference`** (iOS) | `Lentille/Core/BetaFeaturesPreference.swift` | `MEESHY_FLAG_BETA_FEATURES` > `UserDefaults["meeshy.pref.beta_features_enabled"]` **si écrite** > **TRUE** | **ON** — toggle « Bêta » des Réglages |
+| *(support)* **`BetaFeaturesPreference`** (iOS) | `Lentille/Core/BetaFeaturesPreference.swift` | `MEESHY_FLAG_BETA_FEATURES` > `UserDefaults["meeshy.pref.beta_features_enabled"]` **si écrite** > **TRUE** | **ON, INCHANGÉ par le retrait du 2026-08-18** — toggle « Bêta » des Réglages ; ne gate plus que l'item « Focal (bêta) » du menu d'appui long, sauf opt-in explicite |
 | *(hors périmètre)* **`agent_grammar`** (iOS) | `MeeshyFeatureFlags.isAgentGrammarEnabled` | env > `UserDefaults` > OFF | **OFF** — décision produit ÉCRITE exigée par §5.2, non prise |
 
 **Rien n'est posé nulle part.** Aucun `.env`, aucun `docker-compose`, aucun workflow CI, aucun
@@ -441,6 +448,25 @@ aujourd'hui** :
 1. **iOS — `reading_modes` ON par défaut** (I-075, 2026-08-16). Tout appareil qui installe
    l'app et ne touche à rien ouvre ses conversations par l'orchestrateur. C'est le plus gros
    levier du chantier, et il est déjà tiré.
+   → **DÉCISION PRISE le 2026-08-18 : RETIRÉE.** La cascade bêta ne vaut plus opt-in
+   implicite. Sémantique exacte du retrait, telle qu'implémentée :
+   - **Absence de toute clé ⇒ OFF.** Ni `MEESHY_FLAG_READING_MODES`, ni
+     `meeshy.flag.reading_modes`, ni `meeshy.pref.beta_features_enabled` ⇒ `false` : une
+     installation neuve ouvre ses conversations en **Bulles** (comportement historique).
+   - **Les choix explicites survivent, dans les deux sens.** L'environnement
+     (`"1"`/`"0"`) prime toujours ; la clé `meeshy.flag.reading_modes` posée explicitement
+     est respectée à `true` **comme** à `false`. Étages 1 et 2 de la cascade : INCHANGÉS.
+   - **L'opt-in bêta volontaire n'est pas retiré.** Le toggle « Bêta » des Réglages
+     EXPLICITEMENT basculé à `true` (clé présente) allume toujours les modes de lecture ;
+     explicitement à `false`, il les coupe. Seule l'**ABSENCE** de ce choix ne vaut plus
+     opt-in.
+
+   Implémentation : la restriction vit dans la cascade de `LentilleFeatureFlag.isEnabled`
+   (nouveau prédicat `BetaFeaturesPreference.isExplicitlySet`), **pas** dans la polarité de
+   défaut de `BetaFeaturesPreference` — celle-ci reste ON parce que son autre client, la
+   visibilité de l'item « Focal (bêta) » du menu d'appui long, n'est pas visé par la
+   décision. Sur les 144 combinaisons de la cascade, **4 seulement changent de verdict** :
+   exactement celles où rien n'a jamais été exprimé.
 2. **Web — « Bulles » par défaut, PROVISOIRE** (`e87886a9`, 2026-08-17). Sans choix
    explicite du lecteur, le fil ouvert rend les bulles **y compris drapeau ON**, là où
    l'orchestrateur résolvait `auto → focal`. La décision vit à UN SEUL endroit
@@ -505,7 +531,7 @@ remède est purement mécanique.
 > réversible par **une seule** variable d'environnement ou **une seule** écriture
 > `UserDefaults` — aucun ne demande un déploiement de code pour revenir en arrière.
 
-**Palier 0 — DÉCIDER, ne rien allumer. Aujourd'hui.**
+**Palier 0 — DÉCIDER, ne rien allumer. ~~Aujourd'hui.~~ FAIT le 2026-08-18.**
 Confirmer ou retirer la cascade bêta iOS (§2.2 point 1). C'est la seule activation déjà en
 cours, et elle porte le levier le plus lourd du chantier.
 *Si CONFIRMÉE* : rien à faire, mais l'écrire dans ce document — pour que la mise en
@@ -514,6 +540,25 @@ production ne la découvre pas.
 prime sur tout), ou une écriture explicite de `meeshy.flag.reading_modes` à `false` au
 premier lancement. Coût : une ligne.
 **Retour arrière** : symétrique, une ligne.
+
+**→ DÉCISION PRISE le 2026-08-18 : RETIRÉE.** Trois points, détaillés au §2.2 point 1 :
+- **Absence de toute clé ⇒ OFF** — installation neuve ⇒ ouverture en **Bulles**.
+- **Les choix explicites survivent, dans les deux sens** — env `MEESHY_FLAG_READING_MODES`
+  (`"1"`/`"0"`) et clé `meeshy.flag.reading_modes` (`true` comme `false`) : INCHANGÉS.
+- **L'opt-in bêta volontaire n'est pas retiré** — toggle « Bêta » explicitement ON ⇒ modes
+  de lecture ON ; explicitement OFF ⇒ OFF. Seule l'ABSENCE de ce choix cesse de valoir
+  opt-in.
+
+Le retrait a été **porté dans le code**, pas dans le schéma de build : ni
+`MEESHY_FLAG_READING_MODES=0` ni écriture au premier lancement n'ont été nécessaires. La
+cascade de `LentilleFeatureFlag.isEnabled` ne consulte plus l'étage bêta que si la
+préférence est explicitement exprimée (`BetaFeaturesPreference.isExplicitlySet`). Deux
+avantages sur la variante « une ligne dans le schéma » : le défaut est le même pour TOUTES
+les builds (App Store, TestFlight, dev) au lieu de dépendre du schéma utilisé, et la
+surcharge process `MEESHY_FLAG_READING_MODES` **reste libre** pour les tests UI et
+TestFlight au lieu d'être consommée par le retrait lui-même.
+**Retour arrière** : `MEESHY_FLAG_READING_MODES=1` (surcharge process, prime sur tout), ou
+revert du commit `[P0-150]`. Le palier 2 ci-dessous en tient compte.
 
 **Palier 1 — Équipe interne, web, opt-in par URL. Rien à déployer.**
 `https://…/conversations?lentille=1` et `?reading_modes=1`. Le cookie persiste pour ce
@@ -527,7 +572,11 @@ conditions réelles. **Faire cette mesure ici**, pas plus tard.
 
 **Palier 2 — Bêta iOS TestFlight, liste comprise.**
 `MEESHY_FLAG_LENTILLE_LIST=1` dans l'environnement du schéma de build TestFlight
-uniquement. `reading_modes` reste sur la cascade bêta (déjà ON). `riviere_mode` reste OFF.
+uniquement. `reading_modes` reste sur la cascade bêta — **désormais OFF en l'absence
+d'opt-in explicite** (retrait du 2026-08-18, palier 0) : pour que la population TestFlight
+voie les modes de lecture, il faut ajouter `MEESHY_FLAG_READING_MODES=1` au schéma
+TestFlight, ou compter sur le toggle « Bêta » que chaque testeur bascule lui-même. À
+trancher au moment d'ouvrir ce palier. `riviere_mode` reste OFF.
 **Pré-conditions, dans cet ordre** :
   (a) CI macOS vert sur le SHA embarqué (point 1 — ce n'est pas une formalité : quatre
   commits Swift ont atterri depuis le dernier run complet vert connu) ;
