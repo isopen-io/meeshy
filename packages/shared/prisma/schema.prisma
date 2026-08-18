@@ -611,7 +611,18 @@ model Participant {
   attachmentReactions     AttachmentReaction[]
   trackingLinkClicks      TrackingLinkClick[]
 
-  @@unique([conversationId, userId], name: "unique_conversation_user")
+  /// Une IDENTITÉ une seule fois par conversation — et « identité » ne veut pas
+  /// dire `userId`. Un anonyme n'en a pas ; il est identifié par
+  /// `sessionTokenHash`. La clé a longtemps été `[conversationId, userId]`, et
+  /// comme MongoDB indexe un champ ABSENT comme la valeur `null`, tous les
+  /// anonymes d'une conversation se percutaient sur la clé `(C, null)` : la
+  /// conversation n'acceptait qu'UN anonyme, et le join suivant remontait un
+  /// duplicate key servi en 500 opaque. Mesuré en prod le 2026-08-18 : 5
+  /// anonymes, 5 conversations distinctes, jamais deux ensemble.
+  ///
+  /// La troisième colonne rétablit la sémantique voulue sans rien céder sur la
+  /// première : inscrit → `(C, userId, null)`, anonyme → `(C, null, hash)`.
+  @@unique([conversationId, userId, sessionTokenHash], name: "unique_conversation_identity")
   @@index([conversationId])
   @@index([conversationId, isActive])
   @@index([userId])

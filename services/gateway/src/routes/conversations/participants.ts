@@ -10,6 +10,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
@@ -236,6 +237,163 @@ export function registerParticipantsRoutes(
   });
 
   // Route pour ajouter un participant à une conversation
+  /**
+   * Fiche d'un participant — pensée pour ceux qui n'ont PAS de compte.
+   *
+   * Un visiteur entré par lien a rempli un formulaire pour passer la porte, et
+   * rien de ce qu'il y a écrit n'était lisible ensuite : les autres membres ne
+   * voyaient qu'un pseudo. Un participant sans fiche est un participant qu'on
+   * ne peut ni reconnaître, ni accueillir, ni modérer.
+   *
+   * DEUX CERCLES, et c'est la décision structurante de cette route :
+   *
+   *   - l'IDENTITÉ (nom, pseudo, langue, arrivée, lien emprunté) est visible de
+   *     tout membre — c'est ce que la personne montre en entrant ;
+   *   - les COORDONNÉES (email, date de naissance) ne le sont pas. Elles n'ont
+   *     été demandées que parce que l'HÔTE a coché `requireEmail` /
+   *     `requireBirthday` : elles lui reviennent, à lui et à ses modérateurs.
+   *     La salle, elle, contient d'autres visiteurs venus par le même lien
+   *     public — leur ouvrir l'email de leurs voisins transformerait une
+   *     condition d'entrée en annuaire.
+   *
+   * Les membres ordinaires reçoivent `hasEmail` / `hasBirthday` : ils savent
+   * que la coordonnée existe sans la lire. Sans ces drapeaux, un visiteur qui a
+   * fourni son email et un visiteur qui n'en a pas fourni seraient
+   * indistinguables.
+   */
+  fastify.get<{
+    Params: { id: string; participantId: string };
+  }>('/conversations/:id/participants/:participantId/profile', {
+    schema: {
+      description: 'Profile card of a conversation participant. Built for anonymous (no-account) visitors: returns the identity they supplied when joining. Contact details (email, birthday) are restricted to conversation admins/moderators — they were only collected because the host required them.',
+      tags: ['conversations', 'participants'],
+      summary: 'Get participant profile card',
+      params: {
+        type: 'object',
+        required: ['id', 'participantId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          participantId: { type: 'string', description: 'Participant ID' }
+        }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                participantId: { type: 'string' },
+                conversationId: { type: 'string' },
+                isAnonymous: { type: 'boolean', description: 'true when the participant has no account' },
+                userId: { type: 'string', nullable: true },
+                username: { type: 'string', nullable: true },
+                displayName: { type: 'string', nullable: true },
+                firstName: { type: 'string', nullable: true },
+                lastName: { type: 'string', nullable: true },
+                avatar: { type: 'string', nullable: true },
+                language: { type: 'string', nullable: true },
+                country: { type: 'string', nullable: true },
+                conversationRole: { type: 'string', nullable: true },
+                joinedAt: { type: 'string', format: 'date-time', nullable: true },
+                isOnline: { type: 'boolean' },
+                lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                shareLinkName: { type: 'string', nullable: true, description: 'Name of the share link used to join' },
+                hasEmail: { type: 'boolean', description: 'An email was supplied (value withheld from ordinary members)' },
+                hasBirthday: { type: 'boolean', description: 'A birthday was supplied (value withheld from ordinary members)' },
+                email: { type: 'string', nullable: true, description: 'Admins/moderators only' },
+                birthday: { type: 'string', format: 'date-time', nullable: true, description: 'Admins/moderators only' }
+              }
+            }
+          }
+        },
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [optionalAuth]
+  }, async (request, reply) => {
+    try {
+      const { id, participantId } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
+      }
+
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return sendForbidden(reply, 'Access denied: you are not a member of this conversation', { code: 'CONVERSATION_ACCESS_DENIED' });
+      }
+
+      const participant = await prisma.participant.findFirst({
+        where: { id: participantId, conversationId, isActive: true },
+        include: { user: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true } } }
+      });
+
+      if (!participant) {
+        return sendNotFound(reply, 'Participant not found in this conversation');
+      }
+
+      // Le rang du LECTEUR dans CETTE conversation décide du second cercle. Un
+      // anonyme n'a pas de `User.id` : sa ligne se trouve par `id`, jamais par
+      // `userId` — chercher sous la mauvaise colonne rendrait `null`, donc
+      // « membre ordinaire », donc un masquage correct pour la mauvaise raison.
+      const viewerContext = authRequest.authContext;
+      const viewerRow = viewerContext?.userId
+        ? await prisma.participant.findFirst({
+            where: viewerContext.isAnonymous
+              ? { id: viewerContext.userId, conversationId, isActive: true }
+              : { userId: viewerContext.userId, conversationId, isActive: true },
+            select: { role: true }
+          })
+        : null;
+
+      const viewerRole = (viewerRow?.role ?? 'member').toLowerCase();
+      const viewerHostsTheRoom = viewerRole === 'admin' || viewerRole === 'moderator' || viewerRole === 'creator';
+
+      const profile = participant.anonymousSession?.profile;
+      const isAnonymous = participant.type === 'anonymous';
+
+      const shareLink = participant.anonymousSession?.shareLinkId
+        ? await prisma.conversationShareLink.findUnique({
+            where: { id: participant.anonymousSession.shareLinkId },
+            select: { name: true }
+          })
+        : null;
+
+      return sendSuccess(reply, {
+        participantId: participant.id,
+        conversationId,
+        isAnonymous,
+        userId: participant.userId ?? null,
+        username: profile?.username ?? participant.user?.username ?? participant.displayName,
+        displayName: participant.displayName,
+        firstName: profile?.firstName ?? participant.user?.firstName ?? null,
+        lastName: profile?.lastName ?? participant.user?.lastName ?? null,
+        avatar: resolveParticipantAvatar(participant),
+        language: participant.language ?? null,
+        country: participant.anonymousSession?.session?.country ?? null,
+        conversationRole: participant.role ?? null,
+        joinedAt: participant.joinedAt ?? null,
+        isOnline: participant.isOnline ?? false,
+        lastActiveAt: participant.lastActiveAt ?? null,
+        shareLinkName: shareLink?.name ?? null,
+        hasEmail: !!profile?.email,
+        hasBirthday: !!profile?.birthday,
+        email: viewerHostsTheRoom ? (profile?.email ?? null) : null,
+        birthday: viewerHostsTheRoom ? (profile?.birthday ?? null) : null
+      });
+    } catch (error) {
+      logger.error('Error fetching participant profile', error as Error);
+      return sendInternalError(reply, 'Internal server error');
+    }
+  });
+
   fastify.post<{
     Params: { id: string };
     Body: { userId: string };
@@ -370,14 +528,16 @@ export function registerParticipantsRoutes(
       // c'est-à-dire maintenant.
       const joinedAt = new Date();
 
+      let joinedParticipantId: string;
       if (entry.outcome === 'rejoin' && entry.participantId) {
-        await prisma.participant.update({
+        const rejoined = await prisma.participant.update({
           where: { id: entry.participantId },
           data: { ...addedMemberFields, ...REJOIN_PARTICIPANT_STATE }
         });
+        joinedParticipantId = rejoined.id;
         invalidateParticipantLookup(entry.participantId, conversationId);
       } else {
-        await prisma.participant.create({
+        const created = await prisma.participant.create({
           data: {
             conversationId: conversationId,
             userId: userId,
@@ -385,7 +545,27 @@ export function registerParticipantsRoutes(
             joinedAt
           }
         });
+        joinedParticipantId = created.id;
       }
+
+      // Annoncer l'arrivée — quatrième et dernière porte, même loi. Une entrée
+      // qui ne se voit pas dans le fil est une entrée que les présents
+      // découvrent au premier message de l'arrivant.
+      await postJoinSystemMessage(
+        {
+          prisma,
+          broadcast: (message, targetConversationId) =>
+            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, targetConversationId)
+              ?? Promise.resolve()
+        },
+        {
+          conversationId,
+          participantId: joinedParticipantId,
+          displayName: addedMemberFields.displayName,
+          isAnonymous: false,
+          viaShareLink: false
+        }
+      );
 
       // R6-1 — broadcast so other members' devices refresh the participant list
       // in real time (the POST previously created the row silently → stale member

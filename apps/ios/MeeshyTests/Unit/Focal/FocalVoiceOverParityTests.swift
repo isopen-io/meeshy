@@ -68,7 +68,7 @@ final class FocalVoiceOverParityTests: XCTestCase {
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: deliveryStatus),
             isMe: isMe,
             senderName: senderName,
-            callNotice: nil
+            callNotice: nil, joinNotice: nil
         )
     }
 

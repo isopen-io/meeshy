@@ -56,6 +56,17 @@ public struct APIMessageSender: Decodable, Sendable {
         nonEmpty(avatar) ?? nonEmpty(user?.avatar)
     }
 
+    /// L'auteur a-t-il un COMPTE ?
+    ///
+    /// `type` était décodé depuis toujours et ne remontait à aucun modèle de
+    /// domaine — exactement le même dernier mètre que sur le web, où le champ
+    /// était chargé, mappé, puis retiré à la sérialisation. Un participant
+    /// `anonymous` s'affichait donc comme n'importe quel inscrit.
+    ///
+    /// Le PSEUDO ne prouve rien : un compte peut s'appeler `ano_bob`. Seul le
+    /// type tranche.
+    public var isAnonymous: Bool { type == "anonymous" }
+
     public var resolvedUserId: String? {
         userId ?? user?.id
     }
@@ -438,6 +449,12 @@ public struct APIMessage: Sendable {
     /// Structured per-type payload. For call-summary system messages this decodes
     /// into a `CallSummaryMetadata`; absent / non-call metadata yields `nil`.
     public let callSummary: CallSummaryMetadata?
+    /// Avis d'arrivée (`metadata.kind == "member-joined"`). `nil` pour toute
+    /// autre famille de message système — `JoinNoticeMetadata` garde sur `kind`.
+    ///
+    /// Défaut posé comme pour `trackingLinks` : l'init memberwise reste
+    /// compatible avec les sites d'appel existants (fixtures de test).
+    public var joinNotice: JoinNoticeMetadata? = nil
     /// Outbound-link tracking mappings minted by the gateway. Parsed from the
     /// top-level `trackingLinks` (socket `message:new`) OR from
     /// `metadata.trackingLinks` (REST). `nil` when the payload predates the
@@ -531,6 +548,7 @@ extension APIMessage: Decodable {
         // Tolerant: a present-but-non-call metadata object must not fail the
         // whole message decode, so swallow shape mismatches into nil.
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
+        joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .metadata)
         // Outbound-link tracking: prefer the top-level `trackingLinks` (socket
         // `message:new`); otherwise read it from the `metadata` envelope (REST).
         // Both decodes are tolerant so a malformed shape leaves the field nil
@@ -850,12 +868,14 @@ extension APIMessage {
             forwardedFrom: uiForwardRef,
             senderName: effectiveSenderName, senderUsername: effectiveSenderUsername, senderColor: senderColor,
             senderAvatarURL: sender?.resolvedAvatar, senderUserId: sender?.resolvedUserId,
+            senderIsAnonymous: sender?.isAnonymous ?? false,
             deliveryStatus: computedDeliveryStatus,
             isMe: isMe,
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
             deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
             recipientCount: recipientCount ?? 0,
             callSummary: callSummary,
+            joinNotice: joinNotice,
             trackedLinkMap: trackedLinkMap
         )
     }

@@ -146,10 +146,16 @@ describe('POST /anonymous/join/:linkId', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns 409 when username conflicts with registered user', async () => {
+  // Rendait 409 : un anonyme se voyait refuser l'entrée parce qu'un INSCRIT
+  // portait ce nom, quelque part sur le site, dans une conversation qu'il ne
+  // verra jamais. La comparaison a disparu — c'est le GLYPHE FANTÔME, pas le
+  // nom, qui dit lequel des deux a un compte.
+  it('admet le joignant même quand un compte porte ce nom — le fantôme les distingue', async () => {
     (app as any).prisma.user.findFirst.mockResolvedValueOnce({ id: 'other', username: 'bob_sm123' });
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', username: 'bob_sm123', language: 'fr' } });
-    expect(res.statusCode).toBe(409);
+    expect(res.statusCode).toBe(201);
+    const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
+    expect(written.displayName).toBe('ano_bob_sm123');
   });
 
   it('returns 201 on successful join', async () => {

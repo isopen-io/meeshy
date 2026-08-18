@@ -69,6 +69,11 @@ struct iPadRootView: View {
     @State private var feedIsVisible = true
     @State private var leftColumnRatio: CGFloat = 0.38
 
+    /// Choix d'identité en attente sur un lien de partage — jumeau de
+    /// `RootView`. Les deux vues partagent la RÉSOLUTION
+    /// (`ShareLinkEntryResolver`) et ne gardent que leur présentation.
+    @State var shareLinkChoice: ShareLinkIdentityChoice?
+
     /// Conversation surfaced by a long-press / pull-down on a notification toast
     /// — presented as a reusable `ConversationView` preview over the columns.
     @State var notificationPreviewConversation: Conversation?
@@ -113,6 +118,17 @@ struct iPadRootView: View {
                 if StatusBubbleController.shared.currentEntry != nil {
                     StatusBubbleController.shared.dismiss()
                 }
+            }
+            .sheet(item: $shareLinkChoice) { choice in
+                ShareLinkIdentitySheet(
+                    choice: choice,
+                    accountDisplayName: AuthManager.shared.currentUser?.displayName
+                        ?? AuthManager.shared.currentUser?.username
+                        ?? String(localized: "shareLink.identity.account.fallback", defaultValue: "mon compte"),
+                    accountUsername: AuthManager.shared.currentUser?.username,
+                    onContinueWithAccount: { joinViaShareLink(identifier: choice.identifier) },
+                    onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
+                )
             }
             .sheet(item: $republishStatusEntry) { entry in
                 StatusComposerView(

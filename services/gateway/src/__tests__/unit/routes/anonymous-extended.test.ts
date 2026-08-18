@@ -165,24 +165,35 @@ describe('POST /anonymous/join/:linkId — requireNickname', () => {
   });
 });
 
-// ─── JOIN: username conflict with existing participant ────────────────────────
+// ─── JOIN: pseudo déjà porté par un autre anonyme de la conversation ─────────
+//
+// Renvoyait 409. Un anonyme n'a pas de compte à retrouver ni de session à
+// reprendre : ce lien EST sa porte, et un refus pour homonymie la ferme
+// définitivement. Le rang tranche désormais — on entre toujours, c'est le
+// pseudo qui cède.
 
-describe('POST /anonymous/join/:linkId — participant username conflict', () => {
+describe('POST /anonymous/join/:linkId — pseudo déjà porté dans la conversation', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     app = await buildApp();
     (app as any).prisma.participant.findFirst
-      .mockResolvedValueOnce({ id: 'other-part', displayName: 'bob_sm123' })
+      .mockResolvedValueOnce({ id: 'other-part', displayName: 'ano_bob_sm123' })
       .mockResolvedValue(null);
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 409 when username already taken by participant in this conversation', async () => {
+  it('admet le joignant sous le rang suivant plutôt que de le refuser', async () => {
     const res = await app.inject({
       method: 'POST', url: `/anonymous/join/${LINK_ID}`,
       payload: { ...VALID_BODY, username: 'bob_sm123' },
     });
-    expect(res.statusCode).toBe(409);
+
+    // L'assertion porte sur ce que la route ÉCRIT, pas sur ce que le double
+    // rend : `participant.create` est mocké sur une valeur figée, donc la
+    // réponse ne peut rien prouver du pseudo résolu.
+    expect(res.statusCode).toBe(201);
+    const written = (app as any).prisma.participant.create.mock.calls.at(-1)[0].data;
+    expect(written.displayName).toBe('ano_bob_sm1232');
   });
 });
 

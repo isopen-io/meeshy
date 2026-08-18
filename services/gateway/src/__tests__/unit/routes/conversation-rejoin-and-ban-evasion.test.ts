@@ -185,6 +185,12 @@ function buildPrisma(rows: any[]) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>(),
     },
+    // L'avis d'arrivée écrit ici. `postJoinSystemMessage` ne rejette JAMAIS :
+    // sans ce double il échouerait dans sa propre garde, et tout témoin de
+    // câblage resterait vert sans rien prouver.
+    message: {
+      create: jest.fn<any>(async (args: any) => ({ id: 'sys-row', ...args?.data })),
+    },
   };
   return prisma;
 }
@@ -403,5 +409,70 @@ describe('POST /conversations/:id/invite', () => {
     const { prisma } = await invite('none');
 
     expect(prisma.participant.create).toHaveBeenCalled();
+  });
+});
+
+// ─── Avis d'arrivée sur les trois portes des inscrits ────────────────────────
+//
+// Les mêmes trois portes que ci-dessus, sur une autre question : le fil dit-il
+// que quelqu'un est entré ? Il ne le disait sur AUCUNE — les présents
+// découvraient l'arrivant à son premier message.
+//
+// Le pendant du refus compte autant que l'annonce : une porte qui REFUSE ne
+// doit rien annoncer. Un banni « annoncé » puis absent serait pire que le
+// silence d'origine.
+
+describe('Avis d’arrivée — les trois portes des inscrits', () => {
+  // Sur la porte du LIEN, celui qui entre EST l'appelant : l'état résiduel se
+  // pose sur sa ligne à lui. Sur les deux autres, il se pose sur la cible que
+  // le membre fait entrer. Un `throughDoor` unique qui l'oublierait testerait
+  // une conversation où personne n'arrive.
+  async function throughDoor(pathFragment: string, state: LeftoverState) {
+    const isLinkDoor = pathFragment === 'join/:linkId';
+    const ctx = setup(state, isLinkDoor ? ACTOR_ID : TARGET_ID);
+    const route = routeFor(ctx.fastify, 'POST', pathFragment);
+    const params = isLinkDoor ? { linkId: 'lnk' } : { id: CONV_ID };
+    await route.handler(
+      { params, body: { userId: TARGET_ID }, authContext: actorContext },
+      ctx.reply
+    );
+    return ctx;
+  }
+
+  const DOORS: readonly [string, string][] = [
+    ['join/:linkId', 'la jointure par lien'],
+    [':id/participants', 'l’ajout par un membre'],
+    [':id/invite', 'l’invitation'],
+  ];
+
+  describe.each(DOORS)('%s — %s', (pathFragment) => {
+    it('annonce l’arrivée d’un primo-arrivant', async () => {
+      const { prisma } = await throughDoor(pathFragment, 'none');
+
+      expect(prisma.message.create).toHaveBeenCalledTimes(1);
+      expect((prisma.message.create.mock.calls[0][0] as any).data).toMatchObject({
+        conversationId: CONV_ID,
+        messageType: 'system',
+        metadata: expect.objectContaining({ kind: 'member-joined', isAnonymous: false }),
+      });
+    });
+
+    it('annonce aussi un RETOUR — les présents ne l’ont pas vu partir non plus', async () => {
+      const { prisma } = await throughDoor(pathFragment, 'departed');
+
+      expect(prisma.message.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('n’annonce RIEN pour un banni — la porte a refusé', async () => {
+      const { prisma } = await throughDoor(pathFragment, 'banned');
+
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('n’annonce RIEN pour un membre déjà actif — personne n’est entré', async () => {
+      const { prisma } = await throughDoor(pathFragment, 'active');
+
+      expect(prisma.message.create).not.toHaveBeenCalled();
+    });
   });
 });

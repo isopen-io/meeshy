@@ -791,6 +791,17 @@
           "hint": "The classic layout"
         }
       }
+    },
+    "participantProfile": {
+      "noAccount": "no account",
+      "language": "Language",
+      "country": "Country",
+      "joined": "Joined",
+      "viaLink": "Via link",
+      "email": "Email",
+      "birthday": "Birthday",
+      "withheld": "provided, moderators only",
+      "title": "Participant profile"
     }
   },
   "bubbleStream": {

@@ -20,7 +20,9 @@ export * from './calendar-date.js';
 export * from './presence-visibility.js';
 export * from './participant-helpers.js';
 export * from './reel-composition.js';
-export { getSenderUserId } from './sender-identity.js';
+export * from './anonymous-username.js';
+export * from './join-notice.js';
+export { getSenderUserId, isAnonymousSender } from './sender-identity.js';
 export {
   generateClientMessageId,
   isValidClientMessageId,

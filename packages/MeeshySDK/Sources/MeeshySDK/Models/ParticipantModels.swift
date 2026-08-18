@@ -100,19 +100,30 @@ public struct PaginatedParticipant: Codable, Identifiable, Sendable {
     public let lastActiveAt: Date?
     public let joinedAt: Date?
     public let isActive: Bool?
+    /// Nature du participant (`Participant.type` : `"user"` / `"anonymous"` /
+    /// `"bot"`). La route le SERT depuis toujours — `conversationParticipantSchema`
+    /// le déclare — et il n'était pas décodé ici : un visiteur sans compte
+    /// s'affichait donc exactement comme un inscrit dans la liste des membres.
+    public let type: String?
+
+    /// Ce participant a-t-il un compte ? Tranché par `type`, jamais par le
+    /// pseudo — `ano_` est lisible mais pas réservé.
+    public var isAnonymous: Bool { type == "anonymous" }
 
     public init(
         id: String, userId: String? = nil, username: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
         displayName: String? = nil, avatar: String? = nil,
         conversationRole: String? = nil, isOnline: Bool? = nil,
-        lastActiveAt: Date? = nil, joinedAt: Date? = nil, isActive: Bool? = nil
+        lastActiveAt: Date? = nil, joinedAt: Date? = nil, isActive: Bool? = nil,
+        type: String? = nil
     ) {
         self.id = id; self.userId = userId; self.username = username
         self.firstName = firstName; self.lastName = lastName
         self.displayName = displayName; self.avatar = avatar
         self.conversationRole = conversationRole; self.isOnline = isOnline
         self.lastActiveAt = lastActiveAt; self.joinedAt = joinedAt; self.isActive = isActive
+        self.type = type
     }
 
     public var name: String {

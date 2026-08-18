@@ -123,6 +123,13 @@ enum FocalSystemRows {
         case .system:
             if let notice = content.callNotice {
                 FocalCallNoticeRow(notice: notice, accentHex: accentHex, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPress)
+            } else if let joinNotice = content.joinNotice {
+                // Sans cette branche, l'arrivée tombait dans
+                // `FocalSystemNoticeRow` et s'affichait dans la langue FIGÉE du
+                // gateway (français), sans marquer que l'arrivant n'a pas de
+                // compte. La vue Bulles porte la même branche — les deux modes
+                // de lecture disent la même chose.
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark)
             } else if let text = content.text?.raw, !text.isEmpty {
                 FocalSystemNoticeRow(text: text, isDark: isDark)
             } else {

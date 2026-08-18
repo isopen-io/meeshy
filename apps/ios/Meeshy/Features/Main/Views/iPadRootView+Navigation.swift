@@ -50,6 +50,37 @@ extension iPadRootView {
         }
     }
 
+    /// Jumeau strict de `RootView.resolveShareLinkEntry`. La collecte des faits
+    /// et la décision sont partagées (`ShareLinkEntryResolver` →
+    /// `ShareLinkEntryPolicy`) ; seule la présentation diffère.
+    func resolveShareLinkEntry(identifier: String) {
+        Task {
+            let known = Set(conversationViewModel.conversations.map(\.id))
+            guard let resolution = await ShareLinkEntryResolver.resolve(
+                identifier: identifier,
+                isAuthenticated: true,
+                knownConversationIds: known
+            ) else {
+                joinViaShareLink(identifier: identifier)
+                return
+            }
+
+            switch resolution.intent {
+            case .openConversation(let conversationId):
+                navigateToConversationById(conversationId)
+            case .chooseIdentity(let conversationId):
+                shareLinkChoice = ShareLinkIdentityChoice(
+                    identifier: identifier,
+                    conversationId: conversationId,
+                    conversationTitle: resolution.conversationTitle,
+                    resumesGuestSession: AnonymousSessionStore.load(linkId: identifier) != nil
+                )
+            case .joinWithAccount, .joinAnonymously, .resumeGuestSession, .requiresAccount:
+                joinViaShareLink(identifier: identifier)
+            }
+        }
+    }
+
     // MARK: - Deep Link Handling
 
     func handleDeepLink(_ deepLink: DeepLink?) {
@@ -59,14 +90,11 @@ extension iPadRootView {
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
         case .joinLink(let identifier), .chatLink(let identifier):
-            // iPadRootView only mounts when authenticated, so we never
-            // want the anonymous join sheet here — that flow is owned by
-            // MeeshyApp.handleGuestDeepLink for the unauthenticated
-            // branch. For authenticated users we resolve the share link
-            // server-side: the gateway is idempotent, so an existing
-            // member gets the same payload as a fresh join and we can
-            // navigate to the canonical conversationId either way.
-            joinViaShareLink(identifier: identifier)
+            // iPadRootView ne se monte qu'authentifié — la branche SANS compte
+            // est tenue par `MeeshyApp.handleGuestDeepLink`. Ici la personne A
+            // un compte, et le choix lui revient : à visage découvert, ou sous
+            // pseudonyme. Même résolveur que `RootView`, à un seul exemplaire.
+            resolveShareLinkEntry(identifier: identifier)
         case .conversation(let id):
             // Validate the conversation exists BEFORE opening. Otherwise a
             // deep link to a deleted/unknown conversation lands the user on

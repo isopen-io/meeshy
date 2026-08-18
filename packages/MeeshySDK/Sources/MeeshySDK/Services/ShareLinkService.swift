@@ -1,6 +1,16 @@
 import Foundation
 
-public final class ShareLinkService: @unchecked Sendable {
+/// Résolution PUBLIQUE d'un lien de partage — la seule capacité dont
+/// `ShareLinkEntryResolver` (app-side) a besoin pour décider qui entre.
+///
+/// Couture étroite volontairement : le résolveur ne doit pas pouvoir rejoindre,
+/// créer ou supprimer un lien, et un double de test n'a pas à simuler les neuf
+/// autres méthodes du service pour répondre à une question de lecture.
+public protocol ShareLinkInfoProviding: Sendable {
+    func getLinkInfo(identifier: String) async throws -> ShareLinkInfo
+}
+
+public final class ShareLinkService: ShareLinkInfoProviding, @unchecked Sendable {
     public static let shared = ShareLinkService()
     private let api: APIClientProviding
 

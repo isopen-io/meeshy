@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Ghost, MessageCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
 import { formatRelativeDate } from '@/utils/date-format';
 import { cn } from '@/lib/utils';
 import { AttachmentPreviewReply } from '@/components/attachments/AttachmentPreviewReply';
@@ -34,7 +35,10 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
   const replyUsername = replyTo.sender?.username;
   const replyUser = replyTo.sender;
   const replyDisplayName = getUserDisplayName(replyUser, t('unknownUser'));
-  const isReplyAnonymous = false;
+  // Jumeau du défaut de `MessageNameDate` : ce littéral gardait une branche
+  // `<Ghost />` complète, jamais rendue. Citer quelqu'un sans compte effaçait
+  // donc son marqueur — et lui prêtait un lien `/u/` vers une page inexistante.
+  const isReplyAnonymous = isAnonymousSender(replyUser as Record<string, unknown> | null | undefined);
 
   return (
     <motion.div

@@ -28,6 +28,9 @@ struct ParticipantsView: View {
     @State private var confirmLeave = false
     @State private var errorMessage: String?
     @State private var isLoadingMore = false
+    /// Fiche ouverte, par `Participant.id`. Seule surface de profil des
+    /// visiteurs SANS COMPTE — ils n'ont pas de page `/u/{pseudo}`.
+    @State private var profileParticipantId: String?
     @State private var hasMore = true
 
     private var accent: Color { Color(hex: accentColor) }
@@ -144,6 +147,12 @@ struct ParticipantsView: View {
                 Task {
                     await ParticipantService.shared.invalidate(conversationId: conversationId)
                 }
+            }
+            .sheet(item: Binding(
+                get: { profileParticipantId.map(IdentifiedString.init) },
+                set: { profileParticipantId = $0?.value }
+            )) { target in
+                ParticipantProfileSheet(conversationId: conversationId, participantId: target.value)
             }
             .sheet(isPresented: $showAddSheet) {
                 AddParticipantSheet(
@@ -294,6 +303,22 @@ struct ParticipantsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
+                    // Le masque QUALIFIE l'identité : sans lui, un visiteur
+                    // entré par lien public est indiscernable d'un membre
+                    // inscrit dans la liste des membres. Tranché par
+                    // `Participant.type`, jamais par le pseudo.
+                    if participant.isAnonymous {
+                        Image(systemName: "theatermasks.fill")
+                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .foregroundColor(.purple)
+                            .accessibilityLabel(String(
+                                localized: "participants.anonymous",
+                                defaultValue: "Sans compte",
+                                bundle: .main
+                            ))
+                            .accessibilityIdentifier("participants-row-anonymous-glyph")
+                    }
+
                     Text(isCurrentUser ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))" : participant.name)
                         .font(MeeshyFont.relative(14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
@@ -330,6 +355,13 @@ struct ParticipantsView: View {
         .padding(.horizontal, MeeshySpacing.xl)
         .padding(.vertical, MeeshySpacing.sm + 2)
         .contentShape(Rectangle())
+        // Ouvrir la fiche : c'est la SEULE surface de profil d'un visiteur sans
+        // compte. Réservée à eux — un inscrit a déjà sa page `/u/{pseudo}`, et
+        // dupliquer l'entrée ferait deux profils pour une même personne.
+        .onTapGesture {
+            guard participant.isAnonymous else { return }
+            profileParticipantId = participant.id
+        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(participantAccessibilityLabel(participant, isCurrentUser: isCurrentUser, presence: presence))
     }

@@ -125,10 +125,17 @@ function createMockFastify() {
       update: jest.fn<any>(),
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    // L'avis d'arrivée écrit ici. Sans ce double, `postJoinSystemMessage`
+    // échouait à l'intérieur de sa propre garde — il ne rejette jamais — et
+    // toute la suite restait VERTE en ne prouvant rien du câblage.
+    message: {
+      create: jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'sys-1', ...data })),
+    },
   };
   const joinUserToConversationRoom = jest.fn<any>().mockResolvedValue(undefined);
+  const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
   const socketIOHandler = {
-    getManager: jest.fn<any>().mockReturnValue({ joinUserToConversationRoom }),
+    getManager: jest.fn<any>().mockReturnValue({ joinUserToConversationRoom, broadcastMessage }),
   };
   return {
     routes,
@@ -137,6 +144,7 @@ function createMockFastify() {
     mentionService,
     socketIOHandler,
     joinUserToConversationRoom,
+    broadcastMessage,
     prisma: prismaOnFastify,
     get: jest.fn<any>((path: string, options: any, handler: RouteHandler) => {
       routes.push({ method: 'GET', path, handler, options });
@@ -173,6 +181,9 @@ function createMockPrisma() {
       update: jest.fn<any>().mockResolvedValue({}),
       findFirst: jest.fn<any>(),
       findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    message: {
+      create: jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'sys-1', ...data })),
     },
   } as any;
 }
@@ -1296,5 +1307,94 @@ describe('POST /conversations/:id/invite', () => {
     await route.handler(req, reply);
 
     expect(fastify.prisma.participant.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Avis d'arrivée — les quatre portes disent la même chose
+//
+// Trois routes font entrer un INSCRIT dans une conversation, et aucune ne le
+// disait au fil : les présents découvraient l'arrivant à son premier message.
+// La porte anonyme portait le même silence, avec un enjeu de plus — rien
+// n'indiquait que le visiteur n'a pas de compte.
+//
+// Ces témoins portent sur l'ÉCRITURE (`prisma.message.create`), jamais sur la
+// réponse HTTP : `postJoinSystemMessage` ne rejette jamais, donc un câblage
+// absent laisserait toute réponse inchangée. Le double `prisma.message` ajouté
+// à `createMockPrisma` existe pour ça — sans lui, le service échouait dans sa
+// propre garde et la suite restait verte en ne prouvant rien.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Avis d’arrivée — POST /conversations/join/:linkId', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function joinSetup() {
+    const { fastify, prisma, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'join/:linkId');
+    prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
+    prisma.participant.findFirst.mockResolvedValue(null);
+    prisma.participant.findMany.mockResolvedValue([]);
+    prisma.user.findUnique.mockResolvedValue({ displayName: 'Bob', username: 'bob' });
+    prisma.participant.create.mockResolvedValue({ id: 'new-participant' });
+    prisma.conversationShareLink.update.mockResolvedValue({});
+    return { fastify, prisma, reply, route };
+  }
+
+  it('annonce l’arrivée de l’inscrit dans le fil', async () => {
+    const { prisma, reply, route } = joinSetup();
+
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+
+    expect(prisma.message.create).toHaveBeenCalledTimes(1);
+    const { data } = prisma.message.create.mock.calls[0][0] as any;
+    expect(data).toMatchObject({
+      conversationId: CONV_ID,
+      senderId: 'new-participant',
+      messageType: 'system',
+    });
+  });
+
+  it('dit que l’arrivant A un compte, et qu’il est entré par un lien', async () => {
+    const { prisma, reply, route } = joinSetup();
+
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+
+    const { data } = prisma.message.create.mock.calls[0][0] as any;
+    expect(data.metadata).toMatchObject({
+      kind: 'member-joined',
+      displayName: 'Bob',
+      isAnonymous: false,
+      viaShareLink: true,
+    });
+  });
+
+  it('n’annonce rien quand la personne était DÉJÀ membre — personne n’est entré', async () => {
+    const { fastify, prisma, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'join/:linkId');
+    prisma.conversationShareLink.findFirst.mockResolvedValue(makeShareLink());
+    prisma.participant.findMany.mockResolvedValue([makeParticipant()]);
+
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('n’annonce rien quand le lien est refusé', async () => {
+    const { fastify, prisma, reply } = setup();
+    const route = getRoute(fastify, 'POST', 'join/:linkId');
+    prisma.conversationShareLink.findFirst.mockResolvedValue(null);
+
+    await route.handler(makeRequest({ params: { linkId: 'nonexistent' } }), reply);
+
+    expect(prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('l’entrée reste acquise si l’avis ne peut pas s’écrire', async () => {
+    const { prisma, reply, route } = joinSetup();
+    prisma.message.create.mockRejectedValue(new Error('mongo down'));
+
+    await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
+
+    expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ conversationId: CONV_ID }));
   });
 });

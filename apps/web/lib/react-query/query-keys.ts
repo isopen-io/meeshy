@@ -11,6 +11,8 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.conversations.details(), id] as const,
     participants: (conversationId: string, filters?: { onlineOnly?: boolean; role?: string; search?: string }) =>
       [...queryKeys.conversations.detail(conversationId), 'participants', filters] as const,
+    participantProfile: (conversationId: string, participantId: string) =>
+      [...queryKeys.conversations.detail(conversationId), 'participant-profile', participantId] as const,
   },
 
   messages: {

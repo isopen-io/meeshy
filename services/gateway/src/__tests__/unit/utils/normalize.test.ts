@@ -184,6 +184,21 @@ describe('normalizeUsername', () => {
     });
   });
 
+  // `ano_` préfixe les pseudos des participants SANS COMPTE, sans leur être
+  // réservé : un compte peut s'appeler `ano_bob`. La distinction visible entre
+  // les deux populations est le GLYPHE FANTÔME, pas le nom — un refus
+  // d'inscription ici n'apporterait rien que le glyphe n'assure déjà.
+  describe('`ano_` n’est pas réservé côté comptes', () => {
+    it('accepte un pseudo de compte préfixé `ano_`', () => {
+      expect(normalizeUsername('ano_bob')).toBe('ano_bob');
+    });
+
+    it('accepte aussi ce qui commence seulement par les mêmes lettres', () => {
+      expect(normalizeUsername('anonyme')).toBe('anonyme');
+      expect(normalizeUsername('anobob')).toBe('anobob');
+    });
+  });
+
   describe('length validation', () => {
     it('should accept username with exactly 2 characters', () => {
       expect(normalizeUsername('ab')).toBe('ab');

@@ -156,6 +156,10 @@
     "bubble": {
       "forwarded": "Reenviado"
     },
-    "newMessagesWhileAway": "mensajes nuevos"
+    "newMessagesWhileAway": "mensajes nuevos",
+    "joinNotice": {
+      "joined": "{{name}} se unió a la conversación",
+      "noAccount": "sin cuenta"
+    }
   }
 }

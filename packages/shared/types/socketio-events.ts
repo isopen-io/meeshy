@@ -2260,6 +2260,15 @@ export interface SocketIOUser {
   readonly createdAt: Date;
   readonly updatedAt: Date;
 
+  /**
+   * Nature du participant quand cet objet décrit l'AUTEUR d'un message plutôt
+   * qu'un compte (`Participant.type`). C'est le discriminant qui fait foi pour
+   * « cette personne a-t-elle un compte ? » — `isAnonymous` et `isMeeshyer`
+   * ci-dessous ne sont que des replis hérités. Lire par `isAnonymousSender`
+   * (`utils/sender-identity.ts`), jamais champ par champ.
+   */
+  readonly type?: 'user' | 'anonymous' | 'bot';
+
   // Compatibility flags
   readonly isAnonymous?: boolean;
   readonly isMeeshyer?: boolean;

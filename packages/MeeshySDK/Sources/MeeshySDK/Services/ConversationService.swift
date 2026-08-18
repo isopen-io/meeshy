@@ -186,6 +186,22 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         )
     }
 
+    /// Fiche d'un participant — la seule surface de profil des visiteurs SANS
+    /// COMPTE, qui n'ont pas de page `/u/{pseudo}`.
+    ///
+    /// Le gateway décide seul de ce qu'il sert : les coordonnées (`email`,
+    /// `birthday`) arrivent `nil` à un membre ordinaire. Le client ne refait
+    /// jamais cet arbitrage — il rendrait un secret dépendant de la vue.
+    public func getParticipantProfile(
+        conversationId: String,
+        participantId: String
+    ) async throws -> ConversationParticipantProfile {
+        let response: APIResponse<ConversationParticipantProfile> = try await api.request(
+            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/profile"
+        )
+        return response.data
+    }
+
     public func deleteForMe(conversationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/conversations/\(conversationId)/delete-for-me"

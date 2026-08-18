@@ -1226,6 +1226,7 @@ final class MessageListViewController: UIViewController {
                     senderPresence: PresenceManager.shared.presenceState(for: senderId),
                     senderStoryRing: senderRingState,
                     senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
+                    senderIsAnonymous: message.senderIsAnonymous,
                     accentHex: accent,
                     isDark: dark,
                     isDirect: direct,

@@ -12,6 +12,8 @@ import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
 import { BubbleMessageNormalView } from './bubble-message/BubbleMessageNormalView';
 import { FocalRow } from './bubble-message/FocalRow';
 import { CallSystemMessage } from './bubble-message/CallSystemMessage';
+import { JoinNoticeMessage } from './bubble-message/JoinNoticeMessage';
+import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib/conversations/reading-mode';
 import { ReactionSelectionMessageView } from './bubble-message/ReactionSelectionMessageView';
 import { LanguageSelectionMessageView } from './bubble-message/LanguageSelectionMessageView';
@@ -228,6 +230,16 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
         isAnonymous={isAnonymous}
       />
     );
+  }
+
+  // L'avis d'arrivée court-circuite pour la MÊME raison que le résumé d'appel :
+  // ce n'est pas une prise de parole. Rendu par la machine de vues il
+  // arriverait signé de l'arrivant, avec avatar, heure, réponse et réactions —
+  // le fil raconterait que le premier mot de chaque nouveau venu est l'annonce
+  // de sa propre arrivée.
+  const joinNotice = parseJoinNotice(message.metadata);
+  if (joinNotice) {
+    return <JoinNoticeMessage metadata={joinNotice} />;
   }
 
   // VIRTUALIZATION SMART: Rendu conditionnel selon le mode

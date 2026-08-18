@@ -85,7 +85,7 @@ final class FocalAudioFlatTests: XCTestCase {
             isViewOnce: false, isPinned: false, isForwarded: false, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),
-            isMe: false, senderName: "Ali", callNotice: nil
+            isMe: false, senderName: "Ali", callNotice: nil, joinNotice: nil
         )
     }
 

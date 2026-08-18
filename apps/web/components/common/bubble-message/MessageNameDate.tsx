@@ -4,6 +4,7 @@ import { memo } from 'react';
 import Link from 'next/link';
 import { Ghost } from 'lucide-react';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
 import { formatRelativeDate } from '@/utils/date-format';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { cn } from '@/lib/utils';
@@ -27,7 +28,13 @@ export const MessageNameDate = memo(function MessageNameDate({
   const user = message.sender;
   const username = message.sender?.username;
   const displayName = getUserDisplayName(user, t('anonymous'));
-  const isAnonymous = false;
+  // Était `const isAnonymous = false` — un littéral, donc une branche `<Ghost />`
+  // écrite et jamais rendue. Ce n'était pas un oubli de câblage : le
+  // discriminant n'arrivait pas jusqu'ici, `Participant.type` étant retiré à la
+  // sérialisation REST faute d'être déclaré dans `userMinimalSchema`.
+  // `isAnonymousSender` est la seule lecture autorisée — elle arbitre entre
+  // `type` (qui fait foi) et les drapeaux hérités des routes de lien.
+  const isAnonymous = isAnonymousSender(user as Record<string, unknown> | null | undefined);
 
   return (
     <div className={cn(

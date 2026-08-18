@@ -53,24 +53,56 @@ class MeeshyLogger implements Logger {
 export const logger = new MeeshyLogger();
 
 // Utility pour les logs d'erreur avec compatibilité Fastify
-export function logError(logger: any, message: string, error: unknown | any): void {
-  try {
-    // Essaie d'abord avec le logger Fastify
-    if (logger && typeof logger.error === 'function') {
-      logger.error(message);
-      if (error instanceof Error) {
-        logger.error(error.message);
-        logger.error(error.stack);
+/**
+ * Trace une erreur — et la fait SORTIR.
+ *
+ * L'ancienne version déléguait au seul logger reçu. Or `server.ts` construit
+ * Fastify avec `logger: false` : `fastify.log` est le no-op d'`abstract-logging`,
+ * dont les méthodes existent, ne rejettent pas, et n'écrivent rien. Comme 166
+ * des 172 appels du dépôt lui passent `fastify.log` (ou `request.log`, le même
+ * objet), la quasi-totalité des erreurs de route étaient écrites nulle part.
+ *
+ * Constaté le 2026-08-18 : un 500 reproductible sur
+ * `POST /anonymous/join/:linkId` n'a laissé aucune ligne structurée en
+ * production. Seul le `prisma:error` brut du client Prisma a fuité — et il ne
+ * nomme ni la route, ni l'appelant. Un logger d'erreurs muet est pire que pas
+ * de logger : le code se lit comme s'il traçait.
+ *
+ * La ligne part donc TOUJOURS par le `logger` de ce module, qui écrit sur la
+ * console et dont on voit la sortie en production. Le logger reçu est servi EN
+ * PLUS quand il sait émettre — les rares appelants qui en passent un vrai ne
+ * perdent rien, et pour `fastify.log` cet appel supplémentaire est un no-op.
+ */
+export function logError(loggerOrMessage: any, message?: string | unknown, error?: unknown): void {
+  // Six appels du dépôt emploient la signature à DEUX arguments
+  // (`logError('Error fetching categories', error, { source })`). Le message
+  // humain y arrive en position `logger` et la cause en position `message` :
+  // la ligne sortait, amputée de ce qu'elle voulait dire. On la rattrape ici
+  // plutôt que de la mutiler.
+  const calledWithoutLogger = typeof loggerOrMessage === 'string';
+  const sink = calledWithoutLogger ? null : loggerOrMessage;
+  const text = calledWithoutLogger ? loggerOrMessage : String(message ?? '');
+  const cause = calledWithoutLogger ? message : error;
+
+  const detail = cause instanceof Error
+    ? `${cause.message}${cause.stack ? `\n${cause.stack}` : ''}`
+    : String(cause);
+
+  logger.error(text, detail);
+
+  if (sink && typeof sink.error === 'function') {
+    try {
+      sink.error(text);
+      if (cause instanceof Error) {
+        sink.error(cause.message);
+        sink.error(cause.stack);
       } else {
-        logger.error(String(error));
+        sink.error(String(cause));
       }
-    } else {
-      // Fallback vers console
-      console.error(message, error);
+    } catch {
+      // Un logger d'appelant qui casse ne doit pas emporter la trace : la
+      // ligne est déjà partie par `logger.error` ci-dessus.
     }
-  } catch (e) {
-    // Dernier recours
-    console.error(message, error);
   }
 }
 

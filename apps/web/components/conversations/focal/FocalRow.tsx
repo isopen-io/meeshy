@@ -68,6 +68,8 @@ import { useI18n } from '@/hooks/use-i18n';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { ExpandableMessageText } from '@/components/common/bubble-message/ExpandableMessageText';
 import { CallSystemMessage } from '@/components/common/bubble-message/CallSystemMessage';
+import { JoinNoticeMessage } from '@/components/common/bubble-message/JoinNoticeMessage';
+import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
 import { FocalIdentityHeader } from './FocalIdentityHeader';
 import { FocalQuotedReply } from './FocalQuotedReply';
 import { FocalMediaBlock } from './FocalMediaBlock';
@@ -170,6 +172,7 @@ export const FocalRow = memo(function FocalRow({
   );
 
   const callMetadata = useMemo(() => resolveFocalCallMetadata(message), [message]);
+  const joinNotice = useMemo(() => parseJoinNotice(message.metadata), [message.metadata]);
   const { images, others } = useMemo(
     () => splitFocalAttachments(message.attachments),
     [message.attachments]
@@ -179,7 +182,7 @@ export const FocalRow = memo(function FocalRow({
   const hasAttachments = images.length > 0 || others.length > 0;
   // Le critère DUR de la directive : si rien de tout cela n'est vrai, la
   // rangée rendrait du vide — un repli descriptif prend le relais.
-  const hasAnyContent = hasText || hasAttachments || !!message.replyTo || !!callMetadata;
+  const hasAnyContent = hasText || hasAttachments || !!message.replyTo || !!callMetadata || !!joinNotice;
 
   const hasReactions =
     (message.reactionSummary != null && Object.keys(message.reactionSummary).length > 0) ||
@@ -246,7 +249,18 @@ export const FocalRow = memo(function FocalRow({
           n'a ni texte, ni pièce jointe, ni réaction à montrer, et son
           `CallSystemMessage` porte déjà son identité et son heure.
         */}
-        {callMetadata ? (
+        {joinNotice ? (
+          /*
+            L'avis d'arrivée court-circuite pour la MÊME raison que le résumé
+            d'appel : ce n'est pas une prise de parole. Il n'a ni auteur à
+            afficher, ni heure, ni affordance — et le rendre en rangée
+            ordinaire ferait passer l'annonce d'une arrivée pour le premier
+            message de l'arrivant.
+          */
+          <div data-testid="focal-join-notice">
+            <JoinNoticeMessage metadata={joinNotice} />
+          </div>
+        ) : callMetadata ? (
           <div data-testid="focal-call-message">
             <CallSystemMessage
               metadata={callMetadata}

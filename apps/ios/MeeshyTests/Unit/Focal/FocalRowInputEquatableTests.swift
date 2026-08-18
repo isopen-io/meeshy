@@ -20,7 +20,7 @@ final class FocalRowInputEquatableTests: XCTestCase {
             isViewOnce: false, isPinned: false, isForwarded: false, editedAt: nil,
             isEditSaving: false, hasEditHistory: false, reactions: [],
             meta: BubbleContent.Meta(timeString: timeString, deliveryStatus: nil),
-            isMe: false, senderName: "Ali", callNotice: nil
+            isMe: false, senderName: "Ali", callNotice: nil, joinNotice: nil
         )
     }
 
@@ -29,13 +29,15 @@ final class FocalRowInputEquatableTests: XCTestCase {
         density: FocalRowInput.Density = .focal,
         userLanguages: (regional: String?, custom: String?) = (nil, nil),
         allAudioItems: [ConversationViewModel.AudioItem] = [],
-        effects: MessageEffects = .none
+        effects: MessageEffects = .none,
+        senderIsAnonymous: Bool = false
     ) -> FocalRowInput {
         FocalRowInput(
             localId: "m1", serverId: "s1", content: content ?? makeContent(), density: density,
             isFirstInGroup: true, senderId: "u1", senderDisplayName: "Ali", senderUsername: "ali",
             senderAvatarURL: nil, senderThumbHash: nil, senderColorHex: "#31B6BA",
             senderPresence: .online, senderStoryRing: .none, senderMoodEmoji: nil,
+            senderIsAnonymous: senderIsAnonymous,
             accentHex: "#31B6BA", isDark: false, isDirect: true, isRightToLeft: false,
             isOptimistic: false, isAgentAuthored: false, showsAgentGrammar: false,
             highlightSearchTerm: nil, mentionDisplayNames: [:], userLanguages: userLanguages,
@@ -139,5 +141,35 @@ final class FocalRowInputEquatableTests: XCTestCase {
         // COMPILATION de ce test avec des closures distinctes fait foi.
         _ = FocalRowActions(onReplyTap: { _ in }, onMediaTap: { _ in })
         _ = FocalRowActions(onReplyTap: { _ in }, onMediaTap: { _ in })
+    }
+}
+
+// ─── Marquage des auteurs sans compte ────────────────────────────────────────
+//
+// `FocalRowInput.==` est le GATE de re-render de la rangée. Un champ oublié dans
+// cette égalité n'est pas une omission cosmétique : la rangée cesse de se
+// réévaluer quand ce champ change, et le glyphe reste celui du message
+// précédent — deux auteurs enchaînés, l'un anonyme, l'autre non, se rendraient
+// avec la même marque.
+//
+// Le drapeau vient de `Participant.type` (`MeeshyMessage.senderIsAnonymous`),
+// jamais du pseudo : `ano_` est lisible, pas réservé, et un compte peut le
+// porter.
+
+extension FocalRowInputEquatableTests {
+
+    func test_equality_distinguishesAnonymousSender() {
+        XCTAssertNotEqual(makeInput(senderIsAnonymous: true), makeInput(senderIsAnonymous: false))
+    }
+
+    func test_equality_sameAnonymityStaysEqual() {
+        XCTAssertEqual(makeInput(senderIsAnonymous: true), makeInput(senderIsAnonymous: true))
+    }
+
+    /// Défaut `false` : les centaines de sites qui construisent une rangée sans
+    /// se prononcer ne marquent personne. Marquer à tort un inscrit comme
+    /// « sans compte » serait une affirmation fausse sur son identité.
+    func test_input_defaultsToNotAnonymous() {
+        XCTAssertFalse(makeInput().senderIsAnonymous)
     }
 }

@@ -212,6 +212,11 @@ struct ThemedMessageBubble: View {
         case .system:
             if let callNotice = content.callNotice {
                 BubbleCallNoticeView(notice: callNotice, accentHex: contactColor, isDark: isDark, onCallBack: onCallBack, onLongPress: onLongPressCallDetail)
+            } else if let joinNotice = content.joinNotice {
+                // Avant cette branche, une arrivée retombait sur la notice
+                // générique — dont l'icône est un TÉLÉPHONE, héritée des
+                // résumés d'appel.
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark)
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
             }

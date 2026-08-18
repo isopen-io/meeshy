@@ -263,6 +263,10 @@ struct RootView: View {
     // New conversation sheet
     @State private var showNewConversation = false
 
+    /// Choix d'identité en attente sur un lien de partage. `nil` = pas de
+    /// question posée.
+    @State private var shareLinkChoice: ShareLinkIdentityChoice?
+
     // Helper to get ButtonPosition for menu ladder alignment
     private var menuButtonPos: ButtonPosition {
         let parts = menuButtonPosition.split(separator: ",")
@@ -593,6 +597,23 @@ struct RootView: View {
             if StatusBubbleController.shared.currentEntry != nil {
                 StatusBubbleController.shared.dismiss()
             }
+        }
+        // Le lien de partage demande QUI entre. La feuille ne se monte que
+        // lorsque le choix existe vraiment : déjà membre, ou lien exigeant un
+        // compte, `ShareLinkEntryPolicy` a déjà tranché sans rien demander.
+        .sheet(item: $shareLinkChoice) { choice in
+            ShareLinkIdentitySheet(
+                choice: choice,
+                accountDisplayName: AuthManager.shared.currentUser?.displayName
+                    ?? AuthManager.shared.currentUser?.username
+                    ?? String(localized: "shareLink.identity.account.fallback", defaultValue: "mon compte"),
+                accountUsername: AuthManager.shared.currentUser?.username,
+                onContinueWithAccount: { joinViaShareLink(identifier: choice.identifier) },
+                // La session invitée est portée par `MeeshyApp`, au-dessus de
+                // cette vue : on lui passe l'intention plutôt que d'essayer de
+                // présenter le conteneur invité depuis ici.
+                onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
+            )
         }
         .sheet(item: $republishStatusEntry) { entry in
             StatusComposerView(
@@ -1092,14 +1113,14 @@ struct RootView: View {
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
         case .joinLink(let identifier), .chatLink(let identifier):
-            // RootView only mounts when authenticated, so we never want
-            // the anonymous join sheet here — that flow is owned by
-            // MeeshyApp.handleGuestDeepLink for the unauthenticated
-            // branch. For authenticated users we resolve the share link
-            // server-side: the gateway is idempotent, so an existing
-            // member gets the same payload as a fresh join and we can
-            // navigate to the canonical conversationId either way.
-            joinViaShareLink(identifier: identifier)
+            // RootView ne se monte qu'authentifié — la branche SANS compte est
+            // tenue par `MeeshyApp.handleGuestDeepLink`. Ici, la personne A un
+            // compte, et c'est précisément là qu'un choix lui revient : entrer
+            // à visage découvert, ou sous pseudonyme. On rejoignait
+            // silencieusement avec le compte, engageant nom, photo et
+            // historique dans un groupe parfois inconnu, sans rien demander —
+            // et une jointure ne se défait pas d'un geste.
+            resolveShareLinkEntry(identifier: identifier)
 
         case .conversation(let id):
             // Validate the conversation exists BEFORE navigating. Pushing a
@@ -1160,6 +1181,50 @@ struct RootView: View {
 
         case .magicLink:
             break
+        }
+    }
+
+    /// Lien de partage tapé alors qu'un compte est présent : QUI entre ?
+    ///
+    /// La décision est une règle PURE du SDK (`ShareLinkEntryPolicy`) et la
+    /// collecte des faits vit dans `ShareLinkEntryResolver`, partagé avec
+    /// `iPadRootView` — les deux vues portaient déjà chacune leur copie du
+    /// raccourci qu'on remplace ici, et en garder deux les ferait diverger.
+    /// Cette méthode ne fait qu'EXÉCUTER l'intention.
+    private func resolveShareLinkEntry(identifier: String) {
+        Task {
+            let known = Set(conversationViewModel.conversations.map(\.id))
+            guard let resolution = await ShareLinkEntryResolver.resolve(
+                identifier: identifier,
+                isAuthenticated: true,
+                knownConversationIds: known
+            ) else {
+                // Résolution impossible : on retombe sur le comportement d'avant
+                // plutôt que sur un cul-de-sac. Un lien qui n'ouvre rien est
+                // pire qu'un lien qui ne propose pas le choix.
+                joinViaShareLink(identifier: identifier)
+                return
+            }
+
+            switch resolution.intent {
+            case .openConversation(let conversationId):
+                navigateToConversationById(conversationId)
+
+            case .chooseIdentity(let conversationId):
+                shareLinkChoice = ShareLinkIdentityChoice(
+                    identifier: identifier,
+                    conversationId: conversationId,
+                    conversationTitle: resolution.conversationTitle,
+                    resumesGuestSession: AnonymousSessionStore.load(linkId: identifier) != nil
+                )
+
+            // `joinWithAccount` est la voie nominale ; les trois dernières
+            // supposent l'absence de compte, que ce chemin exclut par
+            // construction. On ne les tait pas — rendre la main sans rien
+            // ouvrir laisserait un lien mort à l'écran.
+            case .joinWithAccount, .joinAnonymously, .resumeGuestSession, .requiresAccount:
+                joinViaShareLink(identifier: identifier)
+            }
         }
     }
 

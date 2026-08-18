@@ -146,3 +146,66 @@ describe('FocalIdentityHeader — le profil s’ouvre EN MODALE (directive produ
     expect(onOpenProfile).not.toHaveBeenCalled();
   });
 });
+
+// ─── Auteur sans compte ──────────────────────────────────────────────────────
+//
+// La vue plate ne marquait pas du tout les auteurs sans compte : là où les vues
+// Bulles et Citation portaient au moins une branche `<Ghost />` (éteinte par un
+// littéral), celle-ci n'en avait aucune. Elle enveloppait en outre le nom d'un
+// anonyme dans un `<Link href="/u/{pseudo}">` vers une page de profil qui
+// n'existe pas pour lui.
+//
+// Le discriminant est `Participant.type`, jamais le pseudo : un COMPTE nommé
+// `ano_bob` reste un compte, avec son lien de profil et sans fantôme.
+
+const anonymousSender = {
+  id: 'p9',
+  conversationId: 'c1',
+  type: 'anonymous',
+  displayName: 'ano_bob_sm123',
+  username: 'ano_bob_sm123',
+} as unknown as Participant;
+
+const accountNamedLikeOne = {
+  id: 'u9',
+  conversationId: 'c1',
+  type: 'user',
+  displayName: 'ano_bob_sm123',
+  username: 'ano_bob_sm123',
+} as unknown as Participant;
+
+describe('FocalIdentityHeader — auteur sans compte', () => {
+  beforeEach(() => {
+    mockStoredUser = null;
+  });
+
+  it('marque d’un fantôme un auteur `type: "anonymous"`', () => {
+    render(<FocalIdentityHeader sender={anonymousSender} isMe={false} time="10:00" youLabel="Toi" />);
+
+    expect(screen.getByTestId('focal-identity-ghost')).toBeTruthy();
+  });
+
+  it('ne marque PAS un compte dont le pseudo commence par `ano_`', () => {
+    render(<FocalIdentityHeader sender={accountNamedLikeOne} isMe={false} time="10:00" youLabel="Toi" />);
+
+    expect(screen.queryByTestId('focal-identity-ghost')).toBeNull();
+  });
+
+  it('ne propose pas de lien `/u/` vers un profil qui n’existe pas', () => {
+    render(<FocalIdentityHeader sender={anonymousSender} isMe={false} time="10:00" youLabel="Toi" />);
+
+    expect(screen.queryByTestId('focal-identity-profile-link')).toBeNull();
+  });
+
+  it('CONTRE-ÉPREUVE — le compte homonyme garde son lien de profil', () => {
+    render(<FocalIdentityHeader sender={accountNamedLikeOne} isMe={false} time="10:00" youLabel="Toi" />);
+
+    expect(screen.getByTestId('focal-identity-profile-link')).toBeTruthy();
+  });
+
+  it('affiche quand même le nom', () => {
+    render(<FocalIdentityHeader sender={anonymousSender} isMe={false} time="10:00" youLabel="Toi" />);
+
+    expect(screen.getByTestId('focal-identity-name')).toHaveTextContent('ano_bob_sm123');
+  });
+});

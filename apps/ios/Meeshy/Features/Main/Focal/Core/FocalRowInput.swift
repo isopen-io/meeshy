@@ -90,6 +90,10 @@ struct FocalRowInput: Equatable {
     let senderPresence: PresenceState
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
+    /// L'auteur n'a PAS de compte (`MeeshyMessage.senderIsAnonymous`, dérivé de
+    /// `Participant.type`). Porté en primitif jusqu'à la feuille pour que la
+    /// rangée reste Equatable et ne se réévalue que sur changement réel.
+    let senderIsAnonymous: Bool
 
     // MARK: - Contexte visuel (primitifs uniquement — règle « leaf views »)
 
@@ -152,6 +156,7 @@ struct FocalRowInput: Equatable {
         senderPresence: PresenceState,
         senderStoryRing: StoryRingState,
         senderMoodEmoji: String?,
+        senderIsAnonymous: Bool = false,
         accentHex: String,
         isDark: Bool,
         isDirect: Bool,
@@ -186,6 +191,7 @@ struct FocalRowInput: Equatable {
         self.senderPresence = senderPresence
         self.senderStoryRing = senderStoryRing
         self.senderMoodEmoji = senderMoodEmoji
+        self.senderIsAnonymous = senderIsAnonymous
         self.accentHex = accentHex
         self.isDark = isDark
         self.isDirect = isDirect
@@ -229,6 +235,7 @@ struct FocalRowInput: Equatable {
             && lhs.senderThumbHash == rhs.senderThumbHash
             && lhs.senderColorHex == rhs.senderColorHex
             && lhs.senderPresence == rhs.senderPresence
+            && lhs.senderIsAnonymous == rhs.senderIsAnonymous
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
             && lhs.accentHex == rhs.accentHex

@@ -74,7 +74,14 @@ export function sendError(
     violations?: unknown[];
   }
 ): void {
+  // `details` est étalé à la RACINE — c'est là que les clients lisent les champs
+  // d'appoint d'une erreur (`suggestedNickname` sur un 409 de pseudo pris). Il
+  // était accepté par la signature et jeté en silence, ce qui est le pire des
+  // deux mondes : l'appelant croit avoir transmis. L'enveloppe reste maîtresse
+  // de ses quatre clés, et le schéma de réponse de chaque route reste l'arbitre
+  // final de ce qui sort.
   const response: ApiResponse<never> & { violations?: unknown[] } = {
+    ...(options?.details ?? {}),
     success: false,
     error,
     message: options?.message || error,

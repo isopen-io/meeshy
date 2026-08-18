@@ -979,6 +979,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var senderColor: String?
     public var senderAvatarURL: String?
     public var senderUserId: String?
+    /// L'auteur n'a pas de compte (`Participant.type == "anonymous"`).
+    ///
+    /// C'est LUI qui décide du glyphe fantôme, jamais le pseudo : le préfixe
+    /// `ano_` est lisible mais pas réservé, et un compte peut le porter.
+    public var senderIsAnonymous: Bool = false
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
     public var deliveredToAllAt: Date?
@@ -1001,6 +1006,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// (`messageSource == .system`). Drives the rich, actionable call bubble.
     /// `nil` for ordinary messages.
     public var callSummary: CallSummaryMetadata?
+    /// Avis d'arrivée porté par ce message système (`metadata.kind ==
+    /// "member-joined"`). Le rendu dédié court-circuite le rendu ordinaire —
+    /// une arrivée n'est pas une prise de parole.
+    public var joinNotice: JoinNoticeMetadata?
 
     /// Lieu partagé, restitué depuis la colonne `locationJson` du cache GRDB
     /// (`APIMessage.location` hissé côté serveur). `nil` pour un message sans
@@ -1067,11 +1076,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 attachments: [MeeshyMessageAttachment] = [], reactions: [MeeshyReaction] = [],
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
+                senderIsAnonymous: Bool = false,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
                 cachedTimeString: String? = nil,
                 callSummary: CallSummaryMetadata? = nil,
+                joinNotice: JoinNoticeMetadata? = nil,
                 location: SharedPlace? = nil,
                 trackedLinkMap: [String: String] = [:]) {
         self.id = id; self.clientMessageId = clientMessageId
@@ -1088,12 +1099,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
         self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
+        self.senderIsAnonymous = senderIsAnonymous
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
         self.recipientCount = recipientCount
         self.cachedTimeString = cachedTimeString
         self.callSummary = callSummary
+        self.joinNotice = joinNotice
         self.location = location
         self.trackedLinkMap = trackedLinkMap
     }
@@ -1111,6 +1124,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
         case callSummary
+        case joinNotice
         case location
         case trackedLinkMap
         // Legacy keys for migration from old cached data

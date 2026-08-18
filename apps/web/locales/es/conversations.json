@@ -793,6 +793,17 @@
           "hint": "La vista clásica"
         }
       }
+    },
+    "participantProfile": {
+      "noAccount": "sin cuenta",
+      "language": "Idioma",
+      "country": "País",
+      "joined": "Se unió el",
+      "viaLink": "Por el enlace",
+      "email": "Correo",
+      "birthday": "Nacimiento",
+      "withheld": "proporcionado, solo moderadores",
+      "title": "Ficha del participante"
     }
   },
   "bubbleStream": {

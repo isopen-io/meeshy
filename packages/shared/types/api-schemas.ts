@@ -109,7 +109,18 @@ export const userMinimalSchema = {
     username: { type: 'string', description: 'Username' },
     displayName: { type: 'string', description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
-    isOnline: { type: 'boolean', description: 'Online status' }
+    isOnline: { type: 'boolean', description: 'Online status' },
+    // A-t-il un compte ? `Participant.type` répond, et cette ligne est tout ce
+    // qui manquait pour que la réponse ARRIVE : la requête chargeait déjà le
+    // champ, le mapping l'étalait déjà, et fast-json-stringify le retirait
+    // faute de déclaration. Le payload socket `message:new` le transporte
+    // depuis toujours — cette déclaration met le chemin REST au même niveau.
+    // Absent quand le schéma décrit un vrai `User` plutôt qu'un participant.
+    type: {
+      type: 'string',
+      enum: ['user', 'anonymous', 'bot'],
+      description: 'Participant kind — `anonymous` marks an author with no account'
+    }
   }
 } as const;
 
@@ -702,7 +713,11 @@ export const messageSchema = {
             userId: { type: 'string', nullable: true },
             username: { type: 'string' },
             displayName: { type: 'string' },
-            avatar: { type: 'string', nullable: true }
+            avatar: { type: 'string', nullable: true },
+            // Même discriminant que sur `messageSchema.sender` : une citation
+            // d'un auteur sans compte doit le dire aussi, sinon le marqueur
+            // disparaît dès qu'on cite quelqu'un.
+            type: { type: 'string', enum: ['user', 'anonymous', 'bot'] }
           }
         },
         anonymousSender: {

@@ -290,3 +290,72 @@ describe('FocalRow — Prisme, citation, médias', () => {
     expect(screen.getByTestId('focal-media-block')).toBeInTheDocument();
   });
 });
+
+// ─── Avis d'arrivée — la rangée cède la place à la notice ────────────────────
+//
+// Le fil plat rend une rangée par message. Sans court-circuit, « Bob a rejoint
+// la conversation » y arriverait signé de Bob : en-tête d'identité, heure,
+// affordances — l'annonce d'une arrivée déguisée en premier message de
+// l'arrivant. Même arbitrage que le résumé d'appel, pour la même raison.
+//
+// Le témoin porte sur la SUBSTITUTION (l'en-tête d'identité disparaît), pas
+// seulement sur la présence de la notice : les deux pourraient coexister, et
+// c'est justement ce qu'il faut interdire.
+
+const joinNoticeMessage = () =>
+  makeMessage({
+    content: 'Bob a rejoint la conversation',
+    messageType: 'system',
+    messageSource: 'system',
+    metadata: {
+      kind: 'member-joined',
+      participantId: 'p-bob',
+      displayName: 'ano_bob_sm123',
+      isAnonymous: true,
+      viaShareLink: true,
+    },
+  } as Partial<Message>);
+
+describe('FocalRow — avis d’arrivée', () => {
+  const renderRow = (message: Message) =>
+    render(
+      <FocalRow
+        message={message}
+        previousMessage={null}
+        currentUser={currentUser}
+        density="focal"
+        preferredLanguages={['fr']}
+        time="10:00"
+        youLabel="Toi"
+      />
+    );
+
+  it('rend la notice plutôt qu’une rangée ordinaire', () => {
+    renderRow(joinNoticeMessage());
+
+    expect(screen.getByTestId('focal-join-notice')).toBeInTheDocument();
+  });
+
+  it('n’affiche NI en-tête d’identité NI texte de message — ce n’est pas une prise de parole', () => {
+    renderRow(joinNoticeMessage());
+
+    expect(screen.queryByTestId('focal-identity-header')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('focal-row-text')).not.toBeInTheDocument();
+  });
+
+  it('CONTRE-ÉPREUVE — un message ordinaire garde sa rangée', () => {
+    renderRow(makeMessage());
+
+    expect(screen.queryByTestId('focal-join-notice')).not.toBeInTheDocument();
+    expect(screen.getByTestId('focal-identity-header')).toBeInTheDocument();
+  });
+
+  it('ne confond pas un résumé d’appel avec une arrivée', () => {
+    renderRow(makeMessage({
+      messageSource: 'system',
+      metadata: { kind: 'call', callType: 'audio', outcome: 'completed' },
+    } as Partial<Message>));
+
+    expect(screen.queryByTestId('focal-join-notice')).not.toBeInTheDocument();
+  });
+});

@@ -55,9 +55,11 @@
 
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Ghost } from 'lucide-react';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import { getMessageInitials } from '@/lib/avatar-utils';
 import type { Participant } from '@meeshy/shared/types/participant';
+import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
 import { DeliveryIndicator } from '@/components/common/bubble-message/DeliveryIndicator';
 import { ParticipantPresenceIndicator } from '../conversation-item/ParticipantPresenceIndicator';
 import { isPlainLeftClick } from '@/lib/profile-link-click';
@@ -110,6 +112,19 @@ export function FocalIdentityHeader({
   const username =
     sender?.user?.username ?? (sender as { username?: string } | undefined)?.username;
 
+  /**
+   * Un auteur SANS COMPTE se marque d'un fantôme et n'a pas de page `/u/`.
+   * La vue plate était la seule des trois surfaces d'identité à ne rien dire du
+   * tout : Bulles et Citation portaient au moins la branche, éteinte par un
+   * littéral. Le discriminant est `Participant.type` (`isAnonymousSender`),
+   * jamais le pseudo — un COMPTE nommé `ano_bob` garde son lien et son absence
+   * de fantôme.
+   */
+  const isAnonymous = isAnonymousSender(sender as Record<string, unknown> | null | undefined);
+  // `profileUsername` porte le NARROWING : garder `username` dans le ternaire du
+  // rendu laisserait `onOpenProfile(username)` sur un `string | undefined`.
+  const profileUsername = !isAnonymous && username ? username : null;
+
   const avatarNode = (
     <div
       className="relative flex-shrink-0"
@@ -132,6 +147,14 @@ export function FocalIdentityHeader({
     </div>
   );
 
+  const ghostNode = isAnonymous ? (
+    <Ghost
+      data-testid="focal-identity-ghost"
+      className="h-3 w-3 flex-shrink-0 text-purple-600 dark:text-purple-400"
+      aria-hidden="true"
+    />
+  ) : null;
+
   const nameNode = (
     <span
       className="truncate"
@@ -152,9 +175,9 @@ export function FocalIdentityHeader({
       data-testid="focal-identity-header"
       style={{ paddingBottom: '2px' }}
     >
-      {username ? (
+      {profileUsername ? (
         <Link
-          href={`/u/${username}`}
+          href={`/u/${profileUsername}`}
           data-testid="focal-identity-profile-link"
           aria-label={openProfileLabel ?? displayName}
           // Le fil porte ses propres gestes de rangée (saut de citation,
@@ -171,7 +194,7 @@ export function FocalIdentityHeader({
             event.stopPropagation();
             if (onOpenProfile && isPlainLeftClick(event)) {
               event.preventDefault();
-              onOpenProfile(username);
+              onOpenProfile(profileUsername);
             }
           }}
           className="flex min-w-0 items-center gap-2 hover:opacity-80 transition-opacity"
@@ -182,6 +205,7 @@ export function FocalIdentityHeader({
       ) : (
         <>
           {avatarNode}
+          {ghostNode}
           {nameNode}
         </>
       )}

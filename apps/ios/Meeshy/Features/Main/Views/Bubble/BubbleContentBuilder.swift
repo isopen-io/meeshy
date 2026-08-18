@@ -74,6 +74,24 @@ extension BubbleContent {
             self.callNotice = nil
         }
 
+        // --- Avis d'arrivée ---
+        // Une arrivée n'est PAS une prise de parole : sans branche dédiée elle
+        // se rendrait comme un message signé de l'arrivant, et le fil
+        // raconterait que le premier mot de chaque nouveau venu est l'annonce
+        // de sa propre venue. Le texte vient du CATALOGUE au rendu, jamais du
+        // `content` stocké — celui-ci n'est qu'un repli français, et le Prisme
+        // Linguistique veut que chaque lecteur voie sa langue.
+        if message.messageSource == .system, let notice = message.joinNotice {
+            self.joinNotice = JoinNotice(
+                displayName: notice.displayName,
+                isAnonymous: notice.isAnonymous,
+                viaShareLink: notice.viaShareLink,
+                fallbackText: message.content
+            )
+        } else {
+            self.joinNotice = nil
+        }
+
         // --- Text + emoji ---
         let activeLang = activeDisplayLangCode
             ?? preferredTranslation?.targetLanguage

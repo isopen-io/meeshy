@@ -129,3 +129,78 @@ struct BubbleSystemNoticeView: View, Equatable {
         .padding(.vertical, 3)
     }
 }
+
+/// « X a rejoint la conversation » — une NOTICE, pas un message.
+///
+/// Sans elle, l'avis retombait sur `BubbleSystemNoticeView`, dont l'icône est
+/// un TÉLÉPHONE : cette vue a été écrite pour les résumés d'appel avant de
+/// devenir le fourre-tout des messages système. Une arrivée s'y annonçait donc
+/// sous un combiné.
+///
+/// Le texte vient du CATALOGUE, jamais du `content` stocké — celui-ci n'est
+/// qu'un repli français écrit par le gateway, et le Prisme Linguistique veut
+/// que chaque lecteur voie sa langue. `fallbackText` ne sert que si le nom
+/// manque.
+///
+/// Le masque et la mention « sans compte » vont ENSEMBLE : un glyphe seul ne se
+/// lit ni par VoiceOver ni par quelqu'un qui ignore la convention — et c'est
+/// l'information la plus utile quand la porte est un lien public.
+struct BubbleJoinNoticeView: View, Equatable {
+    let notice: BubbleContent.JoinNotice
+    let isDark: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 24)
+
+            HStack(spacing: 6) {
+                Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .foregroundColor(notice.isAnonymous ? .purple : ThemeManager.shared.textMuted)
+
+                Text(label)
+                    .font(MeeshyFont.relative(12.5, weight: .medium))
+                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .multilineTextAlignment(.center)
+
+                if notice.isAnonymous {
+                    Text(String(
+                        localized: "bubble.joinNotice.noAccount",
+                        defaultValue: "sans compte",
+                        bundle: .main
+                    ))
+                    .font(MeeshyFont.relative(10.5, weight: .semibold))
+                    .foregroundColor(.purple)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.purple.opacity(isDark ? 0.22 : 0.12)))
+                    .accessibilityIdentifier("bubble-join-notice-no-account")
+                }
+            }
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .overlay(
+                        Capsule()
+                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                    )
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("bubble-join-notice")
+
+            Spacer(minLength: 24)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var label: String {
+        guard !notice.displayName.isEmpty else { return notice.fallbackText }
+        return String(
+            localized: "bubble.joinNotice.joined",
+            defaultValue: "\(notice.displayName) a rejoint la conversation",
+            bundle: .main
+        )
+    }
+}

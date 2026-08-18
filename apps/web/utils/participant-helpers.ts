@@ -2,9 +2,23 @@ import type { Participant } from '@meeshy/shared/types/participant';
 import { hasMinimumMemberRole, MemberRole, isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { getUserDisplayName } from '@/utils/user-display-name';
+import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
 
+/**
+ * Ce participant a-t-il un compte ?
+ *
+ * Délègue à `isAnonymousSender` (`@meeshy/shared/utils/sender-identity`), la
+ * réponse unique du produit — sans quoi le web porterait un quatrième
+ * discriminant à côté de `type`, `isMeeshyer` et `isAnonymous`, et c'est
+ * exactement cette dispersion qui avait laissé les branches `<Ghost />` de la
+ * vue Bulles éteintes derrière un `const isAnonymous = false`.
+ *
+ * Les deux replis de forme restent : certaines charges utiles de participant
+ * portent `sessionToken` / `shareLinkId` sans porter `type`.
+ */
 export function isAnonymousParticipant(user: any): boolean {
-  return user && (user.type === 'anonymous' || 'sessionToken' in user || 'shareLinkId' in user);
+  if (!user) return false;
+  return isAnonymousSender(user) || 'sessionToken' in user || 'shareLinkId' in user;
 }
 
 export function getParticipantDisplayName(user: { displayName?: string; firstName?: string; lastName?: string; username: string }): string {

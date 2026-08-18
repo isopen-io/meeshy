@@ -156,6 +156,10 @@
     "bubble": {
       "forwarded": "Transféré"
     },
-    "newMessagesWhileAway": "nouveaux messages"
+    "newMessagesWhileAway": "nouveaux messages",
+    "joinNotice": {
+      "joined": "{{name}} a rejoint la conversation",
+      "noAccount": "sans compte"
+    }
   }
 }

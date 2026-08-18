@@ -366,6 +366,19 @@ final class DeepLinkRouter: ObservableObject {
 
     @Published var pendingDeepLink: DeepLink?
 
+    /// Lien de partage sur lequel la personne a choisi d'entrer SANS COMPTE,
+    /// alors qu'un compte est disponible sur l'appareil.
+    ///
+    /// Ce canal existe parce que les deux moitiés de la décision ne vivent pas
+    /// au même endroit : le choix se prend dans `RootView` (qui seule connaît
+    /// la liste des conversations, donc l'appartenance), et la session invitée
+    /// est portée par `MeeshyApp` (`activeGuestSession`), au-dessus.
+    ///
+    /// Distinct de `pendingDeepLink` à dessein : celui-ci décrit une DESTINATION
+    /// à résoudre, celui-là une IDENTITÉ déjà choisie. Les confondre ferait
+    /// reprendre la résolution à zéro et reposerait la question.
+    @Published var requestedGuestJoin: String?
+
     /// Brouillons par conversation. Injecté pour que le dépôt du texte d'un
     /// raccourci (widget « Réponse rapide », App Shortcut « Send Message »)
     /// soit observable en test sans toucher aux `UserDefaults` du simulateur.

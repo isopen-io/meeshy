@@ -230,8 +230,11 @@ describe('registerParticipantsRoutes', () => {
     registerParticipantsRoutes(mockFastify as any, mockPrisma, mockOptionalAuth, mockRequiredAuth);
   });
 
-  it('should register all four routes', () => {
-    expect(mockFastify.get).toHaveBeenCalledTimes(1);
+  // Deux GET : la LISTE des participants, et la FICHE de l'un d'eux — cette
+  // dernière ajoutée pour les visiteurs sans compte, qui n'ont pas de page
+  // `/u/{pseudo}` où présenter ce qu'ils ont fourni en entrant.
+  it('should register all five routes', () => {
+    expect(mockFastify.get).toHaveBeenCalledTimes(2);
     expect(mockFastify.post).toHaveBeenCalledTimes(1);
     expect(mockFastify.delete).toHaveBeenCalledTimes(1);
     expect(mockFastify.patch).toHaveBeenCalledTimes(1);

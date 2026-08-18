@@ -24,3 +24,36 @@ export function getSenderUserId(sender: Record<string, unknown> | null | undefin
 
   return null;
 }
+
+/**
+ * L'auteur d'un message a-t-il un compte ?
+ *
+ * `Participant.type` fait foi : c'est la colonne qui porte la réponse en base,
+ * et elle voyage désormais sur les deux chemins principaux — payload socket
+ * `message:new` et réponses REST (`userMinimalSchema.type`).
+ *
+ * `isMeeshyer` et `isAnonymous` ne sont que des REPLIS pour les charges utiles
+ * qui ne portent pas encore `type` (routes `/links/*`). Ils cèdent devant lui
+ * quand les deux sont présents : un drapeau hérité ne contredit pas la base.
+ *
+ * Défaut `false` quand rien n'est dit. Le seul repli acceptable : marquer à tort
+ * un inscrit comme « sans compte » est une affirmation fausse sur son identité,
+ * là où ne rien marquer n'en fait aucune.
+ */
+export function isAnonymousSender(sender: Record<string, unknown> | null | undefined): boolean {
+  if (!sender) return false;
+
+  if (typeof sender.type === 'string') {
+    return sender.type === 'anonymous';
+  }
+
+  if (typeof sender.isMeeshyer === 'boolean') {
+    return !sender.isMeeshyer;
+  }
+
+  if (typeof sender.isAnonymous === 'boolean') {
+    return sender.isAnonymous;
+  }
+
+  return false;
+}

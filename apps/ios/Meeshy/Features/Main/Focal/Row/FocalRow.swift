@@ -121,6 +121,7 @@ struct FocalRow: View {
                     senderPresence: input.senderPresence,
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
+                    senderIsAnonymous: input.senderIsAnonymous,
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,

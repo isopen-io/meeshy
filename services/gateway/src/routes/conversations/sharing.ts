@@ -19,6 +19,7 @@ import {
 } from './utils/identifier-generator';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
@@ -631,18 +632,22 @@ export function registerSharingRoutes(
         shareLinkId: shareLink.id
       };
 
+      let joinedParticipantId: string;
       if (entry.outcome === 'rejoin' && entry.participantId) {
-        // Réintégration sur la ligne existante : `Participant` ne porte aucune
-        // contrainte d'unicité sur `(conversationId, userId)`, donc un `create`
-        // ici laisserait une seconde ligne — identité d'expéditeur ambiguë,
-        // fan-out doublé. `joinedAt` reste celui de la première venue.
-        await prisma.participant.update({
+        // Réintégration sur la ligne existante. `Participant` porte
+        // `@@unique([conversationId, userId, sessionTokenHash])` : pour un
+        // inscrit — dont `sessionTokenHash` est nul — la clé se réduit à
+        // `(conversationId, userId)` et un `create` ici échouerait. Même sans
+        // elle, une seconde ligne rendrait l'identité d'expéditeur ambiguë et
+        // doublerait le fan-out. `joinedAt` reste celui de la première venue.
+        const rejoined = await prisma.participant.update({
           where: { id: entry.participantId },
           data: { ...linkMemberFields, ...REJOIN_PARTICIPANT_STATE }
         });
+        joinedParticipantId = rejoined.id;
         invalidateParticipantLookup(entry.participantId, shareLink.conversationId);
       } else {
-        await prisma.participant.create({
+        const created = await prisma.participant.create({
           data: {
             conversationId: shareLink.conversationId,
             userId: userToken.userId,
@@ -650,6 +655,7 @@ export function registerSharingRoutes(
             joinedAt: new Date()
           }
         });
+        joinedParticipantId = created.id;
       }
 
       // Incrémenter le compteur d'utilisation du lien
@@ -658,6 +664,24 @@ export function registerSharingRoutes(
         data: { currentUses: { increment: 1 } }
       });
       logger.info('Appartenance ouverte', { outcome: entry.outcome });
+
+      // Annoncer l'arrivée — même loi que la porte anonyme. Un retour compte
+      // comme une arrivée : les présents ne l'ont pas vu partir non plus.
+      await postJoinSystemMessage(
+        {
+          prisma,
+          broadcast: (message, conversationId) =>
+            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
+              ?? Promise.resolve()
+        },
+        {
+          conversationId: shareLink.conversationId,
+          participantId: joinedParticipantId,
+          displayName: linkMemberFields.displayName,
+          isAnonymous: false,
+          viaShareLink: true
+        }
+      );
 
       // Auto-join the joining user's currently-connected sockets to the
       // conversation room so they receive message:new events immediately
@@ -926,6 +950,23 @@ export function registerSharingRoutes(
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
       }
+
+      // Annoncer l'arrivée — troisième des quatre portes, même loi.
+      await postJoinSystemMessage(
+        {
+          prisma: fastify.prisma,
+          broadcast: (message, targetConversationId) =>
+            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, targetConversationId)
+              ?? Promise.resolve()
+        },
+        {
+          conversationId,
+          participantId: newMember.id,
+          displayName: invitedMemberFields.displayName,
+          isAnonymous: false,
+          viaShareLink: false
+        }
+      );
 
       // Auto-join the invited user's currently-connected sockets to the
       // conversation room so they receive message:new events immediately

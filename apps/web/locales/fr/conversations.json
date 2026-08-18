@@ -795,6 +795,17 @@
           "hint": "L'affichage classique"
         }
       }
+    },
+    "participantProfile": {
+      "noAccount": "sans compte",
+      "language": "Langue",
+      "country": "Pays",
+      "joined": "Arrivé le",
+      "viaLink": "Par le lien",
+      "email": "Email",
+      "birthday": "Naissance",
+      "withheld": "fourni, réservé aux modérateurs",
+      "title": "Fiche du participant"
     }
   },
   "bubbleStream": {

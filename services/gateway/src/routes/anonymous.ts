@@ -6,7 +6,9 @@ import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthoriz
 import { SecuritySanitizer } from '../utils/sanitize';
 import { generateNickname } from '../utils/anonymous-nickname';
 import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
+import { postJoinSystemMessage } from '../services/conversations/joinSystemMessage';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { toAnonymousUsername, suffixAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -95,6 +97,41 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     });
 
     return shareLink ? shareLink.id : null;
+  }
+
+  /**
+   * Premier pseudo libre de la série `ano_bob`, `ano_bob2`, `ano_bob3`… dans
+   * CETTE conversation — la seule portée où deux pseudos identiques se voient.
+   *
+   * Rend `null` quand la série est épuisée. La borne n'est pas un détail de
+   * confort : les deux boucles qu'elle remplace étaient des `while (true)` que
+   * seule la part aléatoire de `generateNickname` faisait terminer. Un pseudo
+   * demandé explicitement et durablement pris les faisait tourner jusqu'à
+   * l'OOM du process — un déni de service à un POST non authentifié.
+   */
+  const MAX_USERNAME_RANKS = 25;
+
+  async function findFreeAnonymousUsername(
+    desired: string,
+    conversationId: string
+  ): Promise<string | null> {
+    for (let rank = 1; rank <= MAX_USERNAME_RANKS; rank++) {
+      const candidate = rank === 1 ? desired : suffixAnonymousUsername(desired, rank);
+
+      const taken = await fastify.prisma.participant.findFirst({
+        where: {
+          conversationId,
+          displayName: candidate,
+          type: 'anonymous',
+          isActive: true
+        },
+        select: { id: true }
+      });
+
+      if (!taken) return candidate;
+    }
+
+    return null;
   }
 
   // Route pour rejoindre une conversation de maniere anonyme
@@ -304,98 +341,44 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'La date de naissance est obligatoire pour rejoindre cette conversation');
       }
 
-      // 7. Verifier si l'username est requis et generer le username
-      let username: string;
-      if (shareLink.requireNickname) {
-        // Si l'username est requis, il doit etre fourni
-        if (!body.username || body.username.trim() === '') {
-          return sendBadRequest(reply, 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation');
-        }
-        username = SecuritySanitizer.sanitizeUsername(body.username.trim());
-      } else {
-        // Si l'username n'est pas requis, generer automatiquement
-        username = body.username ? SecuritySanitizer.sanitizeUsername(body.username) : generateNickname(firstName, lastName);
+      // 7. Résoudre le pseudo — dans l'ESPACE RÉSERVÉ `ano_`, et sans jamais
+      //    refuser l'entrée pour cause d'homonymie.
+      //
+      //    L'ancienne porte comparait le pseudo demandé aux `User.username` du
+      //    site et rendait 409 sur collision. Deux torts : elle faisait payer à
+      //    un anonyme la présence d'un INSCRIT qu'il ne croisera jamais, et le
+      //    409 est terminal pour lui — ce lien est sa seule identité. Elle
+      //    calculait bien une alternative, dans deux `while (true)`, puis la
+      //    jetait : `sendError` ne la transportait pas jusqu'au client.
+      //
+      //    Les deux `while (true)` ne terminaient d'ailleurs QUE parce que
+      //    `generateNickname` tire au hasard. Sur une collision stable — un
+      //    pseudo explicitement demandé et déjà pris — la boucle interrogeait
+      //    la base sans fin, jusqu'à l'OOM du process.
+      //
+      //    Le pseudo d'un anonyme ne se compare donc plus à ceux des comptes :
+      //    ce qui distingue les deux populations n'est pas le nom mais le
+      //    GLYPHE FANTÔME, apposé au rendu devant le nom et le pseudo de tout
+      //    participant sans compte. `ano_` reste un préfixe lisible, PAS un
+      //    espace réservé — un compte peut s'appeler `ano_bob`, il n'aura
+      //    simplement pas le fantôme. Reste à départager les anonymes d'une
+      //    MÊME conversation, ce que le rang tranche.
+      if (shareLink.requireNickname && (!body.username || body.username.trim() === '')) {
+        return sendBadRequest(reply, 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation');
       }
 
-      // 6. Verifier que le username n'est pas deja pris par un utilisateur enregistre
-      const existingUser = await fastify.prisma.user.findFirst({
-        where: {
-          username: username,
-          isActive: true
-        }
-      });
+      const requestedUsername = body.username && body.username.trim() !== ''
+        ? SecuritySanitizer.sanitizeUsername(body.username.trim())
+        : generateNickname(firstName, lastName);
 
-      if (existingUser) {
-        // Generer un username alternatif qui ne soit pas pris par un utilisateur enregistre
-        let suggestedUsername = generateNickname(firstName, lastName);
-        let counter = 1;
+      const desiredUsername = toAnonymousUsername(requestedUsername);
+      const username = await findFreeAnonymousUsername(desiredUsername, shareLink.conversationId);
 
-        // Verifier si le username suggere est deja pris par un utilisateur enregistre
-        while (true) {
-          const existingSuggestedUser = await fastify.prisma.user.findFirst({
-            where: {
-              username: suggestedUsername,
-              isActive: true
-            }
-          });
-
-          if (!existingSuggestedUser) {
-            break; // Username disponible
-          }
-
-          // Ajouter un suffixe numerique
-          suggestedUsername = `${generateNickname(firstName, lastName)}${counter}`;
-          counter++;
-        }
-
-        return sendError(reply, 409, 'USERNAME_TAKEN', { message: 'Ce nom d\'utilisateur est deja utilise par un membre du site' });
-      }
-
-      // 7. Verifier que le username n'est pas deja pris dans cette conversation
-      const existingParticipant = await fastify.prisma.participant.findFirst({
-        where: {
-          conversationId: shareLink.conversationId,
-          displayName: username,
-          type: 'anonymous',
-          isActive: true
-        }
-      });
-
-      if (existingParticipant) {
-        // Generer un username alternatif unique pour cette conversation
-        let suggestedUsername = generateNickname(firstName, lastName);
-        let counter = 1;
-
-        // Verifier si le username suggere est deja pris et generer une alternative
-        while (true) {
-          // Verifier d'abord contre les utilisateurs enregistres
-          const existingSuggestedUser = await fastify.prisma.user.findFirst({
-            where: {
-              username: suggestedUsername,
-              isActive: true
-            }
-          });
-
-          // Puis verifier contre les participants anonymes de cette conversation
-          const existingSuggestedParticipant = await fastify.prisma.participant.findFirst({
-            where: {
-              conversationId: shareLink.conversationId,
-              displayName: suggestedUsername,
-              type: 'anonymous',
-              isActive: true
-            }
-          });
-
-          if (!existingSuggestedUser && !existingSuggestedParticipant) {
-            break; // Username disponible
-          }
-
-          // Ajouter un suffixe numerique
-          suggestedUsername = `${generateNickname(firstName, lastName)}${counter}`;
-          counter++;
-        }
-
-        return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', { message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation' });
+      if (!username) {
+        return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', {
+          message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation',
+          details: { suggestedNickname: toAnonymousUsername(generateNickname(firstName, lastName)) }
+        });
       }
 
       // 8. Generer le sessionToken unique
@@ -453,6 +436,29 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // 11. Annoncer l'arrivée dans le fil. Les membres présents voyaient sinon
+      //     un inconnu prendre la parole sans avoir vu entrer personne — et rien
+      //     ne disait que ce visiteur n'a PAS de compte, la distinction la plus
+      //     utile quand la porte est un lien public.
+      //
+      //     `postJoinSystemMessage` ne rejette jamais : l'avis est un accessoire
+      //     de l'entrée, pas sa condition. Un anonyme déjà admis ne doit pas se
+      //     voir refuser pour une panne d'écriture ou de socket.
+      await postJoinSystemMessage(
+        {
+          prisma: fastify.prisma,
+          broadcast: (message, conversationId) =>
+            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
+              ?? Promise.resolve()
+        },
+        {
+          conversationId: shareLink.conversationId,
+          participantId: anonymousParticipant.id,
+          displayName: username,
+          isAnonymous: true,
+          viaShareLink: true
+        }
+      );
 
       return sendSuccess(reply, {
           sessionToken: sessionToken,

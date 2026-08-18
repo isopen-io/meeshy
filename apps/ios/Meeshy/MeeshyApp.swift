@@ -121,8 +121,15 @@ struct MeeshyApp: App {
                             .zIndex(1)
                     }
                 }
+                // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
+                // avant la fin de `checkExistingSession`, qui échouerait un
+                // utilisateur connecté dans un flux invité. `isDeliberate`
+                // nomme l'INTENTION inverse : quelqu'un qui a un compte et
+                // choisit malgré tout d'entrer sans lui. Les deux doivent
+                // coexister ; les confondre reviendrait soit à rouvrir
+                // l'accident, soit à interdire le choix.
                 .fullScreenCover(isPresented: .init(
-                    get: { activeGuestSession != nil && !authManager.isAuthenticated },
+                    get: { activeGuestSession != nil && (!authManager.isAuthenticated || activeGuestSession?.isDeliberate == true) },
                     set: { if !$0 { dismissGuestSession() } }
                 )) {
                     if let guestSession = activeGuestSession {
@@ -132,7 +139,11 @@ struct MeeshyApp: App {
                                 if !AnonymousSessionStore.save(ctx) {
                                     toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Unable to save session", bundle: .main))
                                 }
-                                activeGuestSession = GuestSession(identifier: guestSession.identifier, context: ctx)
+                                activeGuestSession = GuestSession(
+                                    identifier: guestSession.identifier,
+                                    context: ctx,
+                                    isDeliberate: guestSession.isDeliberate
+                                )
                             },
                             onDismiss: { dismissGuestSession() }
                         )
@@ -769,6 +780,21 @@ struct MeeshyApp: App {
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
+                }
+                // Entrée SANS COMPTE choisie depuis un appareil qui en a un.
+                // `RootView` a posé la question et reçu la réponse ; la session
+                // invitée, elle, vit ici. Le canal est distinct de
+                // `pendingDeepLink` parce qu'il ne porte pas une destination à
+                // résoudre mais une identité déjà choisie — le confondre
+                // reposerait la question.
+                .adaptiveOnChange(of: deepLinkRouter.requestedGuestJoin) { _, identifier in
+                    guard let identifier else { return }
+                    deepLinkRouter.requestedGuestJoin = nil
+                    activeGuestSession = GuestSession(
+                        identifier: identifier,
+                        context: AnonymousSessionStore.load(linkId: identifier),
+                        isDeliberate: true
+                    )
                 }
                 // Prisme Linguistique — dès que la langue principale de
                 // l'utilisateur change (login, changement de préférence), on la

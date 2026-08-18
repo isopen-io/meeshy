@@ -157,6 +157,38 @@ describe('sendError', () => {
     const sent = reply.send.mock.calls[0][0];
     expect(sent.code).toBe('VALIDATION_ERROR');
   });
+
+  // `details` figurait dans la signature depuis toujours, était accepté par le
+  // compilateur, et n'atteignait jamais la réponse. Un appelant qui s'en servait
+  // pour porter une issue de secours — `suggestedNickname` sur un 409 de pseudo
+  // pris — voyait son travail disparaître entre le calcul et le fil. Une option
+  // muette est pire qu'une option absente : elle a l'air branchée.
+  //
+  // Le schéma de réponse de chaque route reste l'arbitre de ce qui SORT
+  // (fast-json-stringify retire tout champ non déclaré) — `details` propose, le
+  // schéma dispose.
+  it('porte `details` à la racine — le client lit ces champs directement', () => {
+    const reply = makeReply();
+    sendError(reply as any, 409, 'USERNAME_TAKEN', {
+      details: { suggestedNickname: 'ano_bob42' },
+    });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.suggestedNickname).toBe('ano_bob42');
+  });
+
+  it('ne laisse pas `details` écraser l’enveloppe', () => {
+    const reply = makeReply();
+    sendError(reply as any, 409, 'USERNAME_TAKEN', {
+      message: 'Pseudo pris',
+      details: { success: true, error: 'nope', message: 'nope', code: 'nope' },
+    });
+
+    const sent = reply.send.mock.calls[0][0];
+    expect(sent.success).toBe(false);
+    expect(sent.error).toBe('USERNAME_TAKEN');
+    expect(sent.message).toBe('Pseudo pris');
+  });
 });
 
 // ─── Convenience helpers ──────────────────────────────────────────────────────

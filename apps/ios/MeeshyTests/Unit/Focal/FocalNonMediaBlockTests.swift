@@ -64,7 +64,7 @@ final class FocalNonMediaBlockTests: XCTestCase {
             meta: BubbleContent.Meta(timeString: "10:41", deliveryStatus: nil),
             isMe: false,
             senderName: "Ali",
-            callNotice: nil
+            callNotice: nil, joinNotice: nil
         )
     }
 

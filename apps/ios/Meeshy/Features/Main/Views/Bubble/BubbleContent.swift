@@ -158,6 +158,20 @@ nonisolated struct BubbleContent: Equatable {
         let timestamp: Date
     }
 
+    /// Faits résolus d'un avis d'ARRIVÉE — tout ce dont la feuille
+    /// `BubbleJoinNoticeView` a besoin, en primitifs, pour ne se réévaluer que
+    /// sur changement réel. Même convention que `CallNotice`.
+    struct JoinNotice: Equatable {
+        let displayName: String
+        /// L'arrivant n'a pas de compte — c'est ce que le glyphe dit.
+        let isAnonymous: Bool
+        /// Entré par un lien de partage plutôt qu'ajouté par un membre.
+        let viaShareLink: Bool
+        /// Repli français écrit par le gateway, servi aux surfaces sans rendu
+        /// dédié et aux lecteurs plus anciens que ce `kind`.
+        let fallbackText: String
+    }
+
     let messageId: String
     let kind: Kind
     let text: Text?
@@ -188,6 +202,10 @@ nonisolated struct BubbleContent: Equatable {
     /// (`messageSource == .system` + `callSummary != nil`). When nil, a `.system`
     /// message falls back to the plain centered notice.
     let callNotice: CallNotice?
+    /// Présent pour un message système d'ARRIVÉE (`metadata.kind ==
+    /// "member-joined"`). Quand nil, un `.system` retombe sur la notice
+    /// centrée ordinaire.
+    let joinNotice: JoinNotice?
 
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
@@ -268,5 +286,6 @@ nonisolated struct BubbleContent: Equatable {
             && lhs.isMe == rhs.isMe
             && lhs.senderName == rhs.senderName
             && lhs.callNotice == rhs.callNotice
+            && lhs.joinNotice == rhs.joinNotice
     }
 }

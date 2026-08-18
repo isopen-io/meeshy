@@ -13,6 +13,7 @@ import {
   AuthSchemas,
   SignalProtocolLimits,
   NotificationPreferenceSchemas,
+  updateUsernameSchema,
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
@@ -409,5 +410,43 @@ describe('NotificationPreferenceSchemas.update — DND time format', () => {
 
   it('rejects an out-of-range hour', () => {
     expect(NotificationPreferenceSchemas.update.safeParse({ dndStartTime: '24:00' }).success).toBe(false);
+  });
+});
+
+// ─── `ano_` n'est PAS réservé côté comptes ───────────────────────────────────
+//
+// Le préfixe `ano_` marque les participants sans compte
+// (`utils/anonymous-username.ts`), mais il ne leur est pas RÉSERVÉ : un compte
+// peut parfaitement s'appeler `ano_bob`. Ce qui distingue les deux populations
+// n'est pas le nom, c'est le GLYPHE FANTÔME que seuls les participants sans
+// compte portent, partout où leur nom et leur pseudo s'affichent.
+//
+// Interdire le préfixe aux comptes aurait déplacé le problème plutôt que de le
+// résoudre : un refus d'inscription pour un motif que l'utilisateur ne peut
+// pas deviner, au bénéfice d'une désambiguïsation que le glyphe assure déjà.
+
+describe('`ano_` reste ouvert aux pseudos de compte', () => {
+  const registerPayload = (username: string) => ({
+    username,
+    password: 'SecurePass123!',
+    firstName: 'Bob',
+    lastName: 'Smith',
+    email: 'bob@example.com',
+  });
+
+  it('l’inscription accepte un pseudo préfixé `ano_`', () => {
+    expect(AuthSchemas.register.safeParse(registerPayload('ano_bob')).success).toBe(true);
+  });
+
+  it('le changement de pseudo l’accepte aussi', () => {
+    const result = updateUsernameSchema.safeParse({
+      newUsername: 'ano_bob',
+      currentPassword: 'SecurePass123!',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('le schéma commun l’accepte aussi', () => {
+    expect(CommonSchemas.username.safeParse('ano_bobby').success).toBe(true);
   });
 });

@@ -30,6 +30,11 @@ struct FocalIdentityHeader: View, Equatable {
     let senderPresence: PresenceState
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
+    /// L'auteur n'a PAS de compte (`Participant.type == "anonymous"`).
+    ///
+    /// Décidé par le type, jamais par le pseudo : `ano_` est un préfixe
+    /// lisible, pas un espace réservé, et un compte peut le porter.
+    var senderIsAnonymous: Bool = false
     let timeString: String
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
@@ -50,6 +55,7 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.senderPresence == rhs.senderPresence
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
+            && lhs.senderIsAnonymous == rhs.senderIsAnonymous
             && lhs.timeString == rhs.timeString
             && lhs.deliveryStatus == rhs.deliveryStatus
             && lhs.isDark == rhs.isDark
@@ -117,6 +123,22 @@ struct FocalIdentityHeader: View, Equatable {
                     isDark: isDark
                 )
                 .agentAuthoredAvatarRing(agentStyle, diameter: avatarSize)
+
+                // Le fantôme précède le nom : il qualifie l'identité, il ne la
+                // décore pas. Sans lui, un visiteur entré par lien public est
+                // indiscernable d'un membre inscrit — la distinction la plus
+                // utile dans une conversation ouverte à tout venant.
+                if senderIsAnonymous {
+                    Image(systemName: "theatermasks.fill")
+                        .font(MeeshyFont.relative(FocalMetrics.Name.size * 0.8, weight: .semibold))
+                        .foregroundColor(.purple)
+                        .accessibilityLabel(String(
+                            localized: "focal.row.anonymousSender",
+                            defaultValue: "Sans compte",
+                            bundle: .main
+                        ))
+                        .accessibilityIdentifier("focal-identity-anonymous-glyph")
+                }
 
                 Text(displayName)
                     .font(MeeshyFont.relative(
