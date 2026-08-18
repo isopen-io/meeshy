@@ -11125,3 +11125,61 @@ de tests app entière est morte sur `disk I/O error` + `.resp` manquants :
 `apps/ios/Build` était à 0 B et le disque avait regagné 36 Gi — une session
 voisine avait lancé un `clean`. Pour un gate long dans un worktree partagé,
 utiliser un `-derivedDataPath` privé.
+
+## Leçon — « authentifié » ne veut pas dire « a un compte » (2026-08-18)
+
+Un invité de lien partagé rend `isAuthenticated` VRAI : `joinAnonymously` appelle
+`setUser(participant)`, et `setUser` pose `isAuthenticated: !!user`. Tout garde
+écrit `enabled: isAuthenticated` s'ouvre donc pour quelqu'un sans compte, et lui
+fait demander des ressources que le gateway lui refuse (401 sans en-tête, 403
+avec `X-Session-Token`). Gater sur l'IDENTIFIANT (`hasAccountCredential()`),
+jamais sur la présence d'une identité.
+
+Corollaire de transport : **un jeton nu ne dit pas sous quel en-tête le
+présenter.** Compte = `Authorization: Bearer <JWT>` ; invité = `X-Session-Token`,
+qui n'est pas un JWT — l'envoyer en Bearer fait répondre « Invalid JWT token ».
+Passer un `String` repose la question à chaque site d'appel ; il a suffi d'un
+site distrait (`ApiService`) pour exclure toute une population, pendant que trois
+sites compensaient à la main et masquaient le trou. Le type porte donc l'en-tête
+AVEC la valeur : `RequestCredential` (web), `MeeshyRequestCredential` (iOS).
+
+### Deux réflexes de diagnostic que cette panne a payés
+- **Lire l'horodatage avant de conclure.** La rafale de 401 précédait de 7
+  secondes le join qui, lui, réussissait en base. Le serveur allait très bien ;
+  la panne était entièrement cliente.
+- **Un second lecteur du même état est la cause, pas la solution.** Mon premier
+  correctif lisait `localStorage` en direct au lieu de passer par `authManager` —
+  c'est-à-dire exactement la duplication qui avait produit le défaut. Le test
+  existant l'a attrapé.
+
+## Leçon — un compte de `Task.yield()` n'est pas une synchronisation (2026-08-18)
+
+`SoundLibraryPickerModelTests` est tombée pendant qu'un build concurrent saturait
+le CPU, puis a rendu 30/30 verts relancée seule. Reprendre une continuation la
+rend seulement EXÉCUTABLE ; deux yields suffisaient au repos, pas sous charge.
+Attendre la CONDITION, avec une échéance qui échoue en le disant.
+
+Variante plus vicieuse dans la même suite : le test d'annulation concluait de
+deux `nil` que la tâche avait été annulée — alors que « pas encore tournée »
+produit les mêmes deux `nil`. Il pouvait passer au vert sans rien prouver. Quand
+la conclusion est une ABSENCE, il faut un signal positif attestant que le moment
+d'agir est bien passé (ici `completedPlayIds`, distinct de `playedIds`).
+
+## Leçon — une garde de source qui rougit sur son cas nominal n'apprend plus rien (2026-08-18)
+
+`LentilleScreenNotMountedTests` interdisait toute référence aux composants
+Lentille hors du dossier `Lentille/`, alors que son propre en-tête ET un
+troisième témoin du même fichier nommaient `ConversationListView` comme le point
+de greffe légitime. Trois endroits, deux règles contradictoires. Elle est passée
+au rouge quand les montages y ont été écrits en clair — sans qu'aucune règle
+produit ne soit violée.
+
+Deux corrections, et la seconde est la vraie :
+1. Dépouiller les commentaires (`AppSourceGuard.stripComments`) — 2 des 4 échecs
+   portaient sur des commentaires.
+2. Ce qui compte n'est pas l'absence du NOM, c'est que le montage soit GARDÉ. Le
+   témoin de gating existant se contentait d'exiger que la chaîne du drapeau
+   apparaisse quelque part dans le fichier : un montage sorti de son bloc
+   l'aurait laissé vert, soit exactement la régression qu'il nomme. Remplacé par
+   une preuve de contenance d'accolades — et prouvée ROUGE par contre-épreuve
+   avant livraison.
