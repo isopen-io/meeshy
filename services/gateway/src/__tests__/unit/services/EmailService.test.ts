@@ -1483,4 +1483,61 @@ describe('EmailService', () => {
       expect(result.success).toBe(false);
     });
   });
+
+  describe('sendUsernameReminderEmail', () => {
+    async function sendAndCapture(language: string) {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'reminder-001' }));
+
+      await service.sendUsernameReminderEmail({
+        to: 'verrainembilla@gmail.com',
+        name: 'La Lionne Noire',
+        username: 'lalionnenoire',
+        language,
+      });
+
+      return mockAxiosPost.mock.calls.at(-1)![1] as {
+        subject: string;
+        htmlContent: string;
+        textContent: string;
+      };
+    }
+
+    it('rend le handle dans le HTML et dans le texte', async () => {
+      const payload = await sendAndCapture('fr');
+      expect(payload.htmlContent).toContain('@lalionnenoire');
+      expect(payload.textContent).toContain('@lalionnenoire');
+    });
+
+    it('adresse la personne par son nom', async () => {
+      const payload = await sendAndCapture('fr');
+      expect(payload.textContent).toContain('La Lionne Noire');
+    });
+
+    // Règle produit : c'est un RAPPEL. Aucun vocabulaire de modification, dans
+    // aucune langue — sans quoi le mail révélerait le renommage.
+    const FORBIDDEN: Record<string, readonly string[]> = {
+      fr: ['modifi', 'chang', 'nouveau', 'nouvelle', 'mis à jour'],
+      en: ['chang', 'updat', 'new '],
+      es: ['cambi', 'modific', 'nuevo'],
+      pt: ['alter', 'modific', 'novo'],
+      it: ['modific', 'cambi', 'nuovo'],
+      de: ['geändert', 'aktualisiert', 'neue'],
+    };
+
+    it.each(Object.keys(FORBIDDEN))('n\'évoque aucune modification en %s', async (lang) => {
+      const payload = await sendAndCapture(lang);
+      const body = `${payload.subject}\n${payload.textContent}`.toLowerCase();
+      for (const word of FORBIDDEN[lang]) {
+        expect(body).not.toContain(word.toLowerCase());
+      }
+    });
+
+    it('retombe sur l\'anglais pour une langue inconnue', async () => {
+      const payload = await sendAndCapture('xx');
+      expect(payload.htmlContent).toContain('@lalionnenoire');
+      expect(payload.subject).toBe('Your Meeshy username');
+    });
+  });
 });
