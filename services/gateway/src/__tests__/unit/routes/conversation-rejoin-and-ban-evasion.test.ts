@@ -144,11 +144,13 @@ function rowsMatching(rows: any[], where: any) {
   });
 }
 
-function buildPrisma(rows: any[]) {
+function buildPrisma(rows: any[], closed = false) {
   const prisma: any = {
     conversation: {
       findUnique: jest.fn<any>(async (args: any) => ({
         id: CONV_ID,
+        isActive: !closed,
+        closedAt: closed ? new Date('2026-06-01') : null,
         type: 'group',
         title: 'Test',
         createdAt: new Date('2025-01-01'),
@@ -231,11 +233,11 @@ function routeFor(fastify: any, method: string, fragment: string) {
   return found;
 }
 
-function setup(state: LeftoverState, targetUserId: string) {
+function setup(state: LeftoverState, targetUserId: string, closed = false) {
   const rows = state === 'none' ? [] : [leftoverRow(state, targetUserId)];
   // Sur les portes d'AJOUT, l'appelant doit lui-même être membre actif et admin.
   if (targetUserId !== ACTOR_ID) rows.push(leftoverRow('active', ACTOR_ID));
-  const prisma = buildPrisma(rows);
+  const prisma = buildPrisma(rows, closed);
   const fastify = createMockFastify(prisma);
   registerSharingRoutes(fastify as any, prisma, jest.fn<any>(), jest.fn<any>());
   registerParticipantsRoutes(fastify as any, prisma, jest.fn<any>(), jest.fn<any>());
@@ -403,5 +405,117 @@ describe('POST /conversations/:id/invite', () => {
     const { prisma } = await invite('none');
 
     expect(prisma.participant.create).toHaveBeenCalled();
+  });
+});
+
+// ─── Les trois portes face à une conversation CLOSE (cycle 70) ────────────────
+//
+// Le jumeau d'écriture refuse un message dans un fil clos depuis le cycle 31.
+// Aucune des portes ne refusait d'y faire ENTRER : elles vérifiaient l'état de
+// la LIGNE, et le lien de partage vérifiait l'état du LIEN — jamais celui du
+// conteneur. Ce que recevait l'arrivant : une notification, un
+// `conversation:new` que les clients PERSISTENT, et une conversation que
+// `GET /conversations` ne sert pas et qui refuse chacun de ses messages.
+
+describe('les portes d\'entrée face à une conversation close', () => {
+  async function joinClosed(state: LeftoverState) {
+    const ctx = setup(state, ACTOR_ID, true);
+    const route = routeFor(ctx.fastify, 'POST', 'join/:linkId');
+    await route.handler({ params: { linkId: 'lnk' }, body: {}, authContext: actorContext }, ctx.reply);
+    return ctx;
+  }
+
+  async function addMemberClosed(state: LeftoverState) {
+    const ctx = setup(state, TARGET_ID, true);
+    const route = routeFor(ctx.fastify, 'POST', ':id/participants');
+    await route.handler(
+      { params: { id: CONV_ID }, body: { userId: TARGET_ID }, authContext: actorContext },
+      ctx.reply
+    );
+    return ctx;
+  }
+
+  async function inviteClosed(state: LeftoverState) {
+    const ctx = setup(state, TARGET_ID, true);
+    const route = routeFor(ctx.fastify, 'POST', ':id/invite');
+    await route.handler(
+      { params: { id: CONV_ID }, body: { userId: TARGET_ID }, authContext: actorContext },
+      ctx.reply
+    );
+    return ctx;
+  }
+
+  it('porte du lien — n\'admet PAS un primo-arrivant dans un fil terminal', async () => {
+    const { prisma } = await joinClosed('none');
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(mockSendSuccess).not.toHaveBeenCalled();
+  });
+
+  it('porte du lien — ne RÉINTÈGRE pas non plus : revenir dans un fil terminal n\'est pas revenir', async () => {
+    const { prisma } = await joinClosed('departed');
+
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('porte du lien — ne compte AUCUN usage du lien pour une entrée refusée', async () => {
+    const { prisma } = await joinClosed('none');
+
+    expect(prisma.conversationShareLink.update).not.toHaveBeenCalled();
+  });
+
+  it('porte de l\'admin — n\'admet PAS, et ne notifie personne d\'une adhésion qui n\'a pas eu lieu', async () => {
+    const { prisma, fastify } = await addMemberClosed('none');
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(fastify.notificationService.createAddedToConversationNotification).not.toHaveBeenCalled();
+  });
+
+  it('porte de l\'admin — n\'annonce RIEN sur le fil : pas de `conversation:new` à écrire dans un cache persistant', async () => {
+    const { fastify } = await addMemberClosed('none');
+
+    const io = fastify.socketIOHandler.getManager().getIO();
+    expect(io.to).not.toHaveBeenCalled();
+  });
+
+  it('porte de l\'admin — refuse aussi la réintégration', async () => {
+    const { prisma } = await addMemberClosed('departed');
+
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('porte de l\'invitation — n\'admet PAS dans un fil terminal', async () => {
+    const { prisma } = await inviteClosed('none');
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('porte de l\'invitation — refuse aussi la réintégration', async () => {
+    const { prisma } = await inviteClosed('departed');
+
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('n\'oppose pas la clôture à un membre déjà actif — aucune écriture n\'était en jeu, sa réponse ne change pas', async () => {
+    const { prisma } = await joinClosed('active');
+
+    expect(mockSendSuccess).toHaveBeenCalled();
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('n\'oppose pas la clôture à un banni — le refus de sécurité garde ses mots', async () => {
+    await joinClosed('banned');
+
+    expect(mockSendForbidden).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining('banni')
+    );
   });
 });

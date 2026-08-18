@@ -47,6 +47,10 @@ function createMockPrisma() {
   return {
     conversation: {
       findFirst: jest.fn<any>(),
+      // Vivante par défaut : `resolveConversationEntry` demande ici l'état
+      // TERMINAL du conteneur avant toute écriture d'entrée — une conversation
+      // close n'admet plus personne, par aucune des quatre portes.
+      findUnique: jest.fn<any>().mockResolvedValue({ isActive: true, closedAt: null }),
     },
     participant: {
       findFirst: jest.fn<any>(),

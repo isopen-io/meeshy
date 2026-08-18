@@ -6,6 +6,8 @@ import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthoriz
 import { SecuritySanitizer } from '../utils/sanitize';
 import { generateNickname } from '../utils/anonymous-nickname';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
+import { CONVERSATION_CLOSED_ENTRY_MESSAGE } from '../services/conversations/conversationEntryAdmission';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -221,7 +223,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         where: { OR: [{ linkId }, { identifier: linkId }] },
         include: {
           conversation: {
-            select: { id: true, title: true, type: true }
+            // `isActive` et `closedAt` : l'état TERMINAL du fil, sur la relation
+            // déjà chargée — la garde ci-dessous ne coûte donc aucune requête.
+            // Les DEUX colonnes, comme partout (`isConversationClosed`) : les
+            // conversations fermées par l'ancien `leave.ts` (avant cycle 67)
+            // n'ont pas de `closedAt` et rien ne les rétro-remplit.
+            select: { id: true, title: true, type: true, isActive: true, closedAt: true }
           }
         }
       });
@@ -233,6 +240,20 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       // 2. Verifications de validite du lien
       if (!shareLink.isActive) {
         return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+      }
+
+      // 2 bis. Validite de la CONVERSATION, et pas seulement du lien.
+      //
+      // Les cinq vérifications qui encadrent celle-ci portent toutes sur le
+      // LIEN ; aucune route de clôture ne désactive les liens de la conversation
+      // qu'elle ferme, si bien qu'un lien publié survit à son fil sans date de
+      // péremption. Un invité admis y recevait un jeton de session pour une
+      // conversation que `GET /conversations` ne sert pas et où
+      // `conversationWriteAdmission` refuse chacun de ses messages — et pour lui
+      // ce fil est TOUTE la session, il n'a rien d'autre. Porte quatre de la
+      // famille décrite dans `services/conversations/conversationEntryAdmission.ts`.
+      if (isConversationClosed(shareLink.conversation)) {
+        return sendError(reply, 410, 'CONVERSATION_CLOSED', { message: CONVERSATION_CLOSED_ENTRY_MESSAGE });
       }
 
       if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {

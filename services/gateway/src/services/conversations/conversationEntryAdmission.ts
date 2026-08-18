@@ -72,6 +72,45 @@
  *   une ligne périmée. C'est la leçon 89 — une permission ne doit pas survivre
  *   à la révocation du lien qui la justifiait.
  *
+ * ─── L'ÉTAT TERMINAL DE LA CONVERSATION (cycle 70) ───────────────────────────
+ *
+ * L'unité répondait « que faire de la LIGNE déjà là » sans jamais demander « ce
+ * CONTENEUR accepte-t-il encore quelqu'un ». Son jumeau
+ * `services/messaging/conversationWriteAdmission.ts` (règle 1) refuse un message
+ * dans un fil clos depuis le cycle 31 ; personne ne refusait d'y faire ENTRER.
+ * Les QUATRE portes admettaient donc dans une conversation morte :
+ *
+ * | porte                                   | ce qu'elle vérifiait |
+ * |-----------------------------------------|----------------------|
+ * | `POST /conversations/:id/participants`  | la ligne, jamais le fil |
+ * | `POST /conversations/join/:linkId`      | le LIEN (actif, non expiré, quota), jamais le fil |
+ * | `POST /conversations/:id/invite`        | la ligne, jamais le fil |
+ * | `POST /anonymous/join/:linkId`          | le LIEN (5 vérifications), jamais le fil |
+ *
+ * **La porte reste ouverte indéfiniment.** Aucune des quatre routes de clôture
+ * ne désactive les liens de partage de la conversation qu'elle ferme : un lien
+ * publié survit à son fil, sans date de péremption.
+ *
+ * **Ce que recevait l'arrivant.** Une notification poussée, un
+ * `conversation:new` que les deux clients écrivent dans leur cache PERSISTANT
+ * (cache disque iOS, `staleTime: Infinity` web), une room rejointe — et une
+ * conversation que `GET /conversations` ne sert jamais (`isActive: true` à la
+ * racine du `where`), dans laquelle `conversationWriteAdmission` refuse chacun
+ * de ses messages sans qu'aucun événement n'ait jamais expliqué pourquoi.
+ *
+ * **Et le rattrapage ne la nettoie pas.** `utils/delta-tombstones.ts` interroge
+ * `closedAt > since` : la clôture est ANTÉRIEURE à l'arrivée, donc antérieure à
+ * tout `since` que ce client puisse présenter. La ligne fantôme survit à chaque
+ * resynchro delta — c'est le cas rare où un tombstone correct ne rattrape rien,
+ * parce que le fait qu'il porte s'est produit avant que son destinataire existe.
+ *
+ * Pour l'invité anonyme, c'est toute la session : il n'a pas d'autre
+ * conversation vers laquelle se rabattre.
+ *
+ * **Le refus ne frappe QUE les issues qui ÉCRIVENT** (`create`, `rejoin`).
+ * `banned` et `already-member` n'écrivent rien et gardent leur réponse : ce
+ * cycle ferme une porte, il ne retire aucune capacité vivante.
+ *
  * ─── LES DOUBLONS DÉJÀ EN BASE ───────────────────────────────────────────────
  *
  * Les deux portes d'ajout en ont produit avant ce correctif. La décision lit
@@ -83,6 +122,11 @@
  * de réparation.
  */
 
+import {
+  isConversationClosed,
+  type ConversationTerminalStateRow,
+} from '../messaging/conversationWriteAdmission';
+
 /** L'état de la paire `(conversationId, userId)`, et ce que l'appelant doit en faire. */
 export type ConversationEntryOutcome =
   /** Une ligne porte `bannedAt`. Aucune porte ne s'ouvre — `POST …/unban` est le chemin. */
@@ -92,7 +136,9 @@ export type ConversationEntryOutcome =
   /** Seules des lignes inactives existent. RÉACTIVER `participantId`, ne rien créer. */
   | 'rejoin'
   /** Aucune ligne. Créer, comme aujourd'hui. */
-  | 'create';
+  | 'create'
+  /** La CONVERSATION porte son état terminal. Aucune entrée, cf. l'en-tête § état terminal. */
+  | 'closed';
 
 export interface ConversationEntryDecision {
   readonly outcome: ConversationEntryOutcome;
@@ -122,6 +168,23 @@ export interface ConversationEntryReader {
       }>
     >;
   };
+  /**
+   * L'état terminal du CONTENEUR, lu PARESSEUSEMENT — seulement quand la
+   * décision écrirait (cf. l'en-tête § état terminal). La porte du lien de
+   * partage répond « déjà membre » à chaque réouverture d'un lien connu : lui
+   * facturer une lecture de plus pour une question sans conséquence serait un
+   * coût gratuit sur le chemin le plus fréquenté des quatre.
+   *
+   * `select` en littéraux `true`, même contrainte que ci-dessus : la forme large
+   * (`Record<string, boolean>`) compile ici et fait échouer l'appelant qui passe
+   * le vrai client Prisma.
+   */
+  conversation: {
+    findUnique(args: {
+      where: { id: string };
+      select: { isActive: true; closedAt: true };
+    }): Promise<ConversationTerminalStateRow | null>;
+  };
 }
 
 export interface ConversationEntryParams {
@@ -149,16 +212,37 @@ export async function resolveConversationEntry(
     select: { id: true, isActive: true, bannedAt: true, joinedAt: true },
   });
 
-  if (rows.length === 0) return { outcome: 'create' };
-
+  // Les deux issues SANS écriture d'abord, et l'ordre est la décision : un
+  // banni garde les mots du refus de sécurité, un membre actif garde son ack.
+  // Ni l'un ni l'autre ne fait entrer qui que ce soit — leur opposer la clôture
+  // retirerait une capacité vivante pour ne rien empêcher.
   const banned = rows.find((row) => row.bannedAt != null);
   if (banned) return { outcome: 'banned', participantId: banned.id };
 
   const active = rows.find((row) => row.isActive === true);
   if (active) return { outcome: 'already-member', participantId: active.id };
 
+  // Ici, et seulement ici, la décision ÉCRIRAIT. C'est le seul instant où
+  // l'état du conteneur pèse, donc le seul où il se paie.
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { isActive: true, closedAt: true },
+  });
+  if (isConversationClosed(conversation)) return { outcome: 'closed' };
+
+  if (rows.length === 0) return { outcome: 'create' };
+
   return { outcome: 'rejoin', participantId: mostRecentlyJoined(rows).id };
 }
+
+/**
+ * Ce qu'on DIT à qui se heurte à un fil terminal, en un seul exemplaire pour les
+ * quatre portes — même discipline que `describeConversationWriteRefusal` du côté
+ * écriture, et pour la même raison : quatre routes qui rédigent chacune leur
+ * refus le rédigent en quatre dialectes.
+ */
+export const CONVERSATION_CLOSED_ENTRY_MESSAGE =
+  'Cette conversation est fermée : elle n’accepte plus de nouveaux membres';
 
 /**
  * Sans `joinedAt` exploitable, l'ordre rendu par la base fait foi — c'est le

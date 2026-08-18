@@ -294,3 +294,81 @@ describe('GET /anonymous/link/:identifier — expired link', () => {
     expect(res.statusCode).toBe(410);
   });
 });
+
+// ─── JOIN: conversation close (cycle 70) ──────────────────────────────────────
+//
+// La QUATRIÈME porte d'entrée, et la plus coûteuse : le lien est vérifié cinq
+// fois — actif, non expiré, sous son quota d'usages, sous son quota de
+// simultanés, dans ses restrictions — et le FIL jamais. Aucune route de clôture
+// ne désactive les liens de la conversation qu'elle ferme.
+//
+// Pour un invité anonyme, la conversation close est TOUTE sa session : il n'a
+// pas d'autre fil vers lequel se rabattre, et chacun de ses messages sera
+// refusé par `conversationWriteAdmission`.
+
+describe('POST /anonymous/join/:linkId — conversation close', () => {
+  async function joinWithConversation(conversation: Record<string, unknown>) {
+    const app = await buildApp();
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValue({
+      ...mockShareLink,
+      conversation,
+    });
+    const res = await app.inject({
+      method: 'POST', url: `/anonymous/join/${LINK_ID}`, payload: VALID_BODY,
+    });
+    return { app, res, prisma: (app as any).prisma };
+  }
+
+  it('refuse l\'entrée dans un fil terminal — 410, comme un lien qui n\'existe plus', async () => {
+    const { app, res } = await joinWithConversation({
+      id: CONV_ID, title: 'Test Conv', type: 'group',
+      isActive: false, closedAt: new Date('2026-06-01'),
+    });
+
+    expect(res.statusCode).toBe(410);
+    await app.close();
+  });
+
+  it('ne crée AUCUN participant anonyme, donc aucun jeton de session pour une conversation morte', async () => {
+    const { app, prisma } = await joinWithConversation({
+      id: CONV_ID, title: 'Test Conv', type: 'group',
+      isActive: false, closedAt: new Date('2026-06-01'),
+    });
+
+    expect(prisma.participant.create).not.toHaveBeenCalled();
+    expect(prisma.conversationShareLink.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('lit les DEUX colonnes : une clôture SANS `closedAt` ferme quand même', async () => {
+    // Les lignes fermées par l'ancien `leave.ts` (avant cycle 67) n'ont pas de
+    // `closedAt`, et rien ne les rétro-remplit.
+    const { app, res } = await joinWithConversation({
+      id: CONV_ID, title: 'Test Conv', type: 'group', isActive: false, closedAt: null,
+    });
+
+    expect(res.statusCode).toBe(410);
+    await app.close();
+  });
+
+  it('DEMANDE ces deux colonnes au lien — sans quoi la garde lirait `undefined` et laisserait tout passer', async () => {
+    const { app, prisma } = await joinWithConversation({
+      id: CONV_ID, title: 'Test Conv', type: 'group', isActive: true, closedAt: null,
+    });
+
+    const select = prisma.conversationShareLink.findFirst.mock.calls[0][0]
+      ?.include?.conversation?.select;
+    expect(select).toMatchObject({ isActive: true, closedAt: true });
+    await app.close();
+  });
+
+  it('laisse entrer dans un fil vivant — la garde ne ferme pas les portes ouvertes', async () => {
+    const { app, res, prisma } = await joinWithConversation({
+      id: CONV_ID, title: 'Test Conv', type: 'group', isActive: true, closedAt: null,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(prisma.participant.create).toHaveBeenCalled();
+    await app.close();
+  });
+});

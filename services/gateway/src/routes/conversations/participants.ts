@@ -15,7 +15,8 @@ import { emitToConversationParticipants } from '../../socketio/emitToConversatio
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import {
   resolveConversationEntry,
-  REJOIN_PARTICIPANT_STATE
+  REJOIN_PARTICIPANT_STATE,
+  CONVERSATION_CLOSED_ENTRY_MESSAGE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -331,6 +332,15 @@ export function registerParticipantsRoutes(
 
       if (entry.outcome === 'already-member') {
         return sendBadRequest(reply, 'L\'utilisateur est déjà membre de cette conversation');
+      }
+
+      // Le conteneur, et plus seulement la ligne. Faire entrer quelqu'un dans un
+      // fil terminal lui donnait une notification, un `conversation:new` que son
+      // client PERSISTE, et une conversation que `GET /conversations` ne sert
+      // jamais et où chacun de ses messages est refusé — cf.
+      // `conversationEntryAdmission.ts` § état terminal.
+      if (entry.outcome === 'closed') {
+        return sendBadRequest(reply, CONVERSATION_CLOSED_ENTRY_MESSAGE);
       }
 
       const addedMemberFields = {

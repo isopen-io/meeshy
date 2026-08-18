@@ -21,7 +21,8 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFo
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import {
   resolveConversationEntry,
-  REJOIN_PARTICIPANT_STATE
+  REJOIN_PARTICIPANT_STATE,
+  CONVERSATION_CLOSED_ENTRY_MESSAGE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
@@ -594,6 +595,16 @@ export function registerSharingRoutes(
         return sendSuccess(reply, { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId });
       }
 
+      // Le lien est vérifié trois fois — actif, non expiré, sous son quota — et
+      // rien ne vérifiait le FIL. Aucune route de clôture ne désactive les liens
+      // de la conversation qu'elle ferme : un lien publié survit à son fil, sans
+      // date de péremption. 410 comme ses deux voisines : ce n'est pas un droit
+      // qui manque, c'est une destination qui n'existe plus.
+      if (entry.outcome === 'closed') {
+        logger.warn('Jointure refusée — conversation close', { conversationId: shareLink.conversationId });
+        return sendError(reply, 410, CONVERSATION_CLOSED_ENTRY_MESSAGE);
+      }
+
       // Ajouter l'utilisateur à la conversation
       logger.info('Entrée dans la conversation', { conversationId: shareLink.conversationId, outcome: entry.outcome });
       const joiningUserInfo = await prisma.user.findUnique({
@@ -856,6 +867,12 @@ export function registerSharingRoutes(
 
       if (entry.outcome === 'already-member') {
         return sendBadRequest(reply, 'This user is already a member of the conversation');
+      }
+
+      // Troisième porte, même conteneur mort — cf.
+      // `conversationEntryAdmission.ts` § état terminal.
+      if (entry.outcome === 'closed') {
+        return sendBadRequest(reply, CONVERSATION_CLOSED_ENTRY_MESSAGE);
       }
 
       const invitedMemberFields = {
