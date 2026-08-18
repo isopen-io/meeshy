@@ -104,30 +104,12 @@ export interface GetUserReactionsResponse {
   readonly error?: string;
 }
 
-/**
- * Options pour le hook useMessageReactions
- */
-export interface UseMessageReactionsOptions {
-  readonly messageId: string;
-  readonly currentUserId?: string;
-  readonly isAnonymous?: boolean;
-  readonly onReactionAdded?: (event: ReactionUpdateEvent) => void;
-  readonly onReactionRemoved?: (event: ReactionUpdateEvent) => void;
-}
-
-/**
- * Retour du hook useMessageReactions
- */
-export interface UseMessageReactionsReturn {
-  readonly reactions: ReactionAggregation[];
-  readonly isLoading: boolean;
-  readonly error: string | null;
-  readonly addReaction: (emoji: string) => Promise<void>;
-  readonly removeReaction: (emoji: string) => Promise<void>;
-  readonly toggleReaction: (emoji: string) => Promise<void>;
-  readonly hasReacted: (emoji: string) => boolean;
-  readonly totalCount: number;
-}
+// `UseMessageReactionsOptions` / `UseMessageReactionsReturn` ont été retirées
+// avec le hook web qu'elles nommaient (`apps/web/hooks/use-message-reactions.ts`,
+// supprimé au cycle 68). Elles n'avaient AUCUN lecteur, pas même lui : il
+// redéclarait localement les deux mêmes formes. Le hook vivant
+// (`hooks/queries/use-reactions-query.ts`) porte les siennes, dérivées de
+// React Query, et n'a jamais lu celles-ci.
 
 /**
  * Validation d'un emoji

@@ -227,11 +227,18 @@ final class FocalConversationStartMountTests: XCTestCase {
 
     func test_startRegistration_rendersFocalConversationStartRow() throws {
         let stripped = AppSourceGuard.stripComments(try viewControllerSource())
+        // Appel multi-ligne depuis le lot 3.4 (la date du premier message a
+        // rejoint la rangée) : ancrer sur le SYMBOLE et ses arguments, pas
+        // sur une mise en forme figée.
         XCTAssertTrue(
-            stripped.contains("FocalConversationStartRow(conversationName: name, isDark: dark)"),
+            stripped.contains("FocalConversationStartRow("),
             "`startRegistration` doit configurer sa cellule avec `FocalConversationStartRow` " +
-            "(vue pure, `Focal/Row/FocalConversationStartRow.swift`) — le RENDU était déjà prêt " +
-            "avant ce lot, seul le MONTAGE manquait (R-d)."
+            "(vue pure, `Focal/Row/FocalConversationStartRow.swift`)."
+        )
+        XCTAssertTrue(
+            stripped.contains("firstMessageDayLabel: firstDayLabel"),
+            "spec §5 « Début de la conversation · {date} » (lot 3.4) : la rangée doit recevoir " +
+            "le libellé de jour du premier message, formaté par MessageDayLabel côté hôte."
         )
     }
 }

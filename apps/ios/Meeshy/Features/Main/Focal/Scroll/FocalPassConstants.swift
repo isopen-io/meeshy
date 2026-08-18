@@ -61,6 +61,22 @@ nonisolated enum FocalPassConstants {
     // contrat, ne connaît qu'une échelle ≤ 1 et le fondu de la courbe gelée
     // (plancher 0.18 par construction). Voir `FocalPerspectiveGeometry`.
 
+    // MARK: - ESSAI VISUEL — bande de focus au CENTRE (demande user 2026-08-18)
+
+    /// `true` ⇒ la ligne de focus vit au CENTRE du viewport
+    /// (`H · centeredBandRatio` depuis le bas) au lieu du « bas − 150 » de la
+    /// spec §5. La moitié estompée se réduit de ~80 % à ~50 % de l'écran —
+    /// c'est l'hypothèse à juger à l'œil. Même patron d'interrupteur que
+    /// `FocalFocusDecoration.drawsFocusCard` : l'essai se REVERT en une ligne
+    /// (`false` ⇒ spec §5 bit-à-bit). Le clavier garde la priorité : la bande
+    /// remonte toujours au-dessus de `composeur + bandGap` quand celui-ci
+    /// dépasse le centre.
+    static let centersFocusBand = true
+
+    /// Fraction du viewport, mesurée depuis le BAS, où vit la ligne de focus
+    /// pendant l'essai. `0.5` = centre géométrique.
+    static let centeredBandRatio: CGFloat = 0.5
+
     // MARK: - Bande de focus (§4.3)
 
     /// Marge minimale entre la ligne de focus et le haut du composeur, dans

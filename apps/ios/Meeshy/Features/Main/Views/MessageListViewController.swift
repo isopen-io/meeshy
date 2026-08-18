@@ -223,6 +223,11 @@ final class MessageListViewController: UIViewController {
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
     var onReadMore: ((FocalReadMorePayload) -> Void)?
+    /// Lot 3.2 — carte lieu de la rangée plate : plein écran présenté par
+    /// ConversationView (même chaîne que `onReadMore`).
+    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
+    var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically presents a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Consume a view-once message.
@@ -1129,9 +1134,29 @@ final class MessageListViewController: UIViewController {
             self.primeFocalCell(cell, item: item)
             let name = self.conversationViewModel?.currentConversationName ?? ""
             let dark = self.isDark
+            // Spec §5 « Début de la conversation · {date} » (lot 3.4) : la
+            // date du PREMIER message, formatée par la MÊME loi que les
+            // séparateurs de jour (MessageDayLabel) — jamais un second
+            // formateur. `store.messages` est CHRONOLOGIQUE (le snapshot le
+            // renverse, `applySnapshot`) : le plus ancien est `.first`.
+            let firstDayLabel: String? = self.store.messages.first.map { oldest in
+                MessageDayLabel.label(
+                    for: oldest.createdAt,
+                    now: Date(),
+                    calendar: .current,
+                    locale: .current,
+                    today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                    yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                    dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+                )
+            }
             cell.contentConfiguration = UIHostingConfiguration {
-                FocalConversationStartRow(conversationName: name, isDark: dark)
-                    .scaleEffect(x: 1, y: -1)
+                FocalConversationStartRow(
+                    conversationName: name,
+                    isDark: dark,
+                    firstMessageDayLabel: firstDayLabel
+                )
+                .scaleEffect(x: 1, y: -1)
             }
             .margins(.all, 0)
             cell.backgroundColor = .clear
@@ -1258,6 +1283,8 @@ final class MessageListViewController: UIViewController {
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
             let readMoreHandler = self.onReadMore
+            let tapLocationHandler = self.onFocalTapLocation
+            let shareFileHandler = self.onFocalShareFile
             let callBackHandler = self.onCallBack
             let callDetailHandler = self.onCallDetailRequest
             let mediaTapHandler = self.onMediaTap
@@ -1506,6 +1533,8 @@ final class MessageListViewController: UIViewController {
                 focalActions.onRequestTranslation = requestTranslationHandler
                 focalActions.onShowTranslationDetail = showTranslationHandler
                 focalActions.onReadMore = readMoreHandler
+                focalActions.onTapLocation = tapLocationHandler
+                focalActions.onShareFile = shareFileHandler
                 focalActions.onSetActiveDisplayLanguage = { [weak self] msgId, code in
                     self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: msgId)
                 }
@@ -1571,20 +1600,31 @@ final class MessageListViewController: UIViewController {
                 .environmentObject(timestampReveal)
                 // Counter-flip to undo the parent collectionView.transform.
                 .scaleEffect(x: 1, y: -1)
-                // iOS 26+ : `.contextMenu` NATIF + aperçu = la VRAIE bulle
-                // d'origine, rendue « standalone » (épouse son contenu, pas de
-                // spacers de row) et mise à l'échelle SEULEMENT si trop haute
-                // pour tenir à l'écran (proportions intactes). Le platter système
-                // colle alors à la bulle — plus aucune bordure/card autour, la
-                // bulle est « prise de sa position et affichée comme avant »
-                // (feedback device 2026-07-14). No-op < iOS 26 → overlay custom.
+                // iOS 26+ : `.contextMenu` NATIF + aperçu = le RENDU d'origine.
+                // En rangée plate (Focal/Script), l'aperçu est LA RANGÉE PLATE
+                // (lot 3.3, 2026-08-18 — l'aperçu montrait une BULLE alors que
+                // l'utilisateur pressait une rangée plate : deux rendus pour
+                // le même message). En bulles : la vraie bulle « standalone »
+                // (épouse son contenu, pas de spacers de row), mise à
+                // l'échelle SEULEMENT si trop haute (proportions intactes) —
+                // « prise de sa position et affichée comme avant » (feedback
+                // device 2026-07-14). No-op < iOS 26 → overlay custom.
                 .nativeMessageContextMenu(menu: nativeMenu) {
                     MessageMenuPreviewContainer {
-                        makeThemedBubble(true)
-                            .environmentObject(host)
-                            .environmentObject(stories)
-                            .environmentObject(statuses)
-                            .environmentObject(convList)
+                        if let focalRow {
+                            focalRow
+                                .environmentObject(host)
+                                .environmentObject(stories)
+                                .environmentObject(statuses)
+                                .environmentObject(convList)
+                                .environmentObject(self.timestampReveal)
+                        } else {
+                            makeThemedBubble(true)
+                                .environmentObject(host)
+                                .environmentObject(stories)
+                                .environmentObject(statuses)
+                                .environmentObject(convList)
+                        }
                     }
                 }
             }

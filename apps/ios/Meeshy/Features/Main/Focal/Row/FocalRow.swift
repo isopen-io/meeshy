@@ -471,10 +471,17 @@ struct FocalRow: View {
             nonMediaCount: nonMediaAttachments.count,
             audioMode: audioMode
         ) {
+            // Lot 3.2 (2026-08-18) : cartes RÉELLES (LocationMessageView +
+            // BubbleAttachmentView, réutilisées telles quelles) à la place du
+            // repli texte inerte — un document redevient ouvrable en Focal.
             FocalNonMediaBlock(
-                hasSharedPlace: content.location != nil,
                 items: nonMediaAttachments,
-                isDark: input.isDark
+                isDark: input.isDark,
+                location: content.location,
+                accentHex: input.accentHex,
+                isMe: content.isMe,
+                onTapLocation: actions.onTapLocation,
+                onShareFile: actions.onShareFile
             )
         }
     }

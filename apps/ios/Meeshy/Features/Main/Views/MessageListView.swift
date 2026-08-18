@@ -472,6 +472,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Open the message detail sheet on the "language / translation" tab.
     var onShowTranslationDetail: ((String) -> Void)?
     var onReadMore: ((FocalReadMorePayload) -> Void)?
+    /// Lot 3.2 — carte lieu / partage fichier de la rangée plate.
+    var onFocalTapLocation: ((SharedPlace) -> Void)?
+    var onFocalShareFile: ((URL) -> Void)?
     /// Tap on a media attachment — typically pushes a fullscreen viewer.
     var onMediaTap: ((MessageAttachment) -> Void)?
     /// Consume a view-once message; the bubble flips to the consumed state.
@@ -537,6 +540,8 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onReadMore = onReadMore
+        vc.onFocalTapLocation = onFocalTapLocation
+        vc.onFocalShareFile = onFocalShareFile
         vc.onMediaTap = onMediaTap
         vc.onConsumeViewOnce = onConsumeViewOnce
         vc.onRequestTranslation = onRequestTranslation
@@ -609,6 +614,8 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onReadMore = onReadMore
+        vc.onFocalTapLocation = onFocalTapLocation
+        vc.onFocalShareFile = onFocalShareFile
         vc.onMediaTap = onMediaTap
         vc.onConsumeViewOnce = onConsumeViewOnce
         vc.onRequestTranslation = onRequestTranslation
