@@ -197,11 +197,16 @@ describe('POST /conversations/:id/leave — creator alone (count=0)', () => {
     expect(res.json().success).toBe(true);
   });
 
-  it('deactivates the conversation', async () => {
+  it('deactivates the conversation, and ENREGISTRE la clôture', async () => {
+    // Le second témoin de la même phrase — celui-ci passe par `app.inject`,
+    // l'autre appelle le handler à nu (`conversation-leave-ban-delete-stats`).
+    // Les deux épinglaient `data: { isActive: false }` à l'exclusion du reste,
+    // et donc le défaut : `loadConversationTombstones` interroge `closedAt >
+    // since` et rien d'autre.
     expect(prisma.conversation.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: CONV_ID },
-        data: { isActive: false },
+        data: { isActive: false, closedAt: expect.any(Date), closedBy: USER_ID },
       })
     );
   });
