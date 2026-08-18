@@ -87,6 +87,8 @@
     },
     "toasts": {
       "connectionError": "Error de conexión",
+      "peerConnectionFailed": "Conexión fallida. Inténtalo de nuevo.",
+      "iceConnectionFailed": "Conexión fallida. Reintentando...",
       "videoSwitchFailed": "Error al cambiar el vídeo",
       "cameraSwitched": "Cámara cambiada",
       "cameraSwitchFailed": "Error al cambiar la cámara",
