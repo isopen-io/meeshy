@@ -6998,6 +6998,53 @@
         }
       }
     },
+    "auth.registration.usernameFormat": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "من 2 إلى 16 حرفًا: أحرف وأرقام و- و_"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 bis 16 Zeichen: Buchstaben, Ziffern, - und _"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 to 16 characters: letters, digits, - and _"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 2 a 16 caracteres: letras, números, - y _"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 à 16 caractères: lettres, chiffres, - et _"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Da 2 a 16 caratteri: lettere, numeri, - e _"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 2 a 16 caracteres: letras, números, - e _"
+          }
+        }
+      }
+    },
     "auth.registration.usernameTaken": {
       "extractionState": "extracted_with_value",
       "localizations": {

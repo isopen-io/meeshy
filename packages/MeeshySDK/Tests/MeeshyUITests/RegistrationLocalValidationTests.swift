@@ -115,4 +115,49 @@ final class RegistrationLocalValidationTests: XCTestCase {
         vm.email = "alice @example.com"
         XCTAssertFalse(vm.canProceed)
     }
+
+    // MARK: - Username (miroir ASCII de usernamePatternSource)
+
+    func test_isUsernameValidLocally_plainHandle_isValid() {
+        XCTAssertTrue(makeViewModel().isUsernameValidLocally("alice"))
+    }
+
+    func test_isUsernameValidLocally_dashesAndUnderscores_areValid() {
+        XCTAssertTrue(makeViewModel().isUsernameValidLocally("a_b-1"))
+    }
+
+    func test_isUsernameValidLocally_internalSpace_isInvalid() {
+        // Le bug rapporté : « la lionne noire » passait le gate côté client.
+        XCTAssertFalse(makeViewModel().isUsernameValidLocally("la lionne noire"))
+    }
+
+    func test_isUsernameValidLocally_accentedLetter_isInvalid() {
+        // CharacterSet.alphanumerics est UNICODE : il acceptait `josé`, que le
+        // serveur (ASCII) refuse — d'où un « Données invalides » à la soumission.
+        XCTAssertFalse(makeViewModel().isUsernameValidLocally("josé"))
+    }
+
+    func test_sanitizedUsername_stripsSpaces() {
+        XCTAssertEqual(RegistrationViewModel.sanitizedUsername("la lionne noire"), "lalionnenoire")
+    }
+
+    func test_sanitizedUsername_stripsAccentsAndPunctuation() {
+        XCTAssertEqual(RegistrationViewModel.sanitizedUsername("josé.m@il"), "josmil")
+    }
+
+    func test_sanitizedUsername_keepsConformingHandleUntouched() {
+        XCTAssertEqual(RegistrationViewModel.sanitizedUsername("a_b-1"), "a_b-1")
+    }
+
+    func test_sanitizedUsername_capsAtSixteenCharacters() {
+        XCTAssertEqual(RegistrationViewModel.sanitizedUsername(String(repeating: "a", count: 40)).count, 16)
+    }
+
+    func test_username_assignmentFiltersInPlace() {
+        // Point d'étranglement unique : frappe, collage et restauration d'état
+        // passent tous par l'affectation de `username`.
+        let vm = makeViewModel()
+        vm.username = "la lionne noire"
+        XCTAssertEqual(vm.username, "lalionnenoire")
+    }
 }

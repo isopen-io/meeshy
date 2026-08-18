@@ -89,7 +89,17 @@ public final class RegistrationViewModel: ObservableObject {
 
     // MARK: - Form Fields
 
-    @Published public var username = ""
+    /// Le `didSet` est le point d'étranglement UNIQUE : il attrape la frappe, le
+    /// collage, l'adoption d'une suggestion et la restauration d'état. La garde de
+    /// ré-entrance est obligatoire — sans elle, la réassignation relance `didSet`
+    /// en boucle.
+    @Published public var username = "" {
+        didSet {
+            let sanitized = Self.sanitizedUsername(username)
+            guard sanitized != username else { return }
+            username = sanitized
+        }
+    }
     @Published public var phoneNumber = ""
     @Published public var selectedCountry = CountryPicker.countries[0]
     @Published public var skipPhone = false
@@ -227,10 +237,18 @@ public final class RegistrationViewModel: ObservableObject {
             .debounce(for: .seconds(1), scheduler: RunLoop.main)
             .removeDuplicates()
             .sink { [weak self] value in
-                guard let self, self.isUsernameValidLocally(value) else {
-                    self?.usernameAvailable = nil
-                    self?.usernameError = nil
-                    self?.usernameSuggestions = []
+                guard let self else { return }
+                guard self.isUsernameValidLocally(value) else {
+                    self.usernameAvailable = nil
+                    self.usernameSuggestions = []
+                    // Le champ était muet ici : il posait `nil` et renonçait, si
+                    // bien qu'un pseudo trop court n'affichait jamais pourquoi le
+                    // bouton restait gris.
+                    self.usernameError = value.isEmpty ? nil : String(
+                        localized: "auth.registration.usernameFormat",
+                        defaultValue: "2 à 16 caractères : lettres, chiffres, - et _",
+                        bundle: .module
+                    )
                     return
                 }
                 self.checkUsernameAvailability(value)
@@ -273,11 +291,29 @@ public final class RegistrationViewModel: ObservableObject {
     // récapitulatif doit déjà être conforme au backend — aucune étape validée
     // localement ne peut être refusée par le serveur.
 
-    private func isUsernameValidLocally(_ value: String) -> Bool {
+    /// Miroir ASCII strict de `usernamePatternSource` (`^[a-zA-Z0-9_-]+$`,
+    /// packages/shared/types/api-schemas.ts). Déclaré caractère par caractère et
+    /// NON via `CharacterSet.alphanumerics`, qui est Unicode : il acceptait `josé`
+    /// que le serveur refuse, et le compte se faisait rejeter à la soumission.
+    static let usernameAllowed = CharacterSet(charactersIn:
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
+
+    /// Longueur maximale acceptée par `registerRequestSchema.username`.
+    static let usernameMaxLength = 16
+
+    /// Retire tout caractère hors charset et borne la longueur. Silencieux, comme
+    /// le filtrage web (`UsernameField.tsx`) : la ligne d'aide sous le champ
+    /// énonce la règle en permanence, donc la disparition d'un caractère n'est
+    /// pas mystérieuse.
+    static func sanitizedUsername(_ value: String) -> String {
+        let kept = value.unicodeScalars.filter { usernameAllowed.contains($0) }
+        return String(String.UnicodeScalarView(kept.prefix(usernameMaxLength)))
+    }
+
+    func isUsernameValidLocally(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2, trimmed.count <= 16 else { return false }
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_-"))
-        return CharacterSet(charactersIn: trimmed).isSubset(of: allowed)
+        guard trimmed.count >= 2, trimmed.count <= Self.usernameMaxLength else { return false }
+        return CharacterSet(charactersIn: trimmed).isSubset(of: Self.usernameAllowed)
     }
 
     private func isEmailValidLocally(_ value: String) -> Bool {
