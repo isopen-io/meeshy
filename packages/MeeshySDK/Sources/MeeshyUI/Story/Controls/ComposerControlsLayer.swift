@@ -46,6 +46,10 @@ public struct ComposerControlsLayer: View {
     /// qui tient la fabrique injectée par l'app).
     var onOpenLocationPicker: (() -> Void)? = nil
 
+    /// Ouvre le sélecteur de personne à mentionner (sheet présentée par
+    /// StoryComposerView). Directive user 2026-08-18.
+    var onOpenMentionPicker: (() -> Void)? = nil
+
     /// Reporte la hauteur RÉELLE rendue de `ComposerBottomBand` (content-driven) au
     /// parent, qui la réserve pour scaler le canvas exactement au-dessus. `0` quand
     /// la band est repliée (FABs seuls / dessin immersif) — le canvas reste plein.
@@ -77,7 +81,8 @@ public struct ComposerControlsLayer: View {
         onOpenMediaCrop: @escaping (String) -> Void,
         onDismissActivePanel: @escaping () -> Void,
         onOpenStickerPicker: (() -> Void)? = nil,
-        onOpenLocationPicker: (() -> Void)? = nil
+        onOpenLocationPicker: (() -> Void)? = nil,
+        onOpenMentionPicker: (() -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self.chrome = chrome
@@ -96,6 +101,7 @@ public struct ComposerControlsLayer: View {
         self.onDismissActivePanel = onDismissActivePanel
         self.onOpenStickerPicker = onOpenStickerPicker
         self.onOpenLocationPicker = onOpenLocationPicker
+        self.onOpenMentionPicker = onOpenMentionPicker
     }
 
     /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
@@ -284,6 +290,7 @@ public struct ComposerControlsLayer: View {
                     },
                     onOpenStickerPicker: onOpenStickerPicker,
                     onOpenLocationPicker: onOpenLocationPicker,
+                    onOpenMentionPicker: onOpenMentionPicker,
                     resizableHeight: isBandResizable ? $resizableBandHeight : nil,
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,

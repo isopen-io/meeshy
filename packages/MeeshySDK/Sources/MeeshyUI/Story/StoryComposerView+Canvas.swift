@@ -300,7 +300,8 @@ extension StoryComposerView {
                 onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
                 onDismissActivePanel: dismissActiveBandPanel,
                 onOpenStickerPicker: { showStickerPicker = true },
-                onOpenLocationPicker: { showLocationPicker = true }
+                onOpenLocationPicker: { showLocationPicker = true },
+                onOpenMentionPicker: { showMentionPicker = true }
             )
         }
     }

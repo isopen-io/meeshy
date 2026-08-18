@@ -246,6 +246,50 @@ extension StoryComposerViewModel {
         return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
     }
 
+    /// Épingle quelqu'un sur la slide SANS l'écrire dans une phrase (directive
+    /// user 2026-08-18). La pastille EST un `StoryTextObject` portant `@pseudo` :
+    /// elle hérite ainsi, gratuitement, de tout ce que le texte sait déjà faire —
+    /// déplacement, rotation, z-order, timeline, rendu à l'export, persistance
+    /// dans `StoryEffects` (la seule unité que le dépôt enregistre et envoie).
+    /// Un type d'élément neuf aurait réclamé les six chemins, et en aurait
+    /// silencieusement raté un.
+    ///
+    /// Le fond plein est ce qui la fait LIRE comme une étiquette et non comme du
+    /// texte libre — c'est la seule chose qui la distingue à l'œil.
+    ///
+    /// Décalage en cascade comme les lieux et les stickers : deux mentions
+    /// successives ne doivent pas se superposer exactement.
+    @discardableResult
+    func addMention(username: String) -> StoryTextObject? {
+        let handle = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !handle.isEmpty, canAddText else { return nil }
+        let existing = currentEffects.textObjects.filter { $0.text.hasPrefix("@") }.count
+        let obj = StoryTextObject(
+            text: "@" + handle,
+            x: 0.5,
+            y: 0.62 + Double(existing % 5) * 0.06,
+            scale: 1.0,
+            rotation: 0,
+            fontSize: 64,
+            textStyle: "bold",
+            textColor: "FFFFFF",
+            textAlign: "center",
+            backgroundStyle: .solid(hex: MeeshyColors.brandPrimaryHex),
+            sourceLanguage: Self.defaultSourceLanguage
+        )
+        var effects = currentEffects
+        var texts = effects.textObjects
+        texts.append(obj)
+        effects.textObjects = texts
+        currentEffects = effects
+        selectedElementId = obj.id
+        bringToFront(id: obj.id)
+        // Pas de bascule vers l'outil texte : le geste s'achève à la pose. Un
+        // panneau d'édition qui s'ouvre sur une étiquette qu'on vient de choisir
+        // demanderait de la refermer pour en poser une seconde.
+        return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
+    }
+
     /// Pose une pastille de lieu en BAS de slide, centrée (brief T20) — hors
     /// timeline : elle reste visible tant que la slide l'est. Écrit dans
     /// `currentEffects`, la seule source de vérité (et la seule unité persistée

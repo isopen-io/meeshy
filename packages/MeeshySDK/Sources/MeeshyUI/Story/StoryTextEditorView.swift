@@ -11,6 +11,11 @@ public struct StoryTextEditorView: View {
 
     @FocusState private var isFocused: Bool
     @State private var expandedSection: TextEditorSection?
+    /// Handle `@…` en cours de frappe dans le texte de CE calque, `nil` sinon.
+    /// Même règle pure que le composer de post — écrire `@alice` dans une story
+    /// n'ouvrait aucune liste, donc ne vérifiait aucun pseudo (retour user
+    /// 2026-08-18).
+    @State private var mentionQuery: String?
     @Environment(\.colorScheme) private var colorScheme
 
     public init(textObject: Binding<StoryTextObject>, onDelete: (() -> Void)? = nil) {
@@ -39,6 +44,7 @@ public struct StoryTextEditorView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 4)
             textInputRow
+            mentionSuggestions
             quickActions
             sectionPicker
             expandedSectionContent
@@ -105,6 +111,32 @@ public struct StoryTextEditorView: View {
         .padding(.horizontal, 14)
         .padding(.top, 10)
         .padding(.bottom, 6)
+        .adaptiveOnChange(of: textObject.text) { _, newValue in
+            mentionQuery = ComposerMentionQuery.trailingHandle(in: newValue)
+        }
+    }
+
+    // MARK: - Mentions
+
+    /// Liste des personnes proposées pendant la frappe d'un `@…`.
+    ///
+    /// Le pseudo choisi remplace le fragment DANS le calque de texte : la
+    /// mention reste ce que l'auteur écrivait, elle ne devient pas une seconde
+    /// étiquette. La pastille autonome, elle, a sa propre porte — l'action « @ »
+    /// du panneau Texte.
+    @ViewBuilder
+    private var mentionSuggestions: some View {
+        if let query = mentionQuery {
+            MentionSuggestionList(query: query, maxHeight: 160) { user in
+                textObject.text = ComposerMentionQuery.replacingTrailingHandle(
+                    in: textObject.text, with: user.username
+                )
+                mentionQuery = nil
+            }
+            .background(RoundedRectangle(cornerRadius: 10).fill(inputBackground))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 6)
+        }
     }
 
     // MARK: - Quick Actions (always visible)

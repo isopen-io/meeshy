@@ -120,6 +120,19 @@ extension StoryComposerView {
                 }
             }
         }
+        .sheet(isPresented: $showMentionPicker) {
+            // Épingler quelqu'un sans l'écrire dans une phrase (directive user
+            // 2026-08-18). Contrairement au lieu, rien n'est injecté : le picker
+            // vit au SDK, à côté de celui d'audience, dont il partage les deux
+            // coutures de recherche. La pastille se pose sur la slide courante,
+            // et le `@pseudo` qu'elle porte est ce qui fera notifier la personne
+            // à la publication — c'est le contenu du post, et lui seul, que le
+            // gateway lit pour les mentions.
+            StoryMentionPickerSheet { user in
+                viewModel.addMention(username: user.username)
+                HapticFeedback.light()
+            }
+        }
         // S5 — l'amorce « Caméra » de la page blanche. Même doctrine que le
         // picker de lieu : AVCaptureSession, permissions et écran de refus sont
         // app-side ; le SDK présente et pose le média rendu.

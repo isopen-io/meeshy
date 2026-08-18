@@ -73,6 +73,7 @@ public struct StoryComposerView: View {
     /// picker est injectée par l'app via `\.storyLocationPicker` : MapKit et les
     /// permissions restent app-side (SDK purity).
     @State var showLocationPicker = false
+    @State var showMentionPicker = false
     // Prisme Linguistique : le composer démarre toujours en français
     // (directive 2026-07-30, public cible France) — ni clavier, ni locale, ni
     // préférences de lecture. Voir `StoryComposerViewModel.defaultSourceLanguage`.

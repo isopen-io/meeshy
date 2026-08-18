@@ -9,6 +9,11 @@ import MeeshySDK
 public struct UnifiedPostComposer: View {
     @State private var selectedType: PostType = .post
     @State private var content = ""
+    /// Handle `@…` en cours de frappe, `nil` quand il n'y en a pas. Dérivé du
+    /// texte par la règle PURE partagée avec le canevas de story, jamais
+    /// recopié sur place — deux extractions divergeraient au premier pseudo
+    /// contenant un point.
+    @State private var mentionQuery: String?
     @State private var moodEmoji: String? = nil
     @State private var visibility = "PUBLIC"
     /// Écrite par `storyPlaceholder.onTapGesture` — plus lue par personne
@@ -202,6 +207,10 @@ public struct UnifiedPostComposer: View {
         // `showStoryComposer` ci-dessus). Sans ce cover, ce tap ne fait plus
         // que poser un `@State` que plus aucune vue ne lit — écriture morte
         // inoffensive, cohérente avec le reste de la cascade documentée.
+        .adaptiveOnChange(of: content) { _, newValue in
+            mentionQuery = ComposerMentionQuery.trailingHandle(in: newValue)
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: mentionQuery != nil)
         .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
@@ -256,6 +265,29 @@ public struct UnifiedPostComposer: View {
         }
     }
 
+    /// Suggestions pendant qu'un `@…` est en cours de frappe.
+    ///
+    /// Le champ de saisie n'en savait rien : on pouvait écrire `@alice` dans un
+    /// post sans qu'aucune liste n'apparaisse (retour user 2026-08-18), donc
+    /// sans jamais vérifier que le pseudo existe — et le serveur, lui, n'a rien
+    /// à résoudre quand il se trompe d'une lettre.
+    ///
+    /// Posé SOUS le champ et non au-dessus : le composer est une page, pas une
+    /// barre de conversation ; la liste suit la ligne qu'on est en train
+    /// d'écrire au lieu de recouvrir ce qui précède.
+    @ViewBuilder
+    private var mentionSuggestions: some View {
+        if let query = mentionQuery {
+            MentionSuggestionList(query: query) { user in
+                content = ComposerMentionQuery.replacingTrailingHandle(in: content, with: user.username)
+                mentionQuery = nil
+            }
+            .background(RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground))
+            .padding(.horizontal, 16)
+            .transition(.opacity)
+        }
+    }
+
     private var postComposer: some View {
         // Valeurs `@MainActor` hissées hors de la closure de label `PhotosPicker`
         // (inférée `@Sendable`) en constantes Sendable — voir
@@ -268,6 +300,8 @@ public struct UnifiedPostComposer: View {
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...12)
                 .padding(16)
+
+            mentionSuggestions
 
             if let story = repostSourceStory {
                 // Repost mode: embed the source story canvas instead of the
@@ -360,6 +394,8 @@ public struct UnifiedPostComposer: View {
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2...4)
                 .padding(.horizontal, 16)
+
+            mentionSuggestions
             visibilityPicker
                 .padding(.horizontal, 16)
         }

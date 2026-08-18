@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 import os
 
 // MARK: - MentionComposerController
@@ -111,7 +112,7 @@ public final class MentionComposerController: ObservableObject {
     /// Returns the updated text.
     @discardableResult
     public func insertMention(_ candidate: MentionCandidate, into text: String) -> String {
-        let result = replaceMentionQuery(with: "@\(candidate.username) ", in: text)
+        let result = replaceMentionQuery(withUsername: candidate.username, in: text)
         draftMentions[candidate.username] = candidate
         clearSuggestions()
         return result
@@ -126,13 +127,14 @@ public final class MentionComposerController: ObservableObject {
 
     /// Extracts the current `@query` fragment at the end of the text cursor.
     /// Returns `nil` when no active mention is in progress.
+    ///
+    /// Délégué à la règle PURE du SDK (`ComposerMentionQuery`), partagée avec
+    /// les composeurs de post et de story : la règle vivait ici en double, et
+    /// cette copie-ci ouvrait une recherche sur « exemple.com » à chaque
+    /// `contact@exemple.com` tapé — elle coupait sur le DERNIER `@` sans
+    /// vérifier qu'il ouvre un handle.
     private func extractMentionQuery(from text: String) -> String? {
-        let components = text.components(separatedBy: "@")
-        guard components.count > 1 else { return nil }
-        let last = components.last ?? ""
-        // Only consider active if the last component has no spaces (still typing username)
-        guard !last.contains(" ") else { return nil }
-        return last
+        ComposerMentionQuery.trailingHandle(in: text)
     }
 
     private func filterLocals(_ locals: [MentionCandidate], query: String) -> [MentionCandidate] {
@@ -162,11 +164,10 @@ public final class MentionComposerController: ObservableObject {
         return localCandidates + newFromAPI
     }
 
-    /// Replaces the active `@query` fragment at the end of the text with `replacement`.
-    private func replaceMentionQuery(with replacement: String, in text: String) -> String {
-        guard let lastAt = text.lastIndex(of: "@") else { return text }
-        let afterAt = text[text.index(after: lastAt)...]
-        guard !afterAt.contains(" ") else { return text }
-        return String(text[text.startIndex..<lastAt]) + replacement
+    /// Replaces the active `@query` fragment at the end of the text with the
+    /// chosen handle. Même règle partagée que l'extraction — deux moitiés d'une
+    /// même décision ne peuvent pas vivre à deux endroits différents.
+    private func replaceMentionQuery(withUsername username: String, in text: String) -> String {
+        ComposerMentionQuery.replacingTrailingHandle(in: text, with: username)
     }
 }

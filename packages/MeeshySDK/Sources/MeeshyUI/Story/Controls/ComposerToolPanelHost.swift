@@ -22,6 +22,11 @@ struct ComposerToolPanelHost: View {
     /// T20 — ouvre le sélecteur de lieu (présenté par `StoryComposerView`, qui
     /// tient la fabrique injectée par l'app via `\.storyLocationPicker`).
     var onOpenLocationPicker: (() -> Void)? = nil
+    /// Ouvre le sélecteur de personne à mentionner. Directive user 2026-08-18 :
+    /// « on doit pouvoir identifier des utilisateurs dans les story sans que ce
+    /// ne soit dans un texte ». Le geste est donc une ACTION, à côté du sticker
+    /// et du lieu — pas une frappe dans une phrase.
+    var onOpenMentionPicker: (() -> Void)? = nil
     /// Suppression d'un texte depuis la liste : remontée jusqu'à
     /// `ComposerControlsLayer` afin de fermer le format panel si le texte
     /// supprimé était celui en cours d'édition — sans ce relai la branche
@@ -618,6 +623,35 @@ struct ComposerToolPanelHost: View {
                     }
                     .accessibilityLabel(String(localized: "story.location.add.a11y",
                                                defaultValue: "Ajouter un lieu à la story",
+                                               bundle: .module))
+                }
+                // La mention rejoint le même foyer : c'est un overlay de la même
+                // famille que texte, sticker et lieu — et, comme eux, une
+                // étiquette qu'on POSE. Elle n'est pas gardée par un fournisseur
+                // injecté (le picker vit au SDK, à côté de celui d'audience),
+                // seulement par la place restante sur la slide : un chip qui
+                // ouvre une liste dont le choix ne se posera nulle part serait
+                // pire que pas de chip.
+                if viewModel.canAddText {
+                    Button {
+                        onOpenMentionPicker?()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "at")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(String(localized: "story.mention.add", defaultValue: "Mentionner", bundle: .module))
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
+                        )
+                    }
+                    .accessibilityLabel(String(localized: "story.mention.add.a11y",
+                                               defaultValue: "Mentionner une personne dans la story",
                                                bundle: .module))
                 }
                 Spacer()

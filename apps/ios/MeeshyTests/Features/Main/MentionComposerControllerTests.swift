@@ -42,6 +42,31 @@ final class MentionComposerControllerTests: XCTestCase {
         )
     }
 
+    /// Attend que `condition` devienne vraie, jusqu'à 3 s, en rendant la main à
+    /// l'acteur principal entre deux vérifications.
+    ///
+    /// Remplace un `Task.sleep(400 ms)` nu qui pariait sur 100 ms de marge après
+    /// le débounce de 300 ms du contrôleur. Le pari perdait régulièrement quand
+    /// la classe tourne en entier — deux à quatre échecs par exécution, et
+    /// jamais les mêmes : la tâche débattue et le test se disputent le MÊME
+    /// acteur, et rien ne garantit l'ordre de reprise. Un délai plus long aurait
+    /// déplacé le seuil sans supprimer le pari ; attendre la CONDITION le
+    /// supprime, et rend la main dès qu'elle est vraie (les cas nominaux
+    /// coûtent donc moins qu'avant, pas plus).
+    private func waitUntil(
+        _ condition: () -> Bool,
+        timeout: TimeInterval = 3.0,
+        _ message: @autoclosure () -> String = "condition jamais atteinte",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition(), Date() < deadline {
+            try? await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertTrue(condition(), message(), file: file, line: line)
+    }
+
     // MARK: - handleQuery: activeQuery
 
     func test_handleQuery_withAtSymbol_setsActiveQuery() {
@@ -115,8 +140,7 @@ final class MentionComposerControllerTests: XCTestCase {
 
         sut.handleQuery(in: "@ali")
 
-        // Wait for debounce (300ms) + small buffer
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        await waitUntil({ mock.suggestionsCallCount >= 1 }, "le débounce n'a jamais atteint le service")
 
         XCTAssertGreaterThanOrEqual(mock.suggestionsCallCount, 1)
         XCTAssertEqual(mock.lastQuery, "ali")
@@ -131,7 +155,7 @@ final class MentionComposerControllerTests: XCTestCase {
         // (auteur du post + personnes ayant commenté + contacts) → appel API.
         sut.handleQuery(in: "Hey @")
 
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        await waitUntil({ mock.suggestionsCallCount >= 1 }, "le débounce n'a jamais atteint le service")
 
         XCTAssertGreaterThanOrEqual(mock.suggestionsCallCount, 1)
         XCTAssertEqual(mock.lastQuery, "")
@@ -193,7 +217,7 @@ final class MentionComposerControllerTests: XCTestCase {
         let (sut, mock) = makeSUT(context: .post(id: "post-42"), service: mockService)
 
         sut.handleQuery(in: "@ali")
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        await waitUntil({ mock.lastContextType != nil }, "le débounce n'a jamais atteint le service")
 
         XCTAssertEqual(mock.lastContextType, .post)
         XCTAssertEqual(mock.lastContextId, "post-42")
@@ -207,7 +231,7 @@ final class MentionComposerControllerTests: XCTestCase {
         let (sut, mock) = makeSUT(context: .conversation(id: "conv-99"), service: mockService)
 
         sut.handleQuery(in: "@ali")
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        await waitUntil({ mock.lastContextType != nil }, "le débounce n'a jamais atteint le service")
 
         XCTAssertEqual(mock.lastContextType, .conversation)
         XCTAssertEqual(mock.lastContextId, "conv-99")
@@ -240,7 +264,7 @@ final class MentionComposerControllerTests: XCTestCase {
         let (sut, _) = makeSUT(localCandidates: [localAlice], service: mockService)
 
         sut.handleQuery(in: "@al")
-        try? await Task.sleep(nanoseconds: 400_000_000)
+        await waitUntil({ sut.suggestions.count >= 2 }, "la fusion des résultats API n'est jamais arrivée")
 
         // Should have alice (local) + alicia (from API), not two alices
         XCTAssertEqual(sut.suggestions.count, 2)
