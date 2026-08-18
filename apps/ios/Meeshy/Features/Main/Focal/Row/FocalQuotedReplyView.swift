@@ -43,6 +43,11 @@ struct FocalQuotedReplyView: View, Equatable {
     let mentionDisplayNames: [String: String]
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
+    /// Tap sur le NOM de l'auteur cité → profil (résolution hôte).
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
+    /// Tap sur la zone MÉDIA (miniature/glyphe) → plein écran / lecture
+    /// (résolution hôte ; repli hôte = saut à l'original).
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
 
     static func == (lhs: FocalQuotedReplyView, rhs: FocalQuotedReplyView) -> Bool {
         lhs.reply == rhs.reply
@@ -77,17 +82,80 @@ struct FocalQuotedReplyView: View, Equatable {
         return reference.authorName
     }
 
+    /// URL de miniature du contenu cité — pièce jointe d'un message, ou
+    /// story. `nil` ⇒ pas de vignette, la ligne glyphe+libellé reste seule.
+    private var thumbnailURL: URL? {
+        let raw = reference.attachmentThumbnailUrl ?? reference.storyThumbnailUrl
+        guard let raw, !raw.isEmpty else { return nil }
+        return URL(string: raw)
+    }
+
+    /// Le média cité est jouable/affichable en surface dédiée : la zone
+    /// média (miniature ou glyphe) route alors vers `onQuotedMediaTap` au
+    /// lieu du saut à l'original. Les stories gardent leur chemin
+    /// (`onStoryReplyTap` ouvre le viewer).
+    private var hasTappableMedia: Bool {
+        !reply.isStory && (reference.attachmentType != nil || thumbnailURL != nil)
+    }
+
+    /// Saut à l'original — le comportement historique du bloc entier,
+    /// conservé pour le texte/fond de la citation.
+    private func jumpToOriginal() {
+        guard !reference.messageId.isEmpty else { return }
+        if reply.isStory {
+            onStoryReplyTap?(reference.messageId)
+        } else {
+            onReplyTap?(reference.messageId)
+        }
+    }
+
     var body: some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: FocalMetrics.Quote.railWidth / 2)
                 .fill(railColor)
                 .frame(width: FocalMetrics.Quote.railWidth)
 
+            // Miniature du média cité (image/vidéo/story) — badge play sur
+            // la vidéo. Tap : le média, pas le saut (directive user
+            // 2026-08-18 « voir la miniature, toucher pour jouer »).
+            if let thumbnailURL {
+                CachedAsyncImage(url: thumbnailURL.absoluteString) {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(railColor.opacity(0.18))
+                }
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay {
+                    if reference.attachmentType == "video" {
+                        Image(systemName: "play.fill")
+                            .font(MeeshyFont.relative(11, weight: .bold))
+                            .foregroundStyle(.white)
+                            .shadow(radius: 2)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if hasTappableMedia {
+                        onQuotedMediaTap?(reference)
+                    } else {
+                        jumpToOriginal()
+                    }
+                }
+                .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+            }
+
             VStack(alignment: .leading, spacing: 1) {
+                // Le NOM ouvre le profil de l'auteur cité — zone de tap
+                // PROPRE, le reste du bloc garde le saut à l'original.
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(titleColor)
                     .lineLimit(1)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onQuotedAuthorTap?(reference) }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main))
 
                 previewLine
                     .lineLimit(1)
@@ -96,12 +164,7 @@ struct FocalQuotedReplyView: View, Equatable {
         .padding(.leading, FocalMetrics.Text.indent)
         .contentShape(Rectangle())
         .onTapGesture {
-            guard !reference.messageId.isEmpty else { return }
-            if reply.isStory {
-                onStoryReplyTap?(reference.messageId)
-            } else {
-                onReplyTap?(reference.messageId)
-            }
+            jumpToOriginal()
         }
     }
 
@@ -130,10 +193,14 @@ struct FocalQuotedReplyView: View, Equatable {
             let attachmentKind = BubbleQuotedReply.resolveAttachmentKind(reference.attachmentType)
             HStack(spacing: 4) {
                 if let kind = attachmentKind {
+                    // Audio/document cité sans vignette : le glyphe est la
+                    // zone média — tap = lecture/affichage, pas le saut.
                     Image(systemName: kind.sfSymbolName)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(previewColor)
-                        .accessibilityHidden(true)
+                        .contentShape(Rectangle())
+                        .onTapGesture { onQuotedMediaTap?(reference) }
+                        .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
                 }
                 let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Media", bundle: .main)
                 MessageTextRenderer.render(

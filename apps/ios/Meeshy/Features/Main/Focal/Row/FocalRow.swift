@@ -278,7 +278,9 @@ struct FocalRow: View {
                     isDark: input.isDark,
                     mentionDisplayNames: input.mentionDisplayNames,
                     onReplyTap: actions.onReplyTap,
-                    onStoryReplyTap: actions.onStoryReplyTap
+                    onStoryReplyTap: actions.onStoryReplyTap,
+                    onQuotedAuthorTap: actions.onQuotedAuthorTap,
+                    onQuotedMediaTap: actions.onQuotedMediaTap
                 )
             }
 

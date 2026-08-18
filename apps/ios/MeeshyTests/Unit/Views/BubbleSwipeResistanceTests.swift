@@ -52,6 +52,32 @@ final class BubbleSwipeResistanceTests: XCTestCase {
     // this covers the composition contract those two signals are combined
     // through.
 
+    // MARK: - Géométrie uniforme de la rangée plate (directive user 2026-08-18)
+
+    func test_replyDirection_flatRow_isUniformRightRegardlessOfSender() {
+        XCTAssertEqual(BubbleSwipeResistance.replyDirection(uniformFlatRow: true, isMine: true), 1,
+                       "rangée plate : reply = glisser à DROITE, même pour mes propres messages")
+        XCTAssertEqual(BubbleSwipeResistance.replyDirection(uniformFlatRow: true, isMine: false), 1)
+    }
+
+    func test_replyDirection_bubbles_keepsHistoricalSenderConvention() {
+        XCTAssertEqual(BubbleSwipeResistance.replyDirection(uniformFlatRow: false, isMine: true), -1,
+                       "bulles : convention historique intacte — reply du côté qui pointe vers l'expéditeur")
+        XCTAssertEqual(BubbleSwipeResistance.replyDirection(uniformFlatRow: false, isMine: false), 1)
+    }
+
+    func test_indicatorEdge_flatRow_replyLeft_forwardRight() {
+        XCTAssertEqual(BubbleSwipeResistance.indicatorEdge(uniformFlatRow: true, isMine: true, offset: 40), .leading,
+                       "glisser à droite (reply) libère le bord GAUCHE — l'icône reply y apparaît")
+        XCTAssertEqual(BubbleSwipeResistance.indicatorEdge(uniformFlatRow: true, isMine: false, offset: -40), .trailing,
+                       "glisser à gauche (forward) libère le bord DROIT — l'icône forward y apparaît")
+    }
+
+    func test_indicatorEdge_bubbles_keepsFixedHistoricalEdge() {
+        XCTAssertEqual(BubbleSwipeResistance.indicatorEdge(uniformFlatRow: false, isMine: true, offset: 40), .trailing)
+        XCTAssertEqual(BubbleSwipeResistance.indicatorEdge(uniformFlatRow: false, isMine: false, offset: -40), .leading)
+    }
+
     func test_isGestureOwnershipClaimed_neitherActive_false() {
         XCTAssertFalse(BubbleSwipeResistance.isGestureOwnershipClaimed(
             mediaScrubbing: false, inlinePaging: false))

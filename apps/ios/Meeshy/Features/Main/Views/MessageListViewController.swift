@@ -264,7 +264,7 @@ final class MessageListViewController: UIViewController {
         didSet {
             guard oldValue != readingMode, isViewLoaded else { return }
             collectionView.collectionViewLayout.invalidateLayout()
-            applySnapshot(animated: false, reconfigure: .allItems)
+            applySnapshot(reconfigure: .allItems)
             applyTopInsetToViews()
             updateScrollTimePillMounting()
         }
@@ -357,7 +357,7 @@ final class MessageListViewController: UIViewController {
             stickyDayState.isDark = isDark
             // F-086bis (WS-2) : la pilule jour·heure suit le même thème.
             scrollTimePillState.isDark = isDark
-            applySnapshot(animated: false, reconfigure: .allItems)
+            applySnapshot(reconfigure: .allItems)
         }
     }
 
@@ -465,7 +465,7 @@ final class MessageListViewController: UIViewController {
             deferredTargetedReconfigureIds.removeAll()
             let scope = deferredReconfigureScope
             deferredReconfigureScope = .changedRecords
-            applySnapshot(animated: false, reconfigure: scope)
+            applySnapshot(reconfigure: scope)
             return
         }
         guard !deferredTargetedReconfigureIds.isEmpty else { return }
@@ -494,7 +494,7 @@ final class MessageListViewController: UIViewController {
         // own `init`, which runs BEFORE `viewDidLoad`, so the first refresh
         // emission is missed and the list would render empty even though
         // `store.messages` is non-empty.
-        applySnapshot(animated: false)
+        applySnapshot()
         updateScrollTimePillMounting()
         applyTopInsetToViews()
         // `onNewMessagesBadge` only fires on an INCREASE or on the two
@@ -1288,6 +1288,14 @@ final class MessageListViewController: UIViewController {
                 focalActions.audioQueueTailProvider = audioQueueTailProvider
                 focalActions.onTapConsentNotice = { [weak self] in self?.router.push(.settings) }
                 focalActions.onOpenProfile = openProfileHandler
+                // Citations riches (user 2026-08-18) : nom → profil de
+                // l'auteur CITÉ ; zone média → plein écran / lecture.
+                focalActions.onQuotedAuthorTap = { [weak self] ref in
+                    self?.openQuotedAuthorProfile(ref)
+                }
+                focalActions.onQuotedMediaTap = { [weak self] ref in
+                    self?.openQuotedMedia(ref)
+                }
                 // Le « … » de la barre de contrôles ouvre EXACTEMENT le menu
                 // de l'appui long — même gestionnaire, donc même liste
                 // d'actions (édition, suppression, signalement, traduction),
@@ -1313,6 +1321,9 @@ final class MessageListViewController: UIViewController {
                     // bulle : seule la copie élevée reste visible (anti ghost).
                     isHiddenForOverlay: message.id == self.overlaidMessageId,
                     resistance: hasTimebasedMedia ? .resistant : .normal,
+                    // Rangée plate : reply à droite/icône gauche, forward à
+                    // gauche/icône droite — uniforme, loi `BubbleSwipeResistance`.
+                    uniformFlatDirection: self.readingMode.usesFlatRow,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
                     onLongPress: { [weak self] in longPressHandler?(messageId, self?.focalOverlayPreview(messageId: messageId)) },
@@ -1416,7 +1427,7 @@ final class MessageListViewController: UIViewController {
     /// globale est arrivée pendant le geste.
     private var deferredReconfigureScope: SnapshotReconfigureScope = .changedRecords
 
-    private func applySnapshot(animated: Bool = true, reconfigure: SnapshotReconfigureScope = .changedRecords) {
+    private func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {
         let _spState = PerfSignpost.signposter.beginInterval("applySnapshot")
         defer { PerfSignpost.signposter.endInterval("applySnapshot", _spState) }
         // Sous-segments pour pinpointer le coût des 75ms mesurés sur device :
@@ -1551,7 +1562,22 @@ final class MessageListViewController: UIViewController {
             lastConversationStartFingerprint = startFingerprint
         }
         if !itemsToReconfigure.isEmpty {
-            snapshot.reconfigureItems(itemsToReconfigure)
+            // JAMAIS de reconfigure HORS ÉCRAN (rouleau, user 2026-08-18) :
+            // re-héberger une cellule invisible fait transitoirement
+            // retomber sa hauteur à l'ESTIMÉE par le chemin self-resizing
+            // (qui ne passe par AUCUNE compensation — même canal que le
+            // SIGTRAP), le contentSize s'effondre et l'offset est re-clampé
+            // vers le bas : chaque tick d'outbox « rappelait » la scène au
+            // bas. Une cellule invisible n'a RIEN à reconfigurer : sa
+            // prochaine RÉALISATION relit le record frais via la
+            // registration. Seules les cellules visibles re-hébergent.
+            let visibleItems = Set(
+                collectionView.indexPathsForVisibleItems.compactMap { dataSource.itemIdentifier(for: $0) }
+            )
+            let visibleToReconfigure = itemsToReconfigure.filter { visibleItems.contains($0) }
+            if !visibleToReconfigure.isEmpty {
+                snapshot.reconfigureItems(visibleToReconfigure)
+            }
         }
 
         // Detect genuinely-new messages: the MESSAGE count grew AND the newest
@@ -1567,15 +1593,31 @@ final class MessageListViewController: UIViewController {
         let newCount = messageItems.count
         let delta = newCount - previousSnapshotCount
         let newestItem = messageItems.first
+        // Un item RÉINSÉRÉ (retry outbox qui retire puis rejoue le même
+        // localId — churn ~1/s gateway coupée) n'est PAS un nouveau message :
+        // exiger que le newest soit ABSENT du snapshot précédent. Sans ce
+        // discriminant, chaque tick de retry « recollait » la vue au bas.
         let hasGenuinelyNewMessages = delta > 0
             && previousSnapshotCount > 0
             && newestItem != previousNewestItem
+            && newestItem.map { !previousItems.contains($0) } ?? false
         // RC2.1 — when the user is following the conversation (near bottom),
         // auto-scroll onto the new message; otherwise bump the unread badge.
         // The typing cell appearing also auto-scrolls (when near bottom) so it
         // stays visible just below the last message.
+        //
+        // JAMAIS pendant un geste ni un momentum (rouleau, user 2026-08-18) :
+        // un `scrollToBottom` posé au milieu d'un fling TUE la décélération —
+        // la liste semblait « avaler » chaque tentative de remonter dès
+        // qu'un tick d'outbox tombait. Le doigt et l'inertie ont toujours
+        // priorité sur le confort de suivi.
         let typingJustAppeared = showTyping && !previouslyShowedTyping
-        let shouldAutoScroll = (hasGenuinelyNewMessages || typingJustAppeared) && isCurrentlyNearBottom
+        let isGestureOrMomentumActive = collectionView.isDragging
+            || collectionView.isDecelerating
+            || collectionView.isTracking
+        let shouldAutoScroll = (hasGenuinelyNewMessages || typingJustAppeared)
+            && isCurrentlyNearBottom
+            && !isGestureOrMomentumActive
         // Le badge non-lus ne compte JAMAIS un message dont l'utilisateur est
         // l'AUTEUR : envoyer depuis l'historique (rangée optimiste insérée en
         // bas pendant qu'on lit plus haut) n'est pas un « nouveau message à
@@ -1599,14 +1641,12 @@ final class MessageListViewController: UIViewController {
         // layout before `scrollToItem` runs (apply is asynchronous for the
         // animated diff path).
         PerfSignpost.signposter.endInterval("snapshot.build", _buildState)
-        // N'animer QUE l'insert d'un VRAI nouveau message (petit delta — le joli
-        // slide-in) ou l'apparition du typing. Les bulk-loads / refresh / open /
-        // state-changes ne s'animent PAS : la trace device (iPhone 16 Pro Max)
-        // montre que `dataSource.apply` ANIMÉ est le coût (snapshot.apply = 2136ms
-        // sur 17 applies à la navigation) alors que la prépa (`snapshot.build`)
-        // ne fait que 5ms. Tuer l'animation des bulk supprime le churn sans
-        // perdre le slide d'un message entrant.
-        let effectiveAnimated = animated && ((hasGenuinelyNewMessages && delta <= 2) || typingJustAppeared)
+        // ROULEAU (directive user 2026-08-18) : AUCUNE animation d'insertion
+        // ni de suppression, jamais — ni slide-in de message entrant, ni
+        // apparition du typing, ni bulk-load. Les rangées existent dans le
+        // flux avant d'être visibles ; le SEUL mouvement à l'écran est celui
+        // du défilement lui-même. (La trace device montrait déjà que l'apply
+        // ANIMÉ était le coût dominant — 2136 ms sur 17 applies.)
         // Stabilité du champ visuel — les hauteurs des items SUPPRIMÉS sous
         // la fenêtre (typing indicator qui s'éteint, message effacé déjà
         // défilé) ne seront plus lisibles pendant le batch update : mesurées
@@ -1623,16 +1663,63 @@ final class MessageListViewController: UIViewController {
         (collectionView.collectionViewLayout as? MessageListLayout)?
             .noteUpcomingDeletionCompensation(height: deletedBelowWindowHeight)
         let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
-        dataSource.apply(snapshot, animatingDifferences: effectiveAnimated) { [weak self] in
+        dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
             PerfSignpost.signposter.endInterval("snapshot.apply", _applyState)
             guard let self else { return }
             // La pill flottante doit refléter le nouveau top du flux dès que
             // les cellules sont en place (insertion d'un nouveau message, etc.).
             self.updateStickyDayLabel()
             if shouldAutoScroll {
-                self.scrollToBottom(animated: effectiveAnimated)
+                // Le rouleau avance d'un cran, net — pas de ressort.
+                self.scrollToBottom(animated: false)
             }
         }
+    }
+
+    // MARK: - Verrou de scène (rouleau)
+
+    /// L'ancre du VERROU DE SCÈNE : la rangée du bord haut de l'écran et le
+    /// décalage de l'offset par rapport à elle, capturés tant que
+    /// l'utilisateur pilote (geste, momentum, scroll intentionnel). Loin du
+    /// bas, TOUT mouvement d'offset qui n'est PAS piloté est annulé
+    /// sur-le-champ en restaurant cette ancre — quel que soit le mécanisme
+    /// du saut (re-hosting qui repasse par la hauteur estimée, clamp d'un
+    /// contentSize transitoirement effondré, corrections du solveur
+    /// self-sizing : tous reproduits au simulateur 2026-08-18, aucun
+    /// compensable à sa source car le chemin self-resizing des cellules
+    /// hosting ne traverse aucun hook du layout). C'est la loi du ROULEAU :
+    /// la scène n'appartient qu'au doigt.
+    private var sceneLockAnchor: (item: MessageListItem, offsetDelta: CGFloat)?
+
+    /// Vrai pendant un défilement programmatique VOULU (saut recherche/
+    /// citation, slow-scroll de recherche) — le verrou laisse faire.
+    private var isIntentionalProgrammaticScroll = false
+
+    private func captureSceneLockAnchor() {
+        guard let dataSource,
+              let topIndexPath = collectionView.indexPathsForVisibleItems.max(by: { a, b in
+                  (collectionView.layoutAttributesForItem(at: a)?.frame.minY ?? 0)
+                      < (collectionView.layoutAttributesForItem(at: b)?.frame.minY ?? 0)
+              }),
+              let item = dataSource.itemIdentifier(for: topIndexPath),
+              let attrs = collectionView.layoutAttributesForItem(at: topIndexPath)
+        else {
+            sceneLockAnchor = nil
+            return
+        }
+        sceneLockAnchor = (item, collectionView.contentOffset.y - attrs.frame.minY)
+    }
+
+    /// Restaure l'ancre si la scène a bougé sans pilote (> 2 pt). Sans
+    /// animation — le rouleau ne rebondit pas.
+    private func enforceSceneLock() {
+        guard let sceneLockAnchor, let dataSource,
+              let indexPath = dataSource.indexPath(for: sceneLockAnchor.item),
+              let attrs = collectionView.layoutAttributesForItem(at: indexPath)
+        else { return }
+        let target = max(0, attrs.frame.minY + sceneLockAnchor.offsetDelta)
+        guard abs(collectionView.contentOffset.y - target) > 2 else { return }
+        collectionView.setContentOffset(CGPoint(x: 0, y: target), animated: false)
     }
 
     // MARK: - Observation
@@ -1672,7 +1759,7 @@ final class MessageListViewController: UIViewController {
             .dropFirst()
             .sink { [weak self] _ in
                 // Preferred language revision change requires full reconfigure of all items
-                self?.applySnapshot(animated: false, reconfigure: .allItems)
+                self?.applySnapshot(reconfigure: .allItems)
             }
             .store(in: &cancellables)
 
@@ -1681,7 +1768,7 @@ final class MessageListViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applySnapshot(animated: false, reconfigure: .allItems)
+                self?.applySnapshot(reconfigure: .allItems)
             }
             .store(in: &cancellables)
 
@@ -1697,18 +1784,18 @@ final class MessageListViewController: UIViewController {
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applySnapshot(animated: false, reconfigure: .allItems)
+                self?.applySnapshot(reconfigure: .allItems)
             }
             .store(in: &cancellables)
 
-        // Typing roster — re-snapshot (animated) so the in-flow typing cell
-        // inserts / updates / removes fluidly. Low-frequency signal, no debounce.
+        // Typing roster — re-snapshot : la cellule typing entre/sort du flux
+        // comme toute rangée du rouleau, sans animation. Low-frequency signal, no debounce.
         // Uses stateStore publisher so typing doesn't trigger full ConversationViewModel re-render.
         vm.typingUsernamesPublisher
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in
-                self?.applySnapshot(animated: true)
+                self?.applySnapshot()
             }
             .store(in: &cancellables)
 
@@ -1838,7 +1925,13 @@ final class MessageListViewController: UIViewController {
         let itemsToReconfigure = localIds.map { MessageListItem.message(localId: $0) }
 
         // Only reconfigure items that actually exist in the current snapshot
-        let existingItems = itemsToReconfigure.filter { snapshot.indexOfItem($0) != nil }
+        // — et qui sont VISIBLES (même règle que applySnapshot : re-héberger
+        // hors écran effondre le contentSize, la réalisation suivante relit
+        // le record frais de toute façon).
+        let visibleItems = Set(
+            collectionView.indexPathsForVisibleItems.compactMap { dataSource.itemIdentifier(for: $0) }
+        )
+        let existingItems = itemsToReconfigure.filter { snapshot.indexOfItem($0) != nil && visibleItems.contains($0) }
         guard !existingItems.isEmpty else { return }
 
         snapshot.reconfigureItems(existingItems)
@@ -1890,7 +1983,56 @@ final class MessageListViewController: UIViewController {
         serverIdToLocalId[id] ?? id
     }
 
+    /// Tap sur le NOM de l'auteur cité — résout le message cité dans le
+    /// store local pour ouvrir le profil RÉEL (username/avatar) ; repli sur
+    /// une fiche nom-seul (la sheet profil résout par username) quand le
+    /// cité n'est plus dans la fenêtre locale.
+    private func openQuotedAuthorProfile(_ reference: ReplyReference) {
+        let localId = resolveLocalId(reference.messageId)
+        if let quoted = store.domainMessage(for: localId, currentUserId: currentUserId) {
+            router.deepLinkProfileUser = ProfileSheetUser(
+                userId: quoted.senderId,
+                username: quoted.senderUsername ?? quoted.senderName ?? reference.authorName,
+                displayName: quoted.senderName ?? reference.authorName,
+                avatarURL: quoted.senderAvatarURL,
+                accentColor: reference.authorColor
+            )
+            return
+        }
+        router.deepLinkProfileUser = ProfileSheetUser(
+            userId: nil,
+            username: reference.authorName,
+            displayName: reference.authorName,
+            avatarURL: nil,
+            accentColor: reference.authorColor
+        )
+    }
+
+    /// Tap sur la zone MÉDIA d'une citation — résout la pièce jointe citée :
+    /// image/vidéo → plein écran (`onMediaTap`, la même galerie que la
+    /// rangée), audio → lecture (`playAudio`, même file que la rangée) ;
+    /// document et cité hors fenêtre locale → saut à l'original (la carte
+    /// document y offre téléchargement/partage).
+    private func openQuotedMedia(_ reference: ReplyReference) {
+        let localId = resolveLocalId(reference.messageId)
+        guard let quoted = store.domainMessage(for: localId, currentUserId: currentUserId),
+              let attachment = quoted.attachments.first(where: { $0.type != .location })
+        else {
+            scrollToMessage(localId: localId)
+            return
+        }
+        switch attachment.type {
+        case .image, .video:
+            onMediaTap?(attachment)
+        case .audio:
+            conversationViewModel?.playAudio(attachmentId: attachment.id)
+        case .file, .location:
+            scrollToMessage(localId: localId)
+        }
+    }
+
     func scrollToMessage(localId: String) {
+        isIntentionalProgrammaticScroll = true
         // Forward to parent first — if the message lives outside the current
         // window, the parent ViewModel will trigger a `loadWindow(around:)`
         // which repopulates the store. The store observer reapplies the
@@ -1932,6 +2074,7 @@ final class MessageListViewController: UIViewController {
     /// from the server after a quoted-message search. Stops any ongoing slow
     /// scroll, then jumps directly to the target with a highlight flash.
     func scrollToMessageFast(localId: String) {
+        isIntentionalProgrammaticScroll = true
         stopSlowScroll()
 
         // Same id-flavour bridge as `scrollToMessage` — see
@@ -2013,6 +2156,7 @@ final class MessageListViewController: UIViewController {
     /// Used during quoted message search to give the user a visual impression
     /// that the app is actively browsing through message history.
     func startSlowScrollUp() {
+        isIntentionalProgrammaticScroll = true
         guard slowScrollDisplayLink == nil else { return }
         // Proxy weak partagé (WeakDisplayLinkTarget) : un link `target: self`
         // retenait le VC entier (run loop → link → VC, deinit inatteignable)
@@ -2032,6 +2176,7 @@ final class MessageListViewController: UIViewController {
 
     /// Stops the slow continuous scroll.
     func stopSlowScroll() {
+        isIntentionalProgrammaticScroll = false
         slowScrollDisplayLink?.invalidate()
         slowScrollDisplayLink = nil
     }
@@ -2230,6 +2375,15 @@ extension MessageListViewController: UICollectionViewDelegate {
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
         setChromeHiddenForScroll(scrollView.isDragging)
 
+        // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
+        // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
+        let isUserDriven = scrollView.isDragging || scrollView.isTracking || scrollView.isDecelerating
+        if isUserDriven || isIntentionalProgrammaticScroll || isCurrentlyNearBottom {
+            captureSceneLockAnchor()
+        } else {
+            enforceSceneLock()
+        }
+
         // F-086bis (WS-2) : pilule « jour · heure », RÉUTILISE ce site — pas
         // d'observateur neuf. Gardée par readingMode (`.bubbles` ⇒ no-op).
         noteScrollTimePillActivity()
@@ -2263,13 +2417,14 @@ extension MessageListViewController: UICollectionViewDelegate {
         guard contentHeight > frameHeight else { return }
         let distanceFromBottom = contentHeight - offset - frameHeight
 
-        if distanceFromBottom < 800, !isLoadingOlder {
-            // Threshold 800pt ≈ 4–5 screen-heights of messages. Firing early
-            // gives the network request time to complete BEFORE the user
-            // reaches the edge of loaded content. Combined with the VM's
-            // anticipatory prefetch (auto-loads the NEXT page after each page
-            // completes), this eliminates the "stall at the top" effect on
-            // fast scrolls in large conversations.
+        if distanceFromBottom < frameHeight * 4, !isLoadingOlder {
+            // ROULEAU (user 2026-08-18) : 4 hauteurs d'ÉCRAN d'avance — les
+            // rangées suivantes s'insèrent dans le flux bien AVANT d'être
+            // visibles, on ne frappe jamais le bord chargé (l'ancien seuil de
+            // 800 pt faisait MOINS d'un écran : au fling, le bord arrivait
+            // avant la page → rebond élastique puis insertion, l'effet
+            // « ressort » signalé). La fenêtre GRDB se sert en cache-first et
+            // le prefetch anticipatif du VM enchaîne les pages suivantes.
             guard !store.messages.isEmpty, let onLoadOlder else { return }
             isLoadingOlder = true
             Task { @MainActor [weak self] in
@@ -2303,6 +2458,7 @@ extension MessageListViewController: UICollectionViewDelegate {
     /// l'arrêt d'un geste : retour du chrome + flush des reconfigures
     /// différés (§4.7ter).
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        isIntentionalProgrammaticScroll = false
         settleAtRest()
     }
 
@@ -2312,6 +2468,7 @@ extension MessageListViewController: UICollectionViewDelegate {
     private func settleAtRest() {
         setScrollingActive(false)
         setChromeHiddenForScroll(false)
+        captureSceneLockAnchor()
         flushDeferredReconfigureAtSettle()
     }
 

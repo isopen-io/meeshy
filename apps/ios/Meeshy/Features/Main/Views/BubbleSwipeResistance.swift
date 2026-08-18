@@ -28,6 +28,28 @@ enum BubbleSwipeResistance {
         return true
     }
 
+    /// Direction du swipe REPLY (signe de la translation qui commite une
+    /// réponse). Rangée plate (Script, `uniformFlatRow`) : géométrie
+    /// UNIFORME — tous les messages étant alignés pareil, reply = glisser à
+    /// DROITE (+1) et forward = glisser à GAUCHE, indépendamment de
+    /// l'expéditeur (directive user 2026-08-18). Bulles : convention
+    /// historique — le côté qui « pointe vers l'expéditeur »
+    /// (`isMine ? -1 : +1`), inchangée bit-à-bit.
+    static func replyDirection(uniformFlatRow: Bool, isMine: Bool) -> CGFloat {
+        uniformFlatRow ? 1 : (isMine ? -1 : 1)
+    }
+
+    /// Bord où l'indicateur (icône reply/forward, tampon date) apparaît.
+    /// Rangée plate : le bord que la rangée LIBÈRE en glissant — gauche
+    /// quand on glisse à droite (reply, icône à GAUCHE), droite quand on
+    /// glisse à gauche (forward, icône à DROITE). Bulles : bord historique
+    /// fixe selon l'expéditeur.
+    enum IndicatorEdge { case leading, trailing }
+    static func indicatorEdge(uniformFlatRow: Bool, isMine: Bool, offset: CGFloat) -> IndicatorEdge {
+        guard uniformFlatRow else { return isMine ? .trailing : .leading }
+        return offset < 0 ? .trailing : .leading
+    }
+
     /// Vrai si un widget descendant possède déjà le glissement horizontal —
     /// scrubbing média (waveform/seek bar, `MediaScrubbingPreferenceKey`) OU
     /// carrousel inline ouvert (`BubbleInlinePagingPreferenceKey`) — auquel

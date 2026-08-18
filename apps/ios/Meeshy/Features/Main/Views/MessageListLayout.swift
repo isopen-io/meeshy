@@ -149,10 +149,27 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
         guard !recoveryInvalidationScheduled else { return }
         recoveryInvalidationScheduled = true
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.recoveryInvalidationScheduled = false
-            self.invalidateLayout()
+            self?.fireOrDeferRecoveryInvalidation()
         }
+    }
+
+    /// Le rattrapage (invalidation COMPLÈTE) ne tombe JAMAIS pendant que la
+    /// liste bouge : une invalidation complète en plein momentum tue la
+    /// décélération — chaque fling semblait « avalé » dès qu'une tempête
+    /// avait laissé un refus derrière elle (rouleau, user 2026-08-18).
+    /// Pendant le mouvement, chaque frame re-sollicite naturellement les
+    /// cellules refusées (budget réarmé par tour) ; le rattrapage complet
+    /// attend la pose, en se re-proposant au tour suivant.
+    private func fireOrDeferRecoveryInvalidation() {
+        recoveryInvalidationScheduled = false
+        if let collectionView, collectionView.isDragging || collectionView.isDecelerating {
+            recoveryInvalidationScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                self?.fireOrDeferRecoveryInvalidation()
+            }
+            return
+        }
+        invalidateLayout()
     }
 
     override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
