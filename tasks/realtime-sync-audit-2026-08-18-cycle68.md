@@ -199,6 +199,27 @@ instruites sans les livrer :
    parce qu'elle déplace la couverture globale du web, gate CI à seuil
    (`lines: 42`), et qu'un retrait de fichier intégralement couvert la tire vers
    le bas — à instruire avec la mesure, pas avec l'intuition.
+
+   **Et il n'est pas seul.** Un balayage de `apps/web/hooks/*.ts`, vérifié DEUX
+   fois (par chemin d'import `@/hooks/<nom>` puis par symbole exporté, hors
+   `__tests__` et hors barrel `hooks/index.ts`), rend au moins six autres hooks
+   à zéro consommateur :
+
+   | hook | symboles | consommateurs |
+   |---|---|---|
+   | `use-message-reactions.ts` | `useMessageReactions` | **0** |
+   | `use-app-badge.ts` | `useAppBadge`, `useAppBadgeControl` | **0** |
+   | `use-encryption.ts` | `useEncryption` | **0** |
+   | `use-long-press.ts` | `useLongPress` | **0** |
+   | `use-network-status.ts` | `useNetworkStatus` | **0** |
+   | `useThrottle.ts` | `useThrottle`, `useThrottledCallback` | **0** |
+
+   Le balayage n'est PAS exhaustif (il ne suit ni les ré-exports du barrel ni
+   les imports relatifs) et plusieurs de ces noms — `useEncryption`,
+   `useNetworkStatus` — désignent des sujets où un jumeau vivant existe très
+   probablement ailleurs. C'est exactement la population qui produit le défaut
+   de ce cycle : le prochain correctif de chiffrement ou de statut réseau a une
+   chance non nulle d'atterrir sur le fichier qui porte le nom.
 2. **La question qui a produit ce cycle, et qui n'est pas épuisée** :
    *le correctif s'est-il posé sur le site que la production CHARGE ?* Elle se
    passe sur tout couple de fichiers dont l'un porte le nom de la fonctionnalité
