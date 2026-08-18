@@ -431,10 +431,15 @@ struct FocalRow: View {
     /// existe en plusieurs versions (`content.translation != nil`). Aucune
     /// seconde résolution : `originalLangCode` est déjà résolu par
     /// `BubbleContentBuilder`.
-    /// Texte effectif de la rangée (Prisme résolu en amont) — partagé par le
-    /// rendu, la sheet « Lire plus » et la clé du cross-fade.
+    /// Texte effectif de la rangée — `text.raw` EST déjà le contenu résolu
+    /// par `BubbleContentBuilder` (Prisme + bascule manuelle
+    /// `activeDisplayLangCode`), le même que la bulle. L'ancienne préférence
+    /// `preferredContent ?? raw` court-circuitait la bascule V.O. : le
+    /// drapeau-toggle changeait `activeLangCode` sans jamais changer le
+    /// texte de la rangée plate. Partagé par le rendu, la sheet « Lire
+    /// plus » et la clé du cross-fade.
     private var effectiveText: String {
-        content.translation?.preferredContent ?? content.text?.raw ?? ""
+        content.text?.raw ?? ""
     }
 
     private var textBlock: some View {
@@ -482,21 +487,55 @@ struct FocalRow: View {
         )
     }
 
-    /// Drapeau de la langue D'ORIGINE — le SEUL indicateur multi-langue de
-    /// la rangée (arbitrage user 2026-08-18 : l'icône translate et la bande
-    /// de drapeaux sont retirées ; demander une traduction ou explorer les
-    /// autres langues passe par le menu d'appui long du message). Affiché
-    /// UNIQUEMENT quand plusieurs versions existent (`content.translation`
-    /// non-nil ⟺ au moins une traduction texte/audio, posé par
-    /// `BubbleContentBuilder`). PASSIF : aucun geste — le Prisme reste
-    /// transparent, l'indicateur ne distrait pas.
+    /// Drapeau-TOGGLE de version — le SEUL indicateur multi-langue de la
+    /// rangée (arbitrages user 2026-08-18 : plus d'icône translate ni de
+    /// bande de drapeaux ; le menu d'appui long garde l'exploration
+    /// complète). Affiché UNIQUEMENT quand plusieurs versions existent
+    /// (`content.translation` non-nil).
+    ///
+    /// Le drapeau montre L'AUTRE version disponible, et le tap y bascule :
+    /// - traduction affichée → drapeau de la langue D'ORIGINE ; tap =
+    ///   afficher l'original (`onSetActiveDisplayLanguage(originalLangCode)`) ;
+    /// - original affiché → drapeau de la langue CONFIGURÉE sur le profil
+    ///   (la cible du Prisme, `preferredLangCode`) ; tap = revenir à la
+    ///   traduction (`onSetActiveDisplayLanguage(nil)` → résolution Prisme).
+    /// Quand le Prisme n'a aucune traduction préférée (`preferredLangCode`
+    /// nil), le drapeau d'origine reste un simple indicateur multi-versions.
+    private func flagEmoji(_ code: String) -> String {
+        LanguageData.info(for: code.lowercased())?.flag ?? "\u{1F310}"
+    }
+
+    private var isShowingOriginal: Bool {
+        guard let translation = content.translation else { return true }
+        return translation.activeLangCode.lowercased() == translation.originalLangCode.lowercased()
+    }
+
     @ViewBuilder
     private var originalLanguageFlag: some View {
         if let translation = content.translation {
-            Text(LanguageData.info(for: translation.originalLangCode.lowercased())?.flag ?? "\u{1F310}")
-                .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                .accessibilityLabel(String(
-                    format: String(localized: "focal.translation.original_language", defaultValue: "Message multilingue — langue d'origine : %@", bundle: .main),
+            let profileLang = translation.preferredLangCode
+            let showsProfileFlag = isShowingOriginal && profileLang != nil
+            Button {
+                if isShowingOriginal {
+                    // Retour à la traduction — seulement si le Prisme en a une.
+                    guard profileLang != nil else { return }
+                    actions.onSetActiveDisplayLanguage?(content.messageId, nil)
+                } else {
+                    actions.onSetActiveDisplayLanguage?(content.messageId, translation.originalLangCode)
+                }
+            } label: {
+                Text(showsProfileFlag ? flagEmoji(profileLang ?? "") : flagEmoji(translation.originalLangCode))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(showsProfileFlag
+                ? String(
+                    format: String(localized: "focal.translation.back_to_translation_flag", defaultValue: "Revenir à la traduction (%@)", bundle: .main),
+                    LanguageData.info(for: (profileLang ?? "").lowercased())?.nativeName ?? (profileLang ?? "")
+                )
+                : String(
+                    format: String(localized: "focal.translation.show_original_flag", defaultValue: "Afficher la version originale (%@)", bundle: .main),
                     LanguageData.info(for: translation.originalLangCode.lowercased())?.nativeName ?? translation.originalLangCode
                 ))
         }

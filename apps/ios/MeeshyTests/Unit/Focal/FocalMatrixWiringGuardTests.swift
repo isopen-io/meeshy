@@ -73,27 +73,51 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     // MARK: - Drapeau langue d'origine (arbitrage user 2026-08-18)
 
-    func test_originalLanguageFlag_isPassive_andGatedOnMultipleVersions() throws {
+    func test_originalLanguageFlag_isAVersionToggle_gatedOnMultipleVersions() throws {
         let code = try stripped(rowPath)
         guard let flagStart = code.range(of: "private var originalLanguageFlag") else {
             return XCTFail("originalLanguageFlag introuvable dans FocalRow — le seul indicateur multi-langue de la rangée")
         }
-        let window = String(code[flagStart.lowerBound...].prefix(1200))
+        let window = String(code[flagStart.lowerBound...].prefix(2000))
         XCTAssertTrue(
             window.contains("if let translation = content.translation"),
             "le drapeau n'apparaît QUE quand plusieurs versions existent (content.translation non-nil) — jamais sur un message monolingue"
         )
         XCTAssertTrue(
-            window.contains("originalLangCode"),
-            "le drapeau est celui de la langue D'ORIGINE — jamais la langue affichée"
+            window.contains("onSetActiveDisplayLanguage?(content.messageId, translation.originalLangCode)"),
+            "tap sur le drapeau d'origine = AFFICHER l'original (arbitrage user 2026-08-18 : le drapeau est un toggle de version)"
+        )
+        XCTAssertTrue(
+            window.contains("onSetActiveDisplayLanguage?(content.messageId, nil)"),
+            "tap sur le drapeau de la langue du profil = REVENIR à la traduction (résolution Prisme) — sans ce retour, la V.O. serait un cul-de-sac"
+        )
+        XCTAssertTrue(
+            window.contains("preferredLangCode") || code.contains("profileLang"),
+            "l'état « original affiché » montre le drapeau de la langue CONFIGURÉE sur le profil (preferredLangCode), jamais un globe"
         )
         XCTAssertFalse(
-            window.contains("Button") || window.contains("onTapGesture") || window.contains("LongPressGesture"),
-            "l'indicateur est PASSIF — demander/afficher les autres langues passe par le menu d'appui long du MESSAGE, pas par le drapeau"
+            code.contains("translationChip") || code.contains("systemName: \"globe\""),
+            "l'icône translate (chip 🌐) reste RETIRÉE de la rangée — le toggle est un DRAPEAU"
+        )
+    }
+
+    /// Sans ce réalignement, le toggle changeait `activeLangCode` sans jamais
+    /// changer le texte : la rangée préférait `preferredContent` (la
+    /// traduction) à `text.raw` (le contenu RÉSOLU par le builder, bascule
+    /// manuelle comprise).
+    func test_effectiveText_followsTheBuilderResolution_notThePreferredTranslation() throws {
+        let code = try stripped(rowPath)
+        guard let start = code.range(of: "private var effectiveText") else {
+            return XCTFail("effectiveText introuvable dans FocalRow")
+        }
+        let window = String(code[start.lowerBound...].prefix(300))
+        XCTAssertTrue(
+            window.contains("content.text?.raw"),
+            "effectiveText doit lire text.raw — le contenu résolu par BubbleContentBuilder (Prisme + bascule manuelle), le même que la bulle"
         )
         XCTAssertFalse(
-            code.contains("translationChip"),
-            "l'icône translate (chip 🌐) est RETIRÉE de la rangée — arbitrage user 2026-08-18"
+            window.contains("preferredContent ??"),
+            "préférer preferredContent court-circuite la bascule V.O. — c'est le défaut qui rendait le toggle inopérant en rangée plate"
         )
     }
 

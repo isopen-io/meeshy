@@ -163,17 +163,25 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    // MARK: - F06 — swap de traduction + chip 🌐 (PARTIEL : swap oui, chip non)
+    // MARK: - F06 — swap de traduction + drapeau-toggle
     // behaviour-matrix:F06
 
-    /// Le SWAP de texte (résolution Prisme inchangée, `content.translation?.preferredContent`)
-    /// EST bien branché — cette moitié de F06 est couverte.
+    /// Le SWAP de texte suit désormais `text.raw` — le contenu RÉSOLU par
+    /// `BubbleContentBuilder` (Prisme + bascule manuelle du drapeau-toggle,
+    /// arbitrage user 2026-08-18). Une traduction tardive change la
+    /// résolution du builder → `raw` change → le cross-fade `.id(effectiveText)`
+    /// joue, comme avant. L'ancienne préférence `preferredContent ??`
+    /// court-circuitait la bascule V.O.
     func test_F06_translatedTextSwapsInPlace_prismeUnchanged() throws {
         let code = try source(rowRoot().appendingPathComponent("FocalRow.swift"))
         XCTAssertTrue(
-            code.contains("content.translation?.preferredContent ?? content.text?.raw"),
-            "F06 : FocalRow.textBlock doit préférer `content.translation?.preferredContent` — le swap " +
-            "de traduction tardive doit atteindre le Fil comme la bulle (résolution Prisme inchangée)"
+            code.contains("content.text?.raw ?? \"\""),
+            "F06 : effectiveText doit lire `content.text?.raw` — le contenu résolu par le builder, " +
+            "le même que la bulle (Prisme + bascule manuelle)"
+        )
+        XCTAssertTrue(
+            code.contains(".id(effectiveText)"),
+            "F06 : le cross-fade du swap tardif reste keyé sur le texte effectif"
         )
     }
 

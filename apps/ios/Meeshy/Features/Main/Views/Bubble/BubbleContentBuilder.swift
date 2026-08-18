@@ -149,6 +149,7 @@ extension BubbleContent {
                 preferredContent: preferredTranslation?.translatedContent,
                 activeLangCode: activeLang,
                 originalLangCode: message.originalLanguage,
+                preferredLangCode: preferredTranslation?.targetLanguage,
                 availableFlags: flags,
                 secondaryLangCode: secondaryLangCode,
                 secondaryContent: secondaryContent

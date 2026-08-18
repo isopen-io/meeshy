@@ -101,6 +101,12 @@ nonisolated struct BubbleContent: Equatable {
         let preferredContent: String?      // contenu affiché (peut == raw si pas traduit)
         let activeLangCode: String         // langue actuellement affichée
         let originalLangCode: String
+        /// Langue que le Prisme du LECTEUR choisirait (cible de la
+        /// traduction préférée) — `nil` quand aucune traduction ne matche
+        /// ses préférences. Sert au drapeau-toggle de la rangée plate :
+        /// c'est « la langue configurée sur le profil » vers laquelle on
+        /// revient depuis la V.O.
+        let preferredLangCode: String?
         let availableFlags: [String]       // dédupliqué, ordonné
         let secondaryLangCode: String?     // panneau inline ouvert ?
         let secondaryContent: String?
