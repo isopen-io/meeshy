@@ -12,6 +12,11 @@ package me.meeshy.sdk.model.auth
  * SOTA note: iOS buries these predicates as `private func`s inside the stateful
  * view model. Android lifts them into a pure, framework-free SSOT object so the
  * gate is reusable by any onboarding surface and every branch is JVM-testable.
+ *
+ * Le charset username est ASCII, pas Unicode : c'est le miroir de
+ * `usernamePatternSource` (`^[a-zA-Z0-9_-]+$`, packages/shared/types/api-schemas.ts),
+ * PAS de `Char.isLetterOrDigit()`. Un pseudo accentué doit être refusé ici comme
+ * il l'est côté serveur.
  */
 object SignupFieldValidation {
 
@@ -36,13 +41,29 @@ object SignupFieldValidation {
     fun phoneDigits(value: String): String = value.filter { it.isDigit() }
 
     /**
-     * True when the trimmed username is 2..16 chars and every character is a
-     * letter, a digit, or one of `_ -` (iOS `CharacterSet.alphanumerics ∪ {_,-}`).
+     * Miroir ASCII strict de `usernamePatternSource`. Volontairement NON
+     * `isLetterOrDigit()`, qui est Unicode : il acceptait `josé` que le serveur
+     * refuse, et l'inscription échouait à la soumission.
+     */
+    private fun isUsernameChar(c: Char): Boolean =
+        c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c in usernameExtraAllowed
+
+    /**
+     * Retire tout caractère hors charset et borne la longueur. Silencieux, comme
+     * le filtrage web et iOS : la ligne d'aide sous le champ énonce la règle en
+     * permanence.
+     */
+    fun sanitizedUsername(value: String): String =
+        value.filter(::isUsernameChar).take(USERNAME_MAX_LENGTH)
+
+    /**
+     * True when the trimmed username is 2..16 chars and every character is an
+     * ASCII letter, an ASCII digit, or one of `_ -`.
      */
     fun isUsernameValidLocally(value: String): Boolean {
         val trimmed = value.trim()
         if (trimmed.length < USERNAME_MIN_LENGTH || trimmed.length > USERNAME_MAX_LENGTH) return false
-        return trimmed.all { it.isLetterOrDigit() || it in usernameExtraAllowed }
+        return trimmed.all(::isUsernameChar)
     }
 
     /** True when the value contains both `@` and `.` (iOS's deliberately-loose gate). */

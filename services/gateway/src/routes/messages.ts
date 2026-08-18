@@ -17,7 +17,11 @@ import {
   reconcileEditedLinks,
   mergeTrackingLinksIntoMetadata,
 } from '../services/messaging/messageLinks';
-import { admitMessageEdit, isEditRefused } from '../services/messaging/messageEditAdmission';
+import {
+  admitMessageEdit,
+  isEditRefused,
+  CONVERSATION_CLOSED_EDIT_MESSAGE,
+} from '../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../services/messaging/messageEditEffects';
@@ -44,6 +48,7 @@ import {
   sendNotFound,
   sendForbidden,
   sendInternalError,
+  sendError,
 } from '../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'MessagesRoutes' });
@@ -299,6 +304,9 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         },
         include: {
           sender: { select: { userId: true } },
+          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+          // colonnes sur une lecture déjà là : aucun aller-retour de plus.
+          conversation: { select: { isActive: true, closedAt: true } },
           attachments: { select: attachmentMediaSelect }
         }
       });
@@ -323,12 +331,21 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         message: {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
+          conversation: message.conversation,
           createdAt: message.createdAt,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err as Error),
       });
 
       if (isEditRefused(admission)) {
+        // Le 404 indistinct de cette route protège d'un oracle d'existence — il
+        // ne s'applique donc PAS ici. `admitMessageEdit` ne tranche la clôture
+        // que sur une décision qui allait être ADMISE : qui reçoit ce 410 avait
+        // déjà prouvé son droit d'éditer, et n'apprend rien qu'il ne pouvait
+        // apprendre autrement. Lui rendre un 404 le ferait réessayer sans fin.
+        if (admission.reason === 'conversation-closed') {
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
           : sendNotFound(reply, 'Message not found or you are not authorized to modify it');

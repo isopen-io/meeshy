@@ -288,19 +288,8 @@ extension ConversationListView {
             // SettingsView) — indépendant de `reading_modes` : allumer ce
             // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
             // conversations (mode AUTO), ce que ce chantier interdit.
-            if BetaFeaturesPreference.isEnabled {
-                Divider()
-                Button {
-                    HapticFeedback.light()
-                    router.pendingForcedReadingMode = .focal
-                    onSelect(conversation)
-                } label: {
-                    Label(
-                        String(localized: "context.focal_beta_preview", defaultValue: "Focal (bêta)", bundle: .main),
-                        systemImage: "viewfinder"
-                    )
-                }
-            }
+            // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
+            // (I-075) est retiré avec le mode — Script est le mode nominal.
 
             // Bloquer / Débloquer (DM uniquement)
             if conversation.type == .direct, let userId = conversation.participantUserId {
@@ -650,10 +639,9 @@ extension ConversationListView {
                             deleteTargetConversation = conversation
                         },
                         onOpenFocalBetaPreview: {
-                            // I-075 — override éphémère, jamais persistant :
-                            // même chemin que l'item du menu natif.
-                            router.pendingForcedReadingMode = .focal
-                            onSelect(conversation)
+                            // RETRAIT FOCAL iOS (2026-08-18) : l'item n'est
+                            // plus monté par ConversationContextMenuView —
+                            // closure conservée pour l'API, inerte.
                         },
                         onDismiss: { dismissContextMenu() }
                     )

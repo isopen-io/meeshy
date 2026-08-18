@@ -272,4 +272,44 @@ class SignupAvailabilityTest {
     fun phoneStep_blockedWhenAvailabilityNotConfirmed() {
         assertThat(SignupAvailabilityPolicy.phoneStepCanProceed("12345678", phoneAvailable = null, skipPhone = false)).isFalse()
     }
+
+    // --- charset ASCII + filtrage à la frappe ---
+
+    @Test
+    fun `isUsernameValidLocally rejects internal space`() {
+        assertThat(SignupFieldValidation.isUsernameValidLocally("la lionne noire")).isFalse()
+    }
+
+    @Test
+    fun `isUsernameValidLocally rejects accented letter`() {
+        // isLetterOrDigit() est UNICODE : il acceptait `josé`, que le serveur
+        // (ASCII) refuse — l'inscription échouait à la soumission.
+        assertThat(SignupFieldValidation.isUsernameValidLocally("josé")).isFalse()
+    }
+
+    @Test
+    fun `isUsernameValidLocally accepts dashes and underscores`() {
+        assertThat(SignupFieldValidation.isUsernameValidLocally("a_b-1")).isTrue()
+    }
+
+    @Test
+    fun `sanitizedUsername strips spaces`() {
+        assertThat(SignupFieldValidation.sanitizedUsername("la lionne noire")).isEqualTo("lalionnenoire")
+    }
+
+    @Test
+    fun `sanitizedUsername strips accents and punctuation`() {
+        assertThat(SignupFieldValidation.sanitizedUsername("josé.m@il")).isEqualTo("josmil")
+    }
+
+    @Test
+    fun `sanitizedUsername keeps a conforming handle untouched`() {
+        assertThat(SignupFieldValidation.sanitizedUsername("a_b-1")).isEqualTo("a_b-1")
+    }
+
+    @Test
+    fun `sanitizedUsername caps at the max length`() {
+        assertThat(SignupFieldValidation.sanitizedUsername("a".repeat(40)).length)
+            .isEqualTo(SignupFieldValidation.USERNAME_MAX_LENGTH)
+    }
 }

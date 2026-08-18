@@ -20,7 +20,11 @@ import {
   reconcileEditedLinks,
   mergeTrackingLinksIntoMetadata,
 } from '../../services/messaging/messageLinks';
-import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import {
+  admitMessageEdit,
+  isEditRefused,
+  CONVERSATION_CLOSED_EDIT_MESSAGE,
+} from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
@@ -39,7 +43,7 @@ import type {
   EditMessageBody
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 
@@ -169,6 +173,9 @@ export function registerMessagesAdvancedRoutes(
           sender: {
             select: { id: true, userId: true }
           },
+          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+          // colonnes sur une lecture déjà là : aucun aller-retour de plus.
+          conversation: { select: { isActive: true, closedAt: true } },
           attachments: { select: { id: true } }
         }
       });
@@ -189,12 +196,19 @@ export function registerMessagesAdvancedRoutes(
         message: {
           authorUserId: existingMessage.sender?.userId,
           conversationId,
+          conversation: existingMessage.conversation,
           createdAt: existingMessage.createdAt,
         },
         onError: (err) => logger.error('Edit - admission lookup failed', err),
       });
 
       if (isEditRefused(admission)) {
+        // 410 pour le fil terminé — le même statut et la même phrase que les
+        // portes d'entrée du cycle 70. Un 403 dirait « pas vous », quand le
+        // sujet est « plus personne, plus jamais ».
+        if (admission.reason === 'conversation-closed') {
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
         return admission.reason === 'edit-window-expired'
           ? sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)')
           : sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier ce message');
@@ -767,12 +781,18 @@ export function registerMessagesAdvancedRoutes(
         message: {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
+          // Cette entrée chargeait DÉJÀ la conversation entière par son
+          // `include` : l'état terminal était en main, sans personne pour le lire.
+          conversation: message.conversation,
           createdAt: message.createdAt,
         },
         onError: (err) => logger.error('Patch edit - admission lookup failed', err),
       });
 
       if (isEditRefused(admission)) {
+        if (admission.reason === 'conversation-closed') {
+          return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
         if (admission.reason === 'edit-window-expired') {
           return sendForbidden(reply, 'You can no longer edit this message (24-hour limit exceeded)');
         }

@@ -135,12 +135,18 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         return try listResult.get()
     }
 
+    /// Observé AU MOMENT de l'appel — permet à un test de prouver un ORDRE
+    /// (ex. pagination cache-first : la fenêtre GRDB doit déjà être servie
+    /// quand le REST part).
+    var onListBefore: (() -> Void)?
+
     nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listBeforeCallCount += 1
             lastListBeforeConversationId = conversationId
             lastListBeforeCursor = before
             lastListBeforeLanguages = languages
+            onListBefore?()
         }
         return try listBeforeResult.get()
     }

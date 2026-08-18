@@ -1,10 +1,13 @@
 import { z } from 'zod';
+import { usernamePatternSource } from '../api-schemas.js';
+
+const USERNAME_PATTERN = new RegExp(usernamePatternSource);
 
 /**
  * Schéma pour créer un utilisateur
  */
 export const createUserValidationSchema = z.object({
-  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/),
+  username: z.string().min(3).max(30).regex(USERNAME_PATTERN),
   firstName: z.string().min(1).max(50),
   lastName: z.string().min(1).max(50),
   email: z.email(),
@@ -65,7 +68,7 @@ export function formatZodErrors(errors: z.ZodError) {
  */
 export const updateUserProfileValidationSchema = z.object({
   // Informations personnelles
-  username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).optional(),
+  username: z.string().min(3).max(30).regex(USERNAME_PATTERN).optional(),
   firstName: z.string().min(1).max(50).optional(),
   lastName: z.string().min(1).max(50).optional(),
   displayName: z.string().max(50).nullable().optional(),

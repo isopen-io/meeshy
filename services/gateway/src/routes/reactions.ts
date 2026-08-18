@@ -16,8 +16,10 @@ import {
   sendForbidden,
   sendNotFound,
   sendInternalError,
+  sendError,
 } from '../utils/response.js';
-import { ReactionService } from '../services/ReactionService.js';
+import { ReactionService, CLOSED_CONVERSATION_REACTION_ERROR } from '../services/ReactionService.js';
+import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../services/messaging/messageEditAdmission.js';
 import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifications/reactionNotify.js';
 import type {
   ReactionAddData,
@@ -114,6 +116,10 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Not found - Message not found',
+          ...errorResponseSchema
+        },
+        410: {
+          description: 'Gone - The conversation is closed and accepts no new content',
           ...errorResponseSchema
         },
         500: {
@@ -244,6 +250,14 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       if (error.message === 'Cannot react to a system message') {
         return sendBadRequest(reply, 'Cannot react to a system message');
+      }
+
+      // 410, comme les portes d'entrée du cycle 70 : le conteneur est terminé,
+      // et rien de ce que l'appelant changera n'y remédiera. Sans cette branche
+      // le refus retombait sur le `sendInternalError` du bas — un 500 pour une
+      // règle métier, donc un client qui réessaie sans fin.
+      if (error.message === CLOSED_CONVERSATION_REACTION_ERROR) {
+        return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
       }
 
       if (error.message.includes('not a member') || error.message.includes('not a participant')) {

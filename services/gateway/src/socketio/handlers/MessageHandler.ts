@@ -69,7 +69,11 @@ import {
   mergeTrackingLinksIntoMetadata,
   type LinkReconciler,
 } from '../../services/messaging/messageLinks';
-import { admitMessageEdit, isEditRefused } from '../../services/messaging/messageEditAdmission';
+import {
+  admitMessageEdit,
+  isEditRefused,
+  CONVERSATION_CLOSED_EDIT_MESSAGE,
+} from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
@@ -685,6 +689,9 @@ export class MessageHandler {
         select: {
           id: true,
           conversationId: true,
+          // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
+          // colonnes ajoutées à un `select` déjà là : aucun aller-retour de plus.
+          conversation: { select: { isActive: true, closedAt: true } },
           senderId: true,
           content: true,
           originalLanguage: true,
@@ -720,17 +727,24 @@ export class MessageHandler {
         message: {
           authorUserId: message.sender?.userId,
           conversationId: message.conversationId,
+          conversation: message.conversation,
           createdAt: message.createdAt,
         },
         onError: (err) => console.error('[MESSAGE_HANDLER] Edit admission lookup failed:', err),
       });
 
       if (isEditRefused(admission)) {
+        // Le fil terminé a sa branche PROPRE. Sans elle, il tomberait dans le
+        // `else` et s'annoncerait « vous n'êtes pas autorisé » — un refus
+        // d'autorisation pour un état qui n'en est pas un, et que l'éditeur
+        // corrigerait indéfiniment sans comprendre.
         this._sendGenericError(
           callback,
-          admission.reason === 'edit-window-expired'
-            ? 'You can no longer edit this message (24-hour limit exceeded)'
-            : 'Message not found or you are not authorized to edit it',
+          admission.reason === 'conversation-closed'
+            ? CONVERSATION_CLOSED_EDIT_MESSAGE
+            : admission.reason === 'edit-window-expired'
+              ? 'You can no longer edit this message (24-hour limit exceeded)'
+              : 'Message not found or you are not authorized to edit it',
           socket
         );
         return;

@@ -5,7 +5,7 @@
 
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
-import { personNamePatternSource } from '../types/api-schemas.js';
+import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
@@ -18,6 +18,14 @@ import { normalizeLanguageCode } from './language-normalize.js';
  * le clavier iOS.
  */
 const PERSON_NAME_PATTERN = new RegExp(personNamePatternSource, 'u');
+
+/**
+ * Nom d'utilisateur. Compilé depuis la source unique `usernamePatternSource`
+ * (types/api-schemas.ts) pour que la couche Ajv (body JSON schema Fastify) et la
+ * couche Zod rendent le même verdict — notamment le refus de l'espace et des
+ * lettres accentuées, que le charset ASCII exclut.
+ */
+const USERNAME_PATTERN = new RegExp(usernamePatternSource);
 
 const DEFAULT_PAGE_LIMIT = 20;
 const MAX_PAGE_LIMIT = 100;
@@ -167,7 +175,7 @@ export const CommonSchemas = {
   
   // Username
   username: z.string().min(3, 'Username trop court').max(30, 'Username trop long')
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Username invalide'),
+    .regex(USERNAME_PATTERN, 'Username invalide'),
   
   // Conversation identifier (custom identifier for conversations)
   conversationIdentifier: z.string()
@@ -395,7 +403,7 @@ export const updateUsernameSchema = z.object({
   newUsername: z.string()
     .min(2, 'Username trop court (min 2 caractères)')
     .max(16, 'Username trop long (max 16 caractères)')
-    .regex(/^[a-zA-Z0-9_-]+$/, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
+    .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
   currentPassword: z.string().min(1, 'Mot de passe requis pour confirmer le changement')
 }).strict();
 
@@ -419,7 +427,7 @@ export const AuthSchemas = {
     username: z.string()
       .min(2, 'Username trop court (min 2)')
       .max(16, 'Username trop long (max 16)')
-      .regex(/^[a-zA-Z0-9_-]+$/, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
+      .regex(USERNAME_PATTERN, 'Username invalide (lettres, chiffres, - et _ uniquement)'),
     password: z.string()
       .min(8, 'Mot de passe trop court (min 8 caractères)'),
     firstName: z.string().min(1).max(50)

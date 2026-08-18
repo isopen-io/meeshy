@@ -35,13 +35,8 @@ struct FocalMetaRow: View, Equatable {
     let timeString: String
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
-    /// Retrait — suit la pastille, qui grandit en focus (§4.6). Défaut
-    /// `FocalMetrics.Text.indent` : les sites d'appel qui ne le passent pas
-    /// gardent le rendu d'avant la magnification.
+    /// Retrait — aligné sur la pastille. Défaut `FocalMetrics.Text.indent`.
     var indent: CGFloat = FocalMetrics.Text.indent
-    /// Rangée élue : l'horodatage est PERMANENT et porte « jour · heure ».
-    var isFocused: Bool = false
-    var sentAt: Date? = nil
     var editedAt: Date? = nil
     var isEditSaving: Bool = false
     var hasEditHistory: Bool = false
@@ -72,33 +67,12 @@ struct FocalMetaRow: View, Equatable {
         .accessibilityHidden(true)
     }
 
-    /// L'horodatage de la rangée de suite.
-    ///
-    /// - Élue : PERMANENT, « jour · heure » — « date et heure de l'envoi
-    ///   visible même sans scroll ».
-    /// - Sinon : `FocalRevealedTime`, masqué au repos et révélé pendant le
-    ///   défilement. C'est ce qui remplace la pilule flottante « jour ·
-    ///   heure » : l'information est rendue AU MESSAGE qu'elle date, au lieu
-    ///   de flotter détachée en haut de l'écran.
-    @ViewBuilder
+    /// L'horodatage de la rangée de suite : `FocalRevealedTime`, masqué au
+    /// repos et révélé pendant le défilement. C'est ce qui remplace la pilule
+    /// flottante « jour · heure » : l'information est rendue AU MESSAGE
+    /// qu'elle date, au lieu de flotter détachée en haut de l'écran.
     private var stamp: some View {
-        if isFocused {
-            Text(focusedStamp)
-                .font(MeeshyFont.relative(10.5))
-                .foregroundColor(metaTint)
-                .lineLimit(1)
-        } else {
-            FocalRevealedTime(timeString: timeString, tint: metaTint)
-        }
-    }
-
-    /// Même composition que `FocalIdentityHeader.stampString` — jour via
-    /// `MessageDayLabel`, heure déjà formatée en amont. Aucun `DateFormatter`
-    /// neuf (contrat §WS-2).
-    private var focusedStamp: String {
-        guard let sentAt else { return timeString }
-        let day = MessageDayLabel.label(for: sentAt, now: Date(), calendar: .current, locale: .current)
-        return "\(day) · \(timeString)"
+        FocalRevealedTime(timeString: timeString, tint: metaTint)
     }
 
     @ViewBuilder

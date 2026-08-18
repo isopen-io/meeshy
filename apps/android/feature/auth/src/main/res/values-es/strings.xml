@@ -19,6 +19,7 @@
     <string name="registration_pseudo_header">Un nombre de usuario solo tuyo</string>
     <string name="registration_pseudo_subtitle">Elige el nombre que el mundo recordará.</string>
     <string name="registration_username_label">Nombre de usuario</string>
+    <string name="registration_username_hint">De 2 a 16 caracteres: letras, números, - y _</string>
     <string name="registration_username_available">Nombre de usuario disponible</string>
     <string name="registration_username_taken">Este nombre de usuario ya está en uso</string>
     <string name="registration_username_suggestions_title">Sugerencias disponibles</string>

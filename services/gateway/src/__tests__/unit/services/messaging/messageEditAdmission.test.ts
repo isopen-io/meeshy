@@ -60,6 +60,11 @@ const admit = (params: {
     message: {
       authorUserId: params.authorUserId === undefined ? AUTHOR : params.authorUserId,
       conversationId: CONV,
+      // Ces témoins portent sur QUI édite et JUSQU'À QUAND, pas sur l'état du
+      // conteneur : `null` est le permissif explicite, et laisse chacune de
+      // leurs assertions dire exactement ce qu'elle disait. L'état terminal a
+      // ses propres témoins dans `conversationClosedWriteVerbs.test.ts`.
+      conversation: null,
       createdAt: params.createdAt === undefined ? freshCreatedAt : params.createdAt,
     },
     now: NOW,

@@ -3,9 +3,12 @@
  */
 
 import { parsePhoneNumber, isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
+import { usernamePatternSource } from '@meeshy/shared/types';
 import { enhancedLogger } from './logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'Normalize' });
+
+const USERNAME_PATTERN = new RegExp(usernamePatternSource);
 
 /**
  * Normalise un email en minuscules
@@ -164,9 +167,10 @@ export function normalizeUsername(username: string): string {
     throw new Error('Le nom d\'utilisateur ne peut pas dépasser 16 caractères');
   }
 
-  // Validation des caractères (uniquement lettres, chiffres, tirets et underscores)
-  const usernameRegex = /^[a-zA-Z0-9_-]+$/;
-  if (!usernameRegex.test(trimmed)) {
+  // Validation des caractères — compilée depuis `usernamePatternSource`
+  // (packages/shared/types/api-schemas.ts) pour que ce chemin serveur rende le
+  // même verdict que les couches Ajv et Zod.
+  if (!USERNAME_PATTERN.test(trimmed)) {
     throw new Error('Le nom d\'utilisateur ne peut contenir que des lettres, chiffres, tirets et underscores');
   }
 
