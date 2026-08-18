@@ -10183,6 +10183,27 @@ avait conclu qu'il fallait l'effacer. La démonstration était juste et la
 conclusion trop courte — **montrer qu'une option est mauvaise ne prouve pas que
 la sienne est la meilleure**, seulement qu'il en reste au moins une autre.
 
+### Les deux discriminants qui trahissent un troisième état (addendum, cycle 63 ter)
+
+Le troisième état ne tient que si les LECTEURS savent le lire. Deux pièges, un
+par plateforme, et aucun ne se signale à la compilation :
+
+1. **Swift — `decodeIfPresent` seul ne peut PAS porter la distinction.** Il rend
+   `nil` pour une clé absente comme pour un `null` explicite : il aplatit
+   exactement les deux formes qu'on vient de séparer. Le discriminant est
+   `container.contains(.bridge)`.
+2. **JS — le discriminant est la PRÉSENCE de la clé (`'bridge' in data`), pas sa
+   valeur.** `undefined` et l'absence sont indiscernables à la lecture d'une
+   propriété. Corollaire de test, à connaître : un payload fabriqué en mémoire
+   avec `bridge: undefined` PORTE la clé, donc il efface — sur le fil la
+   question ne se pose pas, JSON ne transportant pas `undefined`.
+
+Et un corollaire de témoins, jumeau de la leçon 231 : un témoin qui fige le
+payload ENTIER alors qu'il parle de la room, du lecteur ou du compteur **gèle une
+forme dont il ne parle pas**. C'est le mécanisme exact qui a laissé la forme
+courte devenir destructrice sans qu'aucune couleur ne change. `objectContaining`
+pour ce dont le témoin parle ; la forme du contrat a ses propres témoins.
+
 ## Leçon 233 — un durcissement posé sur UNE des deux portes jumelles n'est pas une correction, et seule une garde de PARITÉ le dit (2026-08-18, routine messagerie, cycle 65)
 
 `AuthHandler` a deux portes qui font le même geste : rejoindre les rooms de
