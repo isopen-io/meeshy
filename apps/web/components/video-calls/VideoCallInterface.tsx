@@ -98,11 +98,20 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const [fullscreenParticipantId, setFullscreenParticipantId] = useState<string | null>(null);
   const [disconnectedParticipants, setDisconnectedParticipants] = useState<Set<string>>(new Set());
 
-  // Stable error handler
+  // Stable error handler. useWebRTCP2P's aggregate-gated onError forwards a
+  // small, known set of internal error codes (see use-webrtc-p2p.ts) — those
+  // get a translated, user-facing message instead of the raw code leaking
+  // into the toast (e.g. "Connection error: PEER_CONNECTION_FAILED"). Any
+  // other message falls back to the generic prefixed form, unchanged, so a
+  // genuinely unexpected error stays debuggable.
   const handleWebRTCError = useCallback((error: Error) => {
     logger.error('[VideoCallInterface]', 'WebRTC error: ' + error.message);
-    toast.error(t('toasts.connectionError') + ': ' + error.message);
-  }, []);
+    const message =
+      error.message === 'PEER_CONNECTION_FAILED' ? t('toasts.peerConnectionFailed')
+      : error.message === 'ICE_CONNECTION_FAILED' ? t('toasts.iceConnectionFailed')
+      : t('toasts.connectionError') + ': ' + error.message;
+    toast.error(message);
+  }, [t]);
 
   // Initialize WebRTC
   const { initializeLocalStream, createOffer, connectionState, isReconnecting, enableVideo, disableVideo, switchCamera, applyQualityTierToPeer, removeParticipant } = useWebRTCP2P({

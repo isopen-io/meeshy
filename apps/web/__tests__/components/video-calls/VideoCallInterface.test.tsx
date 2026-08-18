@@ -75,7 +75,15 @@ jest.mock('@/components/video-calls/VideoStream', () => ({
 jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => ({ user: { id: 'u1', username: 'Me' } }),
 }));
-jest.mock('@/hooks/use-webrtc-p2p', () => ({ useWebRTCP2P: () => webrtc }));
+// Captured so tests can drive the component's own onError callback directly
+// (Vague 148) — the mock previously ignored the config object entirely.
+let capturedWebRTCConfig: { onError?: (error: Error) => void } = {};
+jest.mock('@/hooks/use-webrtc-p2p', () => ({
+  useWebRTCP2P: (config: { onError?: (error: Error) => void }) => {
+    capturedWebRTCConfig = config;
+    return webrtc;
+  },
+}));
 const useAudioEffectsMock = jest.fn(() => ({
   outputStream: null as unknown,
   effectsState: {} as Record<string, { enabled: boolean }>,
@@ -1481,6 +1489,34 @@ describe('VideoCallInterface (container)', () => {
       await waitFor(() => {
         expect(toast.error).toHaveBeenCalledWith('toasts.removeParticipantFailed');
       });
+    });
+  });
+
+  describe('handleWebRTCError — known internal error codes get a translated toast, not the raw code (Vague 148)', () => {
+    it('translates PEER_CONNECTION_FAILED instead of leaking the raw code', () => {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => capturedWebRTCConfig.onError?.(new Error('PEER_CONNECTION_FAILED')));
+
+      expect(toast.error).toHaveBeenCalledWith('toasts.peerConnectionFailed');
+      expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('PEER_CONNECTION_FAILED'));
+    });
+
+    it('translates ICE_CONNECTION_FAILED instead of leaking the raw code', () => {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => capturedWebRTCConfig.onError?.(new Error('ICE_CONNECTION_FAILED')));
+
+      expect(toast.error).toHaveBeenCalledWith('toasts.iceConnectionFailed');
+      expect(toast.error).not.toHaveBeenCalledWith(expect.stringContaining('ICE_CONNECTION_FAILED'));
+    });
+
+    it('falls back to the generic connectionError prefix + raw message for an unrecognized error (debuggability non-regression)', () => {
+      render(<VideoCallInterface callId="call1" />);
+
+      act(() => capturedWebRTCConfig.onError?.(new Error('SOME_UNKNOWN_CODE')));
+
+      expect(toast.error).toHaveBeenCalledWith('toasts.connectionError: SOME_UNKNOWN_CODE');
     });
   });
 });

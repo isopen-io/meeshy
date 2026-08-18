@@ -10018,3 +10018,61 @@ préexistant du fichier n'avait jamais été auditée. Vague 145 (kick anonyme, 
   d'infrastructure groupe (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct, décision d'équipe requise).
+
+## Vague 148 — deux codes d'erreur internes fuitaient bruts dans un toast utilisateur (web) (2026-08-18)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement un item laissé en « Non fait volontairement » par la Vague 147 — les deux signaux
+call-wide jumeaux (`PEER_CONNECTION_FAILED`, `ICE_CONNECTION_FAILED`) affichaient leur code interne
+brut, non traduit, dans un toast.
+
+- **Root cause** : `use-webrtc-p2p.ts` forward ces deux `Error` via la prop `onError` du hook
+  (distincte de l'`onError` interne de `WebRTCService` corrigé Vague 147) — câblée dans
+  `VideoCallInterface.tsx` sur `handleWebRTCError` :
+  `toast.error(t('toasts.connectionError') + ': ' + error.message)`. Le préfixe est traduit, mais
+  `error.message` — la constante interne `'PEER_CONNECTION_FAILED'` ou `'ICE_CONNECTION_FAILED'` —
+  ne l'est jamais : l'utilisateur voit littéralement « Connection error: PEER_CONNECTION_FAILED »,
+  dans TOUTES les locales (en/fr/es/pt), y compris celles où le préfixe est traduit.
+- **Précédent existant dans le même dépôt** : `use-video-call.ts` `handleMediaError()` (lignes
+  ~235-250) fait déjà exactement ce pattern — un switch sur un petit ensemble connu d'identifiants
+  internes vers des clés traduites, avec repli générique traduit (jamais brut) pour l'inconnu.
+  `locales/*/calls.json` porte déjà un namespace `toasts` avec des clés dédiées par cas
+  (`connectionError`, `callFailed`, `connectTimeout`, …) — l'endroit naturel pour deux clés de plus.
+- **Fix** : `handleWebRTCError` (`VideoCallInterface.tsx`) — switch minimal sur les deux codes
+  connus vers `t('toasts.peerConnectionFailed')` / `t('toasts.iceConnectionFailed')`, repli
+  inchangé (`connectionError: <message>`) pour tout code non reconnu — préserve le débogage d'une
+  erreur vraiment inattendue. Deux clés neuves ajoutées aux 4 locales (`en/fr/es/pt`), reprenant le
+  texte déjà (mais jusqu'ici non traduit) codé en dur dans `use-webrtc-p2p.ts` pour ces deux mêmes
+  événements. `t` ajouté au tableau de dépendances de `useCallback` (omission préexistante,
+  corrigée en passant car le corps référence maintenant `t` de façon plus significative).
+- **Tests** (TDD, RED confirmé avant le fix — les deux nouveaux cas recevaient
+  `'toasts.connectionError: <code brut>'` au lieu de la clé dédiée) : mock `useWebRTCP2P` modifié
+  pour capturer la config passée par le composant (`capturedWebRTCConfig.onError`), 3 cas neufs
+  dans `VideoCallInterface.test.tsx`, describe « handleWebRTCError — known internal error codes
+  get a translated toast, not the raw code (Vague 148) » — `PEER_CONNECTION_FAILED` et
+  `ICE_CONNECTION_FAILED` reçoivent leur clé dédiée (jamais le code brut dans le toast), un code
+  inconnu (`SOME_UNKNOWN_CODE`) garde le repli générique inchangé (non-régression débogage). 58/58
+  verts sur le fichier ciblé (+3 net, 0 régression). Sweep web
+  `--testPathPatterns="[Cc]all|webrtc|i18n"` : **67 suites / 1107 tests** verts, 0 régression
+  (`calls-i18n-regression.test.tsx`, qui vérifie les clés RÉELLES par locale sur `CallControls`,
+  toujours vert — namespace `toasts` non touché par ce test-là). `npx tsc --noEmit` (apps/web) :
+  **0 erreur ajoutée** — 1261 erreurs préexistantes, compte identique avant/après. JSON des 4
+  fichiers de locale validé (`python3 -m json.tool`). `eslint` non exécuté cette vague : même échec
+  environnemental PARTOUT dans le dépôt que documenté en Vague 146/147.
+- **Non fait volontairement** : le reste de `use-webrtc-p2p.ts` porte encore plusieurs
+  `toast.error(error.message)` sur du texte anglais codé en dur, jamais traduit (dette i18n plus
+  large, repérée par l'audit de cette vague, hors périmètre d'un fix ciblé à une seule
+  préoccupation). Kick modérateur sans vérification du RÔLE de la cible — enquêté à nouveau cette
+  vague : le même gap existe aussi sur `DELETE /conversations/:id/participants/:userId`
+  (`participants.ts`), et bien qu'un précédent de hiérarchie de rôles existe
+  (`PermissionsService.canManageUser`), c'est sur l'axe RÔLE PLATEFORME (`User.role`), un domaine
+  distinct du rôle CONVERSATION (`Participant.role`) que les deux routes de kick utilisent —
+  confirmé hors périmètre d'un fix ciblé (nécessiterait une nouvelle hiérarchie de rôles
+  conversation, touchant deux fichiers, plus proche d'une décision produit). Reconduits
+  (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ; ADR `actor
+  CallEventQueue` non implémenté ; jumeau iOS potentiel `canCallBack`/`BubbleCallNoticeView`
+  (Vague 146, toolchain iOS hors d'atteinte) ; `mergeEntries`/`upsertRemoteSegment` sans filtre
+  `targetLanguage` explicite côté client (racine déjà éliminée côté serveur, Vague 135) ; gaps
+  d'infrastructure groupe (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only
+  par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
+  (Vague 143, non corrigée — chantier distinct, décision d'équipe requise).
