@@ -116,14 +116,35 @@ function bridgeSuggestedRenderMode(suggestedMode: ConversationBridge['suggestedM
  * conversation) — jamais un vide, jamais une valeur inventée : c'est
  * exactement ce que `resolveOrchestratorDecision` aurait rendu ici de toute
  * façon, avant ce branchement.
+ *
+ * Q142-c (2026-08-18, TRANCHÉE) — LES DEUX PRIMENT SOUS `isReadingModesFlagActive`.
+ * Ni `suggestedMode` ni `decision.mode` ne connaissent le défaut provisoire
+ * « Bulles » du fil WEB (`PROVISIONAL_DEFAULT_RENDER`,
+ * `hooks/lentille/use-thread-reading-mode.ts`) : c'est une décision
+ * exclusivement web, jamais amendée dans la loi partagée que gateway/iOS/le
+ * recalcul local appellent tous les trois. Sans choix explicite du lecteur
+ * (`preference === 'auto'`) ET le drapeau du fil (`useReadingModesFlag`) allumé, OUVRIR cette
+ * conversation dans le fil web rend les bulles — quoi que `suggestedMode` ou
+ * `decision.mode` aient prédit. `isReadingModesFlagActive` (résolu par
+ * l'appelant, `LentillePeek`, jamais recalculé ici) fait donc primer «
+ * Bulles » sur les deux avant même de les regarder : DÉFAUT à `false`, donc
+ * AUCUN appelant existant n'est affecté tant qu'il ne fournit pas ce
+ * cinquième argument (non-régression R6-4/R6-5).
+ *
+ * @see hooks/lentille/use-thread-reading-mode.ts (`useThreadActiveReadingMode`)
+ *      — même correction, pour `LensSwitcher`.
  */
 export function notchText(
   decision: OrchestratorDecision,
   preference: ReadingModePreference,
   t: LentilleRowTranslate,
-  suggestedMode?: ConversationBridge['suggestedMode'] | null
+  suggestedMode?: ConversationBridge['suggestedMode'] | null,
+  isReadingModesFlagActive = false
 ): string {
   if (preference !== 'auto') return preferenceLabel(preference, t);
+  if (isReadingModesFlagActive) {
+    return t('lentille.modes.autoBadge', { decision: decisionModeLabel('bubbles', t) });
+  }
   const mode = suggestedMode != null ? bridgeSuggestedRenderMode(suggestedMode) : decision.mode;
   return t('lentille.modes.autoBadge', { decision: decisionModeLabel(mode, t) });
 }
