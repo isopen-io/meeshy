@@ -693,6 +693,12 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
     public let rendersFlatTranscription: Bool
     /// `nil` = transcription entière (tenue élue et carte).
     public let flatTranscriptionLineLimit: Int?
+    /// La transcription à plat suit la LECTURE (segments karaoké
+    /// interactifs, surlignage synchronisé) plutôt qu'un texte statique.
+    /// Tenue complète seulement — la tenue minimale garde sa citation
+    /// tronquée (un karaoké coupé à 2 lignes n'aurait rien à surligner
+    /// passé la coupe).
+    public let flatTranscriptionFollowsPlayback: Bool
 
     public init(
         showsCardBackground: Bool,
@@ -701,7 +707,8 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
         showsRetranscribe: Bool,
         showsTranscribeCTA: Bool,
         rendersFlatTranscription: Bool,
-        flatTranscriptionLineLimit: Int?
+        flatTranscriptionLineLimit: Int?,
+        flatTranscriptionFollowsPlayback: Bool = false
     ) {
         self.showsCardBackground = showsCardBackground
         self.showsRightChips = showsRightChips
@@ -710,6 +717,7 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
         self.showsTranscribeCTA = showsTranscribeCTA
         self.rendersFlatTranscription = rendersFlatTranscription
         self.flatTranscriptionLineLimit = flatTranscriptionLineLimit
+        self.flatTranscriptionFollowsPlayback = flatTranscriptionFollowsPlayback
     }
 
     public static func plan(for chrome: AudioPlayerChrome) -> AudioPlayerChromePlan {
@@ -742,7 +750,8 @@ nonisolated public struct AudioPlayerChromePlan: Equatable, Sendable {
                 showsRetranscribe: true,
                 showsTranscribeCTA: true,
                 rendersFlatTranscription: true,
-                flatTranscriptionLineLimit: nil
+                flatTranscriptionLineLimit: nil,
+                flatTranscriptionFollowsPlayback: true
             )
         }
     }
@@ -1142,7 +1151,14 @@ public struct AudioPlayerView: View {
         // availability for the new URL and triggers auto-DL (if policy
         // permits) or shows the download button. The user re-taps play,
         // which goes through handlePlayTap() — gated by availability.
-        player.stop()
+        //
+        // OWNED player only. With an EXTERNAL player (conversation), the
+        // engine belongs to the parent coordinator, which follows the
+        // language switch itself (playVariant keeps playing on the new
+        // track) — stopping it here would kill the playback the parent
+        // just re-launched in the new language (user 2026-08-18: switching
+        // the flag must SWITCH the audio, not silence it).
+        if !usesExternalPlayer { player.stop() }
 
         // Explicit user intent (pill tap / externalLanguage binding) always
         // marks the language explicit — idempotent if Prisme had already
@@ -1285,10 +1301,14 @@ public struct AudioPlayerView: View {
     }
 
     /// Transcription À PLAT des tenues `.flatMinimal` / `.flatFocused`
-    /// (maquette Focal) : texte statique en italique entre guillemets
-    /// français, AUCUN séparateur, aucun bloc karaoké. La tenue minimale
-    /// tronque (`flatTranscriptionLineLimit`) et n'offre AUCUNE affordance ;
-    /// la tenue élue déroule tout et garde re-transcrire + Transcrire.
+    /// (maquette Focal). Tenue minimale : texte statique en italique entre
+    /// guillemets français, tronqué (`flatTranscriptionLineLimit`), aucune
+    /// affordance. Tenue complète (`flatTranscriptionFollowsPlayback`) : le
+    /// MÊME bloc karaoké que la carte (`inlineFlowTranscription`) — segments
+    /// interactifs (tap = seek), surlignage synchronisé sur la lecture, et
+    /// les segments suivent déjà la langue sélectionnée
+    /// (`resolveDisplaySegments`) : basculer le drapeau bascule le texte ET
+    /// la piste surlignée d'un même mouvement.
     @ViewBuilder
     private var flatTranscriptionBlock: some View {
         if isTranscribing && displaySegments.isEmpty {
@@ -1297,13 +1317,17 @@ public struct AudioPlayerView: View {
                 .transition(.opacity)
         } else if !displaySegments.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
-                Text(Self.flatTranscriptionQuote(fullTranscriptionText))
-                    .font(.system(size: 12.5))
-                    .italic()
-                    .foregroundColor(isDark ? .white.opacity(0.55) : .black.opacity(0.5))
-                    .lineLimit(chromePlan.flatTranscriptionLineLimit)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if chromePlan.flatTranscriptionFollowsPlayback {
+                    inlineFlowTranscription(segments: displaySegments)
+                } else {
+                    Text(Self.flatTranscriptionQuote(fullTranscriptionText))
+                        .font(.system(size: 12.5))
+                        .italic()
+                        .foregroundColor(isDark ? .white.opacity(0.55) : .black.opacity(0.5))
+                        .lineLimit(chromePlan.flatTranscriptionLineLimit)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 if chromePlan.showsRetranscribe {
                     retranscribeButton
                 }

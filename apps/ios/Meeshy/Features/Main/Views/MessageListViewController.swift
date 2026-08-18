@@ -1018,6 +1018,16 @@ final class MessageListViewController: UIViewController {
                 user?.regionalLanguage,
                 user?.customDestinationLanguage
             )
+            // Langue de piste AUDIO préférée du Prisme — même loi que
+            // `ConversationViewModel.playAudio` (`AudioTrackLanguageResolver`).
+            // Alimente le repli du builder pour que le drapeau-toggle d'un
+            // vocal SANS traduction texte montre la bonne face et agisse.
+            let preferredAudioLang = AudioTrackLanguageResolver.resolve(
+                manualOverride: nil,
+                originalLanguage: message.originalLanguage,
+                preferredLanguages: ConversationLanguagePreferences(user: user).resolved,
+                translatedAudios: translatedAudios
+            )
 
             // Capture self weakly inside the @Sendable closure passed as
             // ThemedMessageBubble.onReplyTap. The bubble fires it on tap of
@@ -1143,6 +1153,13 @@ final class MessageListViewController: UIViewController {
                         onScrollToMessage: scrollHandler,
                         onCallBack: callBackHandler,
                         onLongPressCallDetail: { callDetailHandler?(messageId) },
+                        // Le drapeau-toggle pilote AUSSI la piste audio et
+                        // ses segments karaoké (user 2026-08-18) — canal
+                        // resté mort depuis sa pose (jamais alimenté), le
+                        // reste du chemin ThemedMessageBubble →
+                        // BubbleStandardLayout → AudioMediaView était déjà
+                        // câblé de bout en bout.
+                        activeAudioLanguage: languageSelection?.activeDisplayLangCode,
                         isLastInGroup: true,
                         isLastReceivedMessage: isLastReceived,
                         isLastSentMessage: isLastSent,
@@ -1196,6 +1213,7 @@ final class MessageListViewController: UIViewController {
                     userLanguages: userLanguages,
                     secondaryLangCode: languageSelection?.secondaryLangCode,
                     activeDisplayLangCode: languageSelection?.activeDisplayLangCode,
+                    preferredAudioLangCode: preferredAudioLang,
                     currentUserId: myId,
                     recipientCount: recipients
                 )

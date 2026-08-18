@@ -1343,6 +1343,14 @@ struct BubbleStandardLayout: View {
                 onShowTranslationDetail: onShowTranslationDetail,
                 onRequestTranslation: onRequestTranslation,
                 activeAudioLanguageOverride: activeAudioLanguage,
+                // La bande interne écrit le CANAL DU MESSAGE (binding routé
+                // vers le VM par ThemedMessageBubble) — la piste jouée, le
+                // texte et le drapeau de rangée suivent le même tap.
+                onSelectAudioLanguage: { code in
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        activeDisplayLangCode = code
+                    }
+                },
                 footerModel: footer?.0,
                 footerActions: footer?.1 ?? .none,
                 replyReference: replyReference,

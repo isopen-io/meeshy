@@ -179,7 +179,10 @@ const mockAttachment = {
     id: MSG_ID,
     conversationId: CONV_ID,
     conversation: {
-      participants: [{ userId: USER_ID }],
+      // `id` présent : la route écrit les statuts par PARTICIPANT
+      // (AttachmentStatusEntry.participantId), jamais par User.id — le
+      // sous-select doit donc remonter les deux.
+      participants: [{ id: PART_ID, userId: USER_ID }],
     },
   },
 };
@@ -806,6 +809,39 @@ describe('POST /attachments/:attachmentId/status', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+
+  // Le bug d'identifiant qui vidait l'onglet « Écouté » pour TOUT LE MONDE
+  // (audit 2026-08-18) : la route passait `authContext.userId` (User.id pour
+  // un inscrit) là où AttachmentStatusEntry.participantId attend un
+  // Participant.id — les lignes écrites étaient orphelines, filtrées en
+  // lecture (`if (!participant) return null`), invisibles au cross-device.
+  // Même patron que la route mark-read (« participantId, pas userId »).
+  it('writes the status under the PARTICIPANT id, never the User id', async () => {
+    mockMarkAudioAsListened.mockClear();
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', complete: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockMarkAudioAsListened).toHaveBeenCalledTimes(1);
+    expect(mockMarkAudioAsListened.mock.calls[0]![0]).toBe(PART_ID);
+  });
+
+  it('routes watched/viewed/downloaded under the PARTICIPANT id too', async () => {
+    mockMarkVideoAsWatched.mockClear();
+    mockMarkImageAsViewed.mockClear();
+    mockMarkAttachmentAsDownloaded.mockClear();
+    for (const action of ['watched', 'viewed', 'downloaded']) {
+      const res = await app.inject({
+        method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+        payload: { action },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+    expect(mockMarkVideoAsWatched.mock.calls[0]![0]).toBe(PART_ID);
+    expect(mockMarkImageAsViewed.mock.calls[0]![0]).toBe(PART_ID);
+    expect(mockMarkAttachmentAsDownloaded.mock.calls[0]![0]).toBe(PART_ID);
   });
 
   it('returns 200 for viewed action', async () => {

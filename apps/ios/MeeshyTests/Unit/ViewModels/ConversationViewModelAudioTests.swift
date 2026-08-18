@@ -36,7 +36,8 @@ final class ConversationViewModelAudioTests: XCTestCase {
     /// Primary SUT factory. Every dependency is instantiated locally — no
     /// shared mutable state between tests (per apps/ios/CLAUDE.md TDD rules).
     private func makeSUT(
-        conversationId: String? = nil
+        conversationId: String? = nil,
+        userSystemLanguage: String? = nil
     ) -> (ConversationViewModel, MockAudioPlaybackEngine, ConversationAudioCoordinator) {
         let mockAuthManager = MockAuthManager()
         let mockMessageService = MockMessageService()
@@ -45,7 +46,10 @@ final class ConversationViewModelAudioTests: XCTestCase {
         let mockReportService = MockReportService()
         let mockMessageSocket = MockMessageSocket()
 
-        let currentUser = MeeshyUser(id: testUserId, username: "bob", displayName: "Bob")
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "bob",
+            displayName: "Bob", systemLanguage: userSystemLanguage
+        )
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
         let pool = try! Self.makeInMemoryPool()
@@ -411,6 +415,285 @@ final class ConversationViewModelAudioTests: XCTestCase {
                        "VM_B must NOT receive a finished-event for an audio that doesn't belong to its conversation")
         XCTAssertTrue(vmB.listenedAttachmentIds.isEmpty,
                       "VM_B's listened set must stay empty — no foreign pollution")
+    }
+
+    // MARK: - 7bis. La piste jouée SUIT le drapeau et le Prisme (user 2026-08-18)
+
+    private func makeTranslatedTrack(
+        attachmentId: String, lang: String, url: String
+    ) -> MessageTranslatedAudio {
+        MessageTranslatedAudio(
+            id: "t-\(lang)", attachmentId: attachmentId, targetLanguage: lang,
+            url: url, transcription: "…", durationMs: 3_000,
+            format: "m4a", cloned: false, quality: 0.9, ttsModel: "tts"
+        )
+    }
+
+    /// Prisme : lecteur francophone, vocal anglais, piste TTS française
+    /// disponible ⇒ `playAudio` doit jouer la piste FRANÇAISE — pas
+    /// l'original en dur (le widget affichait déjà la piste traduite
+    /// pendant que le coordinateur rejouait l'original).
+    func test_playAudio_playsThePrismePreferredTranslatedTrack() async {
+        let (vm, engine, _) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/voix-fr.m4a",
+                       "la piste jouée doit suivre le Prisme — pas attachment.fileUrl en dur")
+    }
+
+    /// Drapeau basculé sur la V.O. AVANT la lecture ⇒ `playAudio` joue
+    /// l'original, même si le Prisme préfère la piste traduite.
+    func test_playAudio_afterFlagToggledToOriginal_playsTheOriginalTrack() async {
+        let (vm, engine, _) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        vm.setBubbleActiveDisplayLanguage("en", for: "m1")
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/orig-en.m4a")
+    }
+
+    /// Bascule du drapeau PENDANT la lecture de ce message ⇒ la piste EN
+    /// COURS suit (playVariant : la file et le contexte survivent), sans
+    /// réinitialiser la file.
+    func test_flagToggle_whilePlayingThisMessage_switchesTheActiveTrack() async {
+        let (vm, engine, coordinator) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/voix-fr.m4a")
+        let queueBefore = coordinator.queueCount
+
+        vm.setBubbleActiveDisplayLanguage("en", for: "m1")
+        await Task.yield()
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/orig-en.m4a",
+                       "la piste en cours doit suivre la bascule V.O.")
+        XCTAssertEqual(coordinator.queueCount, queueBefore,
+                       "playVariant conserve la file — jamais une nouvelle session play()")
+        XCTAssertEqual(coordinator.activeContext?.attachmentId, "a1")
+    }
+
+    /// Bascule du drapeau pendant une PAUSE de ce message ⇒ la TÊTE de file
+    /// est mise à jour et le moteur DÉCHARGÉ (la reprise rejouera la
+    /// nouvelle piste) — mais AUCUNE lecture ne repart toute seule. Sans ce
+    /// chemin, pause → toggle → play ressortait l'ancienne langue sous un
+    /// karaoké déjà basculé (revue adversariale 2026-08-18).
+    func test_flagToggle_whilePaused_updatesHeadTrack_withoutAutoplay() async {
+        let (vm, engine, coordinator) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/voix-fr.m4a")
+        let playsBefore = engine.playCallCount
+
+        engine.isPlaying = false   // pause utilisateur
+        await Task.yield()
+
+        vm.setBubbleActiveDisplayLanguage("en", for: "m1")
+        await Task.yield()
+
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "en pause, la bascule ne relance JAMAIS la lecture toute seule")
+        XCTAssertGreaterThanOrEqual(engine.stopCallCount, 1,
+                                    "le moteur est déchargé pour que la REPRISE recharge la tête")
+        XCTAssertEqual(coordinator.activeTrackUrl, "https://cdn/orig-en.m4a",
+                       "la tête de file porte la NOUVELLE piste — la reprise la jouera")
+    }
+
+    /// Bascule qui résout la piste DÉJÀ jouée ⇒ no-op strict (jamais de
+    /// replay à zéro pendant l'écoute).
+    func test_flagToggle_resolvingTheSameTrack_neverRestartsPlayback() async {
+        let (vm, engine, _) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")   // Prisme → piste fr
+        await Task.yield()
+        let playsBefore = engine.playCallCount
+
+        // Bascule EXPLICITE vers fr — la piste résolue est déjà en tête.
+        vm.setBubbleActiveDisplayLanguage("fr", for: "m1")
+        await Task.yield()
+
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "même piste résolue ⇒ aucun replay à zéro")
+        XCTAssertEqual(engine.stopCallCount, 0)
+    }
+
+    /// La FILE d'auto-avance enfile la piste EFFECTIVE de chaque vocal —
+    /// pas l'URL originale en dur. Sans ça, le 2e vocal sortait en V.O.
+    /// pendant que sa bulle affichait le karaoké traduit.
+    func test_audioQueueTail_carriesTheEffectiveTranslatedTracks() async {
+        let (vm, engine, coordinator) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/a1-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        var m2 = makeAudioMessage(
+            id: "m2",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a2", fileUrl: "https://cdn/a2-en.m4a")],
+            createdAt: date(2_000)
+        )
+        m2.originalLanguage = "en"
+        vm.messages = [m1, m2]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/a1-fr.m4a")
+        ]
+        vm.messageTranslatedAudiosByAttachment["a2"] = [
+            makeTranslatedTrack(attachmentId: "a2", lang: "fr", url: "https://cdn/a2-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/a1-fr.m4a")
+        XCTAssertEqual(coordinator.queueCount, 2)
+
+        engine.simulateFinishPlayback()   // auto-avance vers a2
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(engine.lastPlayedUrl, "https://cdn/a2-fr.m4a",
+                       "l'auto-avance joue la piste EFFECTIVE du vocal suivant — jamais son URL originale en dur")
+    }
+
+    /// Bascule du drapeau SANS lecture en cours ⇒ aucune lecture ne démarre
+    /// toute seule.
+    func test_flagToggle_whileIdle_neverStartsPlayback() async {
+        let (vm, engine, _) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.setBubbleActiveDisplayLanguage("en", for: "m1")
+        await Task.yield()
+
+        XCTAssertEqual(engine.playCallCount, 0, "basculer un drapeau à l'arrêt ne lance JAMAIS de lecture")
+    }
+
+    /// Bascule du drapeau d'un AUTRE message pendant une lecture ⇒ la piste
+    /// en cours ne bouge pas.
+    func test_flagToggle_onAnotherMessage_neverTouchesTheActiveTrack() async {
+        let (vm, engine, _) = makeSUT(userSystemLanguage: "fr")
+
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-en.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "en"
+        let m2 = makeAudioMessage(
+            id: "m2",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a2", fileUrl: "https://cdn/a2.m4a")],
+            createdAt: date(2_000)
+        )
+        vm.messages = [m1, m2]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        let playsBefore = engine.playCallCount
+
+        vm.setBubbleActiveDisplayLanguage("en", for: "m2")
+        await Task.yield()
+
+        XCTAssertEqual(engine.playCallCount, playsBefore,
+                       "le drapeau d'un autre message ne relance jamais la piste active")
     }
 
     // MARK: - 7. Hot-path debounce — id-set dedupe on $messages sink

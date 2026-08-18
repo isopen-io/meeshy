@@ -90,7 +90,10 @@ export function useAudioPlayback({
   const hasTrackedCompletionRef = useRef(false);
 
   const trackConsumption = useCallback((complete: boolean) => {
-    if (isOwnMessage) return;
+    // L'écoute de l'AUTEUR compte aussi (user 2026-08-18 : « remonter les
+    // lectures de l'audio même si c'est l'auteur qui le lit ») — parité
+    // iOS, dont le report n'a jamais eu de gate auteur. `isOwnMessage`
+    // reste une prop de style, plus un filtre de comptage.
     const audio = audioRef.current;
     const playPositionMs = audio ? Math.round(audio.currentTime * 1000) : 0;
     const durationMs = audio ? Math.round(audio.duration * 1000) : 0;
@@ -100,7 +103,7 @@ export function useAudioPlayback({
       durationMs: isFinite(durationMs) ? durationMs : 0,
       complete,
     }).catch(() => {});
-  }, [attachmentId, isOwnMessage]);
+  }, [attachmentId]);
 
   // Reset tracking refs when attachment changes
   useEffect(() => {

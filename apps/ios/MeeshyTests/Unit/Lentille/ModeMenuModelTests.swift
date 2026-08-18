@@ -1,8 +1,10 @@
 import XCTest
 @testable import Meeshy
 
-/// `LentilleModeMenuModel` — le catalogue Auto 🪄 / Focal / Script / Résumé /
-/// Rivière (contrat LWS-8/I-072).
+/// `LentilleModeMenuModel` — le catalogue Auto 🪄 / Script / Résumé /
+/// Rivière (contrat LWS-8/I-072, amendé par le RETRAIT FOCAL iOS
+/// 2026-08-18 : « Focal » sort du menu, Script est le mode nominal —
+/// `docs/focal-retrait-ios-2026-08-18.md`).
 ///
 /// **Suite COMPLÉTÉE par I-073.** I-072 verrouillait ce que la mission
 /// nommait explicitement — Rivière grisée + sa raison réelle sur des seuils
@@ -54,14 +56,17 @@ final class ModeMenuModelTests: XCTestCase {
         try XCTUnwrap(model.entries.first { $0.id == id }, "Entrée « \(id) » absente du modèle.")
     }
 
-    // MARK: - 1. Les cinq entrées, toujours, dans l'ordre
+    // MARK: - 1. Les quatre entrées, toujours, dans l'ordre
 
-    func test_model_alwaysHasExactlyTheFiveEntries_inContractOrder() {
+    /// RETRAIT FOCAL iOS (2026-08-18) : « Focal » sort du menu — quatre
+    /// entrées, plus cinq. Une entrée « Focal » qui réapparaîtrait ici
+    /// signifierait que le retrait a été partiellement défait.
+    func test_model_alwaysHasExactlyTheFourEntries_inContractOrder() {
         let model = LentilleModeMenuModel.build(capabilities: capabilities(), currentPreference: .auto)
         XCTAssertEqual(
             model.entries.map(\.id),
-            [.auto, .focal, .script, .resume, .riviere],
-            "Ordre du contrat, mot pour mot : « Auto 🪄 / Focal / Script / Résumé / Rivière »."
+            [.auto, .script, .resume, .riviere],
+            "Ordre du contrat amendé (retrait Focal) : « Auto 🪄 / Script / Résumé / Rivière »."
         )
     }
 
@@ -334,21 +339,19 @@ final class ModeMenuModelTests: XCTestCase {
     }
 
     /// Catalogue INVITÉ (Résumé masqué, `/analysis` `requiredAuth`) — Résumé
-    /// grisé, Focal/Script non.
-    func test_anonymousCatalog_disablesResume_keepsFocalAndScriptEnabled() throws {
+    /// grisé, Script non (Focal n'est plus au menu — retrait 2026-08-18).
+    func test_anonymousCatalog_disablesResume_keepsScriptEnabled() throws {
         let model = LentilleModeMenuModel.build(capabilities: capabilities(isAnonymous: true), currentPreference: .auto)
 
         XCTAssertTrue(try entry(.resume, in: model).isDisabled)
-        XCTAssertFalse(try entry(.focal, in: model).isDisabled)
         XCTAssertFalse(try entry(.script, in: model).isDisabled)
     }
 
-    /// Catalogue INSCRIT : les trois modes numériques (Focal/Script/Résumé)
+    /// Catalogue INSCRIT : les deux modes numériques restants (Script/Résumé)
     /// sont tous sélectionnables.
-    func test_registeredCatalog_enablesFocalScriptAndResume() throws {
+    func test_registeredCatalog_enablesScriptAndResume() throws {
         let model = LentilleModeMenuModel.build(capabilities: capabilities(isAnonymous: false), currentPreference: .auto)
 
-        XCTAssertFalse(try entry(.focal, in: model).isDisabled)
         XCTAssertFalse(try entry(.script, in: model).isDisabled)
         XCTAssertFalse(try entry(.resume, in: model).isDisabled)
     }

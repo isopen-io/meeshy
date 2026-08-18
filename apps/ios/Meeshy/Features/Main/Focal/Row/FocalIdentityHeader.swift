@@ -7,9 +7,12 @@ import MeeshyUI
 /// Pastille `22` (`FocalMetrics.Avatar.size`), nom `13` heavy
 /// (`FocalMetrics.Name`), heure `12`/`600` (`FocalMetrics.Time`).
 ///
-/// « "Toi" en indigo avec ses ✓✓ » (critère §7) : `isMe` ⇒ nom = clé
-/// `focal.row.you`, tint `MeeshyColors.indigo500`, `BubbleDeliveryCheck`
-/// DANS l'en-tête (pas en pied — contrat §WS-4 : « pas en pied »).
+/// « "Toi" en indigo avec ses ✓✓ » (critère §7, amendé 2026-08-18) : `isMe`
+/// ⇒ nom = clé `focal.row.you`, tint `MeeshyColors.indigo500`.
+/// `BubbleDeliveryCheck` vit dans le groupe de DROITE (après le stamp), à
+/// côté de l'heure — même position que `FocalMetaRow` pour les rangées de
+/// suite. Amendement user : la coche à côté du NOM doublonnait visuellement
+/// avec la coche à côté de l'heure des rangées de suite.
 ///
 /// Vue PURE : primitifs uniquement, aucun `@State`.
 ///
@@ -152,6 +155,12 @@ struct FocalIdentityHeader: View, Equatable {
                     AgentSparkGlyph()
                 }
 
+                Spacer(minLength: 0)
+
+                editedIndicator
+
+                stamp
+
                 if isMe, let deliveryStatus {
                     BubbleDeliveryCheck(
                         status: deliveryStatus,
@@ -160,12 +169,6 @@ struct FocalIdentityHeader: View, Equatable {
                         readTint: readTint
                     )
                 }
-
-                Spacer(minLength: 0)
-
-                editedIndicator
-
-                stamp
             }
         }
         .buttonStyle(.plain)

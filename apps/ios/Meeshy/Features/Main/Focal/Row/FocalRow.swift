@@ -324,6 +324,10 @@ struct FocalRow: View {
                 translatedAudios: input.translatedAudios,
                 mentionDisplayNames: input.mentionDisplayNames,
                 conversationName: input.conversationName,
+                // Le drapeau-toggle de la rangée pilote AUSSI la piste audio
+                // et ses segments karaoké (user 2026-08-18) — même bascule
+                // que le texte (`activeDisplayLangCode`), une seule loi.
+                activeAudioLanguage: input.activeDisplayLangCode,
                 voiceConsentMissing: input.voiceConsentMissing,
                 onPlayAudio: actions.onPlayAudio,
                 onRequestTranslation: actions.onRequestTranslation,

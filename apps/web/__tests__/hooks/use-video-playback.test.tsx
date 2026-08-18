@@ -606,10 +606,13 @@ describe('useVideoPlayback', () => {
       expect(mockApiPost).toHaveBeenCalledTimes(1);
     });
 
-    it('does NOT call trackConsumption when isOwnMessage=true', () => {
+    // user 2026-08-18 : la consommation de l'AUTEUR compte aussi — le gate
+    // isOwnMessage est retiré (parité audio/iOS, dont le report n'a jamais
+    // exclu l'auteur).
+    it('DOES call trackConsumption when isOwnMessage=true (author consumption counts)', () => {
       const { hookRef } = renderHook(makeOptions({ isOwnMessage: true }));
       act(() => { hookRef.current!.handleEnded(); });
-      expect(mockApiPost).not.toHaveBeenCalled();
+      expect(mockApiPost).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -710,10 +713,11 @@ describe('useVideoPlayback', () => {
 
   // ── trackConsumption ────────────────────────────────────────────────────────
   describe('trackConsumption', () => {
-    it('skips API call when isOwnMessage=true', () => {
+    // user 2026-08-18 : l'auteur qui regarde/écoute son propre média COMPTE.
+    it('reports even when isOwnMessage=true (author consumption counts)', () => {
       const { hookRef } = renderHook(makeOptions({ isOwnMessage: true }));
       act(() => { hookRef.current!.handleEnded(); }); // handleEnded calls trackConsumption
-      expect(mockApiPost).not.toHaveBeenCalled();
+      expect(mockApiPost).toHaveBeenCalledTimes(1);
     });
 
     it('calls apiService.post with correct endpoint and payload', () => {

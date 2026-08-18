@@ -1065,7 +1065,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
                     // un ancien membre ne lit plus, et n'écrit plus, les reçus
                     // d'une conversation qu'il a quittée.
                     where: { userId: userId, isActive: true },
-                    select: { userId: true }
+                    select: { id: true, userId: true }
                   }
                 }
               }
@@ -1074,17 +1074,24 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         }
       });
 
-      if (!attachment || !attachment.message.conversation.participants.length) {
+      const participant = attachment?.message.conversation.participants[0];
+      if (!attachment || !participant) {
         return sendNotFound(reply, 'Attachment non trouvé ou accès non autorisé');
       }
 
-      // Utiliser le service pour mettre à jour le statut
+      // Utiliser le service pour mettre à jour le statut.
+      // `AttachmentStatusEntry.participantId` attend un PARTICIPANT.id —
+      // passer `authContext.userId` (User.id pour un inscrit) écrivait des
+      // lignes orphelines que toute lecture filtrait (`if (!participant)
+      // return null`) : l'onglet « Écouté » restait vide pour tout le monde
+      // et la reprise cross-device ne retrouvait rien. Même règle que la
+      // route mark-read ci-dessus (« participantId, pas userId »).
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
       switch (action) {
         case 'listened':
-          await readStatusService.markAudioAsListened(userId, attachmentId, {
+          await readStatusService.markAudioAsListened(participant.id, attachmentId, {
             playPositionMs,
             listenDurationMs: durationMs,
             complete,
@@ -1093,7 +1100,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           });
           break;
         case 'watched':
-          await readStatusService.markVideoAsWatched(userId, attachmentId, {
+          await readStatusService.markVideoAsWatched(participant.id, attachmentId, {
             watchPositionMs: playPositionMs,
             watchDurationMs: durationMs,
             complete,
@@ -1102,14 +1109,14 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           });
           break;
         case 'viewed':
-          await readStatusService.markImageAsViewed(userId, attachmentId, {
+          await readStatusService.markImageAsViewed(participant.id, attachmentId, {
             viewDurationMs: durationMs,
             wasZoomed,
             language
           });
           break;
         case 'downloaded':
-          await readStatusService.markAttachmentAsDownloaded(userId, attachmentId);
+          await readStatusService.markAttachmentAsDownloaded(participant.id, attachmentId);
           break;
       }
 

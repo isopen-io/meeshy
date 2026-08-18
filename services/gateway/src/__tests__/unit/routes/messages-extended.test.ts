@@ -160,7 +160,9 @@ const mockAttachment = {
     id: MSG_ID,
     conversationId: CONV_ID,
     conversation: {
-      participants: [{ userId: USER_ID }],
+      // `id` présent : la route écrit les statuts par PARTICIPANT
+      // (AttachmentStatusEntry.participantId), jamais par User.id.
+      participants: [{ id: PART_ID, userId: USER_ID }],
     },
   },
 };
@@ -551,7 +553,7 @@ describe('POST /attachments/:attachmentId/status — watched action', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockMarkVideoAsWatched).toHaveBeenCalledWith(
-      USER_ID, ATTACHMENT_ID,
+      PART_ID, ATTACHMENT_ID,
       expect.objectContaining({ watchPositionMs: 1000, watchDurationMs: 5000, complete: true })
     );
   });

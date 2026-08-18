@@ -30,6 +30,7 @@ final class FocalAudioFlatTests: XCTestCase {
         XCTAssertTrue(plan.showsTranscribeCTA)
         XCTAssertFalse(plan.rendersFlatTranscription, "en .card la transcription reste le bloc karaoké historique")
         XCTAssertNil(plan.flatTranscriptionLineLimit)
+        XCTAssertFalse(plan.flatTranscriptionFollowsPlayback, "hors périmètre : .card a déjà SON bloc karaoké (transcriptionBlock)")
     }
 
     func test_chromePlan_flatMinimal_isBareBand_twoLineItalicTranscription() {
@@ -41,6 +42,7 @@ final class FocalAudioFlatTests: XCTestCase {
         XCTAssertFalse(plan.showsTranscribeCTA, "pas d'affordance Transcrire sur une rangée ordinaire — la bande reste minimale")
         XCTAssertTrue(plan.rendersFlatTranscription, "transcription à plat en italique « … », jamais le bloc karaoké de la carte")
         XCTAssertEqual(plan.flatTranscriptionLineLimit, 2, "une rangée ordinaire tronque à 2 lignes — la lecture complète appartient à l'élue")
+        XCTAssertFalse(plan.flatTranscriptionFollowsPlayback, "un karaoké coupé à 2 lignes n'aurait rien à surligner passé la coupe — la tenue minimale garde sa citation statique")
     }
 
     func test_chromePlan_flatFocused_keepsSpeedFlagsPercentRetranscribe_fullTranscription() {
@@ -52,6 +54,11 @@ final class FocalAudioFlatTests: XCTestCase {
         XCTAssertTrue(plan.showsTranscribeCTA)
         XCTAssertTrue(plan.rendersFlatTranscription)
         XCTAssertNil(plan.flatTranscriptionLineLimit, "l'élue déroule la transcription entière")
+        XCTAssertTrue(
+            plan.flatTranscriptionFollowsPlayback,
+            "user 2026-08-18 : la transcription de la tenue plate complète SUIT la lecture — " +
+            "segments karaoké interactifs synchronisés, plus jamais une citation statique"
+        )
     }
 
     // MARK: - Guillemets français du texte à plat (SDK, pur)

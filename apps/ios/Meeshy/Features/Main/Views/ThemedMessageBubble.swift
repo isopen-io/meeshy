@@ -195,6 +195,16 @@ struct ThemedMessageBubble: View {
             userLanguages: userLanguages,
             secondaryLangCode: resolvedSecondaryLangCode,
             activeDisplayLangCode: resolvedActiveDisplayLangCode,
+            // Repli AUDIO du Prisme — même loi que le VM et AudioMediaView
+            // (`AudioTrackLanguageResolver`, lecture directe d'AuthManager
+            // comme `resolvedPreferredTranscriptionLanguage`). Sans lui, le
+            // drapeau-toggle d'un vocal sans traduction texte reste inerte.
+            preferredAudioLangCode: AudioTrackLanguageResolver.resolve(
+                manualOverride: nil,
+                originalLanguage: message.originalLanguage,
+                preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
+                translatedAudios: translatedAudios
+            ),
             currentUserId: currentUserId,
             isEditSaving: isEditSaving,
             hasEditHistory: hasEditHistory,

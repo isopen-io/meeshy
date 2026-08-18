@@ -551,6 +551,14 @@ struct AudioMediaView: View, Equatable {
     var onShowTranslationDetail: ((String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var activeAudioLanguageOverride: String? = nil
+    /// Remonte un tap de drapeau de la bande interne au CANAL DU MESSAGE
+    /// (`activeDisplayLangCode` → VM) au lieu du @State local : la piste
+    /// jouée, le texte et le drapeau de rangée suivent d'un même mouvement.
+    /// Le code tapé est transmis TEL QUEL (langue d'origine = V.O.
+    /// explicite — le résolveur la traduit en « piste originale »). `nil` =
+    /// surfaces sans VM (previews, onboarding) : le @State local reste le
+    /// repli, comportement historique.
+    var onSelectAudioLanguage: ((String) -> Void)? = nil
     /// Footer descriptor injected by `BubbleStandardLayout` for audio-only
     /// messages — rendered inside the audio widget. `AudioMediaView` folds the
     /// audio-language flags into it (see `audioFooter`), so the footer is a
@@ -705,17 +713,17 @@ struct AudioMediaView: View, Equatable {
     /// Internal (not `private`) so `@testable import` can observe the
     /// resolution from MeeshyTests without exposing it publicly.
     internal var resolvedPreferredTranscriptionLanguage: String? {
-        guard !translatedAudios.isEmpty else { return nil }
-        let prefs = ConversationLanguagePreferences(user: AuthManager.shared.currentUser)
-        let originalLanguage = message.originalLanguage.lowercased()
-        for lang in prefs.resolved {
-            let langLower = lang.lowercased()
-            if originalLanguage == langLower { return nil }
-            if translatedAudios.contains(where: { $0.targetLanguage.lowercased() == langLower }) {
-                return langLower
-            }
-        }
-        return nil
+        // Loi UNIQUE partagée avec `ConversationViewModel.playAudio` — la
+        // bascule manuelle du drapeau (activeAudioLanguageOverride) prime,
+        // sinon le Prisme parcourt les langues du lecteur dans l'ordre.
+        // Sans la même loi des deux côtés, le widget affichait une piste
+        // pendant que le coordinateur en jouait une autre.
+        AudioTrackLanguageResolver.resolve(
+            manualOverride: activeAudioLanguageOverride,
+            originalLanguage: message.originalLanguage,
+            preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
+            translatedAudios: translatedAudios
+        )
     }
 
     /// Cold-open (F1) : mappe un `AudioItem` vers l'`AudioFullscreenSource`
@@ -820,8 +828,19 @@ struct AudioMediaView: View, Equatable {
             )
         }
         .adaptiveOnChange(of: activeAudioLanguageOverride) { _, newLang in
+            // Le drapeau de la RANGÉE parle en « override de message »
+            // (nil = résolution Prisme, code = bascule explicite, langue
+            // d'origine = V.O.) ; le widget parle en « langue de piste »
+            // (nil = original). Le résolveur traduit l'un en l'autre —
+            // notamment le retour à nil, qui doit RESTAURER la piste
+            // traduite du Prisme, pas retomber sur l'original.
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selectedAudioLangCode = newLang
+                selectedAudioLangCode = AudioTrackLanguageResolver.resolve(
+                    manualOverride: newLang,
+                    originalLanguage: message.originalLanguage,
+                    preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,
+                    translatedAudios: translatedAudios
+                )
             }
         }
         .task(id: currentAudioUrl) {
@@ -889,10 +908,21 @@ struct AudioMediaView: View, Equatable {
 
         if !translatedAudios.isEmpty {
             actions.onFlagTap = { code in
+                HapticFeedback.light()
+                // Canal du MESSAGE d'abord (VM → piste + texte + drapeau de
+                // rangée suivent, y compris la lecture en cours via
+                // syncActiveTrack) ; la sélection redescend par
+                // `activeAudioLanguageOverride` → onChange. L'écriture
+                // LOCALE n'est que le repli des surfaces sans VM — la
+                // garder en plus du canal VM créerait deux vérités (revue
+                // adversariale 2026-08-18).
+                if let onSelectAudioLanguage {
+                    onSelectAudioLanguage(code)
+                    return
+                }
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     selectedAudioLangCode = (code == origCode) ? nil : code
                 }
-                HapticFeedback.light()
             }
         }
         if let detail = onShowTranslationDetail {

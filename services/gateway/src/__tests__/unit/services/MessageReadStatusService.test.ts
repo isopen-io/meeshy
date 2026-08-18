@@ -1823,10 +1823,13 @@ describe('MessageReadStatusService', () => {
 
       const result = await service.getMessageReadStatus(testMessageId, testConversationId);
 
-      // Query is scoped to this message and excludes the sender.
+      // Query is scoped to this message — AUTHOR INCLUDED (user 2026-08-18 :
+      // « remonter les lectures de l'audio même si c'est l'auteur qui le
+      // lit »). L'ancien filtre `participantId: { not: senderId }` cachait
+      // les écoutes de l'auteur dans la feuille « Vues ».
       expect(mockPrisma.attachmentStatusEntry.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { messageId: testMessageId, participantId: { not: testParticipantId } },
+          where: { messageId: testMessageId },
         })
       );
       expect(result.attachmentConsumption).toHaveLength(1);
@@ -1851,6 +1854,43 @@ describe('MessageReadStatusService', () => {
         ],
         languageBreakdown: [],
       });
+    });
+
+    // user 2026-08-18 : « il faut remonter les lectures de l'audio même si
+    // c'est l'auteur qui le lit » — l'écoute de l'AUTEUR sur son propre
+    // vocal apparaît dans attachmentConsumption comme celle de n'importe
+    // quel participant.
+    it('surfaces the AUTHOR own listen in attachmentConsumption', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        id: testMessageId,
+        createdAt: new Date('2025-01-01T10:00:00Z'),
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId,
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: testParticipantId, displayName: 'Auteur', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: null, user: null },
+      ]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      // L'auteur a réécouté son propre vocal en entier.
+      mockPrisma.attachmentStatusEntry.findMany.mockResolvedValue([
+        {
+          attachmentId: testAttachmentId,
+          participantId: testParticipantId,
+          lastPlayPositionMs: 62000,
+          listenedComplete: true,
+          lastWatchPositionMs: null,
+          watchedComplete: false,
+        },
+      ]);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      expect(result.attachmentConsumption).toHaveLength(1);
+      expect(result.attachmentConsumption[0].participants).toHaveLength(1);
+      expect(result.attachmentConsumption[0].participants[0].participantId).toBe(testParticipantId);
+      expect(result.attachmentConsumption[0].participants[0].listenedComplete).toBe(true);
     });
 
     // ── Enrichissements du lot 2 ─────────────────────────────────────────
@@ -3044,7 +3084,11 @@ describe('MessageReadStatusService', () => {
     });
 
     describe('updateAttachmentComputedStatus (via markAudioAsListened)', () => {
-      it('should update listenedByAllAt when all participants listened', async () => {
+      // Contrat 2026-08-18 (« remonter les lectures même si c'est l'auteur ») :
+      // 8 counts — d'abord les 4 compteurs AFFICHÉS (auteur INCLUS), puis les
+      // 4 compteurs de COMPLÉTUDE (auteur exclu, comparés à totalParticipants
+      // lui-même auteur-exclu).
+      it('should update listenedByAllAt when all participants listened, storing author-inclusive counters', async () => {
         mockPrisma.messageAttachment.findUnique.mockResolvedValue({
           id: testAttachmentId,
           messageId: testMessageId,
@@ -3059,12 +3103,15 @@ describe('MessageReadStatusService', () => {
 
         mockPrisma.participant.count.mockResolvedValue(2);
 
-        // All counts
         mockPrisma.attachmentStatusEntry.count
-          .mockResolvedValueOnce(2) // viewedCount
-          .mockResolvedValueOnce(2) // downloadedCount
-          .mockResolvedValueOnce(2) // listenedCount
-          .mockResolvedValueOnce(0); // watchedCount
+          .mockResolvedValueOnce(3) // viewedCount (auteur inclus)
+          .mockResolvedValueOnce(3) // downloadedCount (auteur inclus)
+          .mockResolvedValueOnce(3) // listenedCount (auteur inclus)
+          .mockResolvedValueOnce(0) // watchedCount (auteur inclus)
+          .mockResolvedValueOnce(2) // viewedCountOthers
+          .mockResolvedValueOnce(2) // downloadedCountOthers
+          .mockResolvedValueOnce(2) // listenedCountOthers
+          .mockResolvedValueOnce(0); // watchedCountOthers
 
         const listenedByAllDate = new Date('2025-01-01T14:00:00Z');
 
@@ -3080,10 +3127,69 @@ describe('MessageReadStatusService', () => {
         expect(mockPrisma.messageAttachment.update).toHaveBeenCalledWith({
           where: { id: testAttachmentId },
           data: expect.objectContaining({
-            viewedCount: 2,
-            downloadedCount: 2,
-            consumedCount: 2, // listenedCount for audio
+            viewedCount: 3,
+            downloadedCount: 3,
+            consumedCount: 3, // listenedCount (auteur inclus) pour un audio
             listenedByAllAt: listenedByAllDate
+          })
+        });
+
+        // PROBANT contre l'ancien code (qui ne faisait que 4 counts, tous
+        // auteur-exclus) : 8 appels — les 4 premiers SANS exclusion auteur
+        // (compteurs affichés), les 4 suivants AVEC (complétude). Tous
+        // filtrent les lignes orphelines héritées (participantId = User.id)
+        // par la relation participant→conversation.
+        const countWheres = mockPrisma.attachmentStatusEntry.count.mock.calls.map(
+          (c: any[]) => c[0].where
+        );
+        expect(countWheres).toHaveLength(8);
+        for (const where of countWheres.slice(0, 4)) {
+          expect(where.participantId).toBeUndefined();
+          expect(where.participant).toEqual({ conversationId: testConversationId });
+        }
+        for (const where of countWheres.slice(4)) {
+          expect(where.participantId).toEqual({ not: testParticipantId2 });
+          expect(where.participant).toEqual({ conversationId: testConversationId });
+        }
+      });
+
+      // L'écoute de l'AUTEUR compte dans consumedCount mais n'allume JAMAIS
+      // « écouté par tous » : la complétude reste jugée sur les seuls
+      // destinataires.
+      it('author own listen increments consumedCount without lighting listenedByAllAt', async () => {
+        mockPrisma.messageAttachment.findUnique.mockResolvedValue({
+          id: testAttachmentId,
+          messageId: testMessageId,
+          mimeType: 'audio/mp3',
+          message: {
+            conversationId: testConversationId,
+            senderId: testParticipantId2,
+            anonymousSenderId: null
+          }
+        });
+        mockPrisma.attachmentStatusEntry.upsert.mockResolvedValue({});
+
+        mockPrisma.participant.count.mockResolvedValue(2);
+
+        mockPrisma.attachmentStatusEntry.count
+          .mockResolvedValueOnce(0) // viewedCount
+          .mockResolvedValueOnce(0) // downloadedCount
+          .mockResolvedValueOnce(1) // listenedCount — l'auteur seul
+          .mockResolvedValueOnce(0) // watchedCount
+          .mockResolvedValueOnce(0) // viewedCountOthers
+          .mockResolvedValueOnce(0) // downloadedCountOthers
+          .mockResolvedValueOnce(0) // listenedCountOthers — aucun destinataire
+          .mockResolvedValueOnce(0); // watchedCountOthers
+
+        mockPrisma.messageAttachment.update.mockResolvedValue({});
+
+        await service.markAudioAsListened(testParticipantId2, testAttachmentId, { complete: true });
+
+        expect(mockPrisma.messageAttachment.update).toHaveBeenCalledWith({
+          where: { id: testAttachmentId },
+          data: expect.objectContaining({
+            consumedCount: 1,
+            listenedByAllAt: null
           })
         });
       });

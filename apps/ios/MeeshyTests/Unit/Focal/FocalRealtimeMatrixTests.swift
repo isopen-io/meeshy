@@ -125,21 +125,34 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         )
     }
 
-    // MARK: - F04 — accusés ✓/✓✓/lu dans l'identité, jamais en pied
+    // MARK: - F04 — accusés ✓/✓✓/lu toujours à côté de l'HEURE
     // behaviour-matrix:F04
 
     /// Preuve exhaustive du glyphe/des couleurs : `BubbleDeliveryCheck` lui-
-    /// même (§1.3, non re-testé). Ce que WS-4 devait garantir spécifiquement
-    /// (F04 : « se déplacent dans l'identité des messages Toi ») : la
-    /// présence de `BubbleDeliveryCheck` dans `FocalIdentityHeader`
-    /// (« pas en pied », §WS-4) ET son ABSENCE de `FocalMetaRow` pour la
-    /// rangée en tête de groupe (contrat : « pas en pied »).
-    func test_F04_deliveryCheckLivesInIdentityHeader_notInTheFooterRow() throws {
-        let header = try source(rowRoot().appendingPathComponent("FocalIdentityHeader.swift"))
+    /// même (§1.3, non re-testé). Amendement user 2026-08-18 : « le double
+    /// coche à côté du nom est doublon avec le double coche à côté de
+    /// l'heure » — la coche quitte le flanc du NOM et rejoint le groupe de
+    /// droite de l'en-tête (après le Spacer, à côté du stamp), exactement là
+    /// où `FocalMetaRow` la pose déjà pour les rangées de suite. Invariant :
+    /// la coche existe (gardée `isMe`) ET vit APRÈS le Spacer (côté heure),
+    /// jamais entre le nom et le Spacer.
+    func test_F04_deliveryCheckSitsBesideTheTime_neverBesideTheName() throws {
+        let header = AppSourceGuard.stripComments(
+            try source(rowRoot().appendingPathComponent("FocalIdentityHeader.swift"))
+        )
         XCTAssertTrue(
             header.contains("BubbleDeliveryCheck(") && header.contains("if isMe, let deliveryStatus"),
             "FocalIdentityHeader.swift doit poser BubbleDeliveryCheck, gardé par `isMe` (F04 : les accusés " +
             "ne concernent que les messages « Toi »)"
+        )
+        guard let spacerIndex = header.range(of: "Spacer(minLength: 0)")?.lowerBound,
+              let checkIndex = header.range(of: "BubbleDeliveryCheck(")?.lowerBound else {
+            return XCTFail("FocalIdentityHeader.swift doit contenir Spacer(minLength: 0) et BubbleDeliveryCheck(")
+        }
+        XCTAssertLessThan(
+            spacerIndex, checkIndex,
+            "F04 (amendement 2026-08-18) : BubbleDeliveryCheck doit être posé APRÈS le Spacer de " +
+            "l'en-tête — à côté de l'heure, comme FocalMetaRow — jamais à côté du nom (doublon perçu)"
         )
     }
 

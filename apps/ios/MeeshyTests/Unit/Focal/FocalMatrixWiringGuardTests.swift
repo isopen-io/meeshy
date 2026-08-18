@@ -152,6 +152,59 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Le drapeau pilote AUSSI la piste audio (user 2026-08-18)
+
+    /// « Lorsqu'on switch de drapeau d'audio, il faut aussi switcher l'audio »
+    /// — le fil complet drapeau → piste : FocalRow alimente FocalAudioBlock
+    /// avec la bascule de la rangée, le bloc la forwarde au widget, l'hôte
+    /// alimente la bulle historique, et le VM joue la piste EFFECTIVE (même
+    /// loi `AudioTrackLanguageResolver` que la vue). Chaque maillon coupé =
+    /// audio dans une langue, karaoké dans une autre.
+    func test_flagToggle_drivesTheAudioTrack_endToEnd() throws {
+        let row = try stripped(rowPath)
+        XCTAssertTrue(
+            row.contains("activeAudioLanguage: input.activeDisplayLangCode"),
+            "FocalRow doit alimenter FocalAudioBlock avec la bascule de la rangée — sans ce fil, le drapeau change le texte mais jamais la piste"
+        )
+        let block = try stripped("Meeshy/Features/Main/Focal/Row/FocalAudioBlock.swift")
+        XCTAssertTrue(
+            block.contains("activeAudioLanguageOverride: activeAudioLanguage"),
+            "FocalAudioBlock doit forwarder la bascule au widget (AudioMediaView.activeAudioLanguageOverride)"
+        )
+        XCTAssertTrue(
+            block.contains("activeAudioLanguage: activeAudioLanguage"),
+            "le carrousel audio doit recevoir la même bascule — plus jamais un nil en dur"
+        )
+        let host = try stripped(hostPath)
+        XCTAssertTrue(
+            host.contains("activeAudioLanguage: languageSelection?.activeDisplayLangCode"),
+            "l'hôte doit alimenter ThemedMessageBubble.activeAudioLanguage — canal resté mort depuis sa pose (audit 2026-08-18)"
+        )
+        let vmCode = try stripped("Meeshy/Features/Main/ViewModels/ConversationViewModel.swift")
+        XCTAssertTrue(
+            vmCode.contains("fileUrl: effectiveAudioTrackUrl(for: attachment, message: message)"),
+            "playAudio doit jouer la piste EFFECTIVE (résolveur partagé) — pas attachment.fileUrl en dur"
+        )
+        let mediaView = try stripped("Meeshy/Features/Main/Views/ConversationMediaViews.swift")
+        XCTAssertTrue(
+            mediaView.contains("AudioTrackLanguageResolver.resolve("),
+            "AudioMediaView doit résoudre la langue de piste par la MÊME loi que le VM (AudioTrackLanguageResolver) — deux lois divergent toujours"
+        )
+        let sdkPlayer = try stripped("../../packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift")
+        XCTAssertTrue(
+            sdkPlayer.contains("if !usesExternalPlayer { player.stop() }"),
+            "switchToLanguage ne stoppe QUE le player POSSÉDÉ — en moteur EXTERNE (conversation), le coordinateur vient de faire suivre la piste (syncActiveTrack/playVariant) ; un stop inconditionnel tuait la lecture qu'on venait de basculer"
+        )
+        XCTAssertTrue(
+            vmCode.contains("audioCoordinator.syncActiveTrack("),
+            "la bascule du drapeau route par syncActiveTrack — playVariant direct ne couvrait pas la PAUSE (reprise dans l'ancienne langue sous un karaoké basculé)"
+        )
+        XCTAssertTrue(
+            vmCode.contains("trackUrlResolver:"),
+            "la FILE d'auto-avance (audioQueueTail) doit enfiler la piste EFFECTIVE — sans le résolveur, le 2e vocal sortait en V.O. sous un karaoké traduit"
+        )
+    }
+
     // MARK: - Le scroll VOULU traverse le verrou de scène (user 2026-08-18)
 
     func test_scrollToBottom_declaresItselfIntentional_toTheSceneLock() throws {

@@ -188,10 +188,23 @@ final class LentilleFocusCardTests: XCTestCase {
             suggestedMode: .resume
         )
 
+        // Résolution locale-agnostique (patron du dépôt, cf.
+        // `ModeMenuModelTests`) : l'attendu est composé par les MÊMES clés
+        // que la production — sous la locale `en` du CI il rend « Summary »,
+        // en `fr` « Résumé » ; ce qui est verrouillé est l'IDENTITÉ du mode
+        // affiché (le suggéré), jamais une langue.
+        let notchFormat = String(localized: "lentille.mode.notch.auto", defaultValue: "AUTO · %@", bundle: .main)
+        let expected = String(format: notchFormat, LentilleModeLabels.decisionModeTitle(for: .summary))
         XCTAssertEqual(
-            text, "AUTO · Résumé",
+            text, expected,
             "`bridge.suggestedMode` (précalculé par le serveur/le substitut) DOIT primer sur " +
             "`decision.mode` (recalcul local) — jamais l'inverse (R6-5)."
+        )
+        XCTAssertNotEqual(
+            text,
+            String(format: notchFormat, LentilleModeLabels.decisionModeTitle(for: localDecision.mode)),
+            "Discrimination : le libellé du recalcul LOCAL ne doit pas être celui affiché — " +
+            "sinon ce témoin passerait au vert même si le suggéré était ignoré."
         )
     }
 

@@ -72,6 +72,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
         engine as? AudioPlaybackManager
     }
 
+    /// URL de la piste en TÊTE de file (variante de langue comprise, cf.
+    /// `playVariant`) — permet aux bascules de langue de détecter qu'elles
+    /// ne changeraient rien et de ne pas relancer la même piste à zéro.
+    public var activeTrackUrl: String? {
+        queue.first?.fileUrl
+    }
+
     private var queue: [QueuedAudio] = []
     /// Ids of attachments that finished or failed this session. `appendUpcoming`
     /// skips these to close the race window where a re-emitted `$messages` could
@@ -182,6 +189,40 @@ public final class ConversationAudioCoordinator: ObservableObject {
             receivedAt: head.receivedAt
         )
         engine.play(urlString: urlString)
+    }
+
+    /// Fait SUIVRE la piste active à une bascule de langue (drapeau-toggle),
+    /// quel que soit l'état de lecture :
+    /// - en LECTURE : `playVariant` — la nouvelle piste part immédiatement,
+    ///   file et carte système conservées ;
+    /// - en PAUSE/arrêt : la tête de file est mise à jour et le moteur
+    ///   DÉCHARGÉ (`engine.stop()`) — la reprise (`togglePlayPause` sur
+    ///   moteur déchargé, ou re-tap play → `startCurrentHead`) rejoue la
+    ///   NOUVELLE piste. Sans ce déchargement, la reprise ressortait
+    ///   l'ancienne langue sous un karaoké déjà basculé (revue adversariale
+    ///   2026-08-18). La position n'est pas transposable entre deux pistes
+    ///   (durées et découpes différentes) : repartir de zéro est le
+    ///   comportement honnête.
+    /// No-op quand la bascule résout la piste déjà en tête (jamais de replay
+    /// à zéro pour rien).
+    public func syncActiveTrack(urlString: String) {
+        guard activeContext != nil, !urlString.isEmpty,
+              let head = queue.first, head.fileUrl != urlString else { return }
+        if isPlaying {
+            playVariant(urlString: urlString)
+            return
+        }
+        queue[0] = QueuedAudio(
+            attachmentId: head.attachmentId,
+            messageId: head.messageId,
+            conversationId: head.conversationId,
+            fileUrl: urlString,
+            durationMs: head.durationMs,
+            senderName: head.senderName,
+            senderAvatarURL: head.senderAvatarURL,
+            receivedAt: head.receivedAt
+        )
+        engine.stop()
     }
 
     /// Change l'attachment ACTIF sans réinitialiser la session (nom de

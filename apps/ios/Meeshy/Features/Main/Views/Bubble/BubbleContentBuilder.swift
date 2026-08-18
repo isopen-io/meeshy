@@ -15,6 +15,14 @@ extension BubbleContent {
         userLanguages: (regional: String?, custom: String?) = (nil, nil),
         secondaryLangCode: String? = nil,
         activeDisplayLangCode: String? = nil,
+        // Langue de la piste AUDIO préférée du Prisme (résolue en amont via
+        // `AudioTrackLanguageResolver` — le builder ne connaît pas la langue
+        // primaire de l'utilisateur). Repli de `activeLang` et de
+        // `preferredLangCode` quand le message n'a AUCUNE traduction texte :
+        // sans lui, le drapeau-toggle d'un vocal traduit restait inerte
+        // (`preferredLangCode` nil ⇒ tap sans effet) et affichait la
+        // mauvaise face (user 2026-08-18 : le drapeau doit switcher l'audio).
+        preferredAudioLangCode: String? = nil,
         currentUserId: String,
         timeString: String? = nil,
         isEditSaving: Bool = false,
@@ -95,6 +103,7 @@ extension BubbleContent {
         // --- Text + emoji ---
         let activeLang = activeDisplayLangCode
             ?? preferredTranslation?.targetLanguage
+            ?? preferredAudioLangCode
             ?? message.originalLanguage
         let effective = Self.resolveEffectiveContent(
             message: message,
@@ -167,7 +176,7 @@ extension BubbleContent {
                 preferredContent: preferredTranslation?.translatedContent,
                 activeLangCode: activeLang,
                 originalLangCode: message.originalLanguage,
-                preferredLangCode: preferredTranslation?.targetLanguage,
+                preferredLangCode: preferredTranslation?.targetLanguage ?? preferredAudioLangCode,
                 availableFlags: flags,
                 secondaryLangCode: secondaryLangCode,
                 secondaryContent: secondaryContent

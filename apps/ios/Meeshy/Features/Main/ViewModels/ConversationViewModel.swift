@@ -292,6 +292,25 @@ class ConversationViewModel: ObservableObject {
         guard selection.activeDisplayLangCode != code else { return }
         selection.activeDisplayLangCode = code
         bubbleLanguageSelections[messageId] = selection
+        switchActiveAudioTrackIfNeeded(for: messageId)
+    }
+
+    /// Si le vocal ACTIF du coordinateur appartient à ce message au moment
+    /// de la bascule du drapeau, la piste suit la nouvelle langue —
+    /// `syncActiveTrack` décide selon l'état : bascule immédiate en lecture
+    /// (`playVariant`, file et carte système conservées), tête mise à jour +
+    /// moteur déchargé en pause (la REPRISE rejoue la bonne piste — sans ça,
+    /// pause → toggle → play ressortait l'ancienne langue sous un karaoké
+    /// déjà basculé, revue adversariale 2026-08-18). Une bascule qui résout
+    /// la piste déjà en tête est un no-op (jamais de replay à zéro).
+    private func switchActiveAudioTrackIfNeeded(for messageId: String) {
+        guard let context = audioCoordinator.activeContext,
+              context.messageId == messageId,
+              let (message, attachment) = findAudioAttachment(id: context.attachmentId)
+        else { return }
+        audioCoordinator.syncActiveTrack(
+            urlString: effectiveAudioTrackUrl(for: attachment, message: message)
+        )
     }
 
     func setBubbleSecondaryLanguage(_ code: String?, for messageId: String) {
@@ -2079,7 +2098,11 @@ class ConversationViewModel: ObservableObject {
             attachmentId: attachment.id,
             messageId: message.id,
             conversationId: message.conversationId,
-            fileUrl: attachment.fileUrl,
+            // La piste EFFECTIVE, pas l'original en dur : le drapeau-toggle
+            // et le Prisme décident (user 2026-08-18 — le widget affichait
+            // la piste traduite pendant que le coordinateur rejouait
+            // l'original).
+            fileUrl: effectiveAudioTrackUrl(for: attachment, message: message),
             durationMs: attachment.duration ?? 0,
             senderName: message.senderName ?? "",
             senderAvatarURL: message.senderAvatarURL,
@@ -2104,7 +2127,13 @@ class ConversationViewModel: ObservableObject {
             from: messages,
             startingAfterAttachmentId: attachmentId,
             currentUserId: currentUserId,
-            listenedAttachmentIds: listenedAttachmentIds
+            listenedAttachmentIds: listenedAttachmentIds,
+            // L'auto-avance joue la piste EFFECTIVE de chaque vocal — sans
+            // ce résolveur, le 2e vocal sortait en V.O. pendant que sa bulle
+            // affichait le karaoké traduit (revue adversariale 2026-08-18).
+            trackUrlResolver: { [weak self] message, attachment in
+                self?.effectiveAudioTrackUrl(for: attachment, message: message) ?? attachment.fileUrl
+            }
         )
     }
 
@@ -2118,6 +2147,29 @@ class ConversationViewModel: ObservableObject {
             }
         }
         return nil
+    }
+
+    /// Pistes traduites d'un attachement — MÊME source que `allAudioItems`
+    /// (par-attachement d'abord, repli par-message filtré), jamais une
+    /// troisième résolution.
+    private func translatedAudioTracks(for attachment: MessageAttachment, messageId: String) -> [MessageTranslatedAudio] {
+        messageTranslatedAudiosByAttachment[attachment.id]
+            ?? (messageTranslatedAudios[messageId] ?? []).filter { $0.attachmentId == attachment.id }
+    }
+
+    /// URL de la piste audio EFFECTIVE d'un attachement — la même loi que le
+    /// widget (`AudioTrackLanguageResolver` : bascule manuelle du drapeau
+    /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
+    /// l'audio entendu corresponde au texte et aux segments affichés.
+    private func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
+        let tracks = translatedAudioTracks(for: attachment, messageId: message.id)
+        let lang = AudioTrackLanguageResolver.resolve(
+            manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
+            originalLanguage: message.originalLanguage,
+            preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
+            translatedAudios: tracks
+        )
+        return AudioTrackLanguageResolver.url(for: lang, translatedAudios: tracks, originalUrl: attachment.fileUrl)
     }
 
     /// Subscribes to `$messages` and forwards any newly-inserted audio messages
@@ -2195,7 +2247,8 @@ class ConversationViewModel: ObservableObject {
                     attachmentId: attachment.id,
                     messageId: message.id,
                     conversationId: message.conversationId,
-                    fileUrl: attachment.fileUrl,
+                    // Piste EFFECTIVE — même loi que playAudio/la tail.
+                    fileUrl: effectiveAudioTrackUrl(for: attachment, message: message),
                     durationMs: attachment.duration ?? 0,
                     senderName: message.senderName ?? "",
                     senderAvatarURL: message.senderAvatarURL,
@@ -4227,8 +4280,15 @@ class ConversationViewModel: ObservableObject {
         activeTranslationOverrides[messageId] = translation
     }
 
+    /// Sélection de langue AUDIO (vue Langue du menu d'appui long, fin d'une
+    /// traduction audio à la demande) — DÉLÈGUE au canal unique du message
+    /// (`bubbleLanguageSelections`), le seul que l'hôte observe et que
+    /// `playAudio`/`syncActiveTrack` lisent. `activeAudioLanguageOverrides`
+    /// était un canal MORT (écrit ici, lu par personne — revue adversariale
+    /// 2026-08-18) : sélectionner une langue dans la vue Langue ne changeait
+    /// ni la piste, ni le karaoké, ni le drapeau.
     func setActiveAudioLanguage(for messageId: String, language: String?) {
-        activeAudioLanguageOverrides[messageId] = language
+        setBubbleActiveDisplayLanguage(language, for: messageId)
     }
 
     /// On-demand text translation, triggered by "Traduire" in the language

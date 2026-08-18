@@ -118,11 +118,15 @@ nonisolated enum FocalAudioRouting {
 /// message). Pas de champ `message` ajouté à `FocalRowInput` : la donnée
 /// existe déjà dans `allAudioItems`, RE-PREUVE avant d'étendre le contrat.
 ///
-/// `footerModel: .empty, footerActions: .none` : le footer (heure/accusé)
-/// du widget audio est SUPPRIMÉ — `FocalMetaRow`/`FocalIdentityHeader`
-/// (WS-4) le portent déjà pour toute la rangée, l'un des deux serait en trop
-/// (même règle que `AudioCarouselView`, doc de tête : « chaque page passe
-/// `footerModel: nil` »).
+/// `footerModel: nil, footerActions: .none` : le footer du widget audio est
+/// SUPPRIMÉ EN ENTIER — heure/accusé (portés par `FocalMetaRow`/
+/// `FocalIdentityHeader`, WS-4) ET bande de drapeaux interne. `.empty`
+/// laissait passer cette bande (`audioFooter` la construit dès que le modèle
+/// est non-nil) : un SECOND basculeur de langue, local au widget, qui
+/// contredisait l'arbitrage user 2026-08-18 (« plus de bande de drapeaux —
+/// le seul indicateur est le drapeau-toggle de la rangée, l'exploration vit
+/// dans le menu d'appui long ») et pouvait diverger de la piste jouée par le
+/// coordinateur (état jamais remonté au VM).
 ///
 /// « Transcription traduite en italique sous le player » (critère §WS-3) :
 /// portée NATIVEMENT par `AudioMediaView` (transcription karaoke
@@ -137,6 +141,11 @@ struct FocalAudioBlock: View, Equatable {
     let translatedAudios: [MessageTranslatedAudio]
     let mentionDisplayNames: [String: String]
     let conversationName: String
+    /// Bascule manuelle du drapeau de la rangée (`activeDisplayLangCode`) —
+    /// `nil` = résolution Prisme. Transmis au widget audio pour que la
+    /// piste jouée et les segments karaoké SUIVENT le drapeau (user
+    /// 2026-08-18 : « switcher le drapeau doit switcher l'audio »).
+    var activeAudioLanguage: String? = nil
     var voiceConsentMissing: Bool = false
     var onPlayAudio: ((String) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
@@ -155,6 +164,7 @@ struct FocalAudioBlock: View, Equatable {
             && lhs.translatedAudios == rhs.translatedAudios
             && lhs.mentionDisplayNames == rhs.mentionDisplayNames
             && lhs.conversationName == rhs.conversationName
+            && lhs.activeAudioLanguage == rhs.activeAudioLanguage
             && lhs.voiceConsentMissing == rhs.voiceConsentMissing
     }
 
@@ -214,9 +224,13 @@ struct FocalAudioBlock: View, Equatable {
                 textTranslations: [],
                 allAudioItems: allAudioItems,
                 mentionDisplayNames: mentionDisplayNames,
+                // Le carrousel garde `.empty` (param non-optionnel) : ses
+                // drapeaux par-piste désignent la PAGE visible d'un message
+                // multi-pistes — une information de navigation, pas le
+                // basculeur de version retiré du chemin standalone.
                 footerModel: .empty,
                 footerActions: .none,
-                activeAudioLanguage: nil,
+                activeAudioLanguage: activeAudioLanguage,
                 onScrollToMessage: onScrollToMessage,
                 onShareFile: nil,
                 onShowTranslationDetail: onShowTranslationDetail,
@@ -250,7 +264,8 @@ struct FocalAudioBlock: View, Equatable {
                     onScrollToMessage: onScrollToMessage,
                     onShowTranslationDetail: onShowTranslationDetail,
                     onRequestTranslation: onRequestTranslation,
-                    footerModel: .empty,
+                    activeAudioLanguageOverride: activeAudioLanguage,
+                    footerModel: nil,
                     footerActions: .none,
                     replyReference: mode == .hostsReply ? content.reply?.reference : nil,
                     replyIsStory: mode == .hostsReply ? (content.reply?.isStory ?? false) : false,

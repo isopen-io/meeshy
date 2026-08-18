@@ -1615,15 +1615,16 @@ export class MessageReadStatusService {
       }
 
       // Per-attachment, per-participant media consumption (audio/video positions).
-      // Mirrors the read-receipt detail above: surfaces how far each OTHER
-      // participant listened to an audio / watched a video on this message.
-      // Read straight from AttachmentStatusEntry (per-user rows the gateway
-      // already persists on consumption). Exposed with the same visibility as
-      // receivedBy/readBy — no extra privacy gate (parity with read receipts).
+      // Mirrors the read-receipt detail above: surfaces how far EACH
+      // participant — author included (user 2026-08-18 : « remonter les
+      // lectures de l'audio même si c'est l'auteur qui le lit ») — listened
+      // to an audio / watched a video on this message. Read straight from
+      // AttachmentStatusEntry (per-user rows the gateway already persists on
+      // consumption). Exposed with the same visibility as receivedBy/readBy —
+      // no extra privacy gate (parity with read receipts).
       const consumptionEntries = await this.prisma.attachmentStatusEntry.findMany({
         where: {
           messageId,
-          participantId: { not: message.senderId },
         },
         select: {
           attachmentId: true,
@@ -2794,13 +2795,45 @@ export class MessageReadStatusService {
         },
       });
 
-      const [viewedCount, downloadedCount, listenedCount, watchedCount] =
+      // Deux jeux de compteurs (user 2026-08-18 : « remonter les lectures
+      // de l'audio même si c'est l'auteur qui le lit ») :
+      // - AFFICHÉS (`viewedCount`/`downloadedCount`/`consumedCount`) :
+      //   auteur INCLUS — sa lecture compte comme celle de n'importe qui ;
+      // - COMPLÉTUDE (`…ByAllAt`) : auteur EXCLU des deux côtés de la
+      //   comparaison — sinon sa propre écoute allumerait « écouté par
+      //   tous » avant qu'un seul destinataire n'ait ouvert le vocal.
+      //
+      // `participant: { conversationId }` sur CHAQUE requête : les lignes
+      // HÉRITÉES du bug d'identifiant (participantId = User.id, écrites
+      // avant le correctif de la route) ne référencent aucun Participant —
+      // sans ce filtre elles comptaient double (l'upsert post-correctif crée
+      // une seconde ligne pour le même humain) et passaient TOUJOURS
+      // l'exclusion auteur (User.id ≠ Participant.id de l'auteur), allumant
+      // des « écouté par tous » fantômes. Même règle d'orphelines que les
+      // lectures (`if (!participant) return null`).
+      const [
+        viewedCount, downloadedCount, listenedCount, watchedCount,
+        viewedCountOthers, downloadedCountOthers, listenedCountOthers, watchedCountOthers,
+      ] =
         await Promise.all([
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, viewedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, downloadedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, listenedAt: { not: null }, participant: { conversationId } },
+          }),
+          this.prisma.attachmentStatusEntry.count({
+            where: { attachmentId, watchedAt: { not: null }, participant: { conversationId } },
+          }),
           this.prisma.attachmentStatusEntry.count({
             where: {
               attachmentId,
               viewedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
           }),
           this.prisma.attachmentStatusEntry.count({
@@ -2808,6 +2841,7 @@ export class MessageReadStatusService {
               attachmentId,
               downloadedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
           }),
           this.prisma.attachmentStatusEntry.count({
@@ -2815,6 +2849,7 @@ export class MessageReadStatusService {
               attachmentId,
               listenedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
           }),
           this.prisma.attachmentStatusEntry.count({
@@ -2822,6 +2857,7 @@ export class MessageReadStatusService {
               attachmentId,
               watchedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
           }),
         ]);
@@ -2840,12 +2876,13 @@ export class MessageReadStatusService {
       let watchedByAllAt: Date | null = null;
 
       if (totalParticipants > 0) {
-        if (viewedCount >= totalParticipants) {
+        if (viewedCountOthers >= totalParticipants) {
           const last = await this.prisma.attachmentStatusEntry.findFirst({
             where: {
               attachmentId,
               viewedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
             orderBy: { viewedAt: "desc" },
             select: { viewedAt: true },
@@ -2853,12 +2890,13 @@ export class MessageReadStatusService {
           viewedByAllAt = last?.viewedAt || null;
         }
 
-        if (downloadedCount >= totalParticipants) {
+        if (downloadedCountOthers >= totalParticipants) {
           const last = await this.prisma.attachmentStatusEntry.findFirst({
             where: {
               attachmentId,
               downloadedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
             orderBy: { downloadedAt: "desc" },
             select: { downloadedAt: true },
@@ -2866,12 +2904,13 @@ export class MessageReadStatusService {
           downloadedByAllAt = last?.downloadedAt || null;
         }
 
-        if (listenedCount >= totalParticipants && isAudio) {
+        if (listenedCountOthers >= totalParticipants && isAudio) {
           const last = await this.prisma.attachmentStatusEntry.findFirst({
             where: {
               attachmentId,
               listenedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
             orderBy: { listenedAt: "desc" },
             select: { listenedAt: true },
@@ -2879,12 +2918,13 @@ export class MessageReadStatusService {
           listenedByAllAt = last?.listenedAt || null;
         }
 
-        if (watchedCount >= totalParticipants && isVideo) {
+        if (watchedCountOthers >= totalParticipants && isVideo) {
           const last = await this.prisma.attachmentStatusEntry.findFirst({
             where: {
               attachmentId,
               watchedAt: { not: null },
               participantId: { not: authorId },
+              participant: { conversationId },
             },
             orderBy: { watchedAt: "desc" },
             select: { watchedAt: true },

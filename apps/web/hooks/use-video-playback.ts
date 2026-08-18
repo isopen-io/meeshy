@@ -52,7 +52,8 @@ export function useVideoPlayback({
   const hasTrackedCompletionRef = useRef(false);
 
   const trackConsumption = useCallback((complete: boolean) => {
-    if (isOwnMessage) return;
+    // La consommation de l'AUTEUR compte aussi (user 2026-08-18, parité
+    // audio/iOS) — `isOwnMessage` reste une prop de style, plus un filtre.
     const video = videoRef.current;
     /* istanbul ignore next -- defensive null guard; videoRef.current is always non-null when trackConsumption runs post-mount */
     const playPositionMs = video ? Math.round(video.currentTime * 1000) : 0;
@@ -64,7 +65,7 @@ export function useVideoPlayback({
       durationMs: isFinite(durationMs) ? durationMs : 0,
       complete,
     }).catch(() => {});
-  }, [attachmentId, isOwnMessage]);
+  }, [attachmentId]);
 
   // Reset tracking refs when attachment changes
   useEffect(() => {

@@ -26,7 +26,11 @@ public enum AudioQueueBuilder {
         from messages: [MeeshyMessage],
         startingAfterAttachmentId: String?,
         currentUserId: String,
-        listenedAttachmentIds: Set<String>
+        listenedAttachmentIds: Set<String>,
+        /// Piste EFFECTIVE d'un attachement (drapeau puis Prisme) — fourni
+        /// par le VM (`effectiveAudioTrackUrl`). `nil` = URL originale
+        /// (comportement historique, conservé par les surfaces sans VM).
+        trackUrlResolver: ((MeeshyMessage, MeeshyMessageAttachment) -> String)? = nil
     ) -> [QueuedAudio] {
         let cursorReceivedAt: Date? = startingAfterAttachmentId.flatMap { cursorId in
             messages.first { $0.attachments.contains(where: { $0.id == cursorId }) }
@@ -49,7 +53,12 @@ public enum AudioQueueBuilder {
                     attachmentId: att.id,
                     messageId: message.id,
                     conversationId: message.conversationId,
-                    fileUrl: att.fileUrl,
+                    // La piste EFFECTIVE (drapeau puis Prisme) quand le VM
+                    // fournit son résolveur — sans lui, l'auto-avance
+                    // rejouait les ORIGINAUX pendant que les bulles
+                    // affichaient le karaoké de la piste traduite (revue
+                    // adversariale 2026-08-18).
+                    fileUrl: trackUrlResolver?(message, att) ?? att.fileUrl,
                     durationMs: att.duration ?? 0,
                     senderName: message.senderName ?? "",
                     senderAvatarURL: message.senderAvatarURL,
