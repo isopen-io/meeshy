@@ -78,12 +78,23 @@ final class FakeSoundPreview: SoundPreviewing {
     /// (`playLocalFile` commence par un `stop()` interne).
     var emitsSpuriousFinishOnPlay = false
 
+    /// Ids dont l'appel `play` a effectivement RENDU. `playedIds` dit
+    /// seulement qu'il a été APPELÉ — un test qui attend l'après-lecture ne
+    /// peut pas s'y fier, et un test d'annulation qui n'attend rien passe au
+    /// vert parce que la tâche n'a pas encore tourné, pas parce qu'elle a été
+    /// annulée.
+    private(set) var completedPlayIds: [String] = []
+
     @discardableResult
     func play(_ sound: APISound) async -> Bool {
         playedIds.append(sound.id)
         if emitsSpuriousFinishOnPlay { finishedSubject.send() }
-        guard blocksUntilReleased else { return playSucceeds }
+        guard blocksUntilReleased else {
+            completedPlayIds.append(sound.id)
+            return playSucceeds
+        }
         await withCheckedContinuation { gate = $0 }
+        completedPlayIds.append(sound.id)
         return playSucceeds
     }
 
@@ -304,6 +315,33 @@ final class SoundLibraryPickerModelTests: XCTestCase {
         SoundLibraryPickerModel(service: FakeSoundLibraryService(), preview: preview)
     }
 
+    /// Attend qu'une condition devienne vraie, au lieu de PARIER sur un nombre
+    /// de `Task.yield()`.
+    ///
+    /// `togglePreview` délègue à une `Task` : reprendre la continuation du faux
+    /// lecteur la rend seulement exécutable, elle ne la fait pas tourner. Deux
+    /// yields suffisaient sur une machine au repos et pas sous charge — la
+    /// suite est tombée le 2026-08-18 pendant qu'un build concurrent saturait
+    /// le CPU, puis a rendu 30/30 verts relancée seule. Un compte de yields
+    /// n'est pas une synchronisation ; une condition en est une.
+    private func waitUntil(
+        _ description: String,
+        timeout: TimeInterval = 2,
+        file: StaticString = #filePath,
+        line: UInt = #line,
+        _ condition: () -> Bool
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            if Date() > deadline {
+                XCTFail("Condition jamais atteinte : \(description)", file: file, line: line)
+                return
+            }
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 1_000_000)
+        }
+    }
+
     func test_togglePreview_sonDejaEnCache_passeDirectementEnLecture() async {
         let preview = FakeSoundPreview()
         preview.readyInstantly = true
@@ -329,8 +367,7 @@ final class SoundLibraryPickerModelTests: XCTestCase {
         XCTAssertNil(model.previewingId, "rien ne joue encore : montrer « stop » mentirait")
 
         preview.release()
-        await Task.yield()
-        await Task.yield()
+        await waitUntil("la lecture démarre après la préparation") { model.previewingId == "a" }
 
         XCTAssertNil(model.preparingId)
         XCTAssertEqual(model.previewingId, "a")
@@ -373,7 +410,10 @@ final class SoundLibraryPickerModelTests: XCTestCase {
         await Task.yield()
         model.togglePreview(a)
         preview.release()
-        await Task.yield()
+        // Attendre que `play` ait RENDU : sans cette preuve, deux `nil`
+        // attesteraient seulement que la tâche n'a pas encore tourné, ce que
+        // l'annulation est précisément censée rendre indiscernable.
+        await waitUntil("l'appel play rend la main") { preview.completedPlayIds.contains("a") }
         await Task.yield()
 
         XCTAssertNil(model.previewingId)
