@@ -363,8 +363,13 @@ export function registerInteractionRoutes(
         // sans lui, `getPostById` applique le filtre PUBLIC-seul et retourne
         // `null` pour une story FRIENDS (le cas courant) → `broadcastStoryViewed`
         // ne partait jamais alors que `recordView` (même filtre viewer) avait
-        // bien enregistré la vue. Le viewer vient de passer ce même filtre dans
-        // `recordView`, donc la story est retrouvée ici aussi.
+        // bien enregistré la vue. Le viewer d'audience vient de passer ce même
+        // filtre dans `recordView`, donc la story est retrouvée ici aussi.
+        //
+        // Un lecteur admis par sa seule RÉFÉRENCE (2026-08-19) ne l'est PAS :
+        // sa vue est enregistrée, mais ce chargement-ci la refuse et l'auteur ne
+        // reçoit pas d'événement temps réel — il la verra dans sa liste de vues.
+        // Le verdict d'accès ne voyage pas encore avec le contenu.
         const post = await postService.getPostById(postId, viewerId);
         if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
           socialEvents.broadcastStoryViewed({

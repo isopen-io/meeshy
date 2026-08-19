@@ -22,6 +22,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
+import { consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
@@ -1709,6 +1710,15 @@ export class PostService {
    * SON PROPRE compteur en le consultant. Un reposteur qui revisionne son
    * propre repost ne gonfle donc pas ce repost, mais reste un viewer légitime
    * de l'ORIGINAL — dont l'auteur diffère — et crédite bien la racine.
+   *
+   * RÉFÉRENCES (2026-08-19) : cette route est aussi le SEUL acte qui dépense le
+   * droit qu'une référence ouvre sur un contenu expiré. Elle l'est parce
+   * qu'elle est DÉCLARÉE — la vue est affirmée par le client au moment où il
+   * affiche. Poser la consommation sur une lecture l'aurait dépensée avant tout
+   * affichage : la NSE préfetche le post à la réception de la notification, la
+   * revalidation cache-first relit derrière, le pull-to-refresh relit encore.
+   * Le crédit de la RACINE, lui, garde le filtre d'audience : une référence
+   * posée sur un repost n'ouvre pas l'original.
    */
   async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
     try {
@@ -1717,11 +1727,48 @@ export class PostService {
       // their userId surface in the author's `/posts/:id/views` response
       // (information disclosure + view inflation).
       const visibilityFilter = await this.buildVisibilityFilter(userId);
+      const VIEW_SELECT = {
+        id: true, authorId: true, repostOfId: true, originalRepostOfId: true,
+        type: true, expiresAt: true,
+      } as const;
       const post = await this.prisma.post.findFirst({
         where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-        select: { id: true, authorId: true, repostOfId: true, originalRepostOfId: true },
+        select: VIEW_SELECT,
       });
-      if (!post) return false;
+
+      // Un référencé HORS audience ne passe pas le filtre ci-dessus — c'est
+      // pourtant lui que la référence a le droit d'amener ici. On relit sans
+      // filtre, et seule la référence décide.
+      const target = post ?? await this.prisma.post.findFirst({
+        where: { id: postId, deletedAt: NOT_DELETED },
+        select: VIEW_SELECT,
+      });
+      if (!target) return false;
+
+      const now = new Date();
+      const referencePost = { id: target.id, type: target.type, expiresAt: target.expiresAt };
+      const access = await resolveReferenceAccess({
+        prisma: this.prisma,
+        post: referencePost,
+        viewerId: userId,
+        now,
+      });
+
+      // Ni membre de l'audience, ni référencé : rien à enregistrer.
+      if (!post && access !== 'granted') return false;
+      if (access === 'consumed') return false;
+
+      // La vue DÉCLARÉE est le seul acte qui dépense le droit. Une lecture ne
+      // consomme jamais rien — la NSE préfetche, le cache revalide, le
+      // pull-to-refresh relit.
+      if (access === 'granted') {
+        await consumeReferenceView({
+          prisma: this.prisma,
+          post: referencePost,
+          viewerId: userId,
+          now,
+        });
+      }
 
       // Sanitize duration: client-supplied → cap at 5 minutes (way past any
       // reasonable story).
@@ -1733,11 +1780,11 @@ export class PostService {
       // this guards ONLY the displayed post's own credit. It must NOT abort
       // the whole call: a reposter viewing their own repost is still a
       // legitimate viewer of the ORIGINAL (see root credit below).
-      const isNewView = post.authorId === userId
+      const isNewView = target.authorId === userId
         ? false
         : await this.creditPostView(postId, userId, safeDuration);
 
-      const rootId = post.originalRepostOfId ?? post.repostOfId;
+      const rootId = target.originalRepostOfId ?? target.repostOfId;
       if (rootId && rootId !== postId) {
         // Même filtre de visibilité que le post affiché — pas de requête
         // supplémentaire hors périmètre, le filtre est déjà résolu ci-dessus.

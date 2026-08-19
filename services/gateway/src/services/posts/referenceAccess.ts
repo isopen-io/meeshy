@@ -77,3 +77,45 @@ export async function resolveReferenceAccess(params: {
     return 'none';
   }
 }
+
+/**
+ * Ouvre la fenêtre de consultation d'un contenu EXPIRÉ — l'acte explicite, posé
+ * par `POST /posts/:postId/view` quand le contenu est réellement affiché.
+ *
+ * `updateMany` avec un filtre sur l'absence, jamais `update` : l'appel doit
+ * être IDEMPOTENT. Un client rejoue sa vue à chaque reprise d'affichage, et
+ * réécrire l'horodatage ferait glisser la fenêtre indéfiniment — le droit ne
+ * s'éteindrait jamais, ce qui est exactement ce que la fenêtre existe pour
+ * empêcher.
+ *
+ * Piège Prisma-Mongo : `{ expiredViewAt: null }` ne matche pas un document où
+ * la clé est ABSENTE, c'est-à-dire toutes les références jamais consommées.
+ * Les deux branches sont nécessaires.
+ *
+ * Best-effort — ne lève jamais : une vue perdue ne doit pas transformer un
+ * affichage réussi en erreur.
+ */
+export async function consumeReferenceView(params: {
+  prisma: ReferenceAccessPrisma;
+  post: ReferenceAccessPost;
+  viewerId: string;
+  now: Date;
+}): Promise<void> {
+  const { prisma, post, viewerId, now } = params;
+
+  const expired = post.expiresAt !== null && post.expiresAt.getTime() <= now.getTime();
+  if (!expired) return;
+
+  try {
+    await prisma.postMention.updateMany({
+      where: {
+        postId: post.id,
+        mentionedUserId: viewerId,
+        OR: [{ expiredViewAt: { isSet: false } }, { expiredViewAt: null }],
+      },
+      data: { expiredViewAt: now },
+    });
+  } catch {
+    // Silencieux à dessein : l'appelant a déjà rendu le contenu.
+  }
+}
