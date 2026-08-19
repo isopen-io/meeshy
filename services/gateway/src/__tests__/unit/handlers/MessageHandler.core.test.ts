@@ -501,6 +501,58 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(messagingService.handleMessage).toHaveBeenCalled();
   });
 
+  // RÈGLE JUMELLE de `MessageValidator.validateRequest` : un transfert rend le
+  // corps non-vide autrement — ses pièces jointes sont copiées CÔTÉ SERVEUR
+  // (MessageProcessor.copyForwardedAttachments), le client n'envoie donc ni
+  // texte ni attachmentIds pour un transfert de média. L'exemption existait
+  // dans le validateur mais PAS ici : le transport socket — celui que la
+  // modale de transfert web emprunte en primaire — refusait tout transfert de
+  // média sans légende avec « Le message ne peut pas être vide ».
+  const FORWARD_SOURCE_ID = '507f1f77bcf86cd799439099';
+
+  it('laisse passer un transfert de média SANS texte (exemption forwardedFromId)', async () => {
+    mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Le message ne peut pas être vide' });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData({ content: '', forwardedFromId: FORWARD_SOURCE_ID });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+
+    const messagingService = makeMockMessagingService();
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      messagingService,
+    });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    const [request, resolvedParticipantId] = (messagingService.handleMessage as any).mock.calls[0];
+    expect(request).toMatchObject({ content: '', forwardedFromId: FORWARD_SOURCE_ID });
+    expect(resolvedParticipantId).toBe('participant-1');
+  });
+
+  it('refuse toujours un message vide qui n’est pas un transfert', async () => {
+    mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Le message ne peut pas être vide' });
+    const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
+    const socket = makeSocket('socket-1');
+    const cb = jest.fn();
+    const data = makeValidSendData({ content: '' });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data });
+
+    const messagingService = makeMockMessagingService();
+    const { handler } = makeHandler({
+      connectedUsers: connectedUsers as any,
+      socketToUser,
+      messagingService,
+    });
+    await handler.handleMessageSend(socket, data as any, cb);
+
+    expect(cb).toHaveBeenCalledWith(
+      expect.objectContaining({ success: false, error: 'Le message ne peut pas être vide' }),
+    );
+    expect(messagingService.handleMessage).not.toHaveBeenCalled();
+  });
+
   it('sends USER_BLOCKED error when DM is blocked', async () => {
     // conversation.type === 'direct', blockedBetween true
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();

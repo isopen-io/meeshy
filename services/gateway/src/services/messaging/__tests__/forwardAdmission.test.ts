@@ -69,6 +69,9 @@ const source = (over: Record<string, unknown> = {}) => ({
   effectFlags: 0,
   expiresAt: null,
   createdAt: new Date('2026-08-12T11:00:00.000Z'),
+  // Compté par la MÊME lecture que l'héritage éphémère : c'est ce qui dit si
+  // la copie serveur des pièces jointes donnera un corps au transfert.
+  _count: { attachments: 0 },
   ...over,
 });
 
@@ -191,6 +194,84 @@ describe('admitMessageForward', () => {
         admitted: true,
         expiresAt: new Date(secondForwardAt.getTime() + 30_000),
       });
+    });
+  });
+
+  describe('corps entièrement emprunté à la source — refuser plutôt que diffuser une bulle vide', () => {
+    // Un transfert de MÉDIA n'envoie ni texte, ni `attachmentIds`, ni payload
+    // chiffré : son corps n'existera que par la copie serveur des pièces
+    // jointes de la source. Quand la source a disparu entre-temps (éphémère
+    // balayé, rejeu hors-ligne tardif) ou ne porte aucune pièce jointe, la
+    // copie ne rend RIEN — et une ligne `Message` sans contenu, sans pièce
+    // jointe et sans chiffré était créée puis diffusée : une bulle vide,
+    // irrécupérable, chez tous les destinataires.
+    //
+    // Le savoir est déjà payé : c'est la MÊME lecture que celle de l'héritage
+    // éphémère, qui compte les pièces jointes de la source au passage.
+    const BODY_ONLY_FROM_SOURCE = { forwardedFromId: SOURCE_ID, at: AT, bodyOnlyFromSource: true };
+
+    it('refuse quand la source est introuvable', async () => {
+      messageFindUnique.mockResolvedValue(null);
+
+      const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
+
+      expect(admission).toEqual({ admitted: false, reason: 'forward-source-unavailable' });
+    });
+
+    it('refuse quand la source existe mais ne porte aucune pièce jointe', async () => {
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 0 } }));
+
+      const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
+
+      expect(admission).toEqual({ admitted: false, reason: 'forward-source-unavailable' });
+    });
+
+    it('refuse quand la lecture de la source échoue — rien ne pourra remplir le corps', async () => {
+      messageFindUnique.mockRejectedValue(new Error('mongo down'));
+
+      const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
+
+      expect(admission).toEqual({ admitted: false, reason: 'forward-source-unavailable' });
+    });
+
+    it('admet le cas NOMINAL — la source porte bien des pièces jointes à copier', async () => {
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 2 } }));
+
+      const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
+
+      expect(admission).toEqual({ admitted: true });
+    });
+
+    it('fait toujours hériter l’échéance éphémère d’une source qui porte un média', async () => {
+      messageFindUnique.mockResolvedValue(
+        source({
+          _count: { attachments: 1 },
+          createdAt: new Date('2026-08-12T11:00:00.000Z'),
+          expiresAt: new Date('2026-08-12T11:00:30.000Z'),
+        }),
+      );
+
+      const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
+
+      expect(admission).toEqual({ admitted: true, expiresAt: new Date(AT.getTime() + 30_000) });
+    });
+
+    it('dit d’abord la vue unique — le motif le plus informatif gagne', async () => {
+      messageFindUnique.mockResolvedValue(source({ isViewOnce: true, _count: { attachments: 1 } }));
+
+      const admission = await admitMessageForward(prisma, BODY_ONLY_FROM_SOURCE);
+
+      expect(admission).toEqual({ admitted: false, reason: 'view-once-not-forwardable' });
+    });
+
+    it('ne refuse RIEN quand le message porte déjà son propre corps (défaut)', async () => {
+      // Un transfert de texte envoie le texte ; une source sans pièce jointe
+      // est alors parfaitement normale.
+      messageFindUnique.mockResolvedValue(source({ _count: { attachments: 0 } }));
+
+      const admission = await admitMessageForward(prisma, { forwardedFromId: SOURCE_ID, at: AT });
+
+      expect(admission).toEqual({ admitted: true });
     });
   });
 

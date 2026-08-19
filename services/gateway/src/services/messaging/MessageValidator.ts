@@ -51,6 +51,15 @@ export class MessageValidator {
     // n'envoie ni content ni attachmentIds pour un forward de média. Même
     // exemption que le refine Zod de la route REST — sans elle, tout transfert
     // de média mourait ici en CONTENT_EMPTY après avoir passé la route.
+    //
+    // RÈGLE JUMELLE, trois portes pour un seul envoi : le refine Zod de
+    // `routes/conversations/messages.ts`, la garde de longueur de
+    // `MessageHandler.handleMessageSend` (transport socket) et celle-ci. Toute
+    // évolution de l'exemption touche les trois — une seule porte restée
+    // fermée refuse le transfert de média que les deux autres laissent passer.
+    // Ce que l'exemption ouvre ici, `admitMessageForward` le referme plus bas
+    // (`bodyOnlyFromSource`) : un corps entièrement emprunté à une source
+    // muette ne doit rien faire naître.
     if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId) {
       errors.push({
         field: 'content',

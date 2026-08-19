@@ -273,8 +273,16 @@ export class MessageHandler {
         return;
       }
 
+      // RÈGLE JUMELLE de `MessageValidator.validateRequest` : un transfert rend
+      // le corps non-vide autrement — ses pièces jointes sont copiées CÔTÉ
+      // SERVEUR (`MessageProcessor.copyForwardedAttachments`), le client
+      // n'envoie donc ni texte ni `attachmentIds` pour un transfert de média.
+      // L'exemption vivait dans le validateur mais pas ici : ce transport —
+      // celui que la modale de transfert web emprunte en PRIMAIRE — refusait
+      // tout transfert de média sans légende. Toute évolution de l'une des deux
+      // exemptions touche l'autre.
       const validation = validateMessageLength(validated.content);
-      if (!validation.isValid && !data.encryptedPayload) {
+      if (!validation.isValid && !data.encryptedPayload && !validated.forwardedFromId) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }

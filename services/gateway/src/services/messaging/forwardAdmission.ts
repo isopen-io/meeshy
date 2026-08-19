@@ -51,13 +51,22 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
  * silence. `expiresAt − createdAt` reconstitue la même valeur à partir de deux
  * colonnes réellement peuplées — c'est la seule source de vérité disponible.
  *
- * ─── BEST-EFFORT DÉLIBÉRÉ ───────────────────────────────────────────────────
+ * ─── BEST-EFFORT DÉLIBÉRÉ, ET SA SEULE EXCEPTION ────────────────────────────
  *
  * Une source introuvable (purgée, id fabriqué) ou une lecture qui échoue
  * n'interrompt pas l'envoi : le transfert dégénère en message ordinaire, ce qui
  * est le comportement d'avant ce module et ne fuit rien de plus. Transformer un
  * envoi en erreur parce que la base a hoqueté coûterait plus que ce que ce
  * garde protège.
+ *
+ * Sauf quand le message n'a QUE la source pour corps (`bodyOnlyFromSource`) :
+ * un transfert de média n'envoie ni texte, ni `attachmentIds`, ni payload
+ * chiffré — ses pièces jointes sont copiées côté serveur. Dégénérer y produit
+ * une ligne `Message` sans contenu, sans pièce jointe et sans chiffré, créée
+ * puis diffusée : une bulle vide et irrécupérable chez tous les destinataires.
+ * Le refus est alors le seul comportement qui ne détruit rien, et le sachant
+ * ne coûte AUCUNE lecture de plus — la même requête compte les pièces jointes
+ * de la source au passage.
  */
 
 /**
@@ -72,7 +81,13 @@ export interface ForwardSourceReader {
   message: {
     findUnique(args: {
       where: { id: string };
-      select: { isViewOnce: true; effectFlags: true; expiresAt: true; createdAt: true };
+      select: {
+        isViewOnce: true;
+        effectFlags: true;
+        expiresAt: true;
+        createdAt: true;
+        _count: { select: { attachments: true } };
+      };
     }): Promise<ForwardSourceRow | null>;
   };
 }
@@ -82,6 +97,8 @@ export interface ForwardSourceRow {
   readonly effectFlags?: number | null;
   readonly expiresAt?: Date | null;
   readonly createdAt?: Date | null;
+  /** Ce que la copie serveur des pièces jointes pourra donner au transfert. */
+  readonly _count?: { readonly attachments: number } | null;
 }
 
 export interface ForwardAdmissionParams {
@@ -89,9 +106,16 @@ export interface ForwardAdmissionParams {
   readonly forwardedFromId?: string;
   /** L'instant de l'envoi du transfert. D'où repart le minuteur hérité. */
   readonly at: Date;
+  /**
+   * Le message envoyé n'a AUCUN corps propre — ni texte, ni `attachmentIds`,
+   * ni payload chiffré : il n'existera que par ce que la source lui donne.
+   * Absent (défaut) = le message porte déjà son corps, et rien de ce que dit
+   * la source ne peut le vider.
+   */
+  readonly bodyOnlyFromSource?: boolean;
 }
 
-export type ForwardRefusal = 'view-once-not-forwardable';
+export type ForwardRefusal = 'view-once-not-forwardable' | 'forward-source-unavailable';
 
 export type ForwardAdmission =
   | {
@@ -113,9 +137,28 @@ export const isForwardRefused = (admission: ForwardAdmission): admission is Forw
   admission.admitted === false;
 
 const ADMITTED_WITHOUT_INHERITANCE: ForwardAdmission = { admitted: true };
+const SOURCE_UNAVAILABLE: ForwardAdmission = {
+  admitted: false,
+  reason: 'forward-source-unavailable'
+};
 
 const hasFlag = (effectFlags: number | null, bit: number): boolean =>
   ((effectFlags ?? 0) & bit) !== 0;
+
+/**
+ * Ce que l'appelant dit au sender quand la règle refuse. Même forme que
+ * `describeConversationWriteRefusal` — le motif est une donnée, sa phrase
+ * appartient à ce module.
+ */
+export const describeForwardRefusal = (refusal: ForwardRefused): string => {
+  switch (refusal.reason) {
+    case 'forward-source-unavailable':
+      return 'Le message d’origine n’est plus disponible : rien à transférer';
+    case 'view-once-not-forwardable':
+    default:
+      return 'Un message à vue unique ne peut pas être transféré';
+  }
+};
 
 /**
  * La règle, pour les trois transports d'envoi à la fois.
@@ -135,19 +178,35 @@ export async function admitMessageForward(
   try {
     source = await prisma.message.findUnique({
       where: { id: params.forwardedFromId },
-      select: { isViewOnce: true, effectFlags: true, expiresAt: true, createdAt: true },
+      select: {
+        isViewOnce: true,
+        effectFlags: true,
+        expiresAt: true,
+        createdAt: true,
+        // Compté par CETTE lecture, pas par une seconde : le chemin nominal
+        // (envoi ordinaire) n'y passe même pas, `forwardedFromId` étant absent.
+        _count: { select: { attachments: true } },
+      },
     });
   } catch {
-    return ADMITTED_WITHOUT_INHERITANCE;
+    return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : ADMITTED_WITHOUT_INHERITANCE;
   }
 
-  if (!source) return ADMITTED_WITHOUT_INHERITANCE;
+  if (!source) {
+    return params.bodyOnlyFromSource ? SOURCE_UNAVAILABLE : ADMITTED_WITHOUT_INHERITANCE;
+  }
 
   // La colonne ET le bit : `saveMessage` renseigne les deux, mais un client qui
   // n'aurait envoyé que `effectFlags` doit être tenu par la même règle — sinon
   // le contournement ne coûte qu'un champ.
   if (source.isViewOnce === true || hasFlag(source.effectFlags, MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) {
     return { admitted: false, reason: 'view-once-not-forwardable' };
+  }
+
+  // Dit APRÈS la vue unique : des deux motifs, celui-là est le moins
+  // informatif pour l'expéditeur.
+  if (params.bodyOnlyFromSource && (source._count?.attachments ?? 0) === 0) {
+    return SOURCE_UNAVAILABLE;
   }
 
   const { expiresAt, createdAt } = source;

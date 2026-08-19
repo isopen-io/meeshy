@@ -359,11 +359,71 @@ describe('MessagingService', () => {
           isViewOnce: false,
           effectFlags: 0,
           expiresAt: null,
-          createdAt: new Date('2026-08-12T11:00:00.000Z')
+          createdAt: new Date('2026-08-12T11:00:00.000Z'),
+          // Ce que la copie serveur donnera au transfert. Le double DOIT le
+          // porter : c'est la seule chose qui distingue ce transfert d'une
+          // bulle vide (cf. le cas « source introuvable » plus bas).
+          _count: { attachments: 1 }
         });
 
         const response = await service.handleMessage(
           { ...validRequest, content: '', forwardedFromId },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(true);
+        expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+      });
+
+      // Vécu : la source a disparu entre le geste et l'envoi (éphémère balayé,
+      // rejeu hors-ligne tardif). `sanitizeForwardReferences` garde l'id bien
+      // formé, l'admission dégénérait en best-effort et `copyForwardedAttachments`
+      // rendait la main sans rien copier — une ligne sans contenu, sans pièce
+      // jointe et sans chiffré était créée puis DIFFUSÉE : une bulle vide chez
+      // tous les destinataires, que personne ne peut réparer.
+      it('refuse un transfert sans texte dont la source est introuvable, sans rien écrire', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue(null);
+
+        const response = await service.handleMessage(
+          { ...validRequest, content: '', forwardedFromId },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      it('refuse un transfert sans texte dont la source ne porte aucune pièce jointe', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: false,
+          effectFlags: 0,
+          expiresAt: null,
+          createdAt: new Date('2026-08-12T11:00:00.000Z'),
+          _count: { attachments: 0 }
+        });
+
+        const response = await service.handleMessage(
+          { ...validRequest, content: '', forwardedFromId },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(false);
+        expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      });
+
+      it('laisse passer un transfert de TEXTE dont la source n’a aucune pièce jointe', async () => {
+        // Le client envoie le texte transféré : le corps ne dépend pas de la
+        // copie serveur, et une source sans pièce jointe y est la normale.
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: false,
+          effectFlags: 0,
+          expiresAt: null,
+          createdAt: new Date('2026-08-12T11:00:00.000Z'),
+          _count: { attachments: 0 }
+        });
+
+        const response = await service.handleMessage(
+          { ...validRequest, forwardedFromId },
           testParticipantId
         );
 

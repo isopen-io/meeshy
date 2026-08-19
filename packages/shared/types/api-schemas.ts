@@ -759,12 +759,78 @@ export const messageSchema = {
     },
     forwardedFromId: { type: 'string', nullable: true, description: 'Original message ID if forwarded' },
     forwardedFromConversationId: { type: 'string', nullable: true, description: 'Original conversation ID if forwarded' },
+    // Les deux objets IMBRIQUÉS de l'aperçu de transfert. `GET
+    // /conversations/:id/messages` les construit (deux requêtes Prisma par
+    // page) ; sans déclaration ici, fast-json-stringify les strippait en
+    // silence — la bulle transférée arrivait sans auteur d'origine, sans
+    // vignette et sans nom de conversation source, exactement comme
+    // `metadata` plus haut. Toute évolution de la forme construite par la
+    // route doit se refléter ici, sinon le champ neuf disparaît sans signal.
+    forwardedFrom: {
+      type: 'object',
+      nullable: true,
+      description: 'Message d’ORIGINE d’un transfert — expéditeur résolu, première pièce jointe (chip), lieu partagé. null quand la source a été purgée.',
+      properties: {
+        id: { type: 'string' },
+        content: { type: 'string', nullable: true },
+        messageType: { type: 'string', nullable: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        sender: {
+          type: 'object',
+          nullable: true,
+          description: 'Expéditeur d’origine, résolu (displayName / avatar / username hissés du User quand le participant n’en porte pas)',
+          properties: {
+            id: { type: 'string' },
+            userId: { type: 'string', nullable: true },
+            username: { type: 'string', nullable: true },
+            displayName: { type: 'string', nullable: true },
+            avatar: { type: 'string', nullable: true }
+          }
+        },
+        attachments: {
+          type: 'array',
+          nullable: true,
+          description: 'Première pièce jointe de l’origine (attachmentForwardPreviewSelect, take: 1) — la vignette du transfert de média',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              mimeType: { type: 'string' },
+              thumbnailUrl: { type: 'string', nullable: true },
+              fileUrl: { type: 'string', nullable: true }
+            }
+          }
+        },
+        location: {
+          ...sharedPlaceResponseSchema,
+          description: 'Lieu du message TRANSFÉRÉ (Lot 2) — hissé de son propre metadata.location, jamais celui du porteur'
+        }
+      }
+    },
+    forwardedFromConversation: {
+      type: 'object',
+      nullable: true,
+      description: 'Conversation SOURCE du transfert (« Transféré de … ») — absente quand la provenance n’a pas été transmise ou n’existe plus',
+      properties: {
+        id: { type: 'string' },
+        title: { type: 'string', nullable: true },
+        identifier: { type: 'string', nullable: true },
+        type: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true }
+      }
+    },
 
     // Expiration & View-once
     expiresAt: { type: 'string', format: 'date-time', nullable: true, description: 'Self-destruct timestamp' },
     isViewOnce: { type: 'boolean', description: 'View-once message (disappears after view)' },
     viewOnceCount: { type: 'number', description: 'Number of unique viewers' },
     isBlurred: { type: 'boolean', description: 'Content blurred until tap to reveal' },
+    // Bitfield des effets, recomposé serveur (`MessageProcessor.saveMessage`)
+    // depuis isBlurred / expiresAt / isViewOnce. La route l'émet déjà au
+    // niveau message ; non déclaré, il ne franchissait pas le sérialiseur —
+    // les clients qui lisent le bitfield plutôt que les trois colonnes
+    // rendaient donc une copie transférée comme un message ordinaire.
+    effectFlags: { type: 'number', description: 'Bitfield for message effects (blurred / ephemeral / view-once)' },
 
     // Pinning
     pinnedAt: {

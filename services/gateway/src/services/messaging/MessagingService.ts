@@ -14,7 +14,12 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
-import { admitMessageForward, isForwardRefused, sanitizeForwardReferences } from './forwardAdmission';
+import {
+  admitMessageForward,
+  describeForwardRefusal,
+  isForwardRefused,
+  sanitizeForwardReferences
+} from './forwardAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
@@ -268,15 +273,21 @@ export class MessagingService {
       //
       //      Après le dedup précoce : sur un rejeu la ligne existe déjà, et
       //      relire la source ne servirait qu'à payer une lecture de plus.
+      //
+      //      `bodyOnlyFromSource` est le MIROIR de l'exemption de
+      //      `MessageValidator.validateRequest` : ce que le validateur laisse
+      //      passer sur la seule foi de `forwardedFromId`, ce garde le fait
+      //      tenir. Sans lui, un transfert dont la source a disparu créait une
+      //      ligne sans contenu, sans pièce jointe et sans chiffré — une bulle
+      //      vide diffusée à tous. Les deux règles évoluent ensemble.
       const forwardAdmission = await admitMessageForward(this.prisma, {
         forwardedFromId: request.forwardedFromId,
-        at: new Date()
+        at: new Date(),
+        bodyOnlyFromSource: this.bodyOnlyFromSource(request)
       });
       if (isForwardRefused(forwardAdmission)) {
         logger.info('forward refused', { ...corr, reason: forwardAdmission.reason });
-        return this.createErrorResponse(
-          'Un message à vue unique ne peut pas être transféré'
-        );
+        return this.createErrorResponse(describeForwardRefusal(forwardAdmission));
       }
 
       // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`
@@ -440,6 +451,21 @@ export class MessagingService {
     if (!translations) return true;
     if (typeof translations !== 'object') return true;
     return Object.keys(translations as Record<string, unknown>).length === 0;
+  }
+
+  /**
+   * RÈGLE JUMELLE de l'exemption de `MessageValidator.validateRequest` : les
+   * mêmes trois porteurs de corps (texte, pièces jointes propres, payload
+   * chiffré) — mais lus à l'endroit où l'on peut encore refuser. Le validateur
+   * accepte un envoi qui n'a que `forwardedFromId` ; ce prédicat dit à
+   * `admitMessageForward` que la source est alors le SEUL corps possible, donc
+   * qu'une source muette ne doit rien faire naître.
+   */
+  private bodyOnlyFromSource(request: MessageRequest): boolean {
+    if (!request.forwardedFromId) return false;
+    const hasOwnAttachments =
+      (request.attachments?.length ?? 0) > 0 || (request.attachmentIds?.length ?? 0) > 0;
+    return !request.content?.trim() && !hasOwnAttachments && !request.encryptedPayload;
   }
 
   /**
