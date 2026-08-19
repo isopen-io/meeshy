@@ -186,6 +186,135 @@ final class ContactsListViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Pagination
+
+    /// `MockFriendService.allFriendRequestsResult` est un `Result` FIXE : il ne
+    /// peut pas varier d'un appel à l'autre. Ces tests utilisent
+    /// `allFriendRequestsResults` (séquence dépilée appel par appel) pour
+    /// exercer réellement la boucle `while true` de `fetchFriendsFromNetwork` —
+    /// sans ça, aucun test n'exerce la pagination au-delà du premier tour.
+    ///
+    /// Bâtit une page dont `pagination.hasMore` peut être ABSENT (`nil`), ce que
+    /// `FriendRequestFixture.makePaginated` ne permet pas (elle sérialise
+    /// toujours la clé). Réplique sa sérialisation JSON en omettant la clé
+    /// `hasMore` quand `hasMore == nil`, pour exercer le repli
+    /// `page.pagination?.hasMore ?? (page.data.count == pageSize)`.
+    private func makePage(
+        requests: [FriendRequest],
+        hasMore: Bool?,
+        total: Int? = nil,
+        limit: Int = 100,
+        offset: Int = 0
+    ) -> OffsetPaginatedAPIResponse<[FriendRequest]> {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let requestsJson = requests.map { req -> String in
+            let messageJson = req.message.map { "\"\($0)\"" } ?? "null"
+            let senderJson = req.sender.map { s in
+                """
+                {"id":"\(s.id)","username":"\(s.username)","firstName":null,"lastName":null,"displayName":"\(s.name)","avatar":null,"isOnline":\(s.isOnline ?? false),"lastActiveAt":"\(now)"}
+                """
+            } ?? "null"
+            let receiverJson = req.receiver.map { r in
+                """
+                {"id":"\(r.id)","username":"\(r.username)","firstName":null,"lastName":null,"displayName":"\(r.name)","avatar":null,"isOnline":\(r.isOnline ?? false),"lastActiveAt":"\(now)"}
+                """
+            } ?? "null"
+            return """
+            {"id":"\(req.id)","senderId":"\(req.senderId)","receiverId":"\(req.receiverId)","message":\(messageJson),"status":"\(req.status)","sender":\(senderJson),"receiver":\(receiverJson),"respondedAt":null,"createdAt":"\(now)","updatedAt":"\(now)"}
+            """
+        }.joined(separator: ",")
+
+        let resolvedTotal = total ?? requests.count
+        let hasMoreField = hasMore.map { "\"hasMore\": \($0)," } ?? ""
+        let json = """
+        {
+            "success": true,
+            "data": [\(requestsJson)],
+            "pagination": {
+                "total": \(resolvedTotal),
+                \(hasMoreField)
+                "limit": \(limit),
+                "offset": \(offset)
+            }
+        }
+        """
+        return JSONStub.decode(json)
+    }
+
+    /// Cœur de la Task 2 : pagine jusqu'à épuisement. Page 1 (`hasMore: true`,
+    /// pleine) doit enchaîner sur la page 2 (`hasMore: false`) avec `offset: 100`,
+    /// et la liste finale doit contenir l'union des deux pages.
+    func test_loadFriends_paginatesAcrossTwoPagesUntilExhausted() async {
+        let (sut, friendService) = makeSUT(currentUserId: "me")
+        let firstPage = (1...100).map {
+            FriendRequestFixture.make(id: "p1-\($0)", senderId: "friend-\($0)", receiverId: "me", status: "accepted")
+        }
+        let secondPage = [
+            FriendRequestFixture.make(id: "p2-1", senderId: "friend-101", receiverId: "me", status: "accepted")
+        ]
+        friendService.allFriendRequestsResults = [
+            .success(makePage(requests: firstPage, hasMore: true, total: 101, offset: 0)),
+            .success(makePage(requests: secondPage, hasMore: false, total: 101, offset: 100))
+        ]
+
+        await sut.loadFriends(forceNetwork: true)
+
+        XCTAssertEqual(sut.friends.count, 101, "la liste finale doit contenir l'union des deux pages")
+        let ids = Set(sut.friends.map(\.id))
+        XCTAssertTrue(ids.contains("friend-1") && ids.contains("friend-100") && ids.contains("friend-101"))
+        XCTAssertEqual(friendService.allFriendRequestsCallCount, 2)
+        XCTAssertEqual(
+            friendService.allFriendRequestsOffsets, [0, 100],
+            "le second appel doit recevoir offset: 100, pas rejouer offset: 0"
+        )
+    }
+
+    /// Repli pour un gateway antérieur à la Task 1 (`hasMore` absent du bloc
+    /// `pagination`) : une page PLEINE (`data.count == limit`) doit être
+    /// interprétée comme « il en reste » — la boucle continue.
+    func test_loadFriends_missingHasMoreWithFullPage_continuesPagination() async {
+        let (sut, friendService) = makeSUT(currentUserId: "me")
+        let firstPage = (1...100).map {
+            FriendRequestFixture.make(id: "p1-\($0)", senderId: "friend-\($0)", receiverId: "me", status: "accepted")
+        }
+        let secondPage = [
+            FriendRequestFixture.make(id: "p2-1", senderId: "friend-101", receiverId: "me", status: "accepted")
+        ]
+        friendService.allFriendRequestsResults = [
+            .success(makePage(requests: firstPage, hasMore: nil, offset: 0)),
+            .success(makePage(requests: secondPage, hasMore: false, offset: 100))
+        ]
+
+        await sut.loadFriends(forceNetwork: true)
+
+        XCTAssertEqual(
+            friendService.allFriendRequestsCallCount, 2,
+            "hasMore absent + page pleine (== limit) doit être traité comme 'il en reste', pas comme la fin"
+        )
+    }
+
+    /// Même absence de `hasMore`, mais une page PARTIELLE (`data.count < limit`)
+    /// doit être interprétée comme la fin — un seul appel, pas de boucle infinie.
+    func test_loadFriends_missingHasMoreWithPartialPage_stopsAfterOneCall() async {
+        let (sut, friendService) = makeSUT(currentUserId: "me")
+        let onlyPage = [
+            FriendRequestFixture.make(id: "p1-1", senderId: "friend-1", receiverId: "me", status: "accepted"),
+            FriendRequestFixture.make(id: "p1-2", senderId: "friend-2", receiverId: "me", status: "accepted"),
+            FriendRequestFixture.make(id: "p1-3", senderId: "friend-3", receiverId: "me", status: "accepted")
+        ]
+        friendService.allFriendRequestsResults = [
+            .success(makePage(requests: onlyPage, hasMore: nil, offset: 0))
+        ]
+
+        await sut.loadFriends(forceNetwork: true)
+
+        XCTAssertEqual(
+            friendService.allFriendRequestsCallCount, 1,
+            "hasMore absent + page partielle (< limit) doit être traité comme la fin — un seul appel"
+        )
+        XCTAssertEqual(sut.friends.count, 3)
+    }
+
     // MARK: - Filtering
 
     func test_filterOnline_showsOnlyOnlineUsers() async {

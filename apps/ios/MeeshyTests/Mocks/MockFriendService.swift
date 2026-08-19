@@ -16,6 +16,11 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
     var allFriendRequestsResult: Result<OffsetPaginatedAPIResponse<[FriendRequest]>, Error> = .success(
         OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     )
+    /// Séquence consommée un élément par appel (dépilée par `removeFirst()`), pour
+    /// exercer la boucle de pagination du ViewModel (plusieurs pages). Vide par
+    /// défaut : tant qu'elle est vide, `allFriendRequests` retombe sur le résultat
+    /// FIXE `allFriendRequestsResult` — aucun test existant à un seul appel n'est cassé.
+    var allFriendRequestsResults: [Result<OffsetPaginatedAPIResponse<[FriendRequest]>, Error>] = []
     var respondResult: Result<FriendRequest, Error> = .failure(NSError(domain: "test", code: 0))
     var deleteResult: Result<Void, Error> = .success(())
     var sendEmailInvitationResult: Result<Void, Error> = .success(())
@@ -37,6 +42,9 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
     var lastAllFriendRequestsStatus: String?
     var lastAllFriendRequestsOffset: Int?
     var lastAllFriendRequestsLimit: Int?
+    /// Un offset par appel, dans l'ordre — permet de vérifier la séquence
+    /// exacte parcourue par une boucle de pagination (ex: [0, 100]).
+    var allFriendRequestsOffsets: [Int] = []
 
     var respondCallCount = 0
     var lastRespondRequestId: String?
@@ -75,6 +83,10 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
         lastAllFriendRequestsStatus = status
         lastAllFriendRequestsOffset = offset
         lastAllFriendRequestsLimit = limit
+        allFriendRequestsOffsets.append(offset)
+        if !allFriendRequestsResults.isEmpty {
+            return try allFriendRequestsResults.removeFirst().get()
+        }
         return try allFriendRequestsResult.get()
     }
 
@@ -112,6 +124,8 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
         lastAllFriendRequestsStatus = nil
         lastAllFriendRequestsOffset = nil
         lastAllFriendRequestsLimit = nil
+        allFriendRequestsOffsets = []
+        allFriendRequestsResults = []
         respondCallCount = 0
         lastRespondRequestId = nil
         lastRespondAccepted = nil
