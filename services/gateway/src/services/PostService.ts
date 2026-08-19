@@ -647,20 +647,33 @@ export class PostService {
   /// route). Previously, every fetch silently inflated viewCount.
   async getPostById(postId: string, viewerUserId?: string) {
     const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
-    const post = await this.prisma.post.findFirst({
+    const detailInclude = {
+      ...postInclude,
+      // Le détail charge TOUTES les références, silencieuses comprises : c'est
+      // `projectReferencesForViewer` qui décide de ce que CE lecteur en voit.
+      // Filtrer ici priverait l'auteur de sa propre liste — et la personne
+      // silencieusement nommée de la seule réponse à sa notification.
+      //
+      // `postMentions` est le nom de la RELATION (le schéma nomme
+      // `Post.postMentions`) ; la clé exposée au client, elle, est `mentions`.
+      postMentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
+    };
+    const visible = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-      include: {
-        ...postInclude,
-        // Le détail charge TOUTES les références, silencieuses comprises : c'est
-        // `projectReferencesForViewer` qui décide de ce que CE lecteur en voit.
-        // Filtrer ici priverait l'auteur de sa propre liste — et la personne
-        // silencieusement nommée de la seule réponse à sa notification.
-        //
-        // `postMentions` est le nom de la RELATION (le schéma nomme
-        // `Post.postMentions`) ; la clé exposée au client, elle, est `mentions`.
-        postMentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
-      },
+      include: detailInclude,
     });
+
+    // Un référencé HORS audience ne passe pas le filtre ci-dessus — c'est
+    // pourtant lui que la référence a le droit d'amener ici : sa notification
+    // le mène à CETTE ouverture, et un 404 la rendrait morte. Même relecture
+    // que `recordView`, et rien de plus : le filtre reste seul maître pour un
+    // lecteur anonyme, qu'aucune référence ne peut désigner.
+    const post = visible ?? (viewerUserId
+      ? await this.prisma.post.findFirst({
+          where: { id: postId, deletedAt: NOT_DELETED },
+          include: detailInclude,
+        })
+      : null);
     if (!post) return null;
 
     const { postMentions, ...bare } = post;
@@ -676,21 +689,28 @@ export class PostService {
     // autorise.
     const now = new Date();
 
+    // Le verdict est résolu ICI, avant tout enrichissement, parce qu'il décide
+    // aussi de l'OUVERTURE : hors audience, seule une référence encore vivante
+    // ouvre le contenu. Une LECTURE ne dépense jamais rien — `attachReferenceAccess`
+    // lit, la consommation reste l'affaire de `POST /posts/:postId/view`.
+    const accessed = await attachReferenceAccess({
+      prisma: this.prisma,
+      post: bare,
+      viewerId: viewerUserId,
+      now,
+    });
+    if (!visible && accessed.referenceAccess !== 'granted') return null;
+
     // Anonymous read: no viewer-specific state to resolve.
     if (!viewerUserId) {
-      return attachReferenceAccess({
-        prisma: this.prisma,
-        post: {
-          ...bare,
-          mentions,
-          currentUserReactions: [],
-          isLikedByMe: false,
-          isBookmarkedByMe: false,
-          isRepostedByMe: false,
-        },
-        viewerId: viewerUserId,
-        now,
-      });
+      return {
+        ...accessed,
+        mentions,
+        currentUserReactions: [],
+        isLikedByMe: false,
+        isBookmarkedByMe: false,
+        isRepostedByMe: false,
+      };
     }
 
     // Personal-state enrichment, identical to PostFeedService so the post
@@ -737,19 +757,14 @@ export class PostService {
     ]);
     const currentUserReactions = userReactions.map((r) => r.emoji);
 
-    return attachReferenceAccess({
-      prisma: this.prisma,
-      post: {
-        ...bare,
-        mentions,
-        currentUserReactions,
-        isLikedByMe: currentUserReactions.length > 0,
-        isBookmarkedByMe: viewerBookmark !== null,
-        isRepostedByMe: viewerRepostCount > 0,
-      },
-      viewerId: viewerUserId,
-      now,
-    });
+    return {
+      ...accessed,
+      mentions,
+      currentUserReactions,
+      isLikedByMe: currentUserReactions.length > 0,
+      isBookmarkedByMe: viewerBookmark !== null,
+      isRepostedByMe: viewerRepostCount > 0,
+    };
   }
 
   /**

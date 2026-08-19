@@ -115,3 +115,87 @@ describe('PostService.getPostById — références', () => {
     expect(post).not.toHaveProperty('postMentions');
   });
 });
+
+// ─── L'ouverture unitaire d'un référencé HORS audience ───────────────────────
+//
+// Être nommé ouvre le contenu (spec §3.2) — et `GET /posts/:postId` est
+// nommément l'ouverture détaillée que cette règle vise. Le filtre d'audience
+// seul rendrait 404 à la personne que l'auteur vient de désigner : la
+// notification qu'elle reçoit mènerait nulle part.
+
+const BOB = 'u-bob';
+
+function makeReferencedPrisma(params: {
+  visible: unknown;
+  unfiltered: unknown;
+  reference: { expiredViewAt: Date | null } | null;
+}) {
+  const findFirst = jest.fn<any>()
+    .mockResolvedValueOnce(params.visible)
+    .mockResolvedValueOnce(params.unfiltered);
+  return {
+    post: { findFirst, count: jest.fn<any>().mockResolvedValue(0) },
+    postReaction: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    postBookmark: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    friendRequest: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    communityMember: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    postMention: { findUnique: jest.fn<any>().mockResolvedValue(params.reference) },
+  } as any;
+}
+
+describe('PostService.getPostById — le référencé hors audience', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('sert le contenu à qui y est nommé, même hors de son audience', async () => {
+    const prisma = makeReferencedPrisma({
+      visible: null,
+      unfiltered: makePost(),
+      reference: { expiredViewAt: null },
+    });
+
+    const post = await new PostService(prisma).getPostById('p-1', BOB);
+
+    expect(post).not.toBeNull();
+    expect((post as any).referenceAccess).toBe('granted');
+  });
+
+  it('refuse quand le droit de référence est éteint', async () => {
+    const prisma = makeReferencedPrisma({
+      visible: null,
+      unfiltered: makePost({ expiresAt: new Date(Date.now() - 48 * 3600_000) }),
+      reference: { expiredViewAt: new Date(Date.now() - 30 * 3600_000) },
+    });
+
+    expect(await new PostService(prisma).getPostById('p-1', BOB)).toBeNull();
+  });
+
+  it('refuse un lecteur hors audience que rien ne nomme', async () => {
+    const prisma = makeReferencedPrisma({
+      visible: null,
+      unfiltered: makePost(),
+      reference: null,
+    });
+
+    expect(await new PostService(prisma).getPostById('p-1', BOB)).toBeNull();
+  });
+
+  it('ne relit rien pour un lecteur anonyme — aucune référence ne le désigne', async () => {
+    const prisma = makeReferencedPrisma({ visible: null, unfiltered: makePost(), reference: null });
+
+    expect(await new PostService(prisma).getPostById('p-1', undefined)).toBeNull();
+    expect(prisma.post.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('n\'émet aucune seconde lecture quand l\'audience suffit', async () => {
+    const prisma = makeReferencedPrisma({
+      visible: makePost(),
+      unfiltered: null,
+      reference: null,
+    });
+
+    expect(await new PostService(prisma).getPostById('p-1', BOB)).not.toBeNull();
+    expect(prisma.post.findFirst).toHaveBeenCalledTimes(1);
+  });
+});
