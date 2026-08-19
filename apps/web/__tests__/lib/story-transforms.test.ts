@@ -185,6 +185,18 @@ describe('postToStoryData', () => {
     expect(result.expiresAt).toBeDefined();
     expect(new Date(result.expiresAt).getTime()).toBeGreaterThan(Date.now());
   });
+
+  it('passes referenceAccess through unchanged — the viewer, never this mapper, decides what it means', () => {
+    const granted = postToStoryData(createPost({ referenceAccess: 'granted' }));
+    const consumed = postToStoryData(createPost({ referenceAccess: 'consumed' }));
+    const none = postToStoryData(createPost({ referenceAccess: 'none' }));
+    const absent = postToStoryData(createPost({ referenceAccess: undefined }));
+
+    expect(granted.referenceAccess).toBe('granted');
+    expect(consumed.referenceAccess).toBe('consumed');
+    expect(none.referenceAccess).toBe('none');
+    expect(absent.referenceAccess).toBeUndefined();
+  });
 });
 
 describe('groupStoriesByAuthor', () => {

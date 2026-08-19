@@ -497,6 +497,69 @@ describe('notification-helpers - Structure Groupée V2', () => {
     });
   });
 
+  describe('getNotificationLink — références (Task 7, plan post-references-web)', () => {
+    // Forme EXACTE émise par NotificationService.createPostMentionNotificationsBatch
+    // (services/gateway/src/services/notifications/NotificationService.ts) : une
+    // référence de post partage le type `user_mentioned` des mentions message, et
+    // se distingue par `context.postId` + `metadata.entityType: 'post'`. Le
+    // routage n'a besoin d'aucun code dédié — il retombe sur le mécanisme
+    // générique `metadata.postType` déjà exercé par les mentions POST_LIKE etc.
+    // ci-dessus (commit 4b12a1b06).
+    const makeReferenceNotif = (postType: string): Notification => ({
+      id: 'notif_ref',
+      userId: 'user_recipient',
+      type: NotificationTypeEnum.USER_MENTIONED,
+      priority: 'high',
+      content: '',
+      actor: { id: 'a', username: 'bob', displayName: 'Bob', avatar: null },
+      context: { postId: 'p1' },
+      metadata: { action: 'view_post', entityType: 'post', postId: 'p1', postType } as any,
+      state: { isRead: false, readAt: null, createdAt: new Date() },
+      delivery: { emailSent: false, pushSent: false },
+    });
+
+    it('route une référence de post vers /post/:postId', () => {
+      expect(getNotificationLink(makeReferenceNotif('POST'))).toBe('/post/p1');
+    });
+
+    it('route une référence de story vers le viewer de story', () => {
+      expect(getNotificationLink(makeReferenceNotif('STORY'))).toBe('/story/p1');
+    });
+
+    it('route une référence de réel vers le lecteur de réels', () => {
+      expect(getNotificationLink(makeReferenceNotif('REEL'))).toBe('/reel/p1');
+    });
+
+    it('route une référence de statut (mood) vers /mood', () => {
+      expect(getNotificationLink(makeReferenceNotif('STATUS'))).toBe('/mood/p1');
+    });
+
+    it("context.postExpiresAt passé ne bloque aucun clic — c'est un marqueur visuel, pas une garde (Task 6 décide de l'affichage, pas le routage)", () => {
+      const n = makeReferenceNotif('STORY');
+      const withExpiry: Notification = {
+        ...n,
+        context: { ...n.context, postExpiresAt: new Date(Date.now() - 3600_000).toISOString() },
+      };
+      expect(getNotificationLink(withExpiry)).toBe('/story/p1');
+    });
+
+    it('une mention MESSAGE (conversationId, sans postId) reste routée vers la conversation — non-régression', () => {
+      const n: Notification = {
+        id: 'notif_msg_mention',
+        userId: 'user_recipient',
+        type: NotificationTypeEnum.USER_MENTIONED,
+        priority: 'high',
+        content: '',
+        actor: { id: 'a', username: 'bob', displayName: 'Bob', avatar: null },
+        context: { conversationId: 'conv_1' },
+        metadata: {},
+        state: { isRead: false, readAt: null, createdAt: new Date() },
+        delivery: { emailSent: false, pushSent: false },
+      };
+      expect(getNotificationLink(n)).toBe('/conversations/conv_1');
+    });
+  });
+
   describe('formatNotificationTimeAgo', () => {
     const t = (key: string): string => {
       const map: Record<string, string> = {

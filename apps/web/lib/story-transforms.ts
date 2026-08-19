@@ -373,6 +373,11 @@ export function postToStoryData(post: Post): StoryData {
       ? (typeof post.expiresAt === 'string' ? post.expiresAt : post.expiresAt.toISOString())
       : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     viewCount: post.viewCount,
+    // Le droit d'ouvrir cette story malgré son expiration — déclaré par le
+    // serveur (`resolveReferenceAccess`), jamais recalculé depuis `expiresAt`
+    // côté client. `undefined` (serveur non déployé) se lit comme `'none'`
+    // dans `StoryViewer` : un contenu expiré sans ce champ reste bloqué.
+    referenceAccess: post.referenceAccess,
   };
 }
 

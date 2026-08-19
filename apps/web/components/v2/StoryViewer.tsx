@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import type { ReferenceAccess } from '@meeshy/shared/types/post-reference';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
@@ -122,6 +123,13 @@ interface StoryData {
   createdAt: string;
   expiresAt: string;
   viewCount: number;
+  /**
+   * Le droit du LECTEUR d'ouvrir cette story malgré son expiration parce qu'il
+   * y est référencé — déclaré par le serveur, jamais recalculé depuis
+   * `expiresAt` côté client (CLAUDE.md § Prisme référence). Absent = comme
+   * `'none'` : un contenu expiré sans ce champ reste bloqué.
+   */
+  referenceAccess?: ReferenceAccess;
 }
 
 interface StoryViewerProps {
@@ -176,6 +184,13 @@ function timeAgo(dateStr: string): string {
   if (mins < 60) return `${mins}min`;
   const hrs = Math.floor(mins / 60);
   return `${hrs}h`;
+}
+
+/// `expiresAt` decides WHEN to block, never WHETHER access is allowed once
+/// blocked — that verdict belongs to `referenceAccess` alone (CLAUDE.md §
+/// Prisme référence: "jamais recalculé depuis expiresAt").
+function isPastExpiry(expiresAt: string | undefined, now: number): boolean {
+  return Boolean(expiresAt) && new Date(expiresAt as string).getTime() <= now;
 }
 
 /// Resolve a Prisme-chain pick for a per-text translation map. The web side
@@ -457,6 +472,13 @@ function StoryViewer({
 
   const story = stories[currentIndex];
 
+  // Le rendu ne consomme jamais le droit de référence ; seule la vue
+  // AFFICHÉE le fait (StoryPage.onView → POST /posts/:id/view). Calculé ici,
+  // avant tout hook qui en dépend — `referenceAccess` tranche seul si un
+  // contenu expiré s'ouvre malgré tout, jamais `expiresAt` recalculé.
+  const isCurrentStoryExpired = isPastExpiry(story?.expiresAt, Date.now());
+  const referenceAccessBlocked = isCurrentStoryExpired && story?.referenceAccess !== 'granted';
+
   // ---- Navigation ----
   const goNext = useCallback(() => {
     if (currentIndex < stories.length - 1) {
@@ -473,13 +495,18 @@ function StoryViewer({
   }, [currentIndex]);
 
   // ---- Mark as viewed ----
+  // Un contenu expiré est exclu du marquage automatique au montage : le même
+  // appel (`POST /posts/:id/view`) consomme aussi la fenêtre de référence, et
+  // la déclencher au simple rendu ouvrirait cette fenêtre avant que le
+  // lecteur ait réellement vu quoi que ce soit (montage, préchargement…).
   useEffect(() => {
     if (!story) return;
+    if (isCurrentStoryExpired) return;
     if (!viewedRef.current.has(story.id)) {
       viewedRef.current.add(story.id);
       onView?.(story.id);
     }
-  }, [story, onView]);
+  }, [story, onView, isCurrentStoryExpired]);
 
   // ---- Auto-advance timer ----
   // Honor the per-story `slideDurationMs` (set by the composer to fit longer
@@ -769,6 +796,26 @@ function StoryViewer({
   if (!story) {
     onClose();
     return null;
+  }
+
+  // Contenu expiré et droit de référence éteint (ou absent) : l'écran de fin,
+  // jamais le contenu. `referenceAccess` est la SEULE source de ce verdict —
+  // voir `isCurrentStoryExpired`/`referenceAccessBlocked` ci-dessus.
+  if (referenceAccessBlocked) {
+    return createPortal(
+      <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center gap-4 text-white">
+        <p className="max-w-xs text-center text-sm text-white/70">
+          {t('storyReferenceUnavailable', "Ce contenu n'est plus disponible.")}
+        </p>
+        <button
+          onClick={onClose}
+          className="rounded-full bg-white/15 px-6 py-2 text-sm font-medium hover:bg-white/25 transition-colors"
+        >
+          {t('common.close')}
+        </button>
+      </div>,
+      document.body
+    );
   }
 
   const effects = story.storyEffects;
