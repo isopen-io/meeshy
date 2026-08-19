@@ -224,4 +224,52 @@ describe('PostDetail — repost rendering', () => {
       expect(onTapRepost).not.toHaveBeenCalled();
     });
   });
+
+  // Majeur D — même chaîne que PostCard : `repostOf.mentions` était TOUJOURS
+  // `undefined` tant que le gateway ne peuplait pas `postMentions` sur
+  // `repostOf`. Maintenant qu'il le peuple (postIncludes.ts
+  // `repostOfInclude.postMentions`), la citation doit surligner UNIQUEMENT ce
+  // que le serveur a validé, et la rangée « Avec … » ne doit plus être
+  // structurellement vide.
+  describe("le contenu cité surligne selon les références de l'ORIGINAL", () => {
+    const carol = {
+      userId: 'u-carol', username: 'carol', displayName: 'Carol', avatar: null, display: 'NOTE' as const,
+    };
+
+    it('linkifie un pseudo présent dans repostOf.mentions', () => {
+      render(
+        <PostDetail
+          post={makePost({ repostOf: { ...repostOf, content: 'Soirée avec @carol hier', mentions: [carol] } })}
+          comments={[]}
+        />,
+      );
+
+      expect(screen.getByRole('link', { name: '@carol' })).toHaveAttribute('href', '/u/carol');
+    });
+
+    it("NE linkifie PAS un pseudo absent de repostOf.mentions — le lien mort que la validation existe pour supprimer", () => {
+      render(
+        <PostDetail
+          post={makePost({
+            repostOf: { ...repostOf, content: 'Soirée avec @nimportequoi hier', mentions: [carol] },
+          })}
+          comments={[]}
+        />,
+      );
+
+      expect(screen.queryByRole('link', { name: '@nimportequoi' })).toBeNull();
+      expect(screen.getByText(/@nimportequoi/)).toBeInTheDocument();
+    });
+
+    it("la rangée « Avec … » n'est plus structurellement vide sur le repost", () => {
+      render(
+        <PostDetail
+          post={makePost({ repostOf: { ...repostOf, content: 'Une soirée mémorable', mentions: [carol] } })}
+          comments={[]}
+        />,
+      );
+
+      expect(screen.getByText('Carol')).toBeInTheDocument();
+    });
+  });
 });
