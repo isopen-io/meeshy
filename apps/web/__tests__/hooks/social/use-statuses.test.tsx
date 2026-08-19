@@ -150,4 +150,38 @@ describe('useCreateStatusMutation', () => {
     const cache = qc.getQueryData<Post[]>(['posts', 'list', 'statuses']);
     expect(cache?.map((s) => s.id)).toEqual(['st-new', 'st-old']);
   });
+
+  // The mutationFn hand-picks the fields it forwards to `postsService.createPost`
+  // — `mentions` was missing entirely (plan post-references-web, Task 5).
+  it('passes mentions through to postsService.createPost when provided', async () => {
+    mockCreatePost.mockResolvedValue({ success: true, data: makeStatus() });
+    const qc = makeQC();
+
+    const { result } = renderHook(() => useCreateStatusMutation(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        moodEmoji: '🔥',
+        content: 'on fire',
+        mentions: [{ userId: 'u-a', display: 'SILENT' }],
+      });
+    });
+
+    expect(mockCreatePost).toHaveBeenCalledWith(
+      expect.objectContaining({ mentions: [{ userId: 'u-a', display: 'SILENT' }] }),
+    );
+  });
+
+  it('omits mentions when not provided (tri-state, never [])', async () => {
+    mockCreatePost.mockResolvedValue({ success: true, data: makeStatus() });
+    const qc = makeQC();
+
+    const { result } = renderHook(() => useCreateStatusMutation(), { wrapper: wrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ moodEmoji: '😴' });
+    });
+
+    expect(mockCreatePost.mock.calls[0][0]).not.toHaveProperty('mentions');
+  });
 });

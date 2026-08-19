@@ -92,6 +92,20 @@ describe('postsService', () => {
 
       expect(mockApi.post).toHaveBeenCalledWith('/posts', body);
     });
+
+    it('forwards mentions when the body carries declared references', async () => {
+      const body = {
+        content: 'Soirée avec elle',
+        type: 'POST' as const,
+        visibility: 'PUBLIC' as const,
+        mentions: [{ userId: 'u-a', display: 'SILENT' as const }],
+      };
+      mockApi.post.mockResolvedValue({ success: true, data: { id: 'new-1', ...body } });
+
+      await postsService.createPost(body);
+
+      expect(mockApi.post).toHaveBeenCalledWith('/posts', body);
+    });
   });
 
   describe('updatePost', () => {

@@ -37,6 +37,7 @@ import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
 import type { MobileTranscription } from '@/services/posts.service';
 import type { Post, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { shareLink } from '@/lib/share-utils';
 
@@ -268,7 +269,14 @@ export function PostsFeedScreen() {
   );
 
   const handleStoryPublish = useCallback(
-    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; visibilityUserIds?: string[]; mediaIds?: string[] }) => {
+    (story: {
+      content?: string;
+      storyEffects: Record<string, unknown>;
+      visibility: StoryVisibility;
+      visibilityUserIds?: string[];
+      mediaIds?: string[];
+      mentions?: readonly PostReferenceInput[];
+    }) => {
       setStoryComposerOpen(false);
       createStoryMutation.mutate(
         {
@@ -278,6 +286,7 @@ export function PostsFeedScreen() {
           visibilityUserIds: story.visibilityUserIds,
           mediaIds: story.mediaIds,
           originalLanguage: userLanguage,
+          ...(story.mentions ? { mentions: story.mentions } : {}),
         },
         {
           onSuccess: () => {
@@ -379,6 +388,7 @@ export function PostsFeedScreen() {
           visibilityUserIds: data.visibilityUserIds,
           mediaIds: data.mediaIds,
           optimisticMedia: data.optimisticMedia,
+          ...(data.mentions ? { mentions: data.mentions } : {}),
         },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
@@ -633,10 +643,15 @@ export function PostsFeedScreen() {
   );
 
   const handleStatusPublish = useCallback(
-    (status: { moodEmoji: string; content?: string }) => {
+    (status: { moodEmoji: string; content?: string; mentions?: readonly PostReferenceInput[] }) => {
       setStatusComposerOpen(false);
       createStatusMutation.mutate(
-        { moodEmoji: status.moodEmoji, content: status.content, originalLanguage: userLanguage },
+        {
+          moodEmoji: status.moodEmoji,
+          content: status.content,
+          originalLanguage: userLanguage,
+          ...(status.mentions ? { mentions: status.mentions } : {}),
+        },
         {
           onSuccess: () =>
             showToast(t('toast.moodPublished', 'Mood published!'), 'success', `${status.moodEmoji} ${status.content || ''}`),

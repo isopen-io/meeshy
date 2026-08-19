@@ -1,6 +1,7 @@
 import { apiService } from './api.service';
 import type { Post, PostVisibility, PostView } from '@meeshy/shared/types/post';
 import type { ApiResponse } from '@meeshy/shared/types';
+import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 
 // ============================================================================
 // Types
@@ -13,6 +14,8 @@ export interface CreateStoryRequest {
   readonly storyEffects?: Record<string, unknown>;
   readonly mediaIds?: readonly string[];
   readonly originalLanguage?: string;
+  /** Declared, non-INLINE references only — absent (not `[]`) when not touched (tri-state). */
+  readonly mentions?: readonly PostReferenceInput[];
 }
 
 export interface StoryViewersResponse {
@@ -79,6 +82,7 @@ class StoryService {
       storyEffects: data.storyEffects,
       mediaIds: data.mediaIds,
       originalLanguage: data.originalLanguage,
+      ...(data.mentions ? { mentions: data.mentions } : {}),
     });
     if (!response.data) {
       throw new Error('Failed to create story');

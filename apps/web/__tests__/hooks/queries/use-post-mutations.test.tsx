@@ -181,6 +181,32 @@ describe('useCreatePostMutation', () => {
     expect(mockCreatePost).toHaveBeenCalledWith({ content: 'New post', type: 'POST', visibility: 'PUBLIC' });
   });
 
+  // `mutationFn` spreads `data` as-is (`{ optimisticMedia, ...data }`), so
+  // `mentions` was never dropped here — this locks that passthrough in place
+  // (plan post-references-web, Task 5).
+  it('forwards mentions to postsService.createPost when provided', async () => {
+    const qc = createQueryClient();
+    mockCreatePost.mockResolvedValue({ success: true, data: { ...mockPost, id: 'new-1' } });
+
+    const { result } = renderHook(() => useCreatePostMutation(), {
+      wrapper: createWrapper(qc),
+    });
+
+    await act(async () => {
+      result.current.mutate({
+        content: 'Soirée avec elle',
+        type: 'POST',
+        visibility: 'PUBLIC',
+        mentions: [{ userId: 'u-a', display: 'SILENT' }],
+      });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mockCreatePost).toHaveBeenCalledWith(
+      expect.objectContaining({ mentions: [{ userId: 'u-a', display: 'SILENT' }] }),
+    );
+  });
+
   it('optimistically prepends post to feed', async () => {
     const qc = createQueryClient();
     seedFeed(qc);

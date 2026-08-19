@@ -7,6 +7,7 @@ import type {
   PostVisibility,
   PostView,
 } from '@meeshy/shared/types/post';
+import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 
 // ---------------------------------------------------------------------------
 // Request / Response types
@@ -40,6 +41,8 @@ export interface CreatePostRequest {
   readonly originalLanguage?: string;
   readonly mediaIds?: string[];
   readonly mobileTranscription?: MobileTranscription;
+  /** Declared, non-INLINE references only — absent (not `[]`) when not touched (tri-state). */
+  readonly mentions?: readonly PostReferenceInput[];
 }
 
 export interface UpdatePostRequest {

@@ -1,19 +1,18 @@
 /**
- * PostsFeedScreen — handlePublish relay (Task 1, P0 web social parity)
+ * PostsFeedScreen — StatusComposer/StoryComposer relay of `mentions` (plan
+ * post-references-web, Task 5).
  *
- * `handlePublish` used to destructure only {content, type, visibility} before
- * calling createPostMutation.mutate(...), silently dropping mediaIds and
- * visibilityUserIds from PostComposer's onPublish payload. This verifies the
- * full payload — including a media-only post — reaches the mutation intact.
- *
- * Every dependency of PostsFeedScreen is mocked; PostComposer itself is
- * replaced by a stub that captures the onPublish callback so the test can
- * invoke it directly with a full PostPublishPayload, matching the exact
- * shape PostComposer's real onPublish prop produces.
+ * Same class of bug as `PostsFeedScreen.handlePublish.test.tsx`:
+ * `handleStatusPublish`/`handleStoryPublish` hand-pick the fields they
+ * forward to `createStatusMutation`/`createStoryMutation`, silently dropping
+ * `mentions` — the composer computes the right payload, but it never leaves
+ * the client. Every dependency of PostsFeedScreen is mocked; StatusComposer
+ * and StoryComposer are stubbed to capture their onPublish callback so the
+ * test can invoke it directly with the exact shape the real composers
+ * produce.
  */
 import { render } from '@testing-library/react';
 import React from 'react';
-import type { PostPublishPayload } from '@/components/v2/PostComposer';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn() }),
@@ -30,6 +29,9 @@ jest.mock('@/hooks/use-i18n', () => ({
   }),
 }));
 
+const capturedOnStatusPublish: { current: ((data: unknown) => void) | null } = { current: null };
+const capturedOnStoryPublish: { current: ((data: unknown) => void) | null } = { current: null };
+
 jest.mock('@/components/v2', () => ({
   Button: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => (
     <button onClick={onClick}>{children}</button>
@@ -39,16 +41,18 @@ jest.mock('@/components/v2', () => ({
   StoryTray: () => <div data-testid="story-tray" />,
   StatusBar: () => <div data-testid="status-bar" />,
   StoryViewer: () => null,
-  StoryComposer: () => null,
-  StatusComposer: () => null,
+  StoryComposer: ({ onPublish }: { onPublish: (data: unknown) => void }) => {
+    capturedOnStoryPublish.current = onPublish;
+    return <div data-testid="story-composer-stub" />;
+  },
+  StatusComposer: ({ onPublish }: { onPublish: (data: unknown) => void }) => {
+    capturedOnStatusPublish.current = onPublish;
+    return <div data-testid="status-composer-stub" />;
+  },
 }));
 
-const capturedOnPublish: { current: ((data: PostPublishPayload) => void) | null } = { current: null };
 jest.mock('@/components/v2/PostComposer', () => ({
-  PostComposer: ({ onPublish }: { onPublish: (data: PostPublishPayload) => void }) => {
-    capturedOnPublish.current = onPublish;
-    return <div data-testid="post-composer-stub" />;
-  },
+  PostComposer: () => <div data-testid="post-composer-stub" />,
 }));
 
 jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
@@ -56,9 +60,10 @@ jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
+const mockCreateStoryMutate = jest.fn();
 jest.mock('@/hooks/social/use-stories', () => ({
   useStoriesFeedQuery: () => ({ data: [], isLoading: false }),
-  useCreateStoryMutation: () => ({ mutate: jest.fn() }),
+  useCreateStoryMutation: () => ({ mutate: mockCreateStoryMutate }),
   useDeleteStoryMutation: () => ({ mutate: jest.fn() }),
   useRecordStoryViewMutation: () => ({ recordView: jest.fn() }),
 }));
@@ -72,10 +77,11 @@ jest.mock('@/stores/user-preferences-store', () => ({
   useStoryPreferences: () => ({ preferences: { defaultVisibility: 'FRIENDS' } }),
 }));
 
+const mockCreateStatusMutate = jest.fn();
 jest.mock('@/hooks/social/use-statuses', () => ({
   useStatusesFeedQuery: () => ({ isLoading: false }),
   useStatusesList: () => [],
-  useCreateStatusMutation: () => ({ mutate: jest.fn() }),
+  useCreateStatusMutation: () => ({ mutate: mockCreateStatusMutate }),
 }));
 jest.mock('@/lib/status-transforms', () => ({ postToStatusItem: jest.fn() }));
 
@@ -96,9 +102,8 @@ jest.mock('@/hooks/queries/use-feed-query', () => ({
   usePrefetchPost: () => jest.fn(),
 }));
 
-const mockCreatePostMutate = jest.fn();
 jest.mock('@/hooks/queries/use-post-mutations', () => ({
-  useCreatePostMutation: () => ({ mutate: mockCreatePostMutate, isPending: false }),
+  useCreatePostMutation: () => ({ mutate: jest.fn(), isPending: false }),
   useLikePostMutation: () => ({ mutate: jest.fn() }),
   useUnlikePostMutation: () => ({ mutate: jest.fn() }),
   useSharePostMutation: () => ({ mutate: jest.fn() }),
@@ -137,122 +142,59 @@ jest.mock('@/lib/clipboard', () => ({ copyToClipboard: jest.fn() }));
 
 import { PostsFeedScreen } from '@/components/feed/PostsFeedScreen';
 
-describe('PostsFeedScreen — handlePublish relay (Task 1)', () => {
+describe('PostsFeedScreen — StatusComposer/StoryComposer references relay (Task 5)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    capturedOnPublish.current = null;
+    capturedOnStatusPublish.current = null;
+    capturedOnStoryPublish.current = null;
   });
 
-  it('relays the full PostComposer payload (content, type, visibility, visibilityUserIds, mediaIds) to createPostMutation', () => {
+  it('relays mentions from StatusComposer to createStatusMutation', () => {
     render(<PostsFeedScreen />);
-    expect(capturedOnPublish.current).not.toBeNull();
+    expect(capturedOnStatusPublish.current).not.toBeNull();
 
-    capturedOnPublish.current!({
-      content: 'Hello world',
-      type: 'POST',
-      visibility: 'ONLY',
-      visibilityUserIds: ['user-2', 'user-3'],
-      mediaIds: ['att-1', 'att-2'],
-    });
-
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      {
-        content: 'Hello world',
-        type: 'POST',
-        visibility: 'ONLY',
-        visibilityUserIds: ['user-2', 'user-3'],
-        mediaIds: ['att-1', 'att-2'],
-      },
-      expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) }),
-    );
-  });
-
-  it('relays a media-only post (empty content becomes undefined, mediaIds preserved)', () => {
-    render(<PostsFeedScreen />);
-
-    capturedOnPublish.current!({
-      content: '',
-      type: 'POST',
-      visibility: 'PUBLIC',
-      mediaIds: ['att-1'],
-    });
-
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ content: undefined, mediaIds: ['att-1'], visibility: 'PUBLIC' }),
-      expect.anything(),
-    );
-  });
-
-  it('relays optimisticMedia to createPostMutation (Task 4, point 0bis)', () => {
-    render(<PostsFeedScreen />);
-
-    const optimisticMedia = [
-      { id: 'att-1', mimeType: 'image/png', fileUrl: 'https://cdn.test/1.png', thumbnailUrl: undefined, order: 0 },
-    ];
-    capturedOnPublish.current!({
-      content: '',
-      type: 'POST',
-      visibility: 'PUBLIC',
-      mediaIds: ['att-1'],
-      optimisticMedia,
-    });
-
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ optimisticMedia }),
-      expect.anything(),
-    );
-  });
-
-  it('omits visibilityUserIds and mediaIds when PostComposer does not send them', () => {
-    render(<PostsFeedScreen />);
-
-    capturedOnPublish.current!({
-      content: 'Text only',
-      type: 'POST',
-      visibility: 'PUBLIC',
-    });
-
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
-      {
-        content: 'Text only',
-        type: 'POST',
-        visibility: 'PUBLIC',
-        visibilityUserIds: undefined,
-        mediaIds: undefined,
-      },
-      expect.anything(),
-    );
-  });
-
-  // Same class of bug as mediaIds/visibilityUserIds above (plan
-  // post-references-web, Task 5): PostComposer's onPublish carries `mentions`,
-  // but handlePublish hand-picked fields and dropped it before reaching the
-  // mutation — a silent no-op, never a visible error.
-  it('relays mentions to createPostMutation (post-references)', () => {
-    render(<PostsFeedScreen />);
-
-    capturedOnPublish.current!({
-      content: 'Soirée avec elle',
-      type: 'POST',
-      visibility: 'PUBLIC',
+    capturedOnStatusPublish.current!({
+      moodEmoji: '🔥',
+      content: 'on fire',
       mentions: [{ userId: 'u-a', display: 'SILENT' }],
     });
 
-    expect(mockCreatePostMutate).toHaveBeenCalledWith(
+    expect(mockCreateStatusMutate).toHaveBeenCalledWith(
       expect.objectContaining({ mentions: [{ userId: 'u-a', display: 'SILENT' }] }),
       expect.anything(),
     );
   });
 
-  it('omits mentions when PostComposer does not send them (tri-state, never [])', () => {
+  it('omits mentions from createStatusMutation when StatusComposer does not send them', () => {
     render(<PostsFeedScreen />);
 
-    capturedOnPublish.current!({
-      content: 'No one referenced',
-      type: 'POST',
-      visibility: 'PUBLIC',
+    capturedOnStatusPublish.current!({ moodEmoji: '😴', content: undefined });
+
+    expect(mockCreateStatusMutate.mock.calls[0][0]).not.toHaveProperty('mentions');
+  });
+
+  it('relays mentions from StoryComposer to createStoryMutation', () => {
+    render(<PostsFeedScreen />);
+    expect(capturedOnStoryPublish.current).not.toBeNull();
+
+    capturedOnStoryPublish.current!({
+      content: 'Soirée avec elle',
+      storyEffects: {},
+      visibility: 'FRIENDS',
+      mentions: [{ userId: 'u-a', display: 'SILENT' }],
     });
 
-    expect(mockCreatePostMutate.mock.calls[0][0]).not.toHaveProperty('mentions');
+    expect(mockCreateStoryMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ mentions: [{ userId: 'u-a', display: 'SILENT' }] }),
+      expect.anything(),
+    );
+  });
+
+  it('omits mentions from createStoryMutation when StoryComposer does not send them', () => {
+    render(<PostsFeedScreen />);
+
+    capturedOnStoryPublish.current!({ content: 'No one referenced', storyEffects: {}, visibility: 'FRIENDS' });
+
+    expect(mockCreateStoryMutate.mock.calls[0][0]).not.toHaveProperty('mentions');
   });
 });

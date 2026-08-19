@@ -5,6 +5,7 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
 import { useAuthStore } from '@/stores/auth-store';
 import type { Post, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 
 // ============================================================================
 // useStatusesFeedQuery
@@ -53,6 +54,8 @@ export interface CreateStatusInput {
   content?: string;
   visibility?: PostVisibility;
   originalLanguage?: string;
+  /** Declared, non-INLINE references only — absent (not `[]`) when not touched (tri-state). */
+  mentions?: readonly PostReferenceInput[];
 }
 
 export function useCreateStatusMutation() {
@@ -66,6 +69,7 @@ export function useCreateStatusMutation() {
         content: input.content,
         visibility: input.visibility ?? 'PUBLIC',
         originalLanguage: input.originalLanguage,
+        ...(input.mentions ? { mentions: input.mentions } : {}),
       }),
 
     onSuccess: (result) => {

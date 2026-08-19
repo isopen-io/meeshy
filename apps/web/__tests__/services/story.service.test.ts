@@ -176,6 +176,34 @@ describe('storyService', () => {
         'Failed to create story',
       );
     });
+
+    // `createStory` hand-picks the fields it forwards to `apiService.post` —
+    // same class of bug as the other optional fields above, but `mentions`
+    // was missing entirely (plan post-references-web, Task 5).
+    it('passes mentions when provided', async () => {
+      const story = makePost();
+      mockApi.post.mockResolvedValue({ success: true, data: story });
+
+      await storyService.createStory({
+        content: 'Soirée avec elle',
+        mentions: [{ userId: 'u-a', display: 'SILENT' }],
+      });
+
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/posts',
+        expect.objectContaining({ mentions: [{ userId: 'u-a', display: 'SILENT' }] }),
+      );
+    });
+
+    it('omits mentions when not provided (tri-state, never [])', async () => {
+      const story = makePost();
+      mockApi.post.mockResolvedValue({ success: true, data: story });
+
+      await storyService.createStory({ content: 'No one referenced' });
+
+      const [, body] = mockApi.post.mock.calls[0];
+      expect(body).not.toHaveProperty('mentions');
+    });
   });
 
   // ── deleteStory ────────────────────────────────────────────────────────────
