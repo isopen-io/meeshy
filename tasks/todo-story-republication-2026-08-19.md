@@ -44,15 +44,19 @@ règle d'audience, pas une construction.
 5. **Nommage** : le libellé du repost du rail dit « Partager » ; « Éditer et
    republier en post » devient « Citer en poste ». 7 langues à mettre à jour.
 
-## Décisions à confirmer avant implémentation
+## Décisions — TRANCHÉES par l'utilisateur le 2026-08-19
 
-- **D1** — Ouvre-t-on la republication aux stories FRIENDS/PRIVATE (écart 3) ?
-  C'est ce qu'implique la règle d'audience, mais cela élargit le produit.
-- **D2** — Le rail garde-t-il un bouton (devenu « Republier ») ou tout part-il
-  dans (...) ? La demande dit « mettre l'option partage dans le menu (...) »,
-  sans trancher pour la republication elle-même.
-- **D3** — « Republier en poste » (direct, sans composeur) conserve-t-il son
-  comportement actuel un-tap, ou passe-t-il aussi par un composeur ?
+- **D1 — OUI, les stories FRIENDS/PRIVATE deviennent republiables**, à audience
+  égale ou plus restreinte. Le gating `showsRepost: !isOwnStory &&
+  isPublicStory` est donc à relâcher en `!isOwnStory`, la restriction
+  d'audience prenant le relais. FRIENDS → {FRIENDS, PRIVATE} ;
+  PRIVATE → {PRIVATE}.
+- **D2 — Le rail GARDE un bouton, renommé « Republier »**, qui ouvre le Story
+  composer. Les 3 formes de partage vont dans (...). La republication reste à
+  un geste.
+- **D3 — « Republier en poste » reste DIRECT (un tap)**, sans composeur : c'est
+  ce qui le distingue de « Citer en poste ». Comportement actuel de
+  `repostAsPostDirect` conservé tel quel.
 
 ## Ordre d'exécution proposé (TDD)
 
