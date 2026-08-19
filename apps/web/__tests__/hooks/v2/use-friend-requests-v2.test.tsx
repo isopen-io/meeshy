@@ -182,6 +182,60 @@ describe('useFriendRequestsV2', () => {
     expect(mockPatch).toHaveBeenCalledWith('/friend-requests/req1', { status: 'accepted' });
   });
 
+  it('reflète connected de façon optimiste dès acceptRequest, avant toute résolution réseau', async () => {
+    const received = [makeFriendRequest({ id: 'r1', senderId: 'other', receiverId: 'me', status: 'pending' })];
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/friend-requests/received') {
+        return Promise.resolve({ data: { success: true, data: received, pagination: { total: 1 } } });
+      }
+      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+    });
+
+    let resolvePatch: (value: unknown) => void = () => {};
+    mockPatch.mockImplementation(() => new Promise((resolve) => { resolvePatch = resolve; }));
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.connected).toHaveLength(0);
+
+    act(() => {
+      result.current.acceptRequest('r1');
+    });
+
+    await waitFor(() => expect(result.current.connected).toHaveLength(1));
+    expect(result.current.connected[0].id).toBe('r1');
+
+    await act(async () => {
+      resolvePatch({ data: { success: true, data: makeFriendRequest({ id: 'r1', status: 'accepted' }) } });
+    });
+  });
+
+  it('retire optimistiquement une relation connectée dès cancelRequest, avant toute résolution réseau', async () => {
+    const accepted = [makeFriendRequest({ id: 'r1', senderId: 'other', receiverId: 'me', status: 'accepted' })];
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/users/friend-requests') {
+        return Promise.resolve({ data: { success: true, data: accepted, pagination: { total: 1 } } });
+      }
+      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+    });
+
+    let resolveDelete: (value: unknown) => void = () => {};
+    mockDelete.mockImplementation(() => new Promise((resolve) => { resolveDelete = resolve; }));
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+    await waitFor(() => expect(result.current.connected).toHaveLength(1));
+
+    act(() => {
+      result.current.cancelRequest('r1');
+    });
+
+    await waitFor(() => expect(result.current.connected).toHaveLength(0));
+
+    await act(async () => {
+      resolveDelete({ data: { success: true } });
+    });
+  });
+
   it('rejects a friend request via mutation', async () => {
     mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
     mockPatch.mockResolvedValue({ data: { success: true, data: makeFriendRequest({ status: 'rejected' }) } });

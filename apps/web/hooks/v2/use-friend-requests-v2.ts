@@ -93,7 +93,7 @@ export function useFriendRequestsV2(
   // where the user is the receiver never comes back through either. `connected`
   // is derived instead from `/users/friend-requests?status=accepted`, which
   // renders both directions regardless of who initiated it.
-  const acceptedQueryKey = useMemo(() => [...queryKeys.friendRequests.all, 'accepted'] as const, []);
+  const acceptedQueryKey = queryKeys.friendRequests.accepted();
 
   const { data: acceptedData } = useQuery({
     queryKey: acceptedQueryKey,
@@ -113,7 +113,6 @@ export function useFriendRequestsV2(
   const allRequests = useMemo(() => [...received, ...sent], [received, sent]);
 
   const { connected, pending, refused } = useMemo<FriendRequestsData>(() => {
-    const connectedArr: FriendRequest[] = acceptedData ?? [];
     const pendingArr: FriendRequest[] = [];
     const refusedArr: FriendRequest[] = [];
 
@@ -128,7 +127,7 @@ export function useFriendRequestsV2(
       }
     }
 
-    return { received, sent, connected: connectedArr, pending: pendingArr, refused: refusedArr };
+    return { received, sent, connected: acceptedData ?? [], pending: pendingArr, refused: refusedArr };
   }, [allRequests, received, sent, acceptedData]);
 
   const stats = useMemo<FriendRequestsStats>(
@@ -226,14 +225,24 @@ export function useFriendRequestsV2(
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
+      await queryClient.cancelQueries({ queryKey: acceptedQueryKey });
       const previous = queryClient.getQueryData<FriendRequest[]>(receivedQueryKey);
+      const previousAccepted = queryClient.getQueryData<FriendRequest[]>(acceptedQueryKey);
+      const accepting = (previous ?? []).find((r) => r.id === requestId);
       queryClient.setQueryData<FriendRequest[]>(receivedQueryKey, (old) =>
         (old ?? []).map((r) => (r.id === requestId ? { ...r, status: 'accepted' as const } : r))
       );
-      return { previous };
+      if (accepting) {
+        queryClient.setQueryData<FriendRequest[]>(acceptedQueryKey, (old) => [
+          ...(old ?? []),
+          { ...accepting, status: 'accepted' as const },
+        ]);
+      }
+      return { previous, previousAccepted };
     },
     onError: (_err, _id, context) => {
       if (context?.previous) queryClient.setQueryData(receivedQueryKey, context.previous);
+      if (context?.previousAccepted) queryClient.setQueryData(acceptedQueryKey, context.previousAccepted);
     },
     onSettled: () => invalidateAll(),
   });
@@ -265,17 +274,23 @@ export function useFriendRequestsV2(
       const previousSent = queryClient.getQueryData<FriendRequest[]>(sentQueryKey);
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
       const previousReceived = queryClient.getQueryData<FriendRequest[]>(receivedQueryKey);
+      await queryClient.cancelQueries({ queryKey: acceptedQueryKey });
+      const previousAccepted = queryClient.getQueryData<FriendRequest[]>(acceptedQueryKey);
       queryClient.setQueryData<FriendRequest[]>(sentQueryKey, (old) =>
         (old ?? []).filter((r) => r.id !== requestId)
       );
       queryClient.setQueryData<FriendRequest[]>(receivedQueryKey, (old) =>
         (old ?? []).filter((r) => r.id !== requestId)
       );
-      return { previousSent, previousReceived };
+      queryClient.setQueryData<FriendRequest[]>(acceptedQueryKey, (old) =>
+        (old ?? []).filter((r) => r.id !== requestId)
+      );
+      return { previousSent, previousReceived, previousAccepted };
     },
     onError: (_err, _id, context) => {
       if (context?.previousSent) queryClient.setQueryData(sentQueryKey, context.previousSent);
       if (context?.previousReceived) queryClient.setQueryData(receivedQueryKey, context.previousReceived);
+      if (context?.previousAccepted) queryClient.setQueryData(acceptedQueryKey, context.previousAccepted);
     },
     onSettled: () => invalidateAll(),
   });

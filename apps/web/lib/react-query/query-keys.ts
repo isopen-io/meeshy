@@ -87,6 +87,7 @@ export const queryKeys = {
     all: ['friendRequests'] as const,
     received: () => [...queryKeys.friendRequests.all, 'received'] as const,
     sent: () => [...queryKeys.friendRequests.all, 'sent'] as const,
+    accepted: () => [...queryKeys.friendRequests.all, 'accepted'] as const,
   },
 
   blockedUsers: {
