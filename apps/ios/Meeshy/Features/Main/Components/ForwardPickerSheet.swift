@@ -29,6 +29,9 @@ struct ForwardPickerSheet: View {
     @State private var isLoading = true
     @State private var searchText = ""
     @State private var model = ForwardPickerModel()
+    /// Première cible servie de l'ouverture — retenue pour que la confirmation
+    /// posée À LA FERMETURE sache quelle conversation ouvrir.
+    @State private var firstServedConversation: Conversation?
     @State private var successToastFired = false
     @State private var loadFailed = false
 
@@ -109,6 +112,10 @@ struct ForwardPickerSheet: View {
             await loadConversations()
         }
         .withStatusBubble()
+        // Seul site d'émission du toast succès : la feuille est PARTIE, donc
+        // le toast racine est visible et tappable. Couvre les deux sorties —
+        // bouton « Fermer » et glissé vers le bas.
+        .onDisappear { fireDeferredSuccessToast() }
     }
 
     // MARK: - Message Preview (thin, like reply banner)
@@ -195,112 +202,34 @@ struct ForwardPickerSheet: View {
 
     // MARK: - Conversation Row
 
+    /// Les lectures de singleton (thème via `ForwardPickerRow`, statuts via
+    /// `statusViewModel`) restent ICI : la rangée ne reçoit que des VALEURS,
+    /// condition de son portillon `.equatable()`.
     private func conversationRow(_ conv: Conversation) -> some View {
-        let state = model.state(of: conv.id)
-        return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                MeeshyAvatar(
-                    name: conv.displayName,
-                    context: .conversationList,
-                    accentColor: conv.accentColor,
-                    avatarURL: conv.avatar,
-                    moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                    onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
-                )
-
-                VStack(alignment: .leading, spacing: 2) {
-                    ConversationTitleLabel(
-                        name: conv.displayName,
-                        favoriteEmoji: conv.userState.reaction,
-                        font: MeeshyFont.relative(15, weight: .medium),
-                        color: theme.textPrimary
-                    )
-
-                    HStack(spacing: 4) {
-                        Text(conv.type.rawValue)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
-
-                        if conv.memberCount > 0 {
-                            Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
-                                .font(MeeshyFont.relative(12))
-                                .foregroundColor(theme.textMuted)
-                        }
-                    }
+        ForwardPickerRow(
+            id: conv.id,
+            name: conv.displayName,
+            typeLabel: conv.type.rawValue,
+            memberCount: conv.memberCount,
+            avatarURL: conv.avatar,
+            avatarAccentHex: conv.accentColor,
+            favoriteEmoji: conv.userState.reaction,
+            moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+            accentHex: accentColor,
+            isDark: isDark,
+            state: model.state(of: conv.id),
+            a11yName: conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main),
+            onTap: {
+                // Tap de LIGNE = sélection (no-op sur une cible servie/en cours).
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    model.tapRow(conv.id)
                 }
-                .accessibilityElement(children: .combine)
-
-                Spacer()
-
-                if state == .selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(MeeshyFont.relative(18))
-                        .foregroundColor(Color(hex: accentColor))
-                        .transition(.scale.combined(with: .opacity))
-                        .accessibilityHidden(true)
-                }
-
-                sendControl(for: conv, state: state)
-            }
-
-            if case .failed(let reason) = state {
-                // La RAISON du refus (ex. vue unique) — plus jamais un glyphe muet.
-                Text(reason)
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(MeeshyColors.error)
-                    .lineLimit(2)
-                    .padding(.leading, 52)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(state == .selected ? Color(hex: accentColor).opacity(0.10) : Color.clear)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Tap de LIGNE = sélection (no-op sur une cible servie/en cours).
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                model.tapRow(conv.id)
-            }
-            HapticFeedback.light()
-        }
-        .accessibilityAddTraits(state == .selected ? .isSelected : [])
-    }
-
-    @ViewBuilder
-    private func sendControl(for conv: Conversation, state: ForwardPickerModel.TargetState) -> some View {
-        switch state {
-        case .sent:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title2)
-                .foregroundColor(MeeshyColors.success)
-                .accessibilityLabel(String(localized: "forward.sent", defaultValue: "Transféré", bundle: .main))
-        case .sending:
-            ProgressView()
-                .scaleEffect(0.8)
-                .frame(width: 24, height: 24)
-                .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
-        case .failed:
-            // Send failed — surface it in-sheet (a root toast renders behind the
-            // sheet) as a tappable, recoverable retry. Error is signalled by the
-            // glyph shape, not colour alone.
-            Button {
-                send(conv)
-            } label: {
-                Image(systemName: "exclamationmark.arrow.circlepath")
-                    .font(MeeshyFont.relative(24))
-                    .foregroundColor(MeeshyColors.error)
-            }
-            .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
-        case .idle, .selected:
-            Button {
-                send(conv)
-            } label: {
-                Image(systemName: "paperplane.circle.fill")
-                    .font(MeeshyFont.relative(24))
-                    .foregroundColor(Color(hex: accentColor))
-            }
-            .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
-        }
+                HapticFeedback.light()
+            },
+            onSend: { send(conv) },
+            onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+        )
+        .equatable()
     }
 
     // MARK: - Batch Send Bar
@@ -403,26 +332,182 @@ struct ForwardPickerSheet: View {
         switch outcome {
         case .sent, .queuedOffline:
             HapticFeedback.success()
-            fireSuccessToastIfNeeded(for: conv)
+            if firstServedConversation == nil { firstServedConversation = conv }
         case .failed:
             HapticFeedback.error()
         }
     }
 
-    /// Un seul toast succès par ouverture du sheet ; le tap ouvre la première
-    /// conversation servie (action utilisateur locale → FeedbackToastManager).
-    private func fireSuccessToastIfNeeded(for conv: Conversation) {
-        guard !successToastFired else { return }
+    /// Confirmation succès DIFFÉRÉE à la fermeture de la feuille.
+    ///
+    /// Le toast est rendu par l'overlay RACINE (`MeeshyApp`), qu'une feuille
+    /// présentée RECOUVRE : au détent `.large` il est invisible, au détent
+    /// `.medium` il tombe dans la zone assombrie où un tap referme la feuille
+    /// au lieu d'invoquer l'action — c'est déjà la raison pour laquelle les
+    /// ÉCHECS s'affichent in-sheet (cf. `sendControl`). Le succès se voit donc
+    /// in-sheet, ligne par ligne, via la pastille « Transféré » ; le toast
+    /// tappable — seul chemin vers « ouvrir la cible » (spec A.5) — n'est émis
+    /// qu'une fois la feuille partie. Un seul toast par ouverture, sur la
+    /// PREMIÈRE cible servie.
+    private func fireDeferredSuccessToast() {
+        guard !successToastFired, let conv = firstServedConversation else { return }
         successToastFired = true
         let title = String(localized: "forward.success", defaultValue: "Message transféré", bundle: .main)
-        if let onOpenConversation {
-            FeedbackToastManager.shared.show(title, type: .success) {
-                dismiss()
-                onDismiss()
-                onOpenConversation(conv)
-            }
-        } else {
+        guard let onOpenConversation else {
             FeedbackToastManager.shared.showSuccess(title)
+            return
+        }
+        FeedbackToastManager.shared.show(title, type: .success) {
+            onOpenConversation(conv)
+        }
+    }
+}
+
+// MARK: - ForwardPickerRow
+
+/// Rangée du picker, sous-vue `Equatable` à entrées de VALEUR.
+///
+/// Sans elle, un seul changement d'état — une cible qui passe `sending` →
+/// `sent` — réévaluait le corps de TOUTES les lignes matérialisées : le
+/// `@State model` vit dans le parent, et l'envoi groupé enchaîne autant de
+/// mutations qu'il y a de cibles. Doctrine « Zero Unnecessary Re-render »
+/// (apps/ios/CLAUDE.md).
+///
+/// Les closures sont exclues de `==` : recréées à chaque passe du parent,
+/// elles rendraient toute comparaison fausse et le portillon inopérant.
+/// `isDark` en fait partie à l'inverse — sinon un basculement de thème
+/// laisserait la ligne figée dans les couleurs de l'ancien mode. Même idiome
+/// que `DirectoryPersonRow`.
+struct ForwardPickerRow: View, Equatable {
+    let id: String
+    let name: String
+    let typeLabel: String
+    let memberCount: Int
+    let avatarURL: String?
+    let avatarAccentHex: String
+    let favoriteEmoji: String?
+    let moodEmoji: String?
+    let accentHex: String
+    let isDark: Bool
+    let state: ForwardPickerModel.TargetState
+    /// Nom prononcé par VoiceOver dans « Transférer à … » — déjà replié sur
+    /// son libellé de repli par le parent.
+    let a11yName: String
+    let onTap: () -> Void
+    let onSend: () -> Void
+    let onMoodTap: ((CGPoint) -> Void)?
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    static func == (lhs: ForwardPickerRow, rhs: ForwardPickerRow) -> Bool {
+        lhs.id == rhs.id
+            && lhs.name == rhs.name
+            && lhs.typeLabel == rhs.typeLabel
+            && lhs.memberCount == rhs.memberCount
+            && lhs.avatarURL == rhs.avatarURL
+            && lhs.avatarAccentHex == rhs.avatarAccentHex
+            && lhs.favoriteEmoji == rhs.favoriteEmoji
+            && lhs.moodEmoji == rhs.moodEmoji
+            && lhs.accentHex == rhs.accentHex
+            && lhs.isDark == rhs.isDark
+            && lhs.state == rhs.state
+            && lhs.a11yName == rhs.a11yName
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                MeeshyAvatar(
+                    name: name,
+                    context: .conversationList,
+                    accentColor: avatarAccentHex,
+                    avatarURL: avatarURL,
+                    moodEmoji: moodEmoji,
+                    onMoodTap: onMoodTap
+                )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    ConversationTitleLabel(
+                        name: name,
+                        favoriteEmoji: favoriteEmoji,
+                        font: MeeshyFont.relative(15, weight: .medium),
+                        color: theme.textPrimary
+                    )
+
+                    HStack(spacing: 4) {
+                        Text(typeLabel)
+                            .font(MeeshyFont.relative(12))
+                            .foregroundColor(theme.textMuted)
+
+                        if memberCount > 0 {
+                            Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), memberCount))
+                                .font(MeeshyFont.relative(12))
+                                .foregroundColor(theme.textMuted)
+                        }
+                    }
+                }
+                .accessibilityElement(children: .combine)
+
+                Spacer()
+
+                if state == .selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(MeeshyFont.relative(18))
+                        .foregroundColor(Color(hex: accentHex))
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityHidden(true)
+                }
+
+                sendControl
+            }
+
+            if case .failed(let reason) = state {
+                // La RAISON du refus (ex. vue unique) — plus jamais un glyphe muet.
+                Text(reason)
+                    .font(MeeshyFont.relative(11))
+                    .foregroundColor(MeeshyColors.error)
+                    .lineLimit(2)
+                    .padding(.leading, 52)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(state == .selected ? Color(hex: accentHex).opacity(0.10) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
+        .accessibilityAddTraits(state == .selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private var sendControl: some View {
+        switch state {
+        case .sent:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title2)
+                .foregroundColor(MeeshyColors.success)
+                .accessibilityLabel(String(localized: "forward.sent", defaultValue: "Transféré", bundle: .main))
+        case .sending:
+            ProgressView()
+                .scaleEffect(0.8)
+                .frame(width: 24, height: 24)
+                .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
+        case .failed:
+            // Send failed — surface it in-sheet (a root toast renders behind the
+            // sheet) as a tappable, recoverable retry. Error is signalled by the
+            // glyph shape, not colour alone.
+            Button(action: onSend) {
+                Image(systemName: "exclamationmark.arrow.circlepath")
+                    .font(MeeshyFont.relative(24))
+                    .foregroundColor(MeeshyColors.error)
+            }
+            .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), a11yName))
+        case .idle, .selected:
+            Button(action: onSend) {
+                Image(systemName: "paperplane.circle.fill")
+                    .font(MeeshyFont.relative(24))
+                    .foregroundColor(Color(hex: accentHex))
+            }
+            .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), a11yName))
         }
     }
 }

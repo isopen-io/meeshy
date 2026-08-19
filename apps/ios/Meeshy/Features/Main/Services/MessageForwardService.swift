@@ -20,10 +20,14 @@ protocol MessageForwardServiceProviding {
 ///   attachments de la source (`MessageProcessor.copyForwardedAttachments`).
 /// - Une conversation source inconnue s'OMET (`""` cassait l'écriture Prisma
 ///   `@db.ObjectId` côté serveur).
-/// - Un retry vers la même cible rejoue le MÊME `clientMessageId` : l'index
-///   unique `(conversationId, clientMessageId)` du gateway dédoublonne.
+/// - Un retry APRÈS ÉCHEC vers la même cible rejoue le MÊME `clientMessageId` :
+///   l'index unique `(conversationId, clientMessageId)` du gateway dédoublonne.
+/// - Un envoi CONFIRMÉ libère au contraire sa clé : re-transférer délibérément
+///   le même message vers la même cible doit créer un SECOND message, jamais
+///   retomber sur le chemin idempotent du gateway (qui renverrait la ligne
+///   existante en succès, sans rien créer).
 /// - Hors ligne : enfilage durable dans l'outbox (`OfflineQueue`), rejoué par
-///   `OutboxDispatcher` avec le même cid.
+///   `OutboxDispatcher` avec le même cid — la clé est donc CONSERVÉE.
 @MainActor
 final class MessageForwardService: MessageForwardServiceProviding {
     static let shared = MessageForwardService()
@@ -75,6 +79,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 endpoint: "/conversations/\(targetConversationId)/messages",
                 body: body
             )
+            clientMessageIds.removeValue(forKey: dedupKey)
             return .sent
         } catch let APIError.serverError(_, serverMessage) {
             return .failed(reason: serverMessage ?? Self.genericFailure)

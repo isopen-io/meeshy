@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 @MainActor
@@ -10,7 +11,7 @@ final class MessageActionResolverTests: XCTestCase {
         isEdited: Bool = false, hasEditRevisions: Bool = false,
         saveableAttachmentCount: Int = 0,
         showReadReceipts: Bool = true,
-        isViewOnce: Bool = false
+        isForwardable: Bool = true
     ) -> MessageMenuContext {
         MessageMenuContext(isMine: isMine, canEdit: canEdit, canDelete: canDelete,
             hasText: hasText, hasMedia: hasMedia, hasTimebasedMedia: hasTimebasedMedia,
@@ -18,7 +19,20 @@ final class MessageActionResolverTests: XCTestCase {
             hasEditRevisions: hasEditRevisions,
             saveableAttachmentCount: saveableAttachmentCount,
             showReadReceipts: showReadReceipts,
-            isViewOnce: isViewOnce)
+            isForwardable: isForwardable)
+    }
+
+    private func message(isViewOnce: Bool) -> Message {
+        var msg = Message(
+            id: "6a0ad86a6e21a483b4443d11",
+            conversationId: "6a0ad86a6e21a483b4443d99",
+            senderId: "sender-1",
+            content: "coucou",
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        msg.isViewOnce = isViewOnce
+        return msg
     }
 
     // MARK: - primaryActions : liste COMPACTE de l'overlay (≤ actions clés + .more)
@@ -110,17 +124,40 @@ final class MessageActionResolverTests: XCTestCase {
     // Le serveur refuse le transfert d'une vue unique (`forwardAdmission`,
     // `view-once-not-forwardable`) — offrir l'action condamnait l'utilisateur
     // à un échec muet. Spec 2026-08-19, Volet A.2.
-    func test_moreSections_viewOnce_omitsForward() {
-        let items = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, isViewOnce: true)))
+    func test_moreSections_notForwardable_omitsForward() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, isForwardable: false)))
         XCTAssertFalse(items.contains(.forward),
                        "Une vue unique n'offre pas un transfert que le serveur refuse")
         XCTAssertEqual(Array(items.prefix(2)), [.reply, .thread])
     }
 
-    func test_moreSections_viewOnce_keepsEveryOtherAction() {
+    func test_moreSections_notForwardable_keepsEveryOtherAction() {
         let normal = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true)))
-        let viewOnce = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, isViewOnce: true)))
+        let viewOnce = actionItems(MessageActionResolver.moreSections(ctx(hasText: false, hasMedia: true, isForwardable: false)))
         XCTAssertEqual(viewOnce, normal.filter { $0 != .forward })
+    }
+
+    // MARK: - Prédicat de transférabilité (site d'énonciation UNIQUE)
+
+    /// La règle « vue unique ⇒ pas de transfert » vivait ré-encodée en six
+    /// points d'UI. Elle se nomme désormais une fois, sur le message ; le
+    /// résolveur n'en reçoit que le verdict.
+    func test_isForwardable_viewOnce_isFalse() {
+        XCTAssertFalse(message(isViewOnce: true).isForwardable,
+                       "Le serveur refuse le transfert d'une vue unique — l'UI ne doit pas l'offrir")
+    }
+
+    func test_isForwardable_ordinaryMessage_isTrue() {
+        XCTAssertTrue(message(isViewOnce: false).isForwardable)
+    }
+
+    /// Le verdict alimente le résolveur tel quel — aucune seconde énonciation
+    /// de la règle entre le message et le menu.
+    func test_moreSections_viewOnceMessage_omitsForward_endToEnd() {
+        let items = actionItems(MessageActionResolver.moreSections(
+            ctx(hasText: true, isForwardable: message(isViewOnce: true).isForwardable)
+        ))
+        XCTAssertFalse(items.contains(.forward))
     }
 
     func test_moreSections_mediaBeforeMessageDelete_whenBothPresent() {

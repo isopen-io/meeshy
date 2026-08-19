@@ -111,7 +111,7 @@ struct MessageMoreSheet: View {
                     dismiss()
                 }
             }
-            if !message.isViewOnce {
+            if message.isForwardable {
                 Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
                     onForward?()
                     dismiss()

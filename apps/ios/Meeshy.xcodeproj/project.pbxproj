@@ -229,6 +229,7 @@
 		339C79209CA3D95A6C81D71E /* MessageDayLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44FD2C7B55066F51949BB28D /* MessageDayLabelTests.swift */; };
 		33F4D455795E5F5B64912C98 /* ForcedReadingModeOverrideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9326EF58D9708049B7C1C8EC /* ForcedReadingModeOverrideTests.swift */; };
 		34690B6D63BD6463A05FA694 /* EmailVerificationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA3A77030875A4E70EDC09C /* EmailVerificationViewModel.swift */; };
+		346FBB8D892315D4B25CC6B1 /* ForwardPickerRowEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 362027D018C4A3C26D717F48 /* ForwardPickerRowEquatableTests.swift */; };
 		347903A76733FFBDA997EDA8 /* EngagementDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FBCBEC8E94447F050564849 /* EngagementDispatcher.swift */; };
 		3510B2241A2F99BEDC4C87EB /* ConversationViewModelCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E08FFF5F280686C26514B19 /* ConversationViewModelCacheTests.swift */; };
 		3568FC941D1FD9CB8C8FAEE6 /* CommunityDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C774BC7D059BD4848EE22CD /* CommunityDetailViewModelTests.swift */; };
@@ -1134,6 +1135,7 @@
 		F1F3BC73E60547F0CECB2507 /* FeedPostCard+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A898767927CF988354C48D4 /* FeedPostCard+Media.swift */; };
 		F1FCCE9F8A066DEDEF9A034F /* DeepLinkWidgetIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2E16C690C4B6ABC786EA41D /* DeepLinkWidgetIntegrationTests.swift */; };
 		F25D137C7261FD56B6D209C8 /* LentilleReadingModeContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17BB341483F73555E2AE312A /* LentilleReadingModeContext.swift */; };
+		F28DCBAE834D032CA9F73A7C /* ForwardPickerSuccessToastGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F472AE6074DB7006B526571C /* ForwardPickerSuccessToastGuardTests.swift */; };
 		F2AA7133413498D8343A7942 /* BubbleMetaBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB19637A56751C12F1C1E3A5 /* BubbleMetaBadges.swift */; };
 		F2EC27E27CD8D45B7DF3296A /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = 1D1DCBE5085DEF854FE74387 /* Localizable.xcstrings */; };
 		F3FCD08FE20FAED4B0D781AC /* ComposerDropResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BD50758FEAFB8E40647418 /* ComposerDropResolver.swift */; };
@@ -1494,6 +1496,7 @@
 		36059291DBC7DF96A6E34D7C /* CallManagerSelectCameraFailureCorrectionSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerSelectCameraFailureCorrectionSourceTests.swift; sourceTree = "<group>"; };
 		360AC776A1248173B0DB82C0 /* StoryViewerView+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Canvas.swift"; sourceTree = "<group>"; };
 		3617BEA5ABD3D480670C6E3F /* ProfilePostsCountsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfilePostsCountsTests.swift; sourceTree = "<group>"; };
+		362027D018C4A3C26D717F48 /* ForwardPickerRowEquatableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerRowEquatableTests.swift; sourceTree = "<group>"; };
 		365DD99F60F37D510CF56375 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		36812C0C773C5FAAB1377854 /* LicensesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LicensesView.swift; sourceTree = "<group>"; };
 		3696C0EDE2CE7C099E540719 /* ImageDownsamplingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingTests.swift; sourceTree = "<group>"; };
@@ -2377,6 +2380,7 @@
 		F3D405A5FE6201E7520CEE5C /* EmojiPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiPickerSheet.swift; sourceTree = "<group>"; };
 		F44CD27A4B707CB98C003883 /* GatewayBridgeProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GatewayBridgeProvider.swift; sourceTree = "<group>"; };
 		F466DE40747F4D2139DB90C5 /* CallManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerTests.swift; sourceTree = "<group>"; };
+		F472AE6074DB7006B526571C /* ForwardPickerSuccessToastGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerSuccessToastGuardTests.swift; sourceTree = "<group>"; };
 		F47BC9CDD3A2DCC639E701B9 /* ConversationSocketHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationSocketHandlerTests.swift; sourceTree = "<group>"; };
 		F51696D84621EB4E098942CC /* ConversationViewModelTranslationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelTranslationTests.swift; sourceTree = "<group>"; };
 		F51D4D2B86C6649AF8F566DE /* CallManagerAudioSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerAudioSessionTests.swift; sourceTree = "<group>"; };
@@ -2832,6 +2836,8 @@
 				72D28227D3935B7E9439065A /* EmojiGridCategoryTests.swift */,
 				497F1193C6E19EF5FA667C11 /* FileURLPasteDetectorTests.swift */,
 				A01DFD5C24FBECBC615A19D3 /* ForwardPickerModelTests.swift */,
+				362027D018C4A3C26D717F48 /* ForwardPickerRowEquatableTests.swift */,
+				F472AE6074DB7006B526571C /* ForwardPickerSuccessToastGuardTests.swift */,
 				B36431AC585905639889134D /* MessageActionResolverTests.swift */,
 				946B29340C1B695368BF8CA1 /* MessageOverlayDragLawTests.swift */,
 				1211BB9F888351AD885DA9AC /* MiniAudioPlayerBarTests.swift */,
@@ -5306,6 +5312,8 @@
 				33F4D455795E5F5B64912C98 /* ForcedReadingModeOverrideTests.swift in Sources */,
 				17F4F506E3EE3891EA1B9627 /* ForwardBadgePolicyTests.swift in Sources */,
 				8FFE16FCE84C8B62AD76B4F0 /* ForwardPickerModelTests.swift in Sources */,
+				346FBB8D892315D4B25CC6B1 /* ForwardPickerRowEquatableTests.swift in Sources */,
+				F28DCBAE834D032CA9F73A7C /* ForwardPickerSuccessToastGuardTests.swift in Sources */,
 				ADC16CDCB51BB46A2B493419 /* FrenchDefaultValueRatchetTests.swift in Sources */,
 				7BD1726A1F5CBD11CE92472B /* FriendRequestListTouchTargetTests.swift in Sources */,
 				36570DF8D6BED955EACEE5C7 /* FriendRequestTestHelpers.swift in Sources */,

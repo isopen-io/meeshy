@@ -100,22 +100,63 @@ final class MessageForwardServiceTests: XCTestCase {
                      "'' (conversation source inconnue) ne doit jamais partir sur le fil — Prisma @db.ObjectId refuse l'écriture")
     }
 
-    // MARK: - Dédup au retry
+    // MARK: - Cycle de vie du clientMessageId
 
-    func test_forward_sameTarget_reusesClientMessageId() async throws {
+    /// Un ÉCHEC laisse la cible non servie : le retry doit rejouer le même cid
+    /// pour que l'index unique `(conversationId, clientMessageId)` du gateway
+    /// absorbe le cas où le premier POST avait en réalité abouti.
+    func test_forward_retryAfterFailure_reusesClientMessageId() async throws {
+        let (sut, api, _) = makeSUT()
+        api.errorToThrow = APIError.serverError(500, "boom")
+
+        let failure = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
+
+        api.errorToThrow = nil
+        stubSendSuccess(api, target: target)
+        let retry = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
+
+        XCTAssertEqual(failure, .failed(reason: "boom"))
+        XCTAssertEqual(retry, .sent)
+        let firstCid = try postedBody(api, at: 0)["clientMessageId"] as? String
+        let retryCid = try postedBody(api, at: 1)["clientMessageId"] as? String
+        XCTAssertNotNil(firstCid)
+        XCTAssertEqual(firstCid, retryCid,
+                       "un retry après échec rejoue le même cid — le gateway dédoublonne un POST peut-être déjà passé")
+    }
+
+    /// Un envoi CONFIRMÉ libère la clé. Le picker se réinitialise à chaque
+    /// présentation : re-transférer délibérément le même message vers la même
+    /// cible est une action légitime qui doit créer un SECOND message. Rejouer
+    /// le cid confirmé le ferait avaler par le chemin idempotent du gateway
+    /// (P2002 → la ligne EXISTANTE revient en succès), donnant une UI
+    /// « Transféré » sans qu'aucun message ne soit créé.
+    func test_forward_afterConfirmedSend_usesFreshClientMessageId() async throws {
         let (sut, api, _) = makeSUT()
         stubSendSuccess(api, target: target)
-        stubSendSuccess(api, target: otherTarget)
 
-        _ = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
+        let first = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
+        let second = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
+
+        XCTAssertEqual(first, .sent)
+        XCTAssertEqual(second, .sent)
+        let firstCid = try postedBody(api, at: 0)["clientMessageId"] as? String
+        let secondCid = try postedBody(api, at: 1)["clientMessageId"] as? String
+        XCTAssertNotNil(firstCid)
+        XCTAssertNotNil(secondCid)
+        XCTAssertNotEqual(firstCid, secondCid,
+                          "un second transfert VOULU vers la même cible doit porter un cid neuf — sinon le gateway le dédoublonne et rien n'est créé")
+    }
+
+    func test_forward_distinctTargets_useDistinctClientMessageIds() async throws {
+        let (sut, api, _) = makeSUT()
+        api.errorToThrow = APIError.serverError(500, "boom")
+
         _ = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
         _ = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: otherTarget)
 
         let first = try postedBody(api, at: 0)["clientMessageId"] as? String
-        let retry = try postedBody(api, at: 1)["clientMessageId"] as? String
-        let other = try postedBody(api, at: 2)["clientMessageId"] as? String
+        let other = try postedBody(api, at: 1)["clientMessageId"] as? String
         XCTAssertNotNil(first)
-        XCTAssertEqual(first, retry, "même cible + même message = même cid — le gateway dédoublonne le retry")
         XCTAssertNotEqual(first, other, "une autre cible est un envoi distinct — cid distinct")
     }
 

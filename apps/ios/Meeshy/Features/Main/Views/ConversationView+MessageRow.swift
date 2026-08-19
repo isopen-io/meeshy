@@ -319,9 +319,9 @@ extension ConversationView {
                 }
                 closeReactionBar()
             }
-            // Vue unique : le serveur refuse ce transfert (forwardAdmission) —
-            // le bouton disparaît plutôt que d'offrir une action condamnée.
-            if !(viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isViewOnce }) ?? false) {
+            // Le bouton disparaît plutôt que d'offrir une action condamnée
+            // (`Message.isForwardable`).
+            if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? true {
                 messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: MeeshyColors.warningHex) {
                     composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
                     closeReactionBar()

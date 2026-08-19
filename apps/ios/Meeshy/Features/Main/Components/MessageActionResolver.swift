@@ -53,9 +53,11 @@ struct MessageMenuContext: Equatable {
     ///
     /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
     var showReadReceipts: Bool = true
-    /// Vue unique : le serveur refuse son transfert (`forwardAdmission`,
-    /// `view-once-not-forwardable`) — on n'offre pas une action condamnée.
-    var isViewOnce: Bool = false
+    /// Transférabilité du message, DÉCIDÉE au point d'usage par
+    /// `Message.isForwardable` (vue unique ⇒ le serveur refuse le transfert).
+    /// Le résolveur reçoit le verdict, jamais le drapeau brut : la règle n'a
+    /// qu'un seul site d'énonciation, et ce résolveur reste une logique pure.
+    var isForwardable: Bool = true
 }
 
 /// Logique pure de composition du menu appui-long. Aucune dépendance UI —
@@ -87,7 +89,7 @@ enum MessageActionResolver {
         // éditer (si éditable), copier (si texte), partager, épingler/favori,
         // supprimer.
         var actions: [MoreItem] = [.reply]
-        if !ctx.isViewOnce { actions.append(.forward) }
+        if ctx.isForwardable { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText { actions.append(.copy) }
