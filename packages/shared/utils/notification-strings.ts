@@ -16,6 +16,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'comment.repliedToYours',
   'comment.subtitleOwner', 'comment.subtitleFrom', 'comment.subtitleBare',
   'mention', 'someone',
+  'reference.post', 'reference.reel', 'reference.story', 'reference.status',
   'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
   'call.missed', 'call.incoming.title', 'call.incoming.body',
   'contact.request', 'contact.accepted',
@@ -67,6 +68,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} de {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'vous a mentionné',
+    'reference.post': 'vous a référencé dans sa publication',
+    'reference.reel': 'vous a référencé dans son réel',
+    'reference.story': 'vous a référencé dans sa story',
+    'reference.status': 'vous a référencé dans son statut',
     'friend.story': 'a publié une nouvelle story',
     'friend.post': 'a publié un nouveau post',
     'friend.reel': 'a publié un nouveau réel',
@@ -108,6 +113,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} from {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'mentioned you',
+    'reference.post': 'referenced you in their post',
+    'reference.reel': 'referenced you in their reel',
+    'reference.story': 'referenced you in their story',
+    'reference.status': 'referenced you in their status',
     'friend.story': 'shared a new story',
     'friend.post': 'shared a new post',
     'friend.reel': 'shared a new reel',
@@ -149,6 +158,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} de {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'te mencionó',
+    'reference.post': 'te referenció en su publicación',
+    'reference.reel': 'te referenció en su reel',
+    'reference.story': 'te referenció en su historia',
+    'reference.status': 'te referenció en su estado',
     'friend.story': 'publicó una nueva historia',
     'friend.post': 'publicó una nueva publicación',
     'friend.reel': 'publicó un nuevo reel',
@@ -190,6 +203,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} de {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'mencionou você',
+    'reference.post': 'referenciou você na publicação dele(a)',
+    'reference.reel': 'referenciou você no reel dele(a)',
+    'reference.story': 'referenciou você na story dele(a)',
+    'reference.status': 'referenciou você no status dele(a)',
     'friend.story': 'publicou uma nova story',
     'friend.post': 'publicou uma nova publicação',
     'friend.reel': 'publicou um novo reel',
@@ -231,6 +248,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} von {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'hat dich erwähnt',
+    'reference.post': 'hat dich in einem Beitrag erwähnt',
+    'reference.reel': 'hat dich in einem Reel erwähnt',
+    'reference.story': 'hat dich in einer Story erwähnt',
+    'reference.status': 'hat dich in einem Status erwähnt',
     'friend.story': 'hat eine neue Story geteilt',
     'friend.post': 'hat einen neuen Beitrag geteilt',
     'friend.reel': 'hat einen neuen Reel geteilt',
@@ -272,6 +293,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} di {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'ti ha menzionato',
+    'reference.post': 'ti ha menzionato nel suo post',
+    'reference.reel': 'ti ha menzionato nel suo reel',
+    'reference.story': 'ti ha menzionato nella sua storia',
+    'reference.status': 'ti ha menzionato nel suo stato',
     'friend.story': 'ha pubblicato una nuova storia',
     'friend.post': 'ha pubblicato un nuovo post',
     'friend.reel': 'ha pubblicato un nuovo reel',
@@ -313,6 +338,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{nounCap} من {author}',
     'comment.subtitleBare': '{nounCap}',
     'mention': 'أشار إليك',
+    'reference.post': 'أشار إليك في منشور',
+    'reference.reel': 'أشار إليك في ريل',
+    'reference.story': 'أشار إليك في قصة',
+    'reference.status': 'أشار إليك في حالة',
     'friend.story': 'نشر قصة جديدة',
     'friend.post': 'نشر منشورًا جديدًا',
     'friend.reel': 'نشر ريلًا جديدًا',
@@ -354,6 +383,10 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'comment.subtitleFrom': '{author} 的{nounCap}',
     'comment.subtitleBare': '{nounCap}',
     'mention': '提到了你',
+    'reference.post': '在帖子中提到了你',
+    'reference.reel': '在短视频中提到了你',
+    'reference.story': '在快拍中提到了你',
+    'reference.status': '在状态中提到了你',
     'friend.story': '发布了新快拍',
     'friend.post': '发布了新帖子',
     'friend.reel': '发布了新短视频',
@@ -668,6 +701,21 @@ export type NotificationDisplay = {
   readonly action: string | null;
 };
 
+/**
+ * La clé de libellé par type de contenu référençant.
+ *
+ * MOOD et STATUS partagent la même : `PostType` n'a que quatre valeurs, MOOD
+ * étant le nom PRODUIT de STATUS. `NotificationPostKind` en connaît cinq, et
+ * les notifications déjà en base peuvent porter l'une ou l'autre.
+ */
+const REFERENCE_KEY_BY_KIND: Record<NotificationPostKind, NotificationStringKey> = {
+  POST: 'reference.post',
+  REEL: 'reference.reel',
+  STORY: 'reference.story',
+  STATUS: 'reference.status',
+  MOOD: 'reference.status',
+};
+
 /** Normalise un postType potentiellement absent/inconnu vers une clé sûre. */
 function normalizePostKind(value?: string | null): NotificationPostKind | undefined {
   if (!value) return undefined;
@@ -786,10 +834,14 @@ export function buildNotificationDisplay(
         notificationString(L, 'friend.subtitleNew', { postType: 'MOOD' }),
       );
 
-    // ── Mention (conversation ou commentaire) ──
+    // ── Référence dans un contenu, ou mention en conversation / commentaire ──
     case 'mention':
     case 'user_mentioned':
-      return framed(notificationString(L, 'mention'), nounCap);
+      // Le type du contenu décide du libellé. Absent, c'est une mention en
+      // conversation ou en commentaire : le libellé générique reste le bon.
+      return kind
+        ? framed(ns(REFERENCE_KEY_BY_KIND[kind]), nounCap)
+        : framed(notificationString(L, 'mention'), nounCap);
 
     default:
       // Types non gérés ici (messages, appels, contacts, système…) :

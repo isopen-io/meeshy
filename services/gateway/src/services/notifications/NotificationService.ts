@@ -2442,17 +2442,16 @@ export class NotificationService {
 
     if (!poster) return;
 
-    // Nommer quelqu'un ne lui donne pas le droit de voir. Cf. le lot des
-    // commentaires : l'extrait du post partait tel quel vers un mentionné hors
-    // audience — et, jusqu'au cycle 31, ne partait pas non plus vers un contact
-    // DM que le feed admet pourtant.
-    const audience = await filterPostConsumers({
-      prisma: this.prisma,
-      authorId: params.posterId,
-      visibility: params.visibility,
-      visibilityUserIds: params.visibilityUserIds,
-      candidateUserIds: params.mentionedUserIds,
-    });
+    // La garde d'audience est RETIRÉE du chemin de référence — décision produit
+    // 2026-08-19. Elle empêchait l'extrait d'un post FRIENDS de partir vers un
+    // non-ami ; mais nommer quelqu'un lui OUVRE désormais le contenu, donc la
+    // garde n'a plus d'objet : elle taisait précisément les gens que l'auteur
+    // venait de désigner.
+    //
+    // Ce qui protège à sa place vit dans le composer, pas ici : il avertit
+    // l'auteur quand la personne choisie n'appartient pas à son audience. C'est
+    // la SEULE protection restante — ne pas la traiter comme cosmétique.
+    const audience = params.mentionedUserIds;
     if (audience.length === 0) return;
 
     const excerpt = params.postExcerpt
