@@ -967,6 +967,23 @@ Puis, dans `CreatePostSchema` et `UpdatePostSchema`, remplacer la ligne `mention
   mentions: z.array(PostReferenceInputSchema).max(50).optional(),
 ```
 
+Enfin, déclarer `referenceUserId` dans `StoryTextObjectSchema` (~ligne 114), avant le
+`.passthrough()` :
+
+```ts
+  /**
+   * `User.id` quand cet objet EST un badge de référence, absent pour du texte
+   * libre. C'est LUI que `collectMentionableText` lit pour exclure le badge de
+   * la dérivation INLINE — sans quoi chaque badge se retransformerait en
+   * mention de texte à la première édition.
+   *
+   * `passthrough()` le laisserait déjà passer, mais NON BORNÉ : seul le
+   * garde-fou global de 256 KB l'arrêterait, et un champ que le serveur LIT
+   * mérite d'être validé comme les autres.
+   */
+  referenceUserId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+```
+
 - [ ] **Step 8: Passer `storyEffects` depuis les routes**
 
 Dans `services/gateway/src/routes/posts/core.ts`, aux deux appels (~ligne 180 pour la création, ~ligne 336 pour l'édition), ajouter le champ :
