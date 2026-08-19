@@ -131,9 +131,18 @@ describe('GET /posts/feed — success', () => {
     expect(mockGetFeed).toHaveBeenCalledWith(USER_ID, undefined, 10);
   });
 
-  it('calls resolveMentionedUsers when feed has content', async () => {
-    await app.inject({ method: 'GET', url: '/posts/feed' });
-    expect(mockResolveMentionedUsers).toHaveBeenCalled();
+  // Le feed lisait les references en re-parsant le texte de chaque post a
+  // CHAQUE requete — d'ou un `@nimportequoi` linkifie vers un profil
+  // inexistant, et l'impossibilite d'exposer une reference que le texte ne
+  // porte pas. Les lignes `PostMention` deja persistees font foi, aplaties par
+  // `withMentions` dans `PostFeedService`.
+  it('ne re-parse plus le texte du feed et n\'expose plus meta.mentionedUsers', async () => {
+    mockResolveMentionedUsers.mockClear();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed' });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockResolveMentionedUsers).not.toHaveBeenCalled();
+    expect(res.json().meta?.mentionedUsers).toBeUndefined();
   });
 });
 

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
+import { withMentions } from '../../services/posts/postReferences';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 
@@ -94,7 +95,7 @@ export function registerHashtagRoutes(
     const data = orderedIds
       .map((id) => postsById.get(id))
       .filter((post): post is NonNullable<typeof post> => post !== undefined)
-      .map((post) => hoistLocationDeep(post));
+      .map((post) => withMentions(hoistLocationDeep(post)));
 
     return sendSuccess(reply, data, { pagination: { limit, hasMore, nextCursor } });
   });

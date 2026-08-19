@@ -7,8 +7,9 @@ import { storyContentEditRequested } from '../../services/posts/storyEditPolicy'
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
-import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
+import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
+import { withMentions } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -143,9 +144,6 @@ export function registerCoreRoutes(
       }
 
       const postContent = (post as any).content as string | undefined;
-      const mentionedUsers = postContent
-        ? await resolveMentionedUsers(prisma, [postContent])
-        : [];
 
       // GW1 — use the DECORATED instance (wired push+socket+email by
       // server.ts), never a bare local NotificationService: a bare instance
@@ -217,7 +215,7 @@ export function registerCoreRoutes(
         });
       }
 
-      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { statusCode: 201, meta: { mentionedUsers } });
+      return sendSuccess(reply, withMentions(hoistLocation(post as unknown as Record<string, unknown>)), { statusCode: 201 });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -240,19 +238,7 @@ export function registerCoreRoutes(
 
       reply.header('Cache-Control', 'private, no-cache');
 
-      const contentStrings: string[] = [];
-      if ((post as any).content) contentStrings.push((post as any).content);
-      const embeddedComments = (post as any).comments as Array<{ content?: string }> | undefined;
-      if (embeddedComments) {
-        for (const c of embeddedComments) {
-          if (c.content) contentStrings.push(c.content);
-        }
-      }
-      const mentionedUsers = contentStrings.length > 0
-        ? await resolveMentionedUsers(prisma, contentStrings)
-        : [];
-
-      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers } });
+      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>));
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -301,18 +287,6 @@ export function registerCoreRoutes(
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
-
-      const updateContentStrings: string[] = [];
-      if ((post as any).content) updateContentStrings.push((post as any).content);
-      const updateComments = (post as any).comments as Array<{ content?: string }> | undefined;
-      if (updateComments) {
-        for (const c of updateComments) {
-          if (c.content) updateContentStrings.push(c.content);
-        }
-      }
-      const updateMentionedUsers = updateContentStrings.length > 0
-        ? await resolveMentionedUsers(prisma, updateContentStrings)
-        : [];
 
       // Une édition RÉCONCILIE : elle retire les lignes des partants et ne
       // prévient que les entrants. Le bloc qui vivait ici recréait sans jamais
@@ -384,7 +358,7 @@ export function registerCoreRoutes(
         }
       }
 
-      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>), { meta: { mentionedUsers: updateMentionedUsers } });
+      return sendSuccess(reply, withMentions(hoistLocation(post as unknown as Record<string, unknown>)));
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });

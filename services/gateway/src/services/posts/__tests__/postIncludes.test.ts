@@ -7,6 +7,7 @@ import {
   commentsPreviewInclude,
   repostOfInclude,
   postInclude,
+  postMentionInclude,
 } from '../postIncludes';
 
 describe('posts/postIncludes — canonical shared selects', () => {
@@ -228,13 +229,39 @@ describe('posts/postIncludes — canonical shared selects', () => {
     });
   });
 
+  describe('postMentionInclude — références visibles seulement', () => {
+    // Piège Prisma-Mongo : `{ display: { not: 'SILENT' } }` ne matche PAS une
+    // ligne où le champ est ABSENT — soit toutes celles écrites avant le
+    // discriminant, qui se lisent pourtant INLINE et doivent apparaître.
+    it('retient les trois modes visibles ET les lignes sans mode', () => {
+      expect(postMentionInclude.where).toEqual({
+        OR: [
+          { display: { in: ['INLINE', 'PINNED', 'NOTE'] } },
+          { display: { isSet: false } },
+          { display: null },
+        ],
+      });
+    });
+
+    it('charge le mode et le profil de la personne référencée', () => {
+      expect(postMentionInclude.select).toEqual({
+        display: true,
+        mentionedUser: { select: authorSelect },
+      });
+    });
+  });
+
   describe('postInclude — canonical hydration', () => {
-    it('composes the four shared building blocks', () => {
+    // La relation s'appelle `postMentions` (le schéma nomme
+    // `Post.postMentions`) ; la clé EXPOSÉE au client reste `mentions`, via le
+    // remappage `withMentions`.
+    it('composes the five shared building blocks', () => {
       expect(postInclude).toEqual({
         author: { select: authorSelect },
         media: mediaInclude,
         comments: commentsPreviewInclude,
         repostOf: repostOfInclude,
+        postMentions: postMentionInclude,
       });
     });
   });

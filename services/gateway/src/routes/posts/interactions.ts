@@ -10,7 +10,6 @@ import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMed
 import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
-import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
 import { withMutationLog } from '../../utils/withMutationLog';

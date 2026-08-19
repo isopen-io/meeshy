@@ -417,24 +417,26 @@ describe('POST /posts — friend notification fan-out rejection (.catch callback
   });
 });
 
-// ─── GET /posts/:postId — with embedded comments ──────────────────────────────
+// ─── GET /posts/:postId — la lecture ne redevine plus les références ──────────
 
-describe('GET /posts/:postId — with embedded comments', () => {
+describe('GET /posts/:postId — références lues, jamais re-devinées', () => {
   let app: FastifyInstance;
   beforeAll(async () => { ({ app } = await buildApp()); });
   afterAll(async () => { await app.close(); });
 
-  it('resolves mentioned users from both post content and comments', async () => {
+  // Re-parser le texte à CHAQUE lecture linkifiait n'importe quel `@mot` vers un
+  // profil inexistant, et rendait structurellement impossible d'afficher une
+  // référence que le texte ne porte pas (badge de canevas, note, silencieuse).
+  // Les lignes `PostMention` déjà persistées font foi.
+  it('ne re-parse plus le contenu — ni celui du post, ni celui de ses commentaires', async () => {
+    mockResolveMentionedUsers.mockClear();
     mockGetPostById.mockResolvedValueOnce({
       id: POST_ID, content: 'Post content', type: 'POST',
       comments: [{ content: '@alice check this' }, { content: 'No mentions here' }, {}],
     });
     const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}` });
     expect(res.statusCode).toBe(200);
-    expect(mockResolveMentionedUsers).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining(['Post content', '@alice check this', 'No mentions here'])
-    );
+    expect(mockResolveMentionedUsers).not.toHaveBeenCalled();
   });
 });
 
@@ -454,27 +456,38 @@ describe('PUT /posts/:postId — invalid body (400)', () => {
   });
 });
 
-// ─── PUT /posts/:postId — with embedded comments in updated post ──────────────
+// ─── PUT /posts/:postId — la relation devient la charge utile ─────────────────
 
-describe('PUT /posts/:postId — updated post with comments', () => {
+describe('PUT /posts/:postId — références servies depuis la relation', () => {
   let app: FastifyInstance;
   beforeAll(async () => { ({ app } = await buildApp()); });
   afterAll(async () => { await app.close(); });
 
-  it('resolves mentions from updated post content and comments', async () => {
+  // `postMentions` est le nom de la RELATION Prisma ; la clé EXPOSÉE est
+  // `mentions`, et elle porte des références APLATIES — le client n'a jamais à
+  // connaître la forme de la table.
+  it('expose mentions aplaties et ne laisse pas fuiter la relation brute', async () => {
+    mockResolveMentionedUsers.mockClear();
     mockUpdatePost.mockResolvedValueOnce({
       id: POST_ID, content: 'Updated @alice content', type: 'POST',
       comments: [{ content: '@bob replied' }, {}],
+      postMentions: [{
+        display: 'NOTE',
+        mentionedUser: { id: 'user-alice', username: 'alice', displayName: 'Alice', avatar: null },
+      }],
     });
     const res = await app.inject({
       method: 'PUT', url: `/posts/${POST_ID}`,
       payload: { content: 'Updated @alice content' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockResolveMentionedUsers).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.arrayContaining(['Updated @alice content', '@bob replied'])
-    );
+
+    const body = JSON.parse(res.body);
+    expect(body.data.mentions).toEqual([
+      { userId: 'user-alice', username: 'alice', displayName: 'Alice', avatar: null, display: 'NOTE' },
+    ]);
+    expect(body.data.postMentions).toBeUndefined();
+    expect(mockResolveMentionedUsers).not.toHaveBeenCalled();
   });
 });
 
