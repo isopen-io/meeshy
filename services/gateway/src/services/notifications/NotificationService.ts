@@ -2459,9 +2459,15 @@ export class NotificationService {
     //
     // Le vrai gardien est un GRANT PERSISTÉ, vérifié à la lecture :
     //   PostMention                              (table, `post_user_mention_unique`)
-    //     → isUserReferencedInPost               (postVisibility.ts)
+    //     → isReferenceStillOpen                 (postVisibility.ts)
     //       → canUserViewPost(..., includeReferenced: true)
     //         → canUserConsumePost               (verdict de LECTURE)
+    //
+    // Le grant n'est pas perpétuel : sur un contenu EXPIRÉ il ne vaut qu'une
+    // fenêtre de 24 h (`verdictFor`, referenceAccess.ts), et c'est
+    // `isReferenceStillOpen` — et non la seule existence de la ligne — qui la
+    // fait respecter par TOUT ce que `canUserConsumePost` garde : ce lot de
+    // notifications, le fil de commentaires, la room socket.
     //
     // L'extrait ne part donc qu'à des utilisateurs qui sont EFFECTIVEMENT
     // autorisés à ouvrir le post : la notification ne leur apprend rien qu'ils

@@ -87,6 +87,7 @@ const COMMENT_ID = '507f1f77bcf86cd799439033';
 
 type PostAcl = {
   id: string; authorId: string; visibility: string; visibilityUserIds: string[];
+  expiresAt: Date | null;
   isQuote: boolean; repostOfId: string | null; originalRepostOfId: string | null;
 };
 
@@ -95,9 +96,9 @@ type PostAcl = {
 // `loadCommentPostAcl`, sans effet sur ces tests). La redirection repost
 // simple → racine (`resolveInteractionTarget`/`resolveConsumptionTarget`,
 // tâche 9) est couverte séparément plus bas.
-function acl(visibility: string, visibilityUserIds: string[] = []): PostAcl {
+function acl(visibility: string, visibilityUserIds: string[] = [], expiresAt: Date | null = null): PostAcl {
   return {
-    id: POST_ID, authorId: AUTHOR_ID, visibility, visibilityUserIds,
+    id: POST_ID, authorId: AUTHOR_ID, visibility, visibilityUserIds, expiresAt,
     isQuote: false, repostOfId: null, originalRepostOfId: null,
   };
 }
@@ -113,6 +114,8 @@ function makePrisma(opts: {
   commentPostId?: string;
   isFriend?: boolean;
   isDirectContact?: boolean;
+  /** La ligne `PostMention` du lecteur, `null` quand le post ne le nomme pas. */
+  reference?: { expiredViewAt: Date | null } | null;
 } = {}) {
   const post = opts.post === undefined ? acl('PUBLIC') : opts.post;
   const commentPost = opts.commentPost === undefined ? post : opts.commentPost;
@@ -139,6 +142,9 @@ function makePrisma(opts: {
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(opts.isDirectContact ? [{ conversationId: 'conv-1' }] : []),
       findFirst: jest.fn<any>().mockResolvedValue(opts.isDirectContact ? { id: 'pt-1' } : null),
+    },
+    postMention: {
+      findUnique: jest.fn<any>().mockResolvedValue(opts.reference ?? null),
     },
   } as any;
 }
@@ -231,6 +237,62 @@ describe('GET /posts/:postId/comments — lire le fil suit l’audience du post'
   });
 });
 
+/**
+ * Le droit d'une RÉFÉRENCE ouvre le fil — tant qu'il vaut encore.
+ *
+ * Être nommé dans un contenu l'ouvre (décision produit 2026-08-19), y compris
+ * une fois expiré : une fenêtre de 24 h s'ouvre à la première vue déclarée.
+ * Passée cette fenêtre, le droit est ÉTEINT — et la ligne `PostMention`, elle,
+ * survit (la détruire fausserait l'inbox et les compteurs). Tant que la garde
+ * ne testait que son existence, `GET /posts/:id` répondait `consumed` pendant
+ * que CE fil-ci servait textes, médias et identités au même lecteur.
+ */
+describe('GET /posts/:postId/comments — la référence ouvre le fil, sa fenêtre le referme', () => {
+  const EXPIRED = new Date(Date.now() - 48 * 3600_000);
+
+  it('ADMET un inconnu référencé dans une story FRIENDS expirée qu’il n’a pas encore ouverte', async () => {
+    const app = await buildApp(makePrisma({
+      post: acl('FRIENDS', [], EXPIRED),
+      isFriend: false,
+      reference: { expiredViewAt: null },
+    }));
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockGetComments).toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('REFUSE le même lecteur une fois sa fenêtre de 24 h close, sans toucher au fil', async () => {
+    const app = await buildApp(makePrisma({
+      post: acl('FRIENDS', [], EXPIRED),
+      isFriend: false,
+      reference: { expiredViewAt: new Date(Date.now() - 30 * 3600_000) },
+    }));
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe('POST_NOT_FOUND');
+    expect(mockGetComments).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('REFUSE un référencé sur un post basculé en PRIVATE — « moi seul » l’emporte', async () => {
+    const app = await buildApp(makePrisma({
+      post: acl('PRIVATE'),
+      reference: { expiredViewAt: null },
+    }));
+
+    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/comments` });
+
+    expect(res.statusCode).toBe(404);
+    expect(mockGetComments).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
 describe('GET .../replies — le post est résolu DEPUIS le commentaire', () => {
   it('refuse quand le commentaire visé appartient à un post privé, même si l’URL nomme un post public', async () => {
     const prisma = makePrisma({
@@ -318,7 +380,7 @@ describe('POST /posts/:postId/comments — commenter suit l’audience d’INTER
   it('admet l’auteur sur son propre post PRIVATE', async () => {
     const prisma = makePrisma({ post: {
       id: POST_ID, authorId: VIEWER_ID, visibility: 'PRIVATE', visibilityUserIds: [],
-      isQuote: false, repostOfId: null, originalRepostOfId: null,
+      expiresAt: null, isQuote: false, repostOfId: null, originalRepostOfId: null,
     } });
     const app = await buildApp(prisma);
 
@@ -401,7 +463,7 @@ const ROOT_ID = '507f1f77bcf86cd799439ccc';
 function repostAcl(overrides: Partial<PostAcl> = {}): PostAcl {
   return {
     id: POST_ID, authorId: AUTHOR_ID, visibility: 'PUBLIC', visibilityUserIds: [],
-    isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID,
+    expiresAt: null, isQuote: false, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID,
     ...overrides,
   };
 }
@@ -409,7 +471,7 @@ function repostAcl(overrides: Partial<PostAcl> = {}): PostAcl {
 function rootAcl(overrides: Partial<PostAcl> = {}): PostAcl {
   return {
     id: ROOT_ID, authorId: 'root-author-1', visibility: 'PUBLIC', visibilityUserIds: [],
-    isQuote: false, repostOfId: null, originalRepostOfId: null,
+    expiresAt: null, isQuote: false, repostOfId: null, originalRepostOfId: null,
     ...overrides,
   };
 }

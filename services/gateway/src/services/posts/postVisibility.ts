@@ -8,6 +8,7 @@
 import { PrismaClient, PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 import { doUsersShareCommunity } from './communityVisibility';
 import { doUsersShareDirectConversation } from './directContactVisibility';
+import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
 
 export type PostVisibilityRecord = {
@@ -21,6 +22,18 @@ export type PostVisibilityRecord = {
   authorId: string;
   visibility: PostVisibility;
   visibilityUserIds: string[];
+  /**
+   * L'échéance du contenu, `null` quand il est permanent. Elle fait partie de
+   * la tranche ACL depuis que la branche des RÉFÉRENCES lit un droit QUI SE
+   * DÉPENSE : passée l'expiration, être nommé ne vaut plus qu'une fenêtre de
+   * 24 h, et sans cette date la branche ne saurait pas que le décompte a
+   * commencé.
+   *
+   * REQUISE, et non optionnelle par défaut `null` : une garde qu'on désarme en
+   * oubliant un champ n'est pas une garde — l'oubli ferait passer tout contenu
+   * pour perpétuel, donc tout droit éteint pour intact.
+   */
+  expiresAt: Date | null;
 };
 
 /**
@@ -104,32 +117,59 @@ export function buildPostVisibilityOrFilter(
  * `options.includeReferenced` garde de la même façon la branche des
  * RÉFÉRENCES : être nommé dans un contenu l'ouvre, mais ne donne pas le droit
  * d'y réagir ni d'y commenter.
+ *
+ * ORDRE DES TROIS QUESTIONS, et il porte tout le sens :
+ *
+ *  1. l'auteur — gratuit, aucune requête ;
+ *  2. l'audience ORDINAIRE — celle que le post déclare ;
+ *  3. la RÉFÉRENCE — la voie de secours, et elle seule.
+ *
+ * La référence en DERNIER, pas en premier. La consulter d'abord faisait payer
+ * une lecture de `PostMention` à chaque lecteur légitime de chaque fil de
+ * commentaires — jusque sur un post PUBLIC, où aucune référence ne peut
+ * changer le verdict. Elle ne coûte désormais une requête qu'à qui l'audience
+ * vient de refuser, c'est-à-dire à la population qu'elle existe pour admettre.
  */
 export async function canUserViewPost(
   prisma: PostAclPrisma,
   post: PostVisibilityRecord,
   userId: string,
-  options: { includeDirectContacts?: boolean; includeReferenced?: boolean } = {}
+  options: {
+    includeDirectContacts?: boolean;
+    includeReferenced?: boolean;
+    /** Horloge de la fenêtre de référence — injectable pour la border au test. */
+    now?: Date;
+  } = {}
 ): Promise<boolean> {
   if (post.authorId === userId) return true;
 
-  // Être NOMMÉ dans un contenu l'ouvre — décision produit 2026-08-19. La
-  // branche vit AVANT le switch parce qu'elle traverse toutes les visibilités :
-  // un référencé passe une story FRIENDS sans être ami, et un EXCEPT ne le vise
-  // pas puisque l'auteur vient précisément de le nommer.
-  //
-  // `includeReferenced` la garde, exactement comme `includeDirectContacts`
-  // garde l'élargissement de la branche FRIENDS : elle n'ouvre que la
-  // CONSOMMATION. L'asymétrie « voir ⊇ interagir » (2026-07-08) tient toujours,
-  // et cette option est ce qui la rend exécutable plutôt que déclarative.
-  //
-  // Le verdict ne regarde ici que l'EXISTENCE de la référence, pas l'expiration :
-  // celle-ci n'a de sens qu'à l'ouverture d'un contenu précis, et c'est
-  // `resolveReferenceAccess` qui la tranche.
-  if (options.includeReferenced === true && await isUserReferencedInPost(prisma, post.id, userId)) {
-    return true;
-  }
+  if (await matchesPostAudience(prisma, post, userId, options)) return true;
 
+  // PRIVATE l'emporte sur la référence — et c'est la SEULE visibilité dans ce
+  // cas. La branche traverse FRIENDS, EXCEPT, ONLY et COMMUNITY parce que
+  // l'auteur vient précisément d'y nommer quelqu'un ; PRIVATE dit autre chose,
+  // et le dit après : « moi seul ». Basculer un contenu en archive personnelle
+  // doit le refermer sur tout le monde, y compris sur les personnes qu'il
+  // continue de nommer.
+  if (post.visibility === PostVisibility.PRIVATE) return false;
+
+  if (options.includeReferenced !== true) return false;
+  return isReferenceStillOpen(prisma, post, userId, options.now ?? new Date());
+}
+
+/**
+ * L'audience que le post DÉCLARE — sans la voie des références.
+ *
+ * Extraite pour que l'ordre des trois questions se lise dans
+ * {@link canUserViewPost} plutôt que de se deviner entre un `if` et un
+ * `switch` qui rendent tous deux un verdict final.
+ */
+async function matchesPostAudience(
+  prisma: PostAclPrisma,
+  post: PostVisibilityRecord,
+  userId: string,
+  options: { includeDirectContacts?: boolean }
+): Promise<boolean> {
   switch (post.visibility) {
     case PostVisibility.PUBLIC:
       return true;
@@ -174,25 +214,38 @@ export async function canUserViewPost(
 }
 
 /**
- * Le lecteur est-il NOMMÉ dans ce post ?
+ * Le lecteur est-il nommé dans ce post, ET son droit vaut-il encore ?
  *
- * Une lecture en échec rend `false` — jamais une ouverture. C'est la même règle
- * que `resolveReferenceAccess` : une panne laisse la règle d'audience ordinaire
- * trancher, ce qui est la réponse sûre. Le `try` couvre l'accès au délégué
- * lui-même, pas seulement la promesse : un appelant qui ne porte qu'une tranche
- * du client Prisma ne doit pas transformer un refus d'audience en erreur.
+ * Les deux questions n'en font qu'une, et une seule requête : tester
+ * l'EXISTENCE de la ligne ouvrait tout ce que ce fichier garde à un droit déjà
+ * dépensé. La consommation ne détruit pas la ligne — la détruire fausserait
+ * l'inbox `/mentions`, les compteurs et l'affinité de recommandation — elle
+ * pose `expiredViewAt`, donc l'existence ne prouve plus rien. Alice, nommée
+ * dans une story FRIENDS expirée depuis deux jours, recevait `consumed` sur
+ * `GET /posts/:id` et le fil ENTIER sur `GET /posts/:id/comments`.
+ *
+ * La règle de fenêtre elle-même n'est pas recopiée ici : `verdictFor`
+ * (`referenceAccess.ts`) en est la seule écriture, partagée avec le verdict
+ * unitaire de la charge utile et avec la résolution groupée du tray.
+ *
+ * Une lecture en échec rend `false` — jamais une ouverture. Le `try` couvre
+ * l'accès au délégué lui-même, pas seulement la promesse : un appelant qui ne
+ * porte qu'une tranche du client Prisma ne doit pas transformer un refus
+ * d'audience en erreur.
  */
-async function isUserReferencedInPost(
+async function isReferenceStillOpen(
   prisma: PostAclPrisma,
-  postId: string,
+  post: PostVisibilityRecord,
   userId: string,
+  now: Date,
 ): Promise<boolean> {
   try {
     const reference = await prisma.postMention.findUnique({
-      where: { post_user_mention_unique: { postId, mentionedUserId: userId } },
-      select: { id: true },
+      where: { post_user_mention_unique: { postId: post.id, mentionedUserId: userId } },
+      select: { expiredViewAt: true },
     });
-    return reference !== null;
+    if (reference === null) return false;
+    return verdictFor(post.expiresAt, reference.expiredViewAt, now) === 'granted';
   } catch {
     return false;
   }
@@ -208,6 +261,7 @@ const POST_ACL_SELECT = {
   authorId: true,
   visibility: true,
   visibilityUserIds: true,
+  expiresAt: true,
 } as const;
 
 /**
@@ -311,6 +365,7 @@ const POST_REDIRECT_SELECT = {
   authorId: true,
   visibility: true,
   visibilityUserIds: true,
+  expiresAt: true,
   type: true,
   isQuote: true,
   repostOfId: true,

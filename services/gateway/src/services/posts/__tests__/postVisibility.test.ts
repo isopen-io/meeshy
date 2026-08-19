@@ -9,9 +9,13 @@ const makePrisma = (friendResult: { id: string } | null = null) => ({
 });
 
 const makePost = (overrides: Partial<PostVisibilityRecord> = {}): PostVisibilityRecord => ({
+  id: 'post-1',
   authorId: 'author-1',
   visibility: PostVisibility.PUBLIC,
   visibilityUserIds: [],
+  // Contenu permanent : ces cas portent sur l'audience DÉCLARÉE, jamais sur la
+  // voie des références — aucun n'active `includeReferenced`.
+  expiresAt: null,
   ...overrides,
 });
 

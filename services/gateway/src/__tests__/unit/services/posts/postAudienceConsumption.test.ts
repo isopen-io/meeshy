@@ -387,6 +387,7 @@ describe('canUserViewPost — branche référence', () => {
 
   const REFERENCED_POST = {
     id: 'p1', authorId: AUTHOR, visibility: 'FRIENDS' as const, visibilityUserIds: [],
+    expiresAt: null,
   };
 
   it('ouvre un post FRIENDS à un non-ami qui y est référencé', async () => {
@@ -429,5 +430,126 @@ describe('canUserViewPost — branche référence', () => {
 
     expect(await canUserConsumePost(prisma, REFERENCED_POST, STRANGER)).toBe(true);
     expect(await canUserInteractWithPost(prisma, REFERENCED_POST, STRANGER)).toBe(false);
+  });
+
+  /**
+   * PRIVATE l'emporte sur la référence.
+   *
+   * La branche traverse FRIENDS, EXCEPT, ONLY et COMMUNITY — c'est ce que le
+   * produit a décidé : l'auteur vient précisément de nommer cette personne.
+   * PRIVATE dit autre chose, et le dit APRÈS : « moi seul ». Basculer un
+   * contenu en archive personnelle doit le refermer sur TOUT LE MONDE, y
+   * compris sur les personnes qu'il nomme encore.
+   */
+  it('refuse un référencé sur un post PRIVATE — « moi seul » l’emporte', async () => {
+    const prisma = makeReferencePrisma({ id: 'm1' });
+
+    const allowed = await canUserConsumePost(
+      prisma,
+      { ...REFERENCED_POST, visibility: 'PRIVATE' as const },
+      STRANGER
+    );
+
+    expect(allowed).toBe(false);
+  });
+
+  it('n’interroge même pas la table des références sur un post PRIVATE', async () => {
+    const prisma = makeReferencePrisma({ id: 'm1' });
+
+    await canUserConsumePost(prisma, { ...REFERENCED_POST, visibility: 'PRIVATE' as const }, STRANGER);
+
+    expect(prisma.postMention.findUnique).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Un droit CONSOMMÉ ne doit plus rien ouvrir.
+   *
+   * `expiredViewAt` n'efface pas la ligne — la détruire fausserait l'inbox et
+   * les compteurs. Tester son EXISTENCE laissait donc grand ouvert tout ce que
+   * `canUserConsumePost` garde : le fil de commentaires, les réponses, la room
+   * socket, les notifications. `GET /posts/:id` rendait bien `consumed`, et le
+   * fil du même post servait textes, médias et identités.
+   */
+  describe('le droit s’éteint avec sa fenêtre', () => {
+    const EXPIRED_POST = {
+      ...REFERENCED_POST,
+      expiresAt: new Date(Date.now() - 48 * 3600_000),
+    };
+
+    it('admet un référencé sur un contenu expiré tant qu’il n’a rien dépensé', async () => {
+      const prisma = makeReferencePrisma({ id: 'm1', expiredViewAt: null });
+
+      expect(await canUserConsumePost(prisma, EXPIRED_POST, STRANGER)).toBe(true);
+    });
+
+    it('admet un référencé pendant sa fenêtre de 24 h', async () => {
+      const prisma = makeReferencePrisma({
+        id: 'm1', expiredViewAt: new Date(Date.now() - 3600_000),
+      });
+
+      expect(await canUserConsumePost(prisma, EXPIRED_POST, STRANGER)).toBe(true);
+    });
+
+    it('REFUSE un référencé dont la fenêtre est close', async () => {
+      const prisma = makeReferencePrisma({
+        id: 'm1', expiredViewAt: new Date(Date.now() - 30 * 3600_000),
+      });
+
+      expect(await canUserConsumePost(prisma, EXPIRED_POST, STRANGER)).toBe(false);
+    });
+
+    it('ne ferme rien tant que le contenu VIT, quelle que soit la ligne', async () => {
+      const prisma = makeReferencePrisma({
+        id: 'm1', expiredViewAt: new Date(Date.now() - 30 * 3600_000),
+      });
+
+      expect(await canUserConsumePost(prisma, REFERENCED_POST, STRANGER)).toBe(true);
+    });
+  });
+
+  /**
+   * L'audience ORDINAIRE tranche la première.
+   *
+   * La branche référence est une VOIE DE SECOURS : la consulter d'abord faisait
+   * payer une requête `postMention` à chaque lecteur légitime de chaque fil —
+   * y compris sur un post PUBLIC, où aucune référence ne peut rien changer au
+   * verdict.
+   */
+  describe('la référence n’est consultée qu’après un refus d’audience', () => {
+    it('n’interroge pas les références pour un post PUBLIC', async () => {
+      const prisma = makeReferencePrisma({ id: 'm1' });
+
+      const allowed = await canUserConsumePost(
+        prisma,
+        { ...REFERENCED_POST, visibility: 'PUBLIC' as const },
+        STRANGER
+      );
+
+      expect(allowed).toBe(true);
+      expect(prisma.postMention.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('n’interroge pas les références pour un ami sur un post FRIENDS', async () => {
+      const prisma = makeReferencePrisma({ id: 'm1' });
+      prisma.friendRequest.findFirst.mockResolvedValue({ id: 'fr-1' });
+
+      const allowed = await canUserConsumePost(prisma, REFERENCED_POST, FRIEND);
+
+      expect(allowed).toBe(true);
+      expect(prisma.postMention.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('n’interroge pas les références pour l’AUTEUR de son propre post expiré', async () => {
+      const prisma = makeReferencePrisma(null);
+
+      const allowed = await canUserConsumePost(
+        prisma,
+        { ...REFERENCED_POST, expiresAt: new Date(Date.now() - 48 * 3600_000) },
+        AUTHOR
+      );
+
+      expect(allowed).toBe(true);
+      expect(prisma.postMention.findUnique).not.toHaveBeenCalled();
+    });
   });
 });
