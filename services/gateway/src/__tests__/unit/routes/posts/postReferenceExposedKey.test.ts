@@ -254,4 +254,34 @@ describe('la relation `postMentions` ne quitte jamais le serveur sous son nom', 
     expect(broadcast.mentions).toEqual([FLAT_MENTION]);
     await app.close();
   });
+
+  /**
+   * `GET /posts/:postId` est la SEULE route de détail, et la seule à servir un
+   * post que `getPostById` a déjà aplati ET projeté pour son lecteur — la
+   * racine y porte donc `mentions`, jamais la relation. Son `repostOf`, lui,
+   * sort du `select` (`repostOfInclude`) sous le nom de schéma : sans le
+   * remappage, la route servirait `repostOf.postMentions`, que ni le web ni
+   * iOS ne décodent — et le texte CITÉ retomberait sur la regex locale du
+   * client, qui linkifie n'importe quel `@handle` vers un profil inexistant.
+   */
+  it('aplatit les références de l\'ORIGINAL sur la route de détail', async () => {
+    mockGetPostById.mockResolvedValue({
+      id: 'repost-1', type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
+      visibilityUserIds: [], mentions: [FLAT_MENTION],
+      repostOf: { id: POST_ID, content: 'bravo @alice', postMentions: [MENTION_ROW] },
+    });
+    const { app } = await buildApp();
+
+    const res = await app.inject({ method: 'GET', url: '/posts/repost-1' });
+
+    expect(res.statusCode).toBe(200);
+    const nested = res.json().data.repostOf;
+    expect(nested).not.toHaveProperty('postMentions');
+    expect(nested.mentions).toEqual([FLAT_MENTION]);
+    // La racine, déjà projetée par le service, traverse intacte : la repasser
+    // sur une relation absente rendrait une liste vide et effacerait ce que le
+    // lecteur a le droit de voir.
+    expect(res.json().data.mentions).toEqual([FLAT_MENTION]);
+    await app.close();
+  });
 });

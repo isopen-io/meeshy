@@ -212,6 +212,12 @@ describe('posts/postIncludes — canonical shared selects', () => {
           'shareCount',
           'bookmarkCount',
           'impressionCount',
+          // Les références du post ORIGINAL. Sans elles, `repostOf.mentions`
+          // valait toujours `undefined` et le client retombait sur sa regex
+          // locale pour linkifier le texte CITÉ — le lien mort vers un profil
+          // inexistant que la validation serveur existe pour supprimer.
+          // La forme partagée est verrouillée par `repostReferenceInclude.test.ts`.
+          'postMentions',
         ].sort(),
       );
     });
