@@ -14,6 +14,10 @@ public struct UnifiedPostComposer: View {
     /// recopié sur place — deux extractions divergeraient au premier pseudo
     /// contenant un point.
     @State private var mentionQuery: String?
+    /// Les personnes que ce post nomme, et COMMENT. Aucune n'est INLINE : le
+    /// texte porte les siennes, et le serveur les en relit lui-même.
+    @State private var references: [ComposerReference] = []
+    @State private var showMentionPicker = false
     @State private var moodEmoji: String? = nil
     @State private var visibility = "PUBLIC"
     /// Écrite par `storyPlaceholder.onTapGesture` — plus lue par personne
@@ -57,7 +61,13 @@ public struct UnifiedPostComposer: View {
     /// Set by every public init — the sync overloads adapt their closures into
     /// this contract so the button has a single code path that can `try await`
     /// and rollback `isPublishing` on failure.
-    private let publishHandler: (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void
+    ///
+    /// `mentions` porte les modes DÉCLARÉS (badge, note, silence) — jamais
+    /// INLINE, que le serveur relit du texte. C'est `POST /posts` qui les
+    /// accepte, donc ce chemin-ci et lui seul : une republication part par
+    /// `POST /posts/:id/repost`, qui n'en accepte aucune (cf.
+    /// `declaresReferences`).
+    private let publishHandler: (PostType, String, String?, StoryEffects?, UIImage?, [PostMentionInput]) async throws -> Void
 
     /// Async-throwing repost-mode publish handler. Nil when not in repost mode.
     /// When set, takes precedence over `publishHandler` in the Publish button.
@@ -112,7 +122,7 @@ public struct UnifiedPostComposer: View {
         self.onStoryImported = onStoryImported
         self.onDismiss = onDismiss
         // Default no-op for the non-repost callback so existing call sites keep working.
-        self.publishHandler = { _, _, _, _, _ in }
+        self.publishHandler = { _, _, _, _, _, _ in }
         _ = authorHandle
     }
 
@@ -133,7 +143,7 @@ public struct UnifiedPostComposer: View {
         self.repostPublishHandler = onPublishRepost
         self.onStoryImported = onStoryImported
         self.onDismiss = onDismiss
-        self.publishHandler = { _, _, _, _, _ in }
+        self.publishHandler = { _, _, _, _, _, _ in }
         _ = authorHandle
     }
 
@@ -148,7 +158,7 @@ public struct UnifiedPostComposer: View {
             }
         } else {
             Task {
-                try? await publishHandler(selectedType, content, moodEmoji, nil, selectedImage)
+                try? await publishHandler(selectedType, content, moodEmoji, nil, selectedImage, ComposerReferences.payload(references))
             }
         }
     }
@@ -161,7 +171,7 @@ public struct UnifiedPostComposer: View {
             if let story = repostSourceForTests, let repostPublishHandler {
                 try await repostPublishHandler(content, story, visibility)
             } else {
-                try await publishHandler(selectedType, content, moodEmoji, nil, selectedImage)
+                try await publishHandler(selectedType, content, moodEmoji, nil, selectedImage, ComposerReferences.payload(references))
             }
             return true
         } catch {
@@ -211,6 +221,15 @@ public struct UnifiedPostComposer: View {
             mentionQuery = ComposerMentionQuery.trailingHandle(in: newValue)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: mentionQuery != nil)
+        .sheet(isPresented: $showMentionPicker) {
+            // Un post n'a AUCUNE couche de positionnement sur ses médias : le
+            // badge n'y est pas proposé, un mode qui ne s'afficherait nulle
+            // part valant moins que l'absence de l'option.
+            StoryMentionPickerSheet(references: references,
+                                    modes: Self.modes(forCanvas: false)) { updated in
+                references = updated
+            }
+        }
         .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
@@ -265,6 +284,28 @@ public struct UnifiedPostComposer: View {
         }
     }
 
+    /// Les modes proposables selon que le contenu a un canevas ou non.
+    ///
+    /// PINNED n'a de sens que là où une couche de positionnement existe —
+    /// aujourd'hui la seule STORY. Proposer un badge sur un POST promettrait un
+    /// affichage qui n'arriverait jamais ; l'option revient quand la convergence
+    /// des composers aura donné un canevas à tous les types.
+    static func modes(forCanvas hasCanvas: Bool) -> [PostReferenceDisplay] {
+        hasCanvas ? [.pinned, .note, .silent] : [.note, .silent]
+    }
+
+    /// Ce que l'appui long propose depuis la liste `@`. INLINE en tête, parce
+    /// que c'est ce que le tap fait déjà : le nommer est ce qui rend le reste
+    /// du menu compréhensible.
+    static var textListModes: [PostReferenceDisplay] { [.inline] + modes(forCanvas: false) }
+
+    /// Le mode DÉCLARÉ (badge, note, silence) n'a de destination que par
+    /// `POST /posts`, seule route qui accepte `mentions`. Une republication
+    /// part par `POST /posts/:id/repost`, qui n'en accepte aucune : y proposer
+    /// le choix promettrait une notification que rien n'enverrait. Le texte,
+    /// lui, reste offert dans les deux cas — c'est le contenu qui le porte.
+    private var declaresReferences: Bool { repostSourceStory == nil }
+
     /// Suggestions pendant qu'un `@…` est en cours de frappe.
     ///
     /// Le champ de saisie n'en savait rien : on pouvait écrire `@alice` dans un
@@ -278,14 +319,53 @@ public struct UnifiedPostComposer: View {
     @ViewBuilder
     private var mentionSuggestions: some View {
         if let query = mentionQuery {
-            MentionSuggestionList(query: query) { user in
-                content = ComposerMentionQuery.replacingTrailingHandle(in: content, with: user.username)
-                mentionQuery = nil
-            }
-            .background(RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground))
-            .padding(.horizontal, 16)
-            .transition(.opacity)
+            mentionList(for: query)
+                .background(RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground))
+                .padding(.horizontal, 16)
+                .transition(.opacity)
         }
+    }
+
+    @ViewBuilder
+    private func mentionList(for query: String) -> some View {
+        if declaresReferences {
+            MentionSuggestionList(query: query) { user in
+                insertHandle(of: user)
+            } contextMenu: { user in
+                ReferenceModeMenu(modes: Self.textListModes) { mode in
+                    choose(mode, for: user)
+                }
+            }
+        } else {
+            MentionSuggestionList(query: query) { user in
+                insertHandle(of: user)
+            }
+        }
+    }
+
+    /// Tap = INLINE : comportement historique, inchangé.
+    private func insertHandle(of user: UserSearchResult) {
+        content = ComposerMentionQuery.replacingTrailingHandle(in: content, with: user.username)
+        mentionQuery = nil
+    }
+
+    private func choose(_ mode: PostReferenceDisplay, for user: UserSearchResult) {
+        // Le fragment en cours de frappe (`@ali`) est d'abord complété : c'est
+        // la seule forme que la règle de retrait sache reconnaître, et les deux
+        // règles pures se composent ainsi sans qu'aucune ne connaisse l'autre.
+        let inserted = ComposerMentionQuery.replacingTrailingHandle(in: content, with: user.username)
+        if mode == .inline {
+            content = inserted
+        } else {
+            // Tout sauf INLINE retire le `@handle` du texte : c'est exactement
+            // l'intérêt du geste.
+            content = ComposerReferences.removingHandle(user.username, from: inserted)
+            references = ReferencePickerLogic.apply(
+                .choose(mode), username: user.username, userId: user.id,
+                to: references, context: .textList
+            )
+        }
+        mentionQuery = nil
     }
 
     private var postComposer: some View {
@@ -337,11 +417,49 @@ public struct UnifiedPostComposer: View {
                             .foregroundColor(mediaPickerColor)
                     }
 
+                    mentionChip
                     visibilityPicker
                     Spacer()
                 }
                 .padding(.horizontal, 16)
+
+                referenceRow
             }
+        }
+    }
+
+    /// La seconde porte : nommer quelqu'un SANS l'écrire. La première reste la
+    /// frappe `@`, dont la liste sert le même choix.
+    @ViewBuilder
+    private var mentionChip: some View {
+        if declaresReferences {
+            Button {
+                showMentionPicker = true
+                HapticFeedback.light()
+            } label: {
+                Label(String(localized: "reference.sheet.title", defaultValue: "Mentionner", bundle: .module),
+                      systemImage: "at")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(theme.textSecondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// L'unique état visible des références, quel que soit le nombre de modes
+    /// en jeu — et le seul endroit d'où une SILENCIEUSE se voit, donc le seul
+    /// d'où elle se retire.
+    @ViewBuilder
+    private var referenceRow: some View {
+        if !references.isEmpty {
+            HStack {
+                ReferenceChipRow(references: references,
+                                 accentColor: MeeshyColors.indigo500) {
+                    showMentionPicker = true
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16)
         }
     }
 
@@ -396,8 +514,14 @@ public struct UnifiedPostComposer: View {
                 .padding(.horizontal, 16)
 
             mentionSuggestions
-            visibilityPicker
-                .padding(.horizontal, 16)
+            HStack(spacing: 16) {
+                mentionChip
+                visibilityPicker
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+
+            referenceRow
         }
         .padding(.top, 16)
     }
@@ -526,12 +650,13 @@ public struct UnifiedPostComposer: View {
             let typedType = selectedType
             let typedMood = moodEmoji
             let typedImage = selectedImage
+            let typedMentions = ComposerReferences.payload(references)
             Task { @MainActor in
                 do {
                     if let story = repostSourceStory, let repostPublishHandler {
                         try await repostPublishHandler(typedContent, story, typedVisibility)
                     } else {
-                        try await publishHandler(typedType, typedContent, typedMood, nil, typedImage)
+                        try await publishHandler(typedType, typedContent, typedMood, nil, typedImage, typedMentions)
                     }
                     // On success, the caller typically dismisses the sheet via
                     // `onDismiss` — we still reset the flag defensively so that
