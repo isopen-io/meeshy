@@ -251,11 +251,27 @@ Implémentation, après `sentRequests` (`:51`) :
 
 ```swift
     public func allFriendRequests(status: String? = "accepted", offset: Int = 0, limit: Int = 100) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
-        var endpoint = "/users/friend-requests"
-        if let status, !status.isEmpty { endpoint += "?status=\(status)" }
-        return try await api.offsetPaginatedRequest(endpoint: endpoint, offset: offset, limit: limit)
+        var queryItems = [
+            URLQueryItem(name: "offset", value: String(offset)),
+            URLQueryItem(name: "limit", value: String(limit))
+        ]
+        if let status, !status.isEmpty {
+            queryItems.append(URLQueryItem(name: "status", value: status))
+        }
+        return try await api.request(
+            endpoint: "/users/friend-requests",
+            method: "GET",
+            body: nil,
+            queryItems: queryItems
+        )
     }
 ```
+
+> ⚠️ **Ne PAS concaténer `?status=…` dans la chaîne d'endpoint passée à `offsetPaginatedRequest`.**
+> `APIClient` fait `components.queryItems = queryItems` — une AFFECTATION, qui **écrase** toute query
+> déjà présente dans l'endpoint — et `offsetPaginatedRequest` fournit toujours `[limit, offset]`. Le
+> filtre partirait donc à la poubelle **en production**, pendant que `MockAPIClient`, qui n'exerce pas
+> ce chemin, laisserait le test au vert. (Défaut du premier jet de ce plan, rattrapé à l'exécution.)
 
 - [ ] **Step 4 : Test RED du ViewModel**
 
