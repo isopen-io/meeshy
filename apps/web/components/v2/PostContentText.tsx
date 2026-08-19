@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Fragment } from 'react';
+import type { PostReference } from '@meeshy/shared/types/post-reference';
 
 /**
  * Rendu riche d'une caption de post/reel : mentions, hashtags, URLs colorés
@@ -59,18 +60,42 @@ function parseSegments(content: string): Segment[] {
   return segments;
 }
 
-export function PostContentText({ content, className }: { content: string; className?: string }) {
+export function PostContentText({
+  content,
+  references,
+  className,
+}: {
+  content: string;
+  /**
+   * Les références que le serveur a validées. Fourni, SEULS ces pseudos
+   * deviennent des liens.
+   *
+   * `undefined` (serveur non déployé) linkifie tout, comme avant : ne plus rien
+   * linkifier serait une régression visible. `[]` ne linkifie rien — le serveur
+   * s'est prononcé, et il dit qu'il n'y en a aucune.
+   */
+  references?: readonly PostReference[];
+  className?: string;
+}) {
+  const validUsernames = references
+    ? new Set(references.map((r) => r.username.toLowerCase()))
+    : null;
   const segments = parseSegments(content);
   return (
     <p className={`whitespace-pre-wrap ${className ?? ''}`}>
       {segments.map((segment, i) => {
         switch (segment.type) {
-          case 'mention':
+          case 'mention': {
+            const canonical = segment.username.toLowerCase();
+            if (validUsernames && !validUsernames.has(canonical)) {
+              return <Fragment key={i}>{segment.content}</Fragment>;
+            }
             return (
-              <Link key={i} href={`/u/${segment.username}`} className="text-[var(--gp-terracotta)] font-semibold hover:underline">
+              <Link key={i} href={`/u/${canonical}`} className="text-[var(--gp-terracotta)] font-semibold hover:underline">
                 {segment.content}
               </Link>
             );
+          }
           case 'hashtag':
             return (
               <Link key={i} href={`/hashtag/${segment.tag}`} className="text-[var(--gp-terracotta)] font-semibold hover:underline">

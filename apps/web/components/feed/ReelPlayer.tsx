@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Post, PostMedia } from '@meeshy/shared/types/post';
+import type { PostReference } from '@meeshy/shared/types/post-reference';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { getInitials } from '@/utils/initials';
@@ -70,6 +71,17 @@ function resolveDisplayCaption(post: Post, userLanguage?: string): string {
   const own = resolveCaption(post, userLanguage);
   if (own) return own;
   return post.repostOf ? resolveCaption(post.repostOf, userLanguage) : own;
+}
+
+/**
+ * References follow the SAME own-vs-repostOf source as
+ * {@link resolveDisplayCaption} — a repost's caption comes from `repostOf`,
+ * so its `@handle`s must be validated against `repostOf.mentions`, never the
+ * reposter's own (empty) list.
+ */
+function resolveDisplayReferences(post: Post, userLanguage?: string): readonly PostReference[] | undefined {
+  if (resolveCaption(post, userLanguage)) return post.mentions;
+  return post.repostOf ? post.repostOf.mentions : post.mentions;
 }
 
 /**
@@ -208,6 +220,7 @@ export function ReelPlayer({
   const downloadTarget = video ?? image;
   const name = authorName(reel);
   const caption = resolveDisplayCaption(reel, userLanguage);
+  const captionReferences = resolveDisplayReferences(reel, userLanguage);
 
   const goNext = useCallback(() => {
     if (hasNext) onNext();
@@ -429,7 +442,7 @@ export function ReelPlayer({
             </Avatar>
             <span className="font-semibold text-lg drop-shadow-sm">{name}</span>
           </div>
-          {caption && <PostContentText content={caption} className="mt-3 line-clamp-3 text-sm text-white/90 leading-relaxed drop-shadow-sm" />}
+          {caption && <PostContentText content={caption} references={captionReferences} className="mt-3 line-clamp-3 text-sm text-white/90 leading-relaxed drop-shadow-sm" />}
         </div>
 
       </div>

@@ -1,5 +1,14 @@
 import { render, screen } from '@testing-library/react';
 import { PostContentText } from '@/components/v2/PostContentText';
+import type { PostReference } from '@meeshy/shared/types/post-reference';
+
+const ALICE: PostReference = {
+  userId: 'u-a',
+  username: 'alice',
+  displayName: 'Alice B.',
+  avatar: null,
+  display: 'INLINE',
+};
 
 describe('PostContentText', () => {
   it('renders a hashtag as a link to /hashtag/:tag', () => {
@@ -51,5 +60,33 @@ describe('PostContentText', () => {
     render(<PostContentText content="Rien de spécial ici" />);
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.getByText('Rien de spécial ici')).toBeInTheDocument();
+  });
+
+  it('linkifies a handle the server has validated', () => {
+    render(<PostContentText content="salut @alice" references={[ALICE]} />);
+    expect(screen.getByRole('link', { name: '@alice' })).toHaveAttribute('href', '/u/alice');
+  });
+
+  it('does NOT linkify a handle absent from the references', () => {
+    render(<PostContentText content="salut @nimportequoi" references={[ALICE]} />);
+    expect(screen.queryByRole('link', { name: '@nimportequoi' })).toBeNull();
+    expect(screen.getByText(/@nimportequoi/)).toBeInTheDocument();
+  });
+
+  it('linkifies everything when no reference list is provided (server not yet deployed)', () => {
+    render(<PostContentText content="salut @alice" />);
+    expect(screen.getByRole('link', { name: '@alice' })).toBeInTheDocument();
+  });
+
+  it('linkifies NOTHING when the list is provided and empty', () => {
+    // Distinction essentielle : `[]` veut dire « le serveur dit qu'il n'y en a
+    // aucune », `undefined` veut dire « il ne s'est pas prononcé ».
+    render(<PostContentText content="salut @alice" references={[]} />);
+    expect(screen.queryByRole('link', { name: '@alice' })).toBeNull();
+  });
+
+  it('compares case-insensitively', () => {
+    render(<PostContentText content="salut @Alice" references={[ALICE]} />);
+    expect(screen.getByRole('link', { name: '@Alice' })).toHaveAttribute('href', '/u/alice');
   });
 });

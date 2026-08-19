@@ -13,6 +13,7 @@ import type { TranslationItem } from './TranslationToggle';
 import { getLanguageName } from './flags';
 import { PostContentText } from './PostContentText';
 import type { Post } from '@meeshy/shared/types/post';
+import type { PostReference } from '@meeshy/shared/types/post-reference';
 
 type PostCardMedia = {
   id: string;
@@ -39,6 +40,8 @@ export interface PostCardProps {
   reactionSummary?: Record<string, number>;
   userReaction?: string;
   media?: readonly PostCardMedia[];
+  /** References the server validated for `content` — only these `@handle`s become links. */
+  mentions?: readonly PostReference[];
   /** Original post being reposted — renders the "Reposted from @handle" banner + nested card. */
   repostOf?: Post['repostOf'];
   /** True for a quote-repost (reposter added their own comment). Drives which counters show where. */
@@ -182,6 +185,7 @@ function PostCard({
   reactionSummary,
   userReaction,
   media,
+  mentions,
   repostOf,
   isQuote = false,
   onLike,
@@ -396,11 +400,11 @@ function PostCard({
                 variant="block"
                 showContent={false}
               />
-              <PostContentText content={content} className="text-[var(--gp-text-primary)]" />
+              <PostContentText content={content} references={mentions} className="text-[var(--gp-text-primary)]" />
             </div>
           ) : (
             <div className="mb-3">
-              <PostContentText content={content} className="text-[var(--gp-text-primary)]" />
+              <PostContentText content={content} references={mentions} className="text-[var(--gp-text-primary)]" />
               {onTranslate && lang !== userLanguage && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onTranslate(); }}
@@ -492,7 +496,7 @@ function PostCard({
                 </div>
               ) : (
                 <div className="mb-2">
-                  <PostContentText content={repostOf.content} className="text-sm text-[var(--gp-text-secondary)]" />
+                  <PostContentText content={repostOf.content} references={repostOf.mentions} className="text-sm text-[var(--gp-text-secondary)]" />
                 </div>
               )
             )}

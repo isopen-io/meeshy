@@ -339,11 +339,11 @@ function PostDetail({
                     variant="block"
                     showContent={false}
                   />
-                  <PostContentText content={post.content} className="text-[var(--gp-text-primary)]" />
+                  <PostContentText content={post.content} references={post.mentions} className="text-[var(--gp-text-primary)]" />
                 </>
               ) : (
                 <>
-                  <PostContentText content={post.content} className="text-[var(--gp-text-primary)]" />
+                  <PostContentText content={post.content} references={post.mentions} className="text-[var(--gp-text-primary)]" />
                   {onTranslate && post.originalLanguage && post.originalLanguage !== userLanguage && (
                     <button
                       onClick={onTranslate}
@@ -436,7 +436,7 @@ function PostDetail({
                   </div>
                 ) : (
                   <div className="mb-3">
-                    <PostContentText content={repostOf.content} className="text-sm text-[var(--gp-text-secondary)]" />
+                    <PostContentText content={repostOf.content} references={repostOf.mentions} className="text-sm text-[var(--gp-text-secondary)]" />
                   </div>
                 )
               )}
