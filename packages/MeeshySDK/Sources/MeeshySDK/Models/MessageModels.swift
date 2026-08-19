@@ -815,9 +815,12 @@ extension APIMessage {
                 senderAvatar: fwd.sender?.avatar,
                 previewText: fwd.content ?? "",
                 conversationId: forwardedFromConversation?.id,
-                conversationName: forwardedFromConversation?.title,
+                // Même repli que `MeeshyConversation.name` : un public sans
+                // titre garde un nom affichable via son identifier.
+                conversationName: forwardedFromConversation?.title ?? forwardedFromConversation?.identifier,
                 attachmentType: fwdKindRaw,
-                attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
+                conversationType: forwardedFromConversation?.type
             )
         }()
         let resolvedUsername = sender?.username ?? sender?.user?.username

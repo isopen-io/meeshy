@@ -140,9 +140,10 @@ iOS ↔ web : toute évolution touche les deux sites (à documenter dans les deu
 - Gating dans `BubbleForwardedIndicator` (inputs primitifs Equatable — on passe la décision
   ou le type en String, pas d'objet), nouvelles clés localisées dans les 7 langues
   (gardes habituelles : catalogue 7 langues, clés mortes, cliquet accents).
-- Hydratation locale à l'envoi : le service de transfert (A.3) construit la
-  `ForwardReference` (sender, preview, conversation source : id, nom, type) sur la ligne
-  optimiste → badge complet immédiat, sans attendre le serveur.
+- (Amendé à l'implémentation) Pas de ligne optimiste au transfert (cf. A.5) : l'«
+  hydratation locale » envisagée au brainstorming est SANS OBJET. Le badge de la
+  conversation cible est alimenté par l'enrichissement serveur (GET + broadcast
+  `message:new`), couvert par C.2 — testé via le mapping `toMessage`.
 
 ### C.4 Web
 Le shape du message bulle web gagne `forwardedFrom` / `forwardedFromConversation`

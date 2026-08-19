@@ -480,13 +480,14 @@ struct BubbleStandardLayout: View {
                     BubblePinnedIndicator()
                 }
 
-                // Forwarded indicator
+                // Forwarded indicator — le nom de la conversation source passe
+                // par ForwardBadgePolicy : groupes nommés, tête-à-tête anonymes.
                 if content.isForwarded {
                     BubbleForwardedIndicator(
                         isMe: isMe,
                         isDark: isDark,
                         senderName: message.forwardedFrom?.senderName,
-                        conversationName: message.forwardedFrom?.conversationName
+                        conversationName: ForwardBadgePolicy.conversationName(for: message.forwardedFrom)
                     )
                 }
 

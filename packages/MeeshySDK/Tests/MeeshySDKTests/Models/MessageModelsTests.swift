@@ -217,7 +217,8 @@ final class MessageModelsTests: XCTestCase {
         let original = ForwardReference(
             originalMessageId: "fm1", senderName: "Diana", senderAvatar: "avatar.jpg",
             previewText: "Check this", conversationId: "conv5", conversationName: "Design Team",
-            attachmentType: "video/mp4", attachmentThumbnailUrl: "https://example.com/vid.jpg"
+            attachmentType: "video/mp4", attachmentThumbnailUrl: "https://example.com/vid.jpg",
+            conversationType: "group"
         )
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(ForwardReference.self, from: data)
@@ -228,6 +229,17 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertEqual(decoded.conversationId, "conv5")
         XCTAssertEqual(decoded.conversationName, "Design Team")
         XCTAssertEqual(decoded.attachmentType, "video/mp4")
+        XCTAssertEqual(decoded.conversationType, "group")
+    }
+
+    func testForwardReferenceDecodesLegacyJSONWithoutConversationType() throws {
+        let legacy = Data("""
+        {"originalMessageId":"fm1","senderName":"Diana","previewText":"Check this","conversationId":"conv5","conversationName":"Design Team"}
+        """.utf8)
+        let decoded = try JSONDecoder().decode(ForwardReference.self, from: legacy)
+        XCTAssertNil(decoded.conversationType,
+                     "les caches GRDB antérieurs au champ doivent décoder sans migration")
+        XCTAssertEqual(decoded.conversationName, "Design Team")
     }
 
     // MARK: - MeeshyReaction

@@ -1588,10 +1588,16 @@ public struct ForwardReference: Codable, Sendable {
     public let conversationName: String?
     public let attachmentType: String?
     public let attachmentThumbnailUrl: String?
+    /// Type de la conversation SOURCE (`direct`, `group`, `public`, `global`,
+    /// `community`, `channel`, `bot`, `broadcast`) — mêmes valeurs que
+    /// `MeeshyConversation.ConversationType`. Optionnel : les caches GRDB
+    /// antérieurs au champ décodent en `nil` sans migration.
+    public let conversationType: String?
 
     public init(originalMessageId: String = "", senderName: String, senderAvatar: String? = nil,
                 previewText: String, conversationId: String? = nil, conversationName: String? = nil,
-                attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil) {
+                attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil,
+                conversationType: String? = nil) {
         self.originalMessageId = originalMessageId
         self.senderName = senderName
         self.senderAvatar = senderAvatar
@@ -1600,6 +1606,7 @@ public struct ForwardReference: Codable, Sendable {
         self.conversationName = conversationName
         self.attachmentType = attachmentType
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
+        self.conversationType = conversationType
     }
 }
 

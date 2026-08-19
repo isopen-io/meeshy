@@ -297,4 +297,48 @@ final class APIMessageToMessageTests: XCTestCase {
         XCTAssertEqual(msg.attachments.count, 1)
         XCTAssertEqual(msg.attachments.first?.thumbHash, thumbHashValue)
     }
+
+    // MARK: - ForwardReference : type + fallback nom de la conversation source
+
+    // Le gateway sélectionne `type` sur les deux chemins (REST + socket) mais
+    // la conversion le JETAIT — impossible de distinguer un groupe d'un
+    // tête-à-tête au badge « Transféré » (spec 2026-08-19, Volet C).
+    func test_toMessage_mapsForwardedConversationType() {
+        let api = makeAPIMessage(extraFields: [
+            "forwardedFromId": "fwd-1",
+            "forwardedFrom": [
+                "id": "fwd-1",
+                "content": "hello",
+                "sender": makeSenderJSON(displayName: "Alice"),
+            ],
+            "forwardedFromConversation": [
+                "id": "conv-src",
+                "title": "Équipe",
+                "type": "group",
+            ],
+        ])
+
+        let msg = api.toMessage(currentUserId: "user-1")
+
+        XCTAssertEqual(msg.forwardedFrom?.conversationType, "group")
+        XCTAssertEqual(msg.forwardedFrom?.conversationName, "Équipe")
+    }
+
+    func test_toMessage_forwardedConversationName_fallsBackToIdentifier() {
+        let api = makeAPIMessage(extraFields: [
+            "forwardedFromId": "fwd-1",
+            "forwardedFrom": ["id": "fwd-1", "content": "hello"],
+            "forwardedFromConversation": [
+                "id": "conv-src",
+                "identifier": "meeshy-public",
+                "type": "public",
+            ],
+        ])
+
+        let msg = api.toMessage(currentUserId: "user-1")
+
+        XCTAssertEqual(msg.forwardedFrom?.conversationName, "meeshy-public",
+                       "un public sans titre garde un nom affichable — même repli que MeeshyConversation.name")
+        XCTAssertEqual(msg.forwardedFrom?.conversationType, "public")
+    }
 }
