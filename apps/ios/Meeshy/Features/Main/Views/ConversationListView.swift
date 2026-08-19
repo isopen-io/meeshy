@@ -993,7 +993,15 @@ struct ConversationListView: View {
         }
     }
 
-    private var mainContent: some View {
+    /// `AnyView` à la DÉCLARATION (2026-08-19). Chaîne `body → mainContent →
+    /// mainContentZStack` : 56 niveaux d'imbrication de type concret, résolus
+    /// en UNE fois par le décodeur de métadonnées RÉCURSIF du runtime Swift au
+    /// 1er rendu — ~17 Ko de pile par niveau. Un `.ips` device du 2026-08-17
+    /// (`Meeshy-2026-08-17-161136`) meurt dans cette chaîne. Éraser CHAQUE
+    /// maillon borne chaque matérialisation à sa propre couche.
+    /// Voir `ConversationViewBodyTypeDepthTests`.
+    private var mainContent: AnyView {
+        AnyView(
         mainContentZStack
             .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
@@ -1118,6 +1126,7 @@ struct ConversationListView: View {
                     bundle: .main
                 ))
             }
+        )
     }
 
     // MARK: - Rail vivants & stories (LWS-6, drapeau Lentille)
@@ -1324,7 +1333,8 @@ struct ConversationListView: View {
         }
     }
 
-    private var mainContentZStack: some View {
+    private var mainContentZStack: AnyView {
+        AnyView(
         ZStack(alignment: .bottom) {
             // Layer 1: Full-screen scroll content
             // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
@@ -1638,6 +1648,7 @@ struct ConversationListView: View {
                 }
             )
         }
+        )
     }
 
     // MARK: - Handle Story View

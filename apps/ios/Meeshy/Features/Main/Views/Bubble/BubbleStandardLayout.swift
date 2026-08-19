@@ -696,7 +696,16 @@ struct BubbleStandardLayout: View {
     // MARK: - Content stack (text + media + reply, with blur mask)
 
     @ViewBuilder
-    private func contentStack(shouldBlur: Bool) -> some View {
+    /// `AnyView` à la DÉCLARATION (2026-08-19) — voir `visualMediaGrid`.
+    /// Ce corps est évalué sur `com.apple.uikit.datasource.diffing`, un thread
+    /// à pile de **512 Ko** (moitié du main thread) : le budget d'imbrication
+    /// y est deux fois plus serré.
+    private func contentStack(shouldBlur: Bool) -> AnyView {
+        AnyView(contentStackBody(shouldBlur: shouldBlur))
+    }
+
+    @ViewBuilder
+    private func contentStackBody(shouldBlur: Bool) -> some View {
         let isMe = content.isMe
         VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
             // Grille visuelle (images + videos) ou carrousel inline
@@ -936,8 +945,12 @@ struct BubbleStandardLayout: View {
     // Timestamp-visibility gating + delivery resolution now live in the pure
     // `BubbleFooterModel.make(...)` builder — see `resolvedFooter`.
 
+    private var bubbleInnerContent: AnyView {
+        AnyView(bubbleInnerContentBody)
+    }
+
     @ViewBuilder
-    private var bubbleInnerContent: some View {
+    private var bubbleInnerContentBody: some View {
         // Quoted reply preview (inside bubble)
         if let reply = content.reply {
             quotedReplyView(reply.reference)

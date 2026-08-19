@@ -713,7 +713,8 @@ struct ConversationView: View {
         bodyWithSheets
     }
 
-    private var bodyWithSheets: some View {
+    private var bodyWithSheets: AnyView {
+        AnyView(
         bodyWithCovers
             .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
                 StoryViewerContainer(
@@ -874,9 +875,11 @@ struct ConversationView: View {
             .sheet(item: $focalShareFileItem) { item in
                 ShareSheet(activityItems: [item.url])
             }
+        )
     }
 
-    private var bodyWithCovers: some View {
+    private var bodyWithCovers: AnyView {
+        AnyView(
         bodyWithLifecycle
             .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
                 ConversationMediaGalleryView(
@@ -1015,6 +1018,7 @@ struct ConversationView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
             }
+        )
     }
 
     /// Consomme `router.pendingHighlightMessageId` : scroll + flash sur le
@@ -1045,7 +1049,8 @@ struct ConversationView: View {
         }
     }
 
-    private var bodyWithLifecycle: some View {
+    private var bodyWithLifecycle: AnyView {
+        AnyView(
         bodyContent
             .background(InteractivePopEnabler())
             .task {
@@ -1262,6 +1267,7 @@ struct ConversationView: View {
                     audioRecorder.cancelRecording()
                 }
             }
+        )
     }
 
     // MARK: - Skeleton Overlay
@@ -1287,8 +1293,8 @@ struct ConversationView: View {
 
     // MARK: - Body Content (extracted to help type-checker)
 
-    @ViewBuilder
-    private var bodyContent: some View {
+    private var bodyContent: AnyView {
+        AnyView(
         ZStack {
             conversationBackground
 
@@ -1759,6 +1765,7 @@ struct ConversationView: View {
             searchResultsBlurOverlay
             returnToLatestButton
         }
+        )
     }
 
     // MARK: - Mention Suggestion Panel

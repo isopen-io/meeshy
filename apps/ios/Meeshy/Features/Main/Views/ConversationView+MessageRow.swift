@@ -368,8 +368,14 @@ extension ConversationView {
     /// message hugs the composer — see `QuickReactionBarPlacement`. The
     /// full-screen `Color.clear` backdrop dismisses the bar on tap and also
     /// blocks the list from scrolling, so the captured anchor never drifts.
-    @ViewBuilder
-    func quickReactionBarOverlay(for messageId: String) -> some View {
+    /// `AnyView` à la DÉCLARATION (2026-08-19) : c'était le chemin le PLUS
+    /// PROFOND du type concret de `bodyContent` (GeometryReader → ZStack →
+    /// VStack → EmojiReactionPicker + HStack de `Button<VStack<Image,Text>>`,
+    /// ~30 niveaux). Ce type entrait dans le mangled name de `bodyContent`
+    /// MÊME quand la barre n'est pas affichée — une branche non prise reste
+    /// dans le type. Voir la note d'en-tête de `ConversationView.bodyContent`.
+    func quickReactionBarOverlay(for messageId: String) -> AnyView {
+        AnyView(
         GeometryReader { proxy in
             let container = proxy.frame(in: .global)
             let placement = QuickReactionBarPlacement.compute(
@@ -394,6 +400,7 @@ extension ConversationView {
         }
         .ignoresSafeArea()
         .transition(.scale(scale: 0.9).combined(with: .opacity))
+        )
     }
 
     // MARK: - Reply Count

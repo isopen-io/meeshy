@@ -29,8 +29,19 @@ import MeeshyUI
 // MARK: - Visual Media Grid (extension on BubbleStandardLayout)
 extension BubbleStandardLayout {
 
+    /// `AnyView` à la DÉCLARATION (2026-08-19). Le `switch items.count` à 4
+    /// branches × `makeGridCell` produit un `_ConditionalContent` profond qui
+    /// entrait dans le type de `BubbleStandardLayout.body` (47 niveaux). Trois
+    /// `.ips` device du 2026-08-10 meurent ICI, sur
+    /// `com.apple.uikit.datasource.diffing` — pile de 512 Ko, pas 1 Mo.
+    /// L'extraction de `BubbleGridCell` (voir `makeGridCell`) avait borné les
+    /// CELLULES ; il restait à borner la GRILLE elle-même.
+    var visualMediaGrid: AnyView {
+        AnyView(visualMediaGridBody)
+    }
+
     @ViewBuilder
-    var visualMediaGrid: some View {
+    private var visualMediaGridBody: some View {
         let items = visualAttachments
 
         // Largeur en points d'une cellule moitié (cases 2 & 4) — sert à choisir
@@ -170,8 +181,12 @@ extension BubbleStandardLayout {
     /// neutre. Aucune chat bubble parasite. Footer style `.overlay` épinglé
     /// bottom-trailing sur la grille, identique au visual standalone.
     /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.5
+    func mediaWithReplyContainer(reply: BubbleContent.Reply) -> AnyView {
+        AnyView(mediaWithReplyContainerBody(reply: reply))
+    }
+
     @ViewBuilder
-    func mediaWithReplyContainer(reply: BubbleContent.Reply) -> some View {
+    private func mediaWithReplyContainerBody(reply: BubbleContent.Reply) -> some View {
         let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
         let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
         let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)

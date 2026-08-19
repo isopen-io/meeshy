@@ -107,8 +107,8 @@ extension ConversationView {
     // accesseur de type opaque au lieu d'un mangled name unique géant — la
     // récursion runtime se répartit sur plusieurs appels bornés au lieu d'un
     // seul appel non borné.
-    var themedComposer: some View {
-        composerEditingCovers(composerPickersAndSheets(composerCore))
+    var themedComposer: AnyView {
+        AnyView(composerEditingCovers(composerPickersAndSheets(composerCore)))
     }
 
     private var composerCore: some View {

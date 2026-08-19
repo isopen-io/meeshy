@@ -1,5 +1,6 @@
 import Foundation
 import WidgetKit
+import UIKit
 import MeeshySDK
 import os
 
@@ -74,6 +75,40 @@ struct ConversationSnapshotPayload: Codable {
 @MainActor
 final class WidgetDataManager: NotificationWidgetSink {
     static let shared = WidgetDataManager()
+
+    /// Toute écriture App Group passe par ici.
+    ///
+    /// `UserDefaults.set` sur une suite App Group n'écrit PAS en mémoire : il
+    /// fait un aller-retour **XPC SYNCHRONE** vers `cfprefsd`
+    /// (`CFPrefsPlistSource` → `xpc_connection_send_message_with_reply_sync` →
+    /// `mach_msg2_trap`). Si la suspension de l'app tombe pendant cet
+    /// aller-retour, le process détient un verrou de préférences au moment où
+    /// RunningBoard le suspend, et le système le tue avec **0xDEAD10CC**
+    /// (`RUNNINGBOARD 3735883980`) — 5 rapports `.ips` device entre le
+    /// 2026-07-31 et le 2026-08-17, dont `Meeshy-2026-08-17-074340` qui montre
+    /// la pile exacte : `ConversationListViewModel.syncBadgeOnUnreadChange`
+    /// (sink Combine `.debounce(200 ms)`) → `NotificationCoordinator
+    /// .registerConversations` → `WidgetDataManager.publishConversations` →
+    /// `NSUserDefaults setObject:forKey:` → XPC bloquant.
+    ///
+    /// Le debounce est précisément ce qui rend l'accident probable : il replante
+    /// une écriture jusqu'à 200 ms APRÈS la dernière mutation de la liste,
+    /// donc potentiellement dans la fenêtre de suspension ouverte par un
+    /// passage en arrière-plan.
+    ///
+    /// L'assertion de tâche d'arrière-plan demande au système de différer la
+    /// suspension jusqu'à `endBackgroundTask` — c'est le remède canonique
+    /// d'Apple pour 0xDEAD10CC. Elle est prise et rendue de façon strictement
+    /// synchrone autour de l'écriture, donc son budget est de l'ordre de la
+    /// milliseconde et elle ne retarde jamais réellement la suspension.
+    /// Même parapluie que `BackgroundTransitionCoordinator`.
+    private func writingToSharedContainer(_ body: () -> Void) {
+        let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.widget.publish")
+        defer {
+            if taskId != .invalid { UIApplication.shared.endBackgroundTask(taskId) }
+        }
+        body()
+    }
 
     private let suiteName: String
     /// Seam de test — en production, les dossiers de staging sont résolus
@@ -200,7 +235,7 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// production si elle en sort — un environnement inattendu ne peut donc pas
     /// détourner un partage vers un hôte arbitraire.
     func publishAPIBaseURL(_ origin: String = MeeshyConfig.shared.serverOrigin) {
-        sharedDefaults?.set(origin, forKey: apiBaseURLKey)
+        writingToSharedContainer { sharedDefaults?.set(origin, forKey: apiBaseURLKey) }
     }
 
     // MARK: - NotificationWidgetSink
@@ -235,8 +270,10 @@ final class WidgetDataManager: NotificationWidgetSink {
         guard let defaults = sharedDefaults,
               let data = encoder.encodeOrLog(Array(widgetConversations), field: "widget conversations", logger: Logger.widgetData) else { return }
 
-        defaults.set(data, forKey: conversationsKey)
-        defaults.set(Date().timeIntervalSince1970, forKey: lastUpdatedKey)
+        writingToSharedContainer {
+            defaults.set(data, forKey: conversationsKey)
+            defaults.set(Date().timeIntervalSince1970, forKey: lastUpdatedKey)
+        }
 
         // Store keyé Local-First (toutes conversations, prefs complètes) — la
         // NSE l'interroge par conversationId pour résoudre customName + badges
@@ -285,7 +322,7 @@ final class WidgetDataManager: NotificationWidgetSink {
                 )
             }
         guard let data = encoder.encodeOrLog(snapshots, field: "widget snapshots", logger: Logger.widgetData) else { return }
-        defaults.set(data, forKey: snapshotsKey)
+        writingToSharedContainer { defaults.set(data, forKey: snapshotsKey) }
     }
 
     /// Résolution Local-First **synchrone** de la présentation d'une
@@ -348,11 +385,11 @@ final class WidgetDataManager: NotificationWidgetSink {
         guard let defaults = sharedDefaults,
               let data = encoder.encodeOrLog(Array(favorites), field: "widget favorites", logger: Logger.widgetData) else { return }
 
-        defaults.set(data, forKey: favoritesKey)
+        writingToSharedContainer { defaults.set(data, forKey: favoritesKey) }
     }
 
     func publishUnreadCount(_ count: Int) {
-        sharedDefaults?.set(max(count, 0), forKey: unreadCountKey)
+        writingToSharedContainer { sharedDefaults?.set(max(count, 0), forKey: unreadCountKey) }
     }
 
     func reloadTimelines() {

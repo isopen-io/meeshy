@@ -24,17 +24,22 @@ public extension View {
     ///   control reads as a distinct surface.
     ///
     /// Apply LAST in the modifier chain (after sizing) for correct rendering.
-    @ViewBuilder
+    ///
+    /// Applique via un `ViewModifier` — JAMAIS via un `@ViewBuilder`.
+    ///
+    /// Un `@ViewBuilder` portant l'`if #available` produirait
+    /// `_ConditionalContent<iOS26Branch, FallbackBranch>`, qui embarque les
+    /// DEUX branches : le type de l'appelant doublerait à chaque appel et
+    /// coûterait 2 niveaux d'imbrication au lieu de 1. Avec 87 sites d'appel,
+    /// c'était un contributeur direct du débordement de pile du décodeur de
+    /// métadonnées documenté dans `AdaptiveOnChange.swift`. Encapsulé ici, le
+    /// site d'appel ne voit que `ModifiedContent<Base, AdaptiveGlassModifier<S>>`.
     func adaptiveGlass<S: Shape>(
         in shape: S = Circle(),
         tint: Color? = nil,
         interactive: Bool = false
     ) -> some View {
-        if #available(iOS 26.0, *) {
-            glassEffect(makeMeeshyGlass(tint: tint, interactive: interactive), in: shape)
-        } else {
-            background(adaptiveGlassRegularFallback(in: shape, tint: tint))
-        }
+        modifier(AdaptiveGlassModifier(shape: shape, tint: tint, interactive: interactive))
     }
 
     /// Prominent Liquid Glass — stronger emphasis, for the primary / destructive
@@ -43,17 +48,12 @@ public extension View {
     /// - iOS 26+: tinted `.glassEffect`.
     /// - iOS < 26: a solid `tint` gradient + soft shadow, preserving the bold
     ///   affordance (e.g. a red hang-up button) instead of a pale translucency.
-    @ViewBuilder
     func adaptiveGlassProminent<S: Shape>(
         in shape: S = Circle(),
         tint: Color,
         interactive: Bool = true
     ) -> some View {
-        if #available(iOS 26.0, *) {
-            glassEffect(makeMeeshyGlass(tint: tint, interactive: interactive), in: shape)
-        } else {
-            background(adaptiveGlassProminentFallback(in: shape, tint: tint))
-        }
+        modifier(AdaptiveGlassProminentModifier(shape: shape, tint: tint, interactive: interactive))
     }
 
     /// Translucent sheet backdrop — the Liquid Glass treatment for sheets: the
@@ -65,17 +65,39 @@ public extension View {
     ///   opaque background).
     ///
     /// Apply on the sheet's ROOT view, alongside `presentationDetents`.
-    @ViewBuilder
     func adaptiveSheetGlassBackground() -> some View {
-        if #available(iOS 16.4, *) {
-            presentationBackground(.ultraThinMaterial)
+        modifier(AdaptiveSheetGlassBackgroundModifier())
+    }
+}
+
+/// Builds the iOS 26 `Glass` value from the agnostic params. Free function so it
+/// is callable from the `@ViewBuilder` body (which can't hold local statements).
+@available(iOS 26.0, *)
+private func makeMeeshyGlass(tint: Color?, interactive: Bool) -> Glass {
+    var glass: Glass = .regular
+    if let tint { glass = glass.tint(tint) }
+    if interactive { glass = glass.interactive() }
+    return glass
+}
+
+/// Porte la bascule de disponibilité SANS l'exposer au type de l'appelant
+/// (cf. `adaptiveGlass`). L'`if #available` vit dans `body(content:)`, que
+/// SwiftUI évalue depuis son PROPRE nœud d'attribut, à pile plate.
+private struct AdaptiveGlassModifier<S: Shape>: ViewModifier {
+    let shape: S
+    let tint: Color?
+    let interactive: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(makeMeeshyGlass(tint: tint, interactive: interactive), in: shape)
         } else {
-            self
+            content.background(regularFallback)
         }
     }
 
     @ViewBuilder
-    private func adaptiveGlassRegularFallback<S: Shape>(in shape: S, tint: Color?) -> some View {
+    private var regularFallback: some View {
         if let tint {
             shape.fill(.ultraThinMaterial)
                 .overlay(shape.fill(tint.opacity(0.22)))
@@ -85,8 +107,22 @@ public extension View {
                 .overlay(shape.stroke(Color.white.opacity(0.18), lineWidth: 1))
         }
     }
+}
 
-    private func adaptiveGlassProminentFallback<S: Shape>(in shape: S, tint: Color) -> some View {
+private struct AdaptiveGlassProminentModifier<S: Shape>: ViewModifier {
+    let shape: S
+    let tint: Color
+    let interactive: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(makeMeeshyGlass(tint: tint, interactive: interactive), in: shape)
+        } else {
+            content.background(prominentFallback)
+        }
+    }
+
+    private var prominentFallback: some View {
         shape
             .fill(
                 LinearGradient(
@@ -99,14 +135,14 @@ public extension View {
     }
 }
 
-/// Builds the iOS 26 `Glass` value from the agnostic params. Free function so it
-/// is callable from the `@ViewBuilder` body (which can't hold local statements).
-@available(iOS 26.0, *)
-private func makeMeeshyGlass(tint: Color?, interactive: Bool) -> Glass {
-    var glass: Glass = .regular
-    if let tint { glass = glass.tint(tint) }
-    if interactive { glass = glass.interactive() }
-    return glass
+private struct AdaptiveSheetGlassBackgroundModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(iOS 16.4, *) {
+            content.presentationBackground(.ultraThinMaterial)
+        } else {
+            content
+        }
+    }
 }
 
 /// Groups adjacent Liquid Glass elements so they blend/morph (glass cannot
