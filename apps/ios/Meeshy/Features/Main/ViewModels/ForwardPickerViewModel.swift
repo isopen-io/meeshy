@@ -176,7 +176,20 @@ final class ForwardPickerViewModel: ObservableObject {
         let (conversations, contacts) = await (conversationResults, contactResults)
 
         guard token == searchToken else { return }
-        targets = ForwardTargetMerge.merge(conversations: conversations, contacts: contacts)
+        // Résidu (Task 6+) : `GET /conversations/search` tronque `participants`
+        // à 5, ce qui rend `isReachableConversation` incapable de statuer sur
+        // l'appartenance d'un salon `public`/`global` de plus de 5 membres —
+        // il est alors écarté même quand l'utilisateur en est membre. Les
+        // cibles déjà paginées localement (`conversationTargets`) SONT
+        // forcément atteignables (l'endpoint de liste ne rend que les
+        // conversations de l'utilisateur), donc les correspondances locales
+        // comblent ce trou plutôt que d'être écrasées. Même sémantique que le
+        // jumeau web (`forward-message-modal.tsx` : filtre local sur le titre,
+        // fusionné — jamais un remplacement). La déduplication par id de
+        // `ForwardTargetMerge.merge` absorbe le doublon quand une conversation
+        // est trouvée à la fois localement et à distance.
+        let localMatches = conversationTargets.filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
+        targets = ForwardTargetMerge.merge(conversations: conversations + localMatches, contacts: contacts)
     }
 
     private func fetchSearchConversationTargets(query: String, currentUserId: String) async -> [ForwardTarget] {

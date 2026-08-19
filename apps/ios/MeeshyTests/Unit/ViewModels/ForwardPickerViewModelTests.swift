@@ -231,6 +231,32 @@ final class ForwardPickerViewModelTests: XCTestCase {
                        "un salon public dont on n'est pas membre ne doit jamais être offert comme cible")
     }
 
+    /// Résidu de chantier : `search()` REMPLAÇAIT `targets` par les seuls
+    /// résultats distants, perdant toute correspondance déjà chargée par la
+    /// pagination de navigation. Régression concrète : un salon public de
+    /// plus de 5 membres dont l'utilisateur EST membre est écarté par
+    /// `isReachableConversation` côté recherche serveur (le tableau
+    /// `participants` de `GET /conversations/search` est tronqué à 5,
+    /// l'appartenance y est donc indécidable) — sans repli local, la
+    /// conversation devient INTROUVABLE pendant une recherche alors qu'elle
+    /// est déjà dans `conversationTargets`. Jumeau web :
+    /// `apps/web/components/conversations/forward-message-modal.tsx:275-280`
+    /// (`browsingTargets.filter(...).includes(query)` fusionné aux résultats
+    /// distants, jamais un remplacement).
+    func test_search_mergesLocallyLoadedConversationMatch_whenAbsentFromRemoteResults() async {
+        let (sut, service) = makeSUT()
+        service.listPageResult = .success(ConversationPage(items: [makeConv("cLocal")], rawItems: [], nextCursor: nil, hasMore: false))
+        await sut.loadInitial()
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cLocal"])
+
+        service.searchResult = .success([])  // absente des résultats distants
+
+        await sut.search("cLocal")
+
+        XCTAssertTrue(sut.targets.map(\.id).contains("conv:cLocal"),
+                       "une conversation locale correspondant à la requête doit apparaître même absente des résultats distants")
+    }
+
     func test_search_belowTwoCharacters_doesNotHitTheNetwork() async {
         let (sut, service) = makeSUT()
         await sut.search("a")
