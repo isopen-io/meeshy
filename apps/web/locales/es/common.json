@@ -311,7 +311,20 @@
     "postPlaceholder": "¿Qué estás pensando?",
     "captionPlaceholder": "Añade una leyenda (opcional)...",
     "quotePlaceholder": "Añade tus pensamientos...",
-    "anonymousUser": "Usuario anónimo"
+    "anonymousUser": "Usuario anónimo",
+    "references": {
+      "trigger": "Mencionar a alguien",
+      "searchPlaceholder": "Buscar a alguien",
+      "empty": "Nadie encontrado",
+      "remove": "Quitar",
+      "changeMode": "Cambiar cómo se muestra",
+      "people": "personas",
+      "mode": {
+        "NOTE": "Nota",
+        "SILENT": "Silencioso",
+        "PINNED": "Fijado"
+      }
+    }
   },
   "copied": "Copiado",
   "never": "Nunca",

@@ -311,7 +311,20 @@
     "postPlaceholder": "What's on your mind?",
     "captionPlaceholder": "Add a caption (optional)...",
     "quotePlaceholder": "Add your thoughts...",
-    "anonymousUser": "Anonymous user"
+    "anonymousUser": "Anonymous user",
+    "references": {
+      "trigger": "Mention someone",
+      "searchPlaceholder": "Search for someone",
+      "empty": "No one found",
+      "remove": "Remove",
+      "changeMode": "Change how this is shown",
+      "people": "people",
+      "mode": {
+        "NOTE": "Note",
+        "SILENT": "Silent",
+        "PINNED": "Pinned"
+      }
+    }
   },
   "copied": "Copied",
   "never": "Never",

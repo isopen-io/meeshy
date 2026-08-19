@@ -311,7 +311,20 @@
     "postPlaceholder": "Qu'est-ce qui te passe par la tête ?",
     "captionPlaceholder": "Ajoute une légende (optionnel)...",
     "quotePlaceholder": "Ajoute ton commentaire...",
-    "anonymousUser": "Utilisateur anonyme"
+    "anonymousUser": "Utilisateur anonyme",
+    "references": {
+      "trigger": "Mentionner quelqu'un",
+      "searchPlaceholder": "Rechercher quelqu'un",
+      "empty": "Personne trouvé",
+      "remove": "Retirer",
+      "changeMode": "Changer le mode d'affichage",
+      "people": "personnes",
+      "mode": {
+        "NOTE": "Note",
+        "SILENT": "Silencieux",
+        "PINNED": "Épinglé"
+      }
+    }
   },
   "copied": "Copié",
   "never": "Jamais",
