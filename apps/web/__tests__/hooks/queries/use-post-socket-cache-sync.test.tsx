@@ -556,6 +556,33 @@ describe('usePostSocketCacheSync', () => {
       expect((posts[0] as typeof mockPost).id).toBe('repost-1');
     });
 
+    // Le fil REST ne sert que POST et REEL (`getFeed`). Le broadcast
+    // `post:reposted`, lui, n'est pas typé : il porte le repost quel que soit
+    // son type. Un repost de type STORY y entrait donc en direct alors qu'il
+    // appartient au tray — le même contenu se voyait dans le fil ET dans les
+    // stories. Le fil applique ici le même filtre que sa lecture REST.
+    it('ignores a repost whose type does not belong to the feed', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reposted', { repost: { ...mockPost, id: 'repost-story', type: 'STORY' } }));
+
+      const posts = getFeedPosts(qc);
+      expect(posts).toHaveLength(1);
+      expect((posts[0] as typeof mockPost).id).toBe('post-1');
+    });
+
+    it('prepends a reposted reel, which the feed does serve', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reposted', { repost: { ...mockPost, id: 'repost-reel', type: 'REEL' } }));
+
+      expect(getFeedPosts(qc)).toHaveLength(2);
+    });
+
     it('deduplicates repost', () => {
       const qc = createQueryClient();
       const repost = { ...mockPost, id: 'repost-1' };

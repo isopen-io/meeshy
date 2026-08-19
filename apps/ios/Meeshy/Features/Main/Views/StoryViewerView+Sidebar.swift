@@ -550,11 +550,15 @@ struct StoryActionSidebarView: View {
             // désormais la loi d'audience qui borne le RÉSULTAT
             // (`StoryRepostAudience`), plus l'appartenance au rail.
             // Réintroduit 2026-06-18 après finalisation du flux serveur : route
-            // via le snapshot de repost (`PostService.repost` targetType .story).
-            // Le gateway duplique le média + l'audio source et copie storyEffects
-            // dans une STORY fraîche, self-contenue, liée via repostOfId. Remplace
+            // via le snapshot de repost (`PostService.repost`). Le gateway
+            // duplique le média + l'audio source et copie storyEffects dans le
+            // repost, self-contenu, lié via repostOfId — ce qui remplace
             // l'ancien chemin composer qui produisait une story VIDE (il forçait
             // repostOfId: nil et ne dupliquait jamais le média source).
+            // Le repost ainsi créé est un POST, pas une story : cette ligne a
+            // longtemps annoncé `targetType .story`, ce que le bouton ne fait
+            // plus depuis qu'il ouvre le composeur (`.post` explicite, cf.
+            // `StoryViewerView`).
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",

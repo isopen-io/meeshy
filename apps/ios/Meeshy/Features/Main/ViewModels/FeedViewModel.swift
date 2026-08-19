@@ -878,7 +878,7 @@ class FeedViewModel: ObservableObject {
         do {
             _ = try await postService.repost(
                 postId: resolveRepostTargetId(postId),
-                targetType: nil,           // nil = server defaults to original post type
+                targetType: nil,           // nil = le serveur cree un POST (2026-08-19)
                 content: isQuote ? content : nil,
                 isQuote: isQuote ? (content != nil) : false,
                 // Le feed ne propose pas de sélecteur d'audience : on hérite de l'original.
@@ -1190,6 +1190,10 @@ class FeedViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
                 guard let self else { return }
+                // `post:reposted` n'est pas type : une story repostee y arrivait
+                // et entrait dans le fil, alors qu'elle vit dans le tray.
+                // `getFeed` ne sert que `[POST, REEL]` — meme partage ici.
+                guard !data.repost.belongsToStoryTray else { return }
                 let repostFeedPost = data.repost.toFeedPost(preferredLanguages: self.preferredLanguages)
                 if !self.posts.contains(where: { $0.id == repostFeedPost.id }) {
                     self.posts.insert(repostFeedPost, at: 0)

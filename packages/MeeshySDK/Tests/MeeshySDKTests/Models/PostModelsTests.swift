@@ -551,4 +551,40 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(comment.currentUserReactions, ["\u{2764}\u{FE0F}", "\u{1F525}"])
         XCTAssertEqual(comment.currentUserReactions?.count, 2)
     }
+
+    // MARK: - belongsToStoryTray
+
+    private func makePost(type: String?) throws -> APIPost {
+        let typeField = type.map { "\"type\": \"\($0)\"," } ?? ""
+        let json = """
+        {
+            "id": "p1",
+            \(typeField)
+            "content": "Hello",
+            "createdAt": "2026-05-14T10:00:00.000Z",
+            "author": {"id": "a1", "username": "alice"}
+        }
+        """.data(using: .utf8)!
+        return try makeDecoder().decode(APIPost.self, from: json)
+    }
+
+    func test_belongsToStoryTray_isTrueForTrayTypes() throws {
+        XCTAssertTrue(try makePost(type: "STORY").belongsToStoryTray)
+        XCTAssertTrue(try makePost(type: "STATUS").belongsToStoryTray)
+        XCTAssertTrue(try makePost(type: "story").belongsToStoryTray,
+                      "La casse ne doit pas decider de la surface")
+    }
+
+    func test_belongsToStoryTray_isFalseForFeedTypes() throws {
+        XCTAssertFalse(try makePost(type: "POST").belongsToStoryTray)
+        XCTAssertFalse(try makePost(type: "REEL").belongsToStoryTray)
+    }
+
+    /// Formule par EXCLUSION : un type absent ou hors nomenclature n'appartient
+    /// pas au tray, donc les fils le laissent passer. Une liste blanche le
+    /// ferait disparaitre en silence de toutes les surfaces.
+    func test_belongsToStoryTray_isFalseForUnknownOrMissingType() throws {
+        XCTAssertFalse(try makePost(type: nil).belongsToStoryTray)
+        XCTAssertFalse(try makePost(type: "REPOST").belongsToStoryTray)
+    }
 }

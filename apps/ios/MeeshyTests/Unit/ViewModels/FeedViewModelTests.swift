@@ -1573,6 +1573,32 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    /// `post:reposted` n'est pas typé : le serveur y pousse le repost quel que
+    /// soit son type, alors que la CRÉATION aiguille vers `story:created` /
+    /// `status:created` / `post:created`. Un repost de type STORY entrait donc
+    /// dans le fil en direct tout en vivant dans le tray — le même contenu se
+    /// voyait aux deux endroits, jusqu'au rafraîchissement qui le retirait du
+    /// fil. Le fil applique ici le partage que fait déjà sa lecture REST.
+    func test_socketPostReposted_ofATrayType_doesNotEnterTheFeed() async {
+        let (sut, api, socket, _) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "existing")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        sut.subscribeToSocketEvents()
+
+        let repostData: SocketPostRepostedData = JSONStub.decode("""
+        {"originalPostId":"existing","repost":{"id":"repost-story","type":"STORY","content":"","createdAt":"2026-01-15T13:00:00.000Z","likeCount":0,"commentCount":0,"author":{"id":"a2","username":"bob"}}}
+        """)
+        socket.postReposted.send(repostData)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1, "Une story repostee appartient au tray, pas au fil")
+        XCTAssertEqual(sut.newPostsCount, 0)
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - bookmarkPost()
 
     func test_bookmarkPost_callsAPIWithCorrectEndpoint() async {

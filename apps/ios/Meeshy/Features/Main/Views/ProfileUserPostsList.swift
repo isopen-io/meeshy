@@ -1204,7 +1204,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
                 repostedOverrides[data.originalPostId] = nil
             }
         }
-        guard data.repost.author.id == userId,
+        // Le compteur ci-dessus vaut pour TOUT repost — c'est celui de
+        // l'original. La GRILLE, elle, ne sert que ce que sa lecture REST sert
+        // (`getUserPosts` : `[POST, REEL]`) : une story repostee arrivait par
+        // `post:reposted`, non type, et s'y inserait alors qu'elle vit dans le
+        // tray.
+        guard !data.repost.belongsToStoryTray,
+              data.repost.author.id == userId,
               !posts.contains(where: { $0.id == data.repost.id }) else { return }
         posts.insert(data.repost.toFeedPost(preferredLanguages: preferredLanguages), at: 0)
     }

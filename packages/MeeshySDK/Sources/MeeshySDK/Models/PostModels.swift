@@ -405,6 +405,30 @@ extension APIPostMedia {
 }
 
 extension APIPost {
+    /// Ce post appartient-il au TRAY (stories/statuts) plutot qu'a un FIL ?
+    ///
+    /// Le serveur partage deja ses lectures ainsi — `getFeed` et `getUserPosts`
+    /// servent `[POST, REEL]`, `getStories` sert `STORY` — mais le broadcast
+    /// `post:reposted` n'est PAS type : contrairement a la creation, qui
+    /// aiguille vers `story:created` / `status:created` / `post:created` selon
+    /// le type, le repost part toujours sur le canal des posts avec sa charge
+    /// utile telle quelle. Une story repostee entrait donc dans le fil en
+    /// direct tout en vivant dans le tray — le meme contenu se voyait aux deux
+    /// endroits, jusqu'au rafraichissement qui le retirait du fil.
+    ///
+    /// La source de ces reposts types STORY est tarie cote serveur (un repost
+    /// nait POST depuis le 2026-08-19, `PostService.repostPost`), mais une
+    /// surface n'a pas a faire confiance au type de ce qu'on lui pousse.
+    ///
+    /// Formule par EXCLUSION, et non par liste blanche : `type` est un
+    /// `String?`, donc une valeur hors nomenclature est representable — une
+    /// liste blanche la ferait disparaitre en silence de toutes les surfaces.
+    /// Miroir web : `feedServesType` dans `use-post-socket-cache-sync.ts`.
+    public var belongsToStoryTray: Bool {
+        guard let type else { return false }
+        return ["STORY", "STATUS"].contains(type.uppercased())
+    }
+
     public func toFeedPost(userLanguage: String? = nil, preferredLanguages: [String] = []) -> FeedPost {
         let langs = preferredLanguages.isEmpty ? (userLanguage.map { [$0] } ?? []) : preferredLanguages
 

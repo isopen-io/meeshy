@@ -38,6 +38,33 @@ import type {
 } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 
+/**
+ * Le fil refuse ce qui appartient au TRAY — miroir du partage que fait déjà sa
+ * lecture REST (`PostFeedService.getFeed` sert `[POST, REEL]`, `getStories`
+ * sert `STORY`).
+ *
+ * `post:reposted` n'est PAS typé : contrairement à la création, qui aiguille
+ * vers `story:created` / `status:created` / `post:created` selon le type, le
+ * repost part toujours sur le canal des posts avec sa charge utile telle
+ * quelle. Un repost de type STORY entrait donc dans le fil en direct alors
+ * qu'il appartient au tray — le même contenu se voyait dans les deux, jusqu'au
+ * rafraîchissement qui le faisait disparaître du fil.
+ *
+ * La source de ces reposts typés STORY est tarie côté serveur (un repost naît
+ * POST depuis le 2026-08-19), mais le fil n'a pas à faire confiance au type de
+ * ce qu'on lui pousse.
+ *
+ * Formulé par EXCLUSION, et non par liste blanche : la règle décrit le défaut
+ * (« du contenu de tray entre dans le fil ») et ne fait pas disparaître en
+ * silence un type que le fil ne connaîtrait pas encore. Miroir iOS :
+ * `FeedViewModel.feedRejectsTrayType`.
+ */
+const TRAY_POST_TYPES: ReadonlyArray<Post['type']> = ['STORY', 'STATUS'];
+
+function feedServesType(type: Post['type'] | undefined): boolean {
+  return type === undefined || !TRAY_POST_TYPES.includes(type);
+}
+
 // ---------------------------------------------------------------------------
 // Hook
 // ---------------------------------------------------------------------------
@@ -139,6 +166,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
         queryKeys.posts.infinite('feed'),
         (old) => {
           if (!old) return old;
+          if (!feedServesType(data.repost.type)) return old;
           if (old.pages.some((p) => p.data.some((post) => post.id === data.repost.id))) return old;
           return {
             ...old,
