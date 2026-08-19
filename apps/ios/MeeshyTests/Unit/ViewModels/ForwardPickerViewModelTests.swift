@@ -166,10 +166,20 @@ final class ForwardPickerViewModelTests: XCTestCase {
 
     // MARK: - Search
 
-    func test_search_mergesConversationsThenContacts_andDropsStaleResponses() async {
+    /// Déduplication PAR PERSONNE de bout en bout : `u1` est à la fois un ami
+    /// et l'interlocuteur de la conversation directe `c9` — il ne doit
+    /// apparaître qu'UNE fois, absorbé par sa conversation.
+    ///
+    /// Le pseudo de l'ami DOIT correspondre à la requête (« alice » ⊃ « ali ») :
+    /// depuis l'ajout du filtre client des amis, un ami qui ne correspond pas
+    /// est écarté AVANT d'atteindre la fusion, et le témoin passait alors sans
+    /// jamais exercer l'absorption. Retirer la ligne d'absorption de
+    /// `ForwardTargetMerge.merge` fait bien tomber ce test (vérifié par
+    /// mutation) : `targets` y devient `[conv:c9, user:u1, user:u2]`.
+    func test_search_absorbsAContactAlreadyJoinedByADirectConversation() async {
         let (sut, service) = makeSUT()
         service.searchResult = .success([makeAPIConv("c9", participantUserId: "u1")])
-        friendService.allFriendRequestsResult = .success(pageOf([makeAccepted(otherId: "u1")]))
+        friendService.allFriendRequestsResult = .success(pageOf([makeAccepted(otherId: "u1", username: "alice")]))
         directoryService.listResult = .success(pageOf([makeDirectoryContact(userId: "u2")]))
 
         await sut.search("ali")
