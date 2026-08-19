@@ -1518,7 +1518,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       recherche dans l'app bar ; 22 tests verts (11 modèle + 11 VM)
 - [ ] Communities carousel + category filter chips
 - [~] Pinned / muted / archived states done (optimistic toggle + row indicators
-      📌/🔕 + filter integration) ; locked / favorited (emoji) pending
+      📌/🔕 + filter integration) ; favorited (emoji) done ; **locked done** (slice
+      `conversation-lock-menu`, 2026-08-19): context-menu Lock/Unlock opens a PIN sheet
+      whose logic lives in the pure `LockPinReducer` (parity iOS `ConversationLockSheet`,
+      but extracted from the view per TDD-COVERAGE) — first-time master-PIN setup chains
+      straight into the 4-digit code (iOS dead-ends on a "set a PIN in Settings" alert),
+      wrong PIN keeps its own step, row shows a 🔒 badge from the live
+      `ConversationLockStore` flow. Remaining lock sub-gaps (open-gate on tap, Settings
+      master-PIN change/remove/unlock-all, swipe-to-lock) tracked below.
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending

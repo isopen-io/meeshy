@@ -731,3 +731,32 @@ Append-only log of gotchas and decisions that save time next run.
   thread changes, since `List<String>` compares structurally. **Generalises: before keying an effect
   on a piece of UI state, ask what else mutates that object. Anything driven by an optimistic update
   is a fresh instance on every user tap.**
+
+## Slice `conversation-lock-menu` (2026-08-19)
+- **This container COULD reach `dl.google.com` — the full local Android gate ran here.** The
+  ROUTINE §CI reality warns containerised runs usually have `dl.google.com` denied; this one did
+  not (`curl` → 200), so `sdkmanager` bootstrapped and `assembleDebug` + `testDebugUnitTest` both
+  ran green locally before the PR. When the egress allows it, run the real gate — don't assume the
+  documented block applies to every container.
+- **`compileSdk = 37` does NOT map to a `platforms;android-37` package.** Since the minor SDK
+  releases (37.0, 37.1, …) an API level is no longer published under a bare `android-N` name — the
+  bare install fails with *Failed to find package 'platforms;android-37'*, exactly as `android.yml`'s
+  provisioning step documents. Two extra gotchas the CI YAML hides: (1) the ROUTINE's pinned
+  cmdline-tools `11076708` only understands SDK XML v3 and cannot even *see* the 37.x packages
+  (*"SDK XML version 4 was encountered"*) — fetch a newer bundle (`commandlinetools-linux-13114758`)
+  first; (2) the platform lives on the preview channel, so `sdkmanager --channel=3 --install
+  "platforms;android-37.0"` is what actually lands it. AGP 8.13 then resolves `compileSdk 37` to the
+  `android-37.0` dir. `build-tools;35.0.0`/`platforms;android-35` from the ROUTINE recipe are stale
+  for this repo.
+- **Transient `429 Too Many Requests` from `repo.maven.apache.org` under Gradle's parallel
+  download burst.** A single-file `curl` of the same artifact returned 200 immediately (the proxy
+  rate-limits bursts, not the artifact). Re-running with `--max-workers=2` after warming the cache
+  cleared it. Not a broken repo — just back off the parallelism and retry.
+- **Extracting a view-embedded state machine into a pure reducer is the highest-leverage parity
+  move.** iOS's `ConversationLockSheet.handleComplete` is a 7-mode × 3-step PIN machine living
+  *inside* the SwiftUI view — untestable, and it carries a real bug (its blanket `step = 1` reset
+  mislabels the master-PIN setup flow). Porting it as `LockPinReducer` (pure, oracle-injected)
+  bought 20 branch-covering unit tests, a cleaner reset (rewind to the mode's real entry step), and
+  a dead-end fix (no-master-PIN → chain setup→lock instead of iOS's "go to Settings" alert). The
+  Composable is left a dumb dots+keypad renderer. TDD-COVERAGE's "push decisions out of the
+  Composable" is not just style here — it's what makes the SOTA-over-iOS improvements provable.
