@@ -132,7 +132,13 @@ struct ReelRepostEmbedCell: View {
 
             // Reel caption — drives the card height, like a cited post.
             if !repost.content.isEmpty {
-                MessageTextRenderer.render(repost.content, fontSize: 13, color: theme.textSecondary)
+                // `validUsernames` vaut `nil` PAR DÉFAUT dans le renderer, et
+                // `nil` veut dire « linkifier tout » : sans les références du
+                // post source, chaque `@handle` du texte cité devenait un lien
+                // mort. Le gateway les sert depuis le 2026-08-19, le SDK les
+                // décode ; il ne restait qu'à les passer ici.
+                MessageTextRenderer.render(repost.content, fontSize: 13, color: theme.textSecondary,
+                                           validUsernames: repost.validMentionUsernames)
                     .lineLimit(4)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)

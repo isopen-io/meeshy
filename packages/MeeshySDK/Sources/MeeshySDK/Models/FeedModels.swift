@@ -224,6 +224,21 @@ public struct RepostContent: Identifiable, Sendable {
     /// un repost perdait la position de l'original (reste ouvert du lot 2,
     /// clos 2026-07-30).
     public let location: SharedPlace?
+    /// Les personnes que le post SOURCE nomme. `nil` = la charge utile n'en
+    /// disait rien ; `[]` = elle affirme qu'il n'y en a aucune. Le renderer du
+    /// texte cité s'appuie sur cette différence pour décider quoi linkifier.
+    public let mentions: [PostReference]?
+
+    /// Les pseudos que le texte cité a le droit de rendre cliquables — miroir
+    /// exact de `FeedPost.validMentionUsernames`, même règle, même casse.
+    ///
+    /// `nil` se propage : sans avis sur les références du source, le renderer
+    /// garde son comportement historique. C'est la seule valeur honnête — une
+    /// liste vide affirmerait « personne n'est nommé », ce qu'une charge utile
+    /// muette ne dit pas.
+    public var validMentionUsernames: Set<String>? {
+        mentions.map { Set($0.map { $0.username.lowercased() }) }
+    }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "",
                 authorUsername: String? = nil, authorAvatarURL: String? = nil,
@@ -233,7 +248,8 @@ public struct RepostContent: Identifiable, Sendable {
                 storyEffects: StoryEffects? = nil, media: [FeedMedia] = [],
                 translations: [String: PostTranslation]? = nil,
                 originalRepostOfId: String? = nil, visibility: String? = nil,
-                expiresAt: Date? = nil, location: SharedPlace? = nil) {
+                expiresAt: Date? = nil, location: SharedPlace? = nil,
+                mentions: [PostReference]? = nil) {
         self.id = id; self.author = author; self.authorId = authorId
         self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
@@ -251,6 +267,7 @@ public struct RepostContent: Identifiable, Sendable {
         self.visibility = visibility
         self.expiresAt = expiresAt
         self.location = location
+        self.mentions = mentions
     }
 }
 
@@ -258,7 +275,7 @@ extension RepostContent: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, content, timestamp, likes, isQuote
         case type, originalLanguage, audioUrl, moodEmoji, storyEffects, media, translations
-        case originalRepostOfId, visibility, expiresAt, location
+        case originalRepostOfId, visibility, expiresAt, location, mentions
     }
 
     public init(from decoder: Decoder) throws {
@@ -283,6 +300,7 @@ extension RepostContent: Codable {
         visibility = try c.decodeIfPresent(String.self, forKey: .visibility)
         expiresAt = try c.decodeIfPresent(Date.self, forKey: .expiresAt)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -308,6 +326,7 @@ extension RepostContent: Codable {
         try c.encodeIfPresent(visibility, forKey: .visibility)
         try c.encodeIfPresent(expiresAt, forKey: .expiresAt)
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(mentions, forKey: .mentions)
     }
 }
 

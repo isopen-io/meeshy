@@ -447,6 +447,78 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(repostOf.originalRepostOfId, "root-1")
     }
 
+    // MARK: - Les references du post SOURCE
+
+    /// Le gateway sert `repostOf.mentions` depuis le 2026-08-19 ; `APIRepostOf`
+    /// ne les decodait pas, et `RepostContent` ne les portait pas.
+    ///
+    /// Ce n'est pas cosmetique : `ReelRepostEmbedCell` rend le texte cite via
+    /// `MessageTextRenderer.render(...)`, dont le parametre `validUsernames`
+    /// vaut `nil` par defaut — et `nil` veut dire « linkifier TOUT ». Sans les
+    /// references du source, chaque `@handle` du texte cite devenait un lien
+    /// mort : un tap qui ne mene a personne.
+    func test_APIRepostOf_decodesTheReferencesOfTheSourcePost() throws {
+        let json = """
+        {
+          "id": "src-1",
+          "type": "REEL",
+          "content": "bravo @alice",
+          "author": {"id": "a", "username": "bob", "displayName": "Bob"},
+          "createdAt": "2026-08-19T10:00:00.000Z",
+          "mentions": [
+            {"userId": "u2", "username": "alice", "displayName": "Alice", "display": "INLINE"}
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let repostOf = try makeDecoder().decode(APIRepostOf.self, from: json)
+
+        XCTAssertEqual(repostOf.mentions?.count, 1)
+        XCTAssertEqual(repostOf.mentions?.first?.username, "alice")
+    }
+
+    /// `nil` n'est PAS un ensemble vide : une charge utile qui ne porte pas la
+    /// cle ne dit rien des references du source, alors qu'une liste vide dit
+    /// « il n'y en a aucune ». Le renderer distingue les deux — sans avis, il
+    /// ne linkifie pas au hasard.
+    func test_APIRepostOf_withoutTheKey_saysNothingAboutReferences() throws {
+        let json = """
+        {
+          "id": "src-2",
+          "type": "POST",
+          "content": "coucou",
+          "author": {"id": "a", "username": "bob", "displayName": "Bob"},
+          "createdAt": "2026-08-19T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let repostOf = try makeDecoder().decode(APIRepostOf.self, from: json)
+
+        XCTAssertNil(repostOf.mentions)
+    }
+
+    /// Le champ doit VOYAGER jusqu'au modele de rendu : decode sans mapping, il
+    /// resterait invisible a la vue qui en a besoin.
+    func test_theSourceReferencesReachTheRenderedModel() throws {
+        let json = """
+        {
+          "id": "src-3",
+          "type": "REEL",
+          "content": "bravo @alice",
+          "author": {"id": "a", "username": "bob", "displayName": "Bob"},
+          "createdAt": "2026-08-19T10:00:00.000Z",
+          "mentions": [
+            {"userId": "u2", "username": "alice", "displayName": "Alice", "display": "INLINE"}
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let repostOf = try makeDecoder().decode(APIRepostOf.self, from: json)
+        let rendered = repostOf.toRepostContent()
+
+        XCTAssertEqual(rendered.mentions?.map(\.username), ["alice"])
+    }
+
     func test_APIRepostOf_decodes_legacyResponse_withoutNewFields() throws {
         // Older API responses don't have the new fields — must still decode cleanly
         let json = """

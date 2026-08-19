@@ -95,6 +95,21 @@ public struct APIRepostOf: Codable, Sendable {
     /// Lieu du post SOURCE, hissé par le gateway comme sur le post porteur.
     /// `nil` sur les payloads antérieurs — décodage synthétisé tolérant.
     public let location: SharedPlace?
+    /// Les personnes que le post SOURCE nomme, servies par le gateway depuis le
+    /// 2026-08-19 (`repostOf.postMentions`, aplati en `mentions`).
+    ///
+    /// `nil` ≠ liste vide, et la distinction porte tout le comportement :
+    /// `MessageTextRenderer.render(...)` prend `validUsernames` en `nil` par
+    /// défaut, et `nil` veut dire « linkifier TOUT ». Sans ce champ, chaque
+    /// `@handle` du texte cité d'un repost devenait un lien mort — un tap qui
+    /// ne mène à personne. Une liste, même vide, est un avis ; son absence n'en
+    /// est pas un.
+    ///
+    /// `var` + défaut : même patron que `APIPostComment.location` — reste
+    /// source-compatible avec le memberwise init déjà utilisé par les tests,
+    /// sans rien changer au décodage (Swift décode la clé quand elle est là,
+    /// garde le défaut sinon).
+    public var mentions: [PostReference]? = nil
 }
 
 public struct APIPostComment: Decodable, Sendable {
@@ -561,6 +576,7 @@ extension APIRepostOf {
                              originalRepostOfId: originalRepostOfId,
                              visibility: nil,
                              expiresAt: nil,
-                             location: location)
+                             location: location,
+                             mentions: mentions)
     }
 }
