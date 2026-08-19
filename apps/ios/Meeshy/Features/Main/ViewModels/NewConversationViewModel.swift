@@ -74,6 +74,10 @@ final class NewConversationViewModel: ObservableObject {
     /// `ContactsListViewModel`, le budget `limit` étant plafonné à 100 côté
     /// gateway.
     private static let friendsPageSize = 100
+    /// Borne de sécurité : au-delà, on cesse de paginer plutôt que de suivre
+    /// indéfiniment un `hasMore` qui ne retomberait jamais. Même sémantique
+    /// et même valeur que `ForwardPickerViewModel.friendsFetchCap`.
+    private static let friendsFetchCap = 500
 
     /// Reuses the same GRDB cache the Contacts directory populates
     /// (`ContactsListViewModel`) so a user who has visited Contacts sees their
@@ -191,7 +195,7 @@ final class NewConversationViewModel: ObservableObject {
         do {
             var collected: [FriendRequest] = []
             var offset = 0
-            while true {
+            while collected.count < Self.friendsFetchCap {
                 let page = try await friendService.allFriendRequests(
                     status: "accepted",
                     offset: offset,

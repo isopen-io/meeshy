@@ -315,6 +315,35 @@ final class ContactsListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.friends.count, 3)
     }
 
+    /// Résidu de chantier : le jumeau de `fetchContactsFromNetwork`
+    /// (`NewConversationViewModel`) partage la même boucle `while true` non
+    /// bornée. Même double, même sémantique : 6 pages PLEINES à
+    /// `hasMore: true` (une de plus que les 5 que la borne de 500 autorise),
+    /// puis repli naturel sur une page vide une fois la file épuisée — la
+    /// boucle termine dans tous les cas, le test échoue par un écart de
+    /// compteur, jamais par un blocage infini.
+    func test_loadFriends_stopsAtSafetyCapEvenWhenGatewayAlwaysReportsHasMore() async {
+        let (sut, friendService) = makeSUT(currentUserId: "me")
+        friendService.allFriendRequestsResults = (0..<6).map { page in
+            .success(FriendRequestFixture.makePaginated(
+                requests: (1...100).map {
+                    FriendRequestFixture.make(
+                        id: "p\(page)-\($0)", senderId: "friend-\(page)-\($0)", receiverId: "me",
+                        status: "accepted", senderUsername: "friend\(page)-\($0)"
+                    )
+                },
+                total: 10_000, hasMore: true, limit: 100, offset: page * 100
+            ))
+        }
+
+        await sut.loadFriends(forceNetwork: true)
+
+        XCTAssertEqual(
+            friendService.allFriendRequestsCallCount, 5,
+            "la pagination doit s'arrêter à la borne de sécurité (500 relations / page 100), pas suivre indéfiniment un hasMore qui ne retombe jamais"
+        )
+    }
+
     // MARK: - Filtering
 
     func test_filterOnline_showsOnlyOnlineUsers() async {

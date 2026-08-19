@@ -414,6 +414,40 @@ final class NewConversationViewModelTests: XCTestCase {
                        "le second appel doit recevoir offset: 100, pas rejouer offset: 0")
     }
 
+    /// Résidu de chantier : la boucle de pagination des amis (`while true`)
+    /// n'était bornée par aucun plafond — un gateway qui répondrait toujours
+    /// `hasMore: true` la ferait tourner indéfiniment. Alignée sur
+    /// `ForwardPickerViewModel.friendsFetchCap` (500, page 100).
+    ///
+    /// Le double sert 6 pages PLEINES avec `hasMore: true` — une de plus que
+    /// les 5 que la borne autorise — puis retombe naturellement sur le
+    /// résultat par défaut (page vide, `pagination: nil`, donc `more == false`)
+    /// une fois la file épuisée. La boucle termine ainsi dans TOUS les cas
+    /// (bornée ou non) : le test échoue proprement par un écart de compteur
+    /// d'appels, jamais par un blocage infini.
+    func test_loadContacts_stopsAtSafetyCapEvenWhenGatewayAlwaysReportsHasMore() async {
+        let friends = MockFriendService()
+        friends.allFriendRequestsResults = (0..<6).map { page in
+            .success(FriendRequestFixture.makePaginated(
+                requests: (1...100).map {
+                    FriendRequestFixture.make(
+                        id: "p\(page)-\($0)", senderId: "friend-\(page)-\($0)", receiverId: "current-user",
+                        status: "accepted", senderUsername: "friend\(page)-\($0)"
+                    )
+                },
+                total: 10_000, hasMore: true, limit: 100, offset: page * 100
+            ))
+        }
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertEqual(
+            friends.allFriendRequestsCallCount, 5,
+            "la pagination doit s'arrêter à la borne de sécurité (500 relations / page 100), pas suivre indéfiniment un hasMore qui ne retombe jamais"
+        )
+    }
+
     func test_loadContacts_networkFailure_leavesContactsEmptyAndStopsSpinner() async {
         let friends = MockFriendService()
         friends.allFriendRequestsResult = .failure(NSError(domain: "TestNetwork", code: 503))

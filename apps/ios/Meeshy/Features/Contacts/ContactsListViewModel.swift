@@ -17,6 +17,10 @@ final class ContactsListViewModel: ObservableObject {
     private var lastObservedFriendIds: Set<String> = []
     private var reconcileTask: Task<Void, Never>?
     private let cacheKey = FriendshipCache.PersistenceKeys.friendsList
+    /// Borne de sécurité : au-delà, on cesse de paginer plutôt que de suivre
+    /// indéfiniment un `hasMore` qui ne retomberait jamais. Même sémantique
+    /// et même valeur que `ForwardPickerViewModel.friendsFetchCap`.
+    private static let friendsFetchCap = 500
 
     var filteredFriends: [FriendRequestUser] {
         var result = friends
@@ -166,7 +170,7 @@ final class ContactsListViewModel: ObservableObject {
             var collected: [FriendRequest] = []
             var offset = 0
             let pageSize = 100
-            while true {
+            while collected.count < Self.friendsFetchCap {
                 let page = try await friendService.allFriendRequests(status: "accepted", offset: offset, limit: pageSize)
                 collected.append(contentsOf: page.data)
                 // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
