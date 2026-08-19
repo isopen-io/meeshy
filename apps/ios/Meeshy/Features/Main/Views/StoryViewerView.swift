@@ -899,6 +899,52 @@ struct StoryViewerView: View {
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
         }
+        // Republication en STORY — le composeur s'ouvre prérempli avec la
+        // slide source et un badge d'attribution VERROUILLÉ (le republieur ne
+        // peut pas le retirer, cf. `StoryComposerViewModel+Repost`).
+        //
+        // Audience : la story source est le DÉFAUT, et `allowedVisibilities`
+        // plafonne le sélecteur — même audience ou plus restreinte, jamais plus
+        // large. Le serveur refuse l'élargissement de son côté (403
+        // `REPOST_AUDIENCE_WIDENING`) ; ce plafond n'est qu'une affordance.
+        //
+        // `repostOfId` descend jusqu'à `createStory` via la file de
+        // publication : sans lui la republication naîtrait sans lien vers son
+        // original, donc sans attribution ni crédit de vues.
+        .fullScreenCover(item: $republishStorySource, onDismiss: { resumeTimer() }) { wrapper in
+            StoryComposerView(
+                viewModel: StoryComposerViewModel(
+                    reposting: wrapper.story,
+                    authorHandle: wrapper.authorHandle
+                ),
+                initialVisibility: wrapper.story.visibility ?? PostVisibility.private.rawValue,
+                initialVisibilityUserIds: wrapper.story.visibilityUserIds ?? [],
+                allowedVisibilities: StoryRepostAudience.allowed(fromRawValue: wrapper.story.visibility),
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
+                    viewModel.publishStoryInBackground(
+                        slides: slides,
+                        slideImages: slideImages,
+                        loadedImages: loadedImages,
+                        loadedVideoURLs: loadedVideoURLs,
+                        loadedAudioURLs: loadedAudioURLs,
+                        originalLanguage: originalLanguage,
+                        visibility: visibility,
+                        visibilityUserIds: visibilityUserIds,
+                        draftId: draftId,
+                        repostOfId: wrapper.story.id
+                    )
+                    republishStorySource = nil
+                    // La création accepte TOUJOURS : hors-ligne, la story part
+                    // en file d'attente au lieu de rester dans le composeur —
+                    // même contrat que la publication nominale.
+                    return true
+                },
+                onDismiss: { republishStorySource = nil }
+            )
+            .storyLocationPickerProvided()
+            .storyCameraCaptureProvided()
+            .storyRecentCameraRollProvided()
+        }
     }
 
     // MARK: - P3 wire-up : prefetcher + gated timer (internal for tests)
@@ -1307,6 +1353,12 @@ struct StoryViewerView: View {
     @State private var heartBouncePulse: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
+    /// Republication d'une story d'AUTRUI dans une story à soi — ouvre le
+    /// composeur prérempli (« Phase C » annoncée depuis l'écriture de
+    /// `StoryComposerViewModel.init(reposting:authorHandle:)`, restée sans
+    /// appelant jusqu'au 2026-08-19). Remplace l'ancien repost un-tap côté
+    /// serveur, qui ne laissait ni ajouter de texte ni choisir l'audience.
+    @State private var republishStorySource: RepostPostSourceWrapper?
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
 
@@ -1430,6 +1482,7 @@ struct StoryViewerView: View {
             isComposerEngaged: $isComposerEngaged,
             hasComposerContent: $hasComposerContent,
             sharedContentWrapper: $sharedContentWrapper,
+            republishStorySource: $republishStorySource,
             editAndRepostAsPostSource: $editAndRepostAsPostSource,
             readerFullscreenPlace: $readerFullscreenPlace,
             isPresented: $isPresented,

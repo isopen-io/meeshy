@@ -68,3 +68,88 @@ règle d'audience, pas une construction.
 4. Transport de `visibility` dans `RepostRequest` au publish.
 5. Réorganisation du menu (...) en 3 formes + libellés 7 langues.
 6. Gate : suite MeeshyTests + vérification device.
+
+---
+
+## Revue — ce qui a été livré (2026-08-19)
+
+### La loi d'audience, et pourquoi ce n'est pas un rang
+
+Le vocabulaire réel est `PostVisibility` à **SIX** cas (`PUBLIC`, `COMMUNITY`,
+`FRIENDS`, `EXCEPT`, `ONLY`, `PRIVATE`), pas les trois de `StoryVisibility`.
+L'hypothèse de départ d'un ordre total était donc fausse : `COMMUNITY` et
+`FRIENDS` sont incomparables (un contact peut ne pas être membre, un membre peut
+ne pas être un contact), idem `ONLY` face à `FRIENDS`. Un rang numérique
+autoriserait des élargissements réels ayant l'air de réductions.
+
+Trois relations seulement sont sûres sans connaître les listes ni les
+appartenances : l'identité, `PRIVATE` (sous-ensemble de tout), et « depuis
+`PUBLIC` ». D'où la table : `PUBLIC` ouvre tout, sinon `{ original, PRIVATE }`.
+
+- Loi autoritaire : `packages/shared/utils/repost-audience.ts` — 12 témoins vitest.
+- Miroir iOS : `StoryRepostAudience` — 10 témoins XCTest.
+
+### Deux portes à garder, pas une
+
+`repostPost` refusait tout original non-`PUBLIC` et en DÉDUISAIT l'invariant.
+Ouvrir la republication fait tomber ce raisonnement → contrôle explicite (403
+`REPOST_AUDIENCE_WIDENING`).
+
+**Faille trouvée en chemin, antérieure à ce lot** : `POST /posts` accepte
+`repostOfId` (« for StoryComposer publishing a repost via POST /posts ») et ne
+lisait la source que pour sa chaîne d'IDs — aucun contrôle d'audience. Un client
+pouvait publier `{ repostOfId: <story PRIVATE>, visibility: 'PUBLIC' }`. Le
+chemin n'avait aucun appelant côté app ; brancher le composeur le rend vivant.
+La sécurité ne peut pas dépendre de l'endpoint choisi par le client → la même
+loi partagée s'applique aux deux portes.
+
+`EXCEPT`/`ONLY` : leur portée EST la liste qui les accompagne, donc « même
+audience » avec une liste plus longue est plus LARGE. La liste vient de la
+source, jamais de la requête — aux deux portes.
+
+### Le câblage, enfin fait
+
+`StoryComposerViewModel.init(reposting:authorHandle:)` existait depuis
+longtemps, avec sa docstring annonçant une « Phase C » côté app — et **aucun
+site d'appel de production**. Trois conséquences, toutes corrigées :
+
+1. Le bouton du rail republiait d'un tap côté serveur : pas de texte ajouté, pas
+   de choix d'audience. Il ouvre désormais le composeur prérempli (slide source
+   + badge d'attribution verrouillé).
+2. `repostOfId` valait `nil` en dur sur tout le chemin de publication
+   (`publishStoryInBackground` → `persistPublishIntentToQueue` →
+   `StoryUploadState` → `createStory`). Une republication naissait orpheline :
+   sans attribution, sans crédit de vues à l'original. La valeur descend
+   maintenant de bout en bout, et **persiste dans l'item de file** — un kill
+   suivi d'un rejeu au boot republie avec la même attribution.
+3. Le sélecteur d'audience du composeur (`visibilityMenu`) est plafonné par
+   `StoryRepostAudience.allowed(from:)`. Affordance, pas garantie.
+
+### D1/D2/D3 appliqués
+
+- **D1** : `showsRepost: !isOwnStory` (plus de gate `isPublicStory`). Gater là
+  rendait la règle inatteignable — le bouton n'existait pas pour les seules
+  stories qu'elle concerne. Le témoin assertait l'inverse ; inversé et documenté.
+- **D2** : le rail garde son bouton, renommé « Republier » (il annonçait
+  « Partager », source directe de la confusion signalée).
+- **D3** : « Republier en poste » reste direct, un tap. « Éditer et republier en
+  post » devient « Citer en post ». Le menu (...) gagne le partage INTERNE comme
+  troisième forme ; le bouton « Envoyer » du rail reste en place.
+
+Vocabulaire : le catalogue dit « post », pas « poste » — en français « poste »
+désigne un emploi ou un récepteur radio. Terme conservé par cohérence.
+
+### Dette laissée, signalée
+
+- 4 clés de catalogue devenues mortes (`story.viewer.repost.success` /
+  `.unavailable` / `.forbidden` / `.error`) : elles servaient les toasts du
+  repost un-tap. Aucune garde ne les rejette (`LocalizationCatalogGuardTests`
+  vérifie la couverture de traduction, pas l'usage). Non retirées pour ne pas
+  churner un fichier de 28 000 lignes sur un gain nul — à balayer avec un
+  prochain nettoyage de clés.
+- Les entrées « Republier en post » / « Citer en post » du menu (...) restent
+  gatées sur `story.isPublic`, comportement INCHANGÉ. D1 ne portait que sur la
+  republication en STORY ; ouvrir les formes POST aux stories non publiques est
+  une décision produit distincte, non prise.
+- `showsForward` de `StoryActionRailPlan` est déclaré et jamais lu — dette
+  antérieure, laissée en place.

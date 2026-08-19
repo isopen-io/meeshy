@@ -1070,6 +1070,8 @@ struct StoryCardView: View {
     @Binding var isComposerEngaged: Bool
     @Binding var hasComposerContent: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
+    /// Republication en STORY — voir la présentation dans `StoryViewerView`.
+    @Binding var republishStorySource: RepostPostSourceWrapper?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     /// Lieu ouvert plein écran au tap d'une pastille de position (Layer 6.6).
     @Binding var readerFullscreenPlace: StoryReaderPlaceWrapper?
@@ -1817,6 +1819,7 @@ struct StoryCardView: View {
                     showExportShareSheet: $showExportShareSheet,
                     isGlobalMutedBinding: $isGlobalMutedBinding,
                     sharedContentWrapper: $sharedContentWrapper,
+                    republishStorySource: $republishStorySource,
                     isPresented: $isPresented,
                     triggerStoryReaction: triggerStoryReaction,
                     onScrubStateChanged: onScrubStateChanged,

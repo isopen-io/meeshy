@@ -183,6 +183,18 @@ public struct StoryComposerView: View {
     //      filtré par `restorableVisibility(_:)` (+SyncRestore) ;
     //   3. `initialVisibility` injecté (dernier choix mémorisé, app-side) ;
     //   4. `PostVisibility.friends`.
+    /// Plafond d'audience — `nil` (défaut) ⇒ toutes les audiences
+    /// sélectionnables. Renseigné par la REPUBLICATION : une story se republie
+    /// à audience égale ou plus restreinte, JAMAIS plus large (règle produit
+    /// 2026-08-19). La liste est calculée par `StoryRepostAudience.allowed(from:)`,
+    /// miroir de la loi serveur.
+    ///
+    /// C'est une AFFORDANCE, pas la garantie : le serveur refuse tout
+    /// élargissement de son côté (403 `REPOST_AUDIENCE_WIDENING`, aux deux
+    /// portes `repostPost` et `createPost`). Le plafond existe pour qu'on ne
+    /// propose jamais à l'utilisateur un choix qui sera refusé.
+    let allowedVisibilities: [PostVisibility]?
+
     @State var visibility: String
     @State var visibilityUserIds: [String]
     @State var audiencePickerMode: PostVisibility?
@@ -248,11 +260,13 @@ public struct StoryComposerView: View {
     public init(
         initialVisibility: String = PostVisibility.friends.rawValue,
         initialVisibilityUserIds: [String] = [],
+        allowedVisibilities: [PostVisibility]? = nil,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
+        self.allowedVisibilities = allowedVisibilities
         self._visibility = State(initialValue: initialVisibility)
         self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide
@@ -272,12 +286,14 @@ public struct StoryComposerView: View {
         viewModel: StoryComposerViewModel,
         initialVisibility: String = PostVisibility.friends.rawValue,
         initialVisibilityUserIds: [String] = [],
+        allowedVisibilities: [PostVisibility]? = nil,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
         onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
         self._viewModel = StateObject(wrappedValue: viewModel)
+        self.allowedVisibilities = allowedVisibilities
         self._visibility = State(initialValue: initialVisibility)
         self._visibilityUserIds = State(initialValue: initialVisibilityUserIds)
         self.onPublishSlide = onPublishSlide

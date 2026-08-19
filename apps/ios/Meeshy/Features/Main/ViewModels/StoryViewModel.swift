@@ -360,6 +360,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
         /// dégèle, l'échec permanent le ramène éditable avec son erreur.
         var draftId: String?
+        /// Republication d'une story d'autrui : id de l'ORIGINAL, transporté
+        /// jusqu'à `createStory` pour que la copie porte son attribution et
+        /// crédite ses vues. `nil` pour une publication nominale.
+        var repostOfId: String?
         /// E5 — le VM détient-il la revendication de son item en queue ?
         /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
         /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
@@ -1347,7 +1351,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
-        draftId: String? = nil
+        draftId: String? = nil,
+        /// Renseigné par la REPUBLICATION d'une story d'autrui : le composeur de
+        /// repost (`StoryComposerViewModel.init(reposting:authorHandle:)`) porte
+        /// la chaîne d'IDs, et c'est ce champ qui la fait descendre jusqu'à
+        /// `createStory`. Il valait `nil` en dur depuis l'écriture de ce
+        /// composeur — la « Phase C » annoncée par sa docstring n'avait jamais
+        /// été faite, si bien qu'une republication naissait sans lien vers son
+        /// original (donc sans attribution ni crédit de vues).
+        repostOfId: String? = nil
     ) {
         // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
         // depuis `updateStoryInBackground` : changer l'audience d'une story
@@ -1385,6 +1397,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             id: UUID().uuidString,
             thumbnailImage: thumbnail,
             draftId: draftId,
+            repostOfId: repostOfId,
             progress: 0,
             phase: .preparing,
             authorId: user?.id ?? "",
@@ -1427,7 +1440,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 originalLanguage: originalLanguage,
                 visibility: visibility,
                 visibilityUserIds: visibilityUserIds,
-                draftId: draftId
+                draftId: draftId,
+                repostOfId: repostOfId
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
@@ -1590,7 +1604,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         originalLanguage: String? = nil,
         visibility: String,
         visibilityUserIds: [String],
-        draftId: String? = nil
+        draftId: String? = nil,
+        /// Republication : id de l'original, persisté DANS l'item de file pour
+        /// survivre à un kill — le rejeu au boot doit republier avec la même
+        /// attribution, pas créer une story orpheline.
+        repostOfId: String? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1655,7 +1673,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let item = StoryPublishQueueItem(
             visibility: visibility,
             slidesPayload: payload,
-            repostOfId: nil,
+            repostOfId: repostOfId,
             mediaReferences: mediaReferences,
             tempStoryId: tempStoryId,
             visibilityUserIds: visibilityUserIds,
@@ -2205,7 +2223,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibilityUserIds: upload.visibilityUserIds,
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
-                repostOfId: nil,
+                repostOfId: upload.repostOfId,
                 mentions: canvasMentions.isEmpty ? nil : canvasMentions
             )
 

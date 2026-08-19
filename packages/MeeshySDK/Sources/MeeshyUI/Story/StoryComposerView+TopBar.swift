@@ -141,9 +141,21 @@ extension StoryComposerView {
             : String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module))
     }
 
+    /// Audiences réellement proposées — `allowedVisibilities` quand un plafond
+    /// est posé (republication), sinon toutes les sélectionnables.
+    ///
+    /// L'intersection est faite dans l'ordre de `composerSelectableCases` pour
+    /// que le menu garde toujours le même ordre de lecture, quel que soit
+    /// l'ordre de la liste autorisée.
+    private var selectableVisibilities: [PostVisibility] {
+        guard let allowedVisibilities else { return PostVisibility.composerSelectableCases }
+        let allowed = Set(allowedVisibilities)
+        return PostVisibility.composerSelectableCases.filter(allowed.contains)
+    }
+
     var visibilityMenu: some View {
         Menu {
-            ForEach(PostVisibility.composerSelectableCases) { mode in
+            ForEach(selectableVisibilities) { mode in
                 Button {
                     visibility = mode.rawValue
                     if mode.requiresUserSelection { audiencePickerMode = mode }

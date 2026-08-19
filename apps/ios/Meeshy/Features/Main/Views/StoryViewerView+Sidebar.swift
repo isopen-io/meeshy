@@ -161,6 +161,9 @@ struct StoryActionSidebarView: View {
     @Binding var showExportShareSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
+    /// Republication en STORY : ouvre le composeur prérempli au lieu de
+    /// l'ancien repost un-tap côté serveur.
+    @Binding var republishStorySource: RepostPostSourceWrapper?
     @Binding var isPresented: Bool
 
     /// Envoie la réaction ; le CGRect est le cadre (dans StoryScrubSpace) de la
@@ -553,38 +556,27 @@ struct StoryActionSidebarView: View {
                     icon: "arrow.2.squarepath",
                     label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main)
                 ) {
-                    guard let story = currentStory else { return }
+                    // Republication : ouvre le COMPOSEUR prérempli au lieu de
+                    // republier d'un tap côté serveur.
+                    //
+                    // L'ancien chemin appelait `PostService.repost` directement :
+                    // la story repartait à l'identique, sans possibilité d'ajouter
+                    // du texte ni de choisir l'audience — et son libellé annonçait
+                    // « Partager », ce qui achevait la confusion. La demande
+                    // produit (2026-08-19) est explicite : « ça ouvre la story
+                    // composeur permettant d'ajouter plus du texte ».
+                    //
+                    // Le composeur porte la chaîne de repost (`repostOfId`) et un
+                    // badge d'attribution VERROUILLÉ ; son sélecteur d'audience est
+                    // plafonné par `StoryRepostAudience`. La présentation vit dans
+                    // `StoryViewerView` (`republishStorySource`).
+                    guard let story = currentStory, let group = currentGroup else { return }
                     HapticFeedback.light()
-                    Task {
-                        do {
-                            _ = try await PostService.shared.repost(
-                                postId: story.id,
-                                targetType: .story,
-                                content: nil,
-                                isQuote: false
-                            )
-                            await MainActor.run {
-                                HapticFeedback.success()
-                                FeedbackToastManager.shared.show(
-                                    String(localized: "story.viewer.repost.success", defaultValue: "Story republiée", bundle: .main))
-                            }
-                        } catch APIError.serverError(404, _) {
-                            await MainActor.run {
-                                FeedbackToastManager.shared.showError(
-                                    String(localized: "story.viewer.repost.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
-                            }
-                        } catch APIError.serverError(403, _) {
-                            await MainActor.run {
-                                FeedbackToastManager.shared.showError(
-                                    String(localized: "story.viewer.repost.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
-                            }
-                        } catch {
-                            await MainActor.run {
-                                FeedbackToastManager.shared.showError(
-                                    String(localized: "story.viewer.repost.error", defaultValue: "Échec de la republication", bundle: .main))
-                            }
-                        }
-                    }
+                    pauseTimer()
+                    republishStorySource = RepostPostSourceWrapper(
+                        story: story,
+                        authorHandle: group.username
+                    )
                 }
             } else if railPlan.showsViews {
                 StoryActionButton(
