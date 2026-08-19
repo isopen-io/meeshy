@@ -475,6 +475,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
         name = try c.decodeIfPresent(String.self, forKey: .name)
+        referenceUserId = try c.decodeIfPresent(String.self, forKey: .referenceUserId)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -510,6 +511,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(isLocked, forKey: .isLocked)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
         try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(referenceUserId, forKey: .referenceUserId)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }

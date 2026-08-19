@@ -339,6 +339,45 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(dict["isLocked"] as? Bool, true)
     }
 
+    // MARK: - StoryTextObject referenceUserId (badge de référence)
+
+    func test_StoryTextObject_decodes_referenceUserId() throws {
+        let json = """
+        {"id": "t1", "text": "@alice", "x": 0.5, "y": 0.92,
+         "scale": 1, "rotation": 0, "referenceUserId": "u-alice"}
+        """.data(using: .utf8)!
+        let obj = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertEqual(obj.referenceUserId, "u-alice")
+    }
+
+    func test_StoryTextObject_referenceUserId_optional_defaults_nil() throws {
+        let json = """
+        {"id": "t1", "text": "hello", "x": 0.5, "y": 0.5,
+         "scale": 1, "rotation": 0}
+        """.data(using: .utf8)!
+        let obj = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertNil(obj.referenceUserId)
+    }
+
+    func test_StoryTextObject_encodes_referenceUserId() throws {
+        var obj = StoryTextObject(text: "@alice")
+        obj.referenceUserId = "u-alice"
+        let data = try JSONEncoder().encode(obj)
+        let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        XCTAssertEqual(dict["referenceUserId"] as? String, "u-alice")
+    }
+
+    func test_StoryTextObject_roundTrips_referenceUserId() throws {
+        // Un badge posé par le composer doit survivre au trajet complet
+        // (persistance disque, envoi au serveur) : sans decode/encode, la
+        // propriété se lit toujours `nil`, quel que soit ce qui a été envoyé.
+        var obj = StoryTextObject(text: "@alice")
+        obj.referenceUserId = "u-alice"
+        let data = try JSONEncoder().encode(obj)
+        let decoded = try JSONDecoder().decode(StoryTextObject.self, from: data)
+        XCTAssertEqual(decoded.referenceUserId, "u-alice")
+    }
+
     // MARK: - StorySticker
 
     func testStoryStickerInit() {
