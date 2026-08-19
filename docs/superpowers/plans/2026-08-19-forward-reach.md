@@ -62,7 +62,35 @@
 **Interfaces:**
 - Produces: `GET /api/v1/users/friend-requests?offset&limit&status=accepted` → `{ success, data: FriendRequest[], pagination: { total, offset, limit, hasMore } }`. `status` optionnel, valeurs `pending|accepted|rejected` ; absent = tous statuts (comportement actuel).
 
-- [ ] **Step 1 : Écrire le test RED**
+- [ ] **Step 1 : Rendre le schéma de pagination testable (préalable au RED)**
+
+Le bloc `pagination` du schéma de réponse est aujourd'hui écrit **inline** dans la route
+(`services/gateway/src/routes/users/devices.ts:53-63`) : un test ne peut donc pas l'atteindre, et
+recopier le bloc dans le test ne prouverait rien (le test attesterait sa propre copie — défaut
+documenté du dépôt : « un témoin qui ne peut pas tomber n'est pas un témoin »).
+
+Extraire le bloc tel quel, **sans le corriger** — le RED du Step 2 doit d'abord échouer. En tête de
+`devices.ts`, après les imports :
+
+```ts
+/**
+ * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
+ * Exporté pour qu'un test puisse traverser la sérialisation réelle :
+ * fast-json-stringify supprime tout champ non déclaré ici.
+ */
+export const friendRequestsPaginationSchema = {
+  type: 'object',
+  properties: {
+    total: { type: 'number' },
+    offset: { type: 'number' },
+    limit: { type: 'number' },
+    returned: { type: 'number' }
+  }
+} as const;
+```
+et remplacer le bloc inline (`:53-63`) par `pagination: friendRequestsPaginationSchema`.
+
+- [ ] **Step 2 : Écrire le test RED (il consomme le VRAI schéma)**
 
 ```ts
 /**
@@ -71,20 +99,12 @@
 import Fastify from 'fastify';
 import { describe, it, expect } from '@jest/globals';
 import { buildPaginationMeta } from '../../../../utils/pagination';
+import { friendRequestsPaginationSchema } from '../../../../routes/users/devices';
 
-// Le schéma de réponse déclarait `returned` (jamais émis) au lieu de `hasMore`
-// (émis par buildPaginationMeta) : fast-json-stringify supprimait donc la seule
-// information qui permet de paginer. Ce test traverse la sérialisation réelle.
-const paginationSchema = {
-  type: 'object',
-  properties: {
-    total: { type: 'number' },
-    offset: { type: 'number' },
-    limit: { type: 'number' },
-    hasMore: { type: 'boolean' }
-  }
-};
-
+// Le schéma déclarait `returned` (jamais émis) au lieu de `hasMore` (seul
+// champ réellement produit par buildPaginationMeta) : fast-json-stringify
+// supprimait donc la seule information permettant de paginer. Ce test monte le
+// VRAI schéma de la route et traverse la sérialisation.
 describe('GET /users/friend-requests — sérialisation de la pagination', () => {
   it('conserve hasMore à travers le schéma de réponse', async () => {
     const app = Fastify();
@@ -96,7 +116,7 @@ describe('GET /users/friend-requests — sérialisation de la pagination', () =>
             properties: {
               success: { type: 'boolean' },
               data: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' } } } },
-              pagination: paginationSchema
+              pagination: friendRequestsPaginationSchema
             }
           }
         }
@@ -117,14 +137,17 @@ describe('GET /users/friend-requests — sérialisation de la pagination', () =>
 });
 ```
 
-- [ ] **Step 2 : Vérifier l'échec**
+- [ ] **Step 3 : Vérifier l'échec**
 
 Run: `cd services/gateway && bun run jest src/__tests__/unit/routes/users/friend-requests-pagination.test.ts`
-Expected: PASS (ce test décrit le schéma CIBLE — il documente l'invariant). Puis **ajouter immédiatement** l'assertion qui échoue sur le schéma RÉEL en important le module de route est impossible sans Prisma : au lieu de cela, **Step 3 modifie la route** et le contrôle se fait au Step 4 par lecture du schéma. Si ce test passe dès le départ, c'est normal : il verrouille la forme attendue.
+Expected: FAIL — `body.pagination.hasMore` vaut `undefined` (le champ est supprimé par le schéma, qui ne déclare que `returned`).
 
-- [ ] **Step 3 : Corriger le schéma et le filtre dans la route**
+- [ ] **Step 4 : Corriger le schéma et ajouter le filtre de statut**
 
-Dans `services/gateway/src/routes/users/devices.ts`, querystring (`:28-34`) :
+Dans `friendRequestsPaginationSchema`, remplacer `returned: { type: 'number' }` par
+`hasMore: { type: 'boolean' }`.
+
+Puis, dans la même route, querystring (`:28-34`) :
 
 ```ts
       querystring: {
@@ -139,9 +162,6 @@ Dans `services/gateway/src/routes/users/devices.ts`, querystring (`:28-34`) :
         }
       },
 ```
-
-Bloc `pagination` du schéma de réponse (`:53-63`) : remplacer `returned: { type: 'number' }` par
-`hasMore: { type: 'boolean' }`.
 
 Handler : lire `status` et l'appliquer au `whereClause` (`:76-86`) :
 
@@ -159,12 +179,12 @@ Handler : lire `status` et l'appliquer au `whereClause` (`:76-86`) :
       };
 ```
 
-- [ ] **Step 4 : Vérifier le vert et la non-régression**
+- [ ] **Step 5 : Vérifier le vert et la non-régression**
 
 Run: `cd services/gateway && bun run jest src/__tests__/unit/routes/users/friend-requests-pagination.test.ts src/__tests__/unit/routes/users-devices.test.ts src/__tests__/unit/routes/users/devices-extra.test.ts src/__tests__/unit/routes/users/devices-extended.test.ts`
 Expected: toutes vertes. Puis `cd services/gateway && npx tsc --noEmit` → 0 erreur.
 
-- [ ] **Step 5 : Commit**
+- [ ] **Step 6 : Commit**
 
 ```bash
 git add services/gateway/src/routes/users/devices.ts services/gateway/src/__tests__/unit/routes/users/friend-requests-pagination.test.ts
