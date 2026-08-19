@@ -262,11 +262,13 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
       select: { mentionedUserId: true, display: true },
     });
     const previousUserIds = previousRows.map((row) => row.mentionedUserId);
+    const previousModes = new Map<string, PostMentionDisplayValue>(
+      previousRows.map((row) => [row.mentionedUserId, readDisplay(row.display)] as const)
+    );
     const previousDeclared = new Map<string, DeclarablePostMentionDisplay>(
-      previousRows
-        .map((row) => [row.mentionedUserId, readDisplay(row.display)] as const)
-        .filter((entry): entry is readonly [string, DeclarablePostMentionDisplay] =>
-          entry[1] !== 'INLINE')
+      [...previousModes.entries()].filter(
+        (entry): entry is [string, DeclarablePostMentionDisplay] => entry[1] !== 'INLINE'
+      )
     );
 
     const fragments = collectMentionableText({
@@ -310,6 +312,17 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
       [...modes.entries()].filter(([id]) => newlyMentionedUserIds.includes(id))
     );
     await persistByDisplay(mentionService, params.post.id, newModes);
+
+    // Le mode de ceux qui RESTENT. `createPostMentions` ne peut pas le poser :
+    // il `create` et avale le P2002 de la ligne déjà là, donc le nouveau mode
+    // n'atteindrait jamais la base — « une liste remplace l'ensemble déclaré »
+    // serait faux dès que la personne y figurait déjà, et un SILENT demandé sur
+    // une ligne INLINE resterait visible de tous.
+    const changedModes = new Map(
+      [...modes.entries()].filter(([id, mode]) => previous.has(id) && previousModes.get(id) !== mode)
+    );
+    await updateChangedDisplays(prisma, params.post.id, changedModes);
+
     notifyNewlyMentioned(params, newlyMentionedUserIds);
 
     return { mentionedUserIds, newlyMentionedUserIds, reconciled: true };
@@ -407,14 +420,43 @@ async function persistByDisplay(
   postId: string,
   modes: ReadonlyMap<string, PostMentionDisplayValue>
 ): Promise<void> {
-  const ORDER: readonly PostMentionDisplayValue[] = ['INLINE', 'PINNED', 'NOTE', 'SILENT'];
-
-  for (const mode of ORDER) {
-    const ids = [...modes.entries()]
-      .filter(([, value]) => value === mode)
-      .map(([id]) => id);
+  for (const mode of DISPLAY_ORDER) {
+    const ids = idsForDisplay(modes, mode);
     if (ids.length > 0) {
       await mentionService.createPostMentions(postId, ids, mode);
+    }
+  }
+}
+
+/** L'ordre d'écriture des lots, un par mode. */
+const DISPLAY_ORDER: readonly PostMentionDisplayValue[] = ['INLINE', 'PINNED', 'NOTE', 'SILENT'];
+
+function idsForDisplay(
+  modes: ReadonlyMap<string, PostMentionDisplayValue>,
+  display: PostMentionDisplayValue
+): string[] {
+  return [...modes.entries()].filter(([, value]) => value === display).map(([id]) => id);
+}
+
+/**
+ * Le mode d'une personne DÉJÀ référencée, quand il change.
+ *
+ * Un lot par mode, comme {@link persistByDisplay} : c'est le même discriminant,
+ * écrit sous la même forme. Rien ne part quand rien ne change — une correction
+ * de frappe ne doit pas réécrire toute la table des références du post.
+ */
+async function updateChangedDisplays(
+  prisma: PostMentionPrisma,
+  postId: string,
+  changed: ReadonlyMap<string, PostMentionDisplayValue>
+): Promise<void> {
+  for (const mode of DISPLAY_ORDER) {
+    const ids = idsForDisplay(changed, mode);
+    if (ids.length > 0) {
+      await prisma.postMention.updateMany({
+        where: { postId, mentionedUserId: { in: ids } },
+        data: { display: mode },
+      });
     }
   }
 }
