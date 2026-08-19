@@ -371,10 +371,11 @@ export function registerInteractionRoutes(
         // bien enregistré la vue. Le viewer d'audience vient de passer ce même
         // filtre dans `recordView`, donc la story est retrouvée ici aussi.
         //
-        // Un lecteur admis par sa seule RÉFÉRENCE (2026-08-19) ne l'est PAS :
-        // sa vue est enregistrée, mais ce chargement-ci la refuse et l'auteur ne
-        // reçoit pas d'événement temps réel — il la verra dans sa liste de vues.
-        // Le verdict d'accès ne voyage pas encore avec le contenu.
+        // Un lecteur admis par sa seule RÉFÉRENCE (2026-08-19) l'est aussi :
+        // `getPostById` relit sans filtre quand l'audience ne rend rien, et la
+        // référence tranche — l'auteur reçoit donc son événement temps réel pour
+        // une vue que `recordView` vient d'enregistrer. Ces deux-là ne peuvent
+        // plus diverger.
         const post = await postService.getPostById(postId, viewerId);
         if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
           socialEvents.broadcastStoryViewed({

@@ -1,3 +1,5 @@
+import type { Prisma } from '@meeshy/shared/prisma/client';
+
 import { REFERENCE_VIEW_WINDOW_MS } from './referenceAccess';
 
 /**
@@ -122,7 +124,7 @@ export const REFERENCE_SWEEP_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
  * Nom de relation Prisma : `postMentions` (`Post.postMentions`), pas
  * `mentions` — le nom court n'existe que sur `PostComment` et `Message`.
  */
-export function buildSweepableFilter(now: Date, cutoff: Date = now): Record<string, unknown> {
+export function buildSweepableFilter(now: Date, cutoff: Date = now): Prisma.PostWhereInput {
   const windowStart = new Date(now.getTime() - REFERENCE_VIEW_WINDOW_MS);
 
   return {
