@@ -824,7 +824,7 @@ struct ConversationView: View {
                     .presentationDetents([.medium, .large])
             }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
-                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
+                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor, onOpenConversation: { router.navigateToConversation($0) }) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`

@@ -5,10 +5,18 @@ import MeeshyUI
 
 // MARK: - ForwardPickerSheet
 
+/// Picker de transfert hybride (spec 2026-08-19, Volet A.6) :
+/// - toucher une LIGNE = sélectionner (mode multi) → barre basse « Envoyer (N) » ;
+/// - le bouton en fin de ligne = envoi IMMÉDIAT à cette seule cible (et retire
+///   la ligne de la sélection si elle y était — jamais de doublon au batch) ;
+/// - une cible servie n'est plus sélectionnable ; un échec affiche sa RAISON
+///   et se réessaie.
+/// L'envoi passe par `MessageForwardService` (chemin unique, offline compris).
 struct ForwardPickerSheet: View {
     let message: Message
     let sourceConversationId: String
     let accentColor: String
+    var onOpenConversation: ((Conversation) -> Void)? = nil
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -20,10 +28,11 @@ struct ForwardPickerSheet: View {
     @State private var conversations: [Conversation] = []
     @State private var isLoading = true
     @State private var searchText = ""
-    @State private var sendingToId: String? = nil
-    @State private var sentToIds: Set<String> = []
-    @State private var failedToIds: Set<String> = []
+    @State private var model = ForwardPickerModel()
+    @State private var successToastFired = false
     @State private var loadFailed = false
+
+    private var forwardService: MessageForwardServiceProviding { MessageForwardService.shared }
 
     private var filteredConversations: [Conversation] {
         if searchText.isEmpty {
@@ -83,6 +92,7 @@ struct ForwardPickerSheet: View {
                 }
             }
             .background(theme.backgroundPrimary)
+            .safeAreaInset(edge: .bottom) { batchSendBar }
             .navigationTitle(String(localized: "forward.title", defaultValue: "Forward", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -119,7 +129,7 @@ struct ForwardPickerSheet: View {
                     .foregroundColor(Color(hex: accentColor))
                     .lineLimit(1)
 
-                Text(message.content.isEmpty ? String(localized: "forward.media-placeholder", defaultValue: "[Media]", bundle: .main) : message.content)
+                Text(previewText)
                     .font(MeeshyFont.relative(11))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
@@ -144,6 +154,27 @@ struct ForwardPickerSheet: View {
         .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
     }
 
+    /// Aperçu digne d'un média : type localisé + compteur, plus jamais « [Media] ».
+    private var previewText: String {
+        if !message.content.isEmpty { return message.content }
+        guard let first = message.attachments.first else {
+            return String(localized: "forward.media-placeholder", defaultValue: "[Media]", bundle: .main)
+        }
+        let kindLabel: String
+        switch first.kind {
+        case .image:
+            kindLabel = String(localized: "forward.preview.image", defaultValue: "Photo", bundle: .main)
+        case .video:
+            kindLabel = String(localized: "forward.preview.video", defaultValue: "Vidéo", bundle: .main)
+        case .audio:
+            kindLabel = String(localized: "forward.preview.audio", defaultValue: "Audio", bundle: .main)
+        default:
+            kindLabel = String(localized: "forward.preview.file", defaultValue: "Fichier", bundle: .main)
+        }
+        let count = message.attachments.count
+        return count > 1 ? "\(kindLabel) · \(count)" : kindLabel
+    }
+
     @ViewBuilder
     private func attachmentThumbnail(_ attachment: MessageAttachment) -> some View {
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
@@ -165,81 +196,132 @@ struct ForwardPickerSheet: View {
     // MARK: - Conversation Row
 
     private func conversationRow(_ conv: Conversation) -> some View {
-        HStack(spacing: 12) {
-            MeeshyAvatar(
-                name: conv.displayName,
-                context: .conversationList,
-                accentColor: conv.accentColor,
-                avatarURL: conv.avatar,
-                moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                ConversationTitleLabel(
+        let state = model.state(of: conv.id)
+        return VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                MeeshyAvatar(
                     name: conv.displayName,
-                    favoriteEmoji: conv.userState.reaction,
-                    font: MeeshyFont.relative(15, weight: .medium),
-                    color: theme.textPrimary
+                    context: .conversationList,
+                    accentColor: conv.accentColor,
+                    avatarURL: conv.avatar,
+                    moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                    onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
                 )
 
-                HStack(spacing: 4) {
-                    Text(conv.type.rawValue)
-                        .font(MeeshyFont.relative(12))
-                        .foregroundColor(theme.textMuted)
+                VStack(alignment: .leading, spacing: 2) {
+                    ConversationTitleLabel(
+                        name: conv.displayName,
+                        favoriteEmoji: conv.userState.reaction,
+                        font: MeeshyFont.relative(15, weight: .medium),
+                        color: theme.textPrimary
+                    )
 
-                    if conv.memberCount > 0 {
-                        Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
+                    HStack(spacing: 4) {
+                        Text(conv.type.rawValue)
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
+
+                        if conv.memberCount > 0 {
+                            Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
+                                .font(MeeshyFont.relative(12))
+                                .foregroundColor(theme.textMuted)
+                        }
                     }
                 }
+                .accessibilityElement(children: .combine)
+
+                Spacer()
+
+                if state == .selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(MeeshyFont.relative(18))
+                        .foregroundColor(Color(hex: accentColor))
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityHidden(true)
+                }
+
+                sendControl(for: conv, state: state)
             }
-            .accessibilityElement(children: .combine)
 
-            Spacer()
-
-            sendButton(for: conv)
+            if case .failed(let reason) = state {
+                // La RAISON du refus (ex. vue unique) — plus jamais un glyphe muet.
+                Text(reason)
+                    .font(MeeshyFont.relative(11))
+                    .foregroundColor(MeeshyColors.error)
+                    .lineLimit(2)
+                    .padding(.leading, 52)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .background(state == .selected ? Color(hex: accentColor).opacity(0.10) : Color.clear)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // Tap de LIGNE = sélection (no-op sur une cible servie/en cours).
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                model.tapRow(conv.id)
+            }
+            HapticFeedback.light()
+        }
+        .accessibilityAddTraits(state == .selected ? .isSelected : [])
     }
 
     @ViewBuilder
-    private func sendButton(for conv: Conversation) -> some View {
-        if sentToIds.contains(conv.id) {
+    private func sendControl(for conv: Conversation, state: ForwardPickerModel.TargetState) -> some View {
+        switch state {
+        case .sent:
             Image(systemName: "checkmark.circle.fill")
                 .font(.title2)
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityLabel(String(localized: "forward.sent", defaultValue: "Transféré", bundle: .main))
-        } else if sendingToId == conv.id {
+        case .sending:
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
                 .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
-        } else if failedToIds.contains(conv.id) {
+        case .failed:
             // Send failed — surface it in-sheet (a root toast renders behind the
             // sheet) as a tappable, recoverable retry. Error is signalled by the
             // glyph shape, not colour alone.
             Button {
-                forwardTo(conv)
+                send(conv)
             } label: {
                 Image(systemName: "exclamationmark.arrow.circlepath")
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(MeeshyColors.error)
             }
             .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
-            .disabled(sendingToId != nil)
-        } else {
+        case .idle, .selected:
             Button {
-                forwardTo(conv)
+                send(conv)
             } label: {
                 Image(systemName: "paperplane.circle.fill")
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(Color(hex: accentColor))
             }
             .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
-            .disabled(sendingToId != nil)
+        }
+    }
+
+    // MARK: - Batch Send Bar
+
+    @ViewBuilder
+    private var batchSendBar: some View {
+        if model.hasSelection {
+            Button {
+                batchSend()
+            } label: {
+                Text(String(format: String(localized: "forward.send-selected", defaultValue: "Envoyer (%d)", bundle: .main), model.selectedIds.count))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color(hex: accentColor)))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
         }
     }
 
@@ -293,53 +375,54 @@ struct ForwardPickerSheet: View {
         await refreshConversations()
     }
 
-    /// Offline: durably enqueues instead of attempting — and losing — the
-    /// direct REST POST (the same `ofq_*` outbox row
-    /// `OutboxDispatcher.dispatchSendMessage` already replays for
-    /// `ConversationViewModel`). Gated on `NetworkMonitor.shared.isOnline`
-    /// mirroring `ConversationViewModel.sendMessage`'s offline branch.
-    private func forwardTo(_ targetConversation: Conversation) {
-        sendingToId = targetConversation.id
-        failedToIds.remove(targetConversation.id)
+    /// Envoi immédiat à UNE cible (bouton par-ligne, ou une étape du batch).
+    private func send(_ conv: Conversation) {
+        guard model.beginSend(conv.id) else { return }
+        Task { await perform(conv) }
+    }
+
+    /// Envoi groupé aux cibles sélectionnées, en séquence — les cibles déjà
+    /// servies en sont exclues par construction (`ForwardPickerModel`).
+    private func batchSend() {
+        let ids = withAnimation { model.beginBatch() }
+        let targets = ids.compactMap { id in conversations.first(where: { $0.id == id }) }
         Task {
-            guard NetworkMonitor.shared.isOnline else {
-                let item = OfflineQueueItem(
-                    conversationId: targetConversation.id,
-                    content: message.content,
-                    forwardedFromId: message.id,
-                    forwardedFromConversationId: sourceConversationId
-                )
-                do {
-                    try await OfflineQueue.shared.enqueue(item)
-                    sentToIds.insert(targetConversation.id)
-                    HapticFeedback.success()
-                } catch {
-                    failedToIds.insert(targetConversation.id)
-                    HapticFeedback.error()
-                }
-                sendingToId = nil
-                return
+            for conv in targets { await perform(conv) }
+        }
+    }
+
+    private func perform(_ conv: Conversation) async {
+        let outcome = await forwardService.forward(
+            message: message,
+            sourceConversationId: sourceConversationId,
+            to: conv.id
+        )
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            model.finishSend(conv.id, outcome: outcome)
+        }
+        switch outcome {
+        case .sent, .queuedOffline:
+            HapticFeedback.success()
+            fireSuccessToastIfNeeded(for: conv)
+        case .failed:
+            HapticFeedback.error()
+        }
+    }
+
+    /// Un seul toast succès par ouverture du sheet ; le tap ouvre la première
+    /// conversation servie (action utilisateur locale → FeedbackToastManager).
+    private func fireSuccessToastIfNeeded(for conv: Conversation) {
+        guard !successToastFired else { return }
+        successToastFired = true
+        let title = String(localized: "forward.success", defaultValue: "Message transféré", bundle: .main)
+        if let onOpenConversation {
+            FeedbackToastManager.shared.show(title, type: .success) {
+                dismiss()
+                onDismiss()
+                onOpenConversation(conv)
             }
-            do {
-                let body = SendMessageRequest(
-                    content: message.content.isEmpty ? nil : message.content,
-                    originalLanguage: nil,
-                    replyToId: nil,
-                    forwardedFromId: message.id,
-                    forwardedFromConversationId: sourceConversationId,
-                    attachmentIds: nil
-                )
-                let _: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(
-                    endpoint: "/conversations/\(targetConversation.id)/messages",
-                    body: body
-                )
-                sentToIds.insert(targetConversation.id)
-                HapticFeedback.success()
-            } catch {
-                failedToIds.insert(targetConversation.id)
-                HapticFeedback.error()
-            }
-            sendingToId = nil
+        } else {
+            FeedbackToastManager.shared.showSuccess(title)
         }
     }
 }

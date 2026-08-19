@@ -24,6 +24,9 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
     var putCount = 0
     var patchCount = 0
     var deleteCount = 0
+    /// Corps POST encodés (JSONEncoder), dans l'ordre d'appel — pour asserter
+    /// le payload réellement mis sur le fil (clés présentes ET absentes).
+    var lastPostBodies: [Data] = []
 
     // MARK: - Stub Registration
 
@@ -87,6 +90,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append("POST")
+        if let data = try? JSONEncoder().encode(body) { lastPostBodies.append(data) }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
             throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for POST endpoint '\(endpoint)'"])
@@ -166,5 +170,6 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         putCount = 0
         patchCount = 0
         deleteCount = 0
+        lastPostBodies.removeAll()
     }
 }
