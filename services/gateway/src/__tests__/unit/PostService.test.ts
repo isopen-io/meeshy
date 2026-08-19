@@ -908,6 +908,53 @@ describe('PostService', () => {
       );
     });
 
+    // ─── Reposter crée un POST, quel que soit le type de l'original ─────────
+    //
+    // Le défaut était `opts.targetType ?? original.type` : un repost HÉRITAIT
+    // du type de sa source. Presque tous les sites d'appel iOS n'envoient rien
+    // (seul le viewer de story passe `.post`), si bien que republier une story
+    // depuis le fil, le profil ou le détail fabriquait une STORY — qui allait
+    // dans le tray du reposteur et jamais dans son fil, alors que le geste
+    // demandé était « partager dans mon fil ». Pire, le broadcast
+    // `post:reposted` n'est pas typé : le fil l'insérait en direct, d'où le
+    // même contenu vu dans le fil ET dans les stories.
+    //
+    // La règle produit (2026-08-19) : reposter crée toujours un POST, qui
+    // PORTE l'original dans `repostOf`. Republier SA PROPRE story garde son
+    // chemin dédié (`POST /posts/:postId/republish` → `republishStory`), non
+    // touché ici.
+
+    it('creates a POST when reposting a story without an explicit targetType', async () => {
+      const original = makePost({ id: 'story-inherit', type: PostType.STORY });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-inherit', repostOfId: 'story-inherit' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('story-inherit', 'user-reposter');
+
+      expect(prisma.post.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: PostType.POST }),
+        })
+      );
+    });
+
+    // Corollaire de la règle : un POST n'est pas éphémère, donc le repost ne
+    // reçoit AUCUNE échéance. Sans cette garde, un repost hérité restait
+    // balayable/masquable au bout de 20 h alors qu'il vit dans un fil.
+    it('gives the repost of a story no expiry, since it is a POST', async () => {
+      const original = makePost({ id: 'story-expiry', type: PostType.STATUS });
+      prisma.post.findFirst.mockResolvedValue(original);
+      prisma.post.create.mockResolvedValue(makePost({ id: 'repost-expiry', repostOfId: 'story-expiry' }));
+      prisma.post.update.mockResolvedValue(original);
+
+      await service.repostPost('story-expiry', 'user-reposter');
+
+      const created = prisma.post.create.mock.calls[0][0] as { data: Record<string, unknown> };
+      expect(created.data.type).toBe(PostType.POST);
+      expect(created.data.expiresAt).toBeUndefined();
+    });
+
     it('rolls back media snapshot if a duplication fails partway', async () => {
       const original = makePost({
         id: 'story-1',

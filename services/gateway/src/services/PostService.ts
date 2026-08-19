@@ -2200,7 +2200,27 @@ export class PostService {
       ? ((original.visibilityUserIds ?? []) as string[])
       : [];
 
-    const targetType = opts.targetType ?? original.type;
+    // Reposter crée un POST, quel que soit le type de l'original (2026-08-19).
+    //
+    // Le défaut était `?? original.type` : le repost HÉRITAIT du type de sa
+    // source. Or presque aucun site d'appel ne renseigne `targetType` — seul
+    // le viewer de story passe `.post` —, si bien que republier une story
+    // depuis le fil, le profil ou le détail fabriquait une STORY : elle
+    // atterrissait dans le tray du reposteur et jamais dans son fil, alors
+    // que le geste demandait « partager dans mon fil ». Et comme
+    // `post:reposted` n'est pas typé, le fil l'insérait quand même en direct
+    // — le même contenu se voyait dans le fil ET dans les stories.
+    //
+    // C'est le modèle des réseaux à fil : partager une story la fait entrer
+    // dans le fil, elle ne crée pas une story chez le repartageur.
+    // Corollaire : un POST n'est pas éphémère, donc `computeExpiresAt` ne
+    // pose plus d'échéance sur un repost.
+    //
+    // Republier SA PROPRE story garde son chemin dédié — `republishStory`
+    // (`POST /posts/:postId/republish`), auteur uniquement, type STORY, date
+    // fraîche. `targetType` reste au protocole : ce chemin-là et un futur
+    // « reposter en story » en dépendent.
+    const targetType = opts.targetType ?? PostType.POST;
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;
 
