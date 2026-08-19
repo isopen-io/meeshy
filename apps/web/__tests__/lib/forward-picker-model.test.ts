@@ -42,6 +42,18 @@ describe('ForwardPickerModel', () => {
     expect(model.selectedIds()).toEqual([]);
   });
 
+  it('tapRow sur une cible en échec la sélectionne pour un renvoi groupé', () => {
+    const model = new ForwardPickerModel();
+    model.beginSend('a');
+    model.finishSend('a', false, 'réseau indisponible');
+
+    model.tapRow('a');
+
+    expect(model.state('a')).toBe('selected');
+    expect(model.selectedIds()).toEqual(['a']);
+    expect(model.beginBatch()).toEqual(['a']);
+  });
+
   it('beginSend sur une ligne sélectionnée la retire de la sélection', () => {
     const model = new ForwardPickerModel();
     model.tapRow('a');

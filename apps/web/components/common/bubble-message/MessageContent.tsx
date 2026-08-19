@@ -86,11 +86,11 @@ export const MessageContent = memo(function MessageContent({
             const fromName = forwardBadgeConversationName(message.forwardedFromConversation);
             return (
               <div className={cn(
-                "flex items-center gap-1 mb-1.5 text-xs font-medium",
+                "flex items-center gap-1 mb-1.5 min-w-0 text-xs font-medium",
                 isOwnMessage ? "text-indigo-200" : "text-gray-400 dark:text-gray-500"
               )}>
                 <CornerUpRight className="h-3 w-3 flex-shrink-0" />
-                <span>{fromName
+                <span className="truncate min-w-0">{fromName
                   ? t('bubble.forwardedFrom', { name: fromName })
                   : t('bubble.forwarded', 'Forwarded')}</span>
               </div>

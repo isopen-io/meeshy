@@ -660,7 +660,27 @@ class MeeshySocketIOService {
       replyTo: replyTo,
       sender: sender,
       attachments: attachments.length > 0 ? attachments : undefined,
-      validatedMentions: (socketMessage as any).validatedMentions || []
+      validatedMentions: (socketMessage as any).validatedMentions || [],
+      // Le broadcast gateway porte déjà ces champs (`MessageHandler` pose
+      // `forwardedFromConversation` et `effectFlags`). Les omettre ici rendait
+      // le badge « Transféré depuis {groupe} » mort sur le chemin temps réel et
+      // toute garde `isViewOnce` vacueuse sur un message live. Mêmes défauts
+      // que le transformer REST (`transformers.service.ts`) : présence
+      // conditionnelle pour les champs optionnels, `false` pour `isViewOnce`
+      // qui est requis par le type partagé.
+      isViewOnce: Boolean((socketMessage as any).isViewOnce),
+      ...((socketMessage as any).forwardedFromId
+        ? { forwardedFromId: String((socketMessage as any).forwardedFromId) }
+        : {}),
+      ...((socketMessage as any).forwardedFromConversationId
+        ? { forwardedFromConversationId: String((socketMessage as any).forwardedFromConversationId) }
+        : {}),
+      ...((socketMessage as any).forwardedFromConversation
+        ? { forwardedFromConversation: (socketMessage as any).forwardedFromConversation as Message['forwardedFromConversation'] }
+        : {}),
+      ...((socketMessage as any).effectFlags !== undefined && (socketMessage as any).effectFlags !== null
+        ? { effectFlags: Number((socketMessage as any).effectFlags) }
+        : {}),
     } as unknown as Message;
   }
 }

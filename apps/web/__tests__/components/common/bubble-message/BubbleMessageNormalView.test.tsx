@@ -496,6 +496,21 @@ describe('BubbleMessageNormalView', () => {
       expect(screen.queryByText('bubbleStream.bubble.forwardedFrom')).not.toBeInTheDocument();
     });
 
+    it('devrait tronquer le libellé plutôt que laisser un nom long casser la ligne', () => {
+      renderNormalView({
+        message: createMockMessage({
+          forwardedFromId: 'msg-src-1',
+          forwardedFromConversation: {
+            id: 'conv-src-1',
+            title: 'Équipe produit, design, croissance et partenariats stratégiques',
+            type: 'group',
+          },
+        }),
+      });
+
+      expect(screen.getByText('bubbleStream.bubble.forwardedFrom')).toHaveClass('truncate');
+    });
+
     it('devrait rester « Transféré » nu sans conversation source', () => {
       renderNormalView({
         message: createMockMessage({ forwardedFromId: 'msg-src-1' }),

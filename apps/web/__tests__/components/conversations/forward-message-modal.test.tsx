@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { ForwardMessageModal } from '../../../components/conversations/forward-message-modal';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
@@ -26,6 +26,10 @@ jest.mock('@/hooks/useI18n', () => ({
     currentLanguage: 'fr',
     tArray: jest.fn(() => []),
   }),
+}));
+
+jest.mock('@/stores', () => ({
+  useUser: jest.fn(() => ({ id: 'user-1', username: 'moi', displayName: 'Moi' })),
 }));
 
 // Mock la façade socket (le transport offline/fallback est couvert par elle)
@@ -106,6 +110,26 @@ const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =
     ...overrides,
   }) as unknown as Conversation;
 
+/**
+ * Un DM n'a PAS de `title` côté gateway (« le frontend résout le nom de
+ * l'interlocuteur ») — seul l'identifiant technique reste peuplé.
+ */
+const makeDirectConversation = (): Conversation =>
+  ({
+    id: 'conv-dm',
+    title: null,
+    identifier: 'mshy_direct-64f1a2b3c4d5e6f708192a3b-64f1a2b3c4d5e6f708192a3c-1755600000',
+    type: 'direct',
+    isActive: true,
+    memberCount: 2,
+    status: 'active',
+    visibility: 'private',
+    participants: [
+      { id: 'part-1', userId: 'user-1', user: { id: 'user-1', displayName: 'Moi', username: 'moi' } },
+      { id: 'part-2', userId: 'user-9', user: { id: 'user-9', displayName: 'Alice Martin', username: 'alicem' } },
+    ],
+  }) as unknown as Conversation;
+
 const makeMessage = (overrides: Partial<Message> = {}): Message =>
   ({
     id: 'msg-1',
@@ -126,6 +150,7 @@ const defaultProps = {
     makeConversation({ id: 'conv-src', title: 'Conversation source' }),
     makeConversation({ id: 'conv-a', title: 'Équipe produit' }),
     makeConversation({ id: 'conv-b', title: 'Général', type: 'public' }),
+    makeDirectConversation(),
   ],
 };
 
@@ -155,6 +180,25 @@ describe('ForwardMessageModal', () => {
     expect(screen.queryByText('Équipe produit')).not.toBeInTheDocument();
   });
 
+  it("nomme une conversation directe par l'interlocuteur, jamais par son identifiant technique", () => {
+    renderModal();
+
+    expect(screen.getByText('Alice Martin')).toBeInTheDocument();
+    expect(screen.queryByText(/mshy_direct-/)).not.toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('forward-row-conv-dm')).getByTestId('avatar-fallback'),
+    ).toHaveTextContent('A');
+  });
+
+  it("trouve une conversation directe en cherchant le nom de l'interlocuteur", () => {
+    renderModal();
+
+    fireEvent.change(screen.getByTestId('input'), { target: { value: 'alice' } });
+
+    expect(screen.getByText('Alice Martin')).toBeInTheDocument();
+    expect(screen.queryByText('Équipe produit')).not.toBeInTheDocument();
+  });
+
   it("l'envoi immédiat appelle la façade avec forwardedFromId et sans attachmentIds", async () => {
     renderModal();
 
@@ -171,7 +215,7 @@ describe('ForwardMessageModal', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
+      expect.stringMatching(/^cid_/),
       'msg-1',
       'conv-src',
     );
@@ -214,7 +258,7 @@ describe('ForwardMessageModal', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
+      expect.stringMatching(/^cid_/),
       'msg-1',
       'conv-src',
     );
@@ -235,5 +279,45 @@ describe('ForwardMessageModal', () => {
     await waitFor(() => {
       expect(screen.getByTestId('forward-row-conv-a')).toHaveAttribute('data-state', 'sent');
     });
+  });
+
+  it('rejoue le MÊME clientMessageId au retry après un échec', async () => {
+    mockSendMessage.mockResolvedValueOnce({ success: false });
+    renderModal();
+
+    fireEvent.click(screen.getByTestId('forward-send-conv-a'));
+    await waitFor(() => {
+      expect(screen.getByTestId('forward-row-conv-a')).toHaveAttribute('data-state', 'failed');
+    });
+    const firstCid = mockSendMessage.mock.calls[0][7];
+    expect(firstCid).toMatch(/^cid_/);
+
+    fireEvent.click(screen.getByTestId('forward-send-conv-a'));
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockSendMessage.mock.calls[1][7]).toBe(firstCid);
+  });
+
+  it('un nouvel envoi vers la même cible après un succès porte un clientMessageId différent', async () => {
+    const { rerender } = render(<ForwardMessageModal {...defaultProps} />);
+
+    fireEvent.click(screen.getByTestId('forward-send-conv-a'));
+    await waitFor(() => {
+      expect(screen.getByTestId('forward-row-conv-a')).toHaveAttribute('data-state', 'sent');
+    });
+    const firstCid = mockSendMessage.mock.calls[0][7];
+
+    rerender(<ForwardMessageModal {...defaultProps} isOpen={false} />);
+    rerender(<ForwardMessageModal {...defaultProps} isOpen />);
+
+    fireEvent.click(screen.getByTestId('forward-send-conv-a'));
+    await waitFor(() => {
+      expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    });
+
+    expect(mockSendMessage.mock.calls[1][7]).toMatch(/^cid_/);
+    expect(mockSendMessage.mock.calls[1][7]).not.toBe(firstCid);
   });
 });

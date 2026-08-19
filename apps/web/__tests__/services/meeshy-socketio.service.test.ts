@@ -268,6 +268,50 @@ describe('MeeshySocketIOService', () => {
     });
   });
 
+  describe('Conversion socket → Message', () => {
+    const basePayload = {
+      id: 'msg-live-1',
+      conversationId: 'conv-target',
+      senderId: 'user-9',
+      content: 'Bonjour',
+      originalLanguage: 'fr',
+      messageType: 'text',
+      createdAt: '2026-08-19T10:00:00.000Z',
+      updatedAt: '2026-08-19T10:00:00.000Z',
+    };
+
+    it('reporte les champs de transfert, les effets et le view-once du payload enrichi', () => {
+      const converted = meeshySocketIOService.convertSocketMessageToMessage({
+        ...basePayload,
+        forwardedFromId: 'msg-src-1',
+        forwardedFromConversationId: 'conv-src',
+        forwardedFromConversation: { id: 'conv-src', title: 'Équipe produit', type: 'group' },
+        effectFlags: 4,
+        isViewOnce: true,
+      });
+
+      expect(converted.forwardedFromId).toBe('msg-src-1');
+      expect(converted.forwardedFromConversationId).toBe('conv-src');
+      expect(converted.forwardedFromConversation).toEqual({
+        id: 'conv-src',
+        title: 'Équipe produit',
+        type: 'group',
+      });
+      expect(converted.effectFlags).toBe(4);
+      expect(converted.isViewOnce).toBe(true);
+    });
+
+    it('ne fabrique aucun champ sur un payload nu', () => {
+      const converted = meeshySocketIOService.convertSocketMessageToMessage({ ...basePayload });
+
+      expect(converted.forwardedFromId).toBeUndefined();
+      expect(converted.forwardedFromConversationId).toBeUndefined();
+      expect(converted.forwardedFromConversation).toBeUndefined();
+      expect(converted.effectFlags).toBeUndefined();
+      expect(converted.isViewOnce).toBe(false);
+    });
+  });
+
   describe('Cleanup', () => {
     it('should clean up resources without throwing', () => {
       expect(() => meeshySocketIOService.cleanup()).not.toThrow();

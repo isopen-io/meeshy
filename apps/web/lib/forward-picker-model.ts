@@ -24,13 +24,14 @@ export class ForwardPickerModel {
 
   tapRow(id: string): void {
     const current = this.state(id);
-    if (current === 'idle') {
-      this.setState(id, 'selected');
-      return;
-    }
     if (current === 'selected') {
       this.setState(id, 'idle');
+      return;
     }
+    if (current === 'sending' || current === 'sent') return;
+    // `idle` ET `{failed}` deviennent sélectionnables : une cible en échec doit
+    // pouvoir rejoindre un envoi groupé (parité iOS `case .idle, .failed`).
+    this.setState(id, 'selected');
   }
 
   beginSend(id: string): boolean {

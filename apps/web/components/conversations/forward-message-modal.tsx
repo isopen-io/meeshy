@@ -10,8 +10,12 @@ import { Search, Send, Check, Loader2, Forward } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
+import { useUser } from '@/stores';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { ForwardPickerModel, type TargetState } from '@/lib/forward-picker-model';
+import { generateClientMessageId } from '@/utils/client-message-id';
+import { getConversationNameOnly } from './conversation-item/conversation-utils';
+import { resolveOtherDirectParticipantUser } from './lentille/lentille-row-utils';
 import type { Conversation, Message } from '@meeshy/shared/types';
 
 interface ForwardMessageModalProps {
@@ -25,8 +29,10 @@ interface ForwardMessageModalProps {
 const stateKey = (state: TargetState): string =>
   typeof state === 'object' ? 'failed' : state;
 
-const conversationLabel = (conv: Conversation): string =>
-  conv.title || conv.identifier || conv.id;
+type LabelledTarget = {
+  readonly conversation: Conversation;
+  readonly label: string;
+};
 
 export function ForwardMessageModal({
   isOpen,
@@ -36,9 +42,20 @@ export function ForwardMessageModal({
   conversations,
 }: ForwardMessageModalProps) {
   const { t } = useI18n('conversations');
+  const currentUser = useUser();
+  const currentUserId = currentUser?.id ?? null;
   const [searchQuery, setSearchQuery] = useState('');
   const modelRef = useRef(new ForwardPickerModel());
   const hasToastedRef = useRef(false);
+  // Registre des envois NON CONFIRMÉS, par (message source, cible). Le gateway
+  // dédoublonne sur `(conversationId, clientMessageId)` et la façade rend
+  // `{success:false, timedOut:true}` alors que `message:new` peut encore
+  // arriver : un retry qui frapperait un cid neuf produirait un DOUBLON. La
+  // clé porte l'id du message pour qu'un transfert d'un AUTRE message vers la
+  // même cible ne soit jamais dédoublonné contre celui-ci ; l'entrée est
+  // retirée au succès confirmé pour qu'un re-transfert volontaire reste un
+  // envoi neuf.
+  const clientMessageIdsRef = useRef(new Map<string, string>());
   const [, bump] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
@@ -49,19 +66,36 @@ export function ForwardMessageModal({
     bump();
   }, [isOpen, message.id]);
 
+  // Le gateway ne pose PAS de `title` sur un tête-à-tête (« le frontend résout
+  // le nom de l'interlocuteur ») : sans le SSOT, la ligne afficherait
+  // l'identifiant technique `mshy_direct-…` et la recherche par prénom ne
+  // trouverait rien.
+  const labelledTargets = useMemo<readonly LabelledTarget[]>(
+    () =>
+      conversations
+        .filter((conv) => conv.id !== sourceConversationId)
+        .map((conv) => ({
+          conversation: conv,
+          label: getConversationNameOnly(conv, () =>
+            resolveOtherDirectParticipantUser(conv, currentUserId),
+          ),
+        })),
+    [conversations, sourceConversationId, currentUserId],
+  );
+
   const targets = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return conversations
-      .filter((conv) => conv.id !== sourceConversationId)
-      .filter((conv) => {
-        if (!query) return true;
-        return conversationLabel(conv).toLowerCase().includes(query);
-      });
-  }, [conversations, sourceConversationId, searchQuery]);
+    if (!query) return labelledTargets;
+    return labelledTargets.filter(({ label }) => label.toLowerCase().includes(query));
+  }, [labelledTargets, searchQuery]);
 
   const transmit = useCallback(
     async (conversationId: string) => {
       const model = modelRef.current;
+      const clientMessageIds = clientMessageIdsRef.current;
+      const cidKey = `${message.id}:${conversationId}`;
+      const clientMessageId = clientMessageIds.get(cidKey) ?? generateClientMessageId();
+      clientMessageIds.set(cidKey, clientMessageId);
       try {
         const result = await meeshySocketIOService.sendMessage(
           conversationId,
@@ -71,11 +105,12 @@ export function ForwardMessageModal({
           undefined,
           undefined,
           undefined,
-          undefined,
+          clientMessageId,
           message.id,
           sourceConversationId || undefined,
         );
         const ok = result?.success ?? false;
+        if (ok) clientMessageIds.delete(cidKey);
         model.finishSend(conversationId, ok, ok ? undefined : t('forward.failed', 'Échec du transfert'));
         if (ok && !hasToastedRef.current) {
           hasToastedRef.current = true;
@@ -144,14 +179,13 @@ export function ForwardMessageModal({
 
           <ScrollArea className="h-72">
             <div className="space-y-1 pr-2">
-              {targets.map((conv) => {
+              {targets.map(({ conversation: conv, label }) => {
                 const state = modelRef.current.state(conv.id);
                 const key = stateKey(state);
                 const isSelected = state === 'selected';
                 const isSending = state === 'sending';
                 const isSent = state === 'sent';
                 const failedReason = typeof state === 'object' ? state.failed : null;
-                const label = conversationLabel(conv);
                 return (
                   <div key={conv.id}>
                     <div
