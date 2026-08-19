@@ -2,6 +2,52 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-19 **Conversation lock/unlock shipped** (slice `conversation-lock-menu`,
+> feature-parity's Conversations "Pinned/muted/archived… locked pending" composite line — the
+> locked sub-gap). No open `claude/apps/android/*` PR to merge first (checked the full open-PR list:
+> 7 open, none on an android-routine branch). `df -h` not a concern; branched off `origin/main`
+> (`a53205df`) clean. **Full local gate ran here** — this container reaches `dl.google.com` (see
+> NOTES), so `assembleDebug` + `testDebugUnitTest` both went green locally before the PR, not only
+> on CI.
+>
+> **The gap, re-proved by reading source, not an agent's paraphrase**: `ConversationLockStore` +
+> `EncryptedConversationLockStore` (master 6-digit PIN + per-conversation 4-digit PIN, SHA-256
+> hashed, DI-wired) already existed, and `ConversationListViewModel` already *collected*
+> `lockedConversationIdsFlow` into state — but nothing rendered it and nothing could lock/unlock: the
+> state field's own doc comment named the PIN flow a "deliberately deferred follow-up". This slice
+> is that follow-up.
+>
+> **SOTA over iOS by extraction**: iOS's `ConversationLockSheet.handleComplete` embeds a 7-mode ×
+> 3-step PIN state machine *inside* the SwiftUI view (untestable). Android lifts the menu-reachable
+> subset into a pure **`LockPinReducer`** (oracle-injected, effect-emitting) per TDD-COVERAGE's
+> "push decisions out of the Composable" directive. Two concrete improvements this makes provable:
+> (1) a confirm mismatch rewinds to the mode's *real* entry step (0 for setup, 1 for a code) instead
+> of iOS's blanket `step = 1`, which mislabels the setup flow's header; (2) locking with no master
+> PIN yet **chains** first-time setup straight into the 4-digit code (`pendingLockConversationId`),
+> where iOS dead-ends on a "configure a master PIN in Settings" alert Android has no Settings screen
+> to honour.
+>
+> **Wiring**: `ConversationListViewModel.onLockToggle/onLockDigit/onLockDelete/dismissLockPrompt`
+> drive a `lockPrompt: LockPinState?` on the UiState; effects apply to the real `ConversationLockStore`
+> (setMasterPin/setLock/removeLock), whose flow re-derives the row's 🔒 badge. New context-menu
+> Lock/Unlock row (label+icon flip on `isLocked`); new `ConversationLockPinSheet` (ModalBottomSheet
+> hero-lock + dots + 10-key pad, indigo accent, `LockOpen` glyph on the unlock flow). Strings ×22
+> across EN/FR/ES/PT.
+>
+> **Tests**: +21 `LockPinReducerTest` (every mode/step, buffer-full & empty-delete inert arms,
+> wrong-master/wrong-code/mismatch failure arms, null-id defensive arms, copy/pinLength/currentPin
+> derivation) + 9 `ConversationLockFlowViewModelTest` (mode selection per store state, the
+> setup→lock chain, unlock, wrong-PIN keeps-open, dismiss drops the pending chain, digit/delete inert
+> with no sheet) — all against the real `InMemoryConversationLockStore`, never a canned mock.
+> Reducer branch coverage is effectively total; the Composable sheet is exempt glue per TDD-COVERAGE.
+>
+> **Verified**: `./gradlew assembleDebug` (exit 0, all modules) then `./gradlew testDebugUnitTest`
+> (BUILD SUCCESSFUL, all modules) green locally. Env gotchas (compileSdk 37 → `android-37.0` on
+> `--channel=3`, newer cmdline-tools required, Maven 429 burst) written up in NOTES.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=5 last_run=conversation-lock-menu`.
+
 > On 2026-08-17 **Chat scroll-to-bottom offline indicator shipped** (slice
 > `chat-scroll-offline-indicator`, feature-parity's scroll-control composite line, "offline
 > indicator" sub-gap). `gh pr list --state open --search "apps/android OR apps/ios"` showed two
