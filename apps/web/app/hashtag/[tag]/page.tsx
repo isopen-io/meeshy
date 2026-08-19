@@ -126,6 +126,7 @@ export default function HashtagPage() {
               isAuthor={post.authorId === currentUserId}
               media={post.media}
               mentions={post.mentions}
+              viewerId={currentUserId}
               repostOf={post.repostOf}
               isQuote={post.isQuote}
               onReport={() => handleReportPost(post.id)}

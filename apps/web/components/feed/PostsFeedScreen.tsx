@@ -791,6 +791,7 @@ export function PostsFeedScreen() {
                     userReaction={userReaction}
                     media={post.media}
                     mentions={post.mentions}
+                    viewerId={currentUserId}
                     repostOf={post.repostOf}
                     isQuote={post.isQuote}
                     onLike={() => handleLike(post.id, isLiked)}

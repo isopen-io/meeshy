@@ -213,7 +213,11 @@
       "removeBookmark": "Remove bookmark",
       "translate": "Translate",
       "translatePost": "Translate post",
-      "imageAlt": "Image {index}"
+      "imageAlt": "Image {index}",
+      "references": {
+        "with": "With",
+        "selfSilent": "You're referenced here"
+      }
     },
     "videoPlayer": {
       "play": "Play",

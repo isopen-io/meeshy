@@ -11,6 +11,7 @@ import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
 import { PostContentText } from './PostContentText';
+import { ReferenceNoteRow } from './ReferenceNoteRow';
 import type { TranslationItem } from './TranslationToggle';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import { getLanguageName } from './flags';
@@ -340,10 +341,12 @@ function PostDetail({
                     showContent={false}
                   />
                   <PostContentText content={post.content} references={post.mentions} className="text-[var(--gp-text-primary)]" />
+                  <ReferenceNoteRow references={post.mentions ?? []} viewerId={currentUserId ?? undefined} />
                 </>
               ) : (
                 <>
                   <PostContentText content={post.content} references={post.mentions} className="text-[var(--gp-text-primary)]" />
+                  <ReferenceNoteRow references={post.mentions ?? []} viewerId={currentUserId ?? undefined} />
                   {onTranslate && post.originalLanguage && post.originalLanguage !== userLanguage && (
                     <button
                       onClick={onTranslate}
@@ -440,6 +443,7 @@ function PostDetail({
                   </div>
                 )
               )}
+              {repostOf.content && <ReferenceNoteRow references={repostOf.mentions ?? []} viewerId={currentUserId ?? undefined} />}
 
               {hasRepostMedia && repostMedia && (
                 <div

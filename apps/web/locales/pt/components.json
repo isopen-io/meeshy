@@ -213,7 +213,11 @@
       "removeBookmark": "Remover dos salvos",
       "translate": "Traduzir",
       "translatePost": "Traduzir a publicação",
-      "imageAlt": "Imagem {index}"
+      "imageAlt": "Imagem {index}",
+      "references": {
+        "with": "Com",
+        "selfSilent": "Você foi referenciado(a) aqui"
+      }
     },
     "videoPlayer": {
       "play": "Reproduzir",

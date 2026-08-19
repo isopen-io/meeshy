@@ -12,6 +12,7 @@ import { TranslationToggle } from './TranslationToggle';
 import type { TranslationItem } from './TranslationToggle';
 import { getLanguageName } from './flags';
 import { PostContentText } from './PostContentText';
+import { ReferenceNoteRow } from './ReferenceNoteRow';
 import type { Post } from '@meeshy/shared/types/post';
 import type { PostReference } from '@meeshy/shared/types/post-reference';
 
@@ -42,6 +43,8 @@ export interface PostCardProps {
   media?: readonly PostCardMedia[];
   /** References the server validated for `content` — only these `@handle`s become links. */
   mentions?: readonly PostReference[];
+  /** Signed-in viewer's id — resolves the personal "you're referenced" marker for a SILENT reference. */
+  viewerId?: string;
   /** Original post being reposted — renders the "Reposted from @handle" banner + nested card. */
   repostOf?: Post['repostOf'];
   /** True for a quote-repost (reposter added their own comment). Drives which counters show where. */
@@ -186,6 +189,7 @@ function PostCard({
   userReaction,
   media,
   mentions,
+  viewerId,
   repostOf,
   isQuote = false,
   onLike,
@@ -401,10 +405,12 @@ function PostCard({
                 showContent={false}
               />
               <PostContentText content={content} references={mentions} className="text-[var(--gp-text-primary)]" />
+              <ReferenceNoteRow references={mentions ?? []} viewerId={viewerId} />
             </div>
           ) : (
             <div className="mb-3">
               <PostContentText content={content} references={mentions} className="text-[var(--gp-text-primary)]" />
+              <ReferenceNoteRow references={mentions ?? []} viewerId={viewerId} />
               {onTranslate && lang !== userLanguage && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onTranslate(); }}
@@ -500,6 +506,7 @@ function PostCard({
                 </div>
               )
             )}
+            {repostOf.content && <ReferenceNoteRow references={repostOf.mentions ?? []} viewerId={viewerId} />}
 
             {hasRepostMedia && repostMedia && (
               <div

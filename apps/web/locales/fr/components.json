@@ -213,7 +213,11 @@
       "removeBookmark": "Retirer des enregistrements",
       "translate": "Traduire",
       "translatePost": "Traduire le post",
-      "imageAlt": "Image {index}"
+      "imageAlt": "Image {index}",
+      "references": {
+        "with": "Avec",
+        "selfSilent": "Vous êtes référencé·e ici"
+      }
     },
     "videoPlayer": {
       "play": "Lecture",
