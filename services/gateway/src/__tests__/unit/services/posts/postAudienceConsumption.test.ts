@@ -26,7 +26,11 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { filterPostConsumers } from '../../../../services/posts/postAudience';
-import { canUserConsumePost } from '../../../../services/posts/postVisibility';
+import {
+  canUserConsumePost,
+  canUserInteractWithPost,
+  canUserViewPost,
+} from '../../../../services/posts/postVisibility';
 
 const AUTHOR = 'u-author';
 
@@ -360,5 +364,70 @@ describe('filterPostConsumers — une panne du graphe DM ne détruit pas ce qui 
     });
 
     expect(admitted).toEqual([]);
+  });
+});
+
+/**
+ * Être NOMMÉ dans un contenu l'ouvre — décision produit 2026-08-19.
+ *
+ * La branche traverse toutes les visibilités : un référencé passe une story
+ * FRIENDS sans être ami. Mais elle n'ouvre que la CONSOMMATION, et l'asymétrie
+ * « voir ⊇ interagir » (2026-07-08) tient : les deux verdicts ne diffèrent que
+ * par leurs options, et une branche non gardée donnerait à tout référencé le
+ * droit de réagir et de commenter.
+ */
+describe('canUserViewPost — branche référence', () => {
+  function makeReferencePrisma(reference: unknown) {
+    return {
+      friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+      participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+      postMention: { findUnique: jest.fn<any>().mockResolvedValue(reference) },
+    } as any;
+  }
+
+  const REFERENCED_POST = {
+    id: 'p1', authorId: AUTHOR, visibility: 'FRIENDS' as const, visibilityUserIds: [],
+  };
+
+  it('ouvre un post FRIENDS à un non-ami qui y est référencé', async () => {
+    const prisma = makeReferencePrisma({ id: 'm1' });
+
+    const allowed = await canUserViewPost(
+      prisma,
+      REFERENCED_POST,
+      STRANGER,
+      { includeDirectContacts: true, includeReferenced: true }
+    );
+
+    expect(allowed).toBe(true);
+  });
+
+  it('laisse un non-ami NON référencé dehors', async () => {
+    const prisma = makeReferencePrisma(null);
+
+    const allowed = await canUserViewPost(
+      prisma,
+      REFERENCED_POST,
+      STRANGER,
+      { includeDirectContacts: true, includeReferenced: true }
+    );
+
+    expect(allowed).toBe(false);
+  });
+
+  it('n’interroge PAS la table des références sans l’option', async () => {
+    const prisma = makeReferencePrisma({ id: 'm1' });
+
+    const allowed = await canUserViewPost(prisma, REFERENCED_POST, STRANGER, {});
+
+    expect(allowed).toBe(false);
+    expect(prisma.postMention.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('laisse un référencé CONSOMMER mais pas INTERAGIR', async () => {
+    const prisma = makeReferencePrisma({ id: 'm1' });
+
+    expect(await canUserConsumePost(prisma, REFERENCED_POST, STRANGER)).toBe(true);
+    expect(await canUserInteractWithPost(prisma, REFERENCED_POST, STRANGER)).toBe(false);
   });
 });

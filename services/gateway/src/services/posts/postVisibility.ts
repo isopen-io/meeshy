@@ -11,6 +11,13 @@ import { doUsersShareDirectConversation } from './directContactVisibility';
 import { NOT_DELETED } from './softDelete';
 
 export type PostVisibilityRecord = {
+  /**
+   * L'id du post lui-même. Il fait partie de la tranche ACL depuis que le
+   * verdict de CONSOMMATION interroge les références (`includeReferenced`) :
+   * sans lui, la branche chercherait une référence sur `undefined` et
+   * refuserait tout le monde en silence.
+   */
+  id: string;
   authorId: string;
   visibility: PostVisibility;
   visibilityUserIds: string[];
@@ -25,7 +32,7 @@ export type PostVisibilityRecord = {
  */
 export type PostAclPrisma = Pick<
   PrismaClient,
-  'post' | 'postComment' | 'friendRequest' | 'communityMember' | 'participant'
+  'post' | 'postComment' | 'friendRequest' | 'communityMember' | 'participant' | 'postMention'
 >;
 
 /**
@@ -93,14 +100,35 @@ export function buildPostVisibilityOrFilter(
  * ci-dessous (`canUserConsumePost` / `canUserInteractWithPost`) ne diffèrent
  * que par lui. Ne pas l'appeler directement depuis un point d'entrée — passer
  * par le verdict nommé d'après ce qu'il autorise.
+ *
+ * `options.includeReferenced` garde de la même façon la branche des
+ * RÉFÉRENCES : être nommé dans un contenu l'ouvre, mais ne donne pas le droit
+ * d'y réagir ni d'y commenter.
  */
 export async function canUserViewPost(
   prisma: PostAclPrisma,
   post: PostVisibilityRecord,
   userId: string,
-  options: { includeDirectContacts?: boolean } = {}
+  options: { includeDirectContacts?: boolean; includeReferenced?: boolean } = {}
 ): Promise<boolean> {
   if (post.authorId === userId) return true;
+
+  // Être NOMMÉ dans un contenu l'ouvre — décision produit 2026-08-19. La
+  // branche vit AVANT le switch parce qu'elle traverse toutes les visibilités :
+  // un référencé passe une story FRIENDS sans être ami, et un EXCEPT ne le vise
+  // pas puisque l'auteur vient précisément de le nommer.
+  //
+  // `includeReferenced` la garde, exactement comme `includeDirectContacts`
+  // garde l'élargissement de la branche FRIENDS : elle n'ouvre que la
+  // CONSOMMATION. L'asymétrie « voir ⊇ interagir » (2026-07-08) tient toujours,
+  // et cette option est ce qui la rend exécutable plutôt que déclarative.
+  //
+  // Le verdict ne regarde ici que l'EXISTENCE de la référence, pas l'expiration :
+  // celle-ci n'a de sens qu'à l'ouverture d'un contenu précis, et c'est
+  // `resolveReferenceAccess` qui la tranche.
+  if (options.includeReferenced === true && await isUserReferencedInPost(prisma, post.id, userId)) {
+    return true;
+  }
 
   switch (post.visibility) {
     case PostVisibility.PUBLIC:
@@ -146,11 +174,37 @@ export async function canUserViewPost(
 }
 
 /**
+ * Le lecteur est-il NOMMÉ dans ce post ?
+ *
+ * Une lecture en échec rend `false` — jamais une ouverture. C'est la même règle
+ * que `resolveReferenceAccess` : une panne laisse la règle d'audience ordinaire
+ * trancher, ce qui est la réponse sûre. Le `try` couvre l'accès au délégué
+ * lui-même, pas seulement la promesse : un appelant qui ne porte qu'une tranche
+ * du client Prisma ne doit pas transformer un refus d'audience en erreur.
+ */
+async function isUserReferencedInPost(
+  prisma: PostAclPrisma,
+  postId: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const reference = await prisma.postMention.findUnique({
+      where: { post_user_mention_unique: { postId, mentionedUserId: userId } },
+      select: { id: true },
+    });
+    return reference !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * La tranche minimale d'un post qui suffit à trancher son ACL. Le `deletedAt`
  * vit dans le `where` des chargeurs ci-dessous, pas dans le verdict : un post
  * supprimé n'a pas d'audience, il n'existe pas.
  */
 const POST_ACL_SELECT = {
+  id: true,
   authorId: true,
   visibility: true,
   visibilityUserIds: true,
@@ -214,7 +268,10 @@ export async function canUserConsumePost(
   userId?: string,
 ): Promise<boolean> {
   if (!userId) return post.visibility === PostVisibility.PUBLIC;
-  return canUserViewPost(prisma, post, userId, { includeDirectContacts: true });
+  return canUserViewPost(prisma, post, userId, {
+    includeDirectContacts: true,
+    includeReferenced: true,
+  });
 }
 
 /**
