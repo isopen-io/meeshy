@@ -1215,51 +1215,75 @@ struct StoryHeaderView: View {
                             Label(String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.fill")
                         }
 
-                        // C.2: repost-as-post entry points. Gated on
-                        // `story.isPublic` (B.2 helper) so we never expose
-                        // these for FRIENDS / PRIVATE visibilities.
+                        // ── Les TROIS formes de partage (demande produit
+                        // 2026-08-19) ─────────────────────────────────────────
+                        //
+                        // Elles n'étaient offertes que sur les stories
+                        // PUBLIQUES (« Gated on `story.isPublic` … so we never
+                        // expose these for FRIENDS / PRIVATE visibilities »).
+                        // Ce gate était le REFLET d'une barrière serveur qui
+                        // n'existe plus : `PostService.repostPost` refusait tout
+                        // original non-`PUBLIC` (« Cannot repost private
+                        // content »). Elle a été remplacée par la LOI
+                        // D'AUDIENCE — même audience ou plus restreinte, jamais
+                        // plus large — que le serveur applique désormais aux
+                        // deux portes (`repostPost` ET `createPost`, 403
+                        // `REPOST_AUDIENCE_WIDENING`).
+                        //
+                        // Garder le gate reviendrait à protéger contre une
+                        // restriction abolie, tout en rendant le menu VIDE de
+                        // toute forme de partage sur les stories que la
+                        // nouvelle règle vise précisément. C'est la loi qui
+                        // borne l'audience du résultat, plus l'appartenance au
+                        // menu — exactement le raisonnement appliqué au bouton
+                        // du rail (`showsRepost: !isOwnStory`).
+
+                        // 1. Republier en post — DIRECT, un tap (arbitrage D3).
+                        // Sans `visibility` : le serveur hérite de l'audience de
+                        // l'original, donc jamais plus large.
+                        Button {
+                            repostAsPostDirect()
+                        } label: {
+                            Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "arrow.2.squarepath")
+                        }
+
+                        // 2. Citer en post — ouvre le composeur de POST avec la
+                        // story citée, pour ajouter d'autres contenus par-dessus.
+                        Button {
+                            HapticFeedback.light()
+                            pauseTimer()
+                            editAndRepostAsPostSource = RepostPostSourceWrapper(
+                                story: story,
+                                authorHandle: group.username
+                            )
+                        } label: {
+                            Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Citer en post", bundle: .main), systemImage: "square.and.pencil")
+                        }
+
+                        // 3. Partager — transmettre DANS Meeshy (conversation
+                        // existante ou contact). Même feuille que le bouton
+                        // « Envoyer » du rail, qui reste en place : le menu
+                        // regroupe les formes, il ne retire pas l'affordance
+                        // directe. Aucune garde d'audience — le rail n'en a pas
+                        // (`showsForward: true`), et en inventer une ici
+                        // créerait deux règles pour un seul geste.
+                        Button {
+                            HapticFeedback.light()
+                            pauseTimer()
+                            EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
+                            sharedContentWrapper = SharedContentWrapper(
+                                content: .story(item: story, authorName: group.username)
+                            )
+                        } label: {
+                            Label(String(localized: "story.viewer.share.internal", defaultValue: "Partager", bundle: .main), systemImage: "paperplane.fill")
+                        }
+
+                        // Partage EXTERNE (Messages, Mail, autres apps) — reste
+                        // réservé aux stories publiques : le lien `meeshy.me/l/…`
+                        // est ouvrable par n'importe qui, ce qui élargirait
+                        // l'audience hors de tout contrôle. C'est le seul des
+                        // quatre où le gate `isPublic` dit encore quelque chose.
                         if story.isPublic {
-                            Button {
-                                repostAsPostDirect()
-                            } label: {
-                                Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "arrow.2.squarepath")
-                            }
-
-                            Button {
-                                HapticFeedback.light()
-                                pauseTimer()
-                                editAndRepostAsPostSource = RepostPostSourceWrapper(
-                                    story: story,
-                                    authorHandle: group.username
-                                )
-                            } label: {
-                                Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Éditer et republier en post", bundle: .main), systemImage: "square.and.pencil")
-                            }
-
-                            // Troisième forme : transmettre DANS Meeshy (une
-                            // conversation existante ou un contact) — la même
-                            // feuille que le bouton « Envoyer » du rail. Sans
-                            // garde d'audience : elle reproduit le
-                            // comportement du rail (`showsForward: true`), et
-                            // inventer ici une restriction que le rail n'a pas
-                            // créerait deux règles pour un seul geste.
-                            Button {
-                                HapticFeedback.light()
-                                pauseTimer()
-                                EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                                sharedContentWrapper = SharedContentWrapper(
-                                    content: .story(item: story, authorName: group.username)
-                                )
-                            } label: {
-                                Label(String(localized: "story.viewer.share.internal", defaultValue: "Partager", bundle: .main), systemImage: "paperplane.fill")
-                            }
-
-                            // Pilier 18 SOTA — external share complement
-                            // (Messages, Mail, other apps) alongside the
-                            // internal SharePicker flow that lives elsewhere.
-                            // Mint the TrackingLink on tap so the shared
-                            // URL is `meeshy.me/l/<token>` and the author
-                            // can track external opens.
                             Button {
                                 Task { await mintAndShareStory(story.id) }
                             } label: {

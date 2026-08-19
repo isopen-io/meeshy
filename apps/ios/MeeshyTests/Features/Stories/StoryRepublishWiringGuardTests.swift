@@ -71,6 +71,70 @@ final class StoryRepublishWiringGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - 1bis. Les TROIS formes de partage vivent dans le menu (...)
+
+    /// Les trois formes n'étaient offertes que sur les stories PUBLIQUES, un
+    /// gate qui reflétait une barrière serveur ABOLIE (`repostPost` refusait
+    /// tout original non-`PUBLIC`). Le laisser rendait le menu VIDE de toute
+    /// forme de partage sur les stories que la nouvelle loi d'audience vise
+    /// précisément.
+    ///
+    /// Une assertion textuelle ne distinguerait pas « présent » de « présent
+    /// SOUS le gate » — c'est justement le défaut qu'a eu la première écriture
+    /// de ce lot. On prouve donc la CONTENANCE : les trois formes sont hors du
+    /// bloc `if story.isPublic`, le partage EXTERNE est dedans (son lien
+    /// `meeshy.me/l/…` est ouvrable par n'importe qui, donc lui seul garde le
+    /// gate).
+    func test_theThreeShareForms_liveOutsideTheIsPublicGate_onlyExternalShareStaysInside() throws {
+        let sidebar = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift"))
+
+        // Le gate de la branche NON-auteur est le dernier `if story.isPublic`
+        // du fichier (celui de la branche auteur le précède).
+        guard let gateStart = sidebar.range(of: "if story.isPublic {", options: .backwards) else {
+            return XCTFail("bloc `if story.isPublic` introuvable")
+        }
+        let gateBody = Self.bracedBody(of: sidebar, openingBraceAfter: gateStart.lowerBound)
+
+        for form in ["story.viewer.repostAsPost",
+                     "story.viewer.editAndRepostAsPost",
+                     "story.viewer.share.internal"] {
+            XCTAssertTrue(
+                sidebar.contains(form),
+                "\(form) doit figurer dans le menu (...)"
+            )
+            XCTAssertFalse(
+                gateBody.contains(form),
+                "\(form) ne doit PAS être enfermé dans `if story.isPublic` : le menu " +
+                "resterait vide de toute forme de partage sur une story FRIENDS ou " +
+                "PRIVATE, alors que la loi d'audience borne déjà le résultat."
+            )
+        }
+
+        XCTAssertTrue(
+            gateBody.contains("story.viewer.share.external"),
+            "Le partage HORS Meeshy doit rester gardé : son lien est ouvrable par " +
+            "n'importe qui, ce qui élargirait l'audience hors de tout contrôle."
+        )
+    }
+
+    /// Corps délimité par accolades équilibrées à partir de la première `{`
+    /// rencontrée après `index`.
+    private static func bracedBody(of source: String, openingBraceAfter index: String.Index) -> String {
+        guard let open = source[index...].firstIndex(of: "{") else { return "" }
+        var depth = 0
+        var cursor = open
+        while cursor < source.endIndex {
+            if source[cursor] == "{" { depth += 1 }
+            if source[cursor] == "}" {
+                depth -= 1
+                if depth == 0 { return String(source[source.index(after: open)..<cursor]) }
+            }
+            cursor = source.index(after: cursor)
+        }
+        return String(source[source.index(after: open)...])
+    }
+
     // MARK: - 2. L'audience est plafonnée
 
     func test_composerPresentation_capsTheAudienceWithTheSharedLaw() throws {

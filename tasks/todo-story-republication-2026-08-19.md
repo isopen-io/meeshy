@@ -141,12 +141,14 @@ désigne un emploi ou un récepteur radio. Terme conservé par cohérence.
 
 ### Dette laissée, signalée
 
-- 4 clés de catalogue devenues mortes (`story.viewer.repost.success` /
-  `.unavailable` / `.forbidden` / `.error`) : elles servaient les toasts du
-  repost un-tap. Aucune garde ne les rejette (`LocalizationCatalogGuardTests`
-  vérifie la couverture de traduction, pas l'usage). Non retirées pour ne pas
-  churner un fichier de 28 000 lignes sur un gain nul — à balayer avec un
-  prochain nettoyage de clés.
+- ~~4 clés de catalogue devenues mortes~~ **RETIRÉES.** Les toasts du repost
+  un-tap (`story.viewer.repost.success` / `.unavailable` / `.forbidden` /
+  `.error`) n'avaient plus d'appelant. J'avais d'abord conclu qu'« aucune garde
+  ne les rejette » après n'avoir inspecté que `LocalizationCatalogGuardTests`
+  (qui mesure la couverture de traduction, pas l'usage) — c'était faux :
+  `LocalizationConsistencyTests
+  .test_everyAppCatalogIdentifierKeyIsReferencedInCode` les a fait rougir dans
+  la suite complète. La garde avait raison ; les clés sont supprimées.
 - Les entrées « Republier en post » / « Citer en post » du menu (...) restent
   gatées sur `story.isPublic`, comportement INCHANGÉ. D1 ne portait que sur la
   republication en STORY ; ouvrir les formes POST aux stories non publiques est
