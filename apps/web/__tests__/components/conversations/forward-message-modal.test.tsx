@@ -5,7 +5,7 @@ import '@testing-library/jest-dom';
 import { ForwardMessageModal } from '../../../components/conversations/forward-message-modal';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { conversationsService } from '@/services/conversations.service';
-import { contactsDirectoryService } from '@/services/contacts-directory.service';
+import { contactsDirectoryService, type DirectoryContact } from '@/services/contacts-directory.service';
 import { useFriendRequestsV2 } from '@/hooks/v2/use-friend-requests-v2';
 import type { Conversation, Message } from '@meeshy/shared/types';
 import type { ForwardTarget } from '@/lib/forward-target-merge';
@@ -485,5 +485,48 @@ describe('ForwardMessageModal', () => {
         'conv-src',
       ),
     );
+  });
+
+  it("rejette une réponse de recherche devenue périmée quand la requête redescend sous 2 caractères", async () => {
+    let resolveDirectory: (value: { contacts: DirectoryContact[]; hasMore: boolean }) => void = () => {};
+    mockDirectoryList.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDirectory = resolve;
+        }),
+    );
+    renderModal();
+
+    const input = screen.getByRole('textbox');
+    // « alice » (5 caractères) déclenche une recherche distante — sa réponse
+    // reste délibérément EN VOL (promesse contrôlée manuellement ci-dessus).
+    await userEvent.type(input, 'alice');
+    // La requête redescend sous le seuil de 2 caractères AVANT que la réponse
+    // de « alice » n'arrive.
+    await userEvent.clear(input);
+    await userEvent.type(input, 'a');
+
+    // La réponse tardive de « alice » arrive maintenant — un contact qui ne
+    // correspond plus du tout à la recherche affichée (« a » seul). `act`
+    // async + un macrotask garantissent que TOUTES les microtâches de
+    // résolution (`Promise.allSettled` puis son `.then`) sont écoulées avant
+    // l'assertion — un simple `waitFor` sur un fait déjà vrai (l'appel a déjà
+    // eu lieu pendant la frappe) ne l'aurait pas garanti.
+    await act(async () => {
+      resolveDirectory({
+        contacts: [
+          {
+            id: 'd-stale',
+            displayName: 'Alice Périmée',
+            isOnMeeshy: true,
+            matchedUser: { id: 'u-stale', username: 'aliceperime' },
+          },
+        ],
+        hasMore: false,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(screen.queryByTestId('forward-row-user:u-stale')).toBeNull();
   });
 });

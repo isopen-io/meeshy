@@ -227,6 +227,11 @@ export function ForwardMessageModal({
     if (!isOpen) return;
     const query = debouncedQuery.trim();
     if (query.length < 2) {
+      // Invalide aussi le jeton ici : une requête en vol pour une saisie plus
+      // longue ne doit PAS réinjecter ses résultats une fois la requête
+      // redescendue sous le seuil — sinon `searchTokenRef.current !== token`
+      // reste faux et une réponse tardive « passe » malgré l'affichage déjà vidé.
+      ++searchTokenRef.current;
       setRemoteResults([]);
       setSearchError(false);
       return;
