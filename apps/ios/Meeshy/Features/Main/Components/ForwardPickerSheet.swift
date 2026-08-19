@@ -36,17 +36,11 @@ struct ForwardPickerSheet: View {
     /// sur `ForwardTarget.id` — distincte de `pickerModel`, qui pilote la
     /// LISTE (pagination/recherche).
     @State private var sendState = ForwardPickerModel()
-    /// Première cible servie qui portait déjà un `conversationId` connu —
-    /// retenue pour que la confirmation posée À LA FERMETURE sache quelle
-    /// conversation ouvrir. Un contact tout juste rejoint n'alimente pas ce
-    /// champ : `MessageForwardService` ne renvoie que l'issue de l'envoi, pas
-    /// la conversation qu'il a pu créer — le toast reste alors non tappable
-    /// (cf. `didServeAnyTarget`) plutôt que de naviguer vers un id inventé.
+    /// Première cible servie — retenue pour que la confirmation posée À LA
+    /// FERMETURE sache quelle conversation ouvrir. Construite depuis l'id
+    /// RÉSOLU que `ForwardOutcome` transporte (`perform(_:)`), donc peuplée
+    /// même pour un contact dont la conversation vient d'être créée.
     @State private var firstServedConversation: Conversation?
-    /// Au moins une cible a été servie cette ouverture — condition MINIMALE
-    /// pour que le toast paraisse, y compris quand aucune n'était une
-    /// conversation déjà résolue.
-    @State private var didServeAnyTarget = false
     @State private var successToastFired = false
 
     private var forwardService: MessageForwardServiceProviding { MessageForwardService.shared }
@@ -313,6 +307,13 @@ struct ForwardPickerSheet: View {
     /// directement ; un contact sans conversation en obtient une, créée par
     /// le service AU MOMENT DE CET APPEL, jamais avant (invariant produit :
     /// sélectionner un contact puis fermer la feuille ne crée rien).
+    ///
+    /// `.sent`/`.queuedOffline` transportent le `conversationId` RÉSOLU (round
+    /// 1 code review) — celui qui existait déjà, ou celui que le service vient
+    /// de créer pour un contact. `firstServedConversation` se construit donc
+    /// TOUJOURS à partir de cet id renvoyé, jamais de `target.conversationId`
+    /// (`nil` pour un contact) : sans ça, le toast n'aurait jamais été
+    /// actionnable pour une conversation tout juste créée.
     private func perform(_ target: ForwardTarget) async {
         let outcome = await forwardService.forward(
             message: message,
@@ -323,10 +324,9 @@ struct ForwardPickerSheet: View {
             sendState.finishSend(target.id, outcome: outcome)
         }
         switch outcome {
-        case .sent, .queuedOffline:
+        case .sent(let conversationId), .queuedOffline(let conversationId):
             HapticFeedback.success()
-            didServeAnyTarget = true
-            if firstServedConversation == nil, let conversationId = target.conversationId {
+            if firstServedConversation == nil {
                 firstServedConversation = Conversation(
                     id: conversationId,
                     identifier: conversationId,
@@ -349,16 +349,15 @@ struct ForwardPickerSheet: View {
     /// au lieu d'invoquer l'action — c'est déjà la raison pour laquelle les
     /// ÉCHECS s'affichent in-sheet (cf. `sendControl`). Le succès se voit donc
     /// in-sheet, ligne par ligne, via la pastille « Transféré » ; le toast
-    /// tappable — quand une conversation navigable est connue (spec A.5) — n'est
-    /// émis qu'une fois la feuille partie. Un seul toast par ouverture, sur la
-    /// PREMIÈRE cible servie ; une cible qui vient de créer sa conversation
-    /// (contact) donne un toast SANS action tappable plutôt que de naviguer
-    /// vers un id inventé.
+    /// tappable — seul chemin vers « ouvrir la cible » (spec A.5), y compris
+    /// une conversation tout juste créée pour un contact — n'est émis qu'une
+    /// fois la feuille partie. Un seul toast par ouverture, sur la PREMIÈRE
+    /// cible servie.
     private func fireDeferredSuccessToast() {
-        guard !successToastFired, didServeAnyTarget else { return }
+        guard !successToastFired, let conv = firstServedConversation else { return }
         successToastFired = true
         let title = String(localized: "forward.success", defaultValue: "Message transféré", bundle: .main)
-        guard let onOpenConversation, let conv = firstServedConversation else {
+        guard let onOpenConversation else {
             FeedbackToastManager.shared.showSuccess(title)
             return
         }

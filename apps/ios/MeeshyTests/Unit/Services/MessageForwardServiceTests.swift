@@ -78,7 +78,7 @@ final class MessageForwardServiceTests: XCTestCase {
             to: target
         )
 
-        XCTAssertEqual(outcome, .sent)
+        XCTAssertEqual(outcome, .sent(conversationId: target))
         XCTAssertEqual(api.requestEndpoints, ["/conversations/\(target)/messages"])
         let body = try postedBody(api)
         XCTAssertEqual(body["forwardedFromId"] as? String, "6a0ad86a6e21a483b4443d11")
@@ -126,7 +126,7 @@ final class MessageForwardServiceTests: XCTestCase {
         let retry = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
 
         XCTAssertEqual(failure, .failed(reason: "boom"))
-        XCTAssertEqual(retry, .sent)
+        XCTAssertEqual(retry, .sent(conversationId: target))
         let firstCid = try postedBody(api, at: 0)["clientMessageId"] as? String
         let retryCid = try postedBody(api, at: 1)["clientMessageId"] as? String
         XCTAssertNotNil(firstCid)
@@ -147,8 +147,8 @@ final class MessageForwardServiceTests: XCTestCase {
         let first = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
         let second = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
 
-        XCTAssertEqual(first, .sent)
-        XCTAssertEqual(second, .sent)
+        XCTAssertEqual(first, .sent(conversationId: target))
+        XCTAssertEqual(second, .sent(conversationId: target))
         let firstCid = try postedBody(api, at: 0)["clientMessageId"] as? String
         let secondCid = try postedBody(api, at: 1)["clientMessageId"] as? String
         XCTAssertNotNil(firstCid)
@@ -181,7 +181,7 @@ final class MessageForwardServiceTests: XCTestCase {
             to: target
         )
 
-        XCTAssertEqual(outcome, .queuedOffline)
+        XCTAssertEqual(outcome, .queuedOffline(conversationId: target))
         XCTAssertEqual(api.postCount, 0, "hors ligne, aucun POST direct — l'outbox rejouera")
         let items = await queue.enqueuedItems
         XCTAssertEqual(items.count, 1)
@@ -236,7 +236,7 @@ final class MessageForwardServiceTests: XCTestCase {
 
         let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: existing)
 
-        XCTAssertEqual(outcome, .sent)
+        XCTAssertEqual(outcome, .sent(conversationId: target))
         XCTAssertEqual(creator.createCallCount, 0, "une conversation déjà connue ne doit jamais déclencher de création")
         XCTAssertEqual(api.requestEndpoints, ["/conversations/\(target)/messages"])
     }
@@ -245,6 +245,10 @@ final class MessageForwardServiceTests: XCTestCase {
     /// jamais à la sélection. Cette preuve tient parce que `forward(...)` est
     /// le SEUL point d'entrée qui touche `createDirectConversation` ; la
     /// sélection d'une cible dans le picker n'appelle jamais ce service.
+    ///
+    /// L'outcome transporte l'id NOUVELLEMENT créé (round 1 code review) :
+    /// sans lui, la feuille n'aurait aucun moyen d'ouvrir la conversation
+    /// tout juste rejointe depuis le toast succès.
     func test_forward_toContactWithoutConversation_createsItOnceThenSends() async throws {
         let (sut, api, _, creator) = makeSUT()
         creator.result = .success(makeConversation(id: "new-conv"))
@@ -254,10 +258,32 @@ final class MessageForwardServiceTests: XCTestCase {
         XCTAssertEqual(creator.createCallCount, 0, "aucune création avant l'envoi")
         let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: contactTarget)
 
-        XCTAssertEqual(outcome, .sent)
+        XCTAssertEqual(outcome, .sent(conversationId: "new-conv"),
+                       "l'issue doit porter l'id CRÉÉ — c'est ce qui permet au toast succès d'ouvrir la bonne conversation")
         XCTAssertEqual(creator.createCallCount, 1)
         XCTAssertEqual(creator.lastUserId, "u1")
         XCTAssertEqual(api.requestEndpoints, ["/conversations/new-conv/messages"])
+    }
+
+    /// Round 1 code review : hors ligne, un contact SANS conversation ne doit
+    /// PAS tenter de création (l'outbox ne sait rejouer qu'un envoi vers une
+    /// conversation déjà identifiée) — l'échec est immédiat et EXPLICITE,
+    /// jamais un envoi silencieusement perdu.
+    func test_forward_toContactWithoutConversation_offline_failsExplicitlyWithoutCreatingOrQueuing() async throws {
+        let (sut, api, queue, creator) = makeSUT(online: false)
+        let contactTarget = makeContactTarget()
+
+        let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: contactTarget)
+
+        guard case .failed(let reason) = outcome else {
+            return XCTFail("expected .failed, got \(outcome)")
+        }
+        XCTAssertFalse(reason.isEmpty)
+        XCTAssertEqual(creator.createCallCount, 0,
+                       "hors ligne, aucune tentative de création — l'outbox ne sait pas rejouer une création de conversation")
+        XCTAssertEqual(api.postCount, 0)
+        let items = await queue.enqueuedItems
+        XCTAssertTrue(items.isEmpty, "rien à enfiler : aucun identifiant de conversation existant à associer à l'item")
     }
 
     func test_forward_toContact_whenCreationFails_doesNotSend() async {

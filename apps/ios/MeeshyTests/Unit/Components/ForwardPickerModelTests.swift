@@ -21,7 +21,7 @@ final class ForwardPickerModelTests: XCTestCase {
     func test_tapRow_onSentTarget_isNoop() {
         var model = ForwardPickerModel()
         model.beginSend("a")
-        model.finishSend("a", outcome: .sent)
+        model.finishSend("a", outcome: .sent(conversationId: "c1"))
         model.tapRow("a")
         XCTAssertEqual(model.state(of: "a"), .sent,
                        "une cible déjà servie n'est plus sélectionnable")
@@ -42,7 +42,7 @@ final class ForwardPickerModelTests: XCTestCase {
         model.tapRow("a")
         model.tapRow("b")
         model.beginSend("a")
-        model.finishSend("a", outcome: .sent)
+        model.finishSend("a", outcome: .sent(conversationId: "c1"))
         model.tapRow("a")
         let batch = model.beginBatch()
         XCTAssertEqual(batch, ["b"], "l'envoi groupé ne reprend jamais une cible déjà servie")
@@ -53,7 +53,7 @@ final class ForwardPickerModelTests: XCTestCase {
         var model = ForwardPickerModel()
         model.beginSend("a")
         XCTAssertFalse(model.beginSend("a"), "un envoi en cours ne se double pas")
-        model.finishSend("a", outcome: .sent)
+        model.finishSend("a", outcome: .sent(conversationId: "c1"))
         XCTAssertFalse(model.beginSend("a"), "une cible servie ne se renvoie pas")
     }
 
@@ -68,7 +68,7 @@ final class ForwardPickerModelTests: XCTestCase {
     func test_finishSend_queuedOffline_countsAsSent() {
         var model = ForwardPickerModel()
         model.beginSend("a")
-        model.finishSend("a", outcome: .queuedOffline)
+        model.finishSend("a", outcome: .queuedOffline(conversationId: "c1"))
         XCTAssertEqual(model.state(of: "a"), .sent,
                        "un enfilage durable vaut envoi pour l'affichage — l'outbox garantit la livraison")
     }

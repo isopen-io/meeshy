@@ -2,9 +2,16 @@ import Foundation
 import MeeshySDK
 
 /// Issue d'un transfert vers UNE cible, telle que l'UI doit la présenter.
+///
+/// `sent`/`queuedOffline` transportent le `conversationId` RÉSOLU — celui de
+/// la cible telle qu'elle existait déjà, ou celui que la résolution vient de
+/// créer pour un contact. Il n'y a qu'UN site de construction pour chacun
+/// (le chemin `String` ci-dessous), qui connaît toujours cet id sans
+/// l'inventer : l'appelant (le picker) peut donc toujours retrouver la
+/// conversation servie, y compris quand elle vient d'être créée.
 enum ForwardOutcome: Equatable {
-    case sent
-    case queuedOffline
+    case sent(conversationId: String)
+    case queuedOffline(conversationId: String)
     case failed(reason: String)
 }
 
@@ -29,6 +36,11 @@ protocol MessageForwardServiceProviding {
 ///   existante en succès, sans rien créer).
 /// - Hors ligne : enfilage durable dans l'outbox (`OfflineQueue`), rejoué par
 ///   `OutboxDispatcher` avec le même cid — la clé est donc CONSERVÉE.
+/// - Hors ligne + contact SANS conversation : ÉCHEC EXPLICITE immédiat, ni
+///   création ni enfilage. L'outbox ne sait rejouer qu'un ENVOI vers une
+///   conversation déjà identifiée (`OfflineQueueItem.conversationId`), jamais
+///   une CRÉATION de conversation — enfiler quand même forcerait à inventer
+///   un identifiant qui n'existe pas encore côté serveur.
 @MainActor
 final class MessageForwardService: MessageForwardServiceProviding {
     static let shared = MessageForwardService()
@@ -69,7 +81,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                     forwardedFromId: message.id,
                     forwardedFromConversationId: sourceId
                 ))
-                return .queuedOffline
+                return .queuedOffline(conversationId: targetConversationId)
             } catch {
                 return .failed(reason: error.localizedDescription)
             }
@@ -87,7 +99,7 @@ final class MessageForwardService: MessageForwardServiceProviding {
                 body: body
             )
             clientMessageIds.removeValue(forKey: dedupKey)
-            return .sent
+            return .sent(conversationId: targetConversationId)
         } catch {
             return .failed(reason: Self.failureReason(for: error))
         }
@@ -98,10 +110,14 @@ final class MessageForwardService: MessageForwardServiceProviding {
     /// résolution.
     ///
     /// - Une cible qui porte déjà `conversationId` (issue d'une conversation
-    ///   existante) part directement.
+    ///   existante) part directement — cette branche gère elle-même le hors
+    ///   ligne (enfilage durable, cf. doc de la classe).
     /// - Une cible SANS conversation (un contact) en obtient une via
     ///   `createDirectConversation`, IDEMPOTENTE côté serveur : elle renvoie
     ///   la conversation existante (200) plutôt que d'en recréer une seconde.
+    ///   **Hors ligne, cette création n'est JAMAIS tentée** : l'outbox ne
+    ///   sait rejouer qu'un envoi vers une conversation déjà identifiée, pas
+    ///   la création elle-même — l'échec est donc immédiat et explicite.
     ///
     /// La résolution — et donc toute création de conversation — n'a lieu
     /// QU'ICI, à l'envoi. Sélectionner un contact dans le picker puis fermer
@@ -112,6 +128,9 @@ final class MessageForwardService: MessageForwardServiceProviding {
         }
         guard let userId = target.userId else {
             return .failed(reason: Self.genericFailure)
+        }
+        guard isOnline() else {
+            return .failed(reason: Self.contactUnreachableOffline)
         }
         do {
             let conversation = try await conversationCreator.createDirectConversation(
@@ -136,5 +155,9 @@ final class MessageForwardService: MessageForwardServiceProviding {
 
     private static var genericFailure: String {
         String(localized: "forward.error.generic", defaultValue: "Le transfert a échoué", bundle: .main)
+    }
+
+    private static var contactUnreachableOffline: String {
+        String(localized: "forward.error.contact-offline", defaultValue: "Cette personne ne peut pas être jointe hors connexion.", bundle: .main)
     }
 }
