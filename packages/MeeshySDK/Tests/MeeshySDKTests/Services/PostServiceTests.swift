@@ -437,3 +437,63 @@ final class PostServiceTests: XCTestCase {
                      "Sans modification du lieu, la clé ne doit pas partir (inchangé)")
     }
 }
+
+// MARK: - update : tri-état des références déclarées
+
+/// `mentions` à l'édition n'a de sens qu'à TROIS états, et la clé absente est
+/// l'un d'eux : sans elle, le gateway (`reconcilePostMentions`) préserve ce que
+/// le post porte déjà. C'est ce qui permet à un chemin d'édition qui ne gère
+/// pas les références — l'édition de texte d'un post, par exemple — de ne rien
+/// détruire au passage.
+extension PostServiceTests {
+
+    /// La forme COMPLÈTE de `update` n'a aucune valeur par défaut (sinon tout
+    /// appel court deviendrait ambigu avec la forme courte) : ce raccourci
+    /// évite d'écrire onze `nil` dans chaque test.
+    private func updateDeclaring(mentions: [PostMentionInput]?, on postId: String) async throws -> APIPost {
+        try await service.update(postId: postId, content: nil, visibility: nil, visibilityUserIds: nil,
+                                 moodEmoji: nil, originalLanguage: nil, type: nil, removeMediaIds: nil,
+                                 storyEffects: nil, mediaIds: nil, location: nil, mentions: mentions)
+    }
+
+    func test_update_withoutMentions_omitsTheKey() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await service.update(postId: "p1", content: "nouveau texte")
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["mentions"],
+                     "Sans déclaration, la clé ne doit pas partir — le serveur préserve")
+    }
+
+    func test_update_emptyMentions_encodesAnEmptyArray() async throws {
+        // `[]` est un VERDICT, pas une absence : « je n'en déclare plus
+        // aucune ». Omettre la clé ici laisserait vivre des références que
+        // l'auteur vient de retirer.
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await updateDeclaring(mentions: [], on: "p1")
+
+        let encoded = mock.lastRequest?.bodyJSON?["mentions"] as? [Any]
+        XCTAssertEqual(encoded?.count, 0,
+                       "`[]` doit partir tel quel — c'est l'effacement explicite")
+    }
+
+    func test_update_mentions_carryTheirDeclaredMode() async throws {
+        let response = APIResponse(success: true, data: makePost(id: "p1"), error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        _ = try await updateDeclaring(mentions: [
+            PostMentionInput.id("u-alice", display: .pinned),
+            PostMentionInput.handle("bob", display: .silent)
+        ], on: "p1")
+
+        let encoded = mock.lastRequest?.bodyJSON?["mentions"] as? [[String: Any]]
+        XCTAssertEqual(encoded?.count, 2)
+        XCTAssertEqual(encoded?[0]["userId"] as? String, "u-alice")
+        XCTAssertEqual(encoded?[0]["display"] as? String, "PINNED")
+        XCTAssertEqual(encoded?[1]["username"] as? String, "bob")
+        XCTAssertEqual(encoded?[1]["display"] as? String, "SILENT")
+    }
+}

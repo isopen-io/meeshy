@@ -202,11 +202,25 @@ public struct UpdatePostRequest: Encodable, Sendable {
     /// Tri-état (cf. doc de `PostLocationUpdate`) : `nil` = clé absente du
     /// JSON (inchangé), `.remove` = `location: null`, `.set` = objet.
     public let location: PostLocationUpdate?
+    /// Les personnes que ce contenu NOMME sans que son texte le dise, à
+    /// l'édition. Tri-état, comme côté gateway (`reconcilePostMentions`) :
+    /// `nil` = clé absente, les déclarées survivent ; `[]` = elles partent
+    /// toutes ; une liste REMPLACE l'ensemble déclaré.
+    ///
+    /// Le `nil` n'est pas une commodité mais la seule lecture juste pour un
+    /// chemin d'édition qui n'affiche pas les références (l'édition de texte
+    /// d'un post) : envoyer `[]` depuis là révoquerait des références que
+    /// l'auteur n'a jamais vues.
+    ///
+    /// INLINE n'y figure jamais — le serveur le dérive du texte à chaque
+    /// écriture, et le déclarer ouvrirait un second chemin vers le même fait.
+    public let mentions: [PostMentionInput]?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
                 removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
-                mediaIds: [String]? = nil, location: PostLocationUpdate? = nil) {
+                mediaIds: [String]? = nil, location: PostLocationUpdate? = nil,
+                mentions: [PostMentionInput]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
@@ -216,11 +230,12 @@ public struct UpdatePostRequest: Encodable, Sendable {
         self.storyEffects = storyEffects
         self.mediaIds = mediaIds
         self.location = location
+        self.mentions = mentions
     }
 
     enum CodingKeys: String, CodingKey {
         case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
-        case type, removeMediaIds, storyEffects, mediaIds, location
+        case type, removeMediaIds, storyEffects, mediaIds, location, mentions
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -234,6 +249,10 @@ public struct UpdatePostRequest: Encodable, Sendable {
         try c.encodeIfPresent(removeMediaIds, forKey: .removeMediaIds)
         try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
         try c.encodeIfPresent(mediaIds, forKey: .mediaIds)
+        // `encodeIfPresent` suffit au tri-état : `nil` omet la clé, `[]`
+        // l'émet vide. Pas besoin du `encodeNil` que le lieu réclame — là,
+        // l'effacement s'écrit `null`, ici il s'écrit `[]`.
+        try c.encodeIfPresent(mentions, forKey: .mentions)
         switch location {
         case .set(let place): try c.encode(place, forKey: .location)
         case .remove: try c.encodeNil(forKey: .location)

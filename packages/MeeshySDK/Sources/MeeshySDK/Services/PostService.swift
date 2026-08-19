@@ -48,6 +48,11 @@ public protocol PostServiceProviding: Sendable {
     /// d'un coup — même patron que `createStory(… mentions:)`.
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost
+    /// Même édition, plus le tri-état des références déclarées. Requirement
+    /// SÉPARÉE et non un paramètre ajouté à la précédente : les protocoles
+    /// Swift ne portent pas de valeur par défaut, et tout double de test aurait
+    /// cessé de conformer d'un coup — même patron que `create(… mentions:)`.
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
@@ -115,6 +120,16 @@ public extension PostServiceProviding {
         try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
                               visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
                               mediaIds: mediaIds, repostOfId: repostOfId)
+    }
+
+    /// Défaut : un conformeur qui n'implémente que la signature SANS mentions
+    /// (mocks existants) reste valide. Le tri-état retombe alors sur « je n'en
+    /// parle pas » — jamais sur `[]`, qui révoquerait.
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                         moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
+                         removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds,
+                         location: location)
     }
 
     /// Compat : la signature historique 8-params reste disponible pour les
@@ -489,11 +504,23 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     // MARK: - Update Post
 
+    /// Forme courte — un chemin d'édition qui ne gère pas les références n'en
+    /// déclare AUCUNE (`mentions: nil`) : le serveur préserve celles du post.
     public func update(postId: String, content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil, moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil, mediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async throws -> APIPost {
+        try await update(postId: postId, content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                         moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type,
+                         removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds,
+                         location: location, mentions: nil)
+    }
+
+    /// Forme complète, SANS valeur par défaut — même patron que
+    /// `create(… mentions:)` : deux surcharges toutes deux « à défauts »
+    /// rendraient tout appel court ambigu.
+    public func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?) async throws -> APIPost {
         // `visibilityUserIds` était déclaré dans `UpdatePostRequest` mais JAMAIS
         // renseigné ici : il partait toujours à `nil`, et le `refine` Zod du
         // gateway rejetait donc systématiquement EXCEPT/ONLY.
-        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location)
+        let body = UpdatePostRequest(content: content, visibility: visibility, visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji, originalLanguage: originalLanguage, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects, mediaIds: mediaIds, location: location, mentions: mentions)
         let response: APIResponse<APIPost> = try await api.put(endpoint: "/posts/\(postId)", body: body)
         return response.data
     }
