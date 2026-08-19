@@ -85,11 +85,28 @@ describe('StoryViewer — accès par référence', () => {
     expect(screen.getByText(/plus disponible/i)).toBeInTheDocument();
   });
 
-  it('ne consomme aucun droit au simple rendu', () => {
+  it('enregistre la vue d\'un contenu expiré RÉELLEMENT montré (droit intact)', () => {
+    // `referenceAccess === 'granted'` veut dire que l'écran de fin ne s'est PAS
+    // affiché (cf. le test ci-dessus) : le contenu est réellement montré, donc
+    // sa vue doit être enregistrée exactement comme une story vivante — sinon
+    // la fenêtre de 24h ne s'ouvre jamais, aucun PostView n'est créé, et la
+    // notification `user_mentioned` reste non lue à vie.
     const onView = jest.fn();
     render(
       <StoryViewer
         stories={[expiredStory({ referenceAccess: 'granted' })]}
+        onClose={jest.fn()}
+        onView={onView}
+      />
+    );
+    expect(onView).toHaveBeenCalledWith('story-expired');
+  });
+
+  it('ne consomme aucun droit quand l\'écran de fin s\'affiche à la place du contenu', () => {
+    const onView = jest.fn();
+    render(
+      <StoryViewer
+        stories={[expiredStory({ referenceAccess: 'consumed' })]}
         onClose={jest.fn()}
         onView={onView}
       />

@@ -495,18 +495,22 @@ function StoryViewer({
   }, [currentIndex]);
 
   // ---- Mark as viewed ----
-  // Un contenu expiré est exclu du marquage automatique au montage : le même
-  // appel (`POST /posts/:id/view`) consomme aussi la fenêtre de référence, et
-  // la déclencher au simple rendu ouvrirait cette fenêtre avant que le
-  // lecteur ait réellement vu quoi que ce soit (montage, préchargement…).
+  // N'écarte l'enregistrement QUE quand le contenu n'est pas réellement
+  // montré — c'est-à-dire quand `referenceAccessBlocked` affiche l'écran de
+  // fin à la place (voir plus haut). Un contenu expiré affiché grâce à
+  // `referenceAccess === 'granted'` DOIT enregistrer sa vue exactement comme
+  // une story vivante : c'est ce même appel (`POST /posts/:id/view`) qui ouvre
+  // la fenêtre de 24h, crée le `PostView` que l'auteur voit dans « vu par »,
+  // et marque `user_mentioned` comme lu. Un simple `isCurrentStoryExpired`
+  // écartait aussi ce cas — la fenêtre ne s'ouvrait alors jamais sur web.
   useEffect(() => {
     if (!story) return;
-    if (isCurrentStoryExpired) return;
+    if (referenceAccessBlocked) return;
     if (!viewedRef.current.has(story.id)) {
       viewedRef.current.add(story.id);
       onView?.(story.id);
     }
-  }, [story, onView, isCurrentStoryExpired]);
+  }, [story, onView, referenceAccessBlocked]);
 
   // ---- Auto-advance timer ----
   // Honor the per-story `slideDurationMs` (set by the composer to fit longer
