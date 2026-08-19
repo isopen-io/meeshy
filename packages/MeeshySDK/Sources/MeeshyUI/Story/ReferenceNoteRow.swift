@@ -43,11 +43,24 @@ public struct ReferenceNoteRow: View, Equatable {
             && lhs.accentColor == rhs.accentColor
     }
 
-    private var noted: [PostReference] { references.filter { $0.display == .note } }
+    /// Les deux gardes, extraites pour être vérifiables sans monter de vue —
+    /// c'est ici, et nulle part ailleurs, que se joue la non-fuite des SILENT.
+    static func noted(in references: [PostReference]) -> [PostReference] {
+        references.filter { $0.display == .note }
+    }
 
-    private var viewerIsSilentlyReferenced: Bool {
+    static func viewerIsSilentlyReferenced(
+        in references: [PostReference],
+        currentUserId: String?
+    ) -> Bool {
         guard let currentUserId, !currentUserId.isEmpty else { return false }
         return references.contains { $0.display == .silent && $0.userId == currentUserId }
+    }
+
+    private var noted: [PostReference] { Self.noted(in: references) }
+
+    private var viewerIsSilentlyReferenced: Bool {
+        Self.viewerIsSilentlyReferenced(in: references, currentUserId: currentUserId)
     }
 
     public var body: some View {
