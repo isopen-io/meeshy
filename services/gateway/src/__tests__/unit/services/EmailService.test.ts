@@ -1540,4 +1540,110 @@ describe('EmailService', () => {
       expect(payload.subject).toBe('Your Meeshy username');
     });
   });
+
+  // ==============================================
+  // $-SEQUENCE INTEGRITY IN NAME INTERPOLATION
+  //
+  // `String.prototype.replace(search, replacement)` interprets `$$`, `$&`,
+  // `$\`` and `$'` inside the replacement STRING even when `search` is a
+  // literal string. Display names are user-controlled, so a name containing
+  // any `$`-sequence corrupts the interpolated intro line:
+  //   '{sender} wants...'.replace('{sender}', 'A $& B') -> 'A {sender} B wants...'
+  // leaking the internal placeholder. Parity with the messaging (7b70bfa1)
+  // and TrackingLinkService (iteration 221) fixes: use a function replacer.
+  // ==============================================
+
+  describe('$-sequence integrity in friend emails', () => {
+    it('sendFriendRequestEmail inserts a "$&" name verbatim without leaking {sender}', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValue(createSuccessResponse({}));
+
+      await service.sendFriendRequestEmail({
+        to: 'r@example.com',
+        recipientName: 'Rachel',
+        senderName: 'Alice $& Bob',
+        viewRequestUrl: 'https://meeshy.me/friends/1',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain('Alice $& Bob');
+      expect(payload.textContent).not.toContain('{sender}');
+      expect(payload.htmlContent).not.toContain('{sender}');
+    });
+
+    it('sendFriendRequestEmail does not duplicate the sentence tail for a "$\'" name', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValue(createSuccessResponse({}));
+
+      await service.sendFriendRequestEmail({
+        to: 'r@example.com',
+        recipientName: 'Rachel',
+        senderName: "$'",
+        viewRequestUrl: 'https://meeshy.me/friends/1',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain("$' wants to connect with you on Meeshy.");
+      // Buggy `$'` duplicates the tail: "... Meeshy. wants to connect ..."
+      expect(payload.textContent).not.toContain('Meeshy. wants to connect');
+    });
+
+    it('sendFriendAcceptedEmail inserts a "$&" name verbatim without leaking {accepter}', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValue(createSuccessResponse({}));
+
+      await service.sendFriendAcceptedEmail({
+        to: 'r@example.com',
+        recipientName: 'Rachel',
+        accepterName: 'Carol $& Dan',
+        conversationUrl: 'https://meeshy.me/c/1',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain('Carol $& Dan');
+      expect(payload.textContent).not.toContain('{accepter}');
+      expect(payload.htmlContent).not.toContain('{accepter}');
+    });
+
+    it('preserves a "$$" name without collapsing it to a single "$"', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValue(createSuccessResponse({}));
+
+      await service.sendFriendRequestEmail({
+        to: 'r@example.com',
+        recipientName: 'Rachel',
+        senderName: 'Deal $$ Co',
+        viewRequestUrl: 'https://meeshy.me/friends/1',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain('Deal $$ Co');
+    });
+
+    it('leaves an ordinary name unchanged (non-regression)', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValue(createSuccessResponse({}));
+
+      await service.sendFriendRequestEmail({
+        to: 'r@example.com',
+        recipientName: 'Rachel',
+        senderName: 'Alice Martin',
+        viewRequestUrl: 'https://meeshy.me/friends/1',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain('Alice Martin wants to connect with you on Meeshy.');
+      expect(payload.textContent).not.toContain('{sender}');
+    });
+  });
 });

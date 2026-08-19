@@ -1195,7 +1195,11 @@ export class EmailService {
 
   async sendFriendRequestEmail(data: FriendRequestEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const intro = t.friendRequest.intro.replace('{sender}', data.senderName);
+    // Function replacer: the display name is user text that may contain $&, $$,
+    // $` or $' — a replacement STRING would be interpreted by String.prototype.replace
+    // (e.g. "$&" leaks the literal {sender} placeholder). A () => value replacer
+    // inserts the name verbatim.
+    const intro = t.friendRequest.intro.replace('{sender}', () => data.senderName);
     const avatarHtml = data.senderAvatar
       ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
@@ -1208,7 +1212,9 @@ export class EmailService {
 
   async sendFriendAcceptedEmail(data: FriendAcceptedEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const intro = t.friendAccepted.intro.replace('{accepter}', data.accepterName);
+    // Function replacer: see sendFriendRequestEmail — the display name may carry
+    // $-sequences that a replacement string would mangle.
+    const intro = t.friendAccepted.intro.replace('{accepter}', () => data.accepterName);
     const avatarHtml = data.accepterAvatar
       ? `<img src="${data.accepterAvatar}" alt="${this.escapeHtml(data.accepterName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
