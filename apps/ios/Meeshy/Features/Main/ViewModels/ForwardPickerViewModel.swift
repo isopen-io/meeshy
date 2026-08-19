@@ -93,6 +93,15 @@ final class ForwardPickerViewModel: ObservableObject {
             )
             let newTargets = page.items.map(Self.makeTarget)
 
+            // La page est POSÉE avant la garde — comme
+            // `ConversationListViewModel.loadMore()` (`:1758`), l'implémentation
+            // de référence. La garde arrête la BOUCLE, elle ne jette pas la page
+            // qu'elle protège : si `cursorPagination` disparaît de la réponse
+            // (incident de mai 2026 cité plus bas), `nextCursor` revient nil à
+            // chaque page et le sélecteur affichait « Aucune conversation »
+            // pendant que la liste principale montrait sa page 1.
+            appendConversationTargets(newTargets)
+
             // Garde anti-boucle « zero-progress » (incident de production
             // documenté sur `ConversationListViewModel.loadMore()`) : une
             // page qui ne fait AVANCER ni le curseur ni le jeu d'ids connus
@@ -108,7 +117,6 @@ final class ForwardPickerViewModel: ObservableObject {
                 return
             }
 
-            appendConversationTargets(newTargets)
             nextCursor = page.nextCursor
             hasMore = page.hasMore
             paginationState = page.hasMore ? .idle : .exhausted

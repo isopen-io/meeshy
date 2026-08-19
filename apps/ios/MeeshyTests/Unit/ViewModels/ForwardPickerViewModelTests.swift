@@ -137,6 +137,25 @@ final class ForwardPickerViewModelTests: XCTestCase {
         XCTAssertEqual(service.listPageCallCount, before)
     }
 
+    /// La garde anti-boucle « zero-progress » protège une PAGE : elle doit la
+    /// CONSERVER, pas l'abandonner. L'implémentation de référence
+    /// (`ConversationListViewModel.loadMore`) appelle `appendConversations`
+    /// AVANT la garde identique. Sans cet ordre, une réponse privée de
+    /// `cursorPagination` — l'incident de mai 2026 que le commentaire de la
+    /// garde cite lui-même — fait afficher « Aucune conversation » au sélecteur
+    /// pendant que la liste principale montre sa page 1.
+    func test_loadInitial_whenCursorNeverAdvances_keepsTheProtectedPage() async {
+        let (sut, service) = makeSUT()
+        service.listPageResult = .success(ConversationPage(items: [makeConv("c1")], rawItems: [], nextCursor: nil, hasMore: true))
+
+        await sut.loadInitial()
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:c1"],
+                       "la page que la garde protège doit rester affichée")
+        XCTAssertFalse(sut.hasMore, "la garde force bien l'épuisement pour casser la boucle")
+        XCTAssertEqual(sut.paginationState, .exhausted)
+    }
+
     func test_loadInitial_passesRealCurrentUserId() async {
         let (sut, service) = makeSUT(currentUserId: "me")
         service.listPageResult = .success(ConversationPage(items: [], rawItems: [], nextCursor: nil, hasMore: false))
