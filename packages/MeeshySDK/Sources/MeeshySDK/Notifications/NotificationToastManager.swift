@@ -499,7 +499,7 @@ public final class NotificationToastManager: ObservableObject {
         }
         recentNotificationIds.insert(event.id)
         Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            try? await Task.sleep(for: .seconds(2))
             self?.recentNotificationIds.remove(event.id)
         }
 
@@ -546,12 +546,8 @@ public final class NotificationToastManager: ObservableObject {
     /// refresh. De-duplicated by id, so an APN + socket double-delivery (already
     /// guarded above) or a later REST refresh never doubles the row.
     private func persistToCache(_ event: SocketNotificationEvent, isRead: Bool = false) {
-        // Built inline (not a static let) to stay clear of Swift 6 shared-mutable
-        // -state diagnostics on the non-Sendable formatter; notifications are
-        // infrequent so the allocation is negligible.
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let base = event.toAPINotification(createdAt: formatter.string(from: Date()))
+        let createdAtStr = Date().formatted(.iso8601.time(includingFractionalSeconds: true))
+        let base = event.toAPINotification(createdAt: createdAtStr)
         let apiNotification = isRead ? base.withReadState(true) : base
         Task {
             await CacheCoordinator.shared.notifications.prependToExisting(apiNotification, for: "all")
@@ -609,7 +605,7 @@ public final class NotificationToastManager: ObservableObject {
         currentToast = event
 
         toastDismissTask = Task {
-            try? await Task.sleep(nanoseconds: Self.toastDuration)
+            try? await Task.sleep(for: .nanoseconds(Self.toastDuration))
             guard !Task.isCancelled else { return }
             currentToast = nil
         }

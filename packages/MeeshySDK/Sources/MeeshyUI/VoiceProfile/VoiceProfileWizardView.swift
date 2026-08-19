@@ -347,7 +347,7 @@ class VoiceProfileWizardViewModel: ObservableObject {
             for sample in voiceSamples {
                 _ = try await voiceService.uploadSample(audioData: sample, durationMs: 10000)
             }
-            try await Task.sleep(nanoseconds: 2_000_000_000)
+            try await Task.sleep(for: .seconds(2))
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 currentStep = .complete
             }

@@ -54,7 +54,7 @@ final class MentionSuggestionsModel: ObservableObject {
         candidates = local
         guard !trimmed.isEmpty else { return }
         searchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            try? await Task.sleep(for: .milliseconds(300))
             guard let self, !Task.isCancelled else { return }
             self.isSearching = true
             defer { self.isSearching = false }
@@ -94,7 +94,7 @@ struct MentionSuggestionList: View {
                     Text(String(localized: "mention.suggestions.empty",
                                 defaultValue: "Aucune personne trouvée",
                                 bundle: .module))
-                        .font(.system(size: 13))
+                        .font(MeeshyFont.relative(.subheadline))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
@@ -115,23 +115,23 @@ struct MentionSuggestionRow: View {
     let user: UserSearchResult
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.sm) {
             MeeshyAvatar(name: user.displayName ?? user.username,
                          context: .userListItem,
                          avatarURL: user.avatar)
             VStack(alignment: .leading, spacing: 1) {
                 Text(user.displayName ?? user.username)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(MeeshyFont.relative(.subheadline, weight: .semibold))
                     .lineLimit(1)
                 Text("@\(user.username)")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(.caption1))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(minHeight: 44)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -157,28 +157,28 @@ struct StoryMentionPickerSheet: View {
         VStack(spacing: 0) {
             ZStack {
                 Text(String(localized: "story.mention.title", defaultValue: "Mentionner", bundle: .module))
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(MeeshyFont.relative(.headline, weight: .semibold))
                 HStack {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
                     Spacer()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.sm)
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "at").foregroundStyle(.secondary)
                 TextField(String(localized: "story.mention.search", defaultValue: "Rechercher une personne…", bundle: .module),
                           text: $query)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(Color(.secondarySystemBackground)))
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.sm)
 
             MentionSuggestionList(query: query, maxHeight: .infinity) { user in
                 onSelect(user)
