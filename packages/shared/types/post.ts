@@ -3,6 +3,8 @@
  * Utilisés par le gateway, le frontend web et l'app iOS
  */
 
+import type { PostReference, ReferenceAccess } from './post-reference.js';
+
 // =====================================================
 // ENUMS
 // =====================================================
@@ -164,6 +166,19 @@ export interface Post {
   readonly media?: readonly PostMedia[];
   readonly comments?: readonly PostComment[];
   readonly repostOf?: Partial<Post> | null;
+  /**
+   * Les personnes que ce post nomme, avec leur mode d'affichage — `postMentions`
+   * (relation Prisma) aplati et RÉSOLU par le serveur sous ce nom exposé
+   * (`withMentions`, `services/gateway/src/services/posts/postReferences.ts`).
+   * `PostContentText` ne linkifie que les `@handle` qui y figurent.
+   */
+  readonly mentions?: readonly PostReference[];
+  /**
+   * Le droit du LECTEUR d'ouvrir ce contenu expiré parce qu'il y est
+   * référencé — déclaré par le serveur (`resolveReferenceAccess`), jamais
+   * recalculé depuis `expiresAt` côté client.
+   */
+  readonly referenceAccess?: ReferenceAccess;
 }
 
 export interface PostReaction {

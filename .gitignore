@@ -176,6 +176,12 @@ frontend/shared/version.txt
 gateway/shared/version.txt
 translator/shared/version.txt
 post-*
+# `post-*` above is unqualified and matches by BASENAME at any depth — it silently
+# swallows real source files named `post-<word>.ts` (lived masked until caught here,
+# 2026-08-19: packages/shared/types/post-reference.ts). Un-ignore known source files
+# individually rather than narrowing the pattern blind, since its original intent
+# (likely a stray root-level artifact) is undocumented.
+!packages/shared/types/post-reference.ts
 
 # Development runtime (dev.sh)
 .pids/

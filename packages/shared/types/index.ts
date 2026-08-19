@@ -74,6 +74,15 @@ export * from './reaction.js';
 // Export des types mentions
 export * from './mention.js';
 
+// Export des types références de post (Prisme des références — parité Swift)
+export type {
+  PostReferenceDisplay,
+  PostReference,
+  ReferenceAccess,
+  ComposerReference,
+  PostReferenceInput,
+} from './post-reference.js';
+
 // Export des types d'erreurs
 export * from './errors.js';
 
