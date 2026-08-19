@@ -181,4 +181,100 @@ final class CallViewLayoutGuardTests: XCTestCase {
             "the two surfaces fall out of sync when the local track drops."
         )
     }
+
+    // MARK: - Bord a bord du fullScreenCover
+
+    /// Les lignes de code, commentaires retires.
+    ///
+    /// Les commentaires de ce fichier CITENT les motifs surveilles (« le
+    /// clipShape rogne a la BOITE »), donc une garde qui lirait la source brute
+    /// se validerait sur sa propre documentation.
+    private func callViewCode() throws -> String {
+        try callViewSource()
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                return trimmed.hasPrefix("//") ? "" : String(line)
+            }
+            .joined(separator: "\n")
+    }
+
+    /// Le fond du `fullScreenCover` est BLANC en theme clair. Constat
+    /// simulateur 2026-08-19 (theme clair, iPhone 16 Pro, appel audio) : deux
+    /// bandes blanches, de exactement les deux insets — 59 pt sous la Dynamic
+    /// Island, 34 pt au-dessus du home indicator.
+    ///
+    /// Cause : `.ignoresSafeArea()` autorise le contenu a DEBORDER, mais ne
+    /// change pas la taille que la vue rapporte a son parent. Le `.clipShape`
+    /// du morph PiP rogne a cette boite-la. Un premier correctif (2026-08-18)
+    /// avait deplace `.ignoresSafeArea()` avant le clip en croyant elargir la
+    /// boite — les bandes sont restees.
+    ///
+    /// Le remede n'est pas un socle opaque derriere la surface : le fond du
+    /// contact doit couvrir les quatre bords LUI-MEME (« la bande noire ne
+    /// doit pas exister »). C'est le PARENT qui propose le plein ecran, et la
+    /// surface le prend.
+    func test_body_proposesFullScreenToTheSurface_soTheMorphClipCannotCropIt() throws {
+        let code = try callViewCode()
+        guard let bodyStart = code.range(of: "var body: some View {"),
+              let surfaceStart = code.range(of: "private var callSurface: some View {")
+        else {
+            XCTFail("CallView doit separer `body` (conteneur) de `callSurface` (contenu clippe)")
+            return
+        }
+        let bodyBlock = String(code[bodyStart.upperBound ..< surfaceStart.lowerBound])
+
+        XCTAssertTrue(
+            bodyBlock.contains("callSurface"),
+            "`body` doit se limiter a proposer le plein ecran a `callSurface`."
+        )
+        XCTAssertTrue(
+            bodyBlock.contains("maxWidth: .infinity") && bodyBlock.contains("maxHeight: .infinity"),
+            "La surface doit PRENDRE toute la proposition. Sans cela sa boite " +
+            "reste celle du fullScreenCover, safe area deduite, et le clip du " +
+            "morph la rogne jusqu'a laisser voir le blanc du cover."
+        )
+        XCTAssertTrue(
+            bodyBlock.contains("ignoresSafeArea"),
+            "Le conteneur doit ignorer la safe area : c'est LUI qui transforme " +
+            "la proposition en plein ecran. Pose seulement plus bas, sur la " +
+            "surface, il etend le rendu sans elargir la boite que le clip suit."
+        )
+        XCTAssertFalse(
+            bodyBlock.contains("clipShape") || bodyBlock.contains("scaleEffect"),
+            "Le clip et le scale du morph appartiennent a `callSurface` : poses " +
+            "sur le conteneur, ils rogneraient a nouveau une boite trop petite."
+        )
+    }
+
+    /// Aucun aplat opaque ne doit s'intercaler derriere la surface pour masquer
+    /// un defaut de geometrie : ce serait une bande noire la ou l'utilisateur
+    /// attend l'image du contact.
+    func test_body_hasNoOpaqueBackdropStandingInForTheContactImage() throws {
+        let code = try callViewCode()
+        guard let bodyStart = code.range(of: "var body: some View {"),
+              let surfaceStart = code.range(of: "private var callSurface: some View {")
+        else {
+            XCTFail("CallView doit separer `body` de `callSurface`")
+            return
+        }
+        let bodyBlock = String(code[bodyStart.upperBound ..< surfaceStart.lowerBound])
+        XCTAssertFalse(
+            bodyBlock.contains("Color.black") || bodyBlock.contains("Color.white"),
+            "Un aplat pose derriere la surface masque le symptome et remplace " +
+            "le fond du contact par une bande unie sur les bords que la " +
+            "geometrie laisse decouverts. C'est la BOITE qui doit etre pleine."
+        )
+    }
+
+    /// La taille ne doit jamais venir de l'ecran PHYSIQUE : en Split View /
+    /// Stage Manager l'app n'occupe qu'une part de l'ecran.
+    func test_callSurface_neverSizesItselfFromTheDisplay() throws {
+        let code = try callViewCode()
+        XCTAssertFalse(
+            code.contains("UIScreen.main.bounds"),
+            "La geometrie doit venir de la proposition du conteneur (ou de la " +
+            "fenetre active via DeviceLayout), jamais de l'ecran physique."
+        )
+    }
 }

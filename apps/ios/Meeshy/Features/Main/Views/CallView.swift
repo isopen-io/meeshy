@@ -90,6 +90,33 @@ struct CallView: View {
     }
 
     var body: some View {
+        // Ce conteneur n'existe que pour PROPOSER le plein écran à la surface.
+        //
+        // `.ignoresSafeArea()` autorise un contenu à DÉBORDER de la safe area,
+        // mais ne change pas la taille que sa vue rapporte : elle reste celle
+        // que le `fullScreenCover` propose, safe area DÉDUITE. Le `.clipShape`
+        // du morph PiP, lui, rogne à cette boîte-là — d'où deux bandes du fond
+        // BLANC du cover, hautes d'exactement les deux insets (59 pt sous la
+        // Dynamic Island, 34 pt au-dessus du home indicator), constatées au
+        // simulateur en thème clair le 2026-08-19.
+        //
+        // Un correctif du 2026-08-18 avait déplacé `.ignoresSafeArea()` AVANT
+        // le clip en croyant élargir la boîte : les bandes sont restées. C'est
+        // le PARENT qui doit proposer le plein écran — ici — pour que la boîte
+        // de la surface l'égale et que le clip n'ait plus rien à rogner. Le
+        // fond du contact couvre alors les quatre bords LUI-MÊME : aucun socle
+        // opaque ne vient s'intercaler (retour user 2026-08-19 — « la bande
+        // noire ne doit pas exister, le fond doit être l'image entière »).
+        ZStack {
+            callSurface
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .ignoresSafeArea()
+    }
+
+    /// La surface d'appel elle-même — séparée de `body` pour que son
+    /// `clipShape` et son `scaleEffect` s'appliquent à une boîte DÉJÀ pleine.
+    private var callSurface: some View {
         ZStack {
             // PiP système — ancre invisible plein écran : `sourceView` d'où la
             // fenêtre PiP émerge. `attachSystemPiP` se gate sur canActivateSystemPiP
