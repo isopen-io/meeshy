@@ -1,0 +1,958 @@
+<title>Planches MeeshyComposer</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Schibsted+Grotesk:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap">
+<style>
+/* ————— Jetons — sombre d'abord (le plateau est le sujet) ————— */
+:root{
+  --bg:#0E0D17; --surface:#161329; --surface2:#1C1838; --line:rgba(159,146,255,.16);
+  --ink:#ECE9FB; --ink2:#B8B0DC; --mut:#847CB0; --acc:#8F7DF8; --acc-ink:#0E0D17;
+  --cS:#5FD6B0; --cP:#7FA6F2; --cR:#F07A66; --cM:#E8B84B;
+  --ex:#69C98F; --new:#B99BFF; --absent:#5A5480;
+  --ruler:rgba(159,146,255,.28);
+  /* Le téléphone dépeint l'UI SOMBRE du produit : fixe dans les deux thèmes. */
+  --ph:#111020; --ph2:#1A1731; --phline:#37315656; --phink:#DDD8F4; --phmut:#8F87BC;
+  --phsocle:#0B0A14; --phscene:#221E3E;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#F5F4FB; --surface:#FFFFFF; --surface2:#EFEDF9; --line:rgba(63,52,120,.16);
+    --ink:#221D3C; --ink2:#4C4478; --mut:#7B74A6; --acc:#5D4BE0; --acc-ink:#FFFFFF;
+    --cS:#1B9E75; --cP:#3B6FD4; --cR:#D4553F; --cM:#A97F17;
+    --ex:#2E9E64; --new:#7A55E8; --absent:#A29BC4; --ruler:rgba(93,75,224,.3);
+  }
+}
+:root[data-theme="light"]{
+  --bg:#F5F4FB; --surface:#FFFFFF; --surface2:#EFEDF9; --line:rgba(63,52,120,.16);
+  --ink:#221D3C; --ink2:#4C4478; --mut:#7B74A6; --acc:#5D4BE0; --acc-ink:#FFFFFF;
+  --cS:#1B9E75; --cP:#3B6FD4; --cR:#D4553F; --cM:#A97F17;
+  --ex:#2E9E64; --new:#7A55E8; --absent:#A29BC4; --ruler:rgba(93,75,224,.3);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto} *{transition:none!important} }
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:400 15px/1.62 "Schibsted Grotesk",system-ui,sans-serif;}
+h1,h2,h3{font-family:"Bricolage Grotesque","Schibsted Grotesk",sans-serif;line-height:1.12;text-wrap:balance;margin:0}
+p{margin:.4em 0 .9em;max-width:68ch}
+a{color:var(--acc)} a:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:3px}
+.mono{font-family:"Spline Sans Mono",ui-monospace,monospace}
+.wrap{max-width:1240px;margin:0 auto;padding:0 22px}
+
+/* ————— Nav ————— */
+nav{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;gap:4px;overflow-x:auto;padding:9px 22px}
+nav a{font:500 11.5px/1 "Spline Sans Mono",monospace;color:var(--ink2);text-decoration:none;
+  padding:6px 9px;border-radius:6px;white-space:nowrap}
+nav a:hover{background:var(--surface2);color:var(--ink)}
+
+/* ————— En-tête ————— */
+header{padding:64px 0 30px;border-bottom:1px solid var(--line);
+  background:
+   repeating-linear-gradient(90deg,var(--ruler) 0 1px,transparent 1px 24px) left bottom/100% 10px no-repeat,
+   repeating-linear-gradient(90deg,var(--ruler) 0 1px,transparent 1px 120px) left bottom/100% 22px no-repeat;}
+.eyebrow{font:600 11.5px/1 "Spline Sans Mono",monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--acc)}
+header h1{font-size:clamp(38px,6vw,58px);font-weight:700;margin:.18em 0 .1em}
+.sub{color:var(--ink2);font-size:16.5px;max-width:72ch}
+.meta{display:flex;flex-wrap:wrap;gap:18px;margin-top:18px;
+  font:500 11.5px/1.7 "Spline Sans Mono",monospace;color:var(--mut)}
+
+/* ————— Chips & tags ————— */
+.chip{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;
+  padding:0 6px;border-radius:6px;font:600 10.5px/1 "Spline Sans Mono",monospace;color:var(--bg)}
+.chS{background:var(--cS)} .chP{background:var(--cP)} .chR{background:var(--cR)} .chM{background:var(--cM)}
+.tag{display:inline-block;padding:2px 7px;border-radius:5px;font:600 10px/1.5 "Spline Sans Mono",monospace;
+  letter-spacing:.05em;text-transform:uppercase;vertical-align:1px}
+.tEx{color:var(--ex);border:1px solid color-mix(in srgb,var(--ex) 45%,transparent)}
+.tNew{color:var(--new);border:1px solid color-mix(in srgb,var(--new) 50%,transparent)}
+.tAb{color:var(--absent);border:1px dashed color-mix(in srgb,var(--absent) 60%,transparent)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:14px;font-size:13px;color:var(--ink2)}
+
+/* ————— Planches ————— */
+section{padding:44px 0 14px;border-bottom:1px solid var(--line)}
+.prail{display:flex;align-items:baseline;gap:16px;margin-bottom:6px}
+.pnum{font:600 13px/1 "Spline Sans Mono",monospace;color:var(--acc);
+  border:1px solid var(--line);border-radius:7px;padding:6px 9px;background:var(--surface)}
+section h2{font-size:clamp(24px,3.4vw,32px);font-weight:600}
+.lede{color:var(--ink2);max-width:76ch}
+h3{font-size:17px;font-weight:600;margin:22px 0 8px}
+
+/* ————— Cartes & grilles ————— */
+.grid{display:grid;gap:16px;margin:18px 0}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 16px 12px}
+.card h4{margin:0 0 6px;font:600 14.5px/1.3 "Bricolage Grotesque",sans-serif}
+.card p{font-size:13.5px;color:var(--ink2);max-width:none}
+.klist{margin:6px 0 8px;padding:0;list-style:none;font-size:13px;color:var(--ink2)}
+.klist li{padding:3.5px 0 3.5px 16px;position:relative}
+.klist li::before{content:"";position:absolute;left:2px;top:.86em;width:6px;height:1.5px;background:var(--acc)}
+
+/* ————— Tables ————— */
+.scrollx{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin:14px 0}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+caption{text-align:left;font:600 12px/1.6 "Spline Sans Mono",monospace;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--mut);padding:12px 14px 4px}
+th{font:600 10.5px/1.5 "Spline Sans Mono",monospace;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--mut);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+tr:last-child td{border-bottom:none}
+td b{color:var(--ink);font-weight:600}
+.mx td, .mx th{font-family:"Spline Sans Mono",monospace;font-size:11.4px;line-height:1.55;
+  font-variant-numeric:tabular-nums;min-width:150px}
+.mx td:first-child{position:sticky;left:0;background:var(--surface);color:var(--ink);
+  font-weight:500;min-width:180px;box-shadow:1px 0 0 var(--line)}
+.mx .grp td{background:var(--surface2);color:var(--acc);font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;font-size:10.5px;position:sticky;left:0}
+.ok{color:var(--ex)} .nv{color:var(--new)} .ab{color:var(--absent)}
+
+/* ————— Téléphones wireframe (UI sombre fixe) ————— */
+.phrow{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;margin:18px 0}
+.phfig{width:214px}
+.phfig.lg{width:280px}
+.ph{position:relative;aspect-ratio:9/19;background:var(--ph);border:1.5px solid var(--phline);
+  border-radius:26px;overflow:hidden;display:flex;flex-direction:column;color:var(--phink)}
+.phfig figcaption{font:500 11.5px/1.55 "Spline Sans Mono",monospace;color:var(--mut);margin-top:9px}
+.phfig figcaption b{color:var(--ink);font-weight:600}
+.notch{position:absolute;top:7px;left:50%;transform:translateX(-50%);width:34%;height:9px;
+  border-radius:9px;background:var(--phsocle);z-index:3}
+.sc{flex:1;margin:24px 9px 6px;border-radius:11px;background:var(--phscene);
+  border:1px dashed var(--phline);position:relative;overflow:hidden;
+  display:flex;flex-direction:column;min-height:0}
+.ph .lbl{font:500 8.8px/1.35 "Spline Sans Mono",monospace;color:var(--phmut)}
+.ob{border:1px dashed var(--phline);border-radius:6px;padding:3px 6px;
+  font:500 8.8px/1.4 "Spline Sans Mono",monospace;color:var(--phink);
+  background:color-mix(in srgb,var(--ph) 55%,transparent)}
+.band{flex:0 0 17%;display:flex;align-items:center;justify-content:center;gap:5px;
+  background:repeating-linear-gradient(45deg,transparent 0 7px,#8F7DF81a 7px 8px)}
+.media169{flex:1;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#2E2951,#1B1834);border-block:1px solid var(--phline)}
+.socle{flex:0 0 auto;background:var(--phsocle);border-top:1px solid var(--phline);
+  display:flex;align-items:center;gap:5px;padding:7px 9px 12px}
+.socle .aud{border:1px solid var(--phline);border-radius:99px;padding:3px 8px;
+  font:600 8.5px/1 "Spline Sans Mono",monospace;color:var(--phink)}
+.socle .eye{width:22px;height:22px;border:1px solid var(--phline);border-radius:99px;
+  display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--phmut)}
+.socle .pub{margin-left:auto;background:var(--acc);color:var(--acc-ink);border-radius:99px;
+  padding:4px 11px;font:600 9px/1 "Spline Sans Mono",monospace}
+.ctx{display:flex;gap:5px;padding:5px 9px;align-items:center}
+.ctx .ob{padding:4px 7px}
+.n{display:inline-flex;width:15px;height:15px;border-radius:99px;background:var(--acc);
+  color:var(--acc-ink);font:600 9px/15px "Spline Sans Mono",monospace;justify-content:center;flex:none}
+.ph .n{position:absolute;z-index:5}
+.legendlist{margin:0;padding:0;list-style:none;font-size:13px;color:var(--ink2);max-width:420px}
+.legendlist li{display:flex;gap:9px;padding:5px 0;align-items:baseline}
+.legendlist .n{position:static;flex:none;transform:translateY(2px)}
+.legendlist b{color:var(--ink)}
+
+/* ————— Panneaux d'outil (bandeaux) ————— */
+.panel{background:var(--ph);border:1px solid var(--phline);border-radius:10px;
+  padding:8px;display:flex;flex-wrap:wrap;gap:5px;margin:10px 0 8px}
+.panel .ob{background:var(--ph2)}
+.panel .on{border-color:var(--acc);color:var(--acc)}
+.fmt{display:flex;gap:6px;margin:2px 0 8px;flex-wrap:wrap}
+.fmt .f{display:flex;gap:6px;align-items:baseline;font-size:12.5px;color:var(--ink2);
+  border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:var(--surface2);flex:1 1 100%}
+.fmt .f p{margin:0;font-size:12.3px}
+
+/* ————— Timeline 2D ————— */
+.tl{background:var(--ph);border:1px solid var(--phline);border-radius:14px;padding:14px;overflow-x:auto}
+.tl-ruler{height:20px;margin-left:118px;background:
+  repeating-linear-gradient(90deg,var(--ruler) 0 1px,transparent 1px 12px) left bottom/100% 7px no-repeat,
+  repeating-linear-gradient(90deg,var(--ruler) 0 1.5px,transparent 1.5px 60px) left bottom/100% 14px no-repeat;
+  position:relative;min-width:560px}
+.tl-ruler .lbl{position:absolute;top:-2px}
+.tl-plane{font:600 9px/1 "Spline Sans Mono",monospace;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--phmut);padding:9px 0 3px}
+.tl-row{display:flex;align-items:center;gap:8px;padding:3px 0;min-width:560px}
+.tl-name{flex:0 0 110px;font:500 9.5px/1.3 "Spline Sans Mono",monospace;color:var(--phink)}
+.tl-lane{flex:1;height:24px;border-radius:6px;background:var(--ph2);position:relative}
+.tl-bar{position:absolute;top:3px;bottom:3px;border-radius:5px;
+  font:600 8.5px/18px "Spline Sans Mono",monospace;color:var(--ph);padding:0 7px;white-space:nowrap;overflow:hidden}
+.tl-bar::before,.tl-bar::after{content:"";position:absolute;top:4px;bottom:4px;width:2.5px;border-radius:2px;
+  background:color-mix(in srgb,var(--ph) 45%,transparent)}
+.tl-bar::before{left:3px}.tl-bar::after{right:3px}
+.tl-ghost{position:absolute;inset:3px 4px;border:1.5px dashed var(--phline);border-radius:5px;
+  font:500 8.5px/17px "Spline Sans Mono",monospace;color:var(--phmut);padding:0 7px}
+.kf{position:absolute;top:50%;width:7px;height:7px;background:var(--cM);
+  transform:translate(-50%,-50%) rotate(45deg);border-radius:1.5px}
+.playhead{position:absolute;top:0;bottom:0;width:1.5px;background:var(--cR)}
+
+/* ————— Mermaid & divers ————— */
+.mermaid{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
+footer{padding:36px 0 64px;color:var(--mut);font-size:13px}
+footer .mono{font-size:11.5px}
+.callout{border-left:3px solid var(--acc);background:var(--surface);border-radius:0 10px 10px 0;
+  padding:12px 16px;margin:16px 0;font-size:14px;color:var(--ink2);max-width:80ch}
+.callout b{color:var(--ink)}
+</style>
+
+<nav aria-label="Planches"><div class="wrap">
+<a href="#p1">P1 Doctrine</a><a href="#p2">P2 Inventaire</a><a href="#p3">P3 Navigation</a>
+<a href="#p4">P4 Anatomie</a><a href="#p5">P5 Entrées</a><a href="#p6">P6 Scène</a>
+<a href="#p7">P7 Outils</a><a href="#p8">P8 Timeline</a><a href="#p9">P9 Capture</a>
+<a href="#p10">P10 Socle</a><a href="#p11">P11 Étagère</a><a href="#p12">P12 Viewers</a>
+<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a>
+</div></nav>
+
+<header><div class="wrap">
+  <div class="eyebrow">Planches de navigation UI · UX — spécification visuelle</div>
+  <h1>MeeshyComposer</h1>
+  <p class="sub">Un seul objet pour créer — Story, Post, Réel, Mood — et un seul noyau pour lire.
+  Quatorze planches : chaque vue, son comportement, et pour chaque outil la précision exacte de ce
+  qu'il fait selon le format. <b>Toutes les features existantes sont inventoriées et préservées
+  avant toute nouveauté.</b></p>
+  <div class="meta">
+    <span>2026-08-19</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
+    <span>statut : proposition — arbitrages O1–O7 ouverts</span>
+  </div>
+  <div class="legend">
+    <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
+    <span><span class="chip chP">P</span> Post · permanent</span>
+    <span><span class="chip chR">R</span> Réel · vidéo-first</span>
+    <span><span class="chip chM">M</span> Mood/Status · 1 h</span>
+    <span><span class="tag tEx">existant</span> préservé tel quel</span>
+    <span><span class="tag tNew">nouveau</span> ajouté après préservation</span>
+    <span><span class="tag tAb">—</span> absent, et pourquoi</span>
+  </div>
+</div></header>
+
+<!-- ================================================================ P1 -->
+<section id="p1"><div class="wrap">
+  <div class="prail"><span class="pnum">P1</span><h2>Doctrine — six lois, aucune exception</h2></div>
+  <p class="lede">Tout le reste du document se déduit d'ici. Quand deux planches semblent se
+  contredire, c'est la loi qui tranche.</p>
+  <div class="grid g3">
+    <div class="card"><h4>1 · Le format est un champ</h4><p>Jamais un écran. On n'entre pas dans
+      « le composer de story » : on entre dans le composer, déjà réglé sur STORY parce qu'on vient
+      du tray. Changer de format ne change pas d'outil.</p></div>
+    <div class="card"><h4>2 · Un objet, cinq familles en moins</h4><p>Texte, média, sticker, son,
+      lieu, dessin, mention — un seul <b class="mono">MeeshyObject</b> (transform, timing,
+      layer, locale). Aujourd'hui chaque famille redéclare scale/rotation/zIndex/startTime/keyframes
+      (<span class="mono">StoryModels.swift:272-276, 629-664, 914-928</span>).</p></div>
+    <div class="card"><h4>3 · La scène est 9:16, toujours</h4><p>Le contenu porteur garde son ratio ;
+      le hors-champ devient deux bandes <b>actives</b>. Un post sans visuel n'a pas de scène du
+      tout — un cadre vide est une injonction à le remplir.</p></div>
+    <div class="card"><h4>4 · Rien à l'écran sans raison</h4><p>Un contrôle apparaît si — et
+      seulement si — l'objet courant l'accepte, le profil l'autorise, et l'action a un effet
+      maintenant. Sinon il n'est pas grisé : il n'est pas là.</p></div>
+    <div class="card"><h4>5 · Le socle ne bouge jamais</h4><p>Audience · aperçu · publier, en bas,
+      dans le plateau sombre (noir / indigo profond / violet profond — jeton choisi par
+      l'utilisateur dans ses réglages d'interface). La seule erreur irréversible d'une publication
+      est son audience : elle reste lisible en permanence.</p></div>
+    <div class="card"><h4>6 · Le lecteur EST l'aperçu</h4><p>Composer et viewers partagent le même
+      registre de rendu (<b class="mono">MeeshyScenePlayer</b>). L'aperçu du socle, la carte de
+      feed, le viewer plein écran : trois chromes, un moteur. WYSIWYG par construction.</p></div>
+  </div>
+</div></section>
+
+<!-- ================================================================ P2 -->
+<section id="p2"><div class="wrap">
+  <div class="prail"><span class="pnum">P2</span><h2>Inventaire — l'existant d'abord, intégralement</h2></div>
+  <p class="lede">Chaque feature en production aujourd'hui, sa source vérifiée, et sa destination
+  dans MeeshyComposer. <b>Aucune ligne ne se perd.</b> Les nouveautés n'arrivent qu'en P14, après
+  cette table.</p>
+
+  <div class="scrollx"><table>
+    <caption>Composer de story (iOS · MeeshyUI/Story, ≈85 vues aujourd'hui)</caption>
+    <thead><tr><th>Feature</th><th>Aujourd'hui</th><th>Destination</th></tr></thead>
+    <tbody>
+      <tr><td><b>Slides</b> ≤10 · ajouter / dupliquer / supprimer</td><td class="mono">SlideStrip (addSlide, duplicateSlide(at:), context-menu Supprimer)</td><td>Rail de scènes, mêmes 3 actions</td></tr>
+      <tr><td><b>Texte</b> — 7 styles (normal, gras, italique, manuscrit, machine, néon, rétro)</td><td class="mono">StoryTextObject + fontForStyle</td><td>Objet <span class="mono">text</span>, payload styles inchangé</td></tr>
+      <tr><td>Texte — couleur, fond, taille, alignement, position, offset, <b>édition en zone</b></td><td class="mono">textPosition/textColor/textBg/textAlign/textSize/textOffsetY · édition inline (zone)</td><td>Panneau contextuel Texte (P7)</td></tr>
+      <tr><td>Texte — timing + keyframes (x, y, scale, opacity, easing)</td><td class="mono">startTime/keyframes — StoryKeyframe</td><td>Timing du MeeshyObject, plan 2D (P8)</td></tr>
+      <tr><td><b>Dessin</b> — mode immersif, pinceaux, épaisseur avec aperçu de pointe, couleur, liste des traits</td><td class="mono">StoryDrawingToolbar + DrawingStrokeList</td><td>Objet <span class="mono">drawing</span> ; panneau reste ouvert tant que le mode est actif</td></tr>
+      <tr><td><b>Stickers</b> — grille par catégories</td><td class="mono">StickerPickerView (StickerCategory)</td><td>Objet <span class="mono">sticker</span> — gagne transform + timing</td></tr>
+      <tr><td><b>Médias</b> — caméra, galerie, dernière capture (sans prompt), éditeur (crop), média premier plan</td><td class="mono">galleryStarter/recentAsset, openMediaEditor, fgMediaItem</td><td>Objet <span class="mono">media</span> ; amorce préservée (P5)</td></tr>
+      <tr><td><b>Filtres</b> — 8 : vintage, N&amp;B, chaud, froid, dramatic, vivid, fade, chrome</td><td class="mono">StoryFilter (CaseIterable)</td><td>Inspecteur média, liste inchangée</td></tr>
+      <tr><td><b>Fond</b> — couleur/dégradé, <b>déplaçable uniquement via son chip</b>, boucle = fond seul</td><td class="mono">background · règles bg-chip &amp; loop=background</td><td>Objet plan <span class="mono">.background</span>, règles conservées</td></tr>
+      <tr><td><b>Son de fond</b> — bibliothèque / fichier / micro, emprunt (crédit soundId), volume, bornes début/fin</td><td class="mono">SoundLibrary, AudioDocumentPicker, VoiceRecorder · backgroundAudio*</td><td>Objet <span class="mono">audio</span> plan fond ; crédit rendu par l'atome partagé</td></tr>
+      <tr><td>Audio <b>premier plan</b> — chips lecteurs posés sur la scène</td><td class="mono">audioPlayerObjects (zIndex, timing, keyframes volume)</td><td>Objet <span class="mono">audio</span> plan contenu</td></tr>
+      <tr><td>Sous-titres voix (karaoké) — dégénérés si timestamps=0</td><td class="mono">currentVoiceCaption · 2 renderers</td><td>ScenePlayer, renderer unique</td></tr>
+      <tr><td><b>Lieu</b> — pastille + métadonnée + précision de découvrabilité</td><td class="mono">locationObjects · storyLocationPicker (app-side)</td><td>Une source, deux rendus (P7 · Lieu) — pastille scalable</td></tr>
+      <tr><td><b>Références</b> — @ inline · sélecteur (appui long = mode) · INLINE/PINNED/NOTE/SILENT · badge épinglé (referenceUserId) · tri-état à l'édition</td><td class="mono">ReferenceComposerBar, ReferenceModeMenu, StoryMentionPickerSheet, adoptDeclaredReferences</td><td>Objet <span class="mono">mention</span> (PINNED) + méta (autres modes) — P7</td></tr>
+      <tr><td><b>Timeline</b> — pistes, règle graduée dérivée de la largeur des libellés, lanes 52 pt, keyframes x/y/scale/opacity/volume/easing</td><td class="mono">32 vues Timeline/* · StoryKeyframe</td><td>Plan 2D unique (P8)</td></tr>
+      <tr><td><b>Aperçu</b> — canvas né en pause, bouton lecture</td><td class="mono">règle « born paused »</td><td>Aperçu du socle = ScenePlayer en mode preview</td></tr>
+      <tr><td><b>Audience</b> — 6 niveaux + EXCEPT/ONLY</td><td class="mono">chip topbar + sheet</td><td>Socle (visible en permanence)</td></tr>
+      <tr><td><b>Brouillons</b> + <b>file de publication</b> offline</td><td class="mono">StoryDraftStore (1 024 l.) · StoryPublishQueue (778 l.)</td><td>Étagère (P11) — moteurs conservés tels quels</td></tr>
+      <tr><td><b>Édition</b> publiée — cache contentHash, reset d'engagement, relecture unitaire avant remplacement des références</td><td class="mono">.edit · storyEditComposerCover</td><td>Intention <span class="mono">.edit(of:)</span> (P5)</td></tr>
+      <tr><td><b>Republication</b> — même story, date fraîche (auteur)</td><td class="mono">POST /posts/:id/republish</td><td>Carte d'archive de l'Étagère</td></tr>
+      <tr><td>Langue — traduction des textes pilotée par l'audience</td><td class="mono">triggerStoryTextTranslation · story:translation-updated</td><td>Conservé ; locale par objet (P14) l'alimente</td></tr>
+      <tr><td>Extraction de son autorisée</td><td class="mono">allowSoundExtraction (déclaré, jamais envoyé — défaut connu)</td><td>Toggle du panneau Son — enfin transmis</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="scrollx"><table>
+    <caption>Composer de feed — posts &amp; réels (iOS · FeedView+Attachments, FeedViewModel)</caption>
+    <thead><tr><th>Feature</th><th>Aujourd'hui</th><th>Destination</th></tr></thead>
+    <tbody>
+      <tr><td><b>Content</b> texte — envoi durable hors-ligne</td><td class="mono">enqueueDurableTextPost → OutboxDispatcher</td><td>Champ content (icône dédiée P/R) ; même outbox</td></tr>
+      <tr><td>Rangée d'options : photo · caméra · emoji · document · lieu · micro</td><td class="mono">FeedView+Attachments:1041-1071</td><td>Amorce + panneaux contextuels</td></tr>
+      <tr><td><b>Bascule Réel</b> — publier la vidéo en réel ou en post plat</td><td class="mono">forcePlainPost (play.rectangle)</td><td>Le champ format du socle (loi 1)</td></tr>
+      <tr><td>Audience — 3 niveaux exposés (Public/Amis/Privé)</td><td class="mono">menu :910-916</td><td>Socle : les 6 niveaux partout <span class="tag tNew">nouveau</span></td></tr>
+      <tr><td><b>Références</b> 4 modes (câblées 2026-08-19, y compris son emprunté)</td><td class="mono">ReferenceComposerBar → 5 chemins d'envoi</td><td>P7 · Références</td></tr>
+      <tr><td>Audio enregistré · <b>son emprunté</b> (post « utiliser ce son »)</td><td class="mono">publishAudioPost · createBorrowedSoundPost</td><td>Panneau Son, mêmes chemins</td></tr>
+      <tr><td>Qualification réel côté serveur (dégradation REEL→POST)</td><td class="mono">PostService.ts:203-225</td><td>Inchangé ; affichée dans le socle</td></tr>
+      <tr><td>Hashtags &amp; liens tracés — extraction serveur</td><td class="mono">hashtagService · TrackingLink</td><td>Inchangé (automatique)</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="scrollx"><table>
+    <caption>Composer de mood (StatusComposerView) &amp; repost</caption>
+    <thead><tr><th>Feature</th><th>Aujourd'hui</th><th>Destination</th></tr></thead>
+    <tbody>
+      <tr><td><b>Mood</b> — emoji + « Comment tu vas ? » + audience 6 niveaux + brouillon + branche offline</td><td class="mono">StatusComposerView (draft.moodEmoji, requiresUserSelection)</td><td>Profil <span class="mono">.moodChip</span> : composer réduit, sans scène</td></tr>
+      <tr><td><b>Repost / citation</b> — texte de citation, attribution verrouillée, snapshot média des sources éphémères</td><td class="mono">UnifiedPostComposer (repost) · repostPost</td><td>Intention <span class="mono">.repost(of:)</span> ; naît POST (2026-08-19)</td></tr>
+      <tr><td>Audience de repost <b>plafonnée</b> par la source (FRIENDS et COMMUNITY incomparables)</td><td class="mono">isRepostVisibilityAllowed · REPOST_AUDIENCE_WIDENING</td><td>Le sélecteur du socle est borné par la loi — inchangée</td></tr>
+      <tr><td>Référence SILENT automatique vers l'auteur reposté</td><td class="mono">spec références §7</td><td>Posée par l'intention .repost</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="scrollx"><table>
+    <caption>Lecture (Story viewer · FeedPostCard/PostDetail · Reels) — préservée puis unifiée (P12)</caption>
+    <thead><tr><th>Feature</th><th>Aujourd'hui</th><th>Destination</th></tr></thead>
+    <tbody>
+      <tr><td>Barres segmentées 3 pt · auto-avance · pause au maintien (0,45 s / slop 24 px) · scrub</td><td class="mono">StoryProgressBars · gestes PR #2819</td><td>Chrome Story</td></tr>
+      <tr><td>Cube entre groupes · interlude d'identité · préchargement</td><td class="mono">neighborCube · GroupIntro · StoryReaderPrefetcher</td><td>Chrome Story</td></tr>
+      <tr><td>En-tête : auteur (borné 16 c.), heure compacte, crédit son note+onde, transcription, menu (éditer / reposter en post / supprimer / signaler / lien externe / plein écran)</td><td class="mono">StoryHeaderView</td><td>Chrome Story</td></tr>
+      <tr><td>Rail figé à l'entrée du slide : réagir (scrub emoji), répondre, commentaires, vues, republier, partager, enregistrer (anneau), muet, langues (Abc + barre isomorphe réactions)</td><td class="mono">StoryViewerView+Sidebar</td><td>Chrome Story — invariant « rien n'apparaît en cours de lecture »</td></tr>
+      <tr><td>Rangée « Avec … » (NOTE) + marqueur personnel SILENT</td><td class="mono">ReferenceNoteRow — posts depuis l'origine, story câblée 2026-08-19</td><td>ScenePlayer : rendu commun aux 3 viewers</td></tr>
+      <tr><td>Commentaires flottants traduits · réponse privée → conversation · liste des vues avec réactions</td><td class="mono">CommentsOverlay · ReplyContext.story · storyViews</td><td>Noyau (thread commun) + chromes</td></tr>
+      <tr><td>Accès référencé à un contenu expiré — fenêtre 24 h, droit consommé à la vue</td><td class="mono">referenceAccess · POST /posts/:id/view</td><td>Inchangé (S · M)</td></tr>
+      <tr><td>Carte de post : contenu natif Prisme + badge, canvas de story embarqué (repost), embed YouTube, liens tracés, réactions, attribution icône+@handle, favori, impressions</td><td class="mono">FeedPostCard</td><td>Chrome Post = CanvasPlayer dans la carte</td></tr>
+      <tr><td>Réels : pager vertical, autoplay/boucle, rail, crédit son marquee « titre · @pseudo · M:SS », « utiliser ce son », embed repost (liens de mentions valides 2026-08-19)</td><td class="mono">ReelsView · AudioChipDisplay.resolve · ReelRepostEmbedCell</td><td>Chrome Réel</td></tr>
+      <tr><td>Prisme : résolution systemLanguage → regional → custom → locale appareil → fr ; jamais <span class="mono">translations.first</span></td><td class="mono">resolveUserLanguage · preferredTranslation(for:)</td><td>Loi du noyau, tous formats</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<!-- ================================================================ P3 -->
+<section id="p3"><div class="wrap">
+  <div class="prail"><span class="pnum">P3</span><h2>Carte de navigation</h2></div>
+  <p class="lede">Huit portes, un composer, trois viewers. Les flèches pleines sont des
+  navigations ; les pointillés, des retours d'état (brouillon, file, archive).</p>
+  <pre class="mermaid">
+flowchart TD
+  subgraph E[Portes d'entrée — chacune fixe un profil]
+    e1([Tray stories « + »]):::s
+    e2([Feed « Partagez quelque chose »]):::p
+    e3([Onglet Réels « + »]):::r
+    e4([Chip humeur]):::m
+    e5([Repost / citation])
+    e6([Éditer une publication])
+    e7([Brouillon de l'Étagère])
+    e8([Partage entrant iOS])
+  end
+  C{{MeeshyComposer<br/>plateau · scène 9:16 · socle}}
+  e1 & e2 & e3 & e4 & e5 & e6 & e7 & e8 --> C
+  C -->|outil requis| T[Panneau contextuel<br/>Texte · Média · Son · Dessin · Sticker · Lieu · Références · Fond]
+  T --> C
+  C -->|poignée ⏱| TL[Timeline — plan 2D]
+  TL --> C
+  C -->|œil du socle| PV[Aperçu = ScenePlayer]
+  PV --> C
+  C -->|Publier| Q[[File offline<br/>clientMutationId]]
+  C -.->|Fermer| D[(Brouillons)]
+  D -.-> C
+  Q --> S2([Serveur : mentions, hashtags,<br/>Whisper, qualification réel])
+  S2 --> VS[Viewer Story]:::s
+  S2 --> VP[Carte + détail Post]:::p
+  S2 --> VR[Viewer Réel]:::r
+  S2 --> VM[Bulle Mood]:::m
+  VS & VP & VR -.->|Éditer / Republier| C
+  S2 -.->|20 h| A[(Archive — Étagère)]
+  A -.->|Republier| C
+  classDef s stroke:#5FD6B0,stroke-width:2px
+  classDef p stroke:#7FA6F2,stroke-width:2px
+  classDef r stroke:#F07A66,stroke-width:2px
+  classDef m stroke:#E8B84B,stroke-width:2px
+  </pre>
+</div></section>
+
+<!-- ================================================================ P4 -->
+<section id="p4"><div class="wrap">
+  <div class="prail"><span class="pnum">P4</span><h2>Anatomie — le plateau, la scène, le socle</h2></div>
+  <div class="phrow">
+    <figure class="phfig lg"><div class="ph">
+      <div class="notch"></div>
+      <span class="n" style="top:30px;left:8px">1</span>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="ob">Story ▾</span><span class="ob" style="margin-left:auto">⋯</span></div>
+      <div class="sc">
+        <span class="n" style="top:6px;right:6px">2</span>
+        <div class="band"><span class="lbl">bande haute — zone de pose</span></div>
+        <div class="media169"><span class="lbl">contenu porteur (ratio libre)</span></div>
+        <div class="band"><span class="lbl">bande basse — zone de pose</span></div>
+      </div>
+      <span class="n" style="right:8px;bottom:104px">3</span>
+      <div class="ctx"><span class="ob on">Aa</span><span class="ob">🖌</span><span class="ob">♫</span><span class="lbl" style="margin-left:auto">← contextuel : vide par défaut</span></div>
+      <div class="socle">
+        <span class="n" style="left:6px;bottom:44px">4</span>
+        <span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span>
+      </div>
+    </div>
+    <figcaption><b>Le composer au repos</b> — profil Story, un média 16:9 posé.</figcaption></figure>
+    <ul class="legendlist">
+      <li><span class="n">1</span><span><b>Plateau.</b> Fond sombre configurable (noir · indigo
+        profond · violet profond) dans les réglages d'interface. Il porte la scène — il n'est
+        jamais une surface de pose.</span></li>
+      <li><span class="n">2</span><span><b>Scène 9:16, fixe.</b> Le porteur garde son ratio ; les
+        bandes hachurées sont des zones d'ancrage de premier ordre (P6). Le fond est un objet du
+        plan <span class="mono">.background</span>.</span></li>
+      <li><span class="n">3</span><span><b>Zone contextuelle.</b> Vide par défaut (loi 4). Elle se
+        remplit quand un objet est sélectionné ou qu'un outil est armé, et se vide dès que la
+        sélection tombe. Jamais de contrôle grisé.</span></li>
+      <li><span class="n">4</span><span><b>Socle permanent.</b> Audience (chip, toujours lisible) ·
+        aperçu (l'œil ouvre le ScenePlayer en preview) · Publier (part dans la file offline).
+        Le sélecteur de format vit dans la barre haute — c'est un champ, pas un écran.</span></li>
+    </ul>
+  </div>
+  <div class="callout"><b>Règle d'apparition.</b> Un contrôle existe à l'écran si l'objet courant
+  l'accepte <b>et</b> le profil l'autorise <b>et</b> l'action a un effet maintenant. Le piège
+  documenté du dépôt — de l'UI verte sur du code injoignable (<span class="mono">UnifiedPostComposer</span>,
+  revue 2026-08-19) — devient impossible : une capacité absente du profil n'est <b>pas montée</b>,
+  et une garde de source le vérifie.</div>
+</div></section>
+
+<!-- ================================================================ P5 -->
+<section id="p5"><div class="wrap">
+  <div class="prail"><span class="pnum">P5</span><h2>Entrées &amp; profils — l'intention est connue d'avance</h2></div>
+  <p class="lede">Le composer ne s'ouvre jamais nu : chaque porte fixe le format initial, les
+  capacités montées, l'état d'ouverture et l'audience par défaut. L'utilisateur ne configure
+  rien — tout est préfait, et le format reste changeable après coup.</p>
+  <div class="scrollx"><table>
+    <thead><tr><th>Porte (origin)</th><th>Format</th><th>État d'ouverture</th><th>Capacités masquées</th><th>Audience</th></tr></thead>
+    <tbody>
+      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td>Caméra prête ; amorces : galerie, dernière capture, « Touchez pour écrire », balayage bas = texte</td><td>content long (le texte vit sur la scène)</td><td>dernière utilisée</td></tr>
+      <tr><td><b>Feed « Partagez quelque chose »</b></td><td><span class="chip chP">P</span></td><td>Clavier levé sur content ; rangée photo·caméra·emoji·document·lieu·micro</td><td>slides multiples (→ carrousel), timeline repliée</td><td>dernière utilisée</td></tr>
+      <tr><td><b>Onglet Réels « + »</b></td><td><span class="chip chR">R</span></td><td>Caméra vidéo prête ; qualification réel affichée au socle</td><td>slides (une scène) ; audio premier plan (la vidéo porte le son)</td><td>Public</td></tr>
+      <tr><td><b>Chip humeur</b></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>pas de scène</b></td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
+      <tr><td><b>Repost / citation</b></td><td><span class="chip chP">P</span></td><td>Citation posée, attribution verrouillée, SILENT auto vers l'auteur</td><td>capture caméra ; l'audience est <b>plafonnée</b> par la source</td><td>≤ source</td></tr>
+      <tr><td><b>Éditer</b></td><td>celui du contenu</td><td>Scène rechargée ; références relues unitairement avant d'oser remplacer (tri-état)</td><td>changement de format (l'identité du contenu est publiée)</td><td>celle publiée</td></tr>
+      <tr><td><b>Brouillon</b></td><td>celui du brouillon</td><td>Reprise exacte, curseur où on l'a laissé</td><td>—</td><td>celle du brouillon</td></tr>
+      <tr><td><b>Partage entrant</b></td><td><span class="chip chP">P</span> (modifiable)</td><td>Le payload partagé est posé (média → scène, URL → content)</td><td>—</td><td>dernière utilisée</td></tr>
+    </tbody>
+  </table></div>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="align-items:center;justify-content:center;gap:6px">
+        <span class="ob">📷 caméra prête</span><span class="lbl">Touchez pour écrire</span>
+        <div style="display:flex;gap:4px"><span class="ob">Galerie</span><span class="ob">Dern. capture</span></div>
+      </div>
+      <div class="socle"><span class="aud">🔒 Privé</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><span class="chip chS">S</span> <b>Tray</b> — l'amorce actuelle, préservée.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="flex:0 0 34%;align-items:flex-start;padding:8px"><span class="lbl">content — clavier levé<br>« Partagez quelque chose… »</span></div>
+      <div class="ctx"><span class="ob">📷</span><span class="ob">🖼</span><span class="ob">😊</span><span class="ob">📄</span><span class="ob">📍</span><span class="ob">🎙</span></div>
+      <div style="flex:1"></div>
+      <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><span class="chip chP">P</span> <b>Feed</b> — document sans scène : la scène
+    naîtra au premier visuel.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="align-items:center;justify-content:center;gap:6px">
+        <span class="ob">🎥 vidéo prête</span><span class="lbl">bandes actives haut/bas</span></div>
+      <div class="ctx"><span class="lbl">qualification réel : ✓ vidéo</span></div>
+      <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><span class="chip chR">R</span> <b>Réels</b> — vidéo-first, une seule scène.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="flex:0 0 42%;align-items:center;justify-content:center;gap:6px">
+        <span class="ob" style="font-size:16px">😊</span><span class="lbl">« Comment tu vas ? »</span></div>
+      <div style="flex:1"></div>
+      <div class="socle"><span class="aud">👥 Amis</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><span class="chip chM">M</span> <b>Mood</b> — jamais de scène : emoji + texte,
+    1 h.</figcaption></figure>
+  </div>
+</div></section>
+
+<!-- ================================================================ P6 -->
+<section id="p6"><div class="wrap">
+  <div class="prail"><span class="pnum">P6</span><h2>La scène — 9:16 fixe, bandes actives, ancrage sémantique</h2></div>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc"><div class="media169" style="flex:1;border:none"><span class="lbl">porteur 9:16 — plein cadre</span></div></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>Porteur 9:16.</b> Pas de bandes : la scène est pleine. Les objets
+    s'ancrent librement (<span class="mono">.free</span>).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc">
+        <div class="band"><span class="ob">Titre — .band(.top)</span></div>
+        <div class="media169"><span class="lbl">porteur 16:9 — jamais rogné</span></div>
+        <div class="band"><span class="ob">♫ crédit · légende — .band(.bottom)</span></div>
+      </div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>Porteur 16:9.</b> Le hors-champ devient deux zones de pose. Un objet peut
+    chevaucher la frontière — l'ancre est un point de référence, pas une cage (arbitrage O5).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="flex:0 0 30%;align-items:flex-start;padding:8px"><span class="lbl">content seul — AUCUNE scène<br>(scenes: nil)</span></div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="lbl" style="color:var(--phmut)">le plateau reste vide —<br>pas de cadre à « remplir »</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>Document sans scène.</b> Un post texte n'invente pas de canvas ; la scène
+    naît au premier objet visuel et meurt avec le dernier (O3).</figcaption></figure>
+  </div>
+  <ul class="klist" style="max-width:76ch">
+    <li><b>Pourquoi l'ancre et pas des coordonnées :</b> un objet posé « à y = 0,08 » saute dès
+      qu'on remplace un 16:9 par un 4:3 — la bande change de hauteur. <span class="mono">.band(.top)</span>
+      désigne une intention (« au-dessus du contenu ») et survit au changement de porteur. Même
+      leçon que le Prisme : on stocke le rang, jamais le résultat.</li>
+    <li><b>Trois plans</b> — <span class="mono">.background</span> (fond, son de fond) ·
+      <span class="mono">.content</span> (porteur, chips audio) · <span class="mono">.foreground</span>
+      (texte, stickers, dessin, pastilles). Le z fin se règle dans le plan, à la timeline (P8).</li>
+    <li><b>Le fond reste déplaçable via son chip uniquement</b> (règle existante) : un fond
+      saisissable au doigt volerait tous les gestes de pose.</li>
+  </ul>
+</div></section>
+
+<!-- ================================================================ P7 -->
+<section id="p7"><div class="wrap">
+  <div class="prail"><span class="pnum">P7</span><h2>Les outils — un par carte, la précision par format</h2></div>
+  <p class="lede">Chaque carte : le déclencheur, le panneau contextuel, et <b>exactement</b> ce que
+  l'outil fait en Story, Post, Réel, Mood. Un format sans chip = l'outil n'y est pas monté, et la
+  raison est écrite.</p>
+
+  <div class="grid g2">
+    <div class="card"><h4>Texte <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Style</span><span class="ob">Police (7)</span><span class="ob">Couleur</span><span class="ob">Fond</span><span class="ob">Taille</span><span class="ob">Align</span><span class="ob">Langue</span></div>
+      <p>Tap <span class="mono">Aa</span> → objet au centre, clavier levé, <b>édition en zone</b>
+      (règle existante). Double-tap un texte = ré-édition ; tap = sélection (inspecteur prérempli).
+      7 styles : normal, gras, italique, manuscrit, machine à écrire, néon, rétro. L'onglet Langue
+      déclare la langue d'origine de l'objet — préremplie par détection.</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>Complet. Les textes composent le
+          <span class="mono">content</span> indexé.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène uniquement. Le texte principal
+          du post reste <span class="mono">content</span> — indexé, traduit, rendu natif — jamais un
+          objet.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Ancrage bandes par défaut (le porteur
+          vidéo reste lisible) ; timing synchronisé à la vidéo.</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Pas de scène. Le texte du mood est
+          <span class="mono">content</span>, point.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Média &amp; filtres <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Recadrer</span><span class="ob">Rogner (trim)</span><span class="ob">Volume</span><span class="ob">Filtre (8)</span><span class="ob">Premier plan</span></div>
+      <p>Caméra, galerie, dernière capture (jamais de prompt à l'ouverture — la demande d'accès
+      part sur le tap, règle existante). Filtres : vintage, N&amp;B, chaud, froid, dramatic, vivid,
+      fade, chrome. <span class="tag tNew">nouveau</span> appui long sur la scène = capture (P9).</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>1 porteur par slide + médias premier plan
+          (<span class="mono">fgMediaItem</span>).</p></span>
+        <span class="f"><span class="chip chP">P</span><p>1 slide = 1 carte de carrousel,
+          <span class="mono">PostMedia.order</span> écrit à l'index (corrige l'ordre constant 0).</p></span>
+        <span class="f"><span class="chip chR">R</span><p>La vidéo est LE porteur — verrouillée au
+          plan <span class="mono">.content</span> ; trim + volume ; 16:9 accepté sans rognage (P6).</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Aucun média aujourd'hui : préservé tel
+          quel.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Son <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Bibliothèque</span><span class="ob">Fichier</span><span class="ob">Micro</span><span class="ob">Volume</span><span class="ob">Bornes</span><span class="ob">Extraction ✓</span></div>
+      <p>Trois sources (existant). Un son emprunté garde son crédit — l'atome partagé
+      « titre · @pseudo · M:SS » le rend partout, décompte compris. Le toggle
+      <span class="mono">allowSoundExtraction</span> est enfin transmis (défaut documenté :
+      déclaré, jamais envoyé).</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>Fond (bibliothèque/fichier/micro, bornes,
+          volume, variantes TTS) + chips audio premier plan posés sur la scène.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Post audio (voix, transcription) et post
+          « utiliser ce son » — chemins existants conservés.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Son original de la vidéo + musique
+          empruntée ; pas de chips premier plan (la vidéo porte le son).</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Un mood n'a pas de piste.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Dessin <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Pinceau</span><span class="ob">Épaisseur (aperçu de pointe)</span><span class="ob">Couleur</span><span class="ob">Liste des traits</span></div>
+      <p>Le panneau reste ouvert tant que le mode est actif ; chaque réglage s'applique au
+      <b>prochain</b> trait (règle existante). Tap un trait existant = inspecteur liste. Plein
+      écran de tracé = chrome masqué.</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>Complet, mode immersif conservé.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Trait = objet timé (apparaît/disparaît
+          sur la vidéo).</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Pas de scène.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Stickers <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Catégories</span><span class="ob">Grille emoji</span></div>
+      <p>Zone dépliée mi-hauteur, choix = posé au centre, repli. <span class="tag tNew">nouveau</span>
+      un sticker devient un MeeshyObject entier : transform + <b>timing + keyframes</b> — il n'en
+      avait aucun.</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>Existant, animable désormais.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Timé sur la vidéo.</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>L'emoji du mood est le moodEmoji, pas un
+          sticker.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Lieu <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Rechercher</span><span class="ob">Carte</span><span class="ob">Découvrabilité</span><span class="ob">Pastille ✓</span></div>
+      <p><b>Une source, deux rendus</b> (arbitrage C5 confirmé) : <span class="mono">metadata.place</span>
+      est la vérité ; la pastille est un rendu posé. Retirer la pastille ne perd pas le lieu.
+      Le picker reste fourni par l'app (MapKit + permissions — pureté SDK).
+      <span class="tag tNew">nouveau</span> la pastille est un objet complet : scalable, animable,
+      ancrable à une bande — « comme tous les autres objets ».</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>Pastille + méta + précision de
+          découvrabilité (existant).</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Méta toujours ; pastille si scène.
+          Corrige la perte de <span class="mono">location</span> des chemins inline.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Méta + pastille timée.</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Préservation stricte : le mood n'a
+          jamais porté de lieu.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Références <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">@ inline</span><span class="ob">Sélecteur</span><span class="ob">INLINE</span><span class="ob">PINNED</span><span class="ob">NOTE</span><span class="ob">SILENT</span></div>
+      <p>Deux portes (existant) : frapper <span class="mono">@</span> dans un texte, ou le chip —
+      tap = INLINE/PINNED par défaut, <b>appui long = menu des modes</b>
+      (<span class="mono">ReferenceModeMenu</span>). Le badge PINNED se reconnaît à son
+      <span class="mono">referenceUserId</span>, jamais à son texte. Édition en tri-état :
+      sans liste, les déclarées survivent. Un repost pose une SILENT automatique vers l'auteur.</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>4 modes. Lecture : badge sur scène
+          (PINNED), rangée « Avec … » (NOTE — câblée 2026-08-19), marqueur personnel (SILENT).</p></span>
+        <span class="f"><span class="chip chP">P</span><p>4 modes — PINNED exige une scène ; sans
+          scène : INLINE/NOTE/SILENT.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>4 modes ; les @ du texte cité d'un repost
+          sont des liens VALIDES (chaîne réparée 2026-08-19).</p></span>
+        <span class="f"><span class="chip chM">M</span><p>INLINE/NOTE/SILENT — pas de scène, donc
+          jamais de PINNED. C'est la précision exacte demandée.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Fond <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">Couleur</span><span class="ob">Dégradé</span><span class="ob">Média</span><span class="ob">Chip fond</span></div>
+      <p>Le fond est un objet du plan <span class="mono">.background</span> — déplaçable
+      <b>uniquement via son chip</b> et la boucle vidéo n'appartient qu'au fond (deux règles
+      produit existantes, conservées à la lettre).</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>Complet.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>La vidéo EST le porteur ; le fond n'existe
+          que dans les bandes (teinte du plateau).</p></span>
+        <span class="f"><span class="chip chM">M</span><p>Couleur de bulle dérivée du thème —
+          pas un objet.</p></span>
+      </div></div>
+
+    <div class="card"><h4>Slides <span class="tag tEx">existant</span></h4>
+      <div class="panel"><span class="ob on">+ Ajouter</span><span class="ob">Dupliquer</span><span class="ob">Supprimer</span><span class="ob">≤ 10</span></div>
+      <p>Rail de vignettes (existant). Chaque slide est une Scene du document — mêmes objets,
+      mêmes règles.</p>
+      <div class="fmt">
+        <span class="f"><span class="chip chS">S</span><p>≤ 10, lecture séquencée par
+          <span class="mono">computedTotalDuration()</span> (autorité unique conservée).</p></span>
+        <span class="f"><span class="chip chP">P</span><p>1 slide = 1 carte du carrousel — un seul
+          modèle mental (C3/A).</p></span>
+        <span class="f"><span class="tag tAb">R —</span><p>Une seule scène : le montage d'un réel
+          est INTERNE (timeline P8), pas une pagination.</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Pas de scène.</p></span>
+      </div></div>
+  </div>
+</div></section>
+
+<!-- ================================================================ P8 -->
+<section id="p8"><div class="wrap">
+  <div class="prail"><span class="pnum">P8</span><h2>Timeline — un plan, pas une liste</h2></div>
+  <p class="lede">La rupture la plus nette avec l'existant (32 vues, une piste visible à la fois).
+  <b>Vertical = empilement</b> — l'ordre des pistes EST l'ordre à l'écran, borné par les trois
+  plans. <b>Horizontal = durée</b> — étirer un bord règle début/fin. Le canvas reste vivant
+  au-dessus : on règle le temps en regardant l'image.</p>
+  <div class="tl" role="img" aria-label="Maquette de la timeline en plan : pistes empilées par plan, barres de durée, keyframes et tête de lecture">
+    <div class="tl-ruler"><span class="lbl" style="left:0">0 s</span><span class="lbl" style="left:120px">2 s</span><span class="lbl" style="left:240px">4 s</span><span class="lbl" style="left:360px">6 s</span><span class="lbl" style="left:480px">8 s</span></div>
+    <div class="tl-plane">foreground — au plus près du spectateur</div>
+    <div class="tl-row"><span class="tl-name">Aa « Bravo ! »</span><div class="tl-lane"><div class="tl-bar" style="left:22%;width:34%;background:var(--cS)">2,0 → 5,4 s<span class="kf" style="left:30%"></span><span class="kf" style="left:80%"></span></div><div class="playhead" style="left:38%"></div></div></div>
+    <div class="tl-row"><span class="tl-name">☺ sticker</span><div class="tl-lane"><div class="tl-bar" style="left:48%;width:22%;background:var(--cM)">4,8 → 7,0 s</div></div></div>
+    <div class="tl-row"><span class="tl-name">@alice (badge)</span><div class="tl-lane"><div class="tl-ghost">présent tout du long — timing nil</div></div></div>
+    <div class="tl-plane">content — le porteur</div>
+    <div class="tl-row"><span class="tl-name">🎥 vidéo (maître)</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:100%;background:var(--cR)">0 → 10 s · verrouillée en Réel</div></div></div>
+    <div class="tl-plane">background — sous tout</div>
+    <div class="tl-row"><span class="tl-name">♫ Nuits d'été</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:82%;background:var(--cP)">bornes début/fin · vol 60 %<span class="kf" style="left:12%"></span></div></div></div>
+  </div>
+  <div class="grid g3" style="margin-top:16px">
+    <div class="card"><h4>Piste fantôme</h4><p>Un objet sans timing (le cas majoritaire) n'affiche
+      pas une barre pleine : un cadre pointillé dit « suit la slide ». Le distinguer d'une durée
+      fixée évite de figer par accident (O4/B) — c'est <span class="mono">timing == nil</span>,
+      pas <span class="mono">0 → durée</span>.</p></div>
+    <div class="card"><h4>Gestes</h4><p>Glisser une piste verticalement = z dans son plan (traverser
+      un plan demande un cran net). Étirer un bord = durée. Losanges = keyframes existants —
+      x, y, scale, opacity, volume, easing (<span class="mono">StoryKeyframe</span>, inchangé).
+      Tap la barre = inspecteur de l'objet.</p></div>
+    <div class="card"><h4>Héritage préservé</h4><p><span class="mono">computedTotalDuration()</span>
+      reste l'autorité de durée ; la règle graduée dérive toujours du gabarit des libellés ;
+      le compteur audio ne rembobine plus la slide (défaut connu, corrigé par le modèle unique).
+      Deux échelles de zoom, aucune « vue avancée » séparée.</p></div>
+  </div>
+</div></section>
+
+<!-- ================================================================ P9 -->
+<section id="p9"><div class="wrap">
+  <div class="prail"><span class="pnum">P9</span><h2>Capture — l'appui long, sans mode à armer <span class="tag tNew">nouveau</span></h2></div>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="align-items:center;justify-content:center"><span class="lbl">scène (vide ou porteur)</span></div>
+      <div class="ctx"><span class="lbl">maintenir n'importe où sur la scène…</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>1 · Repos.</b> Aucun bouton d'obturateur.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="align-items:center;justify-content:center;border-color:var(--cS)">
+        <span class="ob" style="border-color:var(--cS);color:var(--cS)">● viseur — relâcher = photo</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>2 · 0,45 s.</b> Même seuil que le hold du reader (0,45 s / slop 24 px) —
+    un seul vocabulaire de geste dans l'app.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="align-items:center;justify-content:center;border-color:var(--cR)">
+        <span class="ob" style="border-color:var(--cR);color:var(--cR)">⏺ 00:07 — maintenir = vidéo</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>3 · Maintien.</b> Relâcher pose le média : porteur si la scène est vide,
+    premier plan sinon.</figcaption></figure>
+  </div>
+  <p style="max-width:76ch">Disponible partout où le profil autorise le média
+  (<span class="chip chS">S</span> <span class="chip chP">P</span> <span class="chip chR">R</span> ;
+  jamais <span class="chip chM">M</span>). Les amorces existantes — caméra, galerie, dernière
+  capture — ne bougent pas : l'appui long s'ajoute, il ne remplace rien.</p>
+</div></section>
+
+<!-- ================================================================ P10 -->
+<section id="p10"><div class="wrap">
+  <div class="prail"><span class="pnum">P10</span><h2>Socle &amp; publication</h2></div>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="opacity:.35"><div class="media169" style="flex:1"><span class="lbl">scène</span></div></div>
+      <div style="background:var(--phsocle);border-top:1px solid var(--phline);padding:8px;display:flex;flex-direction:column;gap:4px">
+        <span class="ob">🌐 Public</span><span class="ob">👥 Amis</span><span class="ob">🏘 Communauté</span>
+        <span class="ob">🔒 Privé</span><span class="ob on">⊖ Sauf… (EXCEPT)</span><span class="ob">⊕ Seulement… (ONLY)</span>
+      </div>
+      <div class="socle"><span class="aud">⊖ Sauf 3</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>Audience.</b> Les 6 niveaux, inline depuis le chip — EXCEPT/ONLY ouvrent
+    leur liste de personnes. En repost, le sélecteur est borné par la loi d'audience (FRIENDS et
+    COMMUNITY sont incomparables : un « rétrécissement » apparent peut élargir).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="border-style:solid;border-color:var(--acc)">
+        <div class="band"><span class="ob">Titre</span></div>
+        <div class="media169"><span class="lbl">ScenePlayer — preview</span></div>
+        <div class="band"><span class="ob">♫ crédit</span></div>
+      </div>
+      <div class="ctx"><span class="lbl">l'aperçu EST le lecteur — même registre, zéro vue dédiée</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye" style="border-color:var(--acc);color:var(--acc)">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>Aperçu.</b> L'œil bascule la scène en lecture réelle (progression, sons,
+    timings). Ce que le lecteur verra, exactement.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="opacity:.35"><div class="media169" style="flex:1"><span class="lbl">scène</span></div></div>
+      <div class="ctx"><span class="ob on">⇡ dans la file — hors ligne OK</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publié ✓</span></div>
+    </div><figcaption><b>Publier.</b> Un seul verbe (<span class="mono">PublishIntent</span>),
+    une seule file offline — création ET édition — avec <span class="mono">clientMutationId</span>
+    pour la réconciliation optimiste (l'echo socket remplace le post temporaire).</figcaption></figure>
+  </div>
+  <ul class="klist" style="max-width:76ch">
+    <li>La <b>langue de publication</b> vit à côté de l'audience — héritée par les objets, surchargée
+      par objet (C6/B). Le web l'enverra enfin (<span class="mono">originalLanguage</span> jamais
+      transmis aujourd'hui pour un post ordinaire — défaut documenté).</li>
+    <li>La <b>qualification réel</b> s'affiche au socle avant publication (la dégradation
+      REEL→POST serveur reste l'autorité).</li>
+    <li>Fermer sans publier propose <b>Brouillon</b> — l'Étagère (P11) reprend exactement où on
+      s'est arrêté.</li>
+  </ul>
+</div></section>
+
+<!-- ================================================================ P11 -->
+<section id="p11"><div class="wrap">
+  <div class="prail"><span class="pnum">P11</span><h2>Étagère — brouillons, file, publiées, archive</h2></div>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="lbl" style="letter-spacing:.1em">FILE D'ENVOI</span>
+        <span class="ob on">⇡ Story — envoi en cours…</span>
+        <span class="lbl" style="letter-spacing:.1em;margin-top:4px">BROUILLONS</span>
+        <span class="ob">📝 Réel — hier 22:10 · reprendre</span>
+        <span class="lbl" style="letter-spacing:.1em;margin-top:4px">PUBLIÉES</span>
+        <span class="ob">🟢 Story · 14 h restantes · 128 vues</span>
+        <span class="lbl" style="letter-spacing:.1em;margin-top:4px">ARCHIVE (20 h+)</span>
+        <span class="ob">🌒 Story du 12/08 · ↻ Republier</span>
+      </div>
+      <div class="socle"><span class="aud">Mes contenus</span><span class="pub">+ Créer</span></div>
+    </div><figcaption><b>Une liste d'états</b>, pas quatre écrans — fusion du tray perso, de
+    « Mes stories », des brouillons et de la file. Tap = reprendre (intention
+    <span class="mono">.draft</span> / <span class="mono">.edit</span>).</figcaption></figure>
+    <div style="flex:1;min-width:280px">
+      <h3>Actions d'auteur — préservées, chacune à sa place</h3>
+      <div class="scrollx"><table>
+        <thead><tr><th>Action</th><th>Surface</th><th>Précision</th></tr></thead>
+        <tbody>
+          <tr><td><b>Modifier</b></td><td>carte · menu « … » du viewer</td><td>atelier complet ; Story : reset d'engagement annoncé avant, tri-état des références</td></tr>
+          <tr><td><b>Republier</b></td><td>carte d'archive · notification d'expiration</td><td><span class="chip chS">S</span> seulement — même story, date fraîche (<span class="mono">/republish</span>)</td></tr>
+          <tr><td><b>Changer l'audience</b></td><td>menu de carte</td><td>même sélecteur que le socle (<span class="mono">PUT /posts/:id</span>)</td></tr>
+          <tr><td><b>Épingler au profil</b></td><td>menu de carte</td><td><span class="chip chP">P</span> (route <span class="mono">/pin</span>)</td></tr>
+          <tr><td><b>Supprimer</b></td><td>menu · carte</td><td>tous formats ; l'archive n'est jamais balayée (stories : « ne plus jamais supprimer »)</td></tr>
+          <tr><td><b>Vues &amp; engagement</b></td><td>carte publiée/archivée</td><td>consultables même après expiration (l'archive garde storyViews)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</div></section>
+
+<!-- ================================================================ P12 -->
+<section id="p12"><div class="wrap">
+  <div class="prail"><span class="pnum">P12</span><h2>Les viewers — trois chromes, un noyau</h2></div>
+  <p class="lede"><span class="mono">MeeshyScenePlayer</span> rend le document partout : timelines,
+  canvas, layers fond/contenu/premier plan, hashtags, annotations, références, traduction par
+  objet, lieu épinglé. Ce qui change entre les trois, c'est le <b>chrome</b> — et rien d'autre.</p>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="display:flex;gap:2px;padding:24px 9px 4px"><span style="flex:1;height:3px;background:var(--cS);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span></div>
+      <div class="ctx" style="padding-top:2px"><span class="ob">@aïcha · 2 h · ♫〰</span><span class="ob" style="margin-left:auto">⋯</span></div>
+      <div class="ctx" style="padding-top:0"><span class="ob">Avec Alice, Bob</span></div>
+      <div class="sc" style="margin-top:2px"><div class="media169" style="flex:1"><span class="lbl">ScenePlayer</span></div></div>
+      <div class="ctx"><span class="lbl">rail figé → réagir · répondre · 💬 · 👁 · ↻ · ⤴ · 🔖 · 🔇 · Abc</span></div>
+      <div class="socle"><span class="aud">Répondre…</span><span class="eye">😊</span></div>
+    </div><figcaption><span class="chip chS">S</span> <b>Story.</b> Barres segmentées, auto-avance,
+    rail figé à l'entrée du slide, rangée « Avec … », commentaires flottants, cube inter-groupes,
+    interlude. Fenêtre 20 h ; référencé-expiré : une vue, 24 h.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="ob">@marc · a republié ↻ @aïcha</span>
+        <span class="ob">content natif — Prisme + badge langue</span>
+        <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">CanvasPlayer — autoplay muet, tap = plein écran</span></div></div>
+        <span class="ob">Avec Alice · ❤ 12 · 💬 4 · ↻ 2 · 🔖</span>
+      </div>
+      <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
+    </div><figcaption><span class="chip chP">P</span> <b>Post.</b> La carte de feed : content
+    indexé rendu natif, le canvas embarqué EN sourdine, embeds (story repostée, YouTube), liens
+    tracés, impressions. Tap = le même ScenePlayer, immersif.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="margin:24px 0 0;border-radius:0;border:none">
+        <div class="band"><span class="ob">Titre timé</span></div>
+        <div class="media169"><span class="lbl">vidéo — boucle</span></div>
+        <div class="band"><span class="ob">♫ Nuits d'été · @aïcha · 0:15</span></div>
+      </div>
+      <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · ♫ utiliser ce son</span></div>
+      <div class="socle"><span class="aud">@aïcha</span><span class="pub">Suivre</span></div>
+    </div><figcaption><span class="chip chR">R</span> <b>Réel.</b> Pager vertical, boucle, crédit
+    sonore en marquee avec décompte, « utiliser ce son » (si extraction autorisée), captions.
+    Une story publiée = un réel de 20 h — même surface sociale, seul le TTL diffère.</figcaption></figure>
+  </div>
+  <div class="callout"><b>Invariant du rail (conservé).</b> Le plan d'actions est figé à l'entrée
+  du slide — aucun bouton n'apparaît en cours de lecture. Les compteurs vivent, les surfaces non.
+  Détail dans la feuille d'engagement commune ; transcription et signalement dans le menu « … ».</div>
+</div></section>
+
+<!-- ================================================================ P13 -->
+<section id="p13"><div class="wrap">
+  <div class="prail"><span class="pnum">P13</span><h2>Matrice maîtresse — chaque outil, chaque format, exactement</h2></div>
+  <p class="lede">La référence de tri : <span class="ok">✓ existant</span> ·
+  <span class="nv">◆ nouveau</span> · <span class="ab">— absent (raison)</span>. Première colonne
+  épinglée ; la table défile.</p>
+  <div class="scrollx"><table class="mx">
+    <thead><tr><th>Feature</th><th><span class="chip chS">S</span> Story</th><th><span class="chip chP">P</span> Post</th><th><span class="chip chR">R</span> Réel</th><th><span class="chip chM">M</span> Mood</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="5">Composition</td></tr>
+      <tr><td>Content (texte du post)</td><td class="ok">✓ dérivé des textes de scène (index)</td><td class="ok">✓ champ principal · 5 000 · mentions @ · hashtags</td><td class="ok">✓ légende (= content)</td><td class="ok">✓ « Comment tu vas ? » + moodEmoji</td></tr>
+      <tr><td>Texte sur scène</td><td class="ok">✓ 7 styles · zone · timing · keyframes</td><td class="ok">✓ si scène</td><td class="ok">✓ bandes par défaut · timé</td><td class="ab">— pas de scène</td></tr>
+      <tr><td>Médias</td><td class="ok">✓ porteur/slide + premier plan</td><td class="ok">✓ carrousel (order écrit) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée</td><td class="ab">— jamais eu</td></tr>
+      <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr><td>Filtres (8)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
+      <tr><td>Éditeur média (crop·trim·vol)</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ trim vidéo</td><td class="ab">—</td></tr>
+      <tr><td>Dessin</td><td class="ok">✓ immersif</td><td class="ok">✓ si scène</td><td class="ok">✓ traits timés</td><td class="ab">—</td></tr>
+      <tr><td>Stickers</td><td class="ok">✓ <span class="nv">◆ +timing/keyframes</span></td><td class="ok">✓ si scène</td><td class="ok">✓ timés</td><td class="ab">— moodEmoji ≠ sticker</td></tr>
+      <tr><td>Son de fond</td><td class="ok">✓ biblio/fichier/micro · bornes · TTS</td><td class="ok">✓ audio post + emprunté</td><td class="ok">✓ piste vidéo + emprunt</td><td class="ab">—</td></tr>
+      <tr><td>Audio premier plan (chips)</td><td class="ok">✓</td><td class="ok">✓ (audioUrl)</td><td class="ab">— la vidéo porte le son</td><td class="ab">—</td></tr>
+      <tr><td>Extraction de son (toggle)</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td></tr>
+      <tr><td>Lieu — méta / pastille</td><td class="ok">✓ / ✓ <span class="nv">◆ scalable</span></td><td class="ok">✓ / si scène</td><td class="ok">✓ / timée</td><td class="ab">— / —</td></tr>
+      <tr><td>Références 4 modes</td><td class="ok">✓ tous</td><td class="ok">✓ tous (PINNED ⇒ scène)</td><td class="ok">✓ tous</td><td class="ok">✓ sauf PINNED (pas de scène)</td></tr>
+      <tr><td>Hashtags</td><td class="ok">✓ extraction serveur</td><td class="ok">✓ idem</td><td class="ok">✓ idem</td><td class="ok">✓ idem</td></tr>
+      <tr><td>Slides</td><td class="ok">✓ ≤10 (+ / dupl. / suppr.)</td><td class="ok">✓ = cartes carrousel</td><td class="ab">— une scène, montage interne</td><td class="ab">—</td></tr>
+      <tr><td>Timeline plan 2D</td><td class="nv">◆ (remplace 32 vues)</td><td class="nv">◆ si scène</td><td class="nv">◆ piste maître verrouillée</td><td class="ab">—</td></tr>
+      <tr><td>Keyframes (x·y·scale·opacity·vol·easing)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
+      <tr><td>Fond (couleur·dégradé·média)</td><td class="ok">✓ chip mouvable · loop=fond</td><td class="ok">✓ si scène</td><td class="ab">— vidéo = porteur</td><td class="ab">— teinte du thème</td></tr>
+      <tr><td>Langue par objet</td><td class="ok">✓ textes (audience-driven) <span class="nv">◆ généralisée</span></td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr class="grp"><td colspan="5">Publication</td></tr>
+      <tr><td>Audience</td><td class="ok">✓ 6 niveaux + EXCEPT/ONLY</td><td class="ok">3 exposés <span class="nv">◆ → 6 partout</span></td><td class="nv">◆ 6 (hérite du socle)</td><td class="ok">✓ 6 niveaux</td></tr>
+      <tr><td>Langue de publication</td><td class="ok">✓</td><td class="ok">✓ iOS <span class="nv">◆ web l'envoie enfin</span></td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td>Brouillons</td><td class="ok">✓ StoryDraftStore</td><td class="nv">◆ (outbox texte seul aujourd'hui)</td><td class="nv">◆</td><td class="ok">✓ draft mood</td></tr>
+      <tr><td>File offline</td><td class="ok">✓ PublishQueue</td><td class="ok">✓ texte <span class="nv">◆ étendu média/audio</span></td><td class="nv">◆</td><td class="ok">✓ branche offline</td></tr>
+      <tr><td>Aperçu = lecteur</td><td class="ok">✓ (né en pause) <span class="nv">◆ au socle</span></td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆ bulle</td></tr>
+      <tr><td>Édition publiée</td><td class="ok">✓ reset engagement · tri-état</td><td class="ok">✓ PUT (tri-état)</td><td class="ok">✓ = post</td><td class="ok">✓ statusUpdated</td></tr>
+      <tr><td>Repost (source)</td><td class="ok">✓ → naît POST · snapshot média</td><td class="ok">✓ + citation</td><td class="ok">✓</td><td class="ok">✓ (mood copié)</td></tr>
+      <tr><td>Republication (auteur)</td><td class="ok">✓ date fraîche</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ab">— 1 h, balayé</td></tr>
+      <tr><td>Idempotence / cmid</td><td class="ok">✓</td><td class="ok">✓ écho socket réconcilié</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr class="grp"><td colspan="5">Lecture</td></tr>
+      <tr><td>Progression · auto-avance</td><td class="ok">✓ barres 3 pt · scrub · pause 0,45 s</td><td class="ab">— carte</td><td class="ab">— boucle</td><td class="ab">— bulle</td></tr>
+      <tr><td>Réactions</td><td class="ok">✓ scrub emoji + compteurs</td><td class="ok">✓ barre réactions</td><td class="ok">✓ rail</td><td class="ok">✓ statusReacted</td></tr>
+      <tr><td>Commentaires (thread commun)</td><td class="ok">✓ overlay flottant traduit</td><td class="ok">✓ détail + feuille</td><td class="ok">✓ overlay</td><td class="ab">—</td></tr>
+      <tr><td>Réponse privée → conversation</td><td class="ok">✓ ReplyContext</td><td class="nv">◆</td><td class="nv">◆</td><td class="ok">✓ (réagir ouvre la conv)</td></tr>
+      <tr><td>Vues</td><td class="ok">✓ liste + réactions</td><td class="ok">✓ impressions</td><td class="ok">✓ compteur</td><td class="ok">✓</td></tr>
+      <tr><td>Traductions (Prisme)</td><td class="ok">✓ natif + badge · barre langues · original au maintien</td><td class="ok">✓ natif + badge · retraduire</td><td class="ok">✓ captions traduites</td><td class="ok">✓</td></tr>
+      <tr><td>Références en lecture</td><td class="ok">✓ badge · « Avec … » · marqueur SILENT</td><td class="ok">✓ idem</td><td class="ok">✓ + @ valides dans l'embed</td><td class="ok">✓ « Avec … »</td></tr>
+      <tr><td>Accès référencé expiré</td><td class="ok">✓ 24 h · consommé à la vue</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ok">✓ idem S</td></tr>
+      <tr><td>Muet / son</td><td class="ok">✓ + mute par piste</td><td class="ok">✓ (autoplay muet)</td><td class="ok">✓</td><td class="ab">—</td></tr>
+      <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
+      <tr><td>Partage externe · lien tracé</td><td class="ok">✓ /l/ token</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td>Épingler au profil</td><td class="ab">—</td><td class="ok">✓ /pin</td><td class="ab">—</td><td class="ab">—</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<!-- ================================================================ P14 -->
+<section id="p14"><div class="wrap">
+  <div class="prail"><span class="pnum">P14</span><h2>Nouveautés &amp; arbitrages — après la préservation, jamais avant</h2></div>
+  <div class="grid g3">
+    <div class="card"><h4><span class="tag tNew">nouveau</span> MeeshyObject unifié</h4><p>Une seule
+      définition de transform/timing/layer/locale. Sticker animable, lieu scalable, mention posable —
+      gratuits par construction.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Bandes actives &amp; ancrage</h4><p>Le
+      16:9 jamais rogné ; <span class="mono">.band(.top/.bottom)</span> survit au changement de
+      porteur.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Timeline plan 2D</h4><p>Vertical =
+      empilement, horizontal = durée, pistes fantômes. Remplace 32 vues mono-piste.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Appui long = capture</h4><p>Photo au
+      relâcher, vidéo au maintien — même seuil que le hold du reader.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Plateau configurable</h4><p>Noir ·
+      indigo profond · violet profond — un jeton d'interface, pas un thème par écran.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Audience 6 niveaux partout</h4><p>Le
+      feed n'expose que 3 niveaux aujourd'hui — le socle sert les 6, EXCEPT/ONLY compris.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Réponse privée P·R</h4><p>Le
+      ReplyContext des stories s'étend aux posts et réels — même conversation, même bulle
+      contextuelle.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Langue par objet</h4><p>Chaque objet
+      déclare sa langue d'origine (préremplie) ; la publication l'hérite ; le Prisme traduit objet
+      par objet.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Annotation</h4><p>Étiquette liée à un
+      objet ou une zone (callout) — le kind est réservé dans le modèle ; l'UI viendra comme
+      contrôle, jamais comme vue.</p></div>
+  </div>
+  <h3>Arbitrages ouverts (décision produit requise)</h3>
+  <div class="scrollx"><table>
+    <thead><tr><th>#</th><th>Question</th><th>Recommandation</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">O1</td><td>Mentions/# : segments du content ou objets de scène ?</td><td>Les deux coexistent déjà (INLINE vs PINNED) — content pour le texte, objet pour la scène</td></tr>
+      <tr><td class="mono">O2</td><td>Migration du modèle</td><td>v3 dérivé de StoryEffects, lecture des deux — 20 h de stories vivantes à tout instant, une rupture les casse</td></tr>
+      <tr><td class="mono">O3</td><td>Scène pour un post texte ?</td><td><span class="mono">scenes: nil</span> — un cadre vide est une injonction</td></tr>
+      <tr><td class="mono">O4</td><td>Timing par défaut</td><td><span class="mono">nil</span> = « suit la slide » (piste fantôme), distinct d'un choix</td></tr>
+      <tr><td class="mono">O5</td><td>Bandes : zones contraintes ou ancres ?</td><td>Ancres — un objet peut chevaucher la frontière</td></tr>
+      <tr><td class="mono">O6</td><td>Teintes du plateau</td><td>3 jetons d'abord (la demande), palette ensuite</td></tr>
+      <tr><td class="mono">O7</td><td>Export</td><td>Pipeline actuel conservé, rendu-du-registre en cible (parité exacte, export web)</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Risques nommés (à lever avant le plan d'implémentation)</h3>
+  <ul class="klist" style="max-width:78ch">
+    <li><b>Coût du plan 2D</b> sur vieux matériel — N pistes vivantes au-dessus d'un canvas animé ;
+      le dépôt garde trace de réels qui chauffaient. Mesurer avant d'engager.</li>
+    <li><b>Contenu réel des blobs</b> — <span class="mono">storyEffects</span> est validé en
+      <span class="mono">passthrough()</span> : auditer la base avant tout schéma strict.</li>
+    <li><b>Profondeur de type SwiftUI</b> — le dépôt a déjà débordé la pile (device 1 008 Ko vs simu
+      8 Mo). Le registre rend par effacement de type, jamais par composition générique profonde.</li>
+  </ul>
+</div></section>
+
+<footer><div class="wrap">
+  <p><b>Sources vérifiées dans le code</b> (2026-08-19) — <span class="mono">StoryModels.swift</span>
+  (StoryFilter, StoryKeyframe, familles d'objets), <span class="mono">ComposerToolPanelHost.swift</span>,
+  <span class="mono">StoryComposerView+SlideStrip/Canvas.swift</span>, <span class="mono">FeedView+Attachments.swift</span>
+  (:910-916, :1041-1071), <span class="mono">StatusComposerView.swift</span>,
+  <span class="mono">ReferenceComposerBar / ReferenceModeMenu</span>, <span class="mono">StoryViewerView+Canvas/Sidebar.swift</span>,
+  <span class="mono">ReelRepostEmbedCell.swift</span>, <span class="mono">PostService.ts</span>
+  (repost → POST), spec <span class="mono">2026-08-19-post-references-design.md</span>, design
+  <span class="mono">2026-08-15-story-atelier-design.md</span> (§11 : 39 features recensées).</p>
+  <p class="mono">Document sœur : 2026-08-19-meeshy-composer-design.md · Proposition — rien n'est
+  implémenté · Meeshy, Prisme Linguistique</p>
+</div></footer>

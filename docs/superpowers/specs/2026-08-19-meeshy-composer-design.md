@@ -3,6 +3,8 @@
 Date : 2026-08-19
 Statut : **proposition de design, non validée** — succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
+Planches visuelles (14 planches, inventaire exhaustif + matrice outil × format) :
+`./2026-08-19-meeshy-composer-views.html`
 
 ---
 
