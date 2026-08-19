@@ -150,7 +150,8 @@ final class MessageForwardServiceTests: XCTestCase {
         online = true
         _ = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
 
-        let item = try XCTUnwrap(await queue.enqueuedItems.first)
+        let enqueued = await queue.enqueuedItems
+        let item = try XCTUnwrap(enqueued.first)
         let body = try postedBody(api)
         XCTAssertEqual(item.clientMessageId, body["clientMessageId"] as? String,
                        "le rejeu en ligne reprend le cid de l'enfilage hors ligne — jamais de doublon")
