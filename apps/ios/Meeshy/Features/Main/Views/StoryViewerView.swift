@@ -920,7 +920,7 @@ struct StoryViewerView: View {
                 initialVisibility: wrapper.story.visibility ?? PostVisibility.private.rawValue,
                 initialVisibilityUserIds: wrapper.story.visibilityUserIds ?? [],
                 allowedVisibilities: StoryRepostAudience.allowed(fromRawValue: wrapper.story.visibility),
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references in
                     viewModel.publishStoryInBackground(
                         slides: slides,
                         slideImages: slideImages,
@@ -931,7 +931,8 @@ struct StoryViewerView: View {
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds,
                         draftId: draftId,
-                        repostOfId: wrapper.story.id
+                        repostOfId: wrapper.story.id,
+                        references: references
                     )
                     republishStorySource = nil
                     // La création accepte TOUJOURS : hors-ligne, la story part

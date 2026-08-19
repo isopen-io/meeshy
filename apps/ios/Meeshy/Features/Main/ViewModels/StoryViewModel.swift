@@ -273,7 +273,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: media.loadedAudioURLs,
             originalLanguage: item.originalLanguage,
             visibility: item.visibility,
-            visibilityUserIds: item.visibilityUserIds ?? []
+            visibilityUserIds: item.visibilityUserIds ?? [],
+            declaredMentions: item.mentionsPayload ?? []
         )
 
         let ids = try await runStoryUpload(
@@ -388,6 +389,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let originalLanguage: String?
         let visibility: String
         let visibilityUserIds: [String]
+        /// Les personnes que l'auteur a DÉCLARÉES, avec leur mode — ce que la
+        /// publication envoie au lieu de deviner les `@handle` des objets
+        /// texte. Vide = aucune référence hors texte ; le serveur relit le
+        /// texte lui-même.
+        var declaredMentions: [PostMentionInput] = []
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -1359,8 +1365,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// composeur — la « Phase C » annoncée par sa docstring n'avait jamais
         /// été faite, si bien qu'une republication naissait sans lien vers son
         /// original (donc sans attribution ni crédit de vues).
-        repostOfId: String? = nil
+        repostOfId: String? = nil,
+        /// Les personnes que l'auteur a choisi de nommer, avec leur mode. Seuls
+        /// les modes que le TEXTE ne peut pas porter partent au serveur : les
+        /// INLINE, il les relit lui-même du contenu.
+        references: [ComposerReference] = []
     ) {
+        let declaredMentions = ComposerReferences.payload(references)
+
         // C6 — l'écriture a lieu au hand-off de CRÉATION uniquement (jamais
         // depuis `updateStoryInBackground` : changer l'audience d'une story
         // existante n'est pas « mon dernier choix pour une nouvelle story »).
@@ -1382,7 +1394,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     originalLanguage: originalLanguage,
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,
-                    draftId: draftId
+                    draftId: draftId,
+                    declaredMentions: declaredMentions
                 )
             }
             showStoryComposer = false
@@ -1410,7 +1423,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             loadedAudioURLs: loadedAudioURLs,
             originalLanguage: originalLanguage,
             visibility: visibility,
-            visibilityUserIds: visibilityUserIds
+            visibilityUserIds: visibilityUserIds,
+            declaredMentions: declaredMentions
         )
         let uploadId = upload.id
         activeUploads.append(upload)
@@ -1441,7 +1455,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibility: visibility,
                 visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
-                repostOfId: repostOfId
+                repostOfId: repostOfId,
+                declaredMentions: declaredMentions
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
@@ -1544,7 +1559,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
-        draftId: String? = nil
+        draftId: String? = nil,
+        declaredMentions: [PostMentionInput] = []
     ) async {
         guard let intent = await persistPublishIntentToQueue(
             slides: slides,
@@ -1555,7 +1571,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: originalLanguage,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            draftId: draftId
+            draftId: draftId,
+            declaredMentions: declaredMentions
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1608,7 +1625,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// Republication : id de l'original, persisté DANS l'item de file pour
         /// survivre à un kill — le rejeu au boot doit republier avec la même
         /// attribution, pas créer une story orpheline.
-        repostOfId: String? = nil
+        repostOfId: String? = nil,
+        /// Références DÉCLARÉES : elles ne vivent nulle part ailleurs (un badge
+        /// est exclu de la relecture serveur, une note comme un silence n'ont
+        /// aucun texte), donc un rejeu qui ne les porterait pas publierait une
+        /// story qui ne prévient personne.
+        declaredMentions: [PostMentionInput] = []
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1678,7 +1700,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             tempStoryId: tempStoryId,
             visibilityUserIds: visibilityUserIds,
             originalLanguage: originalLanguage,
-            draftId: draftId
+            draftId: draftId,
+            mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)
@@ -2207,14 +2230,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 "publish createStory slide=\(slide.id, privacy: .public) audioInPayload=\(postAudioCount) details=[\(postAudioIds, privacy: .public)]"
             )
 
-            // Les nommés que le `content` ne porte PAS : les pastilles `@pseudo`
-            // posées sur le canevas. Elles vivent dans `StoryEffects`, que le
-            // gateway ne lit pas pour les mentions — il fallait donc les lui
-            // DÉCLARER. Le serveur résout les pseudos avec la même fonction que
-            // l'extraction de texte, donc les deux voies ne divergent pas.
-            let canvasMentions = ComposerMentionQuery
-                .handles(inAll: updatedEffects.textObjects.map(\.text))
-                .map(PostMentionInput.handle)
+            // Les modes que l'auteur a CHOISIS. On ne dérive plus les `@handle`
+            // des objets texte : le serveur les relit lui-même (`content` ET
+            // `storyEffects.textObjects[].text`), et deux dériveurs finiraient
+            // par ne plus dire la même chose.
+            //
+            // Les badges du canevas s'y AJOUTENT : eux, le serveur les exclut
+            // de sa relecture — `referenceUserId` est ce qui distingue un badge
+            // d'une phrase — et ils survivent à ce que la liste déclarée ne
+            // traverse pas encore (reprise de brouillon). Sans cette union, une
+            // pastille visible sur la slide ne préviendrait personne.
+            var declaredUserIds = Set(upload.declaredMentions.compactMap(\.userId))
+            let badgeMentions = updatedEffects.textObjects.compactMap { object -> PostMentionInput? in
+                guard let userId = object.referenceUserId,
+                      declaredUserIds.insert(userId).inserted else { return nil }
+                return PostMentionInput.id(userId, display: .pinned)
+            }
+            let canvasMentions = upload.declaredMentions + badgeMentions
 
             let post = try await postService.createStory(
                 content: slide.content,

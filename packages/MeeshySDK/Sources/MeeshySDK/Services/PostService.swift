@@ -41,6 +41,12 @@ public protocol PostServiceProviding: Sendable {
     /// (mocks) restent valides via le défaut ci-dessous, qui ignore simplement
     /// `location` s'il n'est pas surchargé.
     func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost
+    /// Même création, plus les personnes que le texte ne nomme pas (note sous
+    /// le contenu, métadonnée silencieuse). Requirement SÉPARÉE et non un
+    /// paramètre ajouté à la précédente : les protocoles Swift ne portent pas
+    /// de valeur par défaut, et tout double de test aurait cessé de conformer
+    /// d'un coup — même patron que `createStory(… mentions:)`.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost
     func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?) async throws -> APIPost
     func delete(postId: String) async throws
     func like(postId: String) async throws
@@ -128,6 +134,14 @@ public extension PostServiceProviding {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId)
     }
 
+    /// Défaut : un conformeur qui n'implémente que la signature SANS mentions
+    /// (mocks existants) reste valide — les modes déclarés sont simplement
+    /// ignorés tant que le type ne surcharge pas cette méthode. `PostService`
+    /// la surcharge réellement.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location)
+    }
+
     /// Convenience texte-seul (attachements = nil). Préserve les appels existants
     /// depuis que `addComment` porte `attachmentIds` / `mobileTranscription` /
     /// `originalLanguage` (les protocoles Swift ne supportent pas les valeurs par défaut).
@@ -213,10 +227,15 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
         try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: nil)
     }
 
-    /// Seule surcharge qui envoie réellement `location` au gateway — même
-    /// convention que l'`addComment` porteur de lieu plus bas.
     public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?) async throws -> APIPost {
-        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location)
+        try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: nil)
+    }
+
+    /// Seule surcharge qui envoie réellement `location` ET les références
+    /// déclarées au gateway — même convention que l'`addComment` porteur de
+    /// lieu plus bas.
+    public func create(content: String?, type: String, visibility: String, moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?, originalLanguage: String?, mobileTranscription: MobileTranscriptionPayload?, repostOfId: String?, location: SharedPlace?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        let body = CreatePostRequest(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji, mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration, originalLanguage: originalLanguage, mobileTranscription: mobileTranscription, repostOfId: repostOfId, location: location, mentions: mentions)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }

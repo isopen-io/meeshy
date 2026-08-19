@@ -102,7 +102,7 @@ extension StoryComposerView {
         let accepted = onPublishAllInBackground(
             slides, viewModel.slideImages, viewModel.loadedImages,
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
-            storyLanguage, visibility, ids, viewModel.draftId
+            storyLanguage, visibility, ids, viewModel.draftId, viewModel.references
         )
         // Tout ce qui engage le brouillon attend de savoir si le hand-off a
         // été accepté. Un refus (édition hors-ligne, surface inerte) laisse le

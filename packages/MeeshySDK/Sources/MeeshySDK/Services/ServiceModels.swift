@@ -93,8 +93,13 @@ public struct CreatePostRequest: Encodable {
     /// Opt-in auteur : extraction de la bande-son des VIDÉOS du post vers la
     /// bibliothèque de sons (miroir de `CreatePostSchema.allowSoundExtraction`).
     public let allowSoundExtraction: Bool?
+    /// Les personnes que le post NOMME sans que son texte le dise (note sous le
+    /// contenu, métadonnée silencieuse). Jamais les INLINE : le serveur les
+    /// relit du `content` lui-même, et les déclarer ouvrirait un second chemin
+    /// vers le même fait.
+    public let mentions: [PostMentionInput]?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -104,6 +109,7 @@ public struct CreatePostRequest: Encodable {
         self.location = location
         self.storyEffects = storyEffects
         self.allowSoundExtraction = allowSoundExtraction
+        self.mentions = mentions
     }
 }
 
@@ -244,7 +250,9 @@ public struct UpdatePostRequest: Encodable, Sendable {
 /// affiche — et c'est lui qui survit à un brouillon repris trois jours plus
 /// tard, là où un id devrait être persisté en parallèle des effets. Le serveur
 /// résout les pseudos avec la MÊME fonction que l'extraction de texte.
-public struct PostMentionInput: Encodable, Sendable, Equatable {
+/// `Codable` et non `Encodable` seul : la file de publication hors-ligne
+/// persiste la déclaration telle quelle, et doit donc savoir la relire.
+public struct PostMentionInput: Codable, Sendable, Equatable {
     public let userId: String?
     public let username: String?
     /// `PINNED` | `NOTE` | `SILENT`. Jamais `INLINE` : le serveur le dérive du
@@ -261,17 +269,14 @@ public struct PostMentionInput: Encodable, Sendable, Equatable {
         self.display = display
     }
 
-    /// Conservé sans label pour les appelants existants qui référencent CETTE
-    /// surcharge comme valeur de fonction (`.map(PostMentionInput.handle)`) —
-    /// `display` reste `nil`, lu PINNED côté serveur, comme avant ce chantier.
-    public static func handle(_ username: String) -> PostMentionInput {
-        PostMentionInput(userId: nil, username: username, display: nil)
-    }
-
+    /// Nommée par son pseudo — ce que porte un brouillon repris, là où un id
+    /// devrait avoir été persisté en parallèle des effets.
     public static func handle(_ username: String, display: PostReferenceDisplay) -> PostMentionInput {
         PostMentionInput(userId: nil, username: username, display: display.rawValue)
     }
 
+    /// Nommée par son id — ce que rend un sélecteur, et ce que porte un badge
+    /// du canevas.
     public static func id(_ userId: String, display: PostReferenceDisplay) -> PostMentionInput {
         PostMentionInput(userId: userId, username: nil, display: display.rawValue)
     }

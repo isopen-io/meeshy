@@ -27,7 +27,13 @@ extension View {
         fullScreenCover(item: session) { current in
             StoryComposerView(
                 viewModel: current.composer,
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId in
+                // Les références déclarées ne descendent PAS par l'édition :
+                // le composer ne les hydrate pas depuis la story publiée, et
+                // envoyer sa liste (vide) EFFACERAIT celles qu'elle porte —
+                // `mentions: []` signifie « plus aucune référence déclarée »
+                // côté gateway. Tant que l'hydratation n'existe pas, ne rien
+                // envoyer est la seule lecture juste.
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, _ in
                     let edit = StoryViewModel.StoryEditContext(
                         postId: current.composer.editingPostId ?? current.story.id,
                         originalMediaIds: current.composer.editingOriginalMediaIds,

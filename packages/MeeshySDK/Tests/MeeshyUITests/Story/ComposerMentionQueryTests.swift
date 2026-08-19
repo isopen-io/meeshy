@@ -61,51 +61,6 @@ final class ComposerMentionQueryTests: XCTestCase {
             "Salut @alice ça va"
         )
     }
-
-    // MARK: - Récolte
-
-    func test_handles_collectsEveryHandleInOrder() {
-        XCTAssertEqual(
-            ComposerMentionQuery.handles(in: "@alice et @bob se sont vus"),
-            ["alice", "bob"]
-        )
-    }
-
-    func test_handles_deduplicatesCaseInsensitively() {
-        XCTAssertEqual(ComposerMentionQuery.handles(in: "@alice @Alice @ALICE"), ["alice"])
-    }
-
-    func test_handles_ignoresAnAtThatDoesNotOpenAHandle() {
-        XCTAssertEqual(ComposerMentionQuery.handles(in: "contact@exemple.com"), [])
-    }
-
-    func test_handles_keepsDotsAndUnderscoresOfAPseudonym() {
-        XCTAssertEqual(ComposerMentionQuery.handles(in: "@marie_l.dupont !"), ["marie_l.dupont"])
-    }
-
-    // MARK: - Mentions déclarées au serveur
-
-    /// Le canevas voyage dans `StoryEffects`, que le gateway ne lit pas pour les
-    /// mentions. C'est cette récolte qui alimente le champ `mentions` de
-    /// `POST /posts` — sans elle, nommer quelqu'un par une pastille imposait
-    /// d'écrire son `@handle` dans la légende.
-    func test_handlesInAll_collectsEveryCanvasHandleInOrder() {
-        XCTAssertEqual(
-            ComposerMentionQuery.handles(inAll: ["@alice", "Bonne journée", "coucou @bob"]),
-            ["alice", "bob"]
-        )
-    }
-
-    func test_handlesInAll_deduplicatesAcrossTexts_caseInsensitively() {
-        XCTAssertEqual(
-            ComposerMentionQuery.handles(inAll: ["@alice", "@Alice et @bob"]),
-            ["alice", "bob"]
-        )
-    }
-
-    func test_handlesInAll_withoutAnyHandle_isEmpty() {
-        XCTAssertTrue(ComposerMentionQuery.handles(inAll: ["Bonjour", "contact@exemple.com"]).isEmpty)
-    }
 }
 
 struct ComposerReferencesTests {

@@ -9,11 +9,10 @@ import MeeshySDK
 /// compte. Le panneau de suggestions et l'appel réseau, eux, sont de la
 /// présentation, et se testent mal.
 ///
-/// La récolte (`handles(in:)`) n'est pas un luxe : côté serveur, le SEUL canal
-/// de mention d'un post est son `content` — `POST /posts` n'accepte aucune
-/// liste de mentionnés, et le gateway extrait les `@handle` du texte pour
-/// persister `Mention` et notifier. Une story dont les mentions ne vivent que
-/// sur le canevas ne notifierait donc personne.
+/// La RÉCOLTE des `@handle` n'y est plus : le serveur relit le texte lui-même
+/// (la légende ET les objets du canevas, badges exclus), et ce que le texte ne
+/// peut pas porter, le client le DÉCLARE — cf. `ComposerReferences.payload`.
+/// Deux dériveurs finiraient par ne plus dire la même chose.
 ///
 /// `nonisolated` : `MeeshyUI` compile sous `defaultIsolation(MainActor)`, et une
 /// règle de chaîne de caractères n'a rien à faire sur l'acteur principal — ses
@@ -59,50 +58,6 @@ public nonisolated enum ComposerMentionQuery {
     public static func replacingTrailingHandle(in text: String, with username: String) -> String {
         guard trailingHandle(in: text) != nil, let at = text.lastIndex(of: "@") else { return text }
         return String(text[text.startIndex..<at]) + "@" + username + " "
-    }
-
-    /// Les handles portés par un texte, sans leur `@`, dans l'ordre d'apparition
-    /// et dédupliqués sans tenir compte de la casse (le serveur résout les
-    /// pseudos de la même façon).
-    public static func handles(in text: String) -> [String] {
-        var found: [String] = []
-        var seen = Set<String>()
-        var index = text.startIndex
-        while index < text.endIndex {
-            guard text[index] == "@", opensHandle(at: index, in: text) else {
-                index = text.index(after: index)
-                continue
-            }
-            let start = text.index(after: index)
-            var end = start
-            while end < text.endIndex, isHandleCharacter(text[end]) {
-                end = text.index(after: end)
-            }
-            let handle = String(text[start..<end])
-            if !handle.isEmpty, seen.insert(handle.lowercased()).inserted {
-                found.append(handle)
-            }
-            index = max(end, start)
-        }
-        return found
-    }
-
-    /// Les pseudos que le CANEVAS nomme, dans l'ordre où l'auteur les a posés et
-    /// dédupliqués sans tenir compte de la casse.
-    ///
-    /// C'est ce que la publication déclare au serveur (`mentions` de
-    /// `POST /posts`). Avant ce canal, le gateway n'extrayait les mentions que
-    /// du `content` : nommer quelqu'un par une pastille imposait d'écrire son
-    /// `@handle` dans la légende — une phrase inventée pour satisfaire
-    /// l'extracteur, visible de tous, et traduite par le Prisme comme du contenu
-    /// d'auteur. La déclaration remplace cette contorsion.
-    public static func handles(inAll texts: [String]) -> [String] {
-        var seen = Set<String>()
-        var ordered: [String] = []
-        for handle in texts.flatMap(handles(in:)) where seen.insert(handle.lowercased()).inserted {
-            ordered.append(handle)
-        }
-        return ordered
     }
 }
 
@@ -167,10 +122,10 @@ public nonisolated enum ComposerReferences {
     public static func payload(_ references: [ComposerReference]) -> [PostMentionInput] {
         references.compactMap { reference in
             guard reference.display != .inline else { return nil }
-            if let userId = reference.userId {
-                return PostMentionInput(userId: userId, username: nil, display: reference.display.rawValue)
+            guard let userId = reference.userId else {
+                return .handle(reference.username, display: reference.display)
             }
-            return PostMentionInput(userId: nil, username: reference.username, display: reference.display.rawValue)
+            return .id(userId, display: reference.display)
         }
     }
 

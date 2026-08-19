@@ -111,6 +111,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// Effets de la DERNIÈRE slide envoyée au serveur — sert à prouver que les
     /// thumbHashes calculés en aval du hand-off arrivent bien avant le TUS.
     var lastCreateStoryEffects: StoryEffects?
+    /// Références DÉCLARÉES de la dernière slide envoyée. `nil` = aucune, ce
+    /// qui n'est PAS la même chose qu'une liste vide : le serveur relit alors
+    /// le texte lui-même.
+    var lastCreateStoryMentions: [PostMentionInput]?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -350,6 +354,18 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         return try createStoryResult.get()
     }
 
+    /// Surcharge PORTEUSE des modes déclarés. Sans elle, le défaut du protocole
+    /// retomberait sur la signature sans `mentions` et le double ne verrait
+    /// jamais ce que la publication déclare.
+    func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
+                     visibilityUserIds: [String]?, originalLanguage: String?, mediaIds: [String]?,
+                     repostOfId: String?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        lastCreateStoryMentions = mentions
+        return try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
+                                     visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                                     mediaIds: mediaIds, repostOfId: repostOfId)
+    }
+
     func createWithType(_ type: PostType, content: String, visibility: String,
                         moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost {
         createWithTypeCallCount += 1
@@ -557,6 +573,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastCreateStoryRepostOfId = nil
         lastCreateStoryOriginalLanguage = nil
         lastCreateStoryEffects = nil
+        lastCreateStoryMentions = nil
 
         createWithTypeResult = .success(stubPost)
         createWithTypeCallCount = 0

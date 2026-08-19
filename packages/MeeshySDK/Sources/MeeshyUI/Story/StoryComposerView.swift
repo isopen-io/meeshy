@@ -252,7 +252,11 @@ public struct StoryComposerView: View {
         _ originalLanguage: String?,
         _ visibility: String,
         _ visibilityUserIds: [String],
-        _ draftId: String
+        _ draftId: String,
+        /// Les personnes que l'auteur a choisi de nommer, avec leur mode. La
+        /// publication les DÉCLARE au serveur ; elle ne devine plus les
+        /// `@handle` des objets texte, que le serveur relit lui-même.
+        _ references: [ComposerReference]
     ) -> Bool
     public var onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     public var onDismiss: () -> Void
@@ -262,7 +266,7 @@ public struct StoryComposerView: View {
         initialVisibilityUserIds: [String] = [],
         allowedVisibilities: [PostVisibility]? = nil,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference]) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void
     ) {
@@ -288,7 +292,7 @@ public struct StoryComposerView: View {
         initialVisibilityUserIds: [String] = [],
         allowedVisibilities: [PostVisibility]? = nil,
         onPublishSlide: @escaping (StorySlide, UIImage?, [String: UIImage], [String: URL], String?) async throws -> Void = { _, _, _, _, _ in },
-        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String) -> Bool,
+        onPublishAllInBackground: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL], String?, String, [String], String, [ComposerReference]) -> Bool,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {

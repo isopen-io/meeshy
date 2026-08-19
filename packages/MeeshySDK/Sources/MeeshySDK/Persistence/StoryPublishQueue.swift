@@ -51,11 +51,22 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// son erreur. Optionnel pour rester rétro-compatible avec les items
     /// persistés avant ce champ (→ `nil`, chemin de reprise MANUELLE inchangé).
     public let draftId: String?
+    /// Les personnes que l'auteur a DÉCLARÉES (badge posé sur le canevas, note
+    /// sous le contenu, métadonnée silencieuse), telles que la publication les
+    /// enverra.
+    ///
+    /// Persistées ici parce qu'elles ne vivent NULLE PART ailleurs : le serveur
+    /// relit les `@handle` du texte, mais un badge en est exclu par
+    /// construction et une note comme un silence n'ont aucun texte. Sans ce
+    /// champ, une story mise en file hors-ligne repartait sans référence — elle
+    /// affichait la pastille et ne prévenait personne. Optionnel pour rester
+    /// rétro-compatible avec les rows persistés avant lui (→ `nil`).
+    public let mentionsPayload: [PostMentionInput]?
 
     enum CodingKeys: String, CodingKey {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
-        case originalLanguage, draftId
+        case originalLanguage, draftId, mentionsPayload
     }
 
     public init(
@@ -66,7 +77,8 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         tempStoryId: String? = nil,
         visibilityUserIds: [String]? = nil,
         originalLanguage: String? = nil,
-        draftId: String? = nil
+        draftId: String? = nil,
+        mentionsPayload: [PostMentionInput]? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -81,6 +93,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage
         self.draftId = draftId
+        self.mentionsPayload = mentionsPayload
     }
 
     public init(from decoder: Decoder) throws {
@@ -97,6 +110,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.visibilityUserIds = try container.decodeIfPresent([String].self, forKey: .visibilityUserIds)
         self.originalLanguage = try container.decodeIfPresent(String.self, forKey: .originalLanguage)
         self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
+        self.mentionsPayload = try container.decodeIfPresent([PostMentionInput].self, forKey: .mentionsPayload)
     }
 }
 
