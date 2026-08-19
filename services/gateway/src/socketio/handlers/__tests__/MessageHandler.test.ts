@@ -409,6 +409,53 @@ describe('MessageHandler', () => {
       expect(mockResolveParticipant).toHaveBeenCalled();
     });
 
+    // Troisième porte de l'exemption de contenu vide (`MessageValidator`
+    // :55-69, qui affirme que les trois évoluent ensemble) : une diffusion à
+    // plusieurs destinataires copie ses pièces jointes CÔTÉ SERVEUR
+    // (`copyAttachments.ts`) et n'envoie donc ni texte ni `attachmentIds`. Le
+    // transport socket est le chemin de repli documenté quand REST échoue :
+    // resté fermé, il refusait ce que les deux autres portes laissent passer.
+    it('does not reject an empty-content send carrying copyAttachmentsFromMessageId', async () => {
+      const SOURCE_MSG_ID = 'b1b2c3d4e5f6a1b2c3d4e5f6';
+      mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Le message ne peut pas être vide' });
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: makeValidSendData({ content: '', copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+      });
+
+      await handler.handleMessageSend(
+        socket,
+        makeValidSendData({ content: '', copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+        callback,
+      );
+
+      expect(callback).not.toHaveBeenCalledWith(
+        expect.objectContaining({ error: 'Le message ne peut pas être vide' }),
+      );
+      expect(mockResolveParticipant).toHaveBeenCalled();
+    });
+
+    // Le champ doit aussi ARRIVER au service : franchir la garde sans être
+    // transmis laisserait la copie de pièces jointes muette.
+    it('forwards copyAttachmentsFromMessageId to the messaging service', async () => {
+      const SOURCE_MSG_ID = 'b1b2c3d4e5f6a1b2c3d4e5f6';
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: makeValidSendData({ content: '', copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+      });
+
+      await handler.handleMessageSend(
+        socket,
+        makeValidSendData({ content: '', copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+        callback,
+      );
+
+      expect(deps.messagingService.handleMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ copyAttachmentsFromMessageId: SOURCE_MSG_ID }),
+        PARTICIPANT_ID,
+      );
+    });
+
     it('returns USER_BLOCKED error for blocked DM', async () => {
       (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
         type: 'direct',

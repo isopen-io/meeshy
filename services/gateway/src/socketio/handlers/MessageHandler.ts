@@ -281,8 +281,19 @@ export class MessageHandler {
       // celui que la modale de transfert web emprunte en PRIMAIRE — refusait
       // tout transfert de média sans légende. Toute évolution de l'une des deux
       // exemptions touche l'autre.
+      //
+      // `copyAttachmentsFromMessageId` porte la MÊME exemption pour la MÊME
+      // raison (diffusion à plusieurs destinataires : les pièces jointes sont
+      // copiées côté serveur par `copyAttachments.ts`, le client n'envoie ni
+      // texte ni `attachmentIds`). Cette troisième porte est restée fermée
+      // pendant que les deux autres s'ouvraient.
       const validation = validateMessageLength(validated.content);
-      if (!validation.isValid && !data.encryptedPayload && !validated.forwardedFromId) {
+      if (
+        !validation.isValid &&
+        !data.encryptedPayload &&
+        !validated.forwardedFromId &&
+        !validated.copyAttachmentsFromMessageId
+      ) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
       }
@@ -337,6 +348,10 @@ export class MessageHandler {
         storyReplyToId: validated.storyReplyToId,
         forwardedFromId: validated.forwardedFromId,
         forwardedFromConversationId: validated.forwardedFromConversationId,
+        // Diffusion : les pièces jointes du message source sont copiées côté
+        // serveur (`MessageProcessor.saveMessage` → `copyAttachments`). Franchir
+        // la garde sans transmettre le champ laisserait la copie muette.
+        copyAttachmentsFromMessageId: validated.copyAttachmentsFromMessageId,
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`

@@ -34,6 +34,16 @@ export const SocketMessageSendSchema = z.object({
   // broadcastNewMessage (which would otherwise throw P2023 on a bad id).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // TROISIÈME PORTE de l'exemption de contenu vide (`MessageValidator`
+  // :55-69) : une diffusion à plusieurs destinataires copie ses pièces jointes
+  // CÔTÉ SERVEUR (`copyAttachments.ts`) et n'envoie donc ni texte ni
+  // `attachmentIds`. Sans cette déclaration, `z.object` STRIPPE le champ en
+  // silence et le validateur, privé de son motif d'exemption, rejette l'envoi
+  // en CONTENT_EMPTY — alors que le refine Zod de la route REST le laisse
+  // passer. Validé en ObjectId comme les références de transfert ci-dessus :
+  // `copyAttachments` l'utilise dans une requête Prisma, qui jetterait P2023
+  // sur une chaîne malformée.
+  copyAttachmentsFromMessageId: mongoId.optional(),
   // Effets de message — parité avec la route REST POST /messages.
   // `MessageProcessor.saveMessage` recompose le bitfield `effectFlags`
   // depuis `isBlurred` / `expiresAt` / `isViewOnce`.

@@ -66,6 +66,12 @@ export class MessageValidator {
     // jointes côté serveur (`copyAttachments.ts`), sans jamais poser
     // `forwardedFromId` — ce n'est pas un transfert. Sans cette ligne, une
     // diffusion de média sans texte mourrait ici en CONTENT_EMPTY.
+    //
+    // Sur le transport socket, ce champ doit d'abord SURVIVRE au schéma :
+    // `SocketMessageSendSchema` est un `z.object`, qui strippe en silence tout
+    // champ non déclaré. Il y est déclaré, et la garde de
+    // `MessageHandler.handleMessageSend` l'exempte comme ici — les trois portes
+    // ne s'ouvrent qu'ensemble.
     if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId && !request.copyAttachmentsFromMessageId) {
       errors.push({
         field: 'content',

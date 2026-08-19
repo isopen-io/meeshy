@@ -57,6 +57,31 @@ describe('SocketMessageSendSchema', () => {
     const result = SocketMessageSendSchema.safeParse({ ...base, replyToId: 'not-an-objectid' });
     expect(result.success).toBe(false);
   });
+
+  // TROISIÈME PORTE de l'exemption de contenu vide (`MessageValidator`
+  // :55-69) : le refine Zod de la route REST et le validateur la portent déjà,
+  // le transport socket — chemin de repli documenté quand REST échoue — la
+  // strippait en silence (`z.object` supprime tout champ non déclaré), donc
+  // une diffusion de média sans texte arrivait au validateur SANS son motif
+  // d'exemption et mourait en CONTENT_EMPTY.
+  it('preserves copyAttachmentsFromMessageId (third door of the empty-content exemption)', () => {
+    const result = SocketMessageSendSchema.safeParse({
+      ...base,
+      content: '',
+      copyAttachmentsFromMessageId: VALID_MONGO_ID,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.success && result.data.copyAttachmentsFromMessageId).toBe(VALID_MONGO_ID);
+  });
+
+  it('rejects a copyAttachmentsFromMessageId that is not a MongoDB ObjectId', () => {
+    const result = SocketMessageSendSchema.safeParse({
+      ...base,
+      copyAttachmentsFromMessageId: 'not-an-objectid',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('SocketMessageSendWithAttachmentsSchema', () => {
