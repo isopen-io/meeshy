@@ -1,18 +1,20 @@
 import XCTest
 @testable import Meeshy
 
-/// Garde de source pour "Plus…" → ouverture directe sur "Vues" (accusés de
-/// lecture), sur les DEUX call sites de l'action `.more` (overlay appui-long
-/// custom + menu contextuel natif iOS 26). `ctx`/`MessageMenuContext` n'est en
-/// portée à aucun des deux sites (vérifié) — la source de vérité lue
-/// directement est `UserPreferencesManager.shared.privacy.showReadReceipts`,
-/// exactement comme `ConversationView.swift:1847` et `MessageOverlayMenu.swift:163`.
+/// Garde de source pour l'ouverture de « Plus… » : la GRILLE COMPLÈTE, sur les
+/// DEUX call sites de l'action `.more` (overlay appui-long custom + menu
+/// contextuel natif iOS 26). Le saut direct vers « Vues » introduit le
+/// 2026-08-11 a été ANNULÉ le 2026-08-19 (décision user) — seuls les accès
+/// directs explicites (tap coches ✓✓ `onShowReadStatus`, « info message »
+/// `onShowMessageInfo`) conservent leur saut vers `.views`.
+///
+/// Nom de classe conservé pour l'historique (et la stabilité `-only-testing`).
 ///
 /// Précédents : `CallDetailRoutingTests`, `ConversationMenuSystemDesignGuardTests`
 /// — même fichier (`ConversationView.swift`), même pattern d'extraction de
 /// closure balancée sur les accolades (PAS de fenêtre de caractères fixe).
 ///
-/// Voir `docs/superpowers/specs/2026-08-11-message-more-jumps-to-views-design.md`.
+/// Voir `docs/superpowers/specs/2026-08-19-media-forward-reliability-and-more-menu-design.md`, Volet B.
 @MainActor
 final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
 
@@ -45,28 +47,26 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
 
     // MARK: - Site 1 : overlay appui-long custom (`onShowMore`)
 
-    func test_overlayOnShowMore_gatesInitialItemOnShowReadReceipts() throws {
+    func test_overlayOnShowMore_opensFullGrid() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
         guard let body = closureBody(after: "onShowMore: {", in: view) else {
             XCTFail("ConversationView must define the onShowMore closure passed to MessageOverlayMenu")
             return
         }
-        XCTAssertFalse(
-            body.contains("moreSheetInitialItem = nil"),
-            "onShowMore must no longer hard-code moreSheetInitialItem = nil — « Plus… » must " +
-            "jump straight to Vues when the user shares read receipts (2026-08-11 spec)."
-        )
         XCTAssertTrue(
-            body.contains("UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil"),
-            "onShowMore must gate moreSheetInitialItem on showReadReceipts directly (ctx is not " +
-            "in scope here), falling back to nil (full grid) when reciprocity is off — never " +
-            "pointing initialItem at an item absent from moreSections."
+            body.contains("moreSheetInitialItem = nil"),
+            "onShowMore must open the FULL grid (initialItem = nil) — the 2026-08-11 " +
+            "jump-to-Vues was reverted by the 2026-08-19 spec (Volet B)."
+        )
+        XCTAssertFalse(
+            body.contains(".views"),
+            "onShowMore must no longer route to .views in any form."
         )
     }
 
     // MARK: - Site 2 : menu contextuel natif iOS 26 (`case .more:` → Button)
 
-    func test_nativeMoreButton_gatesInitialItemOnShowReadReceipts() throws {
+    func test_nativeMoreButton_opensFullGrid() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
         guard let caseRange = view.range(of: "case .more:") else {
             XCTFail("ConversationView's native menu builder must define a `case .more:` branch")
@@ -77,34 +77,36 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
             XCTFail("The .more case must wrap its action in a Button { } closure")
             return
         }
-        XCTAssertFalse(
-            body.contains("moreSheetInitialItem = nil"),
-            "The native .more Button must no longer hard-code moreSheetInitialItem = nil — same " +
-            "jump-to-Vues fix as the overlay site, on the iOS 26 native contextMenu path."
-        )
         XCTAssertTrue(
-            body.contains("UserPreferencesManager.shared.privacy.showReadReceipts ? .views : nil"),
-            "The native .more Button must gate moreSheetInitialItem on showReadReceipts directly " +
-            "(ctx is built in buildNativeMessageMenu and never passed to nativeMenuButton), falling " +
-            "back to nil (full grid) when reciprocity is off."
+            body.contains("moreSheetInitialItem = nil"),
+            "The native .more Button must open the FULL grid (initialItem = nil) — same " +
+            "revert as the overlay site, on the iOS 26 native contextMenu path."
+        )
+        XCTAssertFalse(
+            body.contains(".views"),
+            "The native .more Button must no longer route to .views."
         )
     }
 
-    // MARK: - Invariant global : aucun 3e chemin, aucune régression du repli
+    // MARK: - Accès directs préservés + ancien ternaire banni
 
-    /// Repli explicite (2026-08-11) : si un futur refactor supprime la branche
-    /// `: nil` du ternaire (ex. en codant en dur `.views` sans condition), plus
-    /// aucune occurrence de la chaîne littérale ne resterait pour l'attraper —
-    /// ce test lit donc les DEUX sites en une passe, indépendamment des deux
-    /// tests ciblés ci-dessus.
-    func test_noUnconditionalNilFallbackRemainsOnEitherMoreSite() throws {
+    func test_directAccessesStillJumpToViews_andTernaryIsGone() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
-        let occurrences = view.components(separatedBy: "moreSheetInitialItem = nil").count - 1
+        for marker in ["onShowMessageInfo: {", "onShowReadStatus: {"] {
+            guard let body = closureBody(after: marker, in: view) else {
+                XCTFail("ConversationView must keep the \(marker.dropLast(3)) direct-access closure")
+                continue
+            }
+            XCTAssertTrue(
+                body.contains("moreSheetInitialItem = .views"),
+                "\(marker) must keep jumping straight to Vues — only the two « Plus… » " +
+                "sites revert to the grid (2026-08-19 spec, Volet B)."
+            )
+        }
         XCTAssertEqual(
-            occurrences, 0,
-            "ConversationView must not hard-code `moreSheetInitialItem = nil` anywhere — both " +
-            "« Plus… » call sites (overlay + native menu) must gate on " +
-            "UserPreferencesManager.shared.privacy.showReadReceipts instead."
+            view.components(separatedBy: "showReadReceipts ? .views : nil").count - 1, 0,
+            "The 2026-08-11 ternary must be fully removed from ConversationView — " +
+            "« Plus… » no longer depends on read receipts."
         )
     }
 }

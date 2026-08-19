@@ -1,7 +1,12 @@
 # "Plus…" ouvre directement "Vues"
 
+> **ANNULÉ le 2026-08-19** — « Plus… » rouvre la grille complète (décision user).
+> Les accès directs (coches ✓✓ `onShowReadStatus`, « info message » `onShowMessageInfo`)
+> conservent le saut vers Vues. Voir
+> `2026-08-19-media-forward-reliability-and-more-menu-design.md`, Volet B.
+
 Date : 2026-08-11
-Statut : approuvé (user « Oui », choix confirmé par question de clarification)
+Statut : annulé le 2026-08-19 (était : approuvé, user « Oui »)
 Périmètre : `ConversationView.swift`, action `.more` — **les DEUX menus appui-long**, cf. ci-dessous.
 
 ⚠️ **Collision de fichier avec le chantier « bouton média »** (`2026-08-11-attachment-media-action-menu-design.md`) : les deux modifient `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift`. Zones disjointes (celui-ci : 1807-1810 + 1976-1982 ; l'autre : le bloc `MessageMoreSheet(...)` 728-772), mais **jamais les deux en parallèle dans deux worktrees** sans rebase.
