@@ -29,7 +29,9 @@ suivantes :
 ## Objectif & scope
 
 Sous-titres live traduits pendant un appel **1:1** (iOS ne supporte pas les appels de groupe
-aujourd'hui — hors scope). Activation par **toggle manuel** dans l'UI d'appel (pas d'auto-activation).
+aujourd'hui — hors scope). Activation par **toggle manuel** dans l'UI d'appel : c'est ce que
+l'utilisateur LIT. **Révisé le 2026-08-19** — ce qu'il ÉMET, lui, suit l'écoute réelle de
+l'appel (`TranscriptionCapturePolicy`) : voir « Symétrie de la capture » ci-dessous.
 Reconnaissance vocale **strictement on-device** — jamais de fallback vers les serveurs de
 reconnaissance vocale d'Apple, y compris quand le modèle on-device ne supporte pas la langue du
 locuteur (dans ce cas : transcription indisponible pour lui, pas de dégradation silencieuse vers
@@ -95,15 +97,43 @@ Composants détaillés dans la section suivante.
 ## Décisions actées (brainstorming 2026-07-10)
 1. **Objectif** : sous-titres traduits (Prisme Linguistique), pas juste un transcript brut mono-langue.
 2. **Confidentialité STT** : strictement on-device, jamais de fallback serveur Apple.
-3. **Activation** : toggle manuel dans l'appel, jamais automatique.
+3. **Activation** : toggle manuel dans l'appel pour l'AFFICHAGE. **Amendée le 2026-08-19** :
+   la CAPTURE, elle, démarre aussi quand un pair ouvre son panneau — sans quoi activer les
+   sous-titres ne faisait de l'utilisateur qu'un émetteur (cf. « Symétrie de la capture »).
 4. **Approche technique** : capture locale uniquement + pipeline gateway existant (Approche A), avec spike de validation technique en préalable au reste du build.
 
 ## Flux de données détaillé
 1. Utilisateur active le toggle dans `CallView` → `CallManager.toggleTranscription()` → `CallTranscriptionService.requestPermission()` (si pas déjà `.authorized`) → si accordé, démarre le tap `AVAudioEngine` + `SFSpeechRecognizer` local uniquement.
 2. Chaque résultat `isFinal=true` du recognizer → `MessageSocketManager.emitCallTranscriptionSegment(callId:, segment:)`.
-3. Gateway (`CallEventsHandler.handleTranscriptionSegment`, inchangé) valide, autorise, traduit vers chaque participant actif, émet `call:translated-segment` à la salle.
+3. Gateway (`CallEventsHandler.handleTranscriptionSegment`) valide, autorise, traduit vers chaque participant actif, émet `call:translated-segment` — **ciblé par langue**, jamais à la salle entière (une traduction ne doit atteindre que les auditeurs qui l'ont résolue). Les auditeurs qui lisent DÉJÀ la langue du locuteur reçoivent l'ORIGINAL, sans aller-retour ZMQ.
 4. Chaque device (y compris le locuteur, qui reçoit son propre segment en retour avec `sourceLanguage == targetLanguage`) reçoit via `callTranslatedSegmentReceived` → `CallTranscriptionService` ajoute le segment à son buffer d'affichage, attribué à `speakerId`.
 5. Fin d'appel ou toggle désactivé → arrêt du tap, `stopTranscribing()`/`resetForCallEnd()` (logique de purge inconditionnelle conservée du code supprimé — un follower recevait sinon les segments de l'appel précédent).
+
+## Symétrie de la capture (révision 2026-08-19)
+
+**Le défaut.** Un device ne transcrit que son PROPRE micro (jamais l'audio distant reçu). Tant
+que la capture était liée au seul panneau local, activer les sous-titres faisait de
+l'utilisateur un pur ÉMETTEUR : son correspondant recevait ses transcriptions, lui ne recevait
+rien tant que le correspondant n'activait pas de son côté. Le signal
+`call:transcription-active` n'allumait qu'un indicateur d'invitation — l'utilisateur devait
+deviner qu'il fallait attendre un geste de l'autre.
+
+**La règle.** `TranscriptionCapturePolicy` (`apps/ios/.../Models/CaptionsMode.swift`) :
+ce device capture dès que **quelqu'un écoute** — son propre panneau, ou un pair qui a ouvert le
+sien. Il s'arrête quand le dernier auditeur ferme.
+
+**Les trois maillons, et pourquoi aucun n'est facultatif :**
+
+| Maillon | Rôle | Ce qui casse sans lui |
+|---|---|---|
+| `CallManager.toggleTranscription()` consulte la politique | réconcilie capture ↔ écoute | le pair qui écoute ne fait rien démarrer |
+| `call:transcription-active` émis depuis le **panneau**, jamais depuis la capture | dit « j'écoute », pas « je capture » | verrou mutuel : chacun reste actif parce que l'autre l'est, le micro tapé jusqu'à la fin de l'appel |
+| Renvoi de l'intention à `participant-joined` | le gateway ne rejoue pas le signal | un arrivant ignore qu'on l'écoute et reste muet |
+
+**Ce qui NE change pas** : l'utilisateur reste maître de ce qu'il VOIT (la réception est
+toujours filtrée par son propre panneau), la reconnaissance reste strictement on-device, et
+`CaptionsMode` — donc l'état du bouton — se dérive désormais du panneau (`isShowingOverlay`),
+plus de `isTranscribing`, qui peut être vrai sans que l'utilisateur local ait rien demandé.
 
 ## Gestion d'erreurs
 - Permission refusée → toggle reste désactivé, message discret non bloquant pour l'appel.

@@ -1925,40 +1925,37 @@ struct CallView: View {
         .callToggleAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)
     }
 
-    /// Derived from `transcriptionService.isTranscribing` (authoritative on/off) and
-    /// `showOriginalText` (local display flag) — see CaptionsMode's own doc comment.
+    /// Derived from `transcriptionService.isShowingOverlay` (le panneau de
+    /// l'utilisateur LOCAL) and `showOriginalText` (local display flag) — see
+    /// CaptionsMode's own doc comment. Surtout PAS `isTranscribing` : depuis
+    /// que ce device capture aussi pour servir un pair qui écoute
+    /// (`TranscriptionCapturePolicy`), `isTranscribing` peut être vrai sans
+    /// que l'utilisateur local ait rien demandé — le bouton s'allumerait seul.
     private var captionsMode: CaptionsMode {
-        CaptionsMode(isTranscribing: transcriptionService.isTranscribing, showOriginalText: showOriginalText)
+        CaptionsMode(isShowingCaptions: transcriptionService.isShowingOverlay, showOriginalText: showOriginalText)
     }
 
-    /// Advances the 3-state cycle. `.translated`'s start path mirrors the old
-    /// transcriptionToggleButton exactly (read isTranscribing BEFORE calling
-    /// toggleTranscription(), since the start path is async — permission request
-    /// awaited inside a Task — so isTranscribing is still false right after the call
-    /// returns; reading it before, at tap time, is always accurate).
+    /// Advances the 3-state cycle. Le tap POSE l'état du panneau, puis
+    /// `toggleTranscription()` réconcilie la capture avec l'écoute réelle de
+    /// l'appel (panneau local OU pair à l'écoute). L'ancien `willStart`, lu
+    /// sur `isTranscribing`, n'a plus de sens : la capture peut déjà tourner
+    /// pour servir un pair alors que l'utilisateur local n'a rien ouvert.
     private func advanceCaptionsMode() {
-        // Panneau ouvert en RÉCEPTION SEULE : le moteur local a échoué
-        // (permission refusée, langue non supportée on-device) mais le
-        // panneau est resté visible pour continuer à recevoir le pair (spec
-        // 2026-08-13). captionsMode est .off (isTranscribing=false) alors que
-        // le panneau est ouvert — sans cette branche, le cycle .off→.translated
-        // relancerait le démarrage en boucle et le panneau serait infermable.
-        // Le tap FERME (désabonnement réception) ; le suivant retentera.
-        if captionsMode == .off, showTranscript, transcriptionService.lastError != nil {
-            showTranscript = false
-            transcriptionService.isShowingOverlay = false
-            return
-        }
+        // Plus de branche « réception seule » : le cycle est piloté par le
+        // PANNEAU (`isShowingOverlay`), que ce tap vient de poser — il est
+        // donc toujours cohérent, et un panneau ouvert reste fermable même
+        // quand le moteur local a échoué (permission refusée, langue non
+        // supportée on-device). C'est cette dérivation qui rendait le panneau
+        // infermable, pas l'absence de rustine.
         switch captionsMode.next {
         case .translated:
             showOriginalText = false
-            let willStart = !transcriptionService.isTranscribing
-            showTranscript = willStart
+            showTranscript = true
             // PERF-005: single authoritative place that flips this — the audio
             // structural transcript panel and the video floating banner both key
             // off it, so it must not depend on either view's own lifecycle
             // (onAppear/onChange copies would drift).
-            transcriptionService.isShowingOverlay = willStart
+            transcriptionService.isShowingOverlay = true
             callManager.toggleTranscription()
         case .original:
             showOriginalText = true
@@ -1972,9 +1969,11 @@ struct CallView: View {
 
     /// Live captions — cycles off → captions (translated) → captions (original) → off
     /// on tap. Replaces the old transcriptionToggleButton + translationToggleButton pair
-    /// (2 buttons collapsed into 1 — task #17). Manual, per spec decision (never
-    /// auto-activates): the speaker controls when their voice is transcribed and sent
-    /// to the gateway. Floats on the trailing edge, not in controlButtonsRow — see the
+    /// (2 buttons collapsed into 1 — task #17). Ce bouton commande ce que
+    /// l'utilisateur LIT ; ce qu'il ÉMET suit l'écoute réelle de l'appel
+    /// depuis 2026-08-19 (`TranscriptionCapturePolicy`) — sans quoi activer
+    /// les sous-titres ne faisait de lui qu'un émetteur et jamais un lecteur.
+    /// Floats on the trailing edge, not in controlButtonsRow — see the
     /// call site's comment.
     private var captionsCycleButton: some View {
         let mode = captionsMode

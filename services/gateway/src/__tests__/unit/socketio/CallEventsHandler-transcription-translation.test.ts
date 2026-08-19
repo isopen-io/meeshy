@@ -554,4 +554,76 @@ describe('CallEventsHandler — call:transcription-segment ZMQ translation', () 
       expect(emissions.every((e) => !e.rooms.includes(ROOMS.call(VALID_CALL_ID)))).toBe(true);
     });
   });
+  describe('group call, listener sharing the SPEAKER\'s language (same-language starvation guard)', () => {
+    const FR_LISTENER_ID = 'user-fr-listener';
+    const EN_LISTENER_ID = 'user-en-listener';
+
+    /**
+     * Speaker speaks 'fr'. One listener resolves to 'fr' (needs NO translation),
+     * another to 'en' (needs one). The same-language listener used to be dropped
+     * from `listenersByLanguage` and the whole-room fallback only fired when
+     * `targetLanguages.length === 0` — so as soon as ONE listener needed a
+     * translation, every same-language listener received nothing at all.
+     */
+    function setupMixedCall() {
+      const prisma = makePrisma();
+      (prisma.callParticipant.findMany as jest.Mock).mockResolvedValue([
+        { participant: { userId: SPEAKER_ID, user: { systemLanguage: 'fr' } } },
+        { participant: { userId: FR_LISTENER_ID, user: { systemLanguage: 'fr' } } },
+        { participant: { userId: EN_LISTENER_ID, user: { systemLanguage: 'en' } } },
+      ]);
+      const { socket, handlers, emissions } = makeRoomAwareSocket();
+      const zmqClient = makeMultiLanguageFakeZmqClient();
+      const emitter = zmqClient as unknown as EventEmitter;
+
+      const handler = new CallEventsHandler(prisma, makeCallService());
+      handler.setZmqClient(zmqClient);
+      handler.setupCallEvents(socket as any, {} as any, () => SPEAKER_ID);
+
+      const segmentPromise = handlers[CALL_EVENTS.TRANSCRIPTION_SEGMENT](VALID_SEGMENT);
+      return { emitter, emissions, segmentPromise };
+    }
+
+    async function resolveEnglish(emitter: EventEmitter, segmentPromise: Promise<void>) {
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+      await new Promise((resolve) => setImmediate(resolve));
+      emitter.emit(`translationCompleted:${MESSAGE_ID}`, {
+        taskId: 'task-en',
+        result: { translatedText: 'Hello world', messageId: MESSAGE_ID },
+        targetLanguage: 'en',
+      });
+      await segmentPromise;
+    }
+
+    it('still delivers the ORIGINAL segment to the listener who shares the speaker\'s language', async () => {
+      const { emitter, emissions, segmentPromise } = setupMixedCall();
+      await resolveEnglish(emitter, segmentPromise);
+
+      const frEmission = emissions.find((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)));
+      expect(frEmission).toBeDefined();
+      expect(frEmission!.payload.segment.text).toBe('Bonjour le monde');
+      expect(frEmission!.payload.segment.translatedText).toBeUndefined();
+      expect(frEmission!.payload.segment.targetLanguage).toBe('fr');
+    });
+
+    it('does not leak the same-language original into the English listener\'s room', async () => {
+      const { emitter, emissions, segmentPromise } = setupMixedCall();
+      await resolveEnglish(emitter, segmentPromise);
+
+      const frEmission = emissions.find((e) => e.rooms.includes(ROOMS.user(FR_LISTENER_ID)));
+      expect(frEmission!.rooms).not.toContain(ROOMS.user(EN_LISTENER_ID));
+      expect(frEmission!.rooms).not.toContain(ROOMS.call(VALID_CALL_ID));
+    });
+
+    it('still translates for the English listener', async () => {
+      const { emitter, emissions, segmentPromise } = setupMixedCall();
+      await resolveEnglish(emitter, segmentPromise);
+
+      const enEmission = emissions.find((e) => e.payload.segment.translatedText === 'Hello world');
+      expect(enEmission).toBeDefined();
+      expect(enEmission!.rooms).toEqual([ROOMS.user(EN_LISTENER_ID)]);
+    });
+  });
 });

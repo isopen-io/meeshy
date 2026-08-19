@@ -31,14 +31,15 @@ public final class EdgeTranscriptionService: ObservableObject {
 
     // MARK: - Authorization
 
+    /// Passe par `DevicePermissions` — source unique des demandes TCC, dont
+    /// le callback est confiné `nonisolated`. Le closure nu qui vivait ici
+    /// portait la forme exacte d'un crash device confirmé (`tccd` rappelle
+    /// hors main actor, l'assertion d'isolation trappe AU SITE D'APPEL) ;
+    /// `CallTranscriptionService` l'avait corrigé de son côté, pas celui-ci.
     public func requestAuthorization() async -> Bool {
-        let status: SFSpeechRecognizerAuthorizationStatus = await withCheckedContinuation { continuation in
-            SFSpeechRecognizer.requestAuthorization { status in
-                continuation.resume(returning: status)
-            }
-        }
-        authorizationStatus = status
-        return status == .authorized
+        let granted = await DevicePermissions.requestSpeechRecognition().isUsable
+        authorizationStatus = SFSpeechRecognizer.authorizationStatus()
+        return granted
     }
 
     public var isAuthorized: Bool {

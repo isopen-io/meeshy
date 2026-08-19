@@ -1866,11 +1866,28 @@ export class CallEventsHandler {
     // relay below must reach ONLY the listeners who resolved to that language,
     // never the whole call room (see `emitTranslatedSegmentTo`).
     const listenersByLanguage = new Map<string, string[]>();
+    // Auditeurs qui lisent DÉJÀ la langue du locuteur : rien à traduire pour
+    // eux, mais ils ont droit aux sous-titres comme tout le monde. Les
+    // `continue` les écartaient de `listenersByLanguage`, et la diffusion à
+    // la salle ci-dessous ne se déclenche que si PERSONNE ne demande de
+    // traduction — donc dès qu'un SEUL auditeur en demandait une, tous les
+    // auditeurs de même langue que le locuteur ne recevaient plus RIEN
+    // (appel fr+fr+en : le francophone était muet côté sous-titres).
+    // Ils sont désormais servis en ORIGINAL, sans aller-retour ZMQ.
+    const sameLanguageListeners: string[] = [];
     for (const p of activeParticipants) {
-      const userId = p.participant.userId;
-      if (userId === speaker.userId) continue;
+      // Même prudence que `resolveActiveCallSpeaker` : la relation
+      // `participant` peut manquer sur une ligne, et l'accès nu jetait —
+      // l'exception remontait au try/catch du handler, tuant le relais
+      // pour TOUS les auditeurs, pas seulement celui dont la ligne est
+      // incomplète.
+      const userId = p.participant?.userId;
+      if (!userId || userId === speaker.userId) continue;
       const lang = resolveUserLanguage(p.participant.user ?? {}, { deviceLocale: p.participant.user?.deviceLocale ?? undefined });
-      if (typeof lang !== 'string' || lang === data.segment.language) continue;
+      if (typeof lang !== 'string' || lang === data.segment.language) {
+        sameLanguageListeners.push(userId);
+        continue;
+      }
       const listeners = listenersByLanguage.get(lang);
       if (listeners) listeners.push(userId);
       else listenersByLanguage.set(lang, [userId]);
@@ -1898,6 +1915,14 @@ export class CallEventsHandler {
       );
       return;
     }
+
+    // Les auditeurs de même langue sont servis TOUT DE SUITE, en original :
+    // leur sous-titre n'attend pas le retour ZMQ des autres langues.
+    this.emitTranslatedSegmentTo(
+      socket,
+      sameLanguageListeners,
+      this.buildTranslatedSegment(data, speaker, data.segment.language)
+    );
 
     // Scoped to this call+segment (shared across the segment's target
     // languages, disambiguated below by taskId) — NOT the global

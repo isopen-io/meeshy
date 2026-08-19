@@ -270,10 +270,10 @@ final class CallHangupFastPathTests: XCTestCase {
     /// couperait aussi le flux du correspondant, alors que seule MA
     /// transcription a échoué. Le panneau reste donc ouvert en RÉCEPTION
     /// SEULE. Ce garde protège maintenant les deux moitiés de cette décision :
-    /// le toast part, le panneau ne se ferme pas — et il reste FERMABLE, via
-    /// la branche dédiée d'`advanceCaptionsMode` (sans elle, le cycle
-    /// .off→.translated relancerait le démarrage en boucle et le panneau
-    /// serait infermable).
+    /// le toast part, le panneau ne se ferme pas — et il reste FERMABLE parce
+    /// que le cycle est dérivé du PANNEAU (`isShowingOverlay`) depuis le
+    /// 2026-08-19, plus de `isTranscribing`. La branche-rustine qui rendait le
+    /// panneau fermable après un échec moteur a disparu avec sa cause.
     func test_lastError_surfacesAsToast_andKeepsTranscriptPanelOpenForReceiveOnly() throws {
         let view = try source("Meeshy/Features/Main/Views/CallView.swift")
         guard let range = view.range(of: "adaptiveOnChange(of: transcriptionService.lastError)") else {
@@ -301,9 +301,22 @@ final class CallHangupFastPathTests: XCTestCase {
         )
 
         // Contrepartie indissociable : le panneau resté ouvert doit rester
-        // fermable. captionsMode est .off (isTranscribing == false) alors que
-        // le panneau est visible — sans cette branche, le cycle repartirait
-        // sur .translated et retenterait le démarrage indéfiniment.
+        // FERMABLE. C'était assuré par une branche-rustine dédiée tant que le
+        // cycle se dérivait de `isTranscribing` — un moteur en échec laissait
+        // `captionsMode == .off` avec le panneau visible, et le tap suivant
+        // relançait le démarrage au lieu de fermer. Depuis le 2026-08-19 le
+        // cycle se dérive du PANNEAU : `isShowingOverlay == true` ⇒ le mode
+        // n'est jamais `.off`, le cycle avance normalement et `.off` ferme.
+        // La rustine a disparu avec sa cause ; c'est l'invariant qui est gardé
+        // ici, pas la ligne qui l'implémentait.
+        XCTAssertTrue(
+            view.contains("CaptionsMode(isShowingCaptions: transcriptionService.isShowingOverlay"),
+            "captionsMode doit se dériver du PANNEAU. Le dériver d'`isTranscribing` rend le " +
+            "panneau infermable après un échec du moteur local — et, depuis que la capture " +
+            "démarre aussi pour servir un pair, allumerait le bouton sans que l'utilisateur " +
+            "local ait rien demandé."
+        )
+
         guard let cycleRange = view.range(of: "private func advanceCaptionsMode() {") else {
             XCTFail("CallView must define advanceCaptionsMode()")
             return
@@ -311,12 +324,15 @@ final class CallHangupFastPathTests: XCTestCase {
         let cycleEnd = view.range(of: "\n    }", range: cycleRange.upperBound ..< view.endIndex)?.upperBound
             ?? view.endIndex
         let cycleBody = String(view[cycleRange.lowerBound ..< cycleEnd])
+        guard let offRange = cycleBody.range(of: "case .off:") else {
+            XCTFail("advanceCaptionsMode must handle .off")
+            return
+        }
+        let offBranch = String(cycleBody[offRange.upperBound...])
         XCTAssertTrue(
-            cycleBody.contains("if captionsMode == .off, showTranscript, transcriptionService.lastError != nil {"),
-            "advanceCaptionsMode must carry the receive-only escape hatch — panel open while " +
-            "captionsMode is .off after a start failure: the next tap CLOSES it (unsubscribing " +
-            "from reception) instead of re-entering the start loop, which would make the panel " +
-            "impossible to close."
+            offBranch.contains("showTranscript = false") && offBranch.contains("isShowingOverlay = false"),
+            "La branche .off doit fermer le panneau — c'est la sortie du cycle, quelle que soit " +
+            "la santé du moteur local."
         )
     }
 

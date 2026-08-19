@@ -1,5 +1,6 @@
 import AVFoundation
 import Photos
+import Speech
 
 // MARK: - MediaPermissionState
 
@@ -38,6 +39,16 @@ public enum MediaPermissionState: String, Sendable {
 extension MediaPermissionState {
     public init(captureStatus: AVAuthorizationStatus) {
         switch captureStatus {
+        case .notDetermined: self = .notDetermined
+        case .authorized: self = .granted
+        case .denied: self = .denied
+        case .restricted: self = .restricted
+        @unknown default: self = .denied
+        }
+    }
+
+    public init(speechStatus: SFSpeechRecognizerAuthorizationStatus) {
+        switch speechStatus {
         case .notDetermined: self = .notDetermined
         case .authorized: self = .granted
         case .denied: self = .denied
@@ -122,6 +133,26 @@ public enum DevicePermissions {
     /// Requests write-only access to the photo library.
     public nonisolated static func requestPhotoLibraryAdd() async -> MediaPermissionState {
         await requestPhotoLibrary(for: .addOnly)
+    }
+
+    /// Requests on-device speech-recognition access.
+    ///
+    /// `SFSpeechRecognizer.requestAuthorization` rappelle depuis `tccd`, hors
+    /// main actor — exactement le cas décrit en tête de ce fichier. Le même
+    /// défaut a produit un crash device confirmé côté app
+    /// (`Meeshy-2026-07-11-020237.ips`, thread fautif invoqué par `tccd` via
+    /// XPC) ; `CallTranscriptionService` l'a corrigé chez lui, mais
+    /// `EdgeTranscriptionService` gardait le closure nu. Il passe désormais
+    /// par ici, comme les quatre autres demandes TCC.
+    public nonisolated static func requestSpeechRecognition() async -> MediaPermissionState {
+        let current = MediaPermissionState(speechStatus: SFSpeechRecognizer.authorizationStatus())
+        guard current.canPrompt else { return current }
+        let status = await withCheckedContinuation { (continuation: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
+            SFSpeechRecognizer.requestAuthorization { newStatus in
+                continuation.resume(returning: newStatus)
+            }
+        }
+        return MediaPermissionState(speechStatus: status)
     }
 
     // MARK: - Private

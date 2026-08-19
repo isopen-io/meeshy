@@ -255,21 +255,22 @@ final class CallTranscriptionServiceTests: XCTestCase {
         XCTAssertEqual(sut.persistedSegmentsForTesting.first?.text, "Bonjour.")
     }
 
-    func test_stopTranscribing_signalsDeactivationToPeers() {
-        // Symétrique du signal d'activation : les pairs retirent leur badge
-        // d'invitation quand ce device coupe sa transcription.
+    /// `call:transcription-active` dit « j'ÉCOUTE », pas « je capture ».
+    /// Depuis que la capture démarre aussi pour servir un pair qui écoute
+    /// (`TranscriptionCapturePolicy`), l'émettre depuis la capture faisait
+    /// que deux devices s'entretenaient mutuellement — chacun voyant l'autre
+    /// « actif », plus aucun ne pouvait s'arrêter et le micro restait tapé
+    /// jusqu'à la fin de l'appel. L'émission appartient désormais au panneau
+    /// local, via `CallManager.publishListeningIntentIfChanged()`.
+    func test_stopTranscribing_neverSignalsPeers_theSignalBelongsToTheListeningPanel() {
         let (sut, socket) = makeSUT()
         sut.setTranscribingForTesting(true)
         sut.setCallIdForTesting("call-1")
         sut.stopTranscribing()
-        XCTAssertEqual(socket.emitCallTranscriptionActiveCalls.count, 1)
-        XCTAssertEqual(socket.emitCallTranscriptionActiveCalls.first?.callId, "call-1")
-        XCTAssertEqual(socket.emitCallTranscriptionActiveCalls.first?.active, false)
+        XCTAssertTrue(socket.emitCallTranscriptionActiveCalls.isEmpty)
     }
 
-    func test_stopTranscribing_whenNeverTranscribing_doesNotSignal() {
-        // stopTranscribing est aussi appelé au teardown de fin d'appel sur
-        // des devices qui n'ont jamais transcrit — pas de faux signal.
+    func test_startAndStopCapture_neverSignalPeers_evenWhenNeverTranscribing() {
         let (sut, socket) = makeSUT()
         sut.stopTranscribing()
         XCTAssertTrue(socket.emitCallTranscriptionActiveCalls.isEmpty)

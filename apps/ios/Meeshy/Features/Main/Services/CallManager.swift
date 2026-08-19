@@ -301,10 +301,14 @@ final class CallManager: ObservableObject {
     @Published var bubbleSizeTier: CallBubbleSizeTier = .circle
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
-    /// Un pair a activé sa transcription (`call:transcription-active`, nom
-    /// estampillé gateway) — pilote l'indicateur d'invitation sur l'icône
-    /// captions de CallView. JAMAIS gâté par la visibilité du panneau local :
-    /// c'est précisément l'invitation à l'ouvrir. Reset au teardown d'appel.
+    /// Pairs qui ont OUVERT leur panneau de sous-titres — un ensemble, pas un
+    /// booléen : avec un seul drapeau, la fermeture d'UN pair dans un appel à
+    /// trois éteignait la capture locale et privait celui qui lisait encore.
+    private var listeningPeers: Set<String> = []
+    /// Au moins un pair écoute (`call:transcription-active`, nom estampillé
+    /// gateway) — pilote l'indicateur sur l'icône captions de CallView ET la
+    /// capture locale (`TranscriptionCapturePolicy`). JAMAIS gâté par la
+    /// visibilité du panneau local. Reset au teardown d'appel.
     @Published private(set) var remoteTranscriptionActive = false
     /// Outbound video auto-suspended by the graceful-degradation survival layer
     /// (sustained poor link). Distinct from `isVideoEnabled` (the user's camera
@@ -2744,10 +2748,61 @@ final class CallManager: ObservableObject {
         }
     }
 
+    /// Dernière valeur de `call:transcription-active` annoncée aux pairs.
+    /// Évite de ré-émettre à chaque réconciliation — et surtout de renvoyer
+    /// un signal quand c'est le PAIR qui vient de bouger.
+    private var publishedListeningIntent = false
+
+    /// Annonce aux pairs que ce device ÉCOUTE (panneau local ouvert) — jamais
+    /// qu'il capture. La distinction est vitale : la capture démarre aussi
+    /// pour servir un pair, donc l'annoncer depuis la capture faisait que deux
+    /// devices s'entretenaient mutuellement (« l'autre est actif, je reste
+    /// actif ») sans qu'aucun ne puisse plus s'arrêter. Piloté par le panneau,
+    /// le signal reste la propriété du seul utilisateur local.
+    private func publishListeningIntentIfChanged() {
+        guard let callId = currentCallId else { return }
+        let isListening = transcriptionService.isShowingOverlay
+        guard isListening != publishedListeningIntent else { return }
+        publishedListeningIntent = isListening
+        MessageSocketManager.shared.emitCallTranscriptionActive(callId: callId, active: isListening)
+    }
+
+    /// Un participant vient d'entrer : le gateway ne rejoue PAS les
+    /// `call:transcription-active` émis avant son arrivée. Sans ce renvoi, un
+    /// arrivant ignorerait que quelqu'un lit déjà, ne capturerait donc pas, et
+    /// resterait muet pour tout le monde alors que l'appel a des lecteurs.
+    private func reannounceListeningIntent() {
+        guard publishedListeningIntent, let callId = currentCallId else { return }
+        MessageSocketManager.shared.emitCallTranscriptionActive(callId: callId, active: true)
+    }
+
+    /// **Réconcilie la capture locale avec l'écoute RÉELLE de l'appel** —
+    /// le nom « toggle » est historique : ce n'est plus le panneau local seul
+    /// qui décide. Un device ne transcrit que son PROPRE micro (jamais l'audio
+    /// distant), donc lier la capture au seul panneau local faisait de celui
+    /// qui active les sous-titres un pur ÉMETTEUR : le pair recevait tout, lui
+    /// ne recevait rien tant que le pair n'avait pas activé de son côté. C'est
+    /// exactement le symptôme rapporté (« il reçoit mes transcriptions, je ne
+    /// reçois pas les siennes »). La règle vit dans
+    /// `TranscriptionCapturePolicy` ; appeler cette méthode est idempotent.
+    ///
+    /// Appelée par les DEUX entrées d'écoute : le panneau local
+    /// (`CallView.advanceCaptionsMode`) et le signal du pair
+    /// (`call:transcription-active`).
     func toggleTranscription() {
-        if transcriptionService.isTranscribing {
+        publishListeningIntentIfChanged()
+        switch TranscriptionCapturePolicy.action(
+            localPanelOpen: transcriptionService.isShowingOverlay,
+            peerCaptionsActive: remoteTranscriptionActive,
+            isCapturing: transcriptionService.isTranscribing
+        ) {
+        case .stop:
             transcriptionService.stopTranscribing()
             return
+        case .none:
+            return
+        case .start:
+            break
         }
         guard let callId = currentCallId else { return }
         let localUser = AuthManager.shared.currentUser
@@ -3940,6 +3995,8 @@ final class CallManager: ObservableObject {
         hasLocalVideoTrack = false
         hasRemoteVideoTrack = false
         remoteTranscriptionActive = false
+        listeningPeers = []
+        publishedListeningIntent = false
         callStartDate = nil
         reconnectAttempt = 0
         analyticsTotalReconnects = 0
@@ -4471,7 +4528,35 @@ final class CallManager: ObservableObject {
             .sink { [weak self] event in
                 guard let self, self.currentCallId == event.callId else { return }
                 guard event.speakerId != AuthManager.shared.currentUser?.id else { return }
-                self.remoteTranscriptionActive = event.active
+                if event.active {
+                    self.listeningPeers.insert(event.speakerId)
+                } else {
+                    self.listeningPeers.remove(event.speakerId)
+                }
+                self.remoteTranscriptionActive = !self.listeningPeers.isEmpty
+                // Un pair qui ouvre son panneau devient un AUDITEUR : ce
+                // device doit alors capturer son propre micro, panneau local
+                // ouvert ou non — sinon le pair n'a rien à lire. Symétrie
+                // stricte : quand le dernier auditeur ferme, la capture
+                // s'arrête (cf. TranscriptionCapturePolicy).
+                self.toggleTranscription()
+            }
+            .store(in: &cancellables)
+
+        // Un pair peut quitter l'appel (raccroché, crash, coupure) panneau
+        // OUVERT, sans jamais émettre `{active: false}` — son entrée
+        // survivrait dans `listeningPeers` pour le reste de l'appel et ce
+        // device continuerait de tapper le micro pour un auditeur qui n'existe
+        // plus. Miroir exact du nettoyage web (`use-remote-transcription-active`,
+        // Vague 134) : identité résolue par `userId` puis `participantId`.
+        socket.callParticipantLeft
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, self.currentCallId == event.callId else { return }
+                guard let identity = event.userId ?? event.participantId else { return }
+                guard self.listeningPeers.remove(identity) != nil else { return }
+                self.remoteTranscriptionActive = !self.listeningPeers.isEmpty
+                self.toggleTranscription()
             }
             .store(in: &cancellables)
 
@@ -4870,7 +4955,10 @@ final class CallManager: ObservableObject {
         participantJoinedCancellable = MessageSocketManager.shared.callParticipantJoined
             .receive(on: DispatchQueue.main)
             .filter { $0.callId == callId }
-            .sink { handleJoin($0) }
+            .sink { [weak self] event in
+                handleJoin(event)
+                self?.reannounceListeningIntent()
+            }
 
         // CALL-FIX 2026-06-06 — the callee may have ALREADY joined (socket churn /
         // re-join / rapid retry) before this listener subscribed; the live

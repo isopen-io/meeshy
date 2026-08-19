@@ -314,21 +314,21 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         startRecognitionTask(language: localLanguage)
         isTranscribing = true
-        // Signal de présence : invite les autres participants à activer leur
-        // propre transcription (indicateur sur leur icône captions). Estampillé
-        // côté gateway, jamais gâté par la visibilité du panneau du récepteur.
-        socket.emitCallTranscriptionActive(callId: callId, active: true)
+        // Le signal de présence `call:transcription-active` n'est PLUS émis
+        // ici : il dit « j'écoute », pas « je capture ». Depuis que la capture
+        // démarre aussi pour servir un pair qui écoute, l'émettre depuis la
+        // capture faisait que deux devices s'entretenaient mutuellement —
+        // chacun voyant l'autre « actif », aucun ne pouvait plus s'arrêter et
+        // le micro restait tapé jusqu'à la fin de l'appel. C'est désormais
+        // `CallManager.publishListeningIntentIfChanged()`, piloté par le
+        // PANNEAU local, qui l'émet.
         callsLogger.info("Call transcription started — local language: \(localLanguage)")
     }
 
     func stopTranscribing() {
-        // Symétrique du signal d'activation : les pairs retirent l'indicateur
-        // d'invitation. Uniquement si une session était réellement active
-        // (stopTranscribing est aussi appelé en teardown de fin d'appel sur
-        // des devices qui n'ont jamais transcrit).
-        if let callId, isTranscribing {
-            socket.emitCallTranscriptionActive(callId: callId, active: false)
-        }
+        // Pas de signal de présence ici non plus — voir startTranscribing :
+        // arrêter la CAPTURE ne signifie pas cesser d'ÉCOUTER, et l'inverse
+        // est vrai aussi.
         removeConfigurationObserver()
         removeInterruptionObserver()
         stopLocalCapture()
@@ -693,7 +693,12 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     ) {
         guard self.callId == callId else { return }
         guard isTranscribing else { return }
-        guard isFinal || isShowingOverlay else { return }
+        // Les révisions PARTIELLES partent toujours sur le data channel : la
+        // capture peut tourner pour servir un PAIR qui écoute alors que le
+        // panneau local est fermé (TranscriptionCapturePolicy) — les gâter
+        // sur `isShowingOverlay` privait ce pair du flux vivant et ne lui
+        // laissait que les finals, l'énoncé apparaissant d'un bloc.
+        // Seul l'APPEND au journal local reste lié au panneau.
 
         // Le wireId (clé de journal inter-transports) est minté au PREMIER
         // résultat de l'énoncé et partagé par toutes ses révisions
@@ -708,7 +713,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
             isFinal: isFinal, confidence: confidence, language: language,
             capturedAt: capturedAt
         )
-        appendSegment(segment)
+        if isFinal || isShowingOverlay {
+            appendSegment(segment)
+        }
 
         guard isFinal else {
             // Révision partielle : P2P uniquement (data channel) — jamais le

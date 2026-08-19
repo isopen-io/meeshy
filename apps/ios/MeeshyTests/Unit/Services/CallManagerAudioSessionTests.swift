@@ -4551,3 +4551,94 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Symétrie de la transcription d'appel (2026-08-19)
+
+/// Un device ne transcrit que son PROPRE micro. Tant que la capture était liée
+/// au seul panneau local, activer les sous-titres faisait de l'utilisateur un
+/// pur ÉMETTEUR : le pair recevait ses transcriptions, lui ne recevait rien
+/// tant que le pair n'activait pas de son côté. Ces gardes figent les trois
+/// maillons qui rendent la diffusion symétrique.
+@MainActor
+final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func body(of signature: String, in source: String) throws -> String {
+        guard let start = source.range(of: signature),
+              let end = source[start.upperBound...].range(of: "\n    }") else {
+            throw XCTSkip("\(signature) introuvable dans CallManager.swift")
+        }
+        return String(source[start.lowerBound ..< end.upperBound])
+    }
+
+    /// Maillon 1 — la capture doit consulter la politique, sinon le pair qui
+    /// écoute ne fait jamais démarrer ce device.
+    func test_toggleTranscription_consultsTheCapturePolicy_notJustTheLocalPanel() throws {
+        let source = try callManagerSource()
+        let fn = try body(of: "func toggleTranscription()", in: source)
+
+        XCTAssertTrue(
+            fn.contains("TranscriptionCapturePolicy.action("),
+            "toggleTranscription() doit déléguer la décision à TranscriptionCapturePolicy : " +
+            "c'est elle qui fait démarrer la capture quand un PAIR écoute, panneau local fermé."
+        )
+        XCTAssertTrue(
+            fn.contains("peerCaptionsActive: remoteTranscriptionActive"),
+            "L'écoute du pair doit entrer dans la décision de capture — sans elle, " +
+            "activer les sous-titres ne rend l'utilisateur qu'émetteur."
+        )
+    }
+
+    /// Maillon 2 — le signal de présence suit le PANNEAU, jamais la capture.
+    /// L'émettre depuis la capture ferait que deux devices s'entretiennent
+    /// mutuellement : chacun voit l'autre « actif », plus aucun ne s'arrête,
+    /// et le micro reste tapé jusqu'à la fin de l'appel.
+    func test_listeningIntentSignal_readsThePanel_neverTheCaptureState() throws {
+        let source = try callManagerSource()
+        let fn = try body(of: "private func publishListeningIntentIfChanged()", in: source)
+
+        XCTAssertTrue(
+            fn.contains("transcriptionService.isShowingOverlay"),
+            "L'intention d'écoute annoncée aux pairs se lit sur le panneau local."
+        )
+        XCTAssertFalse(
+            fn.contains("isTranscribing"),
+            "Annoncer la CAPTURE au lieu de l'ÉCOUTE crée un verrou mutuel : " +
+            "chaque device resterait actif parce que l'autre l'est."
+        )
+    }
+
+    /// Maillon 3 — le signal du pair doit réellement déclencher la capture.
+    func test_peerTranscriptionActiveSink_reconcilesTheLocalCapture() throws {
+        let source = try callManagerSource()
+        guard let sinkRange = source.range(of: "socket.callTranscriptionActiveReceived") else {
+            return XCTFail("Le sink call:transcription-active est introuvable")
+        }
+        let tail = String(source[sinkRange.upperBound...].prefix(1200))
+
+        XCTAssertTrue(
+            tail.contains("self.listeningPeers.insert(event.speakerId)"),
+            "Le sink doit suivre les auditeurs PAR IDENTITÉ : avec un simple booléen, " +
+            "la fermeture d'UN pair dans un appel à trois éteint la capture et prive " +
+            "celui qui lisait encore."
+        )
+        XCTAssertTrue(
+            tail.contains("self.remoteTranscriptionActive = !self.listeningPeers.isEmpty"),
+            "Le drapeau publié n'est que la projection de l'ensemble des auditeurs."
+        )
+        XCTAssertTrue(
+            tail.contains("self.toggleTranscription()"),
+            "Le sink doit réconcilier la capture : sans cet appel, apprendre qu'un pair " +
+            "écoute ne fait rien démarrer et le pair ne reçoit jamais rien."
+        )
+    }
+}

@@ -1,5 +1,6 @@
 import AVFoundation
 import Photos
+import Speech
 import XCTest
 @testable import MeeshySDK
 
@@ -16,6 +17,15 @@ final class DevicePermissionsTests: XCTestCase {
         XCTAssertEqual(MediaPermissionState(captureStatus: .authorized), .granted)
         XCTAssertEqual(MediaPermissionState(captureStatus: .denied), .denied)
         XCTAssertEqual(MediaPermissionState(captureStatus: .restricted), .restricted)
+    }
+
+    // MARK: - Speech recognition
+
+    func test_state_fromSpeechStatus_mapsEveryCase() {
+        XCTAssertEqual(MediaPermissionState(speechStatus: .notDetermined), .notDetermined)
+        XCTAssertEqual(MediaPermissionState(speechStatus: .authorized), .granted)
+        XCTAssertEqual(MediaPermissionState(speechStatus: .denied), .denied)
+        XCTAssertEqual(MediaPermissionState(speechStatus: .restricted), .restricted)
     }
 
     // MARK: - Photo library
@@ -71,5 +81,45 @@ final class DevicePermissionsTests: XCTestCase {
         XCTAssertNotNil(MediaPermissionState.microphone.rawValue)
         XCTAssertNotNil(MediaPermissionState.photoLibraryRead.rawValue)
         XCTAssertNotNil(MediaPermissionState.photoLibraryAdd.rawValue)
+    }
+}
+
+/// `SFSpeechRecognizer.requestAuthorization` rappelle depuis `tccd`, hors main
+/// actor. Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, un closure littéral
+/// qui lui est remis hérite `@MainActor` et son prologue trappe AU SITE
+/// D'APPEL — crash device confirmé (`Meeshy-2026-07-11-020237.ips`). Le seul
+/// endroit du SDK autorisé à passer ce closure est `DevicePermissions`, dont
+/// tout le fichier est `nonisolated` et documente la doctrine.
+final class SpeechAuthorizationIsolationSourceGuardTests: XCTestCase {
+
+    private func sdkSources() throws -> [(path: String, text: String)] {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources")
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
+            throw XCTSkip("Arborescence Sources introuvable")
+        }
+        var files: [(String, String)] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            files.append((url.lastPathComponent, (try? String(contentsOf: url, encoding: .utf8)) ?? ""))
+        }
+        return files
+    }
+
+    func test_noSDKFileOtherThanDevicePermissions_passesAClosureLiteralToRequestAuthorization() throws {
+        let offenders = try sdkSources()
+            .filter { $0.path != "DevicePermissions.swift" }
+            .filter { $0.text.contains("SFSpeechRecognizer.requestAuthorization {") }
+            .map(\.path)
+
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces fichiers remettent un closure littéral à SFSpeechRecognizer.requestAuthorization : " +
+            "\(offenders). Passer par DevicePermissions.requestSpeechRecognition(), dont le " +
+            "callback est confiné nonisolated — sinon l'assertion d'isolation trappe quand tccd rappelle."
+        )
     }
 }
