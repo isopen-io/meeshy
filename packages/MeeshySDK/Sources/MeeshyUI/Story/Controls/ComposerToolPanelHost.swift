@@ -555,104 +555,66 @@ struct ComposerToolPanelHost: View {
     @ViewBuilder
     private var textPanel: some View {
         VStack(spacing: 10) {
-            // Bouton « + Ajouter du texte ». Reste discret et collé à gauche
-            // pour ne pas competition la liste qui suit (parité avec mediaPanel).
-            HStack(spacing: 8) {
+            // Rangée d'outils de pose : texte, sticker, lieu, mention.
+            //
+            // ICÔNES SEULES, en grand (directive user 2026-08-19 : « met plutôt
+            // les icônes en gros »). Les quatre chips portaient leur libellé en
+            // toutes lettres — « Ajouter du texte », « Stickers », « Lieu »,
+            // « Mentionner » — quatre pavés qui mangeaient la largeur du band et
+            // se traduisaient inégalement (l'allemand débordait là où le français
+            // tenait). Le geste, lui, est le même pour les quatre : poser un
+            // élément sur la slide. Une icône le dit aussi bien, et laisse le
+            // band respirer.
+            //
+            // Les libellés ne DISPARAISSENT pas : ils deviennent les étiquettes
+            // VoiceOver. Une icône nue sans étiquette serait un bouton muet pour
+            // qui ne voit pas l'écran — et les clés du catalogue resteraient
+            // vivantes sans personne pour les lire.
+            HStack(spacing: 12) {
                 if viewModel.canAddText {
-                    Button {
-                        addTextAndEdit()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 14, weight: .medium))
-                            Text(String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .foregroundColor(MeeshyColors.brandPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
-                        )
-                    }
+                    toolIconButton(
+                        systemImage: "textformat",
+                        a11y: String(localized: "story.composer.addText",
+                                     defaultValue: "Ajouter du texte", bundle: .module),
+                        action: addTextAndEdit
+                    )
                 }
                 // C8 — les stickers redeviennent atteignables : le picker
                 // complet existait (StickerPickerView) mais n'avait AUCUN
                 // call site depuis le retrait du tool dédié. Foyer choisi :
                 // le panneau Texte (les stickers sont des overlays de la
-                // même famille), même style que « Ajouter du texte ».
-                Button {
-                    onOpenStickerPicker?()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(MeeshyColors.brandPrimary.opacity(0.12))
-                    )
-                }
+                // même famille).
+                toolIconButton(
+                    systemImage: "face.smiling",
+                    a11y: String(localized: "story.sticker.title",
+                                 defaultValue: "Stickers", bundle: .module),
+                    action: { onOpenStickerPicker?() }
+                )
                 // T20 — la pastille de lieu partage ce foyer : c'est un overlay
                 // de la même famille que texte et sticker. Rendu SEULEMENT si
                 // l'app a injecté un picker (`\.storyLocationPicker`) : un chip
                 // qui ouvre le vide est pire que pas de chip.
                 if locationPicker != nil {
-                    Button {
-                        onOpenLocationPicker?()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 14, weight: .medium))
-                            Text(String(localized: "story.location.add", defaultValue: "Lieu", bundle: .module))
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .foregroundColor(MeeshyColors.brandPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
-                        )
-                    }
-                    .accessibilityLabel(String(localized: "story.location.add.a11y",
-                                               defaultValue: "Ajouter un lieu à la story",
-                                               bundle: .module))
+                    toolIconButton(
+                        systemImage: "mappin.circle.fill",
+                        a11y: String(localized: "story.location.add.a11y",
+                                     defaultValue: "Ajouter un lieu à la story", bundle: .module),
+                        action: { onOpenLocationPicker?() }
+                    )
                 }
                 // La mention rejoint le même foyer : c'est un overlay de la même
                 // famille que texte, sticker et lieu — et, comme eux, une
                 // étiquette qu'on POSE. Elle n'est pas gardée par un fournisseur
                 // injecté (le picker vit au SDK, à côté de celui d'audience),
-                // seulement par la place restante sur la slide : un chip qui
-                // ouvre une liste dont le choix ne se posera nulle part serait
-                // pire que pas de chip.
+                // seulement par la place restante sur la slide.
                 if viewModel.canAddText {
-                    Button {
-                        onOpenMentionPicker?()
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "at")
-                                .font(.system(size: 14, weight: .medium))
-                            Text(String(localized: "story.mention.add", defaultValue: "Mentionner", bundle: .module))
-                                .font(.system(size: 13, weight: .medium))
-                        }
-                        .foregroundColor(MeeshyColors.brandPrimary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10)
-                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
-                        )
-                    }
-                    .accessibilityLabel(String(localized: "story.mention.add.a11y",
-                                               defaultValue: "Mentionner une personne dans la story",
-                                               bundle: .module))
+                    toolIconButton(
+                        systemImage: "at",
+                        a11y: String(localized: "story.mention.add.a11y",
+                                     defaultValue: "Mentionner une personne dans la story",
+                                     bundle: .module),
+                        action: { onOpenMentionPicker?() }
+                    )
                 }
                 Spacer()
             }
@@ -684,6 +646,30 @@ struct ComposerToolPanelHost: View {
                 addTextAndEdit()
             }
         }
+    }
+
+    /// Un outil de pose : grosse icône, cible tactile pleine, libellé porté par
+    /// VoiceOver et non par des pixels.
+    ///
+    /// 44 pt de côté — le minimum tactile d'Apple. L'icône grossit (20 pt) mais
+    /// la zone touchable ne rétrécit pas en perdant le texte : c'est le piège
+    /// exact d'un passage libellé → icône.
+    private func toolIconButton(
+        systemImage: String,
+        a11y: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(MeeshyColors.brandPrimary)
+                .frame(width: 44, height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(MeeshyColors.brandPrimary.opacity(0.12))
+                )
+        }
+        .accessibilityLabel(a11y)
     }
 
     private func addTextAndEdit() {

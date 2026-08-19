@@ -66,8 +66,13 @@ final class StoryComposerLocationTests: XCTestCase {
         let panel = try source("Sources/MeeshyUI/Story/Controls/ComposerToolPanelHost.swift")
         XCTAssertTrue(panel.contains("onOpenLocationPicker?()"),
                       "Le panneau Texte doit porter un chip « Lieu » qui demande l'ouverture du picker.")
-        XCTAssertTrue(panel.contains("story.location.add"),
-                      "Le libellé du chip passe par le catalogue (bundle: .module).")
+        // Le chip ne porte plus de libellé VISIBLE depuis le passage aux
+        // grosses icônes (2026-08-19) : le texte du catalogue est devenu son
+        // étiquette VoiceOver. Une icône nue et muette serait un bouton que
+        // rien n'annonce. La clé est vérifiée ENTIÈRE — `story.location.add`
+        // seule serait satisfaite par n'importe quel préfixe.
+        XCTAssertTrue(panel.contains("story.location.add.a11y"),
+                      "L'étiquette accessible du bouton « Lieu » passe par le catalogue (bundle: .module).")
 
         let media = try source("Sources/MeeshyUI/Story/StoryComposerView+Media.swift")
         XCTAssertTrue(media.contains("$showLocationPicker"),
