@@ -21,6 +21,12 @@ export const DECLARABLE_DISPLAYS: readonly Exclude<PostReferenceDisplay, 'INLINE
  * EN PLACE, pas en fin de liste : choisir un mode et en changer sont le même
  * geste côté UI, et voir la pastille sauter au bout de la rangée à chaque
  * changement donnerait l'impression d'avoir ajouté quelqu'un.
+ *
+ * La casse d'origine du username SURVIT à l'ajout — jumelle exacte de
+ * `ComposerReferences.upsert` (Swift), qui pose `reference` telle quelle sur
+ * ce chemin. `User.username` n'est pas normalisé en minuscules ; l'aplatir
+ * ici ferait dévier le chip affiché du pseudo réel de la personne. Seule la
+ * CLÉ de comparaison est insensible à la casse.
  */
 export function upsertReference(
   reference: ComposerReference,
@@ -28,7 +34,7 @@ export function upsertReference(
 ): ComposerReference[] {
   const key = reference.username.toLowerCase();
   const index = references.findIndex((r) => r.username.toLowerCase() === key);
-  if (index === -1) return [...references, { ...reference, username: key }];
+  if (index === -1) return [...references, reference];
 
   return references.map((r, i) => (i === index ? { ...r, display: reference.display } : r));
 }

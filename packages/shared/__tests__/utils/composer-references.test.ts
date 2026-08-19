@@ -24,6 +24,16 @@ describe('upsertReference', () => {
     expect(result[0]).toEqual({ username: 'alice', display: 'NOTE' });
     expect(result[1].username).toBe('bob');
   });
+
+  it('préserve la casse d\'origine à l\'ajout — jumelle du homologue Swift, qui ne la touche pas', () => {
+    // `ComposerReferences.upsert` (Swift) ajoute `reference` telle quelle sur
+    // le chemin d'ajout ; seul le chemin "déjà là" ne touche pas au username
+    // existant. Aplatir en minuscules ICI ferait dévier le chip affiché
+    // (`ReferencePicker` rend `reference.username` tel quel) du pseudo réel
+    // de la personne, que `User.username` n'oblige pas à être en minuscules.
+    const result = upsertReference({ username: 'Alice', display: 'NOTE' }, []);
+    expect(result).toEqual([{ username: 'Alice', display: 'NOTE' }]);
+  });
 });
 
 describe('removeReference', () => {

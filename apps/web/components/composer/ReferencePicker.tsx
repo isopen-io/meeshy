@@ -136,7 +136,10 @@ function ReferencePickerBody({
     };
   }, [debouncedSearch]);
 
-  const referencedUsernames = new Set(references.map((r) => r.username));
+  // Comparaison insensible à la casse des deux côtés : `references` porte
+  // désormais le username tel qu'ajouté (casse d'origine, jumelle exacte de
+  // `ComposerReferences.upsert` côté Swift), donc plus garanti minuscule.
+  const referencedUsernames = new Set(references.map((r) => r.username.toLowerCase()));
   const candidates = results.filter((u) => !referencedUsernames.has((u.username ?? '').toLowerCase()));
 
   return (
