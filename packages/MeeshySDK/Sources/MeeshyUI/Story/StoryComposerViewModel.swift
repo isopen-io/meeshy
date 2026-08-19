@@ -43,6 +43,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Visibilité initiale de la story éditée (seed de l'état du composer).
     public internal(set) var editingInitialVisibility: String?
     public internal(set) var editingInitialVisibilityUserIds: [String] = []
+    /// L'ensemble DÉCLARÉ de la story éditée a-t-il pu être hydraté ?
+    ///
+    /// `false` quand la charge utile ne le portait pas : le composer ne sait
+    /// alors rien des références de la story, et sa liste — vide — ne peut
+    /// rien prouver. L'édition doit alors se TAIRE (clé absente, le serveur
+    /// préserve) : envoyer `[]` révoquerait des références que l'auteur n'a
+    /// jamais vues, et leur retirerait l'accès au contenu.
+    public internal(set) var editingKnowsDeclaredReferences = false
 
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it

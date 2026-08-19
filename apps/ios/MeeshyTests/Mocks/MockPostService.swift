@@ -134,6 +134,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastUpdateStoryEffects: StoryEffects?
     var lastUpdateMediaIds: [String]?
     var lastUpdateLocation: PostLocationUpdate?
+    /// Références DÉCLARÉES de la dernière édition. TROIS états observables :
+    /// `nil` (clé absente — le serveur préserve), `[]` (effacement explicite),
+    /// une liste (remplacement).
+    var lastUpdateMentions: [PostMentionInput]?
 
     var viewPostCallCount = 0
     var lastViewPostId: String?
@@ -413,6 +417,18 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastUpdateMediaIds = mediaIds
         lastUpdateLocation = location
         return try createResult.get()
+    }
+
+    /// Surcharge COMPLÈTE : sans elle, le défaut du protocole rabat l'appel sur
+    /// la signature sans mentions et le tri-état devient inobservable — un test
+    /// vert prouverait l'inverse de ce qu'il croit.
+    func update(postId: String, content: String?, visibility: String?, visibilityUserIds: [String]?, moodEmoji: String?, originalLanguage: String?, type: String?, removeMediaIds: [String]?, storyEffects: StoryEffects?, mediaIds: [String]?, location: PostLocationUpdate?, mentions: [PostMentionInput]?) async throws -> APIPost {
+        lastUpdateMentions = mentions
+        return try await update(postId: postId, content: content, visibility: visibility,
+                                visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji,
+                                originalLanguage: originalLanguage, type: type,
+                                removeMediaIds: removeMediaIds, storyEffects: storyEffects,
+                                mediaIds: mediaIds, location: location)
     }
 
     func viewPost(postId: String, duration: Int?) async throws {

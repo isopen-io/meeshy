@@ -2090,6 +2090,12 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// `StoryNotificationTargetViewModel`'s open decision.
     public var referenceAccess: ReferenceAccess?
 
+    /// Les personnes que cette story NOMME, telles que le serveur les sert,
+    /// avec leur mode. `nil` = la charge utile ne les portait pas — ce qui
+    /// n'est PAS un ensemble vide : le composer d'édition s'y fie pour savoir
+    /// s'il a le droit de REMPLACER l'ensemble déclaré ou s'il doit se taire.
+    public var mentions: [PostReference]?
+
     /// True when the *current viewer* has personally reacted to this story.
     /// Drives "is my heart active" UI affordances (sidebar, mini-status).
     /// Distinct from `reactionCount > 0`, which counts ANY reaction by anyone.
@@ -2143,7 +2149,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, contentEditedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, impressionCount: Int? = nil, repostCount: Int? = nil,
-                currentUserReactions: [String]? = nil, referenceAccess: ReferenceAccess? = nil) {
+                currentUserReactions: [String]? = nil, referenceAccess: ReferenceAccess? = nil,
+                mentions: [PostReference]? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
@@ -2156,6 +2163,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.impressionCount = impressionCount; self.repostCount = repostCount
         self.currentUserReactions = currentUserReactions; self.referenceAccess = referenceAccess
+        self.mentions = mentions
     }
 
     /// A5 — returns `true` when the story has aged past its visibility window.
@@ -2213,7 +2221,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             backgroundAudio: backgroundAudio,
             reactionCount: reactionCount, commentCount: commentCount,
             shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
-            currentUserReactions: currentUserReactions, referenceAccess: referenceAccess
+            currentUserReactions: currentUserReactions, referenceAccess: referenceAccess,
+            mentions: mentions
         )
     }
 
@@ -2243,7 +2252,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             backgroundAudio: backgroundAudio,
             reactionCount: reactionCount, commentCount: commentCount,
             shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
-            currentUserReactions: currentUserReactions, referenceAccess: referenceAccess
+            currentUserReactions: currentUserReactions, referenceAccess: referenceAccess,
+            mentions: mentions
         )
     }
 }
@@ -2429,7 +2439,8 @@ extension Array where Element == APIPost {
                                  impressionCount: post.impressionCount,
                                  repostCount: post.repostCount,
                                  currentUserReactions: post.currentUserReactions,
-                                 referenceAccess: post.referenceAccess)
+                                 referenceAccess: post.referenceAccess,
+                                 mentions: post.mentions)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {

@@ -27,13 +27,13 @@ extension View {
         fullScreenCover(item: session) { current in
             StoryComposerView(
                 viewModel: current.composer,
-                // Les références déclarées ne descendent PAS par l'édition :
-                // le composer ne les hydrate pas depuis la story publiée, et
-                // envoyer sa liste (vide) EFFACERAIT celles qu'elle porte —
-                // `mentions: []` signifie « plus aucune référence déclarée »
-                // côté gateway. Tant que l'hydratation n'existe pas, ne rien
-                // envoyer est la seule lecture juste.
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, _ in
+                // Les références déclarées descendent par l'édition — mais
+                // seulement quand le composer a pu les HYDRATER depuis la story
+                // publiée (`editingKnowsDeclaredReferences`). Sinon sa liste,
+                // vide, ne prouve rien : `mentions: []` signifie « plus aucune
+                // référence déclarée » côté gateway, et révoquerait celles que
+                // l'auteur n'a jamais vues.
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references in
                     let edit = StoryViewModel.StoryEditContext(
                         postId: current.composer.editingPostId ?? current.story.id,
                         originalMediaIds: current.composer.editingOriginalMediaIds,
@@ -50,7 +50,9 @@ extension View {
                         originalLanguage: originalLanguage,
                         visibility: visibility,
                         visibilityUserIds: visibilityUserIds,
-                        draftId: draftId
+                        draftId: draftId,
+                        references: references,
+                        declaredReferencesAreKnown: current.composer.editingKnowsDeclaredReferences
                     )
                     // Hors-ligne : le composer reste ouvert, rien n'est perdu —
                     // et le `false` remonté relâche son loquet de publication.

@@ -609,6 +609,88 @@ final class StoryUploadQueueTests: XCTestCase {
         XCTAssertNotNil(stored.lastPublishError, "L'erreur reste affichable jusqu'à la prochaine tentative")
     }
 
+    // MARK: - Édition : le tri-état des références déclarées
+
+    /// L'édition d'une story republie sa composition ENTIÈRE. Les badges du
+    /// canevas, eux, y survivent verbatim — c'est donc le seul chemin capable
+    /// de dire au serveur qu'on vient d'en poser un, ou d'en retirer un.
+    private func editDeclaring(
+        references: [ComposerReference],
+        known: Bool,
+        effects: StoryEffects = StoryEffects()
+    ) {
+        var slide = StorySlide()
+        slide.effects = effects
+        _ = sut.updateStoryInBackground(
+            edit: StoryViewModel.StoryEditContext(
+                postId: "post-1", originalMediaIds: [],
+                originalBackgroundMediaId: nil, hydratedBackgroundImage: nil
+            ),
+            slides: [slide],
+            slideImages: [:],
+            loadedImages: [:],
+            loadedVideoURLs: [:],
+            references: references,
+            declaredReferencesAreKnown: known
+        )
+    }
+
+    func test_updateStoryInBackground_whenTheDeclaredSetIsUnknown_saysNothingAboutIt() async {
+        // Le composer n'a pas pu hydrater les références de la story : envoyer
+        // SA liste — vide — révoquerait celles que la story porte, et
+        // l'auteur ne les a jamais vues.
+        mockPostService.createResult = .success(Self.makeStoryAPIPost())
+
+        editDeclaring(references: [], known: false)
+
+        await waitUntil("l'édition est partie") { [self] in mockPostService.updateCallCount == 1 }
+        XCTAssertNil(mockPostService.lastUpdateMentions,
+                     "Clé absente = le serveur préserve — c'est la seule lecture juste d'un ignorant")
+    }
+
+    func test_updateStoryInBackground_whenTheDeclaredSetIsKnown_replacesIt() async {
+        mockPostService.createResult = .success(Self.makeStoryAPIPost())
+
+        editDeclaring(
+            references: [ComposerReference(username: "alice", userId: "u-alice", display: .note)],
+            known: true
+        )
+
+        await waitUntil("l'édition est partie") { [self] in mockPostService.updateCallCount == 1 }
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.count, 1)
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.first?.userId, "u-alice")
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.first?.display, "NOTE")
+    }
+
+    func test_updateStoryInBackground_whenTheAuthorRemovedThemAll_erasesThem() async {
+        // `[]` est un VERDICT : sans lui, retirer sa dernière référence ne
+        // révoquerait rien, et la personne garderait son accès au contenu.
+        mockPostService.createResult = .success(Self.makeStoryAPIPost())
+
+        editDeclaring(references: [], known: true)
+
+        await waitUntil("l'édition est partie") { [self] in mockPostService.updateCallCount == 1 }
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.isEmpty, true)
+    }
+
+    func test_updateStoryInBackground_badgeOnTheCanvas_joinsTheDeclaredSet() async {
+        // Un badge est un objet texte portant `referenceUserId` : le serveur
+        // l'EXCLUT de sa relecture du texte, donc rien ne le déclarerait s'il
+        // ne partait pas d'ici.
+        mockPostService.createResult = .success(Self.makeStoryAPIPost())
+        var effects = StoryEffects()
+        var badge = StoryTextObject(text: "@bob")
+        badge.referenceUserId = "u-bob"
+        effects.textObjects = [badge]
+
+        editDeclaring(references: [], known: true, effects: effects)
+
+        await waitUntil("l'édition est partie") { [self] in mockPostService.updateCallCount == 1 }
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.count, 1)
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.first?.userId, "u-bob")
+        XCTAssertEqual(mockPostService.lastUpdateMentions?.first?.display, "PINNED")
+    }
+
     // MARK: - Helpers
 
     private func publish(

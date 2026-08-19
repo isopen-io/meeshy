@@ -30,6 +30,20 @@ extension StoryComposerViewModel {
         editingInitialVisibility = story.visibility
         editingInitialVisibilityUserIds = story.visibilityUserIds ?? []
 
+        // Les références DÉCLARÉES de la story, quand la charge utile les
+        // porte. Les INLINE en sont écartées : c'est le TEXTE qui les porte, et
+        // le serveur les relit lui-même — les déclarer ouvrirait un second
+        // chemin vers le même fait.
+        //
+        // `mentions == nil` = le serveur ne les a pas servies. On ne s'invente
+        // pas un ensemble vide : l'édition se taira plutôt que de révoquer.
+        if let served = story.mentions {
+            references = served
+                .filter { $0.display != .inline }
+                .map { ComposerReference(username: $0.username, userId: $0.userId, display: $0.display) }
+            editingKnowsDeclaredReferences = true
+        }
+
         // Le média de FOND est par convention `story.media.first` (le publish
         // l'uploade en premier), sauf s'il est déjà référencé par un objet du
         // canvas — auquel cas la story n'a pas de fond distinct.

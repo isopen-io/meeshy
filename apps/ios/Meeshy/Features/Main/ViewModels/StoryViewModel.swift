@@ -2230,23 +2230,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 "publish createStory slide=\(slide.id, privacy: .public) audioInPayload=\(postAudioCount) details=[\(postAudioIds, privacy: .public)]"
             )
 
-            // Les modes que l'auteur a CHOISIS. On ne dérive plus les `@handle`
-            // des objets texte : le serveur les relit lui-même (`content` ET
-            // `storyEffects.textObjects[].text`), et deux dériveurs finiraient
-            // par ne plus dire la même chose.
-            //
-            // Les badges du canevas s'y AJOUTENT : eux, le serveur les exclut
-            // de sa relecture — `referenceUserId` est ce qui distingue un badge
-            // d'une phrase — et ils survivent à ce que la liste déclarée ne
-            // traverse pas encore (reprise de brouillon). Sans cette union, une
-            // pastille visible sur la slide ne préviendrait personne.
-            var declaredUserIds = Set(upload.declaredMentions.compactMap(\.userId))
-            let badgeMentions = updatedEffects.textObjects.compactMap { object -> PostMentionInput? in
-                guard let userId = object.referenceUserId,
-                      declaredUserIds.insert(userId).inserted else { return nil }
-                return PostMentionInput.id(userId, display: .pinned)
-            }
-            let canvasMentions = upload.declaredMentions + badgeMentions
+            let canvasMentions = Self.declaredMentions(
+                declared: upload.declaredMentions, effects: updatedEffects
+            )
 
             let post = try await postService.createStory(
                 content: slide.content,
@@ -2290,6 +2276,40 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         return newPostIds
     }
 
+    /// Ce qu'une publication ou une édition DÉCLARE au serveur : les modes que
+    /// l'auteur a choisis, PLUS les badges posés sur le canevas.
+    ///
+    /// On ne dérive plus les `@handle` des objets texte : le serveur les relit
+    /// lui-même (`content` ET `storyEffects.textObjects[].text`), et deux
+    /// dériveurs finiraient par ne plus dire la même chose.
+    ///
+    /// Les badges, eux, ne peuvent venir que d'ici : le serveur les EXCLUT de
+    /// sa relecture — `referenceUserId` est ce qui distingue un badge d'une
+    /// phrase — et ils survivent à ce que la liste déclarée ne traverse pas
+    /// toujours (reprise de brouillon, édition d'une story publiée). Sans cette
+    /// union, une pastille visible sur la slide ne préviendrait personne.
+    static func declaredMentions(
+        declared: [PostMentionInput],
+        effects: StoryEffects
+    ) -> [PostMentionInput] {
+        var seen = Set(declared.compactMap(\.userId))
+        let badges = effects.textObjects.compactMap { object -> PostMentionInput? in
+            guard let userId = object.referenceUserId,
+                  seen.insert(userId).inserted else { return nil }
+            return PostMentionInput.id(userId, display: .pinned)
+        }
+        return declared + badges
+    }
+
+    /// Variante prenant l'état VIVANT du composer plutôt que sa charge utile —
+    /// le chemin d'édition n'a pas de `StoryUploadState` où la figer.
+    static func declaredMentions(
+        references: [ComposerReference],
+        effects: StoryEffects
+    ) -> [PostMentionInput] {
+        declaredMentions(declared: ComposerReferences.payload(references), effects: effects)
+    }
+
     // MARK: - Background Update (édition d'une story publiée, 2026-07-29)
 
     /// Contexte d'édition capturé depuis `StoryComposerViewModel` au moment du
@@ -2320,7 +2340,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         originalLanguage: String? = nil,
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
-        draftId: String? = nil
+        draftId: String? = nil,
+        /// Les personnes que l'auteur a nommées SANS les écrire, telles que le
+        /// composer les porte à cet instant.
+        references: [ComposerReference] = [],
+        /// Le composer a-t-il pu HYDRATER l'ensemble déclaré de la story ?
+        ///
+        /// `false` = il n'en sait rien, et sa liste (vide) ne peut donc rien
+        /// prouver : l'édition n'en parle pas, le serveur préserve. Envoyer
+        /// `[]` depuis un ignorant révoquerait des références que l'auteur n'a
+        /// jamais vues — et leur retirerait l'accès au contenu.
+        declaredReferencesAreKnown: Bool = false
     ) -> Bool {
         guard let slide = slides.first else { return false }
         if NetworkMonitor.shared.isOffline {
@@ -2335,7 +2365,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 loadedImages: loadedImages, loadedVideoURLs: loadedVideoURLs,
                 loadedAudioURLs: loadedAudioURLs, originalLanguage: originalLanguage,
                 visibility: visibility, visibilityUserIds: visibilityUserIds,
-                draftId: draftId
+                draftId: draftId,
+                references: references,
+                declaredReferencesAreKnown: declaredReferencesAreKnown
             )
         }
         return true
@@ -2355,7 +2387,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         originalLanguage: String?,
         visibility: String,
         visibilityUserIds: [String],
-        draftId: String? = nil
+        draftId: String? = nil,
+        references: [ComposerReference] = [],
+        declaredReferencesAreKnown: Bool = false
     ) async {
         do {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -2467,6 +2501,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
             // 5. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
             // zéro et broadcast `story:updated` avec `engagementReset: true`.
+            //
+            // TRI-ÉTAT des références : `nil` tant que le composer n'a pas pu
+            // hydrater l'ensemble déclaré (le serveur préserve alors) ; sinon
+            // la liste COMPLÈTE remplace, `[]` compris — c'est ce `[]` qui
+            // révoque, et donc qui referme le contenu à qui n'y est plus nommé.
+            let declaredMentions: [PostMentionInput]? = declaredReferencesAreKnown
+                ? Self.declaredMentions(references: references, effects: updatedEffects)
+                : nil
             let post = try await postService.update(
                 postId: edit.postId,
                 content: slide.content,
@@ -2478,7 +2520,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 removeMediaIds: removeMediaIds.isEmpty ? nil : removeMediaIds,
                 storyEffects: updatedEffects,
                 mediaIds: newMediaIds.isEmpty ? nil : newMediaIds,
-                location: nil
+                location: nil,
+                mentions: declaredMentions
             )
 
             // 6. Réconciliation locale : cover local-first re-rendue (la
