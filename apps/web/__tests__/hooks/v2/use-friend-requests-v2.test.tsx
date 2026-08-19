@@ -103,15 +103,18 @@ describe('useFriendRequestsV2', () => {
   });
 
   it('separates requests by status', async () => {
-    const requests = [
-      makeFriendRequest({ id: 'r1', status: 'pending' }),
-      makeFriendRequest({ id: 'r2', status: 'accepted' }),
-      makeFriendRequest({ id: 'r3', status: 'rejected' }),
-    ];
-
-    mockGet
-      .mockResolvedValueOnce({ data: { success: true, data: requests.filter(r => r.status === 'pending'), pagination: { total: 1 } } })
-      .mockResolvedValueOnce({ data: { success: true, data: requests, pagination: { total: 3 } } });
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/friend-requests/received') {
+        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r1', status: 'pending' })], pagination: { total: 1 } } });
+      }
+      if (url === '/friend-requests/sent') {
+        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r3', status: 'rejected' })], pagination: { total: 1 } } });
+      }
+      if (url === '/users/friend-requests') {
+        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r2', status: 'accepted' })], pagination: { total: 1 } } });
+      }
+      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+    });
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
 
@@ -125,15 +128,18 @@ describe('useFriendRequestsV2', () => {
   });
 
   it('computes stats from all requests', async () => {
-    const received = [makeFriendRequest({ id: 'r1', status: 'pending' })];
-    const sent = [
-      makeFriendRequest({ id: 's1', status: 'accepted' }),
-      makeFriendRequest({ id: 's2', status: 'rejected' }),
-    ];
-
-    mockGet
-      .mockResolvedValueOnce({ data: { success: true, data: received, pagination: { total: 1 } } })
-      .mockResolvedValueOnce({ data: { success: true, data: sent, pagination: { total: 2 } } });
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/friend-requests/received') {
+        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r1', status: 'pending' })], pagination: { total: 1 } } });
+      }
+      if (url === '/friend-requests/sent') {
+        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 's2', status: 'rejected' })], pagination: { total: 1 } } });
+      }
+      if (url === '/users/friend-requests') {
+        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 's1', status: 'accepted' })], pagination: { total: 1 } } });
+      }
+      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+    });
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
 
@@ -297,6 +303,37 @@ describe('useFriendRequestsV2', () => {
     expect(result.current.getPendingRequestWithUser('userA')).toBeDefined();
     expect(result.current.getPendingRequestWithUser('userB')).toBeDefined();
     expect(result.current.getPendingRequestWithUser('unknown')).toBeUndefined();
+  });
+
+  it('inclut une relation acceptée où l’utilisateur est le receveur', async () => {
+    mockGet.mockImplementation((url: string) => {
+      if (url === '/users/friend-requests') {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              {
+                id: 'r1',
+                senderId: 'other',
+                receiverId: 'me',
+                status: 'accepted',
+                createdAt: '2026-01-01T00:00:00Z',
+                updatedAt: '2026-01-01T00:00:00Z',
+                sender: { id: 'other', username: 'other' },
+                receiver: { id: 'me', username: 'me' },
+              },
+            ],
+            pagination: { total: 1, offset: 0, limit: 100, hasMore: false },
+          },
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+    });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.connected).toHaveLength(1));
+    expect(result.current.connected[0].id).toBe('r1');
   });
 
   it('handles fetch errors gracefully', async () => {

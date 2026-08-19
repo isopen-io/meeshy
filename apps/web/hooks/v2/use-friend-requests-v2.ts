@@ -88,20 +88,37 @@ export function useFriendRequestsV2(
     enabled,
   });
 
+  // `/friend-requests/received|sent` only surface requests where the caller is
+  // sender XOR receiver of a PENDING request server-side — an accepted relation
+  // where the user is the receiver never comes back through either. `connected`
+  // is derived instead from `/users/friend-requests?status=accepted`, which
+  // renders both directions regardless of who initiated it.
+  const acceptedQueryKey = useMemo(() => [...queryKeys.friendRequests.all, 'accepted'] as const, []);
+
+  const { data: acceptedData } = useQuery({
+    queryKey: acceptedQueryKey,
+    queryFn: async () => {
+      const response = await apiService.get<{
+        success: boolean;
+        data: FriendRequest[];
+        pagination: { total: number; hasMore?: boolean };
+      }>('/users/friend-requests', { offset: '0', limit: '100', status: 'accepted' });
+      return extractRequests(response);
+    },
+    enabled,
+  });
+
   const received = useMemo(() => receivedData ?? [], [receivedData]);
   const sent = useMemo(() => sentData ?? [], [sentData]);
   const allRequests = useMemo(() => [...received, ...sent], [received, sent]);
 
   const { connected, pending, refused } = useMemo<FriendRequestsData>(() => {
-    const connectedArr: FriendRequest[] = [];
+    const connectedArr: FriendRequest[] = acceptedData ?? [];
     const pendingArr: FriendRequest[] = [];
     const refusedArr: FriendRequest[] = [];
 
     for (const req of allRequests) {
       switch (req.status) {
-        case 'accepted':
-          connectedArr.push(req);
-          break;
         case 'pending':
           pendingArr.push(req);
           break;
@@ -112,7 +129,7 @@ export function useFriendRequestsV2(
     }
 
     return { received, sent, connected: connectedArr, pending: pendingArr, refused: refusedArr };
-  }, [allRequests, received, sent]);
+  }, [allRequests, received, sent, acceptedData]);
 
   const stats = useMemo<FriendRequestsStats>(
     () => ({ connected: connected.length, pending: pending.length, refused: refused.length }),
@@ -120,11 +137,15 @@ export function useFriendRequestsV2(
   );
 
   const invalidateAll = useCallback(async () => {
+    // `connected` now lives on its own query (acceptedQueryKey) — without this,
+    // accepting/rejecting a request would settle received/sent but leave the
+    // accepted-relations list stale until an unrelated remount.
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: receivedQueryKey }),
       queryClient.invalidateQueries({ queryKey: sentQueryKey }),
+      queryClient.invalidateQueries({ queryKey: acceptedQueryKey }),
     ]);
-  }, [queryClient, receivedQueryKey, sentQueryKey]);
+  }, [queryClient, receivedQueryKey, sentQueryKey, acceptedQueryKey]);
 
   // Invalidate on friend_request notifications (replaces refetchInterval polling)
   useEffect(() => {
