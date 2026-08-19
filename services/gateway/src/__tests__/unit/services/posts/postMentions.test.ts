@@ -33,6 +33,14 @@ function makePrisma(overrides: Record<string, any> = {}) {
     notification: {
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    // Par défaut, TOUS les `userId` déclarés désignent un compte vivant : le
+    // double rend ce qu'on lui demande. Les cas qui testent la validation
+    // remplacent ce délégué par une base plus pauvre que la déclaration.
+    user: {
+      findMany: jest.fn<any>().mockImplementation(async (args: any) =>
+        ((args?.where?.id?.in ?? []) as string[]).map((id) => ({ id }))
+      ),
+    },
     ...overrides,
   } as any;
 }
@@ -728,5 +736,120 @@ describe('reconcilePostMentions — changement de mode', () => {
     });
 
     expect(notificationService.createPostMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * La branche `userId` d'une référence déclarée n'était validée NULLE PART.
+ *
+ * Zod n'exige qu'un ObjectId bien formé ; la branche `username`, elle, passait
+ * déjà par `resolveUsernames` et sa règle d'écriture unique (`deletedAt`
+ * exclut, `isActive` n'exclut pas). Une seule des deux voies appliquait donc la
+ * règle, et n'importe quel client authentifié pouvait poser une référence
+ * PENDANTE.
+ *
+ * Ce n'est pas une ligne inerte : `PostMention.mentionedUser` est une relation
+ * REQUISE au schéma. Sous MongoDB, Prisma résout la jointure et LÈVE sur une
+ * relation requise sans cible — une seule référence pendante fait échouer
+ * `GET /posts/:postId` pour TOUS les lecteurs du post. Et le balayage l'épargne
+ * sept jours durant, puisqu'elle compte comme un droit d'accès non éteint.
+ */
+describe('résolution des références déclarées — la branche userId est validée', () => {
+  it('écarte un userId déclaré qui ne désigne aucun compte vivant', async () => {
+    const prisma = makePrisma({
+      user: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+    const notificationService = makeNotifier();
+
+    const result = await resolvePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: null,
+      declared: [{ userId: 'u-fantome', display: 'PINNED' }],
+    });
+
+    expect(result).toEqual({ mentionedUserIds: [], newlyMentionedUserIds: [], reconciled: true });
+    expect(mentionService.createPostMentions).not.toHaveBeenCalled();
+    expect(notificationService.createPostMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
+
+  it('applique aux userId la MÊME règle qu’aux pseudos — `deletedAt` exclut', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: null,
+      declared: [{ userId: 'u-bob', display: 'PINNED' }],
+    });
+
+    expect(prisma.user.findMany).toHaveBeenCalledWith({
+      where: { id: { in: ['u-bob'] }, deletedAt: { isSet: false } },
+      select: { id: true },
+    });
+  });
+
+  it('ne garde que les ids rendus, en UNE requête pour tout le lot', async () => {
+    const prisma = makePrisma({
+      user: { findMany: jest.fn<any>().mockResolvedValue([{ id: 'u-bob' }]) },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: null,
+      declared: [
+        { userId: 'u-bob', display: 'PINNED' },
+        { userId: 'u-fantome', display: 'NOTE' },
+      ],
+    });
+
+    expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
+    expect(mentionService.createPostMentions).toHaveBeenCalledTimes(1);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'PINNED');
+  });
+
+  it('n’ouvre aucune requête quand aucune référence déclarée ne porte d’userId', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(
+        new Map([['bob', { id: 'u-bob', username: 'bob' }]])
+      ),
+    });
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: null,
+      declared: [{ username: 'bob', display: 'PINNED' }],
+    });
+
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'PINNED');
+  });
+
+  it('vaut aussi à l’ÉDITION — une référence pendante ne s’y glisse pas non plus', async () => {
+    const prisma = makePrisma({
+      user: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    });
+    prisma.postMention.findMany.mockResolvedValue([]);
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+    });
+
+    const result = await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte sans arobase',
+      declared: [{ userId: 'u-fantome', display: 'SILENT' }],
+    });
+
+    expect(result.mentionedUserIds).toEqual([]);
+    expect(mentionService.createPostMentions).not.toHaveBeenCalled();
   });
 });

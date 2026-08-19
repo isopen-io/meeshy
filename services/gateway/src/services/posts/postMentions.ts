@@ -2,6 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { collectMentionableText } from './mentionableText';
 import { retractMentionNotifications } from './retractMentionNotifications';
+import { NOT_DELETED } from './softDelete';
 
 /**
  * Le contenu mentionnant, tel que la résolution le lit. Structural et minimal :
@@ -41,7 +42,7 @@ export type PostMentionType = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
  * délégués générés portent des surcharges que rien de recopié à la main ne
  * satisfait.
  */
-export type PostMentionPrisma = Pick<PrismaClient, 'postMention' | 'notification'>;
+export type PostMentionPrisma = Pick<PrismaClient, 'postMention' | 'notification' | 'user'>;
 
 /**
  * Les trois méthodes de `MentionService` que la résolution appelle, en
@@ -198,7 +199,7 @@ export async function resolvePostMentions(params: PostMentionParams): Promise<Re
 
   try {
     const textUserIds = namesInText ? await resolveTextUserIds(mentionService, params) : [];
-    const declaredModes = await resolveDeclared(mentionService, declared);
+    const declaredModes = await resolveDeclared(params.prisma, mentionService, declared);
     const modes = applyPrecedence(textUserIds, declaredModes);
 
     const mentionedUserIds = [...modes.keys()];
@@ -284,7 +285,7 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
     // c'est leur raison d'être.
     const declaredModes = params.declared === undefined
       ? previousDeclared
-      : await resolveDeclared(mentionService, params.declared);
+      : await resolveDeclared(prisma, mentionService, params.declared);
 
     const modes = applyPrecedence(textUserIds, declaredModes);
     const mentionedUserIds = [...modes.keys()];
@@ -355,8 +356,18 @@ async function resolveTextUserIds(
  * Les références DÉCLARÉES, résolues en `User.id` et gardant leur mode.
  * Dédupliqué en préservant l'ordre de déclaration — c'est celui du canevas,
  * donc celui que l'auteur a posé.
+ *
+ * LES DEUX BRANCHES sont validées, et par la MÊME règle. Le pseudo passe par
+ * `resolveUsernames`, qui applique déjà « `deletedAt` exclut, `isActive`
+ * n'exclut pas » ; l'`userId`, lui, n'était validé nulle part — Zod n'exige
+ * qu'un ObjectId bien formé, donc n'importe quel client authentifié posait une
+ * référence PENDANTE. `PostMention.mentionedUser` étant une relation REQUISE au
+ * schéma, une seule ligne sans cible fait LEVER la lecture du post pour tous
+ * ses lecteurs, et le balayage l'épargne sept jours durant puisqu'elle compte
+ * comme un droit d'accès non éteint.
  */
 async function resolveDeclared(
+  prisma: PostMentionPrisma,
   mentionService: PostMentionResolver,
   declared: readonly DeclaredPostMention[] | undefined
 ): Promise<Map<string, DeclarablePostMentionDisplay>> {
@@ -370,13 +381,45 @@ async function resolveDeclared(
       )
     : new Map<string, { id: string }>();
 
+  const existingIds = await resolveDeclaredIds(prisma, declared);
+
   for (const mention of declared) {
+    // Un `userId` annoncé mais introuvable ne retombe PAS sur le pseudo du même
+    // objet : les deux champs désignent la même personne, donc un id inconnu
+    // rend la déclaration incohérente — la résoudre autrement serait deviner.
     const id = mention.userId
-      ?? (mention.username ? usernameMap.get(mention.username.toLowerCase())?.id : undefined);
+      ? (existingIds.has(mention.userId) ? mention.userId : undefined)
+      : (mention.username ? usernameMap.get(mention.username.toLowerCase())?.id : undefined);
     if (!id || resolved.has(id)) continue;
     resolved.set(id, mention.display);
   }
   return resolved;
+}
+
+/**
+ * Les `User.id` déclarés qui désignent un compte VIVANT — une requête pour tout
+ * le lot, jamais une par référence.
+ *
+ * `NOT_DELETED` (`{ isSet: false }`) et non `{ deletedAt: null }` : sous
+ * MongoDB un compte jamais supprimé ne porte pas la clé du tout. C'est le même
+ * prédicat que `resolveUsernames`, ce qui est tout l'enjeu — deux filtres
+ * différents feraient reparaître, sous une autre forme, la divergence que cette
+ * passe ferme.
+ */
+async function resolveDeclaredIds(
+  prisma: PostMentionPrisma,
+  declared: readonly DeclaredPostMention[]
+): Promise<ReadonlySet<string>> {
+  const declaredIds = [...new Set(
+    declared.map((mention) => mention.userId).filter((id): id is string => Boolean(id))
+  )];
+  if (declaredIds.length === 0) return new Set<string>();
+
+  const rows = await prisma.user.findMany({
+    where: { id: { in: declaredIds }, deletedAt: NOT_DELETED },
+    select: { id: true },
+  });
+  return new Set(rows.map((row) => row.id));
 }
 
 /**
