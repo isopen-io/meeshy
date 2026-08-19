@@ -241,7 +241,6 @@ extension iPadRootView {
         switch notification.notificationType {
         case .newMessage, .legacyNewMessage, .messageReply,
              .messageReaction, .reaction, .legacyMessageReaction,
-             .userMentioned, .mention, .legacyMention,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .legacyStoryReply, .reply,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
@@ -252,6 +251,30 @@ extension iPadRootView {
                 highlightMessageId: notification.context?.messageId,
                 ensureUnread: true
             )
+
+        // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
+        // (`createPostMentionNotificationsBatch` / `createCommentMentionNotificationsBatch`
+        // portent un `postId` et AUCUN `conversationId`) — même repli que
+        // `RootView.navigateFromNotification` (iPhone). Sans lui, référencer
+        // quelqu'un dans un post/story/réel/statut ouvrait un tap MUET sur iPad.
+        case .userMentioned, .mention, .legacyMention:
+            if let conversationId = data?.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(
+                    conversationId,
+                    highlightMessageId: notification.context?.messageId,
+                    ensureUnread: true
+                )
+            } else if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId {
+                routeSocialNotification(
+                    postId: postId,
+                    postType: notification.metadata?.postType,
+                    contentType: notification.metadata?.contentType,
+                    type: notification.notificationType,
+                    commentId: notification.context?.commentId ?? notification.metadata?.commentId,
+                    parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
+                    storyContext: StoryNotificationContext.from(notification)
+                )
+            }
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
@@ -313,7 +336,7 @@ extension iPadRootView {
     func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
         switch event.notificationType {
         case .newMessage, .messageReply, .messageReaction, .reaction,
-             .mention, .missedCall,
+             .missedCall,
              .newConversation, .newConversationDirect, .newConversationGroup, .addedToConversation, .memberJoined:
             if let conversationId = event.conversationId {
                 // Parité iPhone/push : scroll + flash sur le message exact.
@@ -390,11 +413,29 @@ extension iPadRootView {
         switch type {
         case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
              .messageReaction, .reaction, .legacyMessageReaction,
-             .userMentioned, .mention, .legacyMention,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             guard let conversationId = payload.conversationId, !conversationId.isEmpty else { return }
             navigateToConversationById(conversationId, highlightMessageId: payload.messageId, ensureUnread: true)
+
+        // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
+        // — même repli que `RootView.navigateFromNotification` (iPhone). C'est le
+        // chemin le PLUS emprunté (tap sur la bannière push) : sans ce repli, une
+        // référence dans un post/story/réel/statut était un tap MUET sur iPad.
+        case .userMentioned, .mention, .legacyMention:
+            if let conversationId = payload.conversationId, !conversationId.isEmpty {
+                navigateToConversationById(conversationId, highlightMessageId: payload.messageId, ensureUnread: true)
+            } else if let postId = payload.postId, !postId.isEmpty {
+                routeSocialNotification(
+                    postId: postId,
+                    postType: payload.postType,
+                    contentType: payload.contentType,
+                    type: type,
+                    commentId: payload.commentId,
+                    parentCommentId: payload.parentCommentId,
+                    storyContext: makeStoryContext(from: payload)
+                )
+            }
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,

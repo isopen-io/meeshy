@@ -564,6 +564,44 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(n.formattedContext, "Story · « Soleil »")
     }
 
+    // MARK: - Reference routing (Task 10) — the payload shape the tap dispatch
+    // (`RootView.navigateFromNotification`, `iPadRootView+Navigation`) depends
+    // on to route a post/story/réel/statut reference WITHOUT a conversationId.
+
+    func test_userMentioned_onAStory_carriesNoConversationId_butCarriesPostIdAndPostType() throws {
+        // `createPostMentionNotificationsBatch` / `createCommentMentionNotificationsBatch`
+        // ship a `postId` and NEVER a `conversationId` — the reference lives in
+        // the post, not in a chat. Without exactly this shape, the routing
+        // fallback that opens the story/réel/post surface has nothing to key on
+        // and the tap dead-ends.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"user_mentioned","content":"vous a mentionné·e",
+         "actor":{"id":"a","username":"alice"},
+         "context":{"postId":"p1"},
+         "metadata":{"entityType":"post","postId":"p1","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2026-06-23T10:00:00.000Z"}}
+        """)
+        XCTAssertNil(n.data?.conversationId)
+        XCTAssertEqual(n.context?.postId, "p1")
+        XCTAssertEqual(n.metadata?.postType, "STORY")
+    }
+
+    func test_userMentioned_onAnExpiredStory_isLinkedContentExpiredStaysAVisualMarkerOnly() throws {
+        // `isLinkedContentExpired` must never gate the tap — an expired-but-
+        // referenced story opens the viewer's own end-of-life screen (Task 9),
+        // not a refused tap. This test locks the CONTRACT: the flag is readable
+        // and true, independent of anything a router would need to route.
+        let n = try decodeNotification("""
+        {"id":"n","userId":"u","type":"user_mentioned","content":"vous a mentionné·e",
+         "actor":{"id":"a","username":"alice"},
+         "context":{"postId":"p1","postExpiresAt":"2020-01-02T10:00:00.000Z"},
+         "metadata":{"entityType":"post","postId":"p1","postType":"STORY"},
+         "state":{"isRead":false,"createdAt":"2020-01-01T10:00:00.000Z"}}
+        """)
+        XCTAssertTrue(n.isLinkedContentExpired)
+        XCTAssertEqual(n.context?.postId, "p1")
+    }
+
     // MARK: - Server-built title/subtitle (single source) + content date
 
     func test_formattedTitle_prefersServerTitle() throws {
