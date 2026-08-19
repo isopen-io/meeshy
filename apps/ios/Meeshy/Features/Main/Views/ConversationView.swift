@@ -913,7 +913,8 @@ struct ConversationView: View {
                     isStarred: viewModel.isStarred(messageId: msg.id),
                     isEdited: msg.isEdited,
                     hasEditRevisions: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+                    showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
+                    isViewOnce: msg.isViewOnce
                 )
                 MessageMoreSheet(
                     message: msg,
@@ -1491,7 +1492,9 @@ struct ConversationView: View {
                     // Restore swipe-to-forward: opens the forward picker via
                     // composerState. HapticFeedback already fires inside the
                     // swipe container — we only stage the message here.
-                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    // Vue unique : le serveur refuse ce transfert (forwardAdmission).
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }),
+                          !msg.isViewOnce else { return }
                     composerState.forwardMessage = msg
                 },
                 onLongPress: { messageId, focalPreview in

@@ -111,9 +111,11 @@ struct MessageMoreSheet: View {
                     dismiss()
                 }
             }
-            Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
-                onForward?()
-                dismiss()
+            if !message.isViewOnce {
+                Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
+                    onForward?()
+                    dismiss()
+                }
             }
             Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
                 onDeleteMedia?()

@@ -319,9 +319,13 @@ extension ConversationView {
                 }
                 closeReactionBar()
             }
-            messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: MeeshyColors.warningHex) {
-                composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
-                closeReactionBar()
+            // Vue unique : le serveur refuse ce transfert (forwardAdmission) —
+            // le bouton disparaît plutôt que d'offrir une action condamnée.
+            if !(viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isViewOnce }) ?? false) {
+                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: MeeshyColors.warningHex) {
+                    composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
+                    closeReactionBar()
+                }
             }
             messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: MeeshyColors.errorHex) {
                 overlayState.deleteConfirmMessageId = messageId
