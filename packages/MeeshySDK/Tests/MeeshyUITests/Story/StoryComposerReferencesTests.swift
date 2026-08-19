@@ -80,3 +80,48 @@ struct StoryComposerReferencesTests {
         #expect(vm.references.map(\.username) == ["alice"])
     }
 }
+
+/// Un badge est un `StoryTextObject` ordinaire : l'auteur peut le retoucher au
+/// doigt, comme n'importe quelle étiquette. Le lien entre la pastille et la
+/// référence doit donc tenir à `referenceUserId` — la seule chose qu'une
+/// retouche ne touche pas — et jamais au texte affiché.
+@MainActor
+struct StoryComposerEditedBadgeTests {
+
+    private func composerWithEditedBadge() -> StoryComposerViewModel {
+        let vm = StoryComposerViewModel()
+        vm.addReference(ComposerReference(username: "alice", userId: "u-a", display: .pinned))
+        vm.currentEffects.textObjects[0].text = "@Alice ❤️"
+        return vm
+    }
+
+    @Test func test_removeReference_afterTheBadgeTextWasEdited_stillRemovesTheBadge() {
+        let vm = composerWithEditedBadge()
+
+        vm.removeReference(username: "alice")
+
+        #expect(vm.currentEffects.textObjects.isEmpty)
+        #expect(vm.references.isEmpty)
+    }
+
+    @Test func test_changingFromPinnedToNote_afterTheBadgeTextWasEdited_removesTheBadge() {
+        // Sinon la pastille orpheline survit à la publication, et la règle
+        // d'union du canevas la redéclare PINNED : le mode choisi par l'auteur
+        // serait silencieusement annulé.
+        let vm = composerWithEditedBadge()
+
+        vm.addReference(ComposerReference(username: "alice", userId: "u-a", display: .note))
+
+        #expect(vm.currentEffects.textObjects.filter { $0.referenceUserId != nil }.isEmpty)
+        #expect(vm.references.map(\.display) == [.note])
+    }
+
+    @Test func test_deletingAnEditedBadge_dropsTheReference() {
+        let vm = composerWithEditedBadge()
+        let badgeId = vm.currentEffects.textObjects[0].id
+
+        vm.deleteElement(id: badgeId)
+
+        #expect(vm.references.isEmpty)
+    }
+}
