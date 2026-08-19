@@ -35,6 +35,8 @@
   },
   "toast": {
     "error": "Erro",
+    "postReported": "Publicação denunciada",
+    "reportError": "Erro ao enviar denúncia",
     "storyPublished": "Story publicado!",
     "storyVisibleFriends": "Seu story está visível para seus amigos.",
     "storyVisibleFriendsMedia": "Seu story está visível para seus amigos ({count} mídias).",

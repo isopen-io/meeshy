@@ -4,9 +4,11 @@ import React from 'react';
 import HashtagPage from '@/app/hashtag/[tag]/page';
 import type { Post } from '@meeshy/shared/types/post';
 
+const mockPush = jest.fn();
+
 jest.mock('next/navigation', () => ({
   useParams: () => ({ tag: 'paris' }),
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const mockGetPostsByHashtag = jest.fn();
@@ -160,6 +162,92 @@ describe('HashtagPage', () => {
 
     expect(confirmSpy).toHaveBeenCalled();
     await waitFor(() => expect(mockReportPost).toHaveBeenCalledWith('post-1', 'inappropriate', ''));
+    confirmSpy.mockRestore();
+  });
+
+  // La route gateway `GET /posts/hashtag/:tag` renvoie `type: { in: ['POST','REEL'] }`
+  // avec les médias (`postInclude` → `media: mediaInclude`). La page doit donc
+  // rendre le média des DEUX types — un reel a le plus souvent un `content` vide,
+  // et sans sa vignette la carte paraît vide alors que la requête a bien abouti.
+  describe('reels du tag', () => {
+    const reel = () =>
+      makePost({
+        id: 'reel-1',
+        type: 'REEL',
+        content: '',
+        media: [
+          {
+            id: 'media-1',
+            mimeType: 'video/mp4',
+            fileUrl: '/uploads/reel-1.mp4',
+            thumbnailUrl: null,
+            duration: 12_000,
+          },
+        ] as unknown as Post['media'],
+      });
+
+    it('rend la vignette video d un reel retourne par le tag', async () => {
+      mockGetPostsByHashtag.mockResolvedValue({
+        success: true,
+        data: [reel()],
+        meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+      });
+      const { container } = renderPage();
+
+      await waitFor(() => expect(container.querySelector('video')).toBeInTheDocument());
+      expect(container.querySelector('video')).toHaveAttribute(
+        'src',
+        expect.stringContaining('/uploads/reel-1.mp4'),
+      );
+    });
+
+    it('ouvre le lecteur immersif /reel/:id au tap sur un reel', async () => {
+      mockGetPostsByHashtag.mockResolvedValue({
+        success: true,
+        data: [reel()],
+        meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+      });
+      const { container } = renderPage();
+
+      await waitFor(() => expect(container.querySelector('video')).toBeInTheDocument());
+      fireEvent.click(container.querySelector('[role="button"]')!);
+
+      expect(mockPush).toHaveBeenCalledWith('/reel/reel-1');
+    });
+
+    it('garde /feeds/post/:id au tap sur un post ordinaire', async () => {
+      const { container } = renderPage();
+
+      await waitFor(() => expect(container.querySelector('[role="button"]')).toBeInTheDocument());
+      fireEvent.click(container.querySelector('[role="button"]')!);
+
+      expect(mockPush).toHaveBeenCalledWith('/feeds/post/post-1');
+    });
+  });
+
+  // `addToast(message, type, duration)` — le 3e paramètre est une DURÉE en ms.
+  // Y passer la description faisait `setTimeout(fn, NaN)` : le toast d'erreur
+  // disparaissait aussitôt affiché. Convention du dépôt : replier la
+  // description dans le message (`PostsFeedScreen.tsx:123`).
+  it('signale un echec de report avec un message lisible et la duree par defaut', async () => {
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
+    mockReportPost.mockRejectedValue(new Error('network'));
+    renderPage();
+
+    await waitFor(() => expect(screen.getByLabelText('post.menu')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('post.menu'));
+
+    const reportButton = await screen.findByText('Report');
+    await act(async () => {
+      fireEvent.click(reportButton);
+    });
+
+    await waitFor(() => expect(mockAddToast).toHaveBeenCalled());
+    const [message, type, duration] = mockAddToast.mock.calls.at(-1)!;
+    expect(message).toBe("Couldn't report the post.");
+    expect(type).toBe('error');
+    expect(duration).toBeUndefined();
+
     confirmSpy.mockRestore();
   });
 

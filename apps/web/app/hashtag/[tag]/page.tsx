@@ -39,6 +39,15 @@ function postToTranslations(post: Post) {
     }));
 }
 
+/**
+ * Un reel s'ouvre dans le lecteur immersif, un post dans le fil de détail —
+ * même règle que `PostsFeedScreen` (`components/feed/PostsFeedScreen.tsx`), qui
+ * est l'autre surface mixant les deux types.
+ */
+function postHref(post: Pick<Post, 'id' | 'type'>): string {
+  return post.type === 'REEL' ? `/reel/${post.id}` : `/feeds/post/${post.id}`;
+}
+
 function formatRelativeTime(date: string | Date, t: TFunc): string {
   const d = typeof date === 'string' ? new Date(date) : date;
   const bucket = classifyRelativeTime(d.getTime(), Date.now(), { beyondDays: Infinity });
@@ -73,7 +82,7 @@ export default function HashtagPage() {
       reportService
         .reportPost(postId, 'inappropriate', '')
         .then(() => toastCtx.addToast(t('toast.postReported', 'Post reported'), 'success'))
-        .catch(() => toastCtx.addToast(t('toast.error', 'Error'), 'error', t('toast.reportError', "Couldn't report the post.")));
+        .catch(() => toastCtx.addToast(t('toast.reportError', "Couldn't report the post."), 'error'));
     },
     [t, toastCtx],
   );
@@ -115,11 +124,14 @@ export default function HashtagPage() {
               likes={post.likeCount}
               comments={post.commentCount}
               isAuthor={post.authorId === currentUserId}
+              media={post.media}
               repostOf={post.repostOf}
               isQuote={post.isQuote}
               onReport={() => handleReportPost(post.id)}
-              onTapRepost={(repostId) => router.push(`/feeds/post/${repostId}`)}
-              onClick={() => router.push(`/feeds/post/${post.id}`)}
+              onTapRepost={(repostId) =>
+                router.push(postHref({ id: repostId, type: post.repostOf?.type ?? 'POST' }))
+              }
+              onClick={() => router.push(postHref(post))}
             />
           ))}
         </div>
