@@ -70,6 +70,10 @@ final class NewConversationViewModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
 
     static let searchDebounce: UInt64 = 350_000_000  // ns
+    /// Taille de page des relations acceptées — même valeur que
+    /// `ContactsListViewModel`, le budget `limit` étant plafonné à 100 côté
+    /// gateway.
+    private static let friendsPageSize = 100
 
     /// Reuses the same GRDB cache the Contacts directory populates
     /// (`ContactsListViewModel`) so a user who has visited Contacts sees their
@@ -176,15 +180,34 @@ final class NewConversationViewModel: ObservableObject {
     /// `FriendListAggregator` (the shared "who is a contact" definition). Does
     /// NOT write the friends cache — `ContactsListViewModel` owns that store;
     /// this VM only reads it to avoid a two-writer race.
+    ///
+    /// Même source et même boucle que `ContactsListViewModel
+    /// .fetchFriendsFromNetwork` : `/friend-requests/received` filtre `pending`
+    /// EN DUR côté serveur, donc une relation acceptée où l'utilisateur est le
+    /// RECEVEUR n'y apparaît jamais. Les deux écrans partageant la clé de cache
+    /// `friendsList`, celui-ci lisait la liste réparée puis l'écrasait à la
+    /// revalidation avec une liste incomplète.
     private func fetchContactsFromNetwork() async {
         do {
-            async let receivedResponse = friendService.receivedRequests(offset: 0, limit: 100)
-            async let sentResponse = friendService.sentRequests(offset: 0, limit: 100)
-            let (received, sent) = try await (receivedResponse, sentResponse)
+            var collected: [FriendRequest] = []
+            var offset = 0
+            while true {
+                let page = try await friendService.allFriendRequests(
+                    status: "accepted",
+                    offset: offset,
+                    limit: Self.friendsPageSize
+                )
+                collected.append(contentsOf: page.data)
+                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
+                // le repli sur la taille de page garde le comportement correct.
+                let more = page.pagination?.hasMore ?? (page.data.count == Self.friendsPageSize)
+                if !more || page.data.isEmpty { break }
+                offset += Self.friendsPageSize
+            }
 
             let friends = FriendListAggregator.aggregate(
-                received: received.data,
-                sent: sent.data,
+                received: collected,
+                sent: [],
                 currentUserId: currentUserIdProvider() ?? ""
             )
             contacts = friends.map(SearchedUser.init(friend:))

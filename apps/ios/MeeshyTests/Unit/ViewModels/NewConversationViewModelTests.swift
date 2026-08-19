@@ -310,8 +310,7 @@ final class NewConversationViewModelTests: XCTestCase {
             id: "r1", senderId: "alice-id", receiverId: "current-user",
             status: "accepted", senderUsername: "alice"
         )
-        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted]))
-        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        friends.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted]))
         let (sut, _) = makeSUT(friendService: friends)
 
         await sut.loadContacts()
@@ -331,8 +330,7 @@ final class NewConversationViewModelTests: XCTestCase {
             id: "r2", senderId: "bob-id", receiverId: "current-user",
             status: "pending", senderUsername: "bob"
         )
-        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted, pending]))
-        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        friends.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted, pending]))
         let (sut, _) = makeSUT(friendService: friends)
 
         await sut.loadContacts()
@@ -351,8 +349,7 @@ final class NewConversationViewModelTests: XCTestCase {
             id: "r2", senderId: "current-user", receiverId: "bob-id",
             status: "accepted", receiverUsername: "bob"
         )
-        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [received]))
-        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [sent]))
+        friends.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [received, sent]))
         let (sut, _) = makeSUT(friendService: friends)
 
         await sut.loadContacts()
@@ -360,9 +357,66 @@ final class NewConversationViewModelTests: XCTestCase {
         XCTAssertEqual(Set(sut.contacts.map(\.username)), ["alice", "bob"])
     }
 
+    /// `/friend-requests/received` filtre `pending` EN DUR côté serveur : une
+    /// relation ACCEPTÉE où je suis le receveur n'y apparaît jamais, et
+    /// `/friend-requests/sent` ne connaît que celles que j'ai envoyées. Les
+    /// deux pages vides ci-dessous reproduisent donc la réponse RÉELLE du
+    /// gateway pour ce cas — seul `/users/friend-requests?status=accepted`
+    /// (`allFriendRequests`) couvre les deux sens.
+    ///
+    /// Cet écran partage la clé de cache `friendsList` avec la liste de
+    /// contacts déjà réparée : tant qu'il lit les deux anciens endpoints, sa
+    /// revalidation de fond ÉCRASE l'écran avec une liste incomplète.
+    func test_loadContacts_includesAcceptedRequestWhereUserIsReceiver() async {
+        let friends = MockFriendService()
+        friends.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        friends.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        friends.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [
+            FriendRequestFixture.make(
+                id: "r1", senderId: "alice-id", receiverId: "current-user",
+                status: "accepted", senderUsername: "alice"
+            )
+        ]))
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertEqual(sut.contacts.map(\.id), ["alice-id"],
+                       "une relation acceptée où je suis le RECEVEUR doit apparaître dans mes contacts")
+    }
+
+    /// Même boucle que `ContactsListViewModel.fetchFriendsFromNetwork` : on
+    /// pagine jusqu'à épuisement, le second appel portant `offset: 100`.
+    func test_loadContacts_paginatesAcrossTwoPagesUntilExhausted() async {
+        let friends = MockFriendService()
+        let firstPage = (1...100).map {
+            FriendRequestFixture.make(
+                id: "p1-\($0)", senderId: "friend-\($0)", receiverId: "current-user",
+                status: "accepted", senderUsername: "friend\($0)"
+            )
+        }
+        let secondPage = [
+            FriendRequestFixture.make(
+                id: "p2-1", senderId: "friend-101", receiverId: "current-user",
+                status: "accepted", senderUsername: "friend101"
+            )
+        ]
+        friends.allFriendRequestsResults = [
+            .success(FriendRequestFixture.makePaginated(requests: firstPage, total: 101, hasMore: true, limit: 100, offset: 0)),
+            .success(FriendRequestFixture.makePaginated(requests: secondPage, total: 101, hasMore: false, limit: 100, offset: 100))
+        ]
+        let (sut, _) = makeSUT(friendService: friends)
+
+        await sut.loadContacts()
+
+        XCTAssertEqual(sut.contacts.count, 101, "la liste finale doit contenir l'union des deux pages")
+        XCTAssertEqual(friends.allFriendRequestsOffsets, [0, 100],
+                       "le second appel doit recevoir offset: 100, pas rejouer offset: 0")
+    }
+
     func test_loadContacts_networkFailure_leavesContactsEmptyAndStopsSpinner() async {
         let friends = MockFriendService()
-        friends.receivedRequestsResult = .failure(NSError(domain: "TestNetwork", code: 503))
+        friends.allFriendRequestsResult = .failure(NSError(domain: "TestNetwork", code: 503))
         let (sut, _) = makeSUT(friendService: friends)
 
         await sut.loadContacts()
