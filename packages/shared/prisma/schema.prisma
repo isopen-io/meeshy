@@ -4168,34 +4168,44 @@ model CommentMention {
   @@index([mentionedAt])
 }
 
-/// D'où vient une mention de post.
+/// Comment une référence se montre — et, par voie de conséquence, comment
+/// l'édition la réconcilie.
 ///
-/// Le discriminant existe parce que les deux voies ne se réconcilient pas
-/// pareil à l'édition : le TEXTE est relu à chaque fois (une mention retirée du
-/// contenu doit disparaître), une mention DÉCLARÉE ne bouge que si le client
-/// renvoie sa liste.
-enum PostMentionSource {
-  /// Extraite du texte du post (`@handle` dans `content`).
-  CONTENT
-  /// DÉCLARÉE par le client — une pastille posée sur le canevas d'une story,
-  /// choisie dans un sélecteur. Le texte du post ne la porte pas : sans ce
-  /// canal, la nommer imposait d'écrire son `@handle` dans la légende.
-  CANVAS
+/// INLINE est DÉRIVÉ : le client ne le déclare jamais. Le serveur relit les
+/// `@handle` du contenu à chaque écriture, valide l'existence de la personne,
+/// et pose ce mode lui-même. Les trois autres sont DÉCLARÉS — le texte ne peut
+/// pas les porter, donc rien ne permettrait de les relire.
+enum PostMentionDisplay {
+  /// `@handle` écrit dans le texte (légende ou objet texte de canevas).
+  /// Relu à chaque édition : retiré du texte, il disparaît.
+  INLINE
+  /// Badge posé sur le canevas. Déclaré, tri-état à l'édition.
+  PINNED
+  /// Rangée « Avec … » sous le contenu. Déclaré, tri-état.
+  NOTE
+  /// Métadonnée seule : notifiée, invisible pour les tiers. Déclaré, tri-état.
+  SILENT
 }
 
-/// Mention d'un utilisateur dans un post — son texte, ou une pastille posée sur
-/// son canevas.
+/// Référence à une personne dans un post — dans son texte, en badge sur son
+/// canevas, en note sous le contenu, ou en métadonnée seule (`display`).
 model PostMention {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   postId            String   @db.ObjectId
   mentionedUserId   String   @db.ObjectId
   mentionedAt       DateTime @default(now())
-  /// OPTIONNEL, et pas `@default(CONTENT)` : sous MongoDB, un `@default` ne
-  /// s'applique qu'à l'ÉCRITURE — les lignes déjà en base n'ont pas ce champ, et
-  /// un champ requis absent fait échouer la LECTURE. `null` s'y lit donc
-  /// « antérieure au discriminant », que la réconciliation traite comme
-  /// `CONTENT` : c'est la seule voie qui existait quand elles ont été écrites.
-  source            PostMentionSource?
+  /// OPTIONNEL, et sans `@default` : sous MongoDB un `@default` ne s'applique
+  /// qu'à l'ÉCRITURE — les lignes déjà en base n'ont pas ce champ, et un champ
+  /// requis absent fait échouer la LECTURE. Absent se lit INLINE.
+  display           PostMentionDisplay?
+
+  /// Début de l'UNIQUE fenêtre de 24 h accordée APRÈS expiration du contenu.
+  /// Absent = droit intact. Nullable seul, sans booléen jumeau.
+  ///
+  /// La ligne SURVIT à la consommation : la détruire fausserait l'inbox
+  /// `/mentions`, les compteurs et l'affinité de recommandation
+  /// (`PostFeedService.getMentionsByPost`).
+  expiredViewAt     DateTime?
 
   post           Post @relation("PostMentions", fields: [postId], references: [id], onDelete: Cascade)
   mentionedUser  User @relation("UserPostMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)

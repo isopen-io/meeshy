@@ -23,8 +23,8 @@ const POST = { id: 'post-1', authorId: 'u-author', type: 'POST' as const, visibi
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     postMention: {
-      // `source` fait partie du `select` de la réconciliation : un double qui
-      // l'omet ferait passer des lignes CANVAS pour du texte.
+      // `display` fait partie du `select` de la réconciliation : un double qui
+      // l'omet ferait passer des lignes PINNED pour du texte.
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
@@ -77,7 +77,7 @@ describe('resolvePostMentions — création', () => {
     expect(result.mentionedUserIds).toEqual(['u-alice']);
     expect(result.newlyMentionedUserIds).toEqual(['u-alice']);
     expect(result.reconciled).toBe(true);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'CONTENT');
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'INLINE');
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({
         postId: 'post-1',
@@ -167,7 +167,7 @@ describe('resolvePostMentions — création', () => {
     });
 
     expect(result.mentionedUserIds).toEqual(['u-alice']);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'CONTENT');
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'INLINE');
   });
 });
 
@@ -189,7 +189,7 @@ describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
     });
 
     expect(result.mentionedUserIds).toEqual(['u-bob']);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'CANVAS');
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'PINNED');
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({ mentionedUserIds: ['u-bob'] })
     );
@@ -207,12 +207,12 @@ describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
     });
 
     expect(mentionService.resolveUsernames).not.toHaveBeenCalled();
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-direct'], 'CANVAS');
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-direct'], 'PINNED');
   });
 
   /// Nommée des deux côtés, la personne compte comme mention de TEXTE : c'est
   /// la voie que l'édition relit, donc celle qui gouverne sa survie.
-  it('classe en CONTENT une personne nommée à la fois dans le texte et déclarée', async () => {
+  it('classe en INLINE une personne nommée à la fois dans le texte et déclarée', async () => {
     const prisma = makePrisma();
     const mentionService = makeMentionService();
 
@@ -222,7 +222,7 @@ describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
     });
 
     expect(mentionService.createPostMentions).toHaveBeenCalledTimes(1);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'CONTENT');
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'INLINE');
   });
 
   it('ne touche à rien quand ni le texte ni la déclaration ne nomment personne', async () => {
@@ -246,7 +246,7 @@ describe('reconcilePostMentions — mentions DÉCLARÉES (tri-état)', () => {
   it('préserve les pastilles de canevas quand le client ne parle pas de mentions', async () => {
     const prisma = makePrisma();
     prisma.postMention.findMany.mockResolvedValue([
-      { mentionedUserId: 'u-bob', source: 'CANVAS' },
+      { mentionedUserId: 'u-bob', display: 'PINNED' },
     ]);
     const mentionService = makeMentionService({
       extractMentions: jest.fn<any>().mockReturnValue([]),
@@ -265,7 +265,7 @@ describe('reconcilePostMentions — mentions DÉCLARÉES (tri-état)', () => {
   it('retire les pastilles quand le client déclare une liste vide', async () => {
     const prisma = makePrisma();
     prisma.postMention.findMany.mockResolvedValue([
-      { mentionedUserId: 'u-bob', source: 'CANVAS' },
+      { mentionedUserId: 'u-bob', display: 'PINNED' },
     ]);
     const mentionService = makeMentionService({
       extractMentions: jest.fn<any>().mockReturnValue([]),
@@ -282,12 +282,12 @@ describe('reconcilePostMentions — mentions DÉCLARÉES (tri-état)', () => {
     expect(result.mentionedUserIds).toEqual([]);
   });
 
-  /// `source: null` = ligne écrite avant le discriminant. Elle se lit CONTENT :
+  /// `display` absent = ligne écrite avant le discriminant. Elle se lit INLINE :
   /// c'était la seule voie qui existait alors.
   it('relit dans le texte une ligne antérieure au discriminant', async () => {
     const prisma = makePrisma();
     prisma.postMention.findMany.mockResolvedValue([
-      { mentionedUserId: 'u-legacy', source: null },
+      { mentionedUserId: 'u-legacy', display: null },
     ]);
     const mentionService = makeMentionService({
       extractMentions: jest.fn<any>().mockReturnValue([]),
@@ -353,7 +353,7 @@ describe('reconcilePostMentions — édition', () => {
     expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
       where: { postId: 'post-1', mentionedUserId: { in: ['u-carol'] } },
     });
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'CONTENT');
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-bob'], 'INLINE');
     expect(result.newlyMentionedUserIds).toEqual(['u-bob']);
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({ mentionedUserIds: ['u-bob'] })

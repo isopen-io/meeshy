@@ -50,17 +50,30 @@ export interface PostMentionResolver {
   createPostMentions(
     postId: string,
     mentionedUserIds: string[],
-    source?: PostMentionSourceValue
+    display?: PostMentionDisplayValue
   ): Promise<void>;
 }
 
 /**
- * D'où vient une ligne `PostMention` — miroir de l'enum Prisma
- * `PostMentionSource`. Deux voies, deux réconciliations : le TEXTE est relu à
- * chaque édition, une mention DÉCLARÉE ne bouge que si le client renvoie sa
- * liste.
+ * Miroir de l'enum Prisma `PostMentionDisplay`. Deux familles, deux
+ * réconciliations : INLINE est relu dans le texte à chaque édition, les trois
+ * autres ne bougent que si le client renvoie leur liste.
  */
-export type PostMentionSourceValue = 'CONTENT' | 'CANVAS';
+export type PostMentionDisplayValue = 'INLINE' | 'PINNED' | 'NOTE' | 'SILENT';
+
+/** Les seuls modes qu'un client a le droit de DÉCLARER. INLINE est dérivé. */
+export type DeclarablePostMentionDisplay = Exclude<PostMentionDisplayValue, 'INLINE'>;
+
+/**
+ * Le mode d'une ligne déjà en base. `null` comme `undefined` se lisent INLINE :
+ * c'était la seule voie qui existait avant le discriminant, et c'est ce que
+ * faisait la réconciliation d'alors.
+ */
+export function readDisplay(
+  display: PostMentionDisplayValue | null | undefined
+): PostMentionDisplayValue {
+  return display ?? 'INLINE';
+}
 
 /**
  * Une personne que le post nomme SANS que son texte le dise : pastille posée
@@ -133,7 +146,7 @@ export interface PostMentionParams {
   content: string | null | undefined;
   /**
    * Mentions déclarées hors texte. TRI-ÉTAT à l'édition, comme `location` :
-   * `undefined` = le client n'en parle pas, les lignes `CANVAS` existantes
+   * `undefined` = le client n'en parle pas, les lignes `PINNED` existantes
    * survivent ; `[]` = il n'en déclare plus aucune, elles partent ; une liste
    * remplace l'ensemble déclaré. À la création, `undefined` et `[]` reviennent
    * au même — il n'y a rien à préserver.
@@ -235,14 +248,14 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
     // ne peut plus garantir qu'elle ne détruit rien, donc elle s'abstient.
     const previousRows = await prisma.postMention.findMany({
       where: { postId: params.post.id },
-      select: { mentionedUserId: true, source: true },
+      select: { mentionedUserId: true, display: true },
     });
     const previousUserIds = previousRows.map((row) => row.mentionedUserId);
-    // `source: null` = ligne écrite avant le discriminant. Elle se lit CONTENT :
-    // c'était la seule voie qui existait alors, et la relire dans le texte est
+    // Un `display` absent se lit INLINE (`readDisplay`) : c'était la seule voie
+    // qui existait avant le discriminant, et la relire dans le texte est
     // exactement ce que faisait la réconciliation d'avant.
     const previousCanvasUserIds = previousRows
-      .filter((row) => row.source === 'CANVAS')
+      .filter((row) => readDisplay(row.display) === 'PINNED')
       .map((row) => row.mentionedUserId);
 
     const contentUserIds = content && content.includes('@')
@@ -302,10 +315,10 @@ async function persistBySource(
   canvasUserIds: readonly string[]
 ): Promise<void> {
   if (contentUserIds.length > 0) {
-    await mentionService.createPostMentions(postId, [...contentUserIds], 'CONTENT');
+    await mentionService.createPostMentions(postId, [...contentUserIds], 'INLINE');
   }
   if (canvasUserIds.length > 0) {
-    await mentionService.createPostMentions(postId, [...canvasUserIds], 'CANVAS');
+    await mentionService.createPostMentions(postId, [...canvasUserIds], 'PINNED');
   }
 }
 

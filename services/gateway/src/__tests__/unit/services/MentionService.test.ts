@@ -1676,21 +1676,21 @@ describe('MentionService', () => {
           mentionedUserId: userId,
           // Défaut : c'était la seule voie avant le canal déclaré, et les
           // appelants d'alors ne passent rien.
-          source: 'CONTENT',
+          display: 'INLINE',
         },
       });
     });
 
     /// Le discriminant est ce qui dit, à l'édition suivante, laquelle relire
     /// dans le texte : sans lui, la première correction de frappe effacerait
-    /// les pastilles posées sur un canevas — elles n'y sont pas.
-    it('grave la source CANVAS quand la mention est déclarée hors texte', async () => {
+    /// les badges posés sur un canevas — ils n'y sont pas.
+    it('grave le mode PINNED quand la référence est déclarée hors texte', async () => {
       prisma.postMention.create.mockResolvedValue({ id: 'pm-2' });
 
-      await service.createPostMentions(postId, ['user-2'], 'CANVAS');
+      await service.createPostMentions(postId, ['user-2'], 'PINNED');
 
       expect(prisma.postMention.create).toHaveBeenCalledWith({
-        data: { postId, mentionedUserId: 'user-2', source: 'CANVAS' },
+        data: { postId, mentionedUserId: 'user-2', display: 'PINNED' },
       });
     });
 
