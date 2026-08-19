@@ -656,11 +656,28 @@ export class MessageProcessor {
     // message créé n'a ni texte ni pièce jointe — une bulle vide et
     // irrécupérable chez TOUS les destinataires de la diffusion.
     if (data.copyAttachmentsFromMessageId) {
-      await copyAttachmentsFromMessage(this.prisma, {
-        sourceMessageId: data.copyAttachmentsFromMessageId,
-        targetMessageId: message.id,
-        requesterParticipantId: data.senderId,
-      });
+      try {
+        await copyAttachmentsFromMessage(this.prisma, {
+          sourceMessageId: data.copyAttachmentsFromMessageId,
+          targetMessageId: message.id,
+          requesterParticipantId: data.senderId,
+        });
+      } catch (error) {
+        // La ligne `Message` existe déjà : `saveMessage` la crée AVANT
+        // d'appeler `handleAttachments`. Laisser l'erreur remonter sans
+        // nettoyer laisserait une bulle orpheline (content vide, zéro pièce
+        // jointe, `deletedAt: null`) que le prochain GET servirait comme un
+        // message réel — et qu'un rejeu au même `clientMessageId` rendrait
+        // ensuite `success: true` en dédup P2002 (`saveMessage` retourne
+        // AVANT `handleAttachments` sur ce chemin, donc la copie ne serait
+        // jamais retentée). Supprimer la ligne avant de propager l'erreur
+        // fait échouer l'envoi ET libère le `clientMessageId` pour un vrai
+        // nouvel essai.
+        await this.prisma.message.delete({ where: { id: message.id } }).catch((deleteError) =>
+          logger.error('[MessageProcessor] Failed to delete orphaned message after copy failure', deleteError)
+        );
+        throw error;
+      }
       return;
     }
 

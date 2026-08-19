@@ -118,6 +118,7 @@ const msgCreate = jest.fn() as jest.Mock<any>;
 const msgFindFirst = jest.fn() as jest.Mock<any>;
 const msgFindUnique = jest.fn() as jest.Mock<any>;
 const msgUpdate = jest.fn() as jest.Mock<any>;
+const msgDelete = jest.fn() as jest.Mock<any>;
 const attFindMany = jest.fn() as jest.Mock<any>;
 const attCreate = jest.fn() as jest.Mock<any>;
 const attUpdateMany = jest.fn() as jest.Mock<any>;
@@ -132,7 +133,7 @@ const postFindUnique = jest.fn() as jest.Mock<any>;
 
 const prisma: PrismaClient = {
   conversation: { findUnique: convFindUnique },
-  message: { create: msgCreate, findFirst: msgFindFirst, findUnique: msgFindUnique, update: msgUpdate },
+  message: { create: msgCreate, findFirst: msgFindFirst, findUnique: msgFindUnique, update: msgUpdate, delete: msgDelete },
   messageAttachment: { findMany: attFindMany, create: attCreate, updateMany: attUpdateMany },
   participant: { findUnique: partFindUnique, findFirst: partFindFirst, findMany: partFindMany },
   trackingLink: { updateMany: tlUpdateMany },
@@ -188,6 +189,7 @@ function resetPrisma() {
   msgFindFirst.mockReset();
   msgFindUnique.mockReset();
   msgUpdate.mockReset();
+  msgDelete.mockReset();
   attFindMany.mockReset();
   attCreate.mockReset();
   attUpdateMany.mockReset();
@@ -206,6 +208,7 @@ function resetPrisma() {
   msgFindFirst.mockResolvedValue(null);
   msgFindUnique.mockResolvedValue(null);
   msgUpdate.mockResolvedValue(makeMessage());
+  msgDelete.mockResolvedValue(makeMessage());
   attFindMany.mockResolvedValue([]);
   attCreate.mockResolvedValue({});
   attUpdateMany.mockResolvedValue({});
@@ -838,6 +841,67 @@ describe('MessageProcessor.saveMessage', () => {
     postFindUnique.mockRejectedValue(new Error('DB error'));
     const result = await processor.saveMessage({ ...baseData, storyReplyToId: 'post-1' });
     expect(result).toBeDefined();
+  });
+
+  // Round de correction 1 — IMPORTANT : la ligne `Message` est créée AVANT
+  // `handleAttachments`. Un échec de la copie ne doit pas la laisser
+  // orpheline (content vide, zéro pièce jointe) — sans quoi le prochain GET
+  // la sert comme un message réel, et un rejeu au même `clientMessageId`
+  // la rendrait ensuite `success: true` via le dédup P2002.
+  describe('diffusion via copyAttachmentsFromMessageId', () => {
+    const SOURCE_MSG_ID = 'orig-msg-id';
+
+    it('copie les pièces jointes de la source et NE supprime PAS le message créé', async () => {
+      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
+      const origAtt = {
+        id: 'orig-att', fileName: 'file.jpg', originalName: 'file.jpg',
+        mimeType: 'image/jpeg', fileSize: 1000, filePath: '/uploads/file.jpg',
+        fileUrl: 'https://cdn/file.jpg',
+      };
+      attFindMany.mockResolvedValueOnce([origAtt]).mockResolvedValue([]);
+      attCreate.mockResolvedValue({ ...origAtt });
+
+      await processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID });
+
+      expect(attCreate).toHaveBeenCalledTimes(1);
+      expect(msgDelete).not.toHaveBeenCalled();
+    });
+
+    it('supprime le message ORPHELIN quand le contrôle de propriété refuse la copie', async () => {
+      msgFindUnique.mockResolvedValue({ sender: { id: 'someone-else', userId: 'user-2' } });
+      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
+
+      await expect(
+        processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID })
+      ).rejects.toThrow(/not-owner/);
+
+      expect(msgDelete).toHaveBeenCalledWith({ where: { id: MSG_ID } });
+      expect(attCreate).not.toHaveBeenCalled();
+    });
+
+    it('supprime le message ORPHELIN quand la source ne porte aucune pièce jointe', async () => {
+      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
+      attFindMany.mockResolvedValue([]);
+
+      await expect(
+        processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID })
+      ).rejects.toThrow(/empty-source/);
+
+      expect(msgDelete).toHaveBeenCalledWith({ where: { id: MSG_ID } });
+      expect(attCreate).not.toHaveBeenCalled();
+    });
+
+    it('remonte l’échec de copie même si la suppression de la ligne orpheline échoue elle-même', async () => {
+      msgFindUnique.mockResolvedValue({ sender: { id: 'someone-else', userId: 'user-2' } });
+      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
+      msgDelete.mockRejectedValue(new Error('delete failed'));
+
+      await expect(
+        processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID })
+      ).rejects.toThrow(/not-owner/);
+    });
   });
 });
 

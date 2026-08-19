@@ -476,12 +476,22 @@ describe('MessagingService', () => {
       // sans quoi le destinataire verrait un badge « Transféré depuis … » qui
       // révélerait le nom de la conversation d'un autre destinataire.
       it('copie les pièces jointes SANS marquer le message comme transféré', async () => {
-        // Contrôle de propriété de `copyAttachmentsFromMessage` : seul
-        // l'auteur du message source peut en faire copier les pièces jointes.
-        // Le mock par défaut (`findUnique` → null) ferait refuser la copie ;
-        // ce test prouve le câblage côté ENVOI, la règle de propriété étant
-        // déjà prouvée par `copyAttachments.test.ts`.
-        mockPrisma.message.findUnique.mockResolvedValue({ senderId: testParticipantId });
+        // Contrôle de propriété de `copyAttachmentsFromMessage` : identité
+        // (mêmes `Participant.id`, ou même `User.id` derrière deux
+        // `Participant` de conversations différentes — cf. round de
+        // correction 1). Le mock par défaut (`findUnique` → null) ferait
+        // refuser la copie ; ce test prouve le câblage côté ENVOI, la règle
+        // de propriété étant déjà prouvée par `copyAttachments.test.ts`.
+        mockPrisma.message.findUnique.mockResolvedValue({
+          sender: { id: testParticipantId, userId: testUserId }
+        });
+        // `copyAttachmentsFromMessage` refuse désormais une source SANS
+        // pièce jointe (round de correction 1, garde `empty-source`) : ce
+        // test doit en fournir au moins une pour exercer le câblage nominal.
+        mockPrisma.messageAttachment.findMany.mockResolvedValue([
+          { id: 'att-1', mimeType: 'image/jpeg', filePath: '/p/1', fileUrl: 'u/1', fileName: 'f', originalName: 'f', fileSize: 10 }
+        ]);
+        mockPrisma.messageAttachment.create = jest.fn().mockResolvedValue({ id: 'copy-1' });
 
         const response = await service.handleMessage(
           { ...validRequest, content: '', copyAttachmentsFromMessageId: '507f1f77bcf86cd799439099' },

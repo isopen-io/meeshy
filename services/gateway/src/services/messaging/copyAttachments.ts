@@ -20,6 +20,32 @@
  *    erreurs (best-effort, un forward dégénère en message ordinaire) ; ici
  *    une copie manquée fait échouer l'envoi plutôt que de laisser une bulle
  *    vide, irrécupérable, chez tous les destinataires de la diffusion.
+ *
+ * ─── Le contrôle de propriété compare des IDENTITÉS, pas des LIGNES ────────
+ *
+ * `Message.senderId` est un `Participant.id`, et `Participant` est SCOPÉ par
+ * conversation (`@@unique([conversationId, userId, sessionTokenHash])`). Le
+ * cas d'usage de ce module EST la diffusion vers PLUSIEURS conversations :
+ * pour une 2e cible, `requesterParticipantId` (résolu dans la conversation
+ * CIBLE) et `source.senderId` (le participant de l'auteur dans la
+ * conversation SOURCE) sont deux lignes `Participant` différentes du MÊME
+ * utilisateur. Comparer les deux id bruts refuse alors TOUTE diffusion
+ * au-delà de la première cible. La propriété se prouve par IDENTITÉ stable
+ * (même `Participant.id` — cas mono-conversation — OU même `User.id` derrière
+ * deux `Participant` distincts), même motif que
+ * `MessageProcessor.resolveLinkAuthorUserId`. `requester.userId != null` est
+ * une garde à part entière : un participant ANONYME n'a pas de `userId`
+ * (`Participant.userId String?`), et l'omettre ferait de deux anonymes de
+ * conversations différentes des propriétaires l'un de l'autre sur
+ * `null === null`.
+ *
+ * ─── Une source sans pièce jointe est un refus, pas un no-op ───────────────
+ *
+ * `{ copied: 0 }` renvoyé silencieusement pour un id qui pointe un message
+ * texte (ou dont les pièces jointes ont été balayées entre-temps) laisserait
+ * l'appelant croire l'envoi réussi alors que le message créé est une bulle
+ * vide diffusée à tous les destinataires. Refusé explicitement, comme tout
+ * autre échec de copie (différence 3 ci-dessus).
  */
 
 /**
@@ -73,8 +99,14 @@ export interface CopyAttachmentsPrisma {
   message: {
     findUnique(args: {
       where: { id: string };
-      select: { senderId: true };
-    }): Promise<{ senderId: string } | null>;
+      select: { sender: { select: { id: true; userId: true } } };
+    }): Promise<{ sender: { id: string; userId: string | null } } | null>;
+  };
+  participant: {
+    findUnique(args: {
+      where: { id: string };
+      select: { id: true; userId: true };
+    }): Promise<{ id: string; userId: string | null } | null>;
   };
   messageAttachment: {
     findMany(args: { where: { messageId: string } }): Promise<readonly SourceAttachment[]>;
@@ -92,17 +124,34 @@ export async function copyAttachmentsFromMessage(
   prisma: CopyAttachmentsPrisma,
   params: CopyAttachmentsParams
 ): Promise<{ copied: number }> {
-  const source = await prisma.message.findUnique({
-    where: { id: params.sourceMessageId },
-    select: { senderId: true },
-  });
-  if (!source || source.senderId !== params.requesterParticipantId) {
+  const [source, requester] = await Promise.all([
+    prisma.message.findUnique({
+      where: { id: params.sourceMessageId },
+      select: { sender: { select: { id: true, userId: true } } },
+    }),
+    prisma.participant.findUnique({
+      where: { id: params.requesterParticipantId },
+      select: { id: true, userId: true },
+    }),
+  ]);
+
+  const sender = source?.sender;
+  const isOwner =
+    !!sender &&
+    !!requester &&
+    (sender.id === requester.id ||
+      (requester.userId != null && sender.userId === requester.userId));
+  if (!isOwner) {
     throw new Error('copy-attachments:not-owner');
   }
 
   const sourceAttachments = await prisma.messageAttachment.findMany({
     where: { messageId: params.sourceMessageId },
   });
+
+  if (sourceAttachments.length === 0) {
+    throw new Error('copy-attachments:empty-source');
+  }
 
   const created = await Promise.all(
     sourceAttachments.map((att) =>
