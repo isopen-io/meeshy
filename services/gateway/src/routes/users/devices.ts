@@ -14,6 +14,20 @@ import type { NotificationService } from '../../services/notifications/Notificat
 import type { EmailService } from '../../services/EmailService';
 import { validatePagination } from '../../utils/pagination';
 
+/**
+ * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
+ * Exporté pour qu'un test puisse traverser la sérialisation réelle :
+ * fast-json-stringify supprime tout champ non déclaré ici.
+ */
+export const friendRequestsPaginationSchema = {
+  type: 'object',
+  properties: {
+    total: { type: 'number' },
+    offset: { type: 'number' },
+    limit: { type: 'number' },
+    hasMore: { type: 'boolean' }
+  }
+} as const;
 
 /**
  * Get all friend requests for authenticated user
@@ -29,7 +43,11 @@ export async function getFriendRequests(fastify: FastifyInstance) {
         type: 'object',
         properties: {
           offset: { type: 'string', default: '0', description: 'Pagination offset' },
-          limit: { type: 'string', default: '20', description: 'Results per page (max 100)' }
+          limit: { type: 'string', default: '20', description: 'Results per page (max 100)' },
+          // Le budget `limit` est PARTAGÉ par les deux sens et tous les statuts.
+          // Sans ce filtre, une liste d'amis se fait évincer par des demandes
+          // en attente ou refusées (spec 2026-08-19, S.2).
+          status: { type: 'string', enum: ['pending', 'accepted', 'rejected'], description: 'Filtre de statut' }
         }
       },
       response: {
@@ -52,15 +70,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
                 }
               }
             },
-            pagination: {
-              type: 'object',
-              properties: {
-                total: { type: 'number' },
-                offset: { type: 'number' },
-                limit: { type: 'number' },
-                returned: { type: 'number' }
-              }
-            }
+            pagination: friendRequestsPaginationSchema
           }
         },
         401: errorResponseSchema,
@@ -75,7 +85,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
-      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
+      const { offset = '0', limit = '20', status } = request.query as { offset?: string; limit?: string; status?: string };
 
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
@@ -83,7 +93,8 @@ export async function getFriendRequests(fastify: FastifyInstance) {
         OR: [
           { senderId: userId },
           { receiverId: userId }
-        ]
+        ],
+        ...(status ? { status } : {})
       };
 
       const [friendRequests, totalCount] = await Promise.all([
