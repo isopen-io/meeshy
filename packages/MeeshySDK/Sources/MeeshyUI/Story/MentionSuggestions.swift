@@ -77,7 +77,7 @@ final class MentionSuggestionsModel: ObservableObject {
 /// le mode par défaut de la surface, l'appui long ouvre le choix. Un appelant
 /// qui ne le fournit pas garde une liste à un seul geste — et surtout AUCUN
 /// menu attaché, un `.contextMenu` vide ouvrant une bulle sans entrée.
-struct MentionSuggestionList<Menu: View>: View {
+public struct MentionSuggestionList<Menu: View>: View {
     let query: String
     /// Hauteur maximale du panneau. 200 pt au-dessus d'un champ de saisie (on
     /// ne masque pas ce qu'on écrit) ; sans borne dans une sheet dédiée.
@@ -90,10 +90,10 @@ struct MentionSuggestionList<Menu: View>: View {
     private let attachesContextMenu: Bool
     @StateObject private var model = MentionSuggestionsModel()
 
-    init(query: String,
-         maxHeight: CGFloat = 200,
-         onSelect: @escaping (UserSearchResult) -> Void,
-         @ViewBuilder contextMenu: @escaping (UserSearchResult) -> Menu) {
+    public init(query: String,
+                maxHeight: CGFloat = 200,
+                onSelect: @escaping (UserSearchResult) -> Void,
+                @ViewBuilder contextMenu: @escaping (UserSearchResult) -> Menu) {
         self.init(query: query, maxHeight: maxHeight, onSelect: onSelect,
                   contextMenu: contextMenu, attachesContextMenu: true)
     }
@@ -110,7 +110,7 @@ struct MentionSuggestionList<Menu: View>: View {
         self.attachesContextMenu = attachesContextMenu
     }
 
-    var body: some View {
+    public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
                 ForEach(model.candidates) { user in
@@ -157,7 +157,7 @@ struct MentionSuggestionList<Menu: View>: View {
     }
 }
 
-extension MentionSuggestionList where Menu == EmptyView {
+public extension MentionSuggestionList where Menu == EmptyView {
     /// Liste à un seul geste — la frappe `@` d'une surface qui n'offre pas
     /// encore le choix de mode.
     init(query: String,
@@ -208,7 +208,7 @@ struct MentionSuggestionRow: View {
 /// Elle PILOTE l'ensemble et rend l'ensemble MIS À JOUR : elle ne décide de
 /// rien d'autre, le composer appelant choisissant quoi en faire (poser un badge
 /// sur le canevas, par exemple) — règle de pureté SDK.
-struct StoryMentionPickerSheet: View {
+public struct StoryMentionPickerSheet: View {
     let references: [ComposerReference]
     /// Les modes que CE contenu peut réellement montrer. Un post n'a aucune
     /// couche de positionnement : lui proposer un badge promettrait un
@@ -219,15 +219,15 @@ struct StoryMentionPickerSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
 
-    init(references: [ComposerReference],
-         modes: [PostReferenceDisplay] = PostReferenceDisplay.declarable,
-         onChange: @escaping ([ComposerReference]) -> Void) {
+    public init(references: [ComposerReference],
+                modes: [PostReferenceDisplay] = PostReferenceDisplay.declarable,
+                onChange: @escaping ([ComposerReference]) -> Void) {
         self.references = references
         self.modes = modes
         self.onChange = onChange
     }
 
-    var body: some View {
+    public var body: some View {
         // En-tête explicite plutôt qu'une `NavigationStack` : la sheet est
         // présentée depuis le composer, un `fullScreenCover` sans barre d'état,
         // qui met les insets de safe area à zéro — la même raison qui a fait
