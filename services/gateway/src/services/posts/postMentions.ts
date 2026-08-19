@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { collectMentionableText } from './mentionableText';
+import { retractMentionNotifications } from './retractMentionNotifications';
 
 /**
  * Le contenu mentionnant, tel que la résolution le lit. Structural et minimal :
@@ -40,7 +41,7 @@ export type PostMentionType = 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL';
  * délégués générés portent des surcharges que rien de recopié à la main ne
  * satisfait.
  */
-export type PostMentionPrisma = Pick<PrismaClient, 'postMention'>;
+export type PostMentionPrisma = Pick<PrismaClient, 'postMention' | 'notification'>;
 
 /**
  * Les trois méthodes de `MentionService` que la résolution appelle, en
@@ -294,6 +295,14 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
     if (departedUserIds.length > 0) {
       await prisma.postMention.deleteMany({
         where: { postId: params.post.id, mentionedUserId: { in: departedUserIds } },
+      });
+      // Le retrait de la ligne RÉVOQUE l'accès qu'elle ouvrait : sa notification
+      // survivrait en pointant vers un contenu désormais fermé.
+      await retractMentionNotifications({
+        prisma,
+        postId: params.post.id,
+        departedUserIds,
+        onError: params.onError,
       });
     }
 

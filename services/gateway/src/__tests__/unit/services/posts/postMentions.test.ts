@@ -28,6 +28,11 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
+    // La rétractation des notifications s'appelle dans la foulée du retrait des
+    // lignes : sans ce délégué, tout cas qui fait partir quelqu'un lèverait.
+    notification: {
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   } as any;
 }
@@ -592,5 +597,30 @@ describe('reconcilePostMentions — tri-état par mode déclaré', () => {
     expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
       where: { postId: 'post-1', mentionedUserId: { in: ['u-alice'] } },
     });
+  });
+});
+
+describe('reconcilePostMentions — rétractation', () => {
+  it('retire la notification de la personne dont la référence disparaît', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-bob', display: 'NOTE' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+      notification: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'plus personne', declared: [],
+    });
+
+    expect(prisma.notification.deleteMany).toHaveBeenCalledTimes(1);
   });
 });
