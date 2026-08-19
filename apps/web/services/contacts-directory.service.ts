@@ -31,8 +31,22 @@ export interface ContactsDirectoryListParams {
 }
 
 export interface ContactsDirectoryListResult {
-  readonly contacts: DirectoryContact[];
+  readonly contacts: readonly DirectoryContact[];
   readonly hasMore: boolean;
+}
+
+/**
+ * `apiService.get()` renvoie le corps HTTP COMPLET sous `.data`, sans
+ * déballage (`services/api.service.ts` : `data = await response.json()` puis
+ * `return { success: true, data, message }`). La route répond via
+ * `sendPaginatedSuccess` (`services/gateway/src/utils/response.ts`), qui
+ * produit `{ success, data: contacts, pagination, meta }` — c'est donc CE
+ * second niveau (`response.data.data` / `response.data.pagination`) qu'il
+ * faut lire, comme `notification.service.ts` et `dashboard.service.ts`.
+ */
+interface ContactsDirectoryBody {
+  readonly data: DirectoryContact[];
+  readonly pagination: { readonly offset: number; readonly limit: number; readonly total: number; readonly hasMore: boolean };
 }
 
 export const contactsDirectoryService = {
@@ -43,11 +57,11 @@ export const contactsDirectoryService = {
     if (params.filter !== undefined) query.filter = params.filter;
     if (params.q !== undefined) query.q = params.q;
 
-    const response = await apiService.get<DirectoryContact[]>('/users/me/contacts', query);
+    const response = await apiService.get<ContactsDirectoryBody>('/users/me/contacts', query);
 
     return {
-      contacts: response.data ?? [],
-      hasMore: response.pagination?.hasMore ?? false,
+      contacts: response.data?.data ?? [],
+      hasMore: response.data?.pagination?.hasMore ?? false,
     };
   },
 };

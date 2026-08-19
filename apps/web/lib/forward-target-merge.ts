@@ -22,7 +22,7 @@ export interface ForwardTarget {
 export function mergeForwardTargets(
   conversations: readonly ForwardTarget[],
   contacts: readonly ForwardTarget[],
-): ForwardTarget[] {
+): readonly ForwardTarget[] {
   const seenIds = new Set<string>();
   const joinedUserIds = new Set<string>();
   const out: ForwardTarget[] = [];

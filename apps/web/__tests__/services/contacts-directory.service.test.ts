@@ -13,10 +13,13 @@ describe('contactsDirectoryService.list', () => {
   it('interroge /users/me/contacts avec filter=meeshy et la requête', async () => {
     mockApiGet.mockResolvedValue({
       success: true,
-      data: [
-        { id: 'd1', displayName: 'Alice', isOnMeeshy: true, matchedUser: { id: 'u1', username: 'alice' } },
-      ],
-      pagination: { total: 1, offset: 0, limit: 50, hasMore: false },
+      data: {
+        success: true,
+        data: [
+          { id: 'd1', displayName: 'Alice', isOnMeeshy: true, matchedUser: { id: 'u1', username: 'alice' } },
+        ],
+        pagination: { total: 1, offset: 0, limit: 50, hasMore: false },
+      },
     });
 
     const res = await contactsDirectoryService.list({ q: 'ali', filter: 'meeshy', limit: 50 });
@@ -26,11 +29,29 @@ describe('contactsDirectoryService.list', () => {
     expect(res.hasMore).toBe(false);
   });
 
+  it('reflète hasMore: true quand la page ne couvre pas tout le carnet', async () => {
+    mockApiGet.mockResolvedValue({
+      success: true,
+      data: {
+        success: true,
+        data: [{ id: 'd1', displayName: 'Alice', isOnMeeshy: false }],
+        pagination: { total: 3, offset: 0, limit: 1, hasMore: true },
+      },
+    });
+
+    const res = await contactsDirectoryService.list({ limit: 1 });
+
+    expect(res.hasMore).toBe(true);
+  });
+
   it('rend une liste vide quand le carnet est vide (côté web, acceptable)', async () => {
     mockApiGet.mockResolvedValue({
       success: true,
-      data: [],
-      pagination: { total: 0, offset: 0, limit: 50, hasMore: false },
+      data: {
+        success: true,
+        data: [],
+        pagination: { total: 0, offset: 0, limit: 50, hasMore: false },
+      },
     });
 
     const res = await contactsDirectoryService.list({});
