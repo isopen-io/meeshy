@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -123,5 +124,53 @@ struct StoryComposerEditedBadgeTests {
         vm.deleteElement(id: badgeId)
 
         #expect(vm.references.isEmpty)
+    }
+}
+
+/// L'édition ne remplace l'ensemble déclaré QUE si elle le connaît en entier.
+///
+/// Les charges utiles de LISTE l'amputent — le select du feed écarte les
+/// silencieuses — et republier un jeu amputé les révoquerait sans que l'auteur
+/// les ait seulement vues.
+@MainActor
+struct StoryComposerDeclaredReferencesTests {
+
+    private func editingComposer() -> StoryComposerViewModel {
+        StoryComposerViewModel(editing: StoryItem(
+            id: "post-1",
+            content: "Hier soir",
+            createdAt: Date(),
+            expiresAt: Date().addingTimeInterval(3600),
+            mentions: [
+                PostReference(userId: "u-a", username: "alice", display: .note),
+                PostReference(userId: "u-b", username: "bob", display: .inline)
+            ]
+        ))
+    }
+
+    @Test func test_editing_showsTheServedReferences_butDoesNotClaimToKnowThemAll() {
+        let vm = editingComposer()
+
+        // Affichées tout de suite — l'auteur voit ce que la story porte.
+        #expect(vm.references.map(\.username) == ["alice"])
+        // Mais le drapeau reste BAS : ce jeu-là n'a pas les silencieuses.
+        #expect(vm.editingKnowsDeclaredReferences == false)
+    }
+
+    @Test func test_editing_dropsTheInlineOnes_becauseTheTextCarriesThem() {
+        #expect(editingComposer().references.contains { $0.username == "bob" } == false)
+    }
+
+    @Test func test_adoptDeclaredReferences_isWhatLetsTheEditReplaceTheSet() {
+        let vm = editingComposer()
+
+        vm.adoptDeclaredReferences([
+            PostReference(userId: "u-a", username: "alice", display: .note),
+            PostReference(userId: "u-c", username: "carol", display: .silent)
+        ])
+
+        #expect(vm.references.map(\.username) == ["alice", "carol"])
+        #expect(vm.references.map(\.display) == [.note, .silent])
+        #expect(vm.editingKnowsDeclaredReferences)
     }
 }

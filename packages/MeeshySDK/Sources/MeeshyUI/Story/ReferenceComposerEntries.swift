@@ -65,14 +65,14 @@ public struct ReferenceMentionSuggestions: View {
     }
 
     private func choose(_ mode: PostReferenceDisplay, for user: UserSearchResult) {
-        // Le fragment en cours de frappe (`@ali`) est d'abord COMPLÉTÉ : c'est
-        // la seule forme que la règle de retrait sache reconnaître, et les deux
-        // règles pures se composent ainsi sans qu'aucune ne connaisse l'autre.
-        let inserted = ComposerMentionQuery.replacingTrailingHandle(in: text, with: user.username)
         guard mode != .inline else {
             insert(user)
             return
         }
+        // Le fragment en cours de frappe (`@ali`) est d'abord COMPLÉTÉ : c'est
+        // la seule forme que la règle de retrait sache reconnaître, et les deux
+        // règles pures se composent ainsi sans qu'aucune ne connaisse l'autre.
+        let inserted = ComposerMentionQuery.replacingTrailingHandle(in: text, with: user.username)
         text = ComposerReferences.removingHandle(user.username, from: inserted)
         references = ReferencePickerLogic.apply(
             .choose(mode), username: user.username, userId: user.id,

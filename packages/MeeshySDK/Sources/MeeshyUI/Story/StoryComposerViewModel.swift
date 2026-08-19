@@ -43,13 +43,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// Visibilité initiale de la story éditée (seed de l'état du composer).
     public internal(set) var editingInitialVisibility: String?
     public internal(set) var editingInitialVisibilityUserIds: [String] = []
-    /// L'ensemble DÉCLARÉ de la story éditée a-t-il pu être hydraté ?
+    /// L'ensemble DÉCLARÉ de la story éditée est-il connu EN ENTIER ?
     ///
-    /// `false` quand la charge utile ne le portait pas : le composer ne sait
-    /// alors rien des références de la story, et sa liste — vide — ne peut
-    /// rien prouver. L'édition doit alors se TAIRE (clé absente, le serveur
-    /// préserve) : envoyer `[]` révoquerait des références que l'auteur n'a
-    /// jamais vues, et leur retirerait l'accès au contenu.
+    /// `false` tant que le composer n'a pas relu le post à l'unité : les
+    /// charges utiles de LISTE amputent le jeu (le select du feed écarte les
+    /// SILENCIEUSES), et seule la lecture unitaire projette POUR L'AUTEUR.
+    ///
+    /// Tant qu'il vaut `false`, l'édition se TAIT sur les références (clé
+    /// absente, le serveur préserve) : republier un jeu amputé les révoquerait
+    /// sans que l'auteur les ait seulement vues, et leur retirerait du même
+    /// coup l'accès au contenu.
     public internal(set) var editingKnowsDeclaredReferences = false
 
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.

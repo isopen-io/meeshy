@@ -5,6 +5,30 @@ import MeeshySDK
 // MARK: - StoryComposerViewModel + Edit (directive 2026-07-29)
 
 extension StoryComposerViewModel {
+
+    /// Ce qu'un jeu de références SERVI donne à éditer : les modes DÉCLARÉS.
+    ///
+    /// Les INLINE en sont écartées — c'est le TEXTE qui les porte, le serveur
+    /// les relit lui-même, et les déclarer ouvrirait un second chemin vers le
+    /// même fait.
+    static func declaredReferences(from served: [PostReference]?) -> [ComposerReference] {
+        (served ?? [])
+            .filter { $0.display != .inline }
+            .map { ComposerReference(username: $0.username, userId: $0.userId, display: $0.display) }
+    }
+
+    /// Adopte le jeu de références AUTORITAIRE — celui que la lecture unitaire
+    /// du post sert à son auteur, SILENCIEUSES comprises.
+    ///
+    /// C'est le seul chemin qui lève `editingKnowsDeclaredReferences`, et donc
+    /// le seul qui autorise l'édition à REMPLACER l'ensemble déclaré. Appelé
+    /// après l'ouverture du composer : jusqu'à son retour, l'édition se tait
+    /// plutôt que de révoquer.
+    public func adoptDeclaredReferences(_ served: [PostReference]) {
+        references = Self.declaredReferences(from: served)
+        editingKnowsDeclaredReferences = true
+    }
+
     /// Initializes the composer to EDIT an already-published story.
     ///
     /// Faithful hydration — unlike `init(reposting:authorHandle:)` this is NOT
@@ -30,19 +54,15 @@ extension StoryComposerViewModel {
         editingInitialVisibility = story.visibility
         editingInitialVisibilityUserIds = story.visibilityUserIds ?? []
 
-        // Les références DÉCLARÉES de la story, quand la charge utile les
-        // porte. Les INLINE en sont écartées : c'est le TEXTE qui les porte, et
-        // le serveur les relit lui-même — les déclarer ouvrirait un second
-        // chemin vers le même fait.
-        //
-        // `mentions == nil` = le serveur ne les a pas servies. On ne s'invente
-        // pas un ensemble vide : l'édition se taira plutôt que de révoquer.
-        if let served = story.mentions {
-            references = served
-                .filter { $0.display != .inline }
-                .map { ComposerReference(username: $0.username, userId: $0.userId, display: $0.display) }
-            editingKnowsDeclaredReferences = true
-        }
+        // Affichage IMMÉDIAT de ce que la charge utile de tray porte — mais
+        // SANS lever le drapeau de complétude. Ce jeu-là est amputé par
+        // construction : le select du feed écarte les SILENCIEUSES
+        // (`postMentionInclude`), et les republier telles quelles au PUT
+        // révoquerait en silence toutes celles que l'auteur avait posées
+        // discrètement. Seule la relecture unitaire du post — la seule où le
+        // serveur projette POUR L'AUTEUR — a le droit de lever le drapeau
+        // (`adoptDeclaredReferences`).
+        references = Self.declaredReferences(from: story.mentions)
 
         // Le média de FOND est par convention `story.media.first` (le publish
         // l'uploade en premier), sauf s'il est déjà référencé par un objet du

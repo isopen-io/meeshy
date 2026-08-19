@@ -61,6 +61,17 @@ extension View {
                 },
                 onDismiss: { session.wrappedValue = nil }
             )
+            .task {
+                // Relecture UNITAIRE du post : c'est la seule charge utile où
+                // le serveur projette les références POUR L'AUTEUR, donc la
+                // seule qui porte ses silencieuses. Tant qu'elle n'a pas
+                // répondu, le composer se tait sur les références et l'édition
+                // préserve — jamais l'inverse.
+                guard let served = await viewModel.fetchDeclaredReferences(
+                    postId: current.composer.editingPostId ?? current.story.id
+                ) else { return }
+                current.composer.adoptDeclaredReferences(served)
+            }
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()

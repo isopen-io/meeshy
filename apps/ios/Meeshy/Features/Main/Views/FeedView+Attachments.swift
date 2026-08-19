@@ -450,7 +450,11 @@ extension FeedView {
                 ).rawValue,
                 mediaIds: [result.id],
                 originalLanguage: originalLanguage ?? transcription?.language,
-                mobileTranscription: transcription
+                mobileTranscription: transcription,
+                // Le composer reste ouvert pendant l'enregistrement : les
+                // personnes qu'on venait d'y nommer partent avec le post audio,
+                // au lieu d'être jetées au changement de surface.
+                mentions: feedDeclaredReferences
             )
 
             guard viewModel.publishError == nil else {
@@ -1706,7 +1710,8 @@ struct FeedComposerSheet: View {
                 ).rawValue,
                 mediaIds: [result.id],
                 originalLanguage: transcription?.language ?? composerLanguage,
-                mobileTranscription: transcription
+                mobileTranscription: transcription,
+                mentions: declaredReferences
             )
             guard viewModel.publishError == nil else {
                 await MainActor.run {

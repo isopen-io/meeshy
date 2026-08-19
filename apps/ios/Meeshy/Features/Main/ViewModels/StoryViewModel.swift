@@ -2815,6 +2815,26 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         groups.flatMap(\.stories).compactMap(\.updatedAt).max()
     }
 
+    /// Le jeu de références AUTORITAIRE d'une story — celui que la lecture
+    /// UNITAIRE sert à son auteur, silencieuses comprises.
+    ///
+    /// Le tray en sert un jeu amputé : son select écarte les SILENCIEUSES
+    /// (`postMentionInclude`, gateway). Republier celui-là au PUT les
+    /// révoquerait sans que l'auteur les ait seulement vues, et retirerait du
+    /// même coup l'accès au contenu aux personnes concernées. C'est donc cette
+    /// relecture, et elle seule, qui autorise l'édition à REMPLACER l'ensemble
+    /// déclaré.
+    ///
+    /// `nil` en échec — l'édition se taira, ce qui préserve.
+    func fetchDeclaredReferences(postId: String) async -> [PostReference]? {
+        do {
+            return try await storyService.fetchPost(id: postId).mentions
+        } catch {
+            Logger.messages.error("[StoryVM] declared references fetch failed postId=\(postId, privacy: .public): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// R4 inc.2 — le tray ignore ce post mais le point d'entrée connaît son
     /// id exact (bookmark, notification, deep link) : fetch unitaire LÉGER
     /// (`GET /posts/:id`) au lieu du refetch full-tray bloquant.
