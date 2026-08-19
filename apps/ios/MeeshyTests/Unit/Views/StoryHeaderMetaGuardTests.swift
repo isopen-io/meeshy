@@ -181,4 +181,83 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
             "une seule règle produit, un seul helper."
         )
     }
+
+    // MARK: - Les personnes que la story NOMME
+
+    /// Le défaut couvert ici est un défaut de CÂBLAGE, pas de règle.
+    ///
+    /// La règle existe et est testée côté SDK (`ReferenceNoteRow.noted(in:)`
+    /// ne garde que `.note`, `viewerIsSilentlyReferenced` porte le marqueur
+    /// personnel) ; la donnée arrivait jusqu'au client (`StoryItem.mentions`,
+    /// servie par le gateway, décodée par le SDK) — mais AUCUNE vue du reader
+    /// ne la lisait. Un `grep mentions` sur les quatre `StoryViewerView*`
+    /// rendait zéro occurrence. Les références NOTE d'une story étaient donc
+    /// invisibles, alors que les mêmes s'affichent sur un post (`FeedPostCard`
+    /// et `PostDetailView`, les deux seuls points de montage de la rangée).
+    ///
+    /// Conséquence produit : la personne nommée recevait bien sa notification
+    /// — `createPostMentionNotificationsBatch` notifie TOUS les modes —
+    /// ouvrait la story, et n'y trouvait aucune trace d'avoir été nommée.
+    private func canvasCode() throws -> String {
+        strippingComments(
+            try source("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"))
+    }
+
+    func test_theReaderMountsTheReferenceNoteRow_fedByTheCurrentStory() throws {
+        let code = try canvasCode()
+        XCTAssertTrue(
+            code.contains("ReferenceNoteRow("),
+            "Le reader doit monter `ReferenceNoteRow` : sans point de montage, " +
+            "une story qui nomme quelqu'un en NOTE ne le montre nulle part."
+        )
+        XCTAssertTrue(
+            code.contains("currentStory?.mentions"),
+            "La rangée doit être alimentée par les références de la story " +
+            "COURANTE. Montée sur une source vide, elle serait verte au " +
+            "compilateur et morte à l'écran."
+        )
+    }
+
+    /// La rangée vit dans le CHROME haut : elle suit `chromeVisible` comme
+    /// l'en-tête et le rail. Posée hors du chrome, elle resterait affichée sur
+    /// un contenu que le lecteur veut justement voir nu.
+    func test_theReferenceNoteRow_livesInTheChromeThatCanBeHidden() throws {
+        let code = try canvasCode()
+        guard let rowRange = code.range(of: "ReferenceNoteRow(") else {
+            XCTFail("ReferenceNoteRow doit être monté dans le reader")
+            return
+        }
+        guard let headerRange = code.range(of: "StoryHeaderView(") else {
+            XCTFail("StoryHeaderView introuvable — la structure du chrome a changé")
+            return
+        }
+        guard let chromeExit = code.range(of: "chromeVisible ? 0 : -(topInset",
+                                          range: headerRange.upperBound..<code.endIndex) else {
+            XCTFail("La sortie du chrome (offset sur chromeVisible) est introuvable")
+            return
+        }
+        XCTAssertTrue(
+            rowRange.lowerBound > headerRange.upperBound && rowRange.upperBound < chromeExit.lowerBound,
+            "La rangée « Avec … » doit être montée dans la pile du chrome haut, " +
+            "après l'en-tête et avant la sortie pilotée par `chromeVisible`."
+        )
+    }
+
+    /// La rangée est une liste de GENS, pas une décoration : on doit pouvoir
+    /// les atteindre.
+    func test_tappingANamedPersonOpensTheirProfile() throws {
+        let code = try canvasCode()
+        guard let rowRange = code.range(of: "ReferenceNoteRow(") else {
+            XCTFail("ReferenceNoteRow doit être monté dans le reader")
+            return
+        }
+        let end = code.index(rowRange.upperBound, offsetBy: 700, limitedBy: code.endIndex) ?? code.endIndex
+        let block = String(code[rowRange.upperBound ..< end])
+        XCTAssertTrue(
+            block.contains("selectedProfileUser"),
+            "`onTapReference` doit router vers la fiche de profil (le même " +
+            "`selectedProfileUser` que l'en-tête), sinon la rangée nomme des " +
+            "gens qu'on ne peut pas atteindre."
+        )
+    }
 }

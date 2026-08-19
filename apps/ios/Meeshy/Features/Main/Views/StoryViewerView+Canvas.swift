@@ -1730,6 +1730,34 @@ struct StoryCardView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
 
+                // Les personnes que la story NOMME en mode NOTE, sous l'auteur.
+                //
+                // La donnée arrivait déjà jusqu'ici (`StoryItem.mentions`,
+                // servie par le gateway, décodée par le SDK) mais aucune vue du
+                // reader ne la lisait : une story qui nommait quelqu'un en NOTE
+                // ne le montrait NULLE PART, alors que la personne nommée
+                // recevait bien sa notification et ouvrait la story pour n'y
+                // trouver aucune trace. Les posts, eux, l'affichaient depuis le
+                // début (`FeedPostCard`, `PostDetailView`).
+                //
+                // La rangée fait ses propres tris et n'a besoin d'aucune garde
+                // ici : SILENT n'y figure jamais (il ne se voit que par son
+                // sujet, via le marqueur personnel), PINNED non plus (la
+                // pastille posée sur le canevas EST déjà son affichage).
+                // Vide, elle ne rend rien — pas de place réservée.
+                //
+                // DANS le chrome, à dessein : elle disparaît avec l'en-tête et
+                // le rail quand le lecteur veut voir le contenu nu.
+                ReferenceNoteRow(
+                    references: currentStory?.mentions ?? [],
+                    currentUserId: AuthManager.shared.currentUser?.id,
+                    accentColor: Color(hex: composerAccentColor),
+                    onTapReference: { selectedProfileUser = .from(reference: $0) }
+                )
+                .equatable()
+                .padding(.horizontal, 16)
+                .padding(.top, 6)
+
                 Spacer()
             }
             // Width strict — même rationale que le sidebar Layer 8 : le
