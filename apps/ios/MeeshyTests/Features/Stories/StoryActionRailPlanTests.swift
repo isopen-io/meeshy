@@ -72,7 +72,14 @@ final class StoryActionRailPlanTests: XCTestCase {
         XCTAssertFalse(plan.showsExport)
     }
 
-    func test_resolve_othersPrivateStory_hidesRepost() {
+    /// D1 (arbitrage user 2026-08-19) — ce témoin exigeait l'INVERSE : le
+    /// bouton de republication était caché sur toute story non publique. La
+    /// règle « même audience ou plus restreinte » ne pouvait donc jamais
+    /// s'appliquer, faute d'affordance sur les stories qu'elle concerne. C'est
+    /// désormais `StoryRepostAudience` (miroir du serveur) qui borne le CHOIX
+    /// d'audience ; l'appartenance au rail ne dépend plus que de « ce n'est pas
+    /// ma story ».
+    func test_resolve_othersPrivateStory_stillOffersRepost_audienceLawBoundsTheChoice() {
         let plan = StoryActionRailPlan.resolve(
             isOwnStory: false,
             canReply: false,
@@ -82,7 +89,7 @@ final class StoryActionRailPlanTests: XCTestCase {
             hasTranslatableContent: false
         )
 
-        XCTAssertFalse(plan.showsRepost)
+        XCTAssertTrue(plan.showsRepost)
         XCTAssertFalse(plan.showsReply)
         XCTAssertFalse(plan.showsViews)
         XCTAssertFalse(plan.showsExport)

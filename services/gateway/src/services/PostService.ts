@@ -21,6 +21,7 @@ import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupServ
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
+import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
@@ -180,17 +181,60 @@ export class PostService {
     if (data.repostOfId) {
       const sourcePost = await this.prisma.post.findFirst({
         where: { id: data.repostOfId, deletedAt: NOT_DELETED },
-        select: { id: true, repostOfId: true, originalRepostOfId: true },
+        // `visibility`/`visibilityUserIds` sont lus pour la LOI D'AUDIENCE
+        // ci-dessous — sans eux ce chemin ne pouvait rien vérifier.
+        select: {
+          id: true,
+          repostOfId: true,
+          originalRepostOfId: true,
+          visibility: true,
+          visibilityUserIds: true,
+        },
       });
       if (!sourcePost) {
         const err: any = new Error('Repost source not found');
         err.statusCode = 404;
         throw err;
       }
+
+      // ── Loi d'audience, seconde porte ─────────────────────────────────────
+      //
+      // `POST /posts` accepte `repostOfId` (« for StoryComposer publishing a
+      // repost via POST /posts », schéma `CreatePostSchema`) et ne validait
+      // AUCUNE audience : la source n'était lue que pour sa chaîne d'IDs. Un
+      // client pouvait donc publier `{ repostOfId: <story PRIVATE>,
+      // visibility: 'PUBLIC' }` et contourner intégralement la barrière de
+      // `repostPost`.
+      //
+      // La sécurité ne peut pas dépendre de l'endpoint choisi par le client :
+      // les deux portes appliquent la MÊME loi partagée. Cette faille précède
+      // le lot « republication de story » (2026-08-19) — le chemin n'avait
+      // simplement aucun appelant côté app ; brancher le composeur le rend
+      // vivant.
+      const sourceVisibility = sourcePost.visibility as PostVisibility;
+      if (!isRepostVisibilityAllowed(sourceVisibility, data.visibility as PostVisibility)) {
+        const err: any = new Error(
+          `Repost audience ${data.visibility} is broader than the source ${sourceVisibility}`,
+        );
+        err.statusCode = 403;
+        err.code = 'REPOST_AUDIENCE_WIDENING';
+        throw err;
+      }
+
       repostOfId = sourcePost.id;
       originalRepostOfId = (sourcePost.originalRepostOfId as string | null)
         ?? (sourcePost.repostOfId as string | null)
         ?? sourcePost.id;
+
+      // `EXCEPT`/`ONLY` : la portée EST la liste. Elle vient de la SOURCE,
+      // jamais de la requête — « même audience » avec une liste plus longue
+      // est plus large.
+      if (repostVisibilityInheritsAudienceList(data.visibility as PostVisibility)) {
+        data = {
+          ...data,
+          visibilityUserIds: (sourcePost.visibilityUserIds ?? []) as string[],
+        };
+      }
     }
 
     // Règle produit (directive user 2026-08-02, étendue par la directive durée
@@ -604,14 +648,32 @@ export class PostService {
     const visibilityFilter = await this.buildVisibilityFilter(viewerUserId);
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED, ...visibilityFilter },
-      include: postInclude,
+      include: {
+        ...postInclude,
+        // Le détail charge TOUTES les références, silencieuses comprises : c'est
+        // `projectReferencesForViewer` qui décide de ce que CE lecteur en voit.
+        // Filtrer ici priverait l'auteur de sa propre liste — et la personne
+        // silencieusement nommée de la seule réponse à sa notification.
+        //
+        // `postMentions` est le nom de la RELATION (le schéma nomme
+        // `Post.postMentions`) ; la clé exposée au client, elle, est `mentions`.
+        postMentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
+      },
     });
     if (!post) return null;
+
+    const { postMentions, ...bare } = post;
+    const mentions = projectReferencesForViewer({
+      references: toPostReferences(postMentions),
+      authorId: post.authorId,
+      viewerId: viewerUserId,
+    });
 
     // Anonymous read: no viewer-specific state to resolve.
     if (!viewerUserId) {
       return {
-        ...post,
+        ...bare,
+        mentions,
         currentUserReactions: [],
         isLikedByMe: false,
         isBookmarkedByMe: false,
@@ -664,7 +726,8 @@ export class PostService {
     const currentUserReactions = userReactions.map((r) => r.emoji);
 
     return {
-      ...post,
+      ...bare,
+      mentions,
       currentUserReactions,
       isLikedByMe: currentUserReactions.length > 0,
       isBookmarkedByMe: viewerBookmark !== null,

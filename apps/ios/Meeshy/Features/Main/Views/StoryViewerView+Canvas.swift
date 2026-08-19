@@ -1715,6 +1715,7 @@ struct StoryCardView: View {
                     selectedProfileUser: $selectedProfileUser,
                     editAndRepostAsPostSource: $editAndRepostAsPostSource,
                     showReportSheet: $showReportSheet,
+                    sharedContentWrapper: $sharedContentWrapper,
                     makeStoryExternalShareURL: makeStoryExternalShareURL,
                     deleteCurrentStory: deleteCurrentStory,
                     repostAsPostDirect: repostAsPostDirect,

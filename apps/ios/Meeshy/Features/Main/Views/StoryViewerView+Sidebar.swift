@@ -52,7 +52,14 @@ nonisolated struct StoryActionRailPlan: Equatable {
             showsReact: !isOwnStory,
             showsReply: !isOwnStory && canReply,
             showsForward: true,
-            showsRepost: !isOwnStory && isPublicStory,
+            // D1 (arbitrage user 2026-08-19) : la republication n'est plus
+            // réservée aux stories PUBLIQUES. Une story FRIENDS se republie en
+            // FRIENDS ou PRIVATE, une PRIVATE en PRIVATE — c'est la LOI
+            // D'AUDIENCE (`StoryRepostAudience`, miroir du serveur) qui borne
+            // le choix, plus l'appartenance au rail. Gater ici sur
+            // `isPublicStory` rendait la règle inatteignable : le bouton
+            // n'existait pas pour les seules stories qu'elle concerne.
+            showsRepost: !isOwnStory,
             showsViews: isOwnStory,
             showsExport: isOwnStory,
             showsSound: hasAudibleSound,
@@ -544,7 +551,7 @@ struct StoryActionSidebarView: View {
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Partager", bundle: .main)
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main)
                 ) {
                     guard let story = currentStory else { return }
                     HapticFeedback.light()
@@ -914,6 +921,13 @@ struct StoryHeaderView: View {
         }
     }
 
+    /// Partage INTERNE (vers une conversation ou un contact) — troisième forme
+    /// du menu (...) demandée le 2026-08-19, aux côtés de « Republier en post »
+    /// et « Citer en post ». La même feuille que le bouton « Envoyer » du rail,
+    /// qui reste en place : le menu regroupe les trois formes de partage, il ne
+    /// retire pas l'affordance directe.
+    @Binding var sharedContentWrapper: SharedContentWrapper?
+
     let makeStoryExternalShareURL: (String) -> URL?
     let deleteCurrentStory: () -> Void
     let repostAsPostDirect: () -> Void
@@ -1228,6 +1242,24 @@ struct StoryHeaderView: View {
                                 )
                             } label: {
                                 Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Éditer et republier en post", bundle: .main), systemImage: "square.and.pencil")
+                            }
+
+                            // Troisième forme : transmettre DANS Meeshy (une
+                            // conversation existante ou un contact) — la même
+                            // feuille que le bouton « Envoyer » du rail. Sans
+                            // garde d'audience : elle reproduit le
+                            // comportement du rail (`showsForward: true`), et
+                            // inventer ici une restriction que le rail n'a pas
+                            // créerait deux règles pour un seul geste.
+                            Button {
+                                HapticFeedback.light()
+                                pauseTimer()
+                                EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
+                                sharedContentWrapper = SharedContentWrapper(
+                                    content: .story(item: story, authorName: group.username)
+                                )
+                            } label: {
+                                Label(String(localized: "story.viewer.share.internal", defaultValue: "Partager", bundle: .main), systemImage: "paperplane.fill")
                             }
 
                             // Pilier 18 SOTA — external share complement

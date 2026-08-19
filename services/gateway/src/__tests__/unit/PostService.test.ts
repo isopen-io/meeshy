@@ -1064,12 +1064,25 @@ describe('PostService', () => {
       expect(result).toBeNull();
     });
 
-    it('throws 403 when original visibility is not PUBLIC', async () => {
+    // Loi d'audience (2026-08-19) : ce témoin exigeait un 403 sur TOUT original
+    // non-`PUBLIC`, y compris republié à l'identique. La décision produit ouvre
+    // la republication aux stories non publiques à audience égale ou plus
+    // restreinte — ce n'est donc plus l'audience de l'ORIGINAL qui refuse, mais
+    // l'ÉLARGISSEMENT. Loi et témoins complets :
+    // `@meeshy/shared/utils/repost-audience` + `PostService.repostAudience.test.ts`.
+    it('throws 403 when the requested audience is BROADER than the original', async () => {
       const privateOriginal = makePost({ id: 'private-1', visibility: 'PRIVATE' });
       prisma.post.findFirst.mockResolvedValue(privateOriginal);
       await expect(
-        service.repostPost('private-1', 'user-reposter')
-      ).rejects.toMatchObject({ statusCode: 403 });
+        service.repostPost('private-1', 'user-reposter', { visibility: 'PUBLIC' as never })
+      ).rejects.toMatchObject({ statusCode: 403, code: 'REPOST_AUDIENCE_WIDENING' });
+    });
+
+    it('lets a non-public original be reposted UNCHANGED — same audience, never broader', async () => {
+      const privateOriginal = makePost({ id: 'private-1', visibility: 'PRIVATE' });
+      prisma.post.findFirst.mockResolvedValue(privateOriginal);
+
+      await expect(service.repostPost('private-1', 'user-reposter')).resolves.not.toBeNull();
     });
 
     it('rolls back media AND audio when prisma.post.create fails', async () => {

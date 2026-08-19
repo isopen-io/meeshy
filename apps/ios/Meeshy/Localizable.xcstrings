@@ -84464,43 +84464,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "مشاركة"
+            "value": "إعادة نشر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Teilen"
+            "value": "Erneut teilen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Share"
+            "value": "Republish"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartir"
+            "value": "Republicar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Partager"
+            "value": "Republier"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Condividi"
+            "value": "Ricondividi"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Compartilhar"
+            "value": "Republicar"
           }
         }
       }
@@ -84979,43 +84979,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعديل وإعادة النشر كمنشور"
+            "value": "اقتباس كمنشور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bearbeiten und als Beitrag erneut posten"
+            "value": "Als Beitrag zitieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit and repost as post"
+            "value": "Quote as post"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar y republicar como publicación"
+            "value": "Citar como publicación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Éditer et republier en post"
+            "value": "Citer en post"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifica e ricondividi come post"
+            "value": "Cita come post"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Editar e repostar como publicação"
+            "value": "Citar como publicação"
           }
         }
       }
@@ -149021,6 +149021,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Voltar"
+          }
+        }
+      }
+    },
+    "story.viewer.share.internal": {
+      "extractionState": "manual",
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Partager"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teilen"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Condividi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartilhar"
+          }
+        },
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشاركة"
           }
         }
       }
