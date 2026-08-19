@@ -53,6 +53,11 @@ struct ConversationListResponseBody: Decodable {
 public protocol ConversationServiceProviding: Sendable {
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>
     func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage
+    /// `GET /conversations/search?q=` — recherche serveur par titre ou nom de
+    /// participant, au-delà de la première page chargée localement. Renvoie
+    /// des `APIConversation` brutes (pas de `currentUserId` ici) : l'appelant
+    /// les projette via `toConversation(currentUserId:)` quand il en a besoin.
+    func search(query: String) async throws -> [APIConversation]
     func getById(_ conversationId: String) async throws -> APIConversation
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
@@ -135,6 +140,17 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             nextCursor: nextCursor,
             hasMore: hasMore
         )
+    }
+
+    /// `GET /conversations/search?q=` — pas de pagination côté serveur (le
+    /// gateway renvoie tous les résultats matchés en une passe), donc pas de
+    /// `limit`/`offset` à transmettre ici.
+    public func search(query: String) async throws -> [APIConversation] {
+        let response: APIResponse<[APIConversation]> = try await api.request(
+            endpoint: "/conversations/search",
+            queryItems: [URLQueryItem(name: "q", value: query)]
+        )
+        return response.data
     }
 
     public func getById(_ conversationId: String) async throws -> APIConversation {

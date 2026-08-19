@@ -1565,6 +1565,8 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         ConversationPage(items: [], nextCursor: nil, hasMore: false)
     }
 
+    func search(query: String) async throws -> [APIConversation] { [] }
+
     func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}
@@ -1679,6 +1681,7 @@ private final class GapMockConversationService: ConversationServiceProviding, @u
     func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
         ConversationPage(items: [], nextCursor: nil, hasMore: false)
     }
+    func search(query: String) async throws -> [APIConversation] { [] }
     func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}

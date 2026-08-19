@@ -579,6 +579,7 @@ private final class BareConversationService: ConversationServiceProviding, @unch
     func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
         ConversationPage(items: [], nextCursor: nil, hasMore: false)
     }
+    func search(query: String) async throws -> [APIConversation] { [] }
     func getById(_ conversationId: String) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { throw MeeshyError.network(.timeout) }
     func delete(conversationId: String) async throws {}

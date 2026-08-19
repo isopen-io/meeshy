@@ -1,0 +1,243 @@
+import Foundation
+import MeeshySDK
+
+/// ViewModel du sélecteur de transfert (`ForwardPickerSheet`) : pagination
+/// des conversations au-delà de la première page, et recherche serveur
+/// (conversations + contacts) au-delà de ce qui est déjà chargé localement.
+///
+/// Deux modes distincts partagent `targets` :
+/// - **Navigation** (`loadInitial`/`loadMore`) : uniquement des conversations,
+///   paginées par curseur EN MÉMOIRE — aucun `saveCursor` n'est jamais
+///   appelé. `ConversationListViewModel` reste l'unique écrivain du curseur
+///   persisté `"list"` ; un second écrivain le corromprait.
+/// - **Recherche** (`search`) : fusionne conversations (`ConversationService
+///   .search`) et contacts (amis acceptés + répertoire) via
+///   `ForwardTargetMerge`, qui absorbe un contact déjà joint par une
+///   conversation directe (Task 6).
+@MainActor
+final class ForwardPickerViewModel: ObservableObject {
+    @Published private(set) var targets: [ForwardTarget] = []
+    @Published private(set) var paginationState: PaginationState = .idle
+    @Published private(set) var hasMore: Bool = true
+    @Published var searchText: String = ""
+
+    // MARK: - Dependencies
+
+    private let conversationService: ConversationServiceProviding
+    private let friendService: FriendServiceProviding
+    private let contactDirectoryService: ContactDirectoryServiceProviding
+    private let authManager: AuthManaging
+
+    private static let pageLimit = 50
+    private static let contactSearchLimit = 50
+    private static let searchMinimumLength = 2
+    private static let searchDebounceNanoseconds: UInt64 = 300_000_000
+
+    /// Conversations paginées, EN MÉMOIRE UNIQUEMENT — source de `targets`
+    /// hors recherche. Dédupliquée par id à chaque page, comme
+    /// `ConversationListViewModel.appendConversations`.
+    private var conversationTargets: [ForwardTarget] = []
+    private var nextCursor: String?
+
+    private var currentUserId: String {
+        authManager.currentUser?.id ?? ""
+    }
+
+    init(
+        conversationService: ConversationServiceProviding = ConversationService.shared,
+        friendService: FriendServiceProviding = FriendService.shared,
+        contactDirectoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared,
+        authManager: AuthManaging = AuthManager.shared
+    ) {
+        self.conversationService = conversationService
+        self.friendService = friendService
+        self.contactDirectoryService = contactDirectoryService
+        self.authManager = authManager
+    }
+
+    // MARK: - Pagination
+
+    func loadInitial() async {
+        nextCursor = nil
+        hasMore = true
+        conversationTargets = []
+        targets = []
+        paginationState = .idle
+        await fetchNextPage()
+    }
+
+    /// Reprend `ConversationListViewModel.loadMore()` (`:1725-1834`) : garde
+    /// de ré-entrance + refus de requêter une fois `hasMore == false`.
+    func loadMore() async {
+        guard hasMore, paginationState != .loadingMore else { return }
+        await fetchNextPage()
+    }
+
+    private func fetchNextPage() async {
+        paginationState = .loadingMore
+        let cursor = nextCursor
+        do {
+            let knownIds = Set(conversationTargets.compactMap(\.conversationId))
+            let page = try await conversationService.listPage(
+                before: cursor,
+                limit: Self.pageLimit,
+                currentUserId: currentUserId
+            )
+            let newTargets = page.items.map(Self.makeTarget)
+
+            // Garde anti-boucle « zero-progress » (incident de production
+            // documenté sur `ConversationListViewModel.loadMore()`) : une
+            // page qui ne fait AVANCER ni le curseur ni le jeu d'ids connus
+            // boucle indéfiniment si on la laisse retenter. On force
+            // `.exhausted` au lieu de reboucler.
+            let newConversationIds = Set(newTargets.compactMap(\.conversationId)).subtracting(knownIds)
+            let cursorAdvanced = page.nextCursor != nil && page.nextCursor != cursor
+            let madeProgress = !newConversationIds.isEmpty && cursorAdvanced
+            if !madeProgress, !page.items.isEmpty {
+                nextCursor = page.nextCursor
+                hasMore = false
+                paginationState = .exhausted
+                return
+            }
+
+            appendConversationTargets(newTargets)
+            nextCursor = page.nextCursor
+            hasMore = page.hasMore
+            paginationState = page.hasMore ? .idle : .exhausted
+        } catch {
+            paginationState = .error(error.localizedDescription)
+        }
+    }
+
+    private func appendConversationTargets(_ newTargets: [ForwardTarget]) {
+        var seen = Set(conversationTargets.map(\.id))
+        for target in newTargets where seen.insert(target.id).inserted {
+            conversationTargets.append(target)
+        }
+        targets = conversationTargets
+    }
+
+    // MARK: - Search
+
+    /// Recherche serveur (conversations + contacts), au-delà des cibles déjà
+    /// paginées localement. 2 caractères minimum, anti-rebond 300 ms ; une
+    /// réponse dont la requête n'est plus la requête COURANTE (`searchText` a
+    /// changé pendant l'attente) est rejetée en silence.
+    func search(_ query: String) async {
+        searchText = query
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= Self.searchMinimumLength else { return }
+
+        try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+        guard query == searchText else { return }
+
+        let userId = currentUserId
+        async let conversationResults = fetchSearchConversationTargets(query: trimmed, currentUserId: userId)
+        async let contactResults = fetchSearchContactTargets(query: trimmed, currentUserId: userId)
+        let (conversations, contacts) = await (conversationResults, contactResults)
+
+        guard query == searchText else { return }
+        targets = ForwardTargetMerge.merge(conversations: conversations, contacts: contacts)
+    }
+
+    private func fetchSearchConversationTargets(query: String, currentUserId: String) async -> [ForwardTarget] {
+        do {
+            let apiConversations = try await conversationService.search(query: query)
+            return apiConversations
+                .map { $0.toConversation(currentUserId: currentUserId) }
+                .map(Self.makeTarget)
+        } catch {
+            return []
+        }
+    }
+
+    private func fetchSearchContactTargets(query: String, currentUserId: String) async -> [ForwardTarget] {
+        async let friendTargets = fetchFriendContactTargets(currentUserId: currentUserId)
+        async let directoryTargets = fetchDirectoryContactTargets(query: query)
+        let (friends, directory) = await (friendTargets, directoryTargets)
+        return friends + directory
+    }
+
+    /// Amis acceptés (dans les deux sens, `FriendService.allFriendRequests`
+    /// — Task 2) : pas de recherche texte côté serveur sur cet endpoint, mais
+    /// la liste reste bornée par `contactSearchLimit`.
+    private func fetchFriendContactTargets(currentUserId: String) async -> [ForwardTarget] {
+        do {
+            let page = try await friendService.allFriendRequests(
+                status: "accepted",
+                offset: 0,
+                limit: Self.contactSearchLimit
+            )
+            return page.data.compactMap { Self.makeContactTarget(from: $0, currentUserId: currentUserId) }
+        } catch {
+            return []
+        }
+    }
+
+    /// Répertoire (`ContactDirectoryService.list`) filtré `query` côté
+    /// serveur, restreint aux contacts qui ont un compte Meeshy (`.meeshy`) —
+    /// un contact hors plateforme n'a pas de `userId` vers qui transférer.
+    private func fetchDirectoryContactTargets(query: String) async -> [ForwardTarget] {
+        do {
+            let page = try await contactDirectoryService.list(
+                offset: 0,
+                limit: Self.contactSearchLimit,
+                filter: .meeshy,
+                query: query
+            )
+            return page.data.compactMap(Self.makeContactTarget(from:))
+        } catch {
+            return []
+        }
+    }
+
+    // MARK: - Projection pure
+
+    /// `userId` = `participantUserId` pour un `direct`, `nil` sinon (un
+    /// groupe n'a pas de personne unique à absorber).
+    private static func makeTarget(from conversation: MeeshyConversation) -> ForwardTarget {
+        ForwardTarget(
+            id: "conv:\(conversation.id)",
+            kind: .conversation,
+            conversationId: conversation.id,
+            userId: conversation.type == .direct ? conversation.participantUserId : nil,
+            title: conversation.displayName,
+            subtitle: nil,
+            avatarURL: conversation.avatar ?? conversation.participantAvatarURL
+        )
+    }
+
+    private static func makeContactTarget(from request: FriendRequest, currentUserId: String) -> ForwardTarget? {
+        guard request.status == "accepted", let other = otherParty(of: request, currentUserId: currentUserId) else {
+            return nil
+        }
+        return ForwardTarget(
+            id: "user:\(other.id)",
+            kind: .contact,
+            conversationId: nil,
+            userId: other.id,
+            title: other.name,
+            subtitle: "@\(other.username)",
+            avatarURL: other.avatar
+        )
+    }
+
+    private static func otherParty(of request: FriendRequest, currentUserId: String) -> FriendRequestUser? {
+        if let sender = request.sender, sender.id != currentUserId { return sender }
+        if let receiver = request.receiver, receiver.id != currentUserId { return receiver }
+        return nil
+    }
+
+    private static func makeContactTarget(from contact: DirectoryContact) -> ForwardTarget? {
+        guard let user = contact.matchedUser else { return nil }
+        return ForwardTarget(
+            id: "user:\(user.id)",
+            kind: .contact,
+            conversationId: nil,
+            userId: user.id,
+            title: contact.resolvedName,
+            subtitle: contact.subtitle,
+            avatarURL: user.avatar
+        )
+    }
+}

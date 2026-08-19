@@ -14,6 +14,7 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     var listPageResult: Result<ConversationPage, Error> = .success(
         ConversationPage(items: [], nextCursor: nil, hasMore: false)
     )
+    var searchResult: Result<[APIConversation], Error> = .success([])
     var getByIdResult: Result<APIConversation, Error> = .success(
         JSONStub.decode("""
         {"id":"000000000000000000000001","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}
@@ -62,6 +63,9 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     /// guarantee that two calls actually overlap instead of racing the
     /// instant-return mock (the in-flight guard only coalesces overlap).
     var listPageDelayNanoseconds: UInt64 = 0
+
+    var searchCallCount = 0
+    var lastSearchQuery: String?
 
     var getByIdCallCount = 0
     var lastGetByIdConversationId: String?
@@ -154,6 +158,14 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
             return try handler(cursor).get()
         }
         return try listPageResult.get()
+    }
+
+    nonisolated func search(query: String) async throws -> [APIConversation] {
+        await MainActor.run {
+            searchCallCount += 1
+            lastSearchQuery = query
+        }
+        return try searchResult.get()
     }
 
     nonisolated func getById(_ conversationId: String) async throws -> APIConversation {
@@ -310,6 +322,8 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         lastListPageCurrentUserId = nil
         listPageHandler = nil
         listPageDelayNanoseconds = 0
+        searchCallCount = 0
+        lastSearchQuery = nil
         getByIdCallCount = 0
         lastGetByIdConversationId = nil
         createCallCount = 0

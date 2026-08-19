@@ -210,6 +210,23 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    // MARK: - search
+
+    func test_search_returnsConversationsAndPassesQuery() async throws {
+        let conv = makeConversation(id: "found1")
+        let response = APIResponse(success: true, data: [conv], error: nil)
+        mock.stub("/conversations/search", result: response)
+
+        let result = try await service.search(query: "ali")
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].id, "found1")
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/search")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(mock.lastRequest?.queryItems, [URLQueryItem(name: "q", value: "ali")])
+    }
+
     // MARK: - Error case
 
     func testListThrowsOnNetworkError() async {
