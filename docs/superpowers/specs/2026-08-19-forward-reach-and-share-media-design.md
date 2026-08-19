@@ -46,8 +46,10 @@ le volet A : les conversations directes que **seule** la recherche trouve arrive
 (iOS `participantUserId` → `nil` ; web `participants: []`) — ligne illisible **et** déduplication par
 personne impossible, donc doublons.
 
-Correction : émettre `participants` (déjà autorisé par `conversationMinimalSchema`,
-`packages/shared/types/api-schemas.ts:1431-1435`) avec au minimum `userId`, `displayName`, `avatar`.
+Correction : émettre `participants` (au minimum `userId`, `displayName`, et le sous-objet `user`)
+**et le déclarer** dans `conversationMinimalSchema` (`packages/shared/types/api-schemas.ts:1345-1400`),
+qui ne le prévoit pas aujourd'hui — sans quoi fast-json-stringify le supprimerait, exactement comme
+il supprimait `hasMore` en S.2.
 
 **Filtrage d'appartenance côté client** : la route retourne aussi les conversations `public`/`global`
 dont l'utilisateur n'est **pas** membre (`search.ts:131-137`). Le sélecteur de transfert n'en veut
@@ -84,9 +86,16 @@ Réutiliser les mêmes `attachmentIds` sur un second message les **déplace** :
 (`MessageHandler.ts:1187-1195` + `ForwardBadgePolicy.swift:15-21`) : partager vers « Famille » puis
 « Collègues » révélerait « Famille » aux collègues. **Inacceptable.**
 
-Correction : un champ d'envoi `copyAttachmentsFromMessageId` (nom à figer à l'implémentation), traité
-par le corps déjà existant de `MessageProcessor.copyForwardedAttachments` (`:673-749`) **sans** écrire
-`forwardedFromId` — donc sans badge de provenance. Deux gardes obligatoires :
+**Exigence du user, formulée explicitement le 2026-08-19 :** « il ne faut pas que les autres aient
+l'indicateur transfert — on crée des messages pour les autres avec les mêmes identifiants d'URL
+d'attachement ». Diffuser à plusieurs destinataires **n'est pas** transférer : chacun reçoit un
+message de plein droit, sans aucune marque de provenance, et les pièces jointes pointent les mêmes
+fichiers (aucun octet ré-envoyé).
+
+Correction : un champ d'envoi `copyAttachmentsFromMessageId`, traité par le corps déjà existant de
+`MessageProcessor.copyForwardedAttachments` (`:673-749`) mais **sans** écrire `forwardedFromId` sur le
+message, **ni** `forwardedFromAttachmentId`, **ni** `isForwarded: true` sur les copies — donc aucun
+badge, aucune trace côté destinataire. Deux gardes obligatoires :
 
 - **propriété** : l'appelant doit être l'auteur du message source (le défaut de
   `associateAttachmentsToMessage`, qui ne vérifie ni propriétaire ni `messageId` nul, est une dette
