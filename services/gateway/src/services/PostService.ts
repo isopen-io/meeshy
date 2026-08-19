@@ -10,6 +10,10 @@ import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwners
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
+import {
+  isRepostVisibilityAllowed,
+  repostVisibilityInheritsAudienceList,
+} from '@meeshy/shared/utils/repost-audience';
 import { getCommunityCoMemberIds } from './posts/communityVisibility';
 import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
@@ -2013,11 +2017,40 @@ export class PostService {
       return null;
     }
 
-    if (original.visibility !== 'PUBLIC') {
-      const err: any = new Error('Cannot repost private content');
+    // ── Loi d'audience de la republication ────────────────────────────────
+    //
+    // Jusqu'au 2026-08-19 cette barrière refusait TOUT original non-`PUBLIC`,
+    // et le commentaire de `opts.visibility` ci-dessus en DÉDUISAIT
+    // l'invariant « toute valeur ne fait que restreindre la portée ». La
+    // décision produit ouvre la republication aux stories non publiques, à
+    // audience égale ou plus restreinte : ce raisonnement tombe, et la
+    // restriction doit être vérifiée ICI. C'est la frontière de sécurité —
+    // le plafond du sélecteur côté client est une affordance, pas une
+    // garantie : sans ce contrôle, un client pourrait republier une story
+    // `PRIVATE` en `PUBLIC`.
+    //
+    // La loi (`@meeshy/shared/utils/repost-audience`) démontre au passage que
+    // les six audiences ne forment PAS un ordre total — `FRIENDS` et
+    // `COMMUNITY` sont incomparables, donc un « rétrécissement » apparent
+    // peut exposer le contenu à d'autres gens.
+    const originalVisibility = original.visibility as PostVisibility;
+    const requestedVisibility = opts.visibility ?? originalVisibility;
+
+    if (!isRepostVisibilityAllowed(originalVisibility, requestedVisibility)) {
+      const err: any = new Error(
+        `Repost audience ${requestedVisibility} is broader than the original ${originalVisibility}`,
+      );
       err.statusCode = 403;
+      err.code = 'REPOST_AUDIENCE_WIDENING';
       throw err;
     }
+
+    // `EXCEPT`/`ONLY` ne se lisent pas sans leur liste : « même audience »
+    // avec une liste plus longue est plus LARGE. La liste vient donc de
+    // l'original, jamais de la requête.
+    const effectiveVisibilityUserIds = repostVisibilityInheritsAudienceList(requestedVisibility)
+      ? ((original.visibilityUserIds ?? []) as string[])
+      : [];
 
     const targetType = opts.targetType ?? original.type;
     const content = opts.content;
@@ -2200,7 +2233,8 @@ export class PostService {
           data: {
             authorId: userId,
             type: targetType,
-            visibility: opts.visibility ?? original.visibility,
+            visibility: requestedVisibility,
+            visibilityUserIds: effectiveVisibilityUserIds,
             content: snapshotContent ?? undefined,
             originalLanguage: snapshotOriginalLanguage,
             repostOfId: postId,
@@ -2295,7 +2329,8 @@ export class PostService {
       data: {
         authorId: userId,
         type: targetType,
-        visibility: opts.visibility ?? original.visibility,
+        visibility: requestedVisibility,
+        visibilityUserIds: effectiveVisibilityUserIds,
         content: content ?? undefined,
         originalLanguage,
         repostOfId: postId,

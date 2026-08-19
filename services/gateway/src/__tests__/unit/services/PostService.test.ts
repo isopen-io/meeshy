@@ -876,14 +876,99 @@ describe('repostPost', () => {
     expect(await sut.repostPost('post-1', 'user-2')).toBeNull();
   });
 
-  it('throws 403 when trying to repost private content', async () => {
-    const privatePost = makePost({ visibility: 'FRIENDS' });
-    const prisma = makePrisma({ postFindFirst: privatePost });
+  // ── Loi d'audience de la republication (2026-08-19) ─────────────────────
+  //
+  // Avant ce lot, TOUT original non-`PUBLIC` était refusé, et le service en
+  // DÉDUISAIT l'invariant « toute valeur ne fait que restreindre la portée ».
+  // La décision produit ouvre la republication aux stories non publiques, à
+  // audience égale ou plus restreinte — ce raisonnement tombe donc, et la
+  // restriction doit être VÉRIFIÉE ici : c'est la frontière de sécurité, un
+  // client pourrait sinon republier une story PRIVATE en PUBLIC.
+  //
+  // La loi elle-même (`allowedRepostVisibilities`) vit dans
+  // `@meeshy/shared` et porte ses propres témoins, dont la démonstration que
+  // les six audiences ne forment PAS un ordre total.
+
+  it('refuses a widening — FRIENDS original requested PUBLIC', async () => {
+    const prisma = makePrisma({ postFindFirst: makePost({ visibility: 'FRIENDS' }) });
     const { sut } = makeSut(prisma);
 
-    const err: any = await sut.repostPost('post-1', 'user-2').catch((e) => e);
-    expect(err.message).toContain('private');
+    const err: any = await sut
+      .repostPost('post-1', 'user-2', { visibility: 'PUBLIC' })
+      .catch((e) => e);
     expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a widening — PRIVATE original requested FRIENDS', async () => {
+    const prisma = makePrisma({ postFindFirst: makePost({ visibility: 'PRIVATE' }) });
+    const { sut } = makeSut(prisma);
+
+    const err: any = await sut
+      .repostPost('post-1', 'user-2', { visibility: 'FRIENDS' })
+      .catch((e) => e);
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+    expect(prisma.post.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a lateral move between incomparable audiences — FRIENDS to COMMUNITY', async () => {
+    // Un contact peut ne pas être membre de la communauté : ce n'est PAS un
+    // rétrécissement, c'est une exposition à d'autres gens.
+    const prisma = makePrisma({ postFindFirst: makePost({ visibility: 'FRIENDS' }) });
+    const { sut } = makeSut(prisma);
+
+    const err: any = await sut
+      .repostPost('post-1', 'user-2', { visibility: 'COMMUNITY' })
+      .catch((e) => e);
+    expect(err.statusCode).toBe(403);
+    expect(err.code).toBe('REPOST_AUDIENCE_WIDENING');
+  });
+
+  it('accepts a non-public original republished UNCHANGED — inherits its audience', async () => {
+    const original = makePost({ type: 'STORY', visibility: 'FRIENDS' });
+    const prisma = makePrisma({ postFindFirst: original, postCreate: makePost({ id: 'repost-1' }) });
+    const { sut } = makeSut(prisma);
+
+    await sut.repostPost('post-1', 'user-2');
+
+    expect(prisma.post.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ visibility: 'FRIENDS' }) }),
+    );
+  });
+
+  it('accepts a narrowing — FRIENDS original republished PRIVATE', async () => {
+    const original = makePost({ type: 'STORY', visibility: 'FRIENDS' });
+    const prisma = makePrisma({ postFindFirst: original, postCreate: makePost({ id: 'repost-1' }) });
+    const { sut } = makeSut(prisma);
+
+    await sut.repostPost('post-1', 'user-2', { visibility: 'PRIVATE' });
+
+    expect(prisma.post.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ visibility: 'PRIVATE' }) }),
+    );
+  });
+
+  it('ignores a client-supplied audience LIST for a set-based audience — it inherits the original', async () => {
+    // « Même audience » avec une liste ONLY plus longue est plus LARGE : la
+    // liste se lit sur l'original, jamais sur la requête.
+    const original = makePost({
+      type: 'STORY',
+      visibility: 'ONLY',
+      visibilityUserIds: ['u-1'],
+    });
+    const prisma = makePrisma({ postFindFirst: original, postCreate: makePost({ id: 'repost-1' }) });
+    const { sut } = makeSut(prisma);
+
+    await sut.repostPost('post-1', 'user-2', {
+      visibility: 'ONLY',
+      visibilityUserIds: ['u-1', 'u-2', 'u-3'],
+    } as never);
+
+    expect(prisma.post.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ visibilityUserIds: ['u-1'] }) }),
+    );
   });
 
   it('creates a repost and increments repostCount for non-ephemeral source', async () => {

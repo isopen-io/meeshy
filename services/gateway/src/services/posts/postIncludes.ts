@@ -237,6 +237,38 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
 });
 
 /**
+ * Les références VISIBLES d'un post — jamais les silencieuses.
+ *
+ * Le filtre vit dans le `select`, pas dans une projection applicative : une
+ * charge utile identique pour tous les lecteurs ne peut pas fuiter. Le détail
+ * du post, lui, projette (voir `postReferences.ts`) — mais c'est une lecture
+ * unitaire, jamais un feed mis en cache sous une clé partagée.
+ *
+ * Piège Prisma-Mongo : `{ display: { not: 'SILENT' } }` ne matche PAS les
+ * lignes où le champ est ABSENT — c'est-à-dire toutes celles écrites avant le
+ * discriminant, qui se lisent pourtant INLINE et doivent donc apparaître. D'où
+ * le `OR` explicite sur les trois modes visibles plus l'absence.
+ *
+ * La relation s'appelle `postMentions`, pas `mentions` : le schéma nomme
+ * `Post.postMentions` là où `PostComment.mentions` et `Message.mentions`
+ * portent le nom court. La clé EXPOSÉE au client reste `mentions`, via le
+ * remappage `withMentions`.
+ */
+export const postMentionInclude = Prisma.validator<Prisma.Post$postMentionsArgs>()({
+  where: {
+    OR: [
+      { display: { in: ['INLINE', 'PINNED', 'NOTE'] } },
+      { display: { isSet: false } },
+      { display: null },
+    ],
+  },
+  select: {
+    display: true,
+    mentionedUser: { select: authorSelect },
+  },
+});
+
+/**
  * Canonical post include — single source of truth used by every service that
  * needs a fully-hydrated Post (PostService, PostFeedService, PostAudioService,
  * etc.). DO NOT redeclare a local copy: drift between copies is what caused
@@ -247,6 +279,7 @@ export const postInclude = Prisma.validator<Prisma.PostInclude>()({
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
+  postMentions: postMentionInclude,
 });
 
 /**

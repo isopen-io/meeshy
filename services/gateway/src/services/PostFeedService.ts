@@ -1,7 +1,8 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, postInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { authorSelect, postInclude, postMentionInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
+import { withMentions } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
 import {
@@ -233,12 +234,12 @@ export class PostFeedService {
     const repostedIds = new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]);
 
     return {
-      items: items.map((s) => hoistLocationDeep({
+      items: items.map((s) => withMentions(hoistLocationDeep({
         ...this.enrichWithLikeStatus(s.post, userReactionsMap.get(s.post.id) ?? []),
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
         isBookmarkedByMe: bookmarkedIds.has(s.post.id),
         isRepostedByMe: repostedIds.has(s.post.id),
-      })),
+      }))),
       nextCursor,
       hasMore,
     };
@@ -466,11 +467,11 @@ export class PostFeedService {
     // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
     // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
     // toute façon pas de badge de lieu (anneaux + miniature seuls).
-    const items = stories.map((s) => hoistLocationDeep({
+    const items = stories.map((s) => withMentions(hoistLocationDeep({
       ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
       isViewedByMe: viewedSet.has(s.id),
       currentUserReactions: userReactionsMap.get(s.id) ?? [],
-    }));
+    })));
 
     const fetchedDeletedIds = await deletedIdsPromise;
     const deletedIdsTruncated = fetchedDeletedIds.length > STORY_TOMBSTONE_LIMIT;
@@ -523,13 +524,15 @@ export class PostFeedService {
       where: whereClause,
       include: {
         author: { select: authorSelect },
+        postMentions: postMentionInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
 
     const hasMore = statuses.length > limit;
-    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
+    const items = (hasMore ? statuses.slice(0, limit) : statuses)
+      .map((p) => withMentions(hoistLocationDeep(p)));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -563,13 +566,15 @@ export class PostFeedService {
       where,
       include: {
         author: { select: authorSelect },
+        postMentions: postMentionInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit + 1,
     });
 
     const hasMore = statuses.length > limit;
-    const items = (hasMore ? statuses.slice(0, limit) : statuses).map(hoistLocationDeep);
+    const items = (hasMore ? statuses.slice(0, limit) : statuses)
+      .map((p) => withMentions(hoistLocationDeep(p)));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -715,11 +720,11 @@ export class PostFeedService {
       }),
     ]);
     const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
-    return items.map((p) => hoistLocationDeep({
+    return items.map((p) => withMentions(hoistLocationDeep({
       ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
       isBookmarkedByMe: bookmarkedIds.has(p.id),
-    }));
+    })));
   }
 
   /** Langues que l'utilisateur lit (Prisme Linguistique). Best-effort. */
@@ -857,7 +862,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: [] as string[] }))),
         nextCursor,
         hasMore,
       };
@@ -866,10 +871,10 @@ export class PostFeedService {
     const userReactionsMap = await this.resolveUserReactionsMap(viewerUserId, items);
 
     return {
-      items: items.map((p) => hoistLocationDeep({
+      items: items.map((p) => withMentions(hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
         currentUserReactions: userReactionsMap.get(p.id) ?? [],
-      })),
+      }))),
       nextCursor,
       hasMore,
     };
@@ -913,7 +918,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => hoistLocationDeep({ ...p, currentUserReactions: [] as string[] })),
+        items: items.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: [] as string[] }))),
         nextCursor,
         hasMore,
       };
@@ -922,10 +927,10 @@ export class PostFeedService {
     const communityReactionsMap = await this.resolveUserReactionsMap(viewerUserId, items);
 
     return {
-      items: items.map((p) => hoistLocationDeep({
+      items: items.map((p) => withMentions(hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
         currentUserReactions: communityReactionsMap.get(p.id) ?? [],
-      })),
+      }))),
       nextCursor,
       hasMore,
     };
@@ -964,7 +969,7 @@ export class PostFeedService {
     const bookmarkReactionsMap = await this.resolveUserReactionsMap(userId, posts);
 
     return {
-      items: posts.map((p) => hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
+      items: posts.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] }))),
       nextCursor,
       hasMore,
     };
