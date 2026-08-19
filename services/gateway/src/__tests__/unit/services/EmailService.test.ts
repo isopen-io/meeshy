@@ -1268,6 +1268,25 @@ describe('EmailService', () => {
 
       expect(result.success).toBe(true);
     });
+
+    it('inserts a senderName containing `$` sequences verbatim (no token leak)', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fr-003' }));
+
+      await service.sendFriendRequestEmail({
+        to: 'bob@example.com',
+        recipientName: 'Bob',
+        senderName: 'A$$ & $& Co',
+        viewRequestUrl: 'https://meeshy.me/contacts',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain('A$$ & $& Co');
+      expect(payload.textContent).not.toContain('{sender}');
+      expect(payload.htmlContent).not.toContain('{sender}');
+    });
   });
 
   // ==============================================
@@ -1306,6 +1325,25 @@ describe('EmailService', () => {
       });
 
       expect(result.success).toBe(true);
+    });
+
+    it('inserts an accepterName containing `$` sequences verbatim (no token leak)', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'brevo-key' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'fa-003' }));
+
+      await service.sendFriendAcceptedEmail({
+        to: 'alice@example.com',
+        recipientName: 'Alice',
+        accepterName: "B$'ob $& $$",
+        conversationUrl: 'https://meeshy.me/conversations/123',
+        language: 'en',
+      });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.textContent).toContain("B$'ob $& $$");
+      expect(payload.textContent).not.toContain('{accepter}');
+      expect(payload.htmlContent).not.toContain('{accepter}');
     });
   });
 
