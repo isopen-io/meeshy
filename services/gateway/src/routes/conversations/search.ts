@@ -293,6 +293,16 @@ export function registerSearchRoutes(
           isActive: conversation.isActive,
           communityId: conversation.communityId,
           memberCount: (conversation as any)._count?.participants ?? 0,
+          // Déjà chargés par le `include` ci-dessus (au plus 5) : sans cette
+          // recopie, une conversation DIRECTE trouvée par la recherche arrive
+          // sans titre (forcé à `null` pour les directs) ET sans personne —
+          // illisible à l'écran et non déduplicable côté client.
+          participants: (conversation.participants ?? []).map((p: any) => ({
+            id: p.id,
+            userId: p.userId,
+            displayName: p.displayName,
+            user: p.user ? { id: p.user.id, username: p.user.username, displayName: p.user.displayName } : null,
+          })),
           lastMessage,
           // Prisme Linguistique de la ligne de liste — jumeau de `core.ts`.
           // Les deux colonnes vivent dans le MÊME document Mongo que le message
