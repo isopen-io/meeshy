@@ -76,7 +76,12 @@ final class StoryItemTranslationMergeTests: XCTestCase {
     /// `story:translation-updated` delta (R8's cursor relies on `updatedAt`
     /// surviving cache round-trips). Every field the type carries must
     /// survive the merge untouched except the targeted text-object.
-    func test_merge_preservesViewedAtUpdatedAtAndImpressionCount() {
+    ///
+    /// `referenceAccess` joined this pin at Task 9 (post-references design):
+    /// the exact same reconstruction bug would silently revoke a viewer's
+    /// granted access to an expired referenced story the moment a translation
+    /// arrives for it.
+    func test_merge_preservesViewedAtUpdatedAtImpressionCountAndReferenceAccess() {
         let viewedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let updatedAt = Date(timeIntervalSince1970: 1_700_000_500)
         let story = StoryItem(
@@ -85,7 +90,8 @@ final class StoryItemTranslationMergeTests: XCTestCase {
             isViewed: true,
             viewedAt: viewedAt,
             updatedAt: updatedAt,
-            impressionCount: 42
+            impressionCount: 42,
+            referenceAccess: .granted
         )
 
         let merged = story.mergingTextObjectTranslations(at: 0, translations: ["fr": "Bonjour"])
@@ -93,6 +99,7 @@ final class StoryItemTranslationMergeTests: XCTestCase {
         XCTAssertEqual(merged.viewedAt, viewedAt)
         XCTAssertEqual(merged.updatedAt, updatedAt)
         XCTAssertEqual(merged.impressionCount, 42)
+        XCTAssertEqual(merged.referenceAccess, .granted)
         XCTAssertEqual(merged.storyEffects?.textObjects[0].translations?["fr"], "Bonjour")
     }
 }

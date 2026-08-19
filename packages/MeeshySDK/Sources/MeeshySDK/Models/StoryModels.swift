@@ -2081,6 +2081,15 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// — see `packages/shared/types/post.ts` `currentUserReactions`.
     public var currentUserReactions: [String]?
 
+    /// The viewer's right to open THIS story past its `expiresAt` because
+    /// they are personally referenced in it — DECLARED by the server
+    /// (`APIPost.referenceAccess`), never recomputed from `expiresAt` here.
+    /// `nil` mirrors `ReferenceAccess.none`: no reference for this viewer,
+    /// `isExpired()` applies normally. Propagated by `toStoryGroups` and
+    /// consumed by `StoryViewModel`'s tray filters and
+    /// `StoryNotificationTargetViewModel`'s open decision.
+    public var referenceAccess: ReferenceAccess?
+
     /// True when the *current viewer* has personally reacted to this story.
     /// Drives "is my heart active" UI affordances (sidebar, mini-status).
     /// Distinct from `reactionCount > 0`, which counts ANY reaction by anyone.
@@ -2134,7 +2143,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 isViewed: Bool = false, viewedAt: Date? = nil, updatedAt: Date? = nil, contentEditedAt: Date? = nil, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
                 shareCount: Int? = nil, viewCount: Int? = nil, impressionCount: Int? = nil, repostCount: Int? = nil,
-                currentUserReactions: [String]? = nil) {
+                currentUserReactions: [String]? = nil, referenceAccess: ReferenceAccess? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
@@ -2146,7 +2155,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
         self.shareCount = shareCount; self.viewCount = viewCount; self.impressionCount = impressionCount; self.repostCount = repostCount
-        self.currentUserReactions = currentUserReactions
+        self.currentUserReactions = currentUserReactions; self.referenceAccess = referenceAccess
     }
 
     /// A5 — returns `true` when the story has aged past its visibility window.
@@ -2204,7 +2213,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             backgroundAudio: backgroundAudio,
             reactionCount: reactionCount, commentCount: commentCount,
             shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
-            currentUserReactions: currentUserReactions
+            currentUserReactions: currentUserReactions, referenceAccess: referenceAccess
         )
     }
 
@@ -2234,7 +2243,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             backgroundAudio: backgroundAudio,
             reactionCount: reactionCount, commentCount: commentCount,
             shareCount: shareCount, viewCount: viewCount, impressionCount: impressionCount, repostCount: repostCount,
-            currentUserReactions: currentUserReactions
+            currentUserReactions: currentUserReactions, referenceAccess: referenceAccess
         )
     }
 }
@@ -2419,7 +2428,8 @@ extension Array where Element == APIPost {
                                  viewCount: post.viewCount,
                                  impressionCount: post.impressionCount,
                                  repostCount: post.repostCount,
-                                 currentUserReactions: post.currentUserReactions)
+                                 currentUserReactions: post.currentUserReactions,
+                                 referenceAccess: post.referenceAccess)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {

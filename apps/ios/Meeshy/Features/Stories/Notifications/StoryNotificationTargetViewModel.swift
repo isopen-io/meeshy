@@ -14,14 +14,23 @@ import MeeshySDK
 //      can render a useful empty state.
 //
 // State semantics:
-//   .loading  — initial value, no answer yet (first frame before cache lookup).
-//   .active   — story exists and has not expired yet.
-//   .expired  — the story is CONFIRMED gone (404) or its expiresAt has passed.
-//   .offline  — the network call failed for any OTHER reason (no connectivity,
-//               timeout, 5xx). The story may still exist — we just couldn't
-//               confirm it. Retryable via `load()`, never conflated with a
-//               genuine 404 (P2 — a tap while offline used to show the same
-//               "Story expired, create a new one" empty state as a real 404).
+//   .loading         — initial value, no answer yet (first frame before cache lookup).
+//   .active          — story is renderable: not expired, OR expired with a
+//                      GRANTED reference right (Task 9 — the server DECLARES
+//                      the right via `APIPost.referenceAccess`; this ViewModel
+//                      never recomputes it from `expiresAt`).
+//   .expired         — the story is CONFIRMED gone (404), or its expiresAt has
+//                      passed with no reference right at all (`.none`/`nil`).
+//   .expiredConsumed — expired AND the reference right is `.consumed`: the
+//                      24h post-expiration window has closed. Distinct from
+//                      `.expired` so a future screen can tell "never had a
+//                      right" apart from "had one, it ran out".
+//   .offline         — the network call failed for any OTHER reason (no
+//               connectivity, timeout, 5xx). The story may still exist — we
+//               just couldn't confirm it. Retryable via `load()`, never
+//               conflated with a genuine 404 (P2 — a tap while offline used to
+//               show the same "Story expired, create a new one" empty state
+//               as a real 404).
 
 @MainActor
 public final class StoryNotificationTargetViewModel: ObservableObject {
@@ -30,6 +39,7 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
         case loading
         case active(APIPost)
         case expired
+        case expiredConsumed
         case offline
     }
 
@@ -64,12 +74,12 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
         await NSEPendingPostConsumer.shared.consumeAll()
 
         if let cached = storyService.cachedPost(id: storyId) {
-            state = isExpired(cached) ? .expired : .active(cached)
+            state = state(for: cached)
         }
 
         do {
             let fresh = try await storyService.fetchPost(id: storyId)
-            state = isExpired(fresh) ? .expired : .active(fresh)
+            state = state(for: fresh)
         } catch {
             // Only replace .loading — if the cache already gave us .active or
             // .expired, keep that result rather than overwriting with a
@@ -85,6 +95,26 @@ public final class StoryNotificationTargetViewModel: ObservableObject {
     private func isExpired(_ post: APIPost) -> Bool {
         guard let expiresAt = post.expiresAt else { return false }
         return expiresAt <= Date.now
+    }
+
+    /// Le droit se DÉCLARE, il ne se déduit pas.
+    ///
+    /// `isExpired` ne voit que `expiresAt` et ignore tout de la référence :
+    /// s'en remettre à lui ferait refuser un contenu que le serveur autorise.
+    /// Il reste utile pour ce qu'il sait faire — masquer du tray, griser un
+    /// aperçu — mais l'OUVERTURE obéit au verdict.
+    ///
+    /// `?? .none` évite le piège Swift où `case .none` dans un switch sur un
+    /// `ReferenceAccess?` se lie à `Optional.none` (nil) et non au cas enum
+    /// `ReferenceAccess.none` — ici les deux doivent de toute façon produire
+    /// le même repli, donc on les unifie explicitement avant le switch plutôt
+    /// que de laisser le compilateur trancher une ambiguïté.
+    private func state(for post: APIPost) -> LoadState {
+        switch post.referenceAccess ?? .none {
+        case .granted:  return .active(post)
+        case .consumed: return .expiredConsumed
+        case .none:     return isExpired(post) ? .expired : .active(post)
+        }
     }
 
     private static func isNotFound(_ error: Error) -> Bool {

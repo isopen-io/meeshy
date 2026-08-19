@@ -2797,7 +2797,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .compactMap { group -> StoryGroup? in
                 let alive = group.id == myId
                     ? group.stories
-                    : group.stories.filter { !$0.isExpired() }
+                    // Task 9 (post-references) — une story expirée dont le lecteur
+                    // détient un droit de référence ACCORDÉ reste ouvrable : le
+                    // droit se DÉCLARE (`referenceAccess`), il ne se déduit jamais
+                    // de `expiresAt`. Le serveur ne sert jamais dans ce payload une
+                    // story où le lecteur n'a ni auteur ni référence (§3.5 spec) —
+                    // ce filtre ne fait donc qu'éviter de faire disparaître une
+                    // story DÉJÀ présente à son échéance.
+                    : group.stories.filter { !$0.isExpired() || $0.referenceAccess == .granted }
                 return alive.isEmpty ? nil : group.with(stories: alive)
             }
         guard !groups.isEmpty else { return false }
@@ -2829,7 +2836,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .compactMap { group -> StoryGroup? in
                 let alive = group.id == myId
                     ? group.stories
-                    : group.stories.filter { !$0.isExpired() }
+                    // Task 9 (post-references) — une story expirée dont le lecteur
+                    // détient un droit de référence ACCORDÉ reste ouvrable : le
+                    // droit se DÉCLARE (`referenceAccess`), il ne se déduit jamais
+                    // de `expiresAt`. Le serveur ne sert jamais dans ce payload une
+                    // story où le lecteur n'a ni auteur ni référence (§3.5 spec) —
+                    // ce filtre ne fait donc qu'éviter de faire disparaître une
+                    // story DÉJÀ présente à son échéance.
+                    : group.stories.filter { !$0.isExpired() || $0.referenceAccess == .granted }
                 return alive.isEmpty ? nil : group.with(stories: alive)
             }
         guard !groups.isEmpty else { return }

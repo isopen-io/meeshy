@@ -72,11 +72,13 @@ final class StoryViewModelTests: XCTestCase {
         authorUsername: String = "alice",
         createdAt: String = "2026-01-15T12:00:00.000Z",
         expiresAt: String? = "2026-01-16T09:00:00.000Z",
-        commentCount: Int? = nil
+        commentCount: Int? = nil,
+        referenceAccess: ReferenceAccess? = nil
     ) -> APIPost {
         let expiresAtJSON = expiresAt.map { "\"\($0)\"" } ?? "null"
         let contentJSON = content.map { "\"\($0)\"" } ?? "null"
         let commentCountJSON = commentCount.map { ", \"commentCount\": \($0)" } ?? ""
+        let referenceAccessJSON = referenceAccess.map { ", \"referenceAccess\": \"\($0.rawValue)\"" } ?? ""
         return JSONStub.decode("""
         {
             "id": "\(id)",
@@ -84,7 +86,7 @@ final class StoryViewModelTests: XCTestCase {
             "content": \(contentJSON),
             "createdAt": "\(createdAt)",
             "expiresAt": \(expiresAtJSON),
-            "author": {"id": "\(authorId)", "username": "\(authorUsername)"}\(commentCountJSON)
+            "author": {"id": "\(authorId)", "username": "\(authorUsername)"}\(commentCountJSON)\(referenceAccessJSON)
         }
         """)
     }
@@ -728,6 +730,36 @@ final class StoryViewModelTests: XCTestCase {
                      "An expired deep link must not insert a ghost group into the tray")
     }
 
+    /// Task 9 (post-references) — un droit de référence ACCORDÉ garde une
+    /// story expirée ouvrable via le deep link unitaire, exactement comme
+    /// l'exception auteur juste au-dessus, mais pour un auteur QUELCONQUE
+    /// (`u-referenced` n'est pas l'utilisateur courant du test).
+    func test_ensureStoryLoaded_expiredStoryWithGrantedReferenceAccess_isInserted() async {
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "p-referenced", authorId: "u-referenced", authorUsername: "referenced",
+            referenceAccess: .granted))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-referenced")
+
+        XCTAssertTrue(loaded)
+        XCTAssertNotNil(sut.groupIndex(forUserId: "u-referenced"),
+                        "An expired story with a granted reference right must remain openable")
+    }
+
+    /// Le pendant négatif : un droit ÉTEINT (consumed) n'accorde aucune
+    /// exception — le comportement historique (story expirée écartée)
+    /// s'applique, comme sans référence du tout.
+    func test_ensureStoryLoaded_expiredStoryWithConsumedReferenceAccess_isNotInserted() async {
+        mockStoryService.fetchPostResult = .success(Self.makeStoryAPIPost(
+            id: "p-spent", authorId: "u-spent", authorUsername: "spent",
+            referenceAccess: .consumed))
+
+        let loaded = await sut.ensureStoryLoaded(postId: "p-spent")
+
+        XCTAssertFalse(loaded)
+        XCTAssertNil(sut.groupIndex(forUserId: "u-spent"))
+    }
+
     func test_ensureStoryLoaded_fetchFailure_returnsFalse() async {
         mockStoryService.fetchPostResult = .failure(APIError.networkError(URLError(.notConnectedToInternet)))
 
@@ -779,6 +811,27 @@ final class StoryViewModelTests: XCTestCase {
                        "A commentCount already in the tray but stale relative to the notification's fresh fetch must be updated")
         XCTAssertEqual(mockStoryService.fetchPostCallCount, 0,
                        "Must read the already-warm SDK cache, never hit the network again")
+    }
+
+    /// Task 9 (post-references) — même exception que `ensureStoryLoaded` sur
+    /// ce second point d'entrée : un droit ACCORDÉ sur le post fraîchement
+    /// mis en cache par le chemin notification doit fusionner dans le tray
+    /// même si ce post est expiré, au lieu de faire disparaître silencieusement
+    /// le groupe (`alive.isEmpty` aurait vidé le merge).
+    func test_refreshFromCachedPostIfAvailable_expiredWithGrantedReferenceAccess_stillMerges() {
+        let stale = makeStoryItem(id: "s-known")
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [stale])]
+        mockStoryService.cachedPostResult = Self.makeStoryAPIPost(
+            id: "s-known", authorId: "u1", authorUsername: "alice",
+            createdAt: Self.isoDate(offset: -7200), expiresAt: Self.isoDate(offset: -3600),
+            commentCount: 7, referenceAccess: .granted)
+
+        sut.refreshFromCachedPostIfAvailable(postId: "s-known")
+
+        let refreshed = sut.storyGroups.first(where: { $0.id == "u1" })?
+            .stories.first(where: { $0.id == "s-known" })
+        XCTAssertEqual(refreshed?.commentCount, 7,
+                       "An expired post with a granted reference right must still merge, not vanish from the tray")
     }
 
     func test_refreshFromCachedPostIfAvailable_nothingCached_isNoOp() {

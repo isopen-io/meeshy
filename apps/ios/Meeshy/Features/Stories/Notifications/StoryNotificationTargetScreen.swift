@@ -14,6 +14,12 @@ import MeeshySDK
 //               (comments overlay vs. viewers/reactions sheet) so the user
 //               lands on the surface that maps to the notification trigger.
 //   .expired  → `StoryExpiredContent` empty-state with "Create a story" CTA.
+//   .expiredConsumed → same `StoryExpiredContent` empty-state (Task 9,
+//               post-references): the content is unreachable either way, and
+//               this task's scope is the ViewModel's open decision, not a
+//               dedicated screen. `LoadState` keeps the two DISTINCT so a
+//               future screen can tell "never had a right" apart from "had
+//               one, it expired" without another ViewModel change.
 //   .offline  → `StoryNotificationOfflineContent` retry state — a confirmed
 //               404 is the only thing allowed to claim `.expired`; any other
 //               failure (no connectivity, timeout, 5xx) lands here instead.
@@ -67,7 +73,7 @@ public struct StoryNotificationTargetScreen: View {
                     parentCommentId: parentCommentId,
                     dismiss: { dismiss() }
                 )
-            case .expired:
+            case .expired, .expiredConsumed:
                 StoryExpiredContent(storyId: vm.storyId, context: vm.context)
             case .offline:
                 StoryNotificationOfflineContent {

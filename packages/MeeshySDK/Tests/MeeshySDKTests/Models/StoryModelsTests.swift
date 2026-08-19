@@ -484,6 +484,7 @@ final class StoryModelsTests: XCTestCase {
         repostMedia: [APIPostMedia]? = nil,
         ownMedia: [APIPostMedia]? = nil,
         ownStoryEffects: StoryEffects? = nil,
+        referenceAccess: ReferenceAccess? = nil,
         author overrideAuthor: APIAuthor? = nil
     ) -> APIPost {
         let author = overrideAuthor
@@ -505,13 +506,14 @@ final class StoryModelsTests: XCTestCase {
             repostOf: repostOf, originalRepostOfId: originalRepostOfId, isQuote: false,
             moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: ownStoryEffects,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
-            isViewedByMe: nil, currentUserReactions: nil, viaUsername: nil
+            isViewedByMe: nil, currentUserReactions: nil, referenceAccess: referenceAccess, viaUsername: nil
         )
     }
 
     private func makeStoryItem(
         id: String = "story-x",
-        visibility: String? = nil
+        visibility: String? = nil,
+        referenceAccess: ReferenceAccess? = nil
     ) -> StoryItem {
         StoryItem(
             id: id,
@@ -521,7 +523,8 @@ final class StoryModelsTests: XCTestCase {
             createdAt: Date(),
             expiresAt: nil,
             visibility: visibility,
-            isViewed: false
+            isViewed: false,
+            referenceAccess: referenceAccess
         )
     }
 
@@ -572,6 +575,36 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(firstStory?.originalRepostOfId, "root-1")
         XCTAssertEqual(firstStory?.visibility, "PUBLIC")
         XCTAssertEqual(firstStory?.audioUrl, "/api/v1/attachments/file/audio.mp3")
+    }
+
+    // MARK: - referenceAccess (Task 9 — le viewer obéit au serveur, jamais à expiresAt)
+
+    /// Le tray ne peut obéir au droit de référence que si `toStoryGroups`
+    /// propage `APIPost.referenceAccess` jusqu'au `StoryItem` — sans ce
+    /// relais, `StoryViewModel` ne verrait jamais que `nil` et retomberait
+    /// systématiquement sur `isExpired()`.
+    func test_toStoryGroups_propagatesReferenceAccess_fromPost() {
+        let granted = makeAPIPost(id: "story-granted", referenceAccess: .granted)
+        let consumed = makeAPIPost(id: "story-consumed", referenceAccess: .consumed)
+        let none = makeAPIPost(id: "story-none", referenceAccess: nil)
+
+        XCTAssertEqual([granted].toStoryGroups().first?.stories.first?.referenceAccess, .granted)
+        XCTAssertEqual([consumed].toStoryGroups().first?.stories.first?.referenceAccess, .consumed)
+        XCTAssertNil([none].toStoryGroups().first?.stories.first?.referenceAccess)
+    }
+
+    /// Régression jumelle du bug `StoryTextObject.referenceUserId` de la
+    /// Task 1 (posé dans l'init mémberwise, jamais reporté par une
+    /// reconstruction) : une traduction demandée depuis la feuille Langues
+    /// reconstruit le `StoryItem` via son init mémberwise — si
+    /// `referenceAccess` n'y est pas explicitement reporté, un droit accordé
+    /// disparaît au premier merge de traduction.
+    func test_mergingContentTranslation_preservesReferenceAccess() {
+        let story = makeStoryItem(referenceAccess: .granted)
+
+        let merged = story.mergingContentTranslation(language: "fr", content: "Bonjour")
+
+        XCTAssertEqual(merged.referenceAccess, .granted)
     }
 
     func test_repostedStory_inheritsMedia_fromRepostOf_forViewerPlayback() throws {

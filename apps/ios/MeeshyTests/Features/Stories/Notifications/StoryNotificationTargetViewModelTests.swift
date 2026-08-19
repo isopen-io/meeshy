@@ -16,10 +16,11 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
         )
     }
 
-    private func makePost(id: String, expiresAt: Date?) -> APIPost {
+    private func makePost(id: String, expiresAt: Date?, referenceAccess: ReferenceAccess? = nil) -> APIPost {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         let expiresAtJSON = expiresAt.map { "\"\(formatter.string(from: $0))\"" } ?? "null"
+        let referenceAccessJSON = referenceAccess.map { "\"\($0.rawValue)\"" } ?? "null"
         return JSONStub.decode("""
         {
             "id": "\(id)",
@@ -27,6 +28,7 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
             "content": "story content",
             "createdAt": "2026-01-15T12:00:00.000Z",
             "expiresAt": \(expiresAtJSON),
+            "referenceAccess": \(referenceAccessJSON),
             "author": {"id": "a1", "username": "alice"}
         }
         """)
@@ -206,6 +208,83 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
         if case .active = vm.state {} else { XCTFail("Expected .active, got \(vm.state)") }
         XCTAssertEqual(mock.fetchPostCallCount, 3)
     }
+
+    // MARK: - Task 9 — le droit se DÉCLARE, il ne se déduit jamais de expiresAt
+
+    /// Un contenu expiré dont le lecteur détient un droit de référence
+    /// ACCORDÉ doit s'ouvrir normalement — `isExpired` seul le refuserait.
+    func test_expiredStory_withGrantedReferenceAccess_rendersActive() async {
+        let mock = MockStoryService()
+        let post = makePost(id: "p1", expiresAt: Date().addingTimeInterval(-3600), referenceAccess: .granted)
+        mock.cachedPostResult = nil
+        mock.fetchPostResult = .success(post)
+
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1", intent: .reactions, context: makeContext(), storyService: mock
+        )
+        await vm.load()
+
+        if case .active(let p) = vm.state {
+            XCTAssertEqual(p.id, "p1")
+        } else {
+            XCTFail("Expected .active (referenceAccess granted overrides expiresAt), got \(vm.state)")
+        }
+    }
+
+    /// Droit ÉTEINT (fenêtre de 24h post-expiration close) : un état DISTINCT
+    /// de `.expired`, pas le même repli qu'un contenu jamais référencé.
+    func test_expiredStory_withConsumedReferenceAccess_rendersExpiredConsumed() async {
+        let mock = MockStoryService()
+        let post = makePost(id: "p1", expiresAt: Date().addingTimeInterval(-3600), referenceAccess: .consumed)
+        mock.cachedPostResult = nil
+        mock.fetchPostResult = .success(post)
+
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1", intent: .reactions, context: makeContext(), storyService: mock
+        )
+        await vm.load()
+
+        XCTAssertEqual(vm.state, .expiredConsumed)
+    }
+
+    /// Sans référence pour ce lecteur (`.none`, le cas enum explicite —
+    /// distinct de `nil`), le comportement historique s'applique inchangé.
+    func test_expiredStory_withNoneReferenceAccess_rendersExpired() async {
+        let mock = MockStoryService()
+        // Qualifié explicitement : un `.none` nu se lie à `Optional.none`
+        // (nil), pas au cas enum `ReferenceAccess.none` — piège Swift déjà
+        // vécu (cf. XCTAssertEqual d'enum optionnel).
+        let post = makePost(id: "p1", expiresAt: Date().addingTimeInterval(-3600), referenceAccess: ReferenceAccess.none)
+        mock.cachedPostResult = nil
+        mock.fetchPostResult = .success(post)
+
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1", intent: .reactions, context: makeContext(), storyService: mock
+        )
+        await vm.load()
+
+        XCTAssertEqual(vm.state, .expired)
+    }
+
+    /// Le CHARGEMENT — cache-first, prefetch NSE, revalidation réseau — ne
+    /// doit JAMAIS consommer le droit. `markViewed` (`POST /posts/:id/view`)
+    /// n'est appelé que par le viewer, quand la slide est réellement affichée
+    /// à l'écran (`StoryViewerView+Content`). Deux `load()` d'affilée
+    /// (idempotence documentée) doivent laisser ce compteur à zéro.
+    func test_load_neverCallsMarkViewed() async {
+        let mock = MockStoryService()
+        let post = makePost(id: "p1", expiresAt: Date().addingTimeInterval(-3600), referenceAccess: .granted)
+        mock.cachedPostResult = post
+        mock.fetchPostResult = .success(post)
+
+        let vm = StoryNotificationTargetViewModel(
+            storyId: "p1", intent: .reactions, context: makeContext(), storyService: mock
+        )
+        await vm.load()
+        await vm.load()
+
+        XCTAssertEqual(mock.markViewedCallCount, 0)
+    }
 }
 
 // MARK: - LoadState Equatable conformance for assertions
@@ -213,7 +292,8 @@ final class StoryNotificationTargetViewModelTests: XCTestCase {
 extension StoryNotificationTargetViewModel.LoadState: @retroactive Equatable {
     public static func == (lhs: Self, rhs: Self) -> Bool {
         switch (lhs, rhs) {
-        case (.loading, .loading), (.expired, .expired), (.offline, .offline):
+        case (.loading, .loading), (.expired, .expired),
+             (.expiredConsumed, .expiredConsumed), (.offline, .offline):
             return true
         case (.active(let a), .active(let b)):
             return a.id == b.id
