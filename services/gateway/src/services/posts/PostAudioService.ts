@@ -16,6 +16,7 @@ import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { getLanguagesWithTranslation } from '../../utils/languages';
 import { postInclude, commentMediaInclude, NOT_DELETED } from './postIncludes';
+import { withMentions } from './postReferences';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -324,7 +325,13 @@ export class PostAudioService {
       return;
     }
 
-    await this.socialEvents.broadcastPostUpdated(post as unknown as Post, post.authorId);
+    // La clé exposée est `mentions`, ici aussi : un client remplace son
+    // exemplaire en cache par ce qu'il décode de cet événement, et la relation
+    // servie sous son nom Prisma y effacerait les références du post.
+    await this.socialEvents.broadcastPostUpdated(
+      withMentions(post) as unknown as Post,
+      post.authorId,
+    );
     log.info('post:updated broadcast sent', { postId });
   }
 }

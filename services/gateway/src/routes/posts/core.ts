@@ -97,7 +97,13 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const postType = parsed.data.type ?? 'POST';
-        const broadcastPost = hoistLocation(hoistTrackingLinks(post)) as unknown as Post;
+        // `withMentions` AUSSI sur l'événement : une charge utile temps réel est
+        // une charge utile. Servie sous le nom de la relation Prisma
+        // (`postMentions`), elle ne se décode pas — la clé exposée est
+        // `mentions`, ici comme dans la réponse rendue plus bas.
+        const broadcastPost = withMentions(
+          hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>
+        ) as unknown as Post;
         if (postType === 'STORY') {
           socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
@@ -344,7 +350,9 @@ export function registerCoreRoutes(
         // l'édition (tri-état `location`, merge metadata dans `updatePost`)
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
-        const broadcastPost = hoistLocation(post as unknown as Record<string, unknown>) as unknown as Post;
+        const broadcastPost = withMentions(
+          hoistLocation(post as unknown as Record<string, unknown>)
+        ) as unknown as Post;
         if (updatedPostType === 'STORY') {
           // Même prédicat que le reset d'engagement du service — les deux ne
           // peuvent pas diverger sur un même payload.

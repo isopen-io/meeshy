@@ -898,13 +898,19 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Story not found', { code: 'POST_NOT_FOUND' });
       }
 
+      // Une republication garde ses lignes `PostMention` : servie sous le nom
+      // de la RELATION, l'app qui la reçoit n'y lit aucune référence. Aplatie
+      // une seule fois, pour la réponse ET pour l'événement — un client qui
+      // reçoit les deux ne doit pas en voir deux formes.
+      const payload = withMentions(republished);
+
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
-        socialEvents.broadcastStoryCreated(republished as unknown as Post, authContext.registeredUser.id)
+        socialEvents.broadcastStoryCreated(payload as unknown as Post, authContext.registeredUser.id)
           .catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/republish]: broadcast story created failed'));
       }
 
-      return sendSuccess(reply, republished);
+      return sendSuccess(reply, payload);
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can republish a story', { code: 'FORBIDDEN' });
@@ -945,12 +951,17 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Original post not found', { code: 'POST_NOT_FOUND' });
       }
 
+      // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
+      // y compris sur un repost qui n'en porte aucune — une clé absente et une
+      // liste vide ne se décodent pas pareil.
+      const payload = withMentions(repost);
+
       // Broadcast repost via Socket.IO
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
-          repost: repost as unknown as Post,
+          repost: payload as unknown as Post,
         }, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: broadcast post reposted failed'));
       }
 
@@ -976,7 +987,7 @@ export function registerInteractionRoutes(
         }
       }
 
-      return sendSuccess(reply, repost, { statusCode: 201 });
+      return sendSuccess(reply, payload, { statusCode: 201 });
     } catch (error) {
       if (error instanceof Error && (error as any).statusCode === 403) {
         return sendForbidden(reply, error.message);
