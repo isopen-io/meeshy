@@ -607,14 +607,19 @@ class FeedViewModel: ObservableObject {
     /// Passe par `APIClient` directement : `PostServiceProviding.create` ne
     /// transporte pas de `storyEffects`, et élargir le protocole pour un seul
     /// appel imposerait le champ à tous ses mocks.
-    func createBorrowedSoundPost(type: String, visibility: String = "PUBLIC", storyEffects: StoryEffects) async {
+    ///
+    /// - Parameter mentions: les personnes que le composer nommait déjà quand
+    ///   l'auteur a choisi un son emprunté plutôt que d'enregistrer — troisième
+    ///   chemin audio, oublié la première fois que les deux autres l'ont gagné.
+    func createBorrowedSoundPost(type: String, visibility: String = "PUBLIC", storyEffects: StoryEffects, mentions: [PostMentionInput]? = nil) async {
         publishError = nil
         publishSuccess = false
         do {
             let request = CreatePostRequest(
                 type: type,
                 visibility: visibility,
-                storyEffects: storyEffects.sanitizedForServerPublish()
+                storyEffects: storyEffects.sanitizedForServerPublish(),
+                mentions: mentions
             )
             let response: APIResponse<APIPost> = try await api.request(
                 endpoint: "/posts",

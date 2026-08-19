@@ -45,6 +45,11 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append(method)
+        // Corps déjà encodé par l'appelant (`FeedViewModel.createBorrowedSoundPost`
+        // passe par ce chemin brut plutôt que par `post<T,U>`) — même point de
+        // capture, même ordre : AVANT le throw, pour que le corps reste
+        // observable même quand le test court-circuite la réponse.
+        if let body { lastPostBodies.append(body) }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
             throw NSError(domain: "MockAPIClientForApp", code: -1, userInfo: [NSLocalizedDescriptionKey: "No stub for endpoint '\(endpoint)' returning \(T.self)"])

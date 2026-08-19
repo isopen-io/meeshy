@@ -772,6 +772,43 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertNil(payload?.mentions)
     }
 
+    // MARK: - createBorrowedSoundPost() — les références déclarées voyagent aussi
+
+    /// Ce chemin ne passe ni par `PostService` ni par l'outbox — direct via
+    /// `APIClient` — donc la déclaration s'y perdrait silencieusement sans son
+    /// propre fil jusqu'au corps. Même angle mort que les deux chemins audio
+    /// enregistrés : « son emprunté » en est le troisième, oublié la première fois.
+    func test_createBorrowedSoundPost_forwardsDeclaredReferencesToTheServer() async throws {
+        let (sut, api, _, _) = makeSUT()
+        // Court-circuite juste après l'encodage du corps — la capture du corps
+        // (mockAPI) a lieu AVANT ce throw, comme le fait le `post()` réel.
+        api.errorToThrow = APIError.networkError(URLError(.badServerResponse))
+
+        await sut.createBorrowedSoundPost(
+            type: "POST",
+            storyEffects: StoryEffects(),
+            mentions: [PostMentionInput.id("u-alice", display: .note)]
+        )
+
+        let body = try XCTUnwrap(api.lastPostBodies.last)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        let mentions = try XCTUnwrap(json["mentions"] as? [[String: Any]])
+        XCTAssertEqual(mentions.count, 1)
+        XCTAssertEqual(mentions.first?["userId"] as? String, "u-alice")
+        XCTAssertEqual(mentions.first?["display"] as? String, "NOTE")
+    }
+
+    func test_createBorrowedSoundPost_withoutReferences_omitsTheKey() async throws {
+        let (sut, api, _, _) = makeSUT()
+        api.errorToThrow = APIError.networkError(URLError(.badServerResponse))
+
+        await sut.createBorrowedSoundPost(type: "POST", storyEffects: StoryEffects())
+
+        let body = try XCTUnwrap(api.lastPostBodies.last)
+        let json = try XCTUnwrap(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertNil(json["mentions"], "Rien de déclaré : la clé ne part pas")
+    }
+
     func test_createPost_withMedia_usesDirectPostServicePath() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)

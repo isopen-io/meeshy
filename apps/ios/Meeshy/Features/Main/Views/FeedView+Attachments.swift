@@ -493,7 +493,8 @@ extension FeedView {
         await MainActor.run { isUploading = true }
         await viewModel.createBorrowedSoundPost(
             type: BorrowedSoundPost.type(for: sound, forcePlainPost: composerForcePlainPost),
-            storyEffects: BorrowedSoundPost.effects(for: sound)
+            storyEffects: BorrowedSoundPost.effects(for: sound),
+            mentions: feedDeclaredReferences
         )
 
         await MainActor.run {
@@ -1743,7 +1744,8 @@ struct FeedComposerSheet: View {
         await MainActor.run { isUploading = true }
         await viewModel.createBorrowedSoundPost(
             type: BorrowedSoundPost.type(for: sound, forcePlainPost: forcePlainPost),
-            storyEffects: BorrowedSoundPost.effects(for: sound)
+            storyEffects: BorrowedSoundPost.effects(for: sound),
+            mentions: declaredReferences
         )
         await MainActor.run {
             isUploading = false
