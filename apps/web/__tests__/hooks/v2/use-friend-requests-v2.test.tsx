@@ -152,6 +152,43 @@ describe('useFriendRequestsV2', () => {
     expect(result.current.stats.refused).toBe(1);
   });
 
+  // `/users/friend-requests` n'a AUCUNE recherche texte serveur : le sélecteur
+  // de transfert filtre localement `connected`. Une seule page rendait donc
+  // inatteignable tout ami au-delà d'elle — le Volet C prescrit « paginé
+  // jusqu'à épuisement ». Jumeau iOS : ForwardPickerViewModelTests
+  // .test_search_paginatesFriendsUntilExhausted_findsFriendBeyondTheFirstPage
+  it('pagine les relations acceptées jusqu’à épuisement', async () => {
+    const firstPage = Array.from({ length: 100 }, (_, i) =>
+      makeFriendRequest({ id: `acc-${i}`, status: 'accepted' }),
+    );
+    mockGet.mockImplementation((url: string, params?: Record<string, string>) => {
+      if (url === '/users/friend-requests') {
+        if (params?.offset === '0') {
+          return Promise.resolve({
+            data: { success: true, data: firstPage, pagination: { total: 101, hasMore: true } },
+          });
+        }
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [makeFriendRequest({ id: 'acc-100', status: 'accepted' })],
+            pagination: { total: 101, hasMore: false },
+          },
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+    });
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.connected).toHaveLength(101));
+    expect(mockGet).toHaveBeenCalledWith('/users/friend-requests', {
+      offset: '100',
+      limit: '100',
+      status: 'accepted',
+    });
+  });
+
   it('sends a friend request via mutation', async () => {
     mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
     mockPost.mockResolvedValue({ data: { success: true, data: makeFriendRequest() } });

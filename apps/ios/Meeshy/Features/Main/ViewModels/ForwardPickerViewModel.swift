@@ -29,7 +29,18 @@ final class ForwardPickerViewModel: ObservableObject {
     private let authManager: AuthManaging
 
     private static let pageLimit = 50
+    /// Répertoire (`ContactDirectoryService.list`) : filtré `q` CÔTÉ SERVEUR,
+    /// une page suffit donc.
     private static let contactSearchLimit = 50
+    /// Relations acceptées : AUCUNE recherche serveur, le filtre est client —
+    /// il faut donc les avoir toutes. Taille de page alignée sur le web et sur
+    /// `ContactsListViewModel` (le gateway plafonne `limit` à 100).
+    private static let friendsPageSize = 100
+    /// Borne de sécurité : au-delà, on cesse de paginer plutôt que de suivre
+    /// indéfiniment un `hasMore` qui ne retomberait jamais. 500 relations
+    /// couvrent très largement la population réelle ; la même borne vaut côté
+    /// web (`use-friend-requests-v2.ts`).
+    private static let friendsFetchCap = 500
     private static let searchMinimumLength = 2
     private static let searchDebounceNanoseconds: UInt64 = 300_000_000
 
@@ -203,13 +214,25 @@ final class ForwardPickerViewModel: ObservableObject {
     /// COMPLÈTE des amis mêlée aux vrais résultats.
     private func fetchFriendContactTargets(query: String, currentUserId: String) async -> [ForwardTarget] {
         do {
-            let page = try await friendService.allFriendRequests(
-                status: "accepted",
-                offset: 0,
-                limit: Self.contactSearchLimit
-            )
+            // Le filtre étant CLIENT, une seule page rendrait inatteignable
+            // tout ami au-delà d'elle (Volet C : « paginé jusqu'à épuisement »).
+            var collected: [FriendRequest] = []
+            var offset = 0
+            while collected.count < Self.friendsFetchCap {
+                let page = try await friendService.allFriendRequests(
+                    status: "accepted",
+                    offset: offset,
+                    limit: Self.friendsPageSize
+                )
+                collected.append(contentsOf: page.data)
+                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
+                // le repli sur la taille de page garde le comportement correct.
+                let more = page.pagination?.hasMore ?? (page.data.count == Self.friendsPageSize)
+                if !more || page.data.isEmpty { break }
+                offset += Self.friendsPageSize
+            }
             let lowered = query.lowercased()
-            return page.data.compactMap { request -> ForwardTarget? in
+            return collected.compactMap { request -> ForwardTarget? in
                 guard request.status == "accepted",
                       let other = Self.otherParty(of: request, currentUserId: currentUserId) else {
                     return nil

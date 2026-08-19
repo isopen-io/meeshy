@@ -244,6 +244,28 @@ final class ForwardPickerViewModelTests: XCTestCase {
                        "bob ne correspond pas à « ali » et ne doit pas apparaître")
     }
 
+    /// « N'importe quel contact » : `GET /users/friend-requests` n'a AUCUNE
+    /// recherche texte serveur, le filtre est donc CLIENT — tant qu'une seule
+    /// page est chargée, un ami au-delà de la première page reste inatteignable
+    /// depuis le sélecteur (un utilisateur de 60 amis ne pouvait pas joindre le
+    /// 55ᵉ avec l'ancienne limite de 50). On pagine jusqu'à épuisement.
+    func test_search_paginatesFriendsUntilExhausted_findsFriendBeyondTheFirstPage() async {
+        let (sut, _) = makeSUT()
+        let firstPage = (1...100).map { makeAccepted(otherId: "u\($0)", username: "bob\($0)") }
+        let secondPage = [makeAccepted(otherId: "u101", username: "alice")]
+        friendService.allFriendRequestsResults = [
+            .success(FriendRequestFixture.makePaginated(requests: firstPage, total: 101, hasMore: true, limit: 100, offset: 0)),
+            .success(FriendRequestFixture.makePaginated(requests: secondPage, total: 101, hasMore: false, limit: 100, offset: 100))
+        ]
+
+        await sut.search("ali")
+
+        XCTAssertEqual(sut.targets.map(\.id), ["user:u101"],
+                       "un ami de la SECONDE page doit être atteignable depuis le sélecteur")
+        XCTAssertEqual(friendService.allFriendRequestsOffsets, [0, 100],
+                       "le second appel doit recevoir offset: 100, pas rejouer offset: 0")
+    }
+
     /// Une recherche dont la réponse réseau est différée ne doit JAMAIS
     /// écraser les résultats d'une recherche PLUS RÉCENTE arrivée entre
     /// temps. Le double contrôlable (`searchHandler` + `ResponseGate`)

@@ -45,6 +45,25 @@ function extractRequests(response: unknown): FriendRequest[] {
   return Array.isArray(inner) ? inner : [];
 }
 
+function extractHasMore(response: unknown): boolean | undefined {
+  if (!response || typeof response !== 'object') return undefined;
+  const outer = (response as Record<string, unknown>).data;
+  if (!outer || typeof outer !== 'object') return undefined;
+  const pagination = (outer as Record<string, unknown>).pagination;
+  if (!pagination || typeof pagination !== 'object') return undefined;
+  const hasMore = (pagination as Record<string, unknown>).hasMore;
+  return typeof hasMore === 'boolean' ? hasMore : undefined;
+}
+
+/** Le gateway plafonne `limit` à 100 — même valeur côté iOS. */
+const ACCEPTED_PAGE_SIZE = 100;
+/**
+ * Borne de sécurité : au-delà, on cesse de paginer plutôt que de suivre
+ * indéfiniment un `hasMore` qui ne retomberait jamais. Même borne côté iOS
+ * (`ForwardPickerViewModel.friendsFetchCap`).
+ */
+const ACCEPTED_FETCH_CAP = 500;
+
 export function useFriendRequestsV2(
   options: UseFriendRequestsV2Options = {}
 ): UseFriendRequestsV2Return {
@@ -95,15 +114,34 @@ export function useFriendRequestsV2(
   // renders both directions regardless of who initiated it.
   const acceptedQueryKey = queryKeys.friendRequests.accepted();
 
+  // Paginé JUSQU'À ÉPUISEMENT : cet endpoint n'a aucune recherche texte
+  // serveur, et le sélecteur de transfert filtre `connected` LOCALEMENT — une
+  // seule page rendrait inatteignable tout ami au-delà d'elle (spec 2026-08-19,
+  // Volet C). Jumeau iOS : `ForwardPickerViewModel.fetchFriendContactTargets`.
   const { data: acceptedData } = useQuery({
     queryKey: acceptedQueryKey,
     queryFn: async () => {
-      const response = await apiService.get<{
-        success: boolean;
-        data: FriendRequest[];
-        pagination: { total: number; hasMore?: boolean };
-      }>('/users/friend-requests', { offset: '0', limit: '100', status: 'accepted' });
-      return extractRequests(response);
+      const collected: FriendRequest[] = [];
+      let offset = 0;
+      while (collected.length < ACCEPTED_FETCH_CAP) {
+        const response = await apiService.get<{
+          success: boolean;
+          data: FriendRequest[];
+          pagination: { total: number; hasMore?: boolean };
+        }>('/users/friend-requests', {
+          offset: String(offset),
+          limit: String(ACCEPTED_PAGE_SIZE),
+          status: 'accepted',
+        });
+        const page = extractRequests(response);
+        collected.push(...page);
+        // `hasMore` peut manquer sur un gateway antérieur à la Task 1 : le repli
+        // sur la taille de page garde le comportement correct.
+        const hasMore = extractHasMore(response) ?? page.length === ACCEPTED_PAGE_SIZE;
+        if (!hasMore || page.length === 0) break;
+        offset += ACCEPTED_PAGE_SIZE;
+      }
+      return collected;
     },
     enabled,
   });
