@@ -1017,11 +1017,23 @@ export const contactsDirectoryService = {
 
 - [ ] **Step 1 : Test RED**
 
+> ⚠️ **Le corps HTTP arrive DOUBLEMENT emballé.** `apiService.request<T>()`
+> (`apps/web/services/api.service.ts:207-238`) fait `data = await response.json()` puis
+> `return { success: true, data, message }` : le corps COMPLET de la réponse atterrit dans `.data`,
+> sans déballage. La route répondant via `sendPaginatedSuccess` (`{ success, data, message, pagination }`),
+> la liste se lit en `response.data.data` et la pagination en `response.data.pagination` — **jamais**
+> `response.data` / `response.pagination`. Tous les services voisins le font ainsi
+> (`notification.service.ts:183-193`, `dashboard.service.ts:70`, `agent-admin.service.ts:4-18`), et
+> leurs tests mockent le double niveau. Un mock à un seul niveau laisse le test vert pendant que la
+> production reçoit un objet là où elle attend un tableau, et `hasMore` reste faux à jamais.
+
 ```ts
 it('interroge /users/me/contacts avec filter=meeshy et la requête', async () => {
-  mockApiGet.mockResolvedValue({ success: true, data: [
-    { id: 'd1', displayName: 'Alice', isOnMeeshy: true, matchedUser: { id: 'u1', username: 'alice' } }
-  ], pagination: { total: 1, offset: 0, limit: 50, hasMore: false } });
+  mockApiGet.mockResolvedValue({ success: true, data: {
+    success: true,
+    data: [{ id: 'd1', displayName: 'Alice', isOnMeeshy: true, matchedUser: { id: 'u1', username: 'alice' } }],
+    pagination: { total: 1, offset: 0, limit: 50, hasMore: false }
+  } });
 
   const res = await contactsDirectoryService.list({ q: 'ali', filter: 'meeshy', limit: 50 });
 
