@@ -236,6 +236,17 @@ référencer lui-même (l'auto-mention est filtrée).
 `canUserViewPost` gagne une branche « je suis référencé ici » — un `findUnique` sur l'index
 unique `postId_mentionedUserId` déjà présent.
 
+**Gardée par une option, et c'est essentiel.** `canUserConsumePost` et
+`canUserInteractWithPost` appellent tous deux `canUserViewPost` et ne diffèrent que par leurs
+options. Une branche non gardée ouvrirait donc aussi l'INTERACTION : tout référencé pourrait
+réagir et commenter, ce qui casse l'asymétrie « voir ⊇ interagir » — décision produit du
+2026-07-08, que `postVisibility.ts` protège explicitement (« ne pas réaligner l'un sur l'autre
+sans re-décider l'ACL d'interaction »).
+
+`includeReferenced` la garde donc, exactement comme `includeDirectContacts` garde
+l'élargissement de la branche FRIENDS, et seul `canUserConsumePost` la pose. **Être nommé
+ouvre le contenu, pas la conversation autour.**
+
 ### 3.3 La consommation n'est PAS un effet de bord de la lecture
 
 **C'est le point où une implémentation naïve casse la fonctionnalité en production.** Consommer
@@ -333,9 +344,22 @@ module sait retirer — l'ajout se réduit à brancher le retrait sur le lot `de
 export const PostReferenceInputSchema = z.object({
   userId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   username: z.string().min(1).max(64).optional(),
-  display: z.enum(['PINNED', 'NOTE', 'SILENT']),
+  // OPTIONNEL, défaut PINNED — et ce n'est pas une commodité.
+  //
+  // `PostMentionInput` (SDK iOS) ne porte que `userId` et `username` : toute
+  // app DÉJÀ INSTALLÉE envoie `{ username }` nu. Rendre `display` requis
+  // ferait échouer la validation et rendrait 400 sur toute publication de
+  // story portant une pastille — pour chaque version en circulation.
+  //
+  // PINNED parce que c'est EXACTEMENT ce que faisait l'ancien canal CANVAS :
+  // un client ancien continue de se comporter à l'identique, sans le savoir.
+  display: z.enum(['PINNED', 'NOTE', 'SILENT']).default('PINNED'),
 }).refine((m) => Boolean(m.userId || m.username), { message: 'userId ou username requis' });
 ```
+
+INLINE reste refusé : il n'est pas dans l'énumération, et une déclaration INLINE ouvrirait un
+second chemin vers un fait que le serveur dérive déjà — les deux divergeraient au premier
+désaccord.
 
 ### 5.2 Lecture
 
@@ -343,6 +367,16 @@ export const PostReferenceInputSchema = z.object({
 `feed.ts`, `comments.ts`, `interactions.ts`. La fonction elle-même **reste** : les messages de
 conversation l'utilisent encore (`routes/conversations/messages.ts:1380`), et rien ici ne
 change pour eux.
+
+**Le retrait ne casse aucun client — vérifié, pas supposé.** Aucun chemin post ne lit
+`meta.mentionedUsers` : son unique lecteur (`ConversationSyncEngine.swift:854`) est le chemin
+**messages**. Et `APIPost.mentionedUsers`, que le SDK décode et persiste
+(`PostRecord.mentionedUsersJson`), n'a **jamais eu de source** — le gateway ne l'écrit sur un
+post ni en REST ni en socket. C'est un champ mort, à supprimer côté SDK ; `UserDisplayNameCache`
+gagne au passage une alimentation qui lui arrivera enfin réellement.
+
+Aucune route de lecture de post ne déclare de `response` schema, donc **pas de troncature
+silencieuse** du nouveau champ.
 
 La charge utile porte la relation, résolue au chargement — donc avec le `displayName` et
 l'avatar **du moment**, jamais figés :
@@ -451,6 +485,74 @@ Quand la personne choisie n'appartient pas à l'audience du contenu, le composer
 la publication : *« Carol n'est pas dans votre audience — la référencer lui donnera accès à ce
 contenu. »* C'est la seule protection restante depuis le retrait de `filterPostConsumers` du
 chemin mention (§4).
+
+### 7.4 L'UI — un geste pour le cas courant, le choix sous l'appui long
+
+Quatre modes, mais **jamais quatre décisions à prendre**. Le principe tient en une phrase :
+*un tap suffit toujours ; l'appui long n'existe que pour ceux qui veulent autre chose.*
+Personne n'a à connaître le vocabulaire des modes pour référencer quelqu'un.
+
+**La feuille du chip « Mentionner »** — une bottom sheet, pas un écran :
+
+```
+╭──────────────────────────────────────────────╮
+│  Mentionner                              ✕   │
+│  ╭────────────────────────────────────────╮  │
+│  │ 🔍  Rechercher une personne…           │  │
+│  ╰────────────────────────────────────────╯  │
+│                                              │
+│  Déjà référencées                            │
+│  ╭────────────╮ ╭────────────╮               │
+│  │ 🅐 Alice   │ │ 🅑 Bob     │   ← tap =     │
+│  │      ⬤ badge│ │      ⬤ note│     changer  │
+│  ╰────────────╯ ╰────────────╯     ✕ = ôter  │
+│                                              │
+│  Contacts                          →→→       │
+│  ╭──────╮ ╭──────╮ ╭──────╮ ╭──────╮        │
+│  │  🅒  │ │  🅓  │ │  🅔  │ │  🅕  │  ← liste │
+│  │ Carol│ │ Dan  │ │ Eve  │ │ Finn │   horiz.│
+│  ╰──────╯ ╰──────╯ ╰──────╯ ╰──────╯  scroll │
+╰──────────────────────────────────────────────╯
+```
+
+- **Tap** sur une personne → **SILENT**, et la feuille reste ouverte : on en ajoute plusieurs
+  d'affilée sans rouvrir quoi que ce soit.
+- **Appui long** → menu contextuel à trois entrées, avec icône et libellé :
+
+  | | Libellé | Ce que ça fait |
+  |---|---|---|
+  | `person.crop.square` | **Poser un badge** | pastille déplaçable sur le canevas (PINNED) |
+  | `text.append` | **Référencer** | rangée « Avec … » sous le contenu (NOTE) |
+  | `bell` | **Notifier seulement** | rien de visible (SILENT) |
+
+- Les personnes **déjà référencées** remontent en tête, chacune avec la pastille de son mode.
+  Un tap dessus rouvre le même menu — **changer de mode et choisir un mode sont le même
+  geste**, il n'y a rien de nouveau à apprendre. Le `✕` retire.
+
+**La liste `@`** (§7.2) suit exactement la même grammaire, avec son propre défaut : tap =
+INLINE, appui long = le même menu, augmenté de « insérer ». Choisir autre chose qu'INLINE
+**retire le `@handle` du texte** — c'est tout l'intérêt du geste, et l'animation de retrait le
+montre plutôt que de l'expliquer.
+
+**Un seul état visible dans le composer**, quel que soit le nombre de modes en jeu : une rangée
+compacte sous la barre d'outils, `👤 3 personnes` avec les pastilles de mode. Un tap la rouvre.
+C'est le seul endroit où l'auteur voit ses références silencieuses — et donc le seul endroit
+d'où il peut en retirer une.
+
+### 7.5 Une pastille par mode, partout la même
+
+Le mode se lit d'un coup d'œil, avec le même symbole dans le composer, dans la feuille et dans
+la rangée de gestion :
+
+| Mode | Symbole | Teinte |
+|---|---|---|
+| INLINE | `at` | accent de la conversation / du post |
+| PINNED | `person.crop.square` | accent |
+| NOTE | `text.append` | accent |
+| SILENT | `bell` | `textMuted` — discret, comme ce qu'il désigne |
+
+Jamais de libellé textuel du mode dans le rendu final : le badge, la rangée ou le silence
+**sont** l'affichage. Les libellés n'existent que dans le menu de choix, là où l'auteur décide.
 
 ## 8. Surfaces à livrer
 
@@ -575,3 +677,15 @@ fonctionnalité en production.
 | 8 | **Aucune rétractation** — retirer une référence laissait sa notification pointer vers un accès révoqué | Branchement sur `retractCommentNotifications` (§4) |
 | 9 | **`resolveMentionedUsers` présenté comme supprimable** — les messages l'utilisent encore | Retiré des routes de post seulement (§5.2) |
 | 10 | **`getMentionsByPost` lit les SILENT** sans que ce soit dit | Effet documenté, jugé acceptable (§9) |
+
+### Seconde passe — régression sur les trois plateformes
+
+| # | Défaut | Correction |
+|---|---|---|
+| 11 | **La branche ACL aurait ouvert l'INTERACTION** — `canUserConsumePost` et `canUserInteractWithPost` partagent `canUserViewPost` et ne diffèrent que par leurs options. Tout référencé aurait pu réagir et commenter, cassant l'asymétrie « voir ⊇ interagir » du 2026-07-08 | Branche gardée par `includeReferenced`, posée par la seule consommation (§3.2), verrouillée par un test |
+| 12 | **`meta.mentionedUsers` présumé consommé** | Vérifié : aucun chemin post ne le lit, et `APIPost.mentionedUsers` n'a jamais eu de source. Le retrait ne casse rien (§5.2) |
+| 13 | **Troncature Fastify non vérifiée** — un `response` schema aurait supprimé `mentions` en silence | Vérifié : aucune route de lecture de post n'en déclare (§5.2) |
+| 14 | **`referenceAccess` sans producteur** — la spec l'exigeait (§5.3), aucune tâche ne le posait | Task 11 du plan gateway, avec lecture groupée pour le tray (pas de N+1) |
+| 15 | **Alignement `deletedAt` sans tâche** — §2 l'exigeait, le plan l'oubliait | Étape ajoutée à la Task 3 du plan |
+| 16 | **UI sous-spécifiée** — quatre modes décrits, aucune grammaire de geste | §7.4 et §7.5 : un tap suffit toujours, l'appui long n'existe que pour le reste ; une pastille par mode, la même partout |
+| 17 | **`display` requis aurait cassé les apps déployées** — `PostMentionInput` (SDK) ne porte que `userId`/`username` : toute version installée envoie `{ username }` nu, et Zod aurait rendu 400 sur chaque publication de story portant une pastille | `display` optionnel, défaut **PINNED** — exactement l'ancien comportement CANVAS (§5.1) |
