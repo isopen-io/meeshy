@@ -349,6 +349,67 @@ describe('MessagingService', () => {
         expect(response.success).toBe(true);
         expect(mockPrisma.message.create.mock.calls[0][0].data.expiresAt).toBeNull();
       });
+
+      // Vécu prod 2026-08-19 (« le transfert des médias n'aboutit pas ») : la
+      // route acceptait un forward sans texte, puis MessageValidator le
+      // rejetait en CONTENT_EMPTY — les attachments d'un forward sont copiés
+      // CÔTÉ SERVEUR, le corps n'a donc ni content ni attachmentIds.
+      it('transfère un média SANS texte : forwardedFromId seul rend le corps non-vide', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: false,
+          effectFlags: 0,
+          expiresAt: null,
+          createdAt: new Date('2026-08-12T11:00:00.000Z')
+        });
+
+        const response = await service.handleMessage(
+          { ...validRequest, content: '', forwardedFromId },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(true);
+        expect(mockPrisma.message.create).toHaveBeenCalledTimes(1);
+      });
+
+      // Le picker iOS historique envoyait `forwardedFromConversationId: ""`
+      // (conversation?.id ?? ""). Zod (`z.string().optional()`) l'accepte,
+      // Prisma (`@db.ObjectId`) refuse l'ÉCRITURE : l'envoi mourait en
+      // « Erreur interne » APRÈS validation. La provenance de conversation est
+      // facultative — une référence illisible s'abandonne, l'envoi survit.
+      it('abandonne un forwardedFromConversationId malformé au lieu de casser l’écriture', async () => {
+        mockPrisma.message.findUnique.mockResolvedValue({
+          isViewOnce: false,
+          effectFlags: 0,
+          expiresAt: null,
+          createdAt: new Date('2026-08-12T11:00:00.000Z')
+        });
+
+        const response = await service.handleMessage(
+          { ...validRequest, forwardedFromId, forwardedFromConversationId: '' },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(true);
+        const written = mockPrisma.message.create.mock.calls[0][0].data;
+        expect(written.forwardedFromConversationId ?? null).toBeNull();
+        expect(written.forwardedFromId).toBe(forwardedFromId);
+      });
+
+      // Un rejeu hors-ligne peut porter l'id LOCAL d'un message optimiste
+      // (`ofq_*`) comme source. Même philosophie best-effort que
+      // `admitMessageForward` sur source introuvable : l'envoi dégénère en
+      // message ordinaire — sans lecture DB inutile, sans « Erreur interne ».
+      it('dégénère en message ordinaire quand forwardedFromId n’est pas un ObjectId', async () => {
+        const response = await service.handleMessage(
+          { ...validRequest, forwardedFromId: 'ofq_local_abc123' },
+          testParticipantId
+        );
+
+        expect(response.success).toBe(true);
+        const written = mockPrisma.message.create.mock.calls[0][0].data;
+        expect(written.forwardedFromId ?? null).toBeNull();
+        expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
+      });
     });
 
     describe('conteneur TERMINAL et RANG D’ÉCRITURE — le conteneur gouverne enfin', () => {

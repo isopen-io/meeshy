@@ -162,3 +162,36 @@ export async function admitMessageForward(
 
   return { admitted: true, expiresAt: new Date(params.at.getTime() + lifespanMs) };
 }
+
+const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
+
+/**
+ * Les références de transfert arrivent de clients hétérogènes : le picker iOS
+ * historique envoyait `forwardedFromConversationId: ""` (`conversation?.id ??
+ * ""`), et un rejeu hors-ligne peut porter l'id LOCAL d'un message optimiste
+ * (`ofq_*`). Zod (`z.string().optional()`) les laisse passer ; Prisma
+ * (`@db.ObjectId`) les refuse à l'ÉCRITURE — l'envoi mourait en « Erreur
+ * interne » APRÈS validation. Une référence de CONVERSATION illisible
+ * s'abandonne (la provenance est facultative) ; une référence de MESSAGE
+ * illisible dégrade l'envoi en message ordinaire — le même best-effort que
+ * `admitMessageForward` applique à une source introuvable.
+ */
+export function sanitizeForwardReferences<
+  T extends { forwardedFromId?: string; forwardedFromConversationId?: string }
+>(request: T): T {
+  const forwardedFromId =
+    request.forwardedFromId && OBJECT_ID_RE.test(request.forwardedFromId)
+      ? request.forwardedFromId
+      : undefined;
+  const forwardedFromConversationId =
+    request.forwardedFromConversationId && OBJECT_ID_RE.test(request.forwardedFromConversationId)
+      ? request.forwardedFromConversationId
+      : undefined;
+  if (
+    forwardedFromId === request.forwardedFromId &&
+    forwardedFromConversationId === request.forwardedFromConversationId
+  ) {
+    return request;
+  }
+  return { ...request, forwardedFromId, forwardedFromConversationId };
+}

@@ -46,7 +46,12 @@ export class MessageValidator {
     const hasAttachments = (request.attachments && request.attachments.length > 0) ||
                           (request.attachmentIds && request.attachmentIds.length > 0);
 
-    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload) {
+    // Un transfert rend aussi le corps non-vide : ses attachments sont copiés
+    // CÔTÉ SERVEUR (MessageProcessor.copyForwardedAttachments), le client
+    // n'envoie ni content ni attachmentIds pour un forward de média. Même
+    // exemption que le refine Zod de la route REST — sans elle, tout transfert
+    // de média mourait ici en CONTENT_EMPTY après avoir passé la route.
+    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId) {
       errors.push({
         field: 'content',
         message: 'Message content cannot be empty (unless attachments or encrypted payload are included)',

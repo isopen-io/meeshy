@@ -14,7 +14,7 @@ import { NotificationService } from '../notifications/NotificationService';
 import { MessageValidator } from './MessageValidator';
 import { MessageProcessor } from './MessageProcessor';
 import { queueMessageTranslation, runMessagePostSaveEffects } from './messagePostSaveEffects';
-import { admitMessageForward, isForwardRefused } from './forwardAdmission';
+import { admitMessageForward, isForwardRefused, sanitizeForwardReferences } from './forwardAdmission';
 import {
   admitConversationWrite,
   isConversationWriteRefused,
@@ -66,6 +66,12 @@ export class MessagingService {
     });
 
     try {
+      // 0. Assainissement des références de transfert — AVANT la validation,
+      //    pour qu'un `forwardedFromId` illisible ne compte pas comme contenu :
+      //    dégradé ici, un forward-only malformé tombe en CONTENT_EMPTY
+      //    explicite au lieu d'une « Erreur interne » à l'écriture Prisma.
+      request = sanitizeForwardReferences(request);
+
       // 1. Validation de la requête
       const validationResult = await performanceLogger.withTiming(
         'messaging.validateRequest',

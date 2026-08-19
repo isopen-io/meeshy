@@ -100,6 +100,21 @@ describe('MessageValidator.validateRequest', () => {
     expect(result.errors.find(e => e.code === 'CONTENT_EMPTY')).toBeUndefined();
   });
 
+  // Un transfert copie ses attachments CÔTÉ SERVEUR (copyForwardedAttachments) :
+  // le corps d'un forward de MÉDIA n'a ni content ni attachmentIds — seul
+  // `forwardedFromId` le rend non-vide, exactement comme au refine Zod de la
+  // route REST. Vécu prod 2026-08-19 : ce validateur, ignorant le champ,
+  // rejetait tout transfert de média en CONTENT_EMPTY après que la route
+  // l'avait accepté.
+  it('allows empty content when forwardedFromId is present (media forward)', async () => {
+    const result = await validator.validateRequest(makeRequest({
+      content: '',
+      forwardedFromId: '507f1f77bcf86cd799439012',
+    }));
+    expect(result.errors.find(e => e.code === 'CONTENT_EMPTY')).toBeUndefined();
+    expect(result.isValid).toBe(true);
+  });
+
   it('errors when content exceeds MAX_MESSAGE_LENGTH (4000)', async () => {
     const result = await validator.validateRequest(makeRequest({ content: 'x'.repeat(4001) }));
     expect(result.errors.some(e => e.code === 'CONTENT_TOO_LONG')).toBe(true);
