@@ -21,8 +21,13 @@ function buildPrisma() {
     post: {
       create: jest.fn<() => Promise<unknown>>().mockResolvedValue(created),
       findUnique: jest.fn<() => Promise<unknown>>().mockResolvedValue(created),
+      // `visibility` fait partie de la tranche que `createPost` lit de la
+      // SOURCE depuis la loi d'audience de repost (2026-08-19) : sans elle,
+      // toute republication est refusée « plus large que undefined » et ces
+      // cas-ci échouent sur une garde qu'ils ne visent pas.
       findFirst: jest.fn<() => Promise<unknown>>().mockResolvedValue({
         id: 'source-1', repostOfId: null, originalRepostOfId: null,
+        visibility: 'PUBLIC', visibilityUserIds: [],
       }),
       update: jest.fn<() => Promise<unknown>>().mockResolvedValue(created),
     },

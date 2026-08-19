@@ -16,6 +16,7 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
+import { withMentions } from '../../services/posts/postReferences';
 
 /**
  * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
@@ -90,11 +91,15 @@ export function registerInteractionRoutes(
         op: async () => {
           const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
           if (!res) throw new Error('POST_NOT_FOUND');
-          return res as typeof res & { id: string };
+          // Les deux branches rendent la MÊME forme de post : `likePost` porte
+          // la relation brute `postMentions`, `getPostById` sa forme aplatie et
+          // projetée. Aplatir les deux ici, plutôt que d'assertion en assertion,
+          // c'est la seule façon que le rejeu ne se distingue pas de l'écriture.
+          return withMentions(res as typeof res & { id: string });
         },
         onDuplicate: async (_resultId) => {
           const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
-          return res as (typeof res & { id: string }) | null;
+          return res ? withMentions(res as typeof res & { id: string }) : null;
         },
       }).catch((err) => {
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
@@ -219,11 +224,11 @@ export function registerInteractionRoutes(
         op: async () => {
           const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
           if (!res) throw new Error('POST_NOT_FOUND');
-          return res;
+          return { ...res, post: withMentions(res.post) };
         },
         onDuplicate: async (_resultId) => {
           const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
-          return res ? { id: res.id, post: res, removedEmoji: null } : null;
+          return res ? { id: res.id, post: withMentions(res), removedEmoji: null } : null;
         },
       }).catch((err) => {
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
