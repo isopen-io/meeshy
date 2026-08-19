@@ -83,7 +83,7 @@ final class StoryRepostFlowTests: XCTestCase {
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil,
             isRepostedByMe: nil, isViewedByMe: nil,
-            currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
+            currentUserReactions: nil, mentions: nil, viaUsername: nil
         )
     }
 
