@@ -1483,7 +1483,7 @@ Dans `services/gateway/src/services/posts/postIncludes.ts`, avant `postInclude` 
  * discriminant, qui se lisent pourtant INLINE et doivent donc apparaître. D'où
  * le `OR` explicite sur les trois modes visibles plus l'absence.
  */
-export const postMentionInclude = Prisma.validator<Prisma.Post$mentionsArgs>()({
+export const postMentionInclude = Prisma.validator<Prisma.Post$postMentionsArgs>()({
   where: {
     OR: [
       { display: { in: ['INLINE', 'PINNED', 'NOTE'] } },
@@ -1498,6 +1498,10 @@ export const postMentionInclude = Prisma.validator<Prisma.Post$mentionsArgs>()({
 });
 ```
 
+⚠️ **La relation s'appelle `postMentions`, pas `mentions`.** Le schéma nomme
+`Post.postMentions` là où `PostComment.mentions` et `Message.mentions` portent le nom court —
+écrire `mentions:` ici ne compile pas.
+
 Puis étendre `postInclude` :
 
 ```ts
@@ -1506,11 +1510,24 @@ export const postInclude = Prisma.validator<Prisma.PostInclude>()({
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
-  mentions: postMentionInclude,
+  postMentions: postMentionInclude,
 });
 ```
 
 `storyPostInclude` hérite par spread — rien à y faire.
+
+**La clé EXPOSÉE reste `mentions`.** Prisma rend la relation sous son nom de schéma, donc la
+charge utile brute porterait `post.postMentions` — redondant dans un post, et incohérent avec
+ce que les commentaires et les messages exposent déjà. Chaque chemin de lecture remappe donc
+explicitement :
+
+```ts
+const { postMentions, ...rest } = post;
+return { ...rest, mentions: toPostReferences(postMentions) };
+```
+
+C'est aussi ce qui garantit que la charge utile porte des `PostReference` aplaties plutôt que
+des lignes Prisma brutes — le client n'a jamais à connaître la forme de la table.
 
 - [ ] **Step 6: Retirer le re-parsing des routes de post**
 
@@ -1519,6 +1536,40 @@ Dans `services/gateway/src/routes/posts/feed.ts` : supprimer la fonction `collec
 Même retrait dans `core.ts` (lignes ~147, ~248, ~310), `comments.ts` (~89, ~129, ~377) et `interactions.ts`.
 
 **Ne pas toucher** à `services/gateway/src/routes/conversations/messages.ts:1380` : les messages continuent d'utiliser `resolveMentionedUsers`, et rien ne change pour eux.
+
+- [ ] **Step 6bis: Remapper `postMentions` → `mentions` sur les chemins de liste**
+
+`PostFeedService` rend ses items bruts : sans remappage, ils sortiraient avec `postMentions`,
+la relation Prisma, au lieu de `mentions`. Ajouter une fonction unique dans
+`services/gateway/src/services/posts/postReferences.ts` :
+
+```ts
+/**
+ * Le post tel qu'il quitte le serveur : `postMentions` (nom de la RELATION,
+ * imposé par le schéma) devient `mentions` (nom EXPOSÉ, aligné sur ce que les
+ * commentaires et les messages portent déjà), et les lignes brutes deviennent
+ * des `PostReference` aplaties.
+ *
+ * Une seule fonction pour tous les chemins de liste : le feed, les stories, les
+ * réels, les statuts et les posts d'un profil rendent tous des items bruts, et
+ * cinq remappages copiés divergeraient au premier champ ajouté.
+ */
+export function withMentions<T extends { postMentions?: unknown }>(
+  post: T
+): Omit<T, 'postMentions'> & { mentions: PostReference[] } {
+  const { postMentions, ...rest } = post;
+  return { ...rest, mentions: toPostReferences(postMentions as never) };
+}
+```
+
+Puis l'appliquer dans `PostFeedService` partout où des items sont rendus : `getFeed`,
+`getStories`, `getReels`, `getStatuses`, `getDiscoverStatuses`, `getUserPosts`,
+`getCommunityPosts`, `getBookmarks` — `result.items.map(withMentions)`.
+
+**Vérifier qu'aucun chemin n'est oublié** : après le remappage, un `grep -rn "postMentions"
+services/gateway/src/routes` ne doit rien rendre, et `grep -rn "postMentions"
+services/gateway/src/services` ne doit rendre que `postIncludes.ts`, `postReferences.ts`,
+`postMentions.ts` et `PostService.ts`.
 
 - [ ] **Step 7: Lancer la suite des routes de post**
 
@@ -1664,13 +1715,17 @@ Dans `services/gateway/src/services/PostService.ts`, méthode `getPostById`, rem
         // Le détail charge TOUTES les références, silencieuses comprises : c'est
         // `projectReferencesForViewer` qui décide de ce que CE lecteur en voit.
         // Filtrer ici priverait l'auteur de sa propre liste.
-        mentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
+        //
+        // `postMentions` est le nom de la RELATION (le schéma nomme
+        // `Post.postMentions`) ; la clé exposée au client, elle, est `mentions`.
+        postMentions: { select: { display: true, mentionedUser: { select: authorSelect } } },
       },
     });
     if (!post) return null;
 
+    const { postMentions, ...bare } = post;
     const references = projectReferencesForViewer({
-      references: toPostReferences(post.mentions),
+      references: toPostReferences(postMentions),
       authorId: post.authorId,
       viewerId: viewerUserId,
     });
@@ -1681,7 +1736,7 @@ Puis remplacer `mentions` par les références projetées dans chacun des deux `
 ```ts
     if (!viewerUserId) {
       return {
-        ...post,
+        ...bare,
         mentions: references,
         currentUserReactions: [],
         isLikedByMe: false,
@@ -1691,7 +1746,9 @@ Puis remplacer `mentions` par les références projetées dans chacun des deux `
     }
 ```
 
-Et, à la fin de la méthode, ajouter `mentions: references` à l'objet rendu.
+Et, à la fin de la méthode, rendre `bare` (et non `post`) enrichi de `mentions: references` —
+`bare` est le post **sans** la clé `postMentions`, pour que la relation brute ne fuite pas à
+côté de sa forme aplatie.
 
 Ajouter les imports en tête de fichier :
 
@@ -2988,6 +3045,8 @@ cd services/gateway && npx tsc --noEmit
 | **Lignes `PostMention` antérieures au discriminant** | ✅ `readDisplay` les lit INLINE ; `postMentionInclude` les inclut via la branche `isSet: false` |
 | **Apps iOS déjà installées** | ⚠️ **risque critique** — `PostMentionInput` n'a que `userId`/`username`. Un `display` requis aurait rendu 400 sur chaque publication de story portant une pastille. Neutralisé par `.default('PINNED')` (Task 3) et verrouillé par `postReferenceInputSchema.test.ts` |
 | **Stories publiées par le web avec un `@` dans un objet texte** | ℹ️ **changement de comportement voulu** : elles produiront désormais une référence INLINE là où elles n'en produisaient aucune. C'est la correction du défaut, pas une régression |
+| **Nom de la relation Prisma** | ⚠️ `Post.postMentions`, PAS `mentions` — le nom court n'existe que sur `PostComment` et `Message`. Un `include: { mentions: … }` ne compile pas. La clé exposée reste `mentions`, via `withMentions` (Task 5, Step 6bis) |
+| **`post.mentions` déjà servi par une API** | ✅ aucun include ne charge la relation aujourd'hui : le champ n'existe dans aucune réponse, et aucun client ne le décode. Rien à écraser |
 
 ## Ce que ce plan ne fait pas
 

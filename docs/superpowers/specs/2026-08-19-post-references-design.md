@@ -381,6 +381,13 @@ silencieuse** du nouveau champ.
 La charge utile porte la relation, résolue au chargement — donc avec le `displayName` et
 l'avatar **du moment**, jamais figés :
 
+> **Nom de la relation vs nom exposé.** Le schéma nomme `Post.postMentions`, là où
+> `PostComment.mentions` et `Message.mentions` portent le nom court. La charge utile expose
+> `mentions` — alignée sur les deux autres — via un remappage explicite ; servir
+> `post.postMentions` serait redondant dans un post et incohérent avec le reste de l'API.
+> Aucune réponse ne porte ce champ aujourd'hui (aucun include ne charge la relation), donc
+> rien n'est écrasé.
+
 ```jsonc
 // GET /posts/feed — NEUTRE, identique pour tous
 "mentions": [
