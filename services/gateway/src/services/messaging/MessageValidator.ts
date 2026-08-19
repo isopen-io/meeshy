@@ -60,7 +60,13 @@ export class MessageValidator {
     // Ce que l'exemption ouvre ici, `admitMessageForward` le referme plus bas
     // (`bodyOnlyFromSource`) : un corps entièrement emprunté à une source
     // muette ne doit rien faire naître.
-    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId) {
+    //
+    // `copyAttachmentsFromMessageId` porte la MÊME exemption pour la MÊME
+    // raison : une diffusion à plusieurs destinataires copie aussi ses pièces
+    // jointes côté serveur (`copyAttachments.ts`), sans jamais poser
+    // `forwardedFromId` — ce n'est pas un transfert. Sans cette ligne, une
+    // diffusion de média sans texte mourrait ici en CONTENT_EMPTY.
+    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId && !request.copyAttachmentsFromMessageId) {
       errors.push({
         field: 'content',
         message: 'Message content cannot be empty (unless attachments or encrypted payload are included)',

@@ -20,6 +20,7 @@ import {
 import { resolveMessageMentions } from './messageMentions';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
+import { copyAttachmentsFromMessage } from './copyAttachments';
 import { attachmentFullSelect } from '../attachments/attachmentIncludes';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { shouldProcessAudioAttachment } from '../../utils/transcription';
@@ -285,6 +286,12 @@ export class MessageProcessor {
     storyReplyToId?: string;
     forwardedFromId?: string;
     forwardedFromConversationId?: string;
+    /**
+     * Diffusion à plusieurs destinataires (pas un transfert) : copie
+     * serveur des pièces jointes du message désigné, mêmes fichiers, sans
+     * marque de transfert. Voir `handleAttachments` et `copyAttachments.ts`.
+     */
+    copyAttachmentsFromMessageId?: string;
     mentionedUserIds?: readonly string[];
     encryptedContent?: string;
     encryptionMetadata?: Prisma.InputJsonValue;
@@ -594,7 +601,8 @@ export class MessageProcessor {
     // optimistes avec `null`).
     const hasAttachmentLinks =
       (data.attachmentIds && data.attachmentIds.length > 0) ||
-      Boolean(data.forwardedFromId);
+      Boolean(data.forwardedFromId) ||
+      Boolean(data.copyAttachmentsFromMessageId);
     if (hasAttachmentLinks) {
       const refreshedAttachments = await performanceLogger.withTiming(
         'messaging.refreshAttachments',
@@ -635,10 +643,27 @@ export class MessageProcessor {
       senderId: string;
       attachmentIds?: readonly string[];
       forwardedFromId?: string;
+      copyAttachmentsFromMessageId?: string;
       conversationId: string;
     },
     message: Message
   ): Promise<void> {
+    // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
+    // des pièces jointes du message désigné. Volontairement HORS du
+    // try/catch ci-dessous — celui-ci absorbe les échecs du forward en
+    // best-effort (une source disparue dégrade en message ordinaire), mais
+    // une copie manquée ici doit faire ÉCHOUER l'envoi : sans elle le
+    // message créé n'a ni texte ni pièce jointe — une bulle vide et
+    // irrécupérable chez TOUS les destinataires de la diffusion.
+    if (data.copyAttachmentsFromMessageId) {
+      await copyAttachmentsFromMessage(this.prisma, {
+        sourceMessageId: data.copyAttachmentsFromMessageId,
+        targetMessageId: message.id,
+        requesterParticipantId: data.senderId,
+      });
+      return;
+    }
+
     try {
       // 1. Lier les attachments pré-uploadés
       if (data.attachmentIds && data.attachmentIds.length > 0) {

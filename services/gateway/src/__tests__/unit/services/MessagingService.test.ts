@@ -470,6 +470,32 @@ describe('MessagingService', () => {
         expect(written.forwardedFromId ?? null).toBeNull();
         expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
       });
+
+      // Diffuser à plusieurs destinataires n'est PAS transférer : la copie
+      // serveur des pièces jointes ne doit jamais poser `forwardedFromId` —
+      // sans quoi le destinataire verrait un badge « Transféré depuis … » qui
+      // révélerait le nom de la conversation d'un autre destinataire.
+      it('copie les pièces jointes SANS marquer le message comme transféré', async () => {
+        // Contrôle de propriété de `copyAttachmentsFromMessage` : seul
+        // l'auteur du message source peut en faire copier les pièces jointes.
+        // Le mock par défaut (`findUnique` → null) ferait refuser la copie ;
+        // ce test prouve le câblage côté ENVOI, la règle de propriété étant
+        // déjà prouvée par `copyAttachments.test.ts`.
+        mockPrisma.message.findUnique.mockResolvedValue({ senderId: testParticipantId });
+
+        const response = await service.handleMessage(
+          { ...validRequest, content: '', copyAttachmentsFromMessageId: '507f1f77bcf86cd799439099' },
+          testParticipantId
+        );
+        expect(response.success).toBe(true);
+        const written = mockPrisma.message.create.mock.calls[0][0].data;
+        expect(written.forwardedFromId ?? null).toBeNull();
+        // Preuve que la branche copie a bien tourné (pas un simple message
+        // texte vide qui laisserait passer l'assertion ci-dessus par hasard).
+        expect(mockPrisma.messageAttachment.findMany).toHaveBeenCalledWith({
+          where: { messageId: '507f1f77bcf86cd799439099' }
+        });
+      });
     });
 
     describe('conteneur TERMINAL et RANG D’ÉCRITURE — le conteneur gouverne enfin', () => {

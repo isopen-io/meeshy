@@ -120,6 +120,14 @@ export interface MessageRequest {
   readonly forwardedFromId?: string;        // ID du message original (transfert)
   readonly forwardedFromConversationId?: string; // ID de la conversation source (transfert cross-conversation)
 
+  /**
+   * Diffusion à plusieurs destinataires (PAS un transfert) : copie côté
+   * serveur des pièces jointes du message désigné vers le message en cours
+   * de création, mêmes fichiers, sans `forwardedFromId` ni marque de
+   * transfert sur les copies. Voir `services/messaging/copyAttachments.ts`.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+
   // Mentions d'utilisateurs - envoyées depuis le frontend
   readonly mentionedUserIds?: readonly string[];  // IDs des utilisateurs mentionnés (@user)
 

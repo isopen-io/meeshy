@@ -534,6 +534,14 @@ describe('SendMessageBodySchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // Diffusion à plusieurs destinataires (pas un transfert) : ses pièces
+  // jointes sont copiées CÔTÉ SERVEUR (copyAttachments.ts), le client
+  // n'envoie donc ni content ni attachmentIds — même exemption que forward.
+  it('accepts copyAttachmentsFromMessageId only', () => {
+    const result = SendMessageBodySchema.safeParse({ copyAttachmentsFromMessageId: 'msg-orig' });
+    expect(result.success).toBe(true);
+  });
+
   it('accepts encryptedContent only', () => {
     const result = SendMessageBodySchema.safeParse({ encryptedContent: 'enc123' });
     expect(result.success).toBe(true);

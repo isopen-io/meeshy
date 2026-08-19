@@ -115,6 +115,11 @@ export const SendMessageBodySchema = z.object({
   storyReplyToId: z.string().optional(),
   forwardedFromId: z.string().optional(),
   forwardedFromConversationId: z.string().optional(),
+  // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
+  // des pièces jointes du message désigné vers celui-ci, mêmes fichiers,
+  // sans `forwardedFromId` ni marque de transfert sur les copies. Voir
+  // `services/messaging/copyAttachments.ts`.
+  copyAttachmentsFromMessageId: z.string().optional(),
   encryptedContent: z.string().optional(),
   // Le mode arrive avec la casse du client : iOS émet « E2EE », et la
   // description OpenAPI de cette route annonçait « e2e » — deux valeurs que
@@ -152,6 +157,7 @@ export const SendMessageBodySchema = z.object({
     (data.content?.trim().length ?? 0) > 0 ||
     (data.attachmentIds?.length ?? 0) > 0 ||
     Boolean(data.forwardedFromId) ||
+    Boolean(data.copyAttachmentsFromMessageId) ||
     Boolean(data.encryptedContent),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
 ).refine(
@@ -1688,6 +1694,7 @@ export function registerMessagesRoutes(
         storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
+        copyAttachmentsFromMessageId,
         encryptedContent,
         encryptionMode,
         encryptionMetadata,
@@ -1783,6 +1790,7 @@ export function registerMessagesRoutes(
         replyToId,
         forwardedFromId,
         forwardedFromConversationId,
+        copyAttachmentsFromMessageId,
         mentionedUserIds,
         attachmentIds,
         isBlurred,

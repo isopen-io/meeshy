@@ -37,6 +37,10 @@ export interface SendMessageBody {
   // Forwarding fields
   forwardedFromId?: string;
   forwardedFromConversationId?: string;
+  // Diffusion à plusieurs destinataires (PAS un transfert) : copie serveur
+  // des pièces jointes du message désigné, mêmes fichiers, sans marque de
+  // transfert. Voir services/messaging/copyAttachments.ts.
+  copyAttachmentsFromMessageId?: string;
   // Encryption fields
   encryptedContent?: string;
   encryptionMode?: 'e2ee' | 'server' | 'hybrid';

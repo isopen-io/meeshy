@@ -25,6 +25,11 @@ export const SendMessageRequestSchema = z.object({
   replyToId: z.string().optional(),
   forwardedFromId: z.string().optional(),
   forwardedFromConversationId: z.string().optional(),
+  // Diffusion à plusieurs destinataires : copie SERVEUR des pièces jointes du
+  // message source vers celui-ci, mêmes fichiers, sans marque de transfert
+  // (ni `forwardedFromId` sur le message, ni `forwardedFromAttachmentId` /
+  // `isForwarded` sur les copies). Voir `services/messaging/copyAttachments.ts`.
+  copyAttachmentsFromMessageId: z.string().optional(),
   attachmentIds: z.array(z.string()).optional(),
   messageType: z.string().optional(),
 });
