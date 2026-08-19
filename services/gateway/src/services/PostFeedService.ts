@@ -14,6 +14,7 @@ import type { CacheStore } from './CacheStore';
 import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/communityVisibility';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
+import { verdictFor, type ReferenceAccessVerdict } from './posts/referenceAccess';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
@@ -279,7 +280,7 @@ export class PostFeedService {
           ],
         });
       }
-      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]));
+      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now);
     }
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -391,7 +392,7 @@ export class PostFeedService {
           .then((rows) => rows.map((r) => r.id))
       : () => Promise.resolve([]);
 
-    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory);
+    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now);
   }
 
   /**
@@ -408,6 +409,7 @@ export class PostFeedService {
     limit: number,
     isTrayProjection: boolean,
     deletedIdsFactory: () => Promise<string[]>,
+    now: Date,
   ) {
     // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
     // du plein corps — opt-in, le défaut reste l'include canonique complet.
@@ -442,7 +444,13 @@ export class PostFeedService {
     const storyIds = stories.map((s) => s.id);
     // Le tray ne rend pas les réactions — la requête batch est coupée en
     // projection ; isViewedByMe (anneau vu/non-vu) reste servi dans les deux.
-    const [viewedRows, userReactions] = storyIds.length > 0
+    //
+    // `referenceRows` : UNE requête pour tout le lot, pas un `findUnique` par
+    // story — même patron que `getMentionsByPost` pour l'affinité, même
+    // raison. Le verdict de chaque story se résout ensuite EN MÉMOIRE par
+    // `verdictFor`, le même cœur pur qu'appelle `resolveReferenceAccess` sur
+    // l'ouverture détaillée : deux lectures, une seule règle.
+    const [viewedRows, userReactions, referenceRows] = storyIds.length > 0
       ? await Promise.all([
           this.prisma.postView.findMany({
             where: { postId: { in: storyIds }, userId },
@@ -454,8 +462,12 @@ export class PostFeedService {
                 where: { userId, postId: { in: storyIds } },
                 select: { postId: true, emoji: true },
               }),
+          this.prisma.postMention.findMany({
+            where: { postId: { in: storyIds }, mentionedUserId: userId },
+            select: { postId: true, expiredViewAt: true },
+          }),
         ])
-      : [[], []];
+      : [[], [], []];
     const viewedSet = new Set(viewedRows.map((v) => v.postId));
     const userReactionsMap = new Map<string, string[]>();
     for (const r of userReactions) {
@@ -463,15 +475,26 @@ export class PostFeedService {
       list.push(r.emoji);
       userReactionsMap.set(r.postId, list);
     }
+    const referenceByPost = new Map(referenceRows.map((row) => [row.postId, row.expiredViewAt]));
 
     // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
     // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
     // toute façon pas de badge de lieu (anneaux + miniature seuls).
-    const items = stories.map((s) => withMentions(hoistLocationDeep({
-      ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
-      isViewedByMe: viewedSet.has(s.id),
-      currentUserReactions: userReactionsMap.get(s.id) ?? [],
-    })));
+    const items = stories.map((s) => {
+      // `s` n'est visible dans la requête que si `userId` en a le droit — soit
+      // par l'audience ordinaire, soit parce qu'il y est référencé. `none` ne
+      // dit donc pas « inaccessible » ici : il dit « rien à dépenser », et
+      // l'audience ordinaire tranche l'affichage comme avant.
+      const referenceAccess: ReferenceAccessVerdict = referenceByPost.has(s.id)
+        ? verdictFor(s.expiresAt, referenceByPost.get(s.id), now)
+        : 'none';
+      return withMentions(hoistLocationDeep({
+        ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
+        isViewedByMe: viewedSet.has(s.id),
+        currentUserReactions: userReactionsMap.get(s.id) ?? [],
+        referenceAccess,
+      }));
+    });
 
     const fetchedDeletedIds = await deletedIdsPromise;
     const deletedIdsTruncated = fetchedDeletedIds.length > STORY_TOMBSTONE_LIMIT;

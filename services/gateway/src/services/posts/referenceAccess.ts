@@ -46,6 +46,35 @@ export type ReferenceAccessVerdict = 'none' | 'granted' | 'consumed';
 /** Durée pendant laquelle un contenu expiré reste ouvrable après la première vue. */
 export const REFERENCE_VIEW_WINDOW_MS = 24 * 3600_000;
 
+/**
+ * Le cœur PUR de la décision — une fois qu'on sait qu'une référence existe.
+ *
+ * Extrait pour être appelé par LES DEUX lectures : `resolveReferenceAccess`
+ * (unitaire, un `findUnique`) et `PostFeedService.getStories` (le tray,
+ * résolu en mémoire depuis un `findMany` groupé — un `findUnique` par story y
+ * serait N+1). Sans cette extraction, les deux auraient porté chacune sa
+ * propre copie de la même règle, et l'une aurait fini par diverger de
+ * l'autre — c'est exactement le risque que cette unité existe pour fermer.
+ *
+ * Ne décide PAS `none` : l'absence de référence se constate différemment
+ * selon la lecture (une ligne `null`, une clé absente d'une `Map`), donc
+ * chaque appelant la tranche lui-même avant d'appeler cette fonction.
+ */
+export function verdictFor(
+  expiresAt: Date | null,
+  expiredViewAt: Date | null | undefined,
+  now: Date,
+): Exclude<ReferenceAccessVerdict, 'none'> {
+  // Contenu vivant : la référence n'a rien à dépenser. Une fenêtre close par
+  // une expiration PASSÉE ne doit pas fermer un contenu republié depuis.
+  const expired = expiresAt !== null && expiresAt.getTime() <= now.getTime();
+  if (!expired) return 'granted';
+
+  if (!expiredViewAt) return 'granted';
+
+  return now.getTime() - expiredViewAt.getTime() < REFERENCE_VIEW_WINDOW_MS ? 'granted' : 'consumed';
+}
+
 export async function resolveReferenceAccess(params: {
   prisma: ReferenceAccessPrisma;
   post: ReferenceAccessPost;
@@ -62,15 +91,7 @@ export async function resolveReferenceAccess(params: {
     });
     if (!reference) return 'none';
 
-    // Contenu vivant : la référence n'a rien à dépenser. Une fenêtre close par
-    // une expiration PASSÉE ne doit pas fermer un contenu republié depuis.
-    const expired = post.expiresAt !== null && post.expiresAt.getTime() <= now.getTime();
-    if (!expired) return 'granted';
-
-    const openedAt = reference.expiredViewAt;
-    if (!openedAt) return 'granted';
-
-    return now.getTime() - openedAt.getTime() < REFERENCE_VIEW_WINDOW_MS ? 'granted' : 'consumed';
+    return verdictFor(post.expiresAt, reference.expiredViewAt, now);
   } catch {
     // Une lecture en échec ne doit pas OUVRIR un contenu : `none` laisse la
     // règle d'audience ordinaire trancher, ce qui est la réponse sûre.
@@ -118,4 +139,30 @@ export async function consumeReferenceView(params: {
   } catch {
     // Silencieux à dessein : l'appelant a déjà rendu le contenu.
   }
+}
+
+/**
+ * Pose le verdict sur la charge utile d'un contenu.
+ *
+ * Il voyage AVEC le contenu parce que le client ne peut pas le déduire : il ne
+ * voit que `expiresAt`, et la référence lui est invisible. Sans ce champ, un
+ * viewer refuserait d'afficher un contenu que le serveur autorise — il calcule
+ * l'expiration en local (`StoryItem.isExpired`), et c'est tout ce qu'il sait.
+ *
+ * Le client garde `isExpired()` pour ce qu'il sait faire — masquer du tray,
+ * griser un aperçu — mais l'OUVERTURE obéit à ce champ.
+ */
+export async function attachReferenceAccess<T extends ReferenceAccessPost>(params: {
+  prisma: ReferenceAccessPrisma;
+  post: T;
+  viewerId: string | undefined;
+  now: Date;
+}): Promise<T & { referenceAccess: ReferenceAccessVerdict }> {
+  const referenceAccess = await resolveReferenceAccess({
+    prisma: params.prisma,
+    post: params.post,
+    viewerId: params.viewerId,
+    now: params.now,
+  });
+  return { ...params.post, referenceAccess };
 }

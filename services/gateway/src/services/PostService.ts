@@ -22,7 +22,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
-import { consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
+import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
@@ -670,16 +670,27 @@ export class PostService {
       viewerId: viewerUserId,
     });
 
+    // Un seul `now` pour les deux branches ci-dessous : le viewer calcule
+    // l'expiration en local et ne voit pas la référence — sans ce verdict dans
+    // la charge utile, il refuserait d'afficher un contenu que le serveur
+    // autorise.
+    const now = new Date();
+
     // Anonymous read: no viewer-specific state to resolve.
     if (!viewerUserId) {
-      return {
-        ...bare,
-        mentions,
-        currentUserReactions: [],
-        isLikedByMe: false,
-        isBookmarkedByMe: false,
-        isRepostedByMe: false,
-      };
+      return attachReferenceAccess({
+        prisma: this.prisma,
+        post: {
+          ...bare,
+          mentions,
+          currentUserReactions: [],
+          isLikedByMe: false,
+          isBookmarkedByMe: false,
+          isRepostedByMe: false,
+        },
+        viewerId: viewerUserId,
+        now,
+      });
     }
 
     // Personal-state enrichment, identical to PostFeedService so the post
@@ -726,14 +737,19 @@ export class PostService {
     ]);
     const currentUserReactions = userReactions.map((r) => r.emoji);
 
-    return {
-      ...bare,
-      mentions,
-      currentUserReactions,
-      isLikedByMe: currentUserReactions.length > 0,
-      isBookmarkedByMe: viewerBookmark !== null,
-      isRepostedByMe: viewerRepostCount > 0,
-    };
+    return attachReferenceAccess({
+      prisma: this.prisma,
+      post: {
+        ...bare,
+        mentions,
+        currentUserReactions,
+        isLikedByMe: currentUserReactions.length > 0,
+        isBookmarkedByMe: viewerBookmark !== null,
+        isRepostedByMe: viewerRepostCount > 0,
+      },
+      viewerId: viewerUserId,
+      now,
+    });
   }
 
   /**

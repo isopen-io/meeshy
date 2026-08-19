@@ -792,6 +792,69 @@ describe('PostFeedService.getStories', () => {
 });
 
 // ---------------------------------------------------------------------------
+// PostFeedService.getStories — referenceAccess (Task 11, plan
+// 2026-08-19-post-references-gateway). Le verdict voyage AVEC la story : le
+// client calcule l'expiration en local et ne voit pas la référence.
+// ---------------------------------------------------------------------------
+
+describe('PostFeedService.getStories — referenceAccess', () => {
+  beforeEach(() => {
+    mockPostViewFindMany.mockResolvedValue([]);
+    mockPostReactionFindMany.mockResolvedValue([]);
+  });
+
+  it('pose "none" quand le lecteur n\'est référencé par aucune story', async () => {
+    const story = makePost('s-ref-1', { type: 'STORY' });
+    mockPostFindMany.mockResolvedValue([story]);
+    mockPostMentionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect((result.items[0] as any).referenceAccess).toBe('none');
+  });
+
+  it('pose "granted" sur une story EXPIRÉE dont la référence n\'a jamais été ouverte', async () => {
+    const story = makePost('s-ref-2', { type: 'STORY', expiresAt: new Date('2020-01-01T00:00:00Z') });
+    mockPostFindMany.mockResolvedValue([story]);
+    mockPostMentionFindMany.mockResolvedValue([{ postId: 's-ref-2', expiredViewAt: null }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect((result.items[0] as any).referenceAccess).toBe('granted');
+  });
+
+  it('pose "consumed" sur une story EXPIRÉE dont la fenêtre de 24h est dépassée', async () => {
+    const story = makePost('s-ref-3', { type: 'STORY', expiresAt: new Date('2020-01-01T00:00:00Z') });
+    mockPostFindMany.mockResolvedValue([story]);
+    mockPostMentionFindMany.mockResolvedValue([
+      { postId: 's-ref-3', expiredViewAt: new Date('2019-01-01T00:00:00Z') },
+    ]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getStories('user-1');
+
+    expect((result.items[0] as any).referenceAccess).toBe('consumed');
+  });
+
+  it('lit les références du lot en UNE seule requête groupée — pas un findUnique par story', async () => {
+    const stories = [makePost('s-ref-a', { type: 'STORY' }), makePost('s-ref-b', { type: 'STORY' })];
+    mockPostFindMany.mockResolvedValue(stories);
+    mockPostMentionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getStories('user-1');
+
+    expect(mockPostMentionFindMany).toHaveBeenCalledTimes(1);
+    expect(mockPostMentionFindMany).toHaveBeenCalledWith({
+      where: { postId: { in: ['s-ref-a', 's-ref-b'] }, mentionedUserId: 'user-1' },
+      select: { postId: true, expiredViewAt: true },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PostFeedService.getUserPosts — currentUserReactions enrichment
 // ---------------------------------------------------------------------------
 
