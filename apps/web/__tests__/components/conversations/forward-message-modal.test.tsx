@@ -487,6 +487,44 @@ describe('ForwardMessageModal', () => {
     );
   });
 
+  // `GET /conversations/search` retourne DÉLIBÉRÉMENT les conversations
+  // `public`/`global` dont l'appelant n'est pas membre (elle sert aussi la
+  // recherche globale). Les offrir comme cible produit « Permissions
+  // insuffisantes pour envoyer des messages » : une cible qui ne peut jamais
+  // fonctionner. Jumeau iOS : ForwardPickerViewModelTests
+  // .test_search_dropsPublicRoomWhereUserIsNotAMember
+  it("n'offre pas un salon public dont l'utilisateur n'est pas membre", async () => {
+    jest.spyOn(conversationsService, 'searchConversations').mockResolvedValue([
+      {
+        id: 'conv-public-foreign',
+        title: 'Photographie',
+        type: 'public',
+        isActive: true,
+        participants: [
+          { id: 'p-x', userId: 'user-77', user: { id: 'user-77', displayName: 'Autre', username: 'autre' } },
+        ],
+      },
+      {
+        id: 'conv-public-joined',
+        title: 'Photo perso',
+        type: 'public',
+        isActive: true,
+        participants: [
+          { id: 'p-x', userId: 'user-77', user: { id: 'user-77', displayName: 'Autre', username: 'autre' } },
+          { id: 'p-me', userId: 'user-1', user: { id: 'user-1', displayName: 'Moi', username: 'moi' } },
+        ],
+      },
+    ] as never);
+    renderModal();
+
+    await userEvent.type(screen.getByRole('textbox'), 'photo');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('forward-row-conv-public-joined')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('forward-row-conv-public-foreign')).toBeNull();
+  });
+
   it("rejette une réponse de recherche devenue périmée quand la requête redescend sous 2 caractères", async () => {
     let resolveDirectory: (value: { contacts: DirectoryContact[]; hasMore: boolean }) => void = () => {};
     mockDirectoryList.mockImplementation(

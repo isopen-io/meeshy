@@ -164,6 +164,13 @@ final class ForwardPickerViewModel: ObservableObject {
         do {
             let apiConversations = try await conversationService.search(query: query)
             return apiConversations
+                .filter { conversation in
+                    ForwardTargetMerge.isReachableConversation(
+                        type: conversation.type,
+                        participantUserIds: (conversation.participants ?? []).compactMap(\.userId),
+                        currentUserId: currentUserId
+                    )
+                }
                 .map { $0.toConversation(currentUserId: currentUserId) }
                 .map(Self.makeTarget)
         } catch {

@@ -16,7 +16,11 @@ import { conversationsService } from '@/services/conversations.service';
 import { contactsDirectoryService, type DirectoryContact } from '@/services/contacts-directory.service';
 import { useFriendRequestsV2 } from '@/hooks/v2/use-friend-requests-v2';
 import { ForwardPickerModel, type TargetState } from '@/lib/forward-picker-model';
-import { mergeForwardTargets, type ForwardTarget } from '@/lib/forward-target-merge';
+import {
+  isReachableForwardConversation,
+  mergeForwardTargets,
+  type ForwardTarget,
+} from '@/lib/forward-target-merge';
 import { generateClientMessageId } from '@/utils/client-message-id';
 import { getConversationNameOnly } from './conversation-item/conversation-utils';
 import { resolveOtherDirectParticipantUser } from './lentille/lentille-row-utils';
@@ -247,6 +251,15 @@ export function ForwardMessageModal({
         conversationsOutcome.status === 'fulfilled'
           ? conversationsOutcome.value
               .filter((conv) => conv.id !== sourceConversationId)
+              // Filtre d'appartenance (spec S.1) : la recherche serveur rend
+              // aussi les salons publics dont on n'est PAS membre.
+              .filter((conv) =>
+                isReachableForwardConversation(
+                  conv.type,
+                  (conv.participants ?? []).map((p) => p.userId ?? p.user?.id ?? '').filter(Boolean),
+                  currentUserId,
+                ),
+              )
               .map((conv) => conversationToTarget(conv, currentUserId))
           : [];
       const directoryTargets =

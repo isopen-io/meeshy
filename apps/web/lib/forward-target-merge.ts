@@ -43,3 +43,38 @@ export function mergeForwardTargets(
 
   return out;
 }
+
+const OPEN_CONVERSATION_TYPES = new Set(['public', 'global']);
+
+/**
+ * Une conversation trouvée par `GET /conversations/search` n'est une cible de
+ * transfert que si l'utilisateur peut y ÉCRIRE, donc s'il en est membre.
+ *
+ * La route retourne délibérément aussi les conversations `public`/`global` dont
+ * l'appelant n'est PAS membre (`search.ts:131-137`) — elle sert aussi la
+ * recherche globale, qui les veut. Offrir un salon public homonyme comme cible
+ * produit « Permissions insuffisantes pour envoyer des messages » : une cible
+ * qui ne peut jamais fonctionner.
+ *
+ * Deux branches, parce que la clause `WHERE` de la route en a deux :
+ * - tout type AUTRE que `public`/`global` n'a pu être trouvé que par
+ *   `participants some { userId }` — appartenance garantie par construction ;
+ * - pour `public`/`global`, seul le tableau `participants` du corps le dit.
+ *
+ * LIMITE CONNUE : ce tableau est tronqué à 5 par le `include` de la route. Un
+ * salon public de plus de 5 membres dont on EST membre peut donc être écarté à
+ * tort ; le seul correctif exact est serveur (émettre la ligne de participant
+ * de l'appelant, ou un drapeau d'appartenance).
+ *
+ * RÈGLE JUMELLE : `ForwardTargetMerge.isReachableConversation`
+ * (`apps/ios/Meeshy/Features/Main/Components/ForwardTargetMerge.swift`).
+ */
+export function isReachableForwardConversation(
+  type: string | null | undefined,
+  participantUserIds: readonly string[],
+  currentUserId: string | null | undefined,
+): boolean {
+  if (!OPEN_CONVERSATION_TYPES.has((type ?? '').toLowerCase())) return true;
+  if (!currentUserId) return false;
+  return participantUserIds.includes(currentUserId);
+}

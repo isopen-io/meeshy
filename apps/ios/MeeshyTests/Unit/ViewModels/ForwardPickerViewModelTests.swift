@@ -62,6 +62,27 @@ final class ForwardPickerViewModelTests: XCTestCase {
         )
     }
 
+    /// Un salon `public` tel que le rend `GET /conversations/search` : la route
+    /// le retourne même si l'appelant n'en est PAS membre (`search.ts:131-137`).
+    private func makePublicAPIConv(_ id: String, memberUserIds: [String]) -> APIConversation {
+        APIConversation(
+            id: id,
+            type: "public",
+            title: "Salon \(id)",
+            participants: memberUserIds.map { uid in
+                APIParticipant(
+                    id: "p-\(uid)",
+                    conversationId: id,
+                    type: .user,
+                    userId: uid,
+                    displayName: "User \(uid)",
+                    role: "MEMBER"
+                )
+            },
+            createdAt: Date()
+        )
+    }
+
     private func makeAccepted(otherId: String, currentUserId: String = "me", username: String? = nil) -> FriendRequest {
         FriendRequestFixture.make(
             id: "fr-\(otherId)",
@@ -160,6 +181,25 @@ final class ForwardPickerViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.targets.map(\.id), ["conv:c1"],
                        "effacer la recherche doit restaurer les cibles de navigation")
+    }
+
+    /// `GET /conversations/search` retourne DÉLIBÉRÉMENT les conversations
+    /// `public`/`global` dont l'appelant n'est pas membre — elle sert aussi la
+    /// recherche globale. Les offrir comme cible de transfert produit
+    /// « Permissions insuffisantes pour envoyer des messages » : une cible qui
+    /// ne peut jamais fonctionner. Le sélecteur ne retient donc que celles dont
+    /// l'utilisateur est membre.
+    func test_search_dropsPublicRoomWhereUserIsNotAMember() async {
+        let (sut, service) = makeSUT(currentUserId: "me")
+        service.searchResult = .success([
+            makePublicAPIConv("cPublic", memberUserIds: ["u1", "u2"]),
+            makePublicAPIConv("cJoined", memberUserIds: ["u1", "me"])
+        ])
+
+        await sut.search("photo")
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cJoined"],
+                       "un salon public dont on n'est pas membre ne doit jamais être offert comme cible")
     }
 
     func test_search_belowTwoCharacters_doesNotHitTheNetwork() async {
