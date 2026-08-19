@@ -239,14 +239,20 @@ export class MentionService {
   async resolveUsernames(usernames: string[]): Promise<Map<string, User>> {
     if (usernames.length === 0) return new Map();
 
-    // Ne pas filtrer sur isActive/deletedAt pour cohérence avec l'autocomplete
-    // Si un utilisateur apparaît dans l'autocomplete (membre de conversation),
-    // il doit pouvoir être mentionné même s'il est "inactif"
-
+    // Règle unique écriture/lecture : `deletedAt` exclut, `isActive` n'exclut
+    // pas. Un compte supprimé n'est pas référençable ; un compte inactif l'est
+    // — c'est déjà le choix assumé de l'autocomplete, et quelqu'un qui apparaît
+    // dans le sélecteur doit pouvoir être nommé. Sans le premier filtre,
+    // l'écriture persistait des références que la lecture n'affichait jamais.
+    //
+    // `isSet: false` et non `null` : sous MongoDB, un compte jamais supprimé ne
+    // porte pas la clé du tout, et `{ deletedAt: null }` ne le matcherait pas.
+    //
     // Note: mode: 'insensitive' ne fonctionne PAS avec 'in' dans Prisma + MongoDB
     // On doit utiliser $or avec equals pour chaque username
     const users = await this.prisma.user.findMany({
       where: {
+        deletedAt: { isSet: false },
         OR: usernames.map(username => ({
           username: {
             equals: username,

@@ -172,11 +172,15 @@ export function registerCoreRoutes(
           visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
         },
         content: postContent,
-        // Les nommés que le TEXTE ne porte pas : pastille posée sur le canevas
-        // d'une story, choix dans un sélecteur. Sans ce canal, les nommer
-        // imposait d'écrire leur `@handle` dans la légende — une phrase
-        // inventée pour satisfaire l'extracteur, visible de tous et traduite
-        // par le Prisme comme du contenu d'auteur.
+        // Le texte d'une story ne vit pas dans sa légende : il vit dans les
+        // objets de canevas. Sans ce champ, un `@handle` tapé sur une slide ne
+        // nommait personne.
+        storyEffects: parsed.data.storyEffects,
+        // Les nommés que le TEXTE ne porte pas : badge posé sur le canevas
+        // d'une story, note sous le contenu, métadonnée silencieuse. Sans ce
+        // canal, les nommer imposait d'écrire leur `@handle` dans la légende —
+        // une phrase inventée pour satisfaire l'extracteur, visible de tous et
+        // traduite par le Prisme comme du contenu d'auteur.
         declared: parsed.data.mentions,
         onError: (err: unknown) => {
           fastify.log.error(`[POST /posts] post mention reconcile failed: ${err}`);
@@ -330,7 +334,10 @@ export function registerCoreRoutes(
           visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
         },
         content: editedContent,
-        // TRI-ÉTAT : clé absente = les pastilles du canevas survivent, `[]` =
+        // Même source de texte qu'à la création : la légende ET les objets de
+        // canevas.
+        storyEffects: parsed.data.storyEffects,
+        // TRI-ÉTAT : clé absente = les références déclarées survivent, `[]` =
         // elles partent. Les déduire du texte les effacerait à la première
         // correction de frappe — elles n'y sont pas, c'est leur raison d'être.
         declared: parsed.data.mentions,

@@ -112,6 +112,17 @@ const StoryTextObjectSchema = z.object({
   duration: z.number().min(0).max(86400).optional(),
   sourceLanguage: z.string().max(STORY_LANG_MAX).optional(),
   translations: z.record(z.string(), z.string().max(STORY_TEXT_MAX)).optional(),
+  /**
+   * `User.id` quand cet objet EST un badge de référence, absent pour du texte
+   * libre. C'est LUI que `collectMentionableText` lit pour exclure le badge de
+   * la dérivation INLINE — sans quoi chaque badge se retransformerait en
+   * mention de texte à la première édition.
+   *
+   * `passthrough()` le laisserait déjà passer, mais NON BORNÉ : seul le
+   * garde-fou global de 256 KB l'arrêterait, et un champ que le serveur LIT
+   * mérite d'être validé comme les autres.
+   */
+  referenceUserId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
 }).passthrough();
 
 const StoryStickerObjectSchema = z.object({
@@ -178,12 +189,6 @@ export const StoryEffectsSchema = z.object({
 /**
  * Une personne que le post NOMME sans que son texte le dise.
  *
- * `POST /posts` n'avait aucun canal de mention : le gateway extrayait les
- * `@handle` du seul `content`. Épingler quelqu'un sur le canevas d'une story
- * imposait donc d'écrire son pseudo dans la légende — une phrase inventée pour
- * satisfaire l'extracteur, visible par tout le monde, et traduite par le Prisme
- * comme du contenu d'auteur.
- *
  * `userId` OU `username`, au moins l'un des deux. Les deux existent parce que
  * les deux appelants sont réels : un sélecteur rend un `User.id`, tandis qu'un
  * canevas ne porte que le `@handle` qu'il affiche — et c'est LUI qui survit à
@@ -191,10 +196,28 @@ export const StoryEffectsSchema = z.object({
  * en parallèle des effets. Le serveur résout les pseudos avec la MÊME fonction
  * que l'extraction de texte (`MentionService.resolveUsernames`), donc les deux
  * voies ne peuvent pas diverger.
+ *
+ * `display` n'accepte PAS `INLINE` : le client ne déclare que ce que le texte
+ * ne peut pas porter. INLINE est dérivé par le serveur, qui relit les `@handle`
+ * de la légende ET des objets de canevas — accepter une déclaration INLINE
+ * ouvrirait un second chemin vers le même fait, et les deux divergeraient au
+ * premier désaccord.
  */
-export const PostMentionInputSchema = z.object({
+export const PostReferenceInputSchema = z.object({
   userId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   username: z.string().min(1).max(64).optional(),
+  /**
+   * OPTIONNEL, défaut PINNED — et ce n'est pas une commodité.
+   *
+   * `PostMentionInput` (SDK iOS) ne porte que `userId` et `username` : toute
+   * app DÉJÀ INSTALLÉE envoie `{ username }` nu. Le rendre requis ferait
+   * échouer la validation et rendrait 400 sur toute publication de story
+   * portant une pastille, pour chaque version en circulation.
+   *
+   * PINNED parce que c'est EXACTEMENT ce que faisait l'ancien canal CANVAS :
+   * un client ancien continue de se comporter à l'identique, sans le savoir.
+   */
+  display: z.enum(['PINNED', 'NOTE', 'SILENT']).default('PINNED'),
 }).refine((m) => Boolean(m.userId || m.username), {
   message: 'userId ou username requis',
 });
@@ -219,12 +242,11 @@ export const CreatePostSchema = z.object({
   originalLanguage: z.string().min(2).max(5).optional(),
   // Media IDs (already uploaded)
   mediaIds: z.array(z.string()).max(10).optional(),
-  // Mentions DÉCLARÉES — celles que le texte ne porte pas (pastille sur le
-  // canevas d'une story, choix dans un sélecteur). Elles s'AJOUTENT à celles
-  // que le contenu nomme ; elles ne les remplacent pas. Persistées avec
-  // `source: CANVAS` pour que l'édition sache lesquelles relire dans le texte
-  // et lesquelles n'y sont pas.
-  mentions: z.array(PostMentionInputSchema).max(50).optional(),
+  // Références DÉCLARÉES — celles que le texte ne porte pas (badge sur le
+  // canevas d'une story, note sous le contenu, métadonnée silencieuse). Chacune
+  // porte son mode d'exposition, que l'édition relit pour savoir lesquelles
+  // sont dans le texte et lesquelles n'y sont pas.
+  mentions: z.array(PostReferenceInputSchema).max(50).optional(),
   // Mobile transcription for audio media
   mobileTranscription: MobileTranscriptionSchema.optional(),
   // Repost source ID (for StoryComposer publishing a repost via POST /posts)
@@ -322,11 +344,11 @@ export const UpdatePostSchema = z.object({
   // Ids of attached media (PostMedia) to detach during the edit. Only media
   // belonging to this post is removed; a reel must keep at least one media.
   removeMediaIds: z.array(z.string()).max(50).optional(),
-  // Mentions déclarées — TRI-ÉTAT, même contrat que `location` : clé ABSENTE =
-  // inchangées (le texte seul est relu), `[]` = plus aucune mention déclarée,
-  // liste = remplace l'ensemble déclaré. Les mentions issues du TEXTE sont
-  // réconciliées à part, depuis `content`, à chaque édition.
-  mentions: z.array(PostMentionInputSchema).max(50).optional(),
+  // Références déclarées — TRI-ÉTAT, même contrat que `location` : clé ABSENTE =
+  // inchangées (le texte seul est relu), `[]` = plus aucune référence déclarée,
+  // liste = remplace l'ensemble déclaré. Les références issues du TEXTE sont
+  // réconciliées à part, depuis la légende et le canevas, à chaque édition.
+  mentions: z.array(PostReferenceInputSchema).max(50).optional(),
   // Ids of freshly uploaded media (PostMedia created by TUS with postId=null)
   // to attach during the edit — same contract and bound as CreatePostSchema.
   // On a STORY this counts as a content edit (engagement reset).

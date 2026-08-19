@@ -172,7 +172,7 @@ describe('resolvePostMentions — création', () => {
 });
 
 describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
-  it('persiste et prévient une pastille de canevas que le texte ne nomme pas', async () => {
+  it('persiste et prévient un badge de canevas que le texte ne nomme pas', async () => {
     const prisma = makePrisma();
     const mentionService = makeMentionService({
       extractMentions: jest.fn<any>().mockReturnValue([]),
@@ -185,7 +185,7 @@ describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
     const result = await resolvePostMentions({
       prisma, mentionService, notificationService, post: POST,
       content: 'une story sans une seule arobase',
-      declared: [{ username: 'bob' }],
+      declared: [{ username: 'bob', display: 'PINNED' }],
     });
 
     expect(result.mentionedUserIds).toEqual(['u-bob']);
@@ -203,26 +203,11 @@ describe('resolvePostMentions — mentions DÉCLARÉES (hors texte)', () => {
 
     await resolvePostMentions({
       prisma, mentionService, notificationService: makeNotifier(), post: POST,
-      content: null, declared: [{ userId: 'u-direct' }],
+      content: null, declared: [{ userId: 'u-direct', display: 'PINNED' }],
     });
 
     expect(mentionService.resolveUsernames).not.toHaveBeenCalled();
     expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-direct'], 'PINNED');
-  });
-
-  /// Nommée des deux côtés, la personne compte comme mention de TEXTE : c'est
-  /// la voie que l'édition relit, donc celle qui gouverne sa survie.
-  it('classe en INLINE une personne nommée à la fois dans le texte et déclarée', async () => {
-    const prisma = makePrisma();
-    const mentionService = makeMentionService();
-
-    await resolvePostMentions({
-      prisma, mentionService, notificationService: makeNotifier(), post: POST,
-      content: 'salut @alice', declared: [{ userId: 'u-alice' }],
-    });
-
-    expect(mentionService.createPostMentions).toHaveBeenCalledTimes(1);
-    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'INLINE');
   });
 
   it('ne touche à rien quand ni le texte ni la déclaration ne nomment personne', async () => {
@@ -468,5 +453,144 @@ describe('reconcilePostMentions — édition', () => {
     expect(notificationService.createPostMentionNotificationsBatch).toHaveBeenCalledWith(
       expect.objectContaining({ postType: 'REEL', mentionedUserIds: ['u-alice'] })
     );
+  });
+});
+
+describe('resolvePostMentions — précédence des modes', () => {
+  it('laisse un PINNED déclaré gagner sur le texte qui nomme la même personne', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+    const notificationService = makeNotifier();
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: 'bravo @alice',
+      declared: [{ username: 'alice', display: 'PINNED' }],
+    });
+
+    expect(mentionService.createPostMentions).toHaveBeenCalledTimes(1);
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'PINNED');
+  });
+
+  it('fait perdre un SILENT déclaré contre le texte — on ne cache pas ce qui est écrit', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+    const notificationService = makeNotifier();
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: 'bravo @alice',
+      declared: [{ username: 'alice', display: 'SILENT' }],
+    });
+
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'INLINE');
+  });
+
+  it('dérive INLINE depuis le texte du CANEVAS, pas seulement depuis la légende', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+    const notificationService = makeNotifier();
+
+    await resolvePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: null,
+      storyEffects: { textObjects: [{ id: 't1', text: 'coucou @alice' }] },
+    });
+
+    expect(mentionService.createPostMentions).toHaveBeenCalledWith('post-1', ['u-alice'], 'INLINE');
+  });
+
+  it('n\'interroge NI la base NI le service quand aucune source ne porte de @ ni de déclaration', async () => {
+    const prisma = makePrisma();
+    const mentionService = makeMentionService();
+    const notificationService = makeNotifier();
+
+    const result = await resolvePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: 'rien ici',
+      storyEffects: { textObjects: [{ id: 't1', text: 'ni la' }] },
+    });
+
+    expect(result.reconciled).toBe(true);
+    expect(mentionService.extractMentions).not.toHaveBeenCalled();
+    expect(mentionService.createPostMentions).not.toHaveBeenCalled();
+  });
+});
+
+describe('reconcilePostMentions — tri-état par mode déclaré', () => {
+  it('préserve les trois modes déclarés quand le client n\'en parle pas', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-bob', display: 'PINNED' },
+          { mentionedUserId: 'u-carol', display: 'SILENT' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+
+    const result = await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte sans arobase',
+      declared: undefined,
+    });
+
+    expect(prisma.postMention.deleteMany).not.toHaveBeenCalled();
+    expect(result.mentionedUserIds).toEqual(expect.arrayContaining(['u-bob', 'u-carol']));
+    expect(result.reconciled).toBe(true);
+  });
+
+  it('efface toutes les déclarées quand le client envoie une liste vide', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-bob', display: 'NOTE' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte sans arobase',
+      declared: [],
+    });
+
+    expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
+      where: { postId: 'post-1', mentionedUserId: { in: ['u-bob'] } },
+    });
+  });
+
+  it('lit une ligne sans champ display comme INLINE — donc relue dans le texte', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-alice', display: null },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'le pseudo a disparu du texte',
+      declared: undefined,
+    });
+
+    expect(prisma.postMention.deleteMany).toHaveBeenCalledWith({
+      where: { postId: 'post-1', mentionedUserId: { in: ['u-alice'] } },
+    });
   });
 });

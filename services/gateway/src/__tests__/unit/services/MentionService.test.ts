@@ -387,6 +387,9 @@ describe('MentionService', () => {
 
       expect(prisma.user.findMany).toHaveBeenCalledWith({
         where: {
+          // `isSet: false` et non `null` : sous MongoDB un compte jamais
+          // supprimé ne porte pas la clé du tout.
+          deletedAt: { isSet: false },
           OR: [
             { username: { equals: 'alice', mode: 'insensitive' } },
             { username: { equals: 'bob', mode: 'insensitive' } },

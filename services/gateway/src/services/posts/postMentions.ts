@@ -1,5 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+import { collectMentionableText } from './mentionableText';
+
 /**
  * Le contenu mentionnant, tel que la résolution le lit. Structural et minimal :
  * les routes tiennent un post Prisma complet, mais rien ici n'a besoin de plus
@@ -50,7 +52,7 @@ export interface PostMentionResolver {
   createPostMentions(
     postId: string,
     mentionedUserIds: string[],
-    display?: PostMentionDisplayValue
+    display: PostMentionDisplayValue
   ): Promise<void>;
 }
 
@@ -76,19 +78,20 @@ export function readDisplay(
 }
 
 /**
- * Une personne que le post nomme SANS que son texte le dise : pastille posée
- * sur le canevas d'une story, choix dans un sélecteur.
+ * Une personne que le post NOMME sans que son texte le dise.
  *
- * `userId` OU `username`. Les deux existent parce que les deux appelants sont
- * réels — un sélecteur rend un `User.id`, un canevas ne porte que le `@handle`
- * qu'il affiche (et c'est lui qui survit à un brouillon repris trois jours plus
- * tard, là où un id devrait être persisté en parallèle des effets). Les pseudos
- * passent par la MÊME résolution que l'extraction de texte, donc les deux voies
- * ne peuvent pas diverger.
+ * `userId` OU `username` — un sélecteur rend un `User.id`, un canevas ne porte
+ * que le `@handle` qu'il affiche, et c'est LUI qui survit à un brouillon repris
+ * trois jours plus tard. Les pseudos passent par la MÊME résolution que
+ * l'extraction de texte, donc les deux voies ne peuvent pas diverger.
+ *
+ * `display` est REQUIS et ne peut pas valoir INLINE : le client ne déclare que
+ * ce que le texte ne peut pas porter. INLINE est dérivé par le serveur.
  */
 export interface DeclaredPostMention {
   readonly userId?: string;
   readonly username?: string;
+  readonly display: DeclarablePostMentionDisplay;
 }
 
 /**
@@ -145,8 +148,14 @@ export interface PostMentionParams {
   post: MentionTargetPost;
   content: string | null | undefined;
   /**
-   * Mentions déclarées hors texte. TRI-ÉTAT à l'édition, comme `location` :
-   * `undefined` = le client n'en parle pas, les lignes `PINNED` existantes
+   * Les effets du post, quand il en a. La dérivation INLINE y lit le texte des
+   * objets de canevas — c'est là que vit le texte d'une story, pas dans
+   * `content`. Voir `collectMentionableText`.
+   */
+  storyEffects?: unknown;
+  /**
+   * Références déclarées hors texte. TRI-ÉTAT à l'édition, comme `location` :
+   * `undefined` = le client n'en parle pas, les lignes déclarées existantes
    * survivent ; `[]` = il n'en déclare plus aucune, elles partent ; une liste
    * remplace l'ensemble déclaré. À la création, `undefined` et `[]` reviennent
    * au même — il n'y a rien à préserver.
@@ -170,30 +179,31 @@ export interface PostMentionParams {
  * journaliser dans le contexte de sa requête.
  */
 export async function resolvePostMentions(params: PostMentionParams): Promise<ResolvedPostMentions> {
-  const { mentionService, content, declared } = params;
+  const { mentionService, declared } = params;
 
   if (!mentionService) return UNRESOLVED;
 
-  // Le court-circuit couvre désormais les DEUX voies : un post sans `@` ET sans
-  // mention déclarée ne doit coûter aucune requête. Le tester sur le seul
-  // contenu aurait silencieusement jeté toute pastille de canevas — le défaut
+  // Le court-circuit couvre les DEUX voies : un post sans `@` nulle part ET
+  // sans référence déclarée ne doit coûter aucune requête. Le tester sur la
+  // seule légende aurait silencieusement jeté tout badge de canevas — le défaut
   // même que la voie déclarée existe pour corriger.
-  const namesInContent = Boolean(content && content.includes('@'));
+  const fragments = collectMentionableText({
+    content: params.content,
+    storyEffects: params.storyEffects,
+  });
+  const namesInText = fragments.some((fragment) => fragment.includes('@'));
   const namesDeclared = Boolean(declared && declared.length > 0);
-  if (!namesInContent && !namesDeclared) return NO_MENTIONS;
+  if (!namesInText && !namesDeclared) return NO_MENTIONS;
 
   try {
-    const contentUserIds = namesInContent
-      ? await resolveMentionedUserIds(mentionService, content as string)
-      : [];
-    const declaredUserIds = await resolveDeclaredUserIds(mentionService, declared);
-    // Nommée des DEUX côtés, la personne compte comme mention de TEXTE : c'est
-    // la voie que l'édition relit, donc celle qui doit gouverner sa survie.
-    const canvasOnlyUserIds = declaredUserIds.filter((id) => !contentUserIds.includes(id));
-    const mentionedUserIds = [...contentUserIds, ...canvasOnlyUserIds];
+    const textUserIds = namesInText ? await resolveTextUserIds(mentionService, params) : [];
+    const declaredModes = await resolveDeclared(mentionService, declared);
+    const modes = applyPrecedence(textUserIds, declaredModes);
+
+    const mentionedUserIds = [...modes.keys()];
     if (mentionedUserIds.length === 0) return NO_MENTIONS;
 
-    await persistBySource(mentionService, params.post.id, contentUserIds, canvasOnlyUserIds);
+    await persistByDisplay(mentionService, params.post.id, modes);
     notifyNewlyMentioned(params, mentionedUserIds);
 
     return { mentionedUserIds, newlyMentionedUserIds: mentionedUserIds, reconciled: true };
@@ -235,10 +245,10 @@ export async function resolvePostMentions(params: PostMentionParams): Promise<Re
  * quelqu'un de trop le temps d'une édition, la seconde ne revient jamais.
  */
 export async function reconcilePostMentions(params: PostMentionParams): Promise<ResolvedPostMentions> {
-  const { prisma, mentionService, content } = params;
+  const { prisma, mentionService } = params;
 
   // Sans service, rien n'est résolvable — donc rien n'est réconciliable. En
-  // conclure que le post ne nomme plus personne effacerait les mentions d'un
+  // conclure que le post ne nomme plus personne effacerait les références d'un
   // texte qui les porte toujours.
   if (!mentionService) return UNRESOLVED;
 
@@ -251,26 +261,30 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
       select: { mentionedUserId: true, display: true },
     });
     const previousUserIds = previousRows.map((row) => row.mentionedUserId);
-    // Un `display` absent se lit INLINE (`readDisplay`) : c'était la seule voie
-    // qui existait avant le discriminant, et la relire dans le texte est
-    // exactement ce que faisait la réconciliation d'avant.
-    const previousCanvasUserIds = previousRows
-      .filter((row) => readDisplay(row.display) === 'PINNED')
-      .map((row) => row.mentionedUserId);
+    const previousDeclared = new Map<string, DeclarablePostMentionDisplay>(
+      previousRows
+        .map((row) => [row.mentionedUserId, readDisplay(row.display)] as const)
+        .filter((entry): entry is readonly [string, DeclarablePostMentionDisplay] =>
+          entry[1] !== 'INLINE')
+    );
 
-    const contentUserIds = content && content.includes('@')
-      ? await resolveMentionedUserIds(mentionService, content)
+    const fragments = collectMentionableText({
+      content: params.content,
+      storyEffects: params.storyEffects,
+    });
+    const textUserIds = fragments.some((fragment) => fragment.includes('@'))
+      ? await resolveTextUserIds(mentionService, params)
       : [];
 
-    // TRI-ÉTAT : sans liste, les pastilles du canevas SURVIVENT. Les déduire du
-    // texte les effacerait à la première correction de frappe — elles n'y sont
-    // pas, c'est leur raison d'être.
-    const canvasUserIds = params.declared === undefined
-      ? previousCanvasUserIds
-      : await resolveDeclaredUserIds(mentionService, params.declared);
+    // TRI-ÉTAT : sans liste, les déclarées SURVIVENT. Les déduire du texte les
+    // effacerait à la première correction de frappe — elles n'y sont pas,
+    // c'est leur raison d'être.
+    const declaredModes = params.declared === undefined
+      ? previousDeclared
+      : await resolveDeclared(mentionService, params.declared);
 
-    const canvasOnlyUserIds = canvasUserIds.filter((id) => !contentUserIds.includes(id));
-    const mentionedUserIds = [...contentUserIds, ...canvasOnlyUserIds];
+    const modes = applyPrecedence(textUserIds, declaredModes);
+    const mentionedUserIds = [...modes.keys()];
 
     const previous = new Set(previousUserIds);
     const retained = new Set(mentionedUserIds);
@@ -283,12 +297,10 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
       });
     }
 
-    await persistBySource(
-      mentionService,
-      params.post.id,
-      newlyMentionedUserIds.filter((id) => contentUserIds.includes(id)),
-      newlyMentionedUserIds.filter((id) => !contentUserIds.includes(id))
+    const newModes = new Map(
+      [...modes.entries()].filter(([id]) => newlyMentionedUserIds.includes(id))
     );
+    await persistByDisplay(mentionService, params.post.id, newModes);
     notifyNewlyMentioned(params, newlyMentionedUserIds);
 
     return { mentionedUserIds, newlyMentionedUserIds, reconciled: true };
@@ -299,74 +311,103 @@ export async function reconcilePostMentions(params: PostMentionParams): Promise<
 }
 
 /**
- * Écrit chaque lot sous SA source. Deux appels et non un : c'est le
- * discriminant qui dit, à l'édition suivante, laquelle relire dans le texte —
- * un lot fusionné les rendrait toutes relisibles, et la première correction de
- * frappe effacerait les pastilles du canevas.
- *
- * La garde du lot vide vit ici plutôt que dans `createPostMentions` : lui la
- * porte déjà, mais l'appeler pour rien brouillerait le compte d'appels que
- * lisent les tests — et une écriture qu'on n'a pas à faire ne se demande pas.
+ * Les `User.id` que le TEXTE nomme — légende et objets de canevas confondus,
+ * badges exclus (`collectMentionableText`).
  */
-async function persistBySource(
+async function resolveTextUserIds(
   mentionService: PostMentionResolver,
-  postId: string,
-  contentUserIds: readonly string[],
-  canvasUserIds: readonly string[]
-): Promise<void> {
-  if (contentUserIds.length > 0) {
-    await mentionService.createPostMentions(postId, [...contentUserIds], 'INLINE');
-  }
-  if (canvasUserIds.length > 0) {
-    await mentionService.createPostMentions(postId, [...canvasUserIds], 'PINNED');
-  }
-}
-
-/**
- * Les `User.id` des mentions DÉCLARÉES. Un `userId` fourni est pris tel quel ;
- * un `username` passe par la même résolution que le texte. Dédupliqué en
- * préservant l'ordre de déclaration — c'est celui du canevas, donc celui que
- * l'auteur a posé.
- */
-async function resolveDeclaredUserIds(
-  mentionService: PostMentionResolver,
-  declared: readonly DeclaredPostMention[] | undefined
+  params: PostMentionParams
 ): Promise<string[]> {
-  if (!declared || declared.length === 0) return [];
-
-  const usernames = declared
-    .filter((mention) => !mention.userId)
-    .map((mention) => mention.username)
-    .filter((username): username is string => Boolean(username));
-
-  const resolvedByName = usernames.length > 0
-    ? await mentionService.resolveUsernames(usernames)
-    : new Map<string, { id: string }>();
-  const fromNames = Array.from(resolvedByName.values()).map((user) => user.id);
-
-  const seen = new Set<string>();
-  const ordered: string[] = [];
-  for (const id of [...declared.map((m) => m.userId), ...fromNames]) {
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    ordered.push(id);
-  }
-  return ordered;
-}
-
-/**
- * Les `User.id` que le contenu nomme, dédupliqués par la `Map` que
- * `resolveUsernames` rend (clé = username normalisé).
- */
-async function resolveMentionedUserIds(
-  mentionService: PostMentionResolver,
-  content: string
-): Promise<string[]> {
-  const usernames = mentionService.extractMentions(content);
+  const fragments = collectMentionableText({
+    content: params.content,
+    storyEffects: params.storyEffects,
+  });
+  const usernames = fragments.flatMap((fragment) => mentionService.extractMentions(fragment));
   if (usernames.length === 0) return [];
 
   const userMap = await mentionService.resolveUsernames(usernames);
   return Array.from(userMap.values()).map((user) => user.id);
+}
+
+/**
+ * Les références DÉCLARÉES, résolues en `User.id` et gardant leur mode.
+ * Dédupliqué en préservant l'ordre de déclaration — c'est celui du canevas,
+ * donc celui que l'auteur a posé.
+ */
+async function resolveDeclared(
+  mentionService: PostMentionResolver,
+  declared: readonly DeclaredPostMention[] | undefined
+): Promise<Map<string, DeclarablePostMentionDisplay>> {
+  const resolved = new Map<string, DeclarablePostMentionDisplay>();
+  if (!declared || declared.length === 0) return resolved;
+
+  const byUsername = declared.filter((mention) => !mention.userId && mention.username);
+  const usernameMap = byUsername.length > 0
+    ? await mentionService.resolveUsernames(
+        byUsername.map((mention) => mention.username as string)
+      )
+    : new Map<string, { id: string }>();
+
+  for (const mention of declared) {
+    const id = mention.userId
+      ?? (mention.username ? usernameMap.get(mention.username.toLowerCase())?.id : undefined);
+    if (!id || resolved.has(id)) continue;
+    resolved.set(id, mention.display);
+  }
+  return resolved;
+}
+
+/**
+ * Le mode FINAL de chaque personne, précédence appliquée.
+ *
+ * Une personne nommée des deux côtés garde son mode DÉCLARÉ — c'est un choix
+ * explicite de l'auteur, là où INLINE n'est qu'un défaut dérivé ; faire gagner
+ * le texte détruirait le badge dès que le pseudo apparaît aussi dans la
+ * légende. SEUL SILENT perd contre le texte : on ne peut pas cacher ce qui est
+ * écrit, et prétendre le contraire donnerait à l'auteur une discrétion que le
+ * rendu contredit aussitôt.
+ */
+function applyPrecedence(
+  textUserIds: readonly string[],
+  declared: ReadonlyMap<string, DeclarablePostMentionDisplay>
+): Map<string, PostMentionDisplayValue> {
+  const final = new Map<string, PostMentionDisplayValue>();
+
+  for (const id of textUserIds) {
+    const declaredMode = declared.get(id);
+    final.set(id, declaredMode && declaredMode !== 'SILENT' ? declaredMode : 'INLINE');
+  }
+  for (const [id, mode] of declared.entries()) {
+    if (!final.has(id)) final.set(id, mode);
+  }
+  return final;
+}
+
+/**
+ * Écrit chaque lot sous SON mode. Un appel par mode et non un seul : c'est le
+ * discriminant qui dit, à l'édition suivante, laquelle relire dans le texte —
+ * un lot fusionné les rendrait toutes relisibles, et la première correction de
+ * frappe effacerait les badges du canevas.
+ *
+ * La garde du lot vide vit ici plutôt que dans `createPostMentions` : lui la
+ * porte déjà, mais l'appeler pour rien brouillerait le compte d'appels que
+ * lisent les tests.
+ */
+async function persistByDisplay(
+  mentionService: PostMentionResolver,
+  postId: string,
+  modes: ReadonlyMap<string, PostMentionDisplayValue>
+): Promise<void> {
+  const ORDER: readonly PostMentionDisplayValue[] = ['INLINE', 'PINNED', 'NOTE', 'SILENT'];
+
+  for (const mode of ORDER) {
+    const ids = [...modes.entries()]
+      .filter(([, value]) => value === mode)
+      .map(([id]) => id);
+    if (ids.length > 0) {
+      await mentionService.createPostMentions(postId, ids, mode);
+    }
+  }
 }
 
 /**

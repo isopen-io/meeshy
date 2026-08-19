@@ -312,7 +312,7 @@ describe('POST /posts — translatePost throws synchronously (catch block)', () 
  * canevas d'une story imposait donc d'écrire son `@handle` dans la légende.
  *
  * Ce cas verrouille le canal de bout en bout : le champ traverse la validation,
- * la route, la résolution, et arrive persisté sous `CANVAS` — le discriminant
+ * la route, la résolution, et arrive persisté sous `PINNED` — le discriminant
  * qui empêchera l'édition suivante de le chercher dans un texte qui ne le porte
  * pas.
  */
@@ -336,7 +336,7 @@ describe('POST /posts — mentions déclarées hors contenu', () => {
     await app.close();
   });
 
-  it('persiste une pastille de canevas sous la source CANVAS et prévient la personne', async () => {
+  it('persiste un badge de canevas sous le mode PINNED et prévient la personne', async () => {
     mockCreatePostMentions.mockClear();
     mockCreatePostMentionNotificationsBatch.mockClear();
 
@@ -350,7 +350,7 @@ describe('POST /posts — mentions déclarées hors contenu', () => {
     });
 
     expect(res.statusCode).toBe(201);
-    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-decl', ['user-dana'], 'CANVAS');
+    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-decl', ['user-dana'], 'PINNED');
     expect(mockCreatePostMentionNotificationsBatch).toHaveBeenCalled();
   });
 
@@ -395,7 +395,7 @@ describe('POST /posts — with @mentions in content', () => {
       payload: { content: 'Hello @bob and @carol', type: 'POST' },
     });
     expect(res.statusCode).toBe(201);
-    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-001', ['user-bob', 'user-carol'], 'CONTENT');
+    expect(mockCreatePostMentions).toHaveBeenCalledWith('post-001', ['user-bob', 'user-carol'], 'INLINE');
     expect(mockCreatePostMentionNotificationsBatch).toHaveBeenCalled();
   });
 });
@@ -503,7 +503,7 @@ describe('PUT /posts/:postId — edited content with @mentions', () => {
       payload: { content: 'Updated @dave check this' },
     });
     expect(res.statusCode).toBe(200);
-    expect(mockCreatePostMentions).toHaveBeenCalledWith(POST_ID, ['user-dave'], 'CONTENT');
+    expect(mockCreatePostMentions).toHaveBeenCalledWith(POST_ID, ['user-dave'], 'INLINE');
   });
 });
 
