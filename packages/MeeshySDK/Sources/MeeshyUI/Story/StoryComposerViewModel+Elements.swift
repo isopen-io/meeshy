@@ -246,6 +246,68 @@ extension StoryComposerViewModel {
         return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
     }
 
+    /// Nomme quelqu'un, dans le mode choisi.
+    ///
+    /// PINNED pose un `StoryTextObject` portant `@pseudo` et son
+    /// `referenceUserId` ; les trois autres modes ne posent RIEN sur le
+    /// canevas — ils vivent dans `references`, que la publication déclare.
+    ///
+    /// Changer de mode et en choisir un sont le MÊME geste : cette méthode est
+    /// donc aussi celle qui change un mode, et c'est elle qui retire le badge
+    /// quand on quitte PINNED (le laisser afficherait une étiquette que plus
+    /// rien ne justifie).
+    func addReference(_ reference: ComposerReference) {
+        let key = reference.username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !key.isEmpty else { return }
+        let previous = references.first { $0.username.lowercased() == key }
+        references = ComposerReferences.upsert(reference, into: references)
+
+        if previous?.display == .pinned, reference.display != .pinned {
+            removeBadge(for: reference.username)
+        }
+        if reference.display == .pinned, previous?.display != .pinned {
+            poseBadge(for: reference)
+        }
+    }
+
+    /// Adopte l'ensemble rendu par la feuille de sélection.
+    ///
+    /// La feuille pilote l'ensemble sans rien savoir du canevas : c'est ICI que
+    /// l'écart se traduit en badges posés ou retirés. Les retraits d'abord —
+    /// sinon un mode changé reposerait le badge qu'on vient d'enlever.
+    func applyReferences(_ updated: [ComposerReference]) {
+        let kept = Set(updated.map { $0.username.lowercased() })
+        for gone in references where !kept.contains(gone.username.lowercased()) {
+            removeReference(username: gone.username)
+        }
+        for reference in updated { addReference(reference) }
+    }
+
+    /// Retire une personne — et le badge qui la portait, s'il y en avait un.
+    func removeReference(username: String) {
+        references = ComposerReferences.remove(username: username, from: references)
+        removeBadge(for: username)
+    }
+
+    /// Retire du canevas le badge d'une personne, sans toucher à sa référence :
+    /// c'est le mode qui vient de changer, pas la décision de la nommer.
+    ///
+    /// Un badge se reconnaît à son `referenceUserId` — jamais à son seul texte,
+    /// qu'une phrase ordinaire peut porter à l'identique.
+    private func removeBadge(for username: String) {
+        let key = "@\(username.lowercased())"
+        var effects = currentEffects
+        let doomed = effects.textObjects.filter {
+            $0.referenceUserId != nil && $0.text.lowercased() == key
+        }
+        guard !doomed.isEmpty else { return }
+        let ids = Set(doomed.map(\.id))
+        effects.textObjects.removeAll { ids.contains($0.id) }
+        currentEffects = effects
+        if let selected = selectedElementId, ids.contains(selected) { selectedElementId = nil }
+        for id in ids { zIndexMap.removeValue(forKey: id) }
+    }
+
     /// Épingle quelqu'un sur la slide SANS l'écrire dans une phrase (directive
     /// user 2026-08-18). La pastille EST un `StoryTextObject` portant `@pseudo` :
     /// elle hérite ainsi, gratuitement, de tout ce que le texte sait déjà faire —
@@ -254,17 +316,24 @@ extension StoryComposerViewModel {
     /// Un type d'élément neuf aurait réclamé les six chemins, et en aurait
     /// silencieusement raté un.
     ///
+    /// `referenceUserId` est ce qui la distingue d'une phrase : sans lui, la
+    /// dérivation INLINE côté serveur relirait le badge comme une mention de
+    /// texte et écraserait le mode choisi par l'auteur. C'est aussi lui qui la
+    /// rend publiable après une reprise de brouillon, quand la liste des
+    /// références n'existe plus mais que le canevas, lui, a survécu — d'où le
+    /// refus de poser un badge dont on ne connaît pas la personne.
+    ///
     /// Le fond plein est ce qui la fait LIRE comme une étiquette et non comme du
     /// texte libre — c'est la seule chose qui la distingue à l'œil.
     ///
     /// Décalage en cascade comme les lieux et les stickers : deux mentions
     /// successives ne doivent pas se superposer exactement.
     @discardableResult
-    func addMention(username: String) -> StoryTextObject? {
-        let handle = username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !handle.isEmpty, canAddText else { return nil }
+    private func poseBadge(for reference: ComposerReference) -> StoryTextObject? {
+        let handle = reference.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !handle.isEmpty, let userId = reference.userId, canAddText else { return nil }
         let existing = currentEffects.textObjects.filter { $0.text.hasPrefix("@") }.count
-        let obj = StoryTextObject(
+        var obj = StoryTextObject(
             text: "@" + handle,
             x: 0.5,
             y: 0.62 + Double(existing % 5) * 0.06,
@@ -277,6 +346,7 @@ extension StoryComposerViewModel {
             backgroundStyle: .solid(hex: MeeshyColors.brandPrimaryHex),
             sourceLanguage: Self.defaultSourceLanguage
         )
+        obj.referenceUserId = userId
         var effects = currentEffects
         var texts = effects.textObjects
         texts.append(obj)
@@ -557,6 +627,16 @@ extension StoryComposerViewModel {
         // central refusal here closes any future call site we might miss.
         if currentEffects.textObjects.first(where: { $0.id == id })?.isLocked == true {
             return
+        }
+        // Supprimer la pastille au doigt RETIRE la référence : sans cette
+        // boucle, l'auteur notifie quelqu'un dont plus rien ne témoigne dans la
+        // story. Lu AVANT la suppression, seule fenêtre où l'objet existe
+        // encore.
+        if let badge = currentEffects.textObjects.first(where: { $0.id == id }),
+           badge.referenceUserId != nil {
+            references = ComposerReferences.remove(
+                username: String(badge.text.dropFirst()), from: references
+            )
         }
         var effects = currentEffects
         effects.textObjects.removeAll { $0.id == id }

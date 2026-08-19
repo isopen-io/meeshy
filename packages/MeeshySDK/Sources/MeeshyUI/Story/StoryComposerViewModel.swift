@@ -49,6 +49,20 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // without requiring a MainActor hop (cancellation is Sendable / thread-safe).
     nonisolated(unsafe) var preloadTask: Task<Void, Never>?
 
+    // MARK: - Références
+
+    /// L'ensemble des personnes que cette story nomme, tous modes confondus.
+    ///
+    /// PINNED a EN PLUS un badge sur le canevas ; les trois autres modes
+    /// n'existent qu'ici, et c'est la publication qui les déclare. La liste
+    /// vit donc hors de `StoryEffects` : y ranger une référence SILENCIEUSE la
+    /// publierait à tous les lecteurs du blob d'effets, ce qui est exactement
+    /// ce que ce mode promet de ne pas faire.
+    ///
+    /// Écrite par `addReference` / `removeReference` (et par la suppression
+    /// d'un badge sur le canevas) — jamais de l'extérieur.
+    @Published public internal(set) var references: [ComposerReference] = []
+
     // MARK: - Selection
 
     @Published var selectedElementId: String?

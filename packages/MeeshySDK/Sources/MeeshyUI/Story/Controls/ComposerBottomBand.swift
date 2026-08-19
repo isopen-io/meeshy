@@ -124,6 +124,7 @@ struct ComposerBottomBand: View {
                     if let binding = textObjectBinding(for: elementId) {
                         StoryTextEditorView(
                             textObject: binding,
+                            onReference: { viewModel.addReference($0) },
                             onDelete: {
                                 HapticFeedback.medium()
                                 // Fermer AVANT de supprimer : sinon le binding

@@ -8,6 +8,12 @@ import MeeshySDK
 public struct StoryTextEditorView: View {
     @Binding public var textObject: StoryTextObject
     public let onDelete: (() -> Void)?
+    /// Appelé quand l'auteur choisit, par appui long, un mode que le TEXTE ne
+    /// peut pas porter (badge, note, silence). Le `@handle` quitte alors la
+    /// phrase — c'est tout l'intérêt du geste — et le composer prend la
+    /// référence en charge : cet éditeur ne connaît qu'un calque de texte, pas
+    /// le canevas ni la publication.
+    public let onReference: ((ComposerReference) -> Void)?
 
     @FocusState private var isFocused: Bool
     @State private var expandedSection: TextEditorSection?
@@ -18,9 +24,12 @@ public struct StoryTextEditorView: View {
     @State private var mentionQuery: String?
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(textObject: Binding<StoryTextObject>, onDelete: (() -> Void)? = nil) {
+    public init(textObject: Binding<StoryTextObject>,
+                onReference: ((ComposerReference) -> Void)? = nil,
+                onDelete: (() -> Void)? = nil) {
         self._textObject = textObject
         self.onDelete = onDelete
+        self.onReference = onReference
     }
 
     // Texte adaptatif aligné sur les autres panels (ComposerToolPanelHost).
@@ -132,10 +141,29 @@ public struct StoryTextEditorView: View {
             // au-dessus. Plus haut, la liste mangerait la moitié de la story
             // pendant qu'on tape un pseudo.
             MentionSuggestionList(query: query, maxHeight: 132) { user in
+                // Tap = INLINE : on est en train de l'écrire, le pseudo reste
+                // dans la phrase.
                 textObject.text = ComposerMentionQuery.replacingTrailingHandle(
                     in: textObject.text, with: user.username
                 )
                 mentionQuery = nil
+            } contextMenu: { user in
+                ReferenceModeMenu(modes: [.inline] + PostReferenceDisplay.declarable) { mode in
+                    // Le fragment en cours de frappe (`@ali`) est d'abord
+                    // complété : c'est la seule forme que la règle de retrait
+                    // sache reconnaître, et les deux règles pures se composent
+                    // ainsi sans qu'aucune n'ait à connaître l'autre.
+                    let inserted = ComposerMentionQuery.replacingTrailingHandle(
+                        in: textObject.text, with: user.username
+                    )
+                    if mode == .inline {
+                        textObject.text = inserted
+                    } else {
+                        textObject.text = ComposerReferences.removingHandle(user.username, from: inserted)
+                        onReference?(ComposerReference(username: user.username, userId: user.id, display: mode))
+                    }
+                    mentionQuery = nil
+                }
             }
             .background(RoundedRectangle(cornerRadius: 10).fill(inputBackground))
             .padding(.horizontal, 14)
