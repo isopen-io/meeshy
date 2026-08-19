@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import MeeshySDK
 import MeeshyUI
 
 struct StatusComposerView: View {
@@ -33,6 +34,9 @@ struct StatusComposerView: View {
     /// as a draft). Set when the composer opens onto a stuck unsent mood; the
     /// re-send supersedes this row so the resend replaces it (no duplicate).
     @State private var recoveredCmid: String?
+    /// Les personnes que ce mood nomme SANS que son texte le dise. Aucune n'est
+    /// INLINE : celles-là, le serveur les relit du contenu lui-même.
+    @State private var references: [ComposerReference] = []
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 5)
 
@@ -81,6 +85,10 @@ struct StatusComposerView: View {
 
                         // Text Field
                         textInput
+
+                        // Les deux entrées de référence — mêmes gestes que le
+                        // composer de post : tap = discret, appui long = le choix.
+                        referenceEntries
                     }
                     // The stack no longer ends on a `Spacer()`: inside a scroll
                     // container it resolves to zero height, and a vertical scroll
@@ -221,6 +229,27 @@ struct StatusComposerView: View {
             }
     }
 
+    // MARK: - Références
+
+    /// Ce que la publication DÉCLARE : les non-INLINE, et `nil` quand il n'y en
+    /// a aucune — `[]` serait entendu par le serveur comme un effacement.
+    private var declaredReferences: [PostMentionInput]? {
+        let declared = ComposerReferences.payload(references)
+        return declared.isEmpty ? nil : declared
+    }
+
+    /// Les deux entrées, sous le champ : la frappe `@` et le chip. Un STATUS
+    /// n'a pas plus de canevas qu'un post — le badge n'y est donc pas proposé.
+    private var referenceEntries: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            ReferenceMentionSuggestions(text: $statusText,
+                                        references: $references,
+                                        background: theme.inputBackground)
+            ReferenceComposerBar(references: $references,
+                                 accentColor: MeeshyColors.indigo500)
+        }
+    }
+
     // MARK: - Publish Button (toolbar)
 
     private var publishToolbarButton: some View {
@@ -243,7 +272,8 @@ struct StatusComposerView: View {
                     visibilityUserIds: selectedVisibility.requiresUserSelection ? selectedUserIds : nil,
                     viaUsername: viaUsername,
                     audioUrl: repostAudioUrl,
-                    repostOfId: repostOfId
+                    repostOfId: repostOfId,
+                    mentions: declaredReferences
                 )
                 isPublishing = false
                 dismiss()

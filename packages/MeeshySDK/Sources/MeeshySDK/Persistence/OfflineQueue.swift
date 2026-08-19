@@ -426,6 +426,10 @@ public protocol OfflineQueueing: Sendable {
     /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
     /// Swift, et les appelants (`FeedViewModel.createOfflineMediaPost`) passent
     /// la position à travers ce protocole.
+    /// `mentions` fait partie de la REQUIREMENT et non d'un défaut concret :
+    /// `location` avait été ajoutée à l'implémentation seule, et le protocole
+    /// muet la jetait avant le mock — un test vert prouvait l'inverse de ce
+    /// qu'il croyait.
     func enqueuePostMedia(
         sourceMediaURLs: [URL],
         clientMutationId: String,
@@ -433,7 +437,8 @@ public protocol OfflineQueueing: Sendable {
         visibility: String,
         originalLanguage: String?,
         type: String?,
-        location: SharedPlace?
+        location: SharedPlace?,
+        mentions: [PostMentionInput]?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -1761,7 +1766,8 @@ public actor OfflineQueue {
         visibility: String,
         originalLanguage: String? = nil,
         type: String? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        mentions: [PostMentionInput]? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1777,7 +1783,8 @@ public actor OfflineQueue {
             originalLanguage: originalLanguage,
             localMediaPaths: relativePaths,
             type: type,
-            location: location
+            location: location,
+            mentions: mentions
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

@@ -60,6 +60,11 @@ struct FeedView: View {
     @FocusState var isComposerFocused: Bool
     @State private var composerBounce: Bool = false
     @State var composerText = ""
+    /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
+    /// INLINE : celles-là, le serveur les relit du contenu lui-même. `var` non
+    /// privée — `publishPostWithAttachments()` vit dans l'extension
+    /// `FeedView+Attachments`.
+    @State var composerReferences: [ComposerReference] = []
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
     /// A QUALIFYING composition (video || audio || >= 2 images —
@@ -1498,7 +1503,23 @@ struct FeedView: View {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
 
+                // Première porte : la frappe `@`, posée SOUS le champ — la
+                // liste suit la ligne qu'on écrit au lieu de recouvrir ce qui
+                // précède.
+                ReferenceMentionSuggestions(text: $composerText,
+                                            references: $composerReferences,
+                                            background: theme.inputBackground)
+                    .padding(.horizontal, 16)
+
                 Spacer(minLength: 0)
+
+                // Seconde porte, plus l'unique état visible des références —
+                // le seul endroit d'où une SILENCIEUSE se voit, donc le seul
+                // d'où elle se retire.
+                ReferenceComposerBar(references: $composerReferences,
+                                     accentColor: MeeshyColors.indigo500)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
 
                 // Toolbar
                 // Doctrine 82i : les 6 glyphes d'action du composer ci-dessous (photo/caméra/

@@ -314,6 +314,15 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// hors-ligne. Optionnel : un enregistrement persisté avant Task 17
     /// décode toujours sans cette clé.
     public let location: SharedPlace?
+    /// Les personnes que l'auteur a nommées SANS les écrire (note sous le
+    /// contenu, métadonnée silencieuse). `nil` — et jamais `[]` — quand il n'en
+    /// a déclaré aucune : le serveur relit alors le texte lui-même.
+    ///
+    /// Porté ici pour la même raison que `location` : un post TEXTE, le cas le
+    /// plus courant de l'app, ne passe jamais par `PostService.create` mais par
+    /// cette file. Une déclaration absente du payload persisté serait perdue au
+    /// premier redémarrage — et silencieusement, même en ligne.
+    public let mentions: [PostMentionInput]?
 
     public init(
         clientMutationId: String,
@@ -327,7 +336,8 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         audioUrl: String? = nil,
         audioDuration: Int? = nil,
         visibilityUserIds: [String]? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        mentions: [PostMentionInput]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -341,6 +351,7 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.audioDuration = audioDuration
         self.visibilityUserIds = visibilityUserIds
         self.location = location
+        self.mentions = mentions
     }
 }
 

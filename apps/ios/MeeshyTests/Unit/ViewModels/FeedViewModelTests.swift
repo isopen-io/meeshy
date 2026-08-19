@@ -729,6 +729,49 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(sut.posts.isEmpty, "exhausted outbox row must roll back the optimistic post")
     }
 
+    // MARK: - createPost() — les références déclarées voyagent par les DEUX chemins
+
+    func test_createPost_withMedia_forwardsDeclaredReferencesToTheServer() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
+        postService.createResult = .success(Self.makeAPIPost(id: "media-1", content: "Avec Alice"))
+
+        await sut.createPost(content: "Avec Alice", mediaIds: ["att-1"],
+                             mentions: [PostMentionInput.id("u-alice", display: .note)])
+
+        XCTAssertEqual(postService.lastCreateMentions?.count, 1)
+        XCTAssertEqual(postService.lastCreateMentions?.first?.userId, "u-alice")
+        XCTAssertEqual(postService.lastCreateMentions?.first?.display, "NOTE")
+    }
+
+    func test_createPost_textOnly_carriesDeclaredReferencesThroughTheDurableQueue() async {
+        // Un post texte passe par l'outbox : sans la déclaration DANS le
+        // payload persisté, référencer quelqu'un sur le chemin le plus courant
+        // de l'app ne produirait rien du tout.
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createPost(content: "Coucou", mentions: [PostMentionInput.handle("bob", display: .silent)])
+
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertEqual(payload?.mentions?.count, 1)
+        XCTAssertEqual(payload?.mentions?.first?.username, "bob")
+        XCTAssertEqual(payload?.mentions?.first?.display, "SILENT")
+    }
+
+    func test_createPost_withoutReferences_declaresNothing_ratherThanAnEmptyList() async {
+        // `nil` et `[]` ne disent pas la même chose au serveur : `[]` est un
+        // verdict d'effacement. Un post qui n'a rien déclaré ne doit pas le
+        // prononcer.
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createPost(content: "Rien de special")
+
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertNil(payload?.mentions)
+    }
+
     func test_createPost_withMedia_usesDirectPostServicePath() async {
         let queue = MockOfflineQueue()
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)

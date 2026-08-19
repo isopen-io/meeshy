@@ -478,46 +478,6 @@ struct OutboxDispatcher: OutboxDispatching {
             resolvedMediaIds = uploadedIds + payload.attachmentIds
         }
 
-        struct CreatePostBody: Encodable {
-            let content: String?
-            let mediaIds: [String]?
-            let visibility: String
-            let originalLanguage: String?
-            /// Post type forwarded to `CreatePostSchema`. Omitted when nil so the
-            /// gateway applies its `POST` default — keeps legacy rows (written
-            /// before reel-offline carried no `type`) replaying as plain posts.
-            let type: String?
-            // STATUS/mood fields — only set for `type == "STATUS"` rows; omitted
-            // (and ignored by the gateway) otherwise.
-            let moodEmoji: String?
-            let audioUrl: String?
-            let audioDuration: Int?
-            let visibilityUserIds: [String]?
-            /// Task 17 — même clé top-level `location` que le chemin direct
-            /// (`CreatePostRequest`, `PostService.create`) : sans elle ici, la
-            /// position survivrait jusqu'au décodage de `CreatePostPayload` mais
-            /// serait tout de même jetée en silence à l'ultime saut réseau.
-            let location: SharedPlace?
-
-            func encode(to encoder: Encoder) throws {
-                var container = encoder.container(keyedBy: CodingKeys.self)
-                if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
-                if let mediaIds, !mediaIds.isEmpty { try container.encode(mediaIds, forKey: .mediaIds) }
-                try container.encode(visibility, forKey: .visibility)
-                if let originalLanguage, !originalLanguage.isEmpty { try container.encode(originalLanguage, forKey: .originalLanguage) }
-                if let type, !type.isEmpty { try container.encode(type, forKey: .type) }
-                if let moodEmoji, !moodEmoji.isEmpty { try container.encode(moodEmoji, forKey: .moodEmoji) }
-                if let audioUrl, !audioUrl.isEmpty { try container.encode(audioUrl, forKey: .audioUrl) }
-                if let audioDuration { try container.encode(audioDuration, forKey: .audioDuration) }
-                if let visibilityUserIds, !visibilityUserIds.isEmpty { try container.encode(visibilityUserIds, forKey: .visibilityUserIds) }
-                if let location { try container.encode(location, forKey: .location) }
-            }
-
-            enum CodingKeys: String, CodingKey {
-                case content, mediaIds, visibility, originalLanguage, type
-                case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location
-            }
-        }
         let body = CreatePostBody(
             content: payload.content,
             mediaIds: resolvedMediaIds.isEmpty ? nil : resolvedMediaIds,
@@ -528,7 +488,8 @@ struct OutboxDispatcher: OutboxDispatching {
             audioUrl: payload.audioUrl,
             audioDuration: payload.audioDuration,
             visibilityUserIds: payload.visibilityUserIds,
-            location: payload.location
+            location: payload.location,
+            mentions: payload.mentions
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -1244,5 +1205,61 @@ final class OutboxRetryScheduler {
             guard !Task.isCancelled else { return }
             await OutboxFlushTrigger.flushNow()
         }
+    }
+}
+
+/// Corps de `POST /posts` tel que la file durable l'émet — hissé au niveau du
+/// fichier pour être encodable en test, comme `UpdateProfileFieldsBody`.
+/// `attachmentIds` devient `mediaIds` au passage du fil, pour épouser le nom
+/// du champ côté gateway.
+/// `nonisolated` : l'app compile sous `defaultIsolation(MainActor)`, et une
+/// conformance `Encodable` isolée ne peut pas servir depuis le dispatch, qui
+/// hérite de l'isolation de son appelant.
+nonisolated struct CreatePostBody: Encodable {
+    let content: String?
+    let mediaIds: [String]?
+    let visibility: String
+    let originalLanguage: String?
+    /// Post type forwarded to `CreatePostSchema`. Omitted when nil so the
+    /// gateway applies its `POST` default — keeps legacy rows (written
+    /// before reel-offline carried no `type`) replaying as plain posts.
+    let type: String?
+    // STATUS/mood fields — only set for `type == "STATUS"` rows; omitted
+    // (and ignored by the gateway) otherwise.
+    let moodEmoji: String?
+    let audioUrl: String?
+    let audioDuration: Int?
+    let visibilityUserIds: [String]?
+    /// Task 17 — même clé top-level `location` que le chemin direct
+    /// (`CreatePostRequest`, `PostService.create`) : sans elle ici, la
+    /// position survivrait jusqu'au décodage de `CreatePostPayload` mais
+    /// serait tout de même jetée en silence à l'ultime saut réseau.
+    let location: SharedPlace?
+    /// Les références DÉCLARÉES (note, silence) — même clé que le chemin
+    /// direct. Sans elle, nommer quelqu'un dans un post TEXTE, le cas le plus
+    /// courant de l'app, ne produirait rien : ces posts-là n'empruntent que
+    /// ce chemin.
+    let mentions: [PostMentionInput]?
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
+        if let mediaIds, !mediaIds.isEmpty { try container.encode(mediaIds, forKey: .mediaIds) }
+        try container.encode(visibility, forKey: .visibility)
+        if let originalLanguage, !originalLanguage.isEmpty { try container.encode(originalLanguage, forKey: .originalLanguage) }
+        if let type, !type.isEmpty { try container.encode(type, forKey: .type) }
+        if let moodEmoji, !moodEmoji.isEmpty { try container.encode(moodEmoji, forKey: .moodEmoji) }
+        if let audioUrl, !audioUrl.isEmpty { try container.encode(audioUrl, forKey: .audioUrl) }
+        if let audioDuration { try container.encode(audioDuration, forKey: .audioDuration) }
+        if let visibilityUserIds, !visibilityUserIds.isEmpty { try container.encode(visibilityUserIds, forKey: .visibilityUserIds) }
+        if let location { try container.encode(location, forKey: .location) }
+        // Vide vaut absent à la CRÉATION : il n'existe encore aucune ligne à
+        // effacer, et le `[]` du tri-état n'a de sens qu'à l'édition.
+        if let mentions, !mentions.isEmpty { try container.encode(mentions, forKey: .mentions) }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case content, mediaIds, visibility, originalLanguage, type
+        case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
     }
 }

@@ -182,7 +182,10 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Set Status
 
-    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil, audioUrl: String? = nil, repostOfId: String? = nil) async {
+    /// - Parameter mentions: les personnes que ce mood nomme sans que son texte
+    ///   le dise. `nil` quand il n'y en a aucune — `[]` serait entendu comme un
+    ///   effacement.
+    func setStatus(emoji: String, content: String?, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, viaUsername: String? = nil, audioUrl: String? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) async {
         // Offline: persist the mood durably through the SAME `.createPost` outbox
         // row as posts/reels (type STATUS) so it is not lost, and survives an app
         // kill. We do NOT insert an optimistic entry — unlike posts, the gateway
@@ -198,7 +201,8 @@ class StatusViewModel: ObservableObject {
                 originalLanguage: DefaultComposerLanguage.resolve(),
                 type: "STATUS",
                 moodEmoji: emoji,
-                visibilityUserIds: visibilityUserIds
+                visibilityUserIds: visibilityUserIds,
+                mentions: (mentions?.isEmpty ?? true) ? nil : mentions
             )
             do {
                 try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
@@ -210,7 +214,7 @@ class StatusViewModel: ObservableObject {
         }
 
         do {
-            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId)
+            let post = try await statusService.create(moodEmoji: emoji, content: content, originalLanguage: DefaultComposerLanguage.resolve(), visibility: visibility, visibilityUserIds: visibilityUserIds, viaUsername: viaUsername, audioUrl: audioUrl, repostOfId: repostOfId, mentions: mentions)
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry

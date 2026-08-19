@@ -35,6 +35,9 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
     var lastCreateViaUsername: String?
     var lastCreateAudioUrl: String?
     var lastCreateRepostOfId: String?
+    /// Références DÉCLARÉES du dernier mood publié. `nil` = aucune, ce qui
+    /// n'est PAS `[]`.
+    var lastCreateMentions: [PostMentionInput]?
 
     var deleteCallCount = 0
     var lastDeleteStatusId: String?
@@ -56,7 +59,9 @@ final class MockStatusService: StatusServiceProviding, @unchecked Sendable {
     func create(moodEmoji: String, content: String?, originalLanguage: String?,
                 visibility: String,
                 visibilityUserIds: [String]?, viaUsername: String? = nil,
-                audioUrl: String? = nil, repostOfId: String? = nil) async throws -> APIPost {
+                audioUrl: String? = nil, repostOfId: String? = nil,
+                mentions: [PostMentionInput]? = nil) async throws -> APIPost {
+        lastCreateMentions = mentions
         createCallCount += 1
         lastCreateMoodEmoji = moodEmoji
         lastCreateContent = content

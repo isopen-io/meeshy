@@ -62,6 +62,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var lastCreateContent: String?
     var lastCreateType: String?
     var lastCreateRepostOfId: String?
+    /// Références DÉCLARÉES du dernier post créé. `nil` = aucune déclaration,
+    /// ce qui n'est PAS `[]` : le serveur relit alors le texte lui-même.
+    var lastCreateMentions: [PostMentionInput]?
+    var lastCreateLocation: SharedPlace?
 
     var deleteCallCount = 0
     var lastDeletePostId: String?
@@ -233,6 +237,23 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastCreateType = type
         lastCreateRepostOfId = repostOfId
         return try createResult.get()
+    }
+
+    /// Surcharge COMPLÈTE : sans elle, le défaut du protocole rabat l'appel sur
+    /// la signature courte et les références déclarées disparaissent avant
+    /// d'être observables — un test vert prouverait l'inverse de ce qu'il croit.
+    func create(content: String?, type: String, visibility: String, moodEmoji: String?,
+                mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
+                originalLanguage: String?,
+                mobileTranscription: MobileTranscriptionPayload?,
+                repostOfId: String?, location: SharedPlace?,
+                mentions: [PostMentionInput]?) async throws -> APIPost {
+        lastCreateMentions = mentions
+        lastCreateLocation = location
+        return try await create(content: content, type: type, visibility: visibility, moodEmoji: moodEmoji,
+                                mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration,
+                                originalLanguage: originalLanguage, mobileTranscription: mobileTranscription,
+                                repostOfId: repostOfId)
     }
 
     func delete(postId: String) async throws {

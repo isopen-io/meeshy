@@ -243,6 +243,13 @@ extension FeedView {
         }
     }
 
+    /// Ce que la publication DÉCLARE : les non-INLINE, et `nil` quand il n'y
+    /// en a aucune — `[]` serait entendu par le serveur comme un effacement.
+    var feedDeclaredReferences: [PostMentionInput]? {
+        let declared = ComposerReferences.payload(composerReferences)
+        return declared.isEmpty ? nil : declared
+    }
+
     // MARK: - Publish Post with Attachments
     func publishPostWithAttachments() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -262,6 +269,10 @@ extension FeedView {
         let attachments = pendingAttachments
         let audioURL = pendingAudioURL
         let mediaFiles = pendingMediaFiles
+        // Capturé AVANT le nettoyage du composer, comme text/attachments : la
+        // remise à zéro vide `composerReferences`, et une lecture tardive ne
+        // déclarerait plus personne.
+        let declaredReferences = feedDeclaredReferences
         // Capturé avant feedCleanupAttachments() (qui remet pendingPlace à nil) :
         // sans ce cliché local, la Task async ci-dessous lirait toujours nil,
         // exactement comme text/attachments/mediaFiles le sont pour la même raison.
@@ -278,7 +289,7 @@ extension FeedView {
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace, mentions: declaredReferences) }
             }
             return
         }
@@ -315,7 +326,8 @@ extension FeedView {
                     visibility: postVisibility,
                     originalLanguage: lang,
                     type: postType,
-                    location: pendingPlace
+                    location: pendingPlace,
+                    mentions: declaredReferences
                 )
             }
             return
@@ -374,7 +386,8 @@ extension FeedView {
                         forcePlainPost: composerForcePlainPost
                     ).rawValue,
                     mediaIds: uploadedIds.isEmpty ? nil : uploadedIds,
-                    originalLanguage: composerLanguage
+                    originalLanguage: composerLanguage,
+                    mentions: declaredReferences
                 )
 
                 guard viewModel.publishError == nil else {
@@ -493,6 +506,9 @@ extension FeedView {
 
     // MARK: - Cleanup
     private func feedCleanupAttachments() {
+        // Sans cette remise à zéro, le post SUIVANT hériterait des personnes
+        // nommées dans le précédent — et les notifierait.
+        composerReferences = []
         pendingAttachments.removeAll()
         pendingPlace = nil
         pendingAudioURL = nil
@@ -786,6 +802,14 @@ struct FeedComposerSheet: View {
     @State private var showAudioComposer = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var showLanguagePicker = false
+    /// Les personnes que ce post nomme SANS que son texte le dise. Aucune n'est
+    /// INLINE : celles-là, le serveur les relit du contenu lui-même.
+    @State private var references: [ComposerReference] = []
+
+    /// Une citation part par `POST /posts/:id/repost`, qui n'accepte aucune
+    /// `mentions` : y proposer le choix promettrait une notification que rien
+    /// n'enverrait.
+    private var declaresReferences: Bool { quotePost == nil }
 
     private var composerLanguageDisplayName: String {
         let name = Locale.current.localizedString(forLanguageCode: composerLanguage) ?? composerLanguage
@@ -936,6 +960,16 @@ struct FeedComposerSheet: View {
                         .padding(.top, 4)
                 }
 
+                // Première porte : la frappe `@`. Posée SOUS le champ — la
+                // liste suit la ligne qu'on écrit au lieu de recouvrir ce qui
+                // précède.
+                if declaresReferences {
+                    ReferenceMentionSuggestions(text: $composerText,
+                                                references: $references,
+                                                background: theme.inputBackground)
+                        .padding(.horizontal, 16)
+                }
+
                 // Quoted post preview
                 if let quoted = quotePost {
                     VStack(alignment: .leading, spacing: 8) {
@@ -985,6 +1019,16 @@ struct FeedComposerSheet: View {
                 }
 
                 Spacer(minLength: 0)
+
+                // Seconde porte, plus l'unique état visible des références —
+                // donc le seul endroit d'où une SILENCIEUSE se voit, et le seul
+                // d'où elle se retire.
+                if declaresReferences {
+                    ReferenceComposerBar(references: $references,
+                                         accentColor: MeeshyColors.indigo500)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 4)
+                }
 
                 // Toolbar
                 HStack(spacing: 16) {
@@ -1507,6 +1551,13 @@ struct FeedComposerSheet: View {
     }
 
     // MARK: - Publish
+    /// Ce que la publication DÉCLARE : les non-INLINE, et `nil` quand il n'y
+    /// en a aucune — `[]` serait entendu par le serveur comme un effacement.
+    private var declaredReferences: [PostMentionInput]? {
+        let declared = ComposerReferences.payload(references)
+        return declared.isEmpty ? nil : declared
+    }
+
     private func publishPost() {
         let text = composerText.trimmingCharacters(in: .whitespacesAndNewlines)
         // Une position seule, sans texte ni piece jointe, doit pouvoir partir : sinon
@@ -1525,13 +1576,16 @@ struct FeedComposerSheet: View {
         let attachments = pendingAttachments
         let mediaFiles = pendingMediaFiles
         let hasFiles = !mediaFiles.isEmpty
+        // Capturé avant `onDismiss()` : la feuille est démontée aussitôt, et
+        // relire son `@State` depuis la Task ne déclarerait plus personne.
+        let declared = declaredReferences
 
         if !hasFiles || attachments.isEmpty {
             onDismiss()
             HapticFeedback.success()
             if !text.isEmpty || pendingPlace != nil {
                 let lang = composerLanguage
-                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace) }
+                Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang, location: pendingPlace, mentions: declared) }
             }
             return
         }
@@ -1562,7 +1616,8 @@ struct FeedComposerSheet: View {
                     visibility: postVisibility,
                     originalLanguage: lang,
                     type: postType,
-                    location: pendingPlace
+                    location: pendingPlace,
+                    mentions: declared
                 )
             }
             return
@@ -1600,7 +1655,7 @@ struct FeedComposerSheet: View {
                 }
                 progressCancellable?.cancel()
 
-                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage)
+                await viewModel.createPost(content: text, type: ReelComposition.defaultType(mimeTypes: attachments.map(\.mimeType), durationsMs: attachments.map(\.duration), forcePlainPost: forcePlainPost).rawValue, visibility: postVisibility, mediaIds: uploadedIds.isEmpty ? nil : uploadedIds, originalLanguage: composerLanguage, mentions: declared)
 
                 guard viewModel.publishError == nil else {
                     await MainActor.run {

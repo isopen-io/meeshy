@@ -539,7 +539,11 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil) async {
+    /// - Parameter mentions: les personnes que l'auteur a nommées SANS les
+    ///   écrire — note sous le contenu, métadonnée silencieuse. `nil` quand il
+    ///   n'en a déclaré aucune : le serveur relit alors les `@handle` du texte
+    ///   lui-même, et déclarer `[]` lui ferait entendre un effacement.
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
         publishError = nil
         publishSuccess = false
 
@@ -560,7 +564,7 @@ class FeedViewModel: ObservableObject {
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage, location: location)
+            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage, location: location, mentions: mentions)
             return
         }
 
@@ -576,7 +580,8 @@ class FeedViewModel: ObservableObject {
                 originalLanguage: originalLanguage,
                 mobileTranscription: mobileTranscription,
                 repostOfId: nil,
-                location: location
+                location: location,
+                mentions: mentions
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
@@ -638,7 +643,7 @@ class FeedViewModel: ObservableObject {
     /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
     /// optimistic post in place (cmid -> server id). Rolls back if the outbox
     /// refuses the row synchronously, or later exhausts its retry budget.
-    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?, location: SharedPlace? = nil) async {
+    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -662,7 +667,10 @@ class FeedViewModel: ObservableObject {
             attachmentIds: [],
             visibility: visibility,
             originalLanguage: originalLanguage,
-            location: location
+            location: location,
+            // `nil` et non `[]` quand rien n'est déclaré : le payload persisté
+            // porte un VERDICT, et « je n'en parle pas » n'est pas « efface ».
+            mentions: (mentions?.isEmpty ?? true) ? nil : mentions
         )
         do {
             try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
@@ -739,7 +747,8 @@ class FeedViewModel: ObservableObject {
         visibility: String = "PUBLIC",
         originalLanguage: String? = nil,
         type: String = "POST",
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        mentions: [PostMentionInput]? = nil
     ) async {
         publishError = nil
         publishSuccess = false
@@ -748,7 +757,8 @@ class FeedViewModel: ObservableObject {
                 content: content ?? "",
                 visibility: visibility,
                 originalLanguage: originalLanguage,
-                location: location
+                location: location,
+                mentions: mentions
             )
             return
         }
@@ -778,7 +788,8 @@ class FeedViewModel: ObservableObject {
                 visibility: visibility,
                 originalLanguage: originalLanguage,
                 type: type,
-                location: location
+                location: location,
+                mentions: (mentions?.isEmpty ?? true) ? nil : mentions
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in
