@@ -173,7 +173,7 @@ public struct AudienceUserPickerView: View {
     private var header: some View {
         ZStack {
             Text(title)
-                .font(MeeshyFont.relative(.headline, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .lineLimit(1)
             HStack {
                 Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
@@ -226,10 +226,10 @@ public struct AudienceUserPickerView: View {
                 ForEach(vm.selectedUsers) { user in
                     HStack(spacing: MeeshySpacing.xs) {
                         Text(user.displayName ?? user.username)
-                            .font(MeeshyFont.relative(.subheadline, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .lineLimit(1)
                         Button { vm.toggle(user) } label: {
-                            Image(systemName: "xmark.circle.fill").font(MeeshyFont.relative(.subheadline))
+                            Image(systemName: "xmark.circle.fill").font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         }
                         .buttonStyle(.plain)
                     }
@@ -260,16 +260,16 @@ public struct AudienceUserPickerView: View {
             MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem)
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
-                    .font(MeeshyFont.relative(.body, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                     .lineLimit(1)
                 Text("@\(user.username)")
-                    .font(MeeshyFont.relative(.caption1))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Image(systemName: vm.isSelected(user.id) ? "checkmark.circle.fill" : "circle")
-                .font(MeeshyFont.relative(.title3))
+                .font(MeeshyFont.relative(20))
                 .foregroundStyle(vm.isSelected(user.id) ? Color.accentColor : Color.secondary)
         }
         .contentShape(Rectangle())

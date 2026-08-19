@@ -94,7 +94,7 @@ struct MentionSuggestionList: View {
                     Text(String(localized: "mention.suggestions.empty",
                                 defaultValue: "Aucune personne trouvée",
                                 bundle: .module))
-                        .font(MeeshyFont.relative(.subheadline))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 }
@@ -121,10 +121,10 @@ struct MentionSuggestionRow: View {
                          avatarURL: user.avatar)
             VStack(alignment: .leading, spacing: 1) {
                 Text(user.displayName ?? user.username)
-                    .font(MeeshyFont.relative(.subheadline, weight: .semibold))
+                    .font(MeeshyFont.relative(14, weight: .semibold))
                     .lineLimit(1)
                 Text("@\(user.username)")
-                    .font(MeeshyFont.relative(.caption1))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -157,7 +157,7 @@ struct StoryMentionPickerSheet: View {
         VStack(spacing: 0) {
             ZStack {
                 Text(String(localized: "story.mention.title", defaultValue: "Mentionner", bundle: .module))
-                    .font(MeeshyFont.relative(.headline, weight: .semibold))
+                    .font(MeeshyFont.relative(16, weight: .semibold))
                 HStack {
                     Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
                     Spacer()
