@@ -85,6 +85,7 @@
       "copy": "Copy message",
       "translate": "Translate",
       "reply": "Reply",
+      "forward": "Forward",
       "edit": "Edit",
       "delete": "Delete",
       "more": "More options",
@@ -154,7 +155,8 @@
       "helpText": "↑↓ navigate • Enter select • Esc close"
     },
     "bubble": {
-      "forwarded": "Forwarded"
+      "forwarded": "Forwarded",
+      "forwardedFrom": "Forwarded from {name}"
     },
     "newMessagesWhileAway": "new messages",
     "joinNotice": {

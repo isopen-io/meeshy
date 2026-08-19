@@ -42,6 +42,7 @@ interface BubbleMessageProps {
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   onLanguageSwitch?: (messageId: string, language: string) => void;
   onReplyMessage?: (message: Message) => void;
+  onForwardMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   onImageClick?: (attachmentId: string) => void;
   
@@ -75,6 +76,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
   onDeleteMessage,
   onLanguageSwitch,
   onReplyMessage,
+  onForwardMessage,
   onNavigateToMessage,
   onImageClick,
   currentDisplayLanguage,
@@ -259,6 +261,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
           isAnonymous={isAnonymous}
           currentAnonymousUserId={currentAnonymousUserId}
           onReplyMessage={onReplyMessage}
+          onForwardMessage={onForwardMessage}
           onNavigateToMessage={onNavigateToMessage}
           onImageClick={onImageClick}
           onLanguageSwitch={onLanguageSwitch}
@@ -290,6 +293,7 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
           isAnonymous={isAnonymous}
           currentAnonymousUserId={currentAnonymousUserId}
           onReplyMessage={onReplyMessage}
+          onForwardMessage={onForwardMessage}
           onNavigateToMessage={onNavigateToMessage}
           onImageClick={onImageClick}
           onLanguageSwitch={onLanguageSwitch}

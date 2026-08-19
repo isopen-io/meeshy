@@ -39,6 +39,7 @@ import { ConversationList } from './ConversationList';
 import { ConversationView } from './ConversationView';
 import { ConversationEmptyState } from './ConversationEmptyState';
 import { CreateConversationModal } from './create-conversation-modal';
+import { ForwardMessageModal } from './forward-message-modal';
 import { getUserLanguageChoices, resolveUserPreferredLanguage } from '@/utils/user-language-preferences';
 import { cn } from '@/lib/utils';
 import { useReplyStore } from '@/stores/reply-store';
@@ -50,7 +51,7 @@ import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messag
 import { useFCMNotifications } from '@/hooks/use-fcm-notifications';
 import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
-import type { Conversation } from '@meeshy/shared/types';
+import type { Conversation, Message } from '@meeshy/shared/types';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 
 import { createOptimisticMessage } from '@/utils/optimistic-message';
@@ -219,6 +220,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // États locaux
   const [selectedLanguage, setSelectedLanguage] = useState('fr');
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
 
   // Refs
   const selectedConversationIdRef = useRef<string | null>(null);
@@ -554,6 +556,10 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     messageComposerRef.current?.focus();
   }, []);
 
+  const handleForwardMessage = useCallback((message: Message) => {
+    setForwardingMessage(message);
+  }, []);
+
   const handleNavigateToMessageFromGallery = useCallback(
     (messageId: string) => {
       setGalleryOpen(false);
@@ -852,6 +858,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           onEditMessage={handleEditMessage}
           onDeleteMessage={handleDeleteMessage}
           onReplyMessage={handleReplyMessage}
+          onForwardMessage={handleForwardMessage}
           onNavigateToMessage={handleNavigateToMessage}
           onImageClick={handleImageClick}
           onLoadMore={loadMore}
@@ -886,6 +893,16 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
             onClose={() => setGalleryOpen(false)}
             onNavigateToMessage={handleNavigateToMessageFromGallery}
             attachments={imageAttachments}
+          />
+        )}
+
+        {forwardingMessage && (
+          <ForwardMessageModal
+            isOpen={!!forwardingMessage}
+            onClose={() => setForwardingMessage(null)}
+            message={forwardingMessage}
+            sourceConversationId={forwardingMessage.conversationId || effectiveSelectedId || undefined}
+            conversations={conversations}
           />
         )}
       </>
@@ -1005,6 +1022,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                   onEditMessage={handleEditMessage}
                   onDeleteMessage={handleDeleteMessage}
                   onReplyMessage={handleReplyMessage}
+                  onForwardMessage={handleForwardMessage}
                   onNavigateToMessage={handleNavigateToMessage}
                   onImageClick={handleImageClick}
                   onLoadMore={loadMore}
@@ -1068,6 +1086,16 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           onClose={() => setGalleryOpen(false)}
           onNavigateToMessage={handleNavigateToMessageFromGallery}
           attachments={imageAttachments}
+        />
+      )}
+
+      {forwardingMessage && (
+        <ForwardMessageModal
+          isOpen={!!forwardingMessage}
+          onClose={() => setForwardingMessage(null)}
+          message={forwardingMessage}
+          sourceConversationId={forwardingMessage.conversationId || effectiveSelectedId || undefined}
+          conversations={conversations}
         />
       )}
     </div>

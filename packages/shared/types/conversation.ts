@@ -131,6 +131,16 @@ export interface Message {
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
+  /** Conversation source d'un transfert, enrichie par le gateway (GET messages + broadcast socket). Absente si non transféré. */
+  readonly forwardedFromConversation?: {
+    readonly id: string;
+    readonly title?: string | null;
+    readonly identifier?: string | null;
+    readonly type?: string | null;
+    readonly avatar?: string | null;
+  };
+  /** Bitfield d'effets visuels persisté par le gateway (`Message.effectFlags`). */
+  readonly effectFlags?: number;
 
   // ===== EXPIRATION =====
   readonly expiresAt?: Date;

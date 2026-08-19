@@ -802,6 +802,14 @@
       "birthday": "Birthday",
       "withheld": "provided, moderators only",
       "title": "Participant profile"
+    },
+    "forward": {
+      "title": "Forward message",
+      "search": "Search for a conversation...",
+      "send": "Send",
+      "send-selected": "Send ({count})",
+      "sent": "Message forwarded",
+      "failed": "Forwarding failed"
     }
   },
   "bubbleStream": {

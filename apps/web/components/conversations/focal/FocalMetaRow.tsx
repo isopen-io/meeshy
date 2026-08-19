@@ -81,6 +81,10 @@ export interface FocalMetaRowProps {
    * `!isFirstInGroup`.
    */
   readonly time?: string;
+  /**
+   * Libellé RÉSOLU par la rangée : « Transféré depuis {groupe} » quand la
+   * règle jumelle (`lib/forward-badge.ts`) livre un nom, « Transféré » sinon.
+   */
   readonly forwardedLabel: string;
   readonly editedLabel: string;
   readonly translatedLabel: string;

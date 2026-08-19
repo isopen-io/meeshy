@@ -67,6 +67,7 @@ interface ConversationMessagesProps {
   onEditMessage: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
   onReplyMessage?: (message: Message) => void;
+  onForwardMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   onImageClick?: (attachmentId: string) => void;
   onRetryMessage?: (tempId: string, content: string, language: string, replyToId?: string) => void;
@@ -102,6 +103,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   onEditMessage,
   onDeleteMessage,
   onReplyMessage,
+  onForwardMessage,
   onNavigateToMessage,
   onImageClick,
   onRetryMessage,
@@ -593,6 +595,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               isAnonymous={isAnonymous}
               currentAnonymousUserId={currentAnonymousUserId}
               onReplyMessage={onReplyMessage}
+              onForwardMessage={onForwardMessage}
               onNavigateToMessage={onNavigateToMessage}
               onImageClick={onImageClick}
               conversationType={conversationType || 'direct'}

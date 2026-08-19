@@ -85,6 +85,7 @@
       "copy": "Copiar mensagem",
       "translate": "Traduzir",
       "reply": "Responder",
+      "forward": "Encaminhar",
       "edit": "Editar",
       "delete": "Excluir",
       "more": "Mais opções",
@@ -154,7 +155,8 @@
       "helpText": "↑↓ navegar • Enter selecionar • Esc fechar"
     },
     "bubble": {
-      "forwarded": "Encaminhado"
+      "forwarded": "Encaminhado",
+      "forwardedFrom": "Encaminhado de {name}"
     },
     "newMessagesWhileAway": "novas mensagens",
     "joinNotice": {

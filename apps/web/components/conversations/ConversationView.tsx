@@ -85,6 +85,7 @@ interface ConversationViewProps {
   onEditMessage: (messageId: string, content: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage: (messageId: string) => Promise<void>;
   onReplyMessage: (message: Message) => void;
+  onForwardMessage?: (message: Message) => void;
   onNavigateToMessage: (messageId: string) => Promise<void>;
   onImageClick: (attachmentId: string) => void;
   onLoadMore: () => void;
@@ -176,6 +177,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       onEditMessage,
       onDeleteMessage,
       onReplyMessage,
+      onForwardMessage,
       onNavigateToMessage,
       onImageClick,
       onLoadMore,
@@ -396,6 +398,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
               onEditMessage={onEditMessage}
               onDeleteMessage={onDeleteMessage}
               onReplyMessage={onReplyMessage}
+              onForwardMessage={onForwardMessage}
               onNavigateToMessage={onNavigateToMessage}
               onImageClick={onImageClick}
               onRetryMessage={onRetryMessage}

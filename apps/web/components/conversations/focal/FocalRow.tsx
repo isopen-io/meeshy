@@ -70,6 +70,7 @@ import { ExpandableMessageText } from '@/components/common/bubble-message/Expand
 import { CallSystemMessage } from '@/components/common/bubble-message/CallSystemMessage';
 import { JoinNoticeMessage } from '@/components/common/bubble-message/JoinNoticeMessage';
 import { parseJoinNotice } from '@meeshy/shared/utils/join-notice';
+import { forwardBadgeConversationName } from '@/lib/forward-badge';
 import { FocalIdentityHeader } from './FocalIdentityHeader';
 import { FocalQuotedReply } from './FocalQuotedReply';
 import { FocalMediaBlock } from './FocalMediaBlock';
@@ -148,6 +149,7 @@ export const FocalRow = memo(function FocalRow({
   onOpenProfile,
 }: FocalRowProps) {
   const { t } = useI18n('conversations');
+  const { t: tBubble } = useI18n('bubbleStream');
   const isMe = message.senderId === currentUser.id;
   const effectiveConversationId = conversationId ?? message.conversationId;
 
@@ -187,6 +189,10 @@ export const FocalRow = memo(function FocalRow({
   const hasReactions =
     (message.reactionSummary != null && Object.keys(message.reactionSummary).length > 0) ||
     (message.reactionCount ?? 0) > 0;
+
+  // Règle jumelle iOS/web (lib/forward-badge.ts) : nom du groupe source sur le
+  // badge « Transféré », jamais pour un tête-à-tête.
+  const forwardedName = forwardBadgeConversationName(message.forwardedFromConversation);
 
   const senderName = isMe ? youLabel : getUserDisplayName(message.sender, youLabel);
 
@@ -352,7 +358,9 @@ export const FocalRow = memo(function FocalRow({
                 // pas déjà (rangée de suite de groupe) — précédent iOS
                 // `FocalMetaRow`, monté pour `!isFirstInGroup` uniquement.
                 time={showsIdentityHeader ? undefined : time}
-                forwardedLabel={t('focal.row.forwarded', 'Transféré')}
+                forwardedLabel={forwardedName
+                  ? tBubble('bubble.forwardedFrom', { name: forwardedName })
+                  : t('focal.row.forwarded', 'Transféré')}
                 editedLabel={t('focal.row.edited', 'Modifié')}
                 translatedLabel={t('focal.row.translated', 'Traduit')}
               />

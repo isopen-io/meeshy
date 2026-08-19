@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useState, useMemo } from 'react';
 import { useI18n, type TFunction } from '@/hooks/use-i18n';
-import { Smile, Copy, Reply, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle, CheckCheck } from 'lucide-react';
+import { Smile, Copy, Reply, Forward, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle, CheckCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,8 @@ interface MessageActionsBarProps {
   canEditMessage: boolean;
   canDeleteMessage: boolean;
   onReply?: () => void;
+  /** Absent quand le transfert est refusé (message vue unique) — l'item n'apparaît pas. */
+  onForward?: () => void;
   onReaction: () => void;
   onQuickReaction?: (emoji: string) => void;
   onCopy: () => void;
@@ -70,6 +72,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
   canEditMessage,
   canDeleteMessage,
   onReply,
+  onForward,
   onReaction,
   onQuickReaction,
   onCopy,
@@ -459,6 +462,17 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   : t('copyLink', 'Copy link')}
               </span>
             </DropdownMenuItem>
+
+            {/* Forward option - absent for view-once messages */}
+            {onForward && (
+              <DropdownMenuItem
+                onClick={onForward}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <Forward className="h-4 w-4" />
+                <span>{t('messageActions.forward', 'Transférer')}</span>
+              </DropdownMenuItem>
+            )}
 
             {/* Message info - own messages only */}
             {isOwnMessage && onViewInfo && (

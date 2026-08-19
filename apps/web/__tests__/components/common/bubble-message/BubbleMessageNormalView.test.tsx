@@ -152,6 +152,7 @@ jest.mock('@/components/common/message-reactions', () => ({
 jest.mock('@/components/common/bubble-message/MessageActionsBar', () => ({
   MessageActionsBar: ({
     onReply,
+    onForward,
     onReaction,
     onQuickReaction,
     onCopy,
@@ -164,6 +165,7 @@ jest.mock('@/components/common/bubble-message/MessageActionsBar', () => ({
   }: any) => (
     <div data-testid="actions-bar">
       {onReply && <button onClick={onReply} data-testid="action-reply">Reply</button>}
+      {onForward && <button onClick={onForward} data-testid="action-forward">Forward</button>}
       {onReaction && <button onClick={onReaction} data-testid="action-reaction">React</button>}
       {onQuickReaction && <button onClick={() => onQuickReaction('heart')} data-testid="action-quick-react">Quick</button>}
       {onCopy && <button onClick={onCopy} data-testid="action-copy">Copy</button>}
@@ -469,6 +471,40 @@ describe('BubbleMessageNormalView', () => {
     });
   });
 
+  describe('Badge transféré', () => {
+    it('devrait nommer le groupe source quand la conversation source est un groupe', () => {
+      renderNormalView({
+        message: createMockMessage({
+          forwardedFromId: 'msg-src-1',
+          forwardedFromConversation: { id: 'conv-src-1', title: 'Équipe', type: 'group' },
+        }),
+      });
+
+      expect(screen.getByText('bubbleStream.bubble.forwardedFrom')).toBeInTheDocument();
+      expect(screen.queryByText('bubbleStream.bubble.forwarded')).not.toBeInTheDocument();
+    });
+
+    it('devrait rester « Transféré » nu quand la source est un tête-à-tête', () => {
+      renderNormalView({
+        message: createMockMessage({
+          forwardedFromId: 'msg-src-1',
+          forwardedFromConversation: { id: 'conv-src-1', title: 'Alice', type: 'direct' },
+        }),
+      });
+
+      expect(screen.getByText('bubbleStream.bubble.forwarded')).toBeInTheDocument();
+      expect(screen.queryByText('bubbleStream.bubble.forwardedFrom')).not.toBeInTheDocument();
+    });
+
+    it('devrait rester « Transféré » nu sans conversation source', () => {
+      renderNormalView({
+        message: createMockMessage({ forwardedFromId: 'msg-src-1' }),
+      });
+
+      expect(screen.getByText('bubbleStream.bubble.forwarded')).toBeInTheDocument();
+    });
+  });
+
   describe('Messages avec reponse (replyTo)', () => {
     it('devrait afficher le message parent', () => {
       renderNormalView({
@@ -618,6 +654,33 @@ describe('BubbleMessageNormalView', () => {
       fireEvent.click(screen.getByTestId('action-reply'));
 
       expect(onReplyMessage).toHaveBeenCalled();
+    });
+
+    it('devrait appeler onForwardMessage avec le message au clic sur Transférer', () => {
+      const onForwardMessage = jest.fn();
+      renderNormalView({ onForwardMessage });
+
+      fireEvent.click(screen.getByTestId('action-forward'));
+
+      expect(onForwardMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'msg-123' })
+      );
+    });
+
+    it('ne devrait pas proposer Transférer pour un message vue unique', () => {
+      const onForwardMessage = jest.fn();
+      renderNormalView({
+        onForwardMessage,
+        message: createMockMessage({ isViewOnce: true }),
+      });
+
+      expect(screen.queryByTestId('action-forward')).not.toBeInTheDocument();
+    });
+
+    it('ne devrait pas proposer Transférer sans handler onForwardMessage', () => {
+      renderNormalView();
+
+      expect(screen.queryByTestId('action-forward')).not.toBeInTheDocument();
     });
 
     it('devrait appeler onEnterReactionMode au clic sur React', () => {

@@ -10,6 +10,7 @@ import { MessageReactions } from '@/components/common/message-reactions';
 import { MessageReplyPreview } from './MessageReplyPreview';
 import { DeliveryIndicator } from './DeliveryIndicator';
 import { MessageEffects } from '@/components/common/MessageEffects';
+import { forwardBadgeConversationName } from '@/lib/forward-badge';
 import type { useReactionsQuery } from '@/hooks/queries/use-reactions-query';
 import type { TFunction } from '@/hooks/use-i18n';
 
@@ -21,6 +22,11 @@ interface MessageContentProps {
     content: string;
     conversationId: string;
     forwardedFromId?: string;
+    forwardedFromConversation?: {
+      title?: string | null;
+      identifier?: string | null;
+      type?: string | null;
+    } | null;
     /** Bitfield d'effets persisté par le gateway (`Message.effectFlags`). */
     effectFlags?: number;
     replyTo?: {
@@ -76,15 +82,20 @@ export const MessageContent = memo(function MessageContent({
       >
         <CardContent className="px-3.5 py-2.5 w-full break-words overflow-hidden overflow-wrap-anywhere">
           {/* Forwarded indicator */}
-          {message.forwardedFromId && (
-            <div className={cn(
-              "flex items-center gap-1 mb-1.5 text-xs font-medium",
-              isOwnMessage ? "text-indigo-200" : "text-gray-400 dark:text-gray-500"
-            )}>
-              <CornerUpRight className="h-3 w-3 flex-shrink-0" />
-              <span>{t('bubble.forwarded', 'Forwarded')}</span>
-            </div>
-          )}
+          {message.forwardedFromId && (() => {
+            const fromName = forwardBadgeConversationName(message.forwardedFromConversation);
+            return (
+              <div className={cn(
+                "flex items-center gap-1 mb-1.5 text-xs font-medium",
+                isOwnMessage ? "text-indigo-200" : "text-gray-400 dark:text-gray-500"
+              )}>
+                <CornerUpRight className="h-3 w-3 flex-shrink-0" />
+                <span>{fromName
+                  ? t('bubble.forwardedFrom', { name: fromName })
+                  : t('bubble.forwarded', 'Forwarded')}</span>
+              </div>
+            );
+          })()}
 
           {/* Message de réponse (replyTo) */}
           {message.replyTo && (

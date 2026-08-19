@@ -408,6 +408,16 @@ export class TransformersService {
       attachments,
       validatedMentions,
       timestamp: createdAt,
+      ...(msg.forwardedFromId ? { forwardedFromId: String(msg.forwardedFromId) } : {}),
+      ...(msg.forwardedFromConversationId
+        ? { forwardedFromConversationId: String(msg.forwardedFromConversationId) }
+        : {}),
+      ...(msg.forwardedFromConversation
+        ? { forwardedFromConversation: msg.forwardedFromConversation as Message['forwardedFromConversation'] }
+        : {}),
+      ...(msg.effectFlags !== undefined && msg.effectFlags !== null
+        ? { effectFlags: Number(msg.effectFlags) }
+        : {}),
     };
 
     // Mettre en cache

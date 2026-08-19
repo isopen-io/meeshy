@@ -804,6 +804,14 @@
       "birthday": "Nacimiento",
       "withheld": "proporcionado, solo moderadores",
       "title": "Ficha del participante"
+    },
+    "forward": {
+      "title": "Reenviar mensaje",
+      "search": "Buscar una conversación...",
+      "send": "Enviar",
+      "send-selected": "Enviar ({count})",
+      "sent": "Mensaje reenviado",
+      "failed": "Error al reenviar"
     }
   },
   "bubbleStream": {

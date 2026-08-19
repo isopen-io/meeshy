@@ -85,6 +85,7 @@
       "copy": "Copier le message",
       "translate": "Traduire",
       "reply": "Répondre",
+      "forward": "Transférer",
       "edit": "Modifier",
       "delete": "Supprimer",
       "more": "Plus d'options",
@@ -154,7 +155,8 @@
       "helpText": "↑↓ naviguer • Entrée sélectionner • Échap fermer"
     },
     "bubble": {
-      "forwarded": "Transféré"
+      "forwarded": "Transféré",
+      "forwardedFrom": "Transféré depuis {name}"
     },
     "newMessagesWhileAway": "nouveaux messages",
     "joinNotice": {

@@ -34,6 +34,7 @@ interface MessagesDisplayProps {
   onEditMessage?: (messageId: string, newContent: string, originalLanguage: string) => Promise<void>;
   onDeleteMessage?: (messageId: string) => Promise<void>;
   onReplyMessage?: (message: Message) => void;
+  onForwardMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   onImageClick?: (attachmentId: string) => void;
   conversationType?: ConversationType;
@@ -71,6 +72,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   onEditMessage,
   onDeleteMessage,
   onReplyMessage,
+  onForwardMessage,
   onNavigateToMessage,
   onImageClick,
   conversationType = 'direct',
@@ -461,6 +463,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
                   onEditMessage={onEditMessage}
                   onDeleteMessage={onDeleteMessage}
                   onReplyMessage={onReplyMessage}
+                  onForwardMessage={onForwardMessage}
                   onNavigateToMessage={onNavigateToMessage}
                   onImageClick={onImageClick}
                   onLanguageSwitch={handleLanguageSwitch}
@@ -545,6 +548,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
                   onEditMessage={onEditMessage}
                   onDeleteMessage={onDeleteMessage}
                   onReplyMessage={onReplyMessage}
+                  onForwardMessage={onForwardMessage}
                   onNavigateToMessage={onNavigateToMessage}
                   onImageClick={onImageClick}
                   onLanguageSwitch={handleLanguageSwitch}

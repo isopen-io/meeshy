@@ -806,6 +806,14 @@
       "birthday": "Naissance",
       "withheld": "fourni, réservé aux modérateurs",
       "title": "Fiche du participant"
+    },
+    "forward": {
+      "title": "Transférer le message",
+      "search": "Rechercher une conversation...",
+      "send": "Envoyer",
+      "send-selected": "Envoyer ({count})",
+      "sent": "Message transféré",
+      "failed": "Échec du transfert"
     }
   },
   "bubbleStream": {

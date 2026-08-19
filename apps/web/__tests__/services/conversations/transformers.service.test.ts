@@ -462,6 +462,36 @@ describe('TransformersService', () => {
       expect(msg1).not.toBe(msg2);
       expect(msg1).toEqual(msg2);
     });
+
+    it('recopie forwardedFromId, forwardedFromConversationId, effectFlags et forwardedFromConversation', () => {
+      const raw = makeRawMessage({
+        forwardedFromId: 'msg-src-1',
+        forwardedFromConversationId: 'conv-src-1',
+        effectFlags: 4,
+        forwardedFromConversation: { id: 'conv-src-1', title: 'Équipe', type: 'group' },
+      });
+      const msg = svc.transformMessageData(raw);
+
+      expect(msg.forwardedFromId).toBe('msg-src-1');
+      expect(msg.forwardedFromConversationId).toBe('conv-src-1');
+      expect(msg.effectFlags).toBe(4);
+      expect(msg.forwardedFromConversation).toEqual({
+        id: 'conv-src-1',
+        title: 'Équipe',
+        type: 'group',
+      });
+    });
+
+    it('laisse les champs de transfert absents quand le raw ne les porte pas (pas de null fabriqué)', () => {
+      const raw = makeRawMessage();
+      const msg = svc.transformMessageData(raw);
+
+      expect(msg.forwardedFromId).toBeUndefined();
+      expect(msg.forwardedFromConversationId).toBeUndefined();
+      expect(msg.effectFlags).toBeUndefined();
+      expect(msg.forwardedFromConversation).toBeUndefined();
+      expect(msg).not.toHaveProperty('forwardedFromConversation', null);
+    });
   });
 
   // ── transformConversationData ────────────────────────────────────────────

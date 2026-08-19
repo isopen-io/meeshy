@@ -59,6 +59,7 @@ interface BubbleMessageNormalViewProps {
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   onLanguageSwitch?: (messageId: string, language: string) => void;
   onReplyMessage?: (message: Message) => void;
+  onForwardMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   isFirstInGroup?: boolean;
   isLastInGroup?: boolean;
@@ -87,6 +88,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
   onDeleteMessage,
   onLanguageSwitch,
   onReplyMessage,
+  onForwardMessage,
   onNavigateToMessage,
   onImageClick,
   isFirstInGroup = true,
@@ -252,6 +254,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               canEditMessage={canModifyMessage()}
               canDeleteMessage={canDeleteMessage()}
               onReply={onReplyMessage ? () => onReplyMessage(message as unknown as Message) : undefined}
+              onForward={onForwardMessage && !message.isViewOnce ? () => onForwardMessage(message as unknown as Message) : undefined}
               onReaction={handleReactionClick}
               onQuickReaction={handleQuickReaction}
               onCopy={handleCopy}

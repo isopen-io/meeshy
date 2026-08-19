@@ -74,6 +74,7 @@ interface FocalRowProps {
   onDeleteMessage?: (messageId: string) => Promise<void> | void;
   onLanguageSwitch?: (messageId: string, language: string) => void;
   onReplyMessage?: (message: Message) => void;
+  onForwardMessage?: (message: Message) => void;
   onNavigateToMessage?: (messageId: string) => void;
   onImageClick?: (attachmentId: string) => void;
   onForceTranslation?: (messageId: string, targetLanguage: string, model?: TranslationModel) => void;
@@ -116,6 +117,7 @@ export const FocalRow = memo(function FocalRow({
   onDeleteMessage,
   onLanguageSwitch,
   onReplyMessage,
+  onForwardMessage,
   onNavigateToMessage,
   onImageClick,
 }: FocalRowProps) {
@@ -303,6 +305,7 @@ export const FocalRow = memo(function FocalRow({
             canEditMessage={canModifyMessage()}
             canDeleteMessage={canDeleteMessage()}
             onReply={onReplyMessage ? () => onReplyMessage(message as unknown as Message) : undefined}
+            onForward={onForwardMessage && !message.isViewOnce ? () => onForwardMessage(message as unknown as Message) : undefined}
             onReaction={handleReactionClick}
             onQuickReaction={handleQuickReaction}
             onCopy={handleCopy}
