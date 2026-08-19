@@ -1,3 +1,5 @@
+import { REFERENCE_VIEW_WINDOW_MS } from './referenceAccess';
+
 /**
  * Les types de post ÉPHÉMÈRES et leur durée de vie — source unique.
  *
@@ -84,4 +86,60 @@ function isEphemeral(type: string): type is EphemeralPostType {
 export function ephemeralExpiresAt(type: string, from: Date): Date | undefined {
   if (!isEphemeral(type)) return undefined;
   return new Date(from.getTime() + EPHEMERAL_POST_TTL_HOURS[type] * 3600_000);
+}
+
+/**
+ * Combien de temps un contenu éphémère RÉFÉRENCÉ survit à son échéance quand
+ * personne n'ouvre jamais sa notification.
+ *
+ * Sans ce plafond, une seule référence suffirait à garder un statut en vie
+ * pour toujours : le filtre n'épargne que les droits INTACTS, et un droit que
+ * personne n'exerce reste intact indéfiniment.
+ *
+ * Aligné sur `EPHEMERAL_AUTHOR_ARCHIVE_MS` — même ordre de grandeur, même
+ * intuition : au-delà d'une semaine, plus personne ne revient.
+ */
+export const REFERENCE_SWEEP_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Ce qu'un balayeur a le droit de détruire.
+ *
+ * Un statut RÉFÉRENCÉ porte une promesse — « vous le verrez au moins une
+ * fois » — que sa destruction rendrait fausse dès la deuxième heure. Il est
+ * donc épargné tant qu'au moins une de ses références garde un droit vivant :
+ * jamais consommée, ou dans sa fenêtre de 24 h.
+ *
+ * Piège Prisma-Mongo : `{ expiredViewAt: null }` ne matche pas un champ ABSENT,
+ * c'est-à-dire précisément les références jamais consommées — celles qu'il faut
+ * le plus épargner. Les trois branches sont nécessaires.
+ *
+ * `cutoff` — le seuil d'échéance que l'APPELANT applique (`softDeleteCutoff`,
+ * `hardDeleteCutoff`), par défaut `now`. La fenêtre de référence, elle, reste
+ * TOUJOURS ancrée sur `now` : décaler `windowStart` avec le retard du
+ * balayeur ferait paraître intacte une référence déjà éteinte depuis
+ * longtemps du point de vue du lecteur.
+ *
+ * Nom de relation Prisma : `postMentions` (`Post.postMentions`), pas
+ * `mentions` — le nom court n'existe que sur `PostComment` et `Message`.
+ */
+export function buildSweepableFilter(now: Date, cutoff: Date = now): Record<string, unknown> {
+  const windowStart = new Date(now.getTime() - REFERENCE_VIEW_WINDOW_MS);
+
+  return {
+    expiresAt: { lt: cutoff },
+    OR: [
+      {
+        postMentions: {
+          none: {
+            OR: [
+              { expiredViewAt: { isSet: false } },
+              { expiredViewAt: null },
+              { expiredViewAt: { gt: windowStart } },
+            ],
+          },
+        },
+      },
+      { expiresAt: { lt: new Date(now.getTime() - REFERENCE_SWEEP_GRACE_MS) } },
+    ],
+  };
 }

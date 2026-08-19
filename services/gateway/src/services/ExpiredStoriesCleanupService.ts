@@ -4,7 +4,7 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks';
 import { detachReposts } from './posts/detachReposts';
-import { EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
+import { buildSweepableFilter, EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
 import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { retractPostNotifications } from './posts/retractPostNotifications';
 import { SoundCaptureService } from './posts/SoundCaptureService';
@@ -146,7 +146,12 @@ export class ExpiredStoriesCleanupService {
           // seule leur échéance les masque du public. Le balayage ne porte
           // plus que sur les STATUS.
           type: { in: [...SWEPT_POST_TYPES] },
-          expiresAt: { lt: softDeleteCutoff },
+          // Le prédicat d'échéance seul détruirait un statut RÉFÉRENCÉ avant
+          // que la personne nommée ait pu l'ouvrir — `buildSweepableFilter`
+          // épargne tant qu'un droit de référence vit encore, plafonné à
+          // `REFERENCE_SWEEP_GRACE_MS` (7 j) pour qu'un droit jamais exercé ne
+          // garde pas le statut en vie pour toujours.
+          ...buildSweepableFilter(now, softDeleteCutoff),
           // `NOT_DELETED` (`isSet: false`) et JAMAIS `deletedAt: null` : sur le
           // connecteur MongoDB de Prisma, le filtre nul ne matche que les
           // documents présent-et-null, et `post.create` n'écrit jamais cette
@@ -193,7 +198,10 @@ export class ExpiredStoriesCleanupService {
           // plus que sur les STATUS.
           type: { in: [...SWEPT_POST_TYPES] },
           deletedAt: { not: null },
-          expiresAt: { lt: hardDeleteCutoff },
+          // Même garde que la passe de soft-delete ci-dessus, sur le cutoff du
+          // hard-delete : un post qui n'a pu franchir la première passe qu'en
+          // perdant son droit de référence ne doit pas le retrouver ici.
+          ...buildSweepableFilter(now, hardDeleteCutoff),
         },
         select: { id: true },
         // Les plus anciennes d'abord : le rattrapage draine le passif dans
