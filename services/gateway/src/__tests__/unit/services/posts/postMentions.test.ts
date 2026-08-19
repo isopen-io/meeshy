@@ -30,7 +30,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     // La rétractation des notifications s'appelle dans la foulée du retrait des
     // lignes : sans ce délégué, tout cas qui fait partir quelqu'un lèverait.
+    // Elle RELIT avant de supprimer — l'ensemble annoncé aux appareils est
+    // exactement l'ensemble supprimé (cf. retractMentionNotifications).
     notification: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     // Par défaut, TOUS les `userId` déclarés désignent un compte vivant : le
@@ -617,7 +620,10 @@ describe('reconcilePostMentions — rétractation', () => {
         ]),
         deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       },
-      notification: { deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+      notification: {
+        findMany: jest.fn<any>().mockResolvedValue([{ id: 'n-1', userId: 'u-bob' }]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
     });
     const mentionService = makeMentionService({
       extractMentions: jest.fn<any>().mockReturnValue([]),
