@@ -152,23 +152,39 @@ final class ForwardPickerViewModel: ObservableObject {
     }
 
     private func fetchSearchContactTargets(query: String, currentUserId: String) async -> [ForwardTarget] {
-        async let friendTargets = fetchFriendContactTargets(currentUserId: currentUserId)
+        async let friendTargets = fetchFriendContactTargets(query: query, currentUserId: currentUserId)
         async let directoryTargets = fetchDirectoryContactTargets(query: query)
         let (friends, directory) = await (friendTargets, directoryTargets)
         return friends + directory
     }
 
     /// Amis acceptés (dans les deux sens, `FriendService.allFriendRequests`
-    /// — Task 2) : pas de recherche texte côté serveur sur cet endpoint, mais
-    /// la liste reste bornée par `contactSearchLimit`.
-    private func fetchFriendContactTargets(currentUserId: String) async -> [ForwardTarget] {
+    /// — Task 2), filtrés CÔTÉ CLIENT sur `query` : cet endpoint n'a pas de
+    /// recherche texte serveur (contrairement à `ContactDirectoryService.list`
+    /// et `ConversationService.search`). Même sémantique que
+    /// `ContactsListViewModel.filteredFriends`
+    /// (`apps/ios/Meeshy/Features/Contacts/ContactsListViewModel.swift:34-37`)
+    /// — sans ce filtre, taper 2 caractères quelconques remontait la liste
+    /// COMPLÈTE des amis mêlée aux vrais résultats.
+    private func fetchFriendContactTargets(query: String, currentUserId: String) async -> [ForwardTarget] {
         do {
             let page = try await friendService.allFriendRequests(
                 status: "accepted",
                 offset: 0,
                 limit: Self.contactSearchLimit
             )
-            return page.data.compactMap { Self.makeContactTarget(from: $0, currentUserId: currentUserId) }
+            let lowered = query.lowercased()
+            return page.data.compactMap { request -> ForwardTarget? in
+                guard request.status == "accepted",
+                      let other = Self.otherParty(of: request, currentUserId: currentUserId) else {
+                    return nil
+                }
+                guard other.username.lowercased().contains(lowered)
+                    || other.name.lowercased().contains(lowered) else {
+                    return nil
+                }
+                return Self.makeContactTarget(from: other)
+            }
         } catch {
             return []
         }
@@ -207,18 +223,15 @@ final class ForwardPickerViewModel: ObservableObject {
         )
     }
 
-    private static func makeContactTarget(from request: FriendRequest, currentUserId: String) -> ForwardTarget? {
-        guard request.status == "accepted", let other = otherParty(of: request, currentUserId: currentUserId) else {
-            return nil
-        }
-        return ForwardTarget(
-            id: "user:\(other.id)",
+    private static func makeContactTarget(from user: FriendRequestUser) -> ForwardTarget {
+        ForwardTarget(
+            id: "user:\(user.id)",
             kind: .contact,
             conversationId: nil,
-            userId: other.id,
-            title: other.name,
-            subtitle: "@\(other.username)",
-            avatarURL: other.avatar
+            userId: user.id,
+            title: user.name,
+            subtitle: "@\(user.username)",
+            avatarURL: user.avatar
         )
     }
 

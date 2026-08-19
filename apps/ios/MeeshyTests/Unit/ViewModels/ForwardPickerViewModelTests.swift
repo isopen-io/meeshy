@@ -62,13 +62,13 @@ final class ForwardPickerViewModelTests: XCTestCase {
         )
     }
 
-    private func makeAccepted(otherId: String, currentUserId: String = "me") -> FriendRequest {
+    private func makeAccepted(otherId: String, currentUserId: String = "me", username: String? = nil) -> FriendRequest {
         FriendRequestFixture.make(
             id: "fr-\(otherId)",
             senderId: currentUserId,
             receiverId: otherId,
             status: "accepted",
-            receiverUsername: "user\(otherId)"
+            receiverUsername: username ?? "user\(otherId)"
         )
     }
 
@@ -142,5 +142,87 @@ final class ForwardPickerViewModelTests: XCTestCase {
         let (sut, service) = makeSUT()
         await sut.search("a")
         XCTAssertEqual(service.searchCallCount, 0)
+    }
+
+    /// `FriendService.allFriendRequests` n'a pas de recherche texte côté
+    /// serveur — sans filtre client, taper une requête quelconque au-delà de
+    /// 2 caractères remonterait la liste COMPLÈTE des amis mêlée aux vrais
+    /// résultats. Deux amis dans la fixture : un seul correspond à « ali ».
+    func test_search_filtersFriendsByQuery_excludesNonMatchingFriend() async {
+        let (sut, _) = makeSUT()
+        friendService.allFriendRequestsResult = .success(pageOf([
+            makeAccepted(otherId: "u1", username: "alice"),
+            makeAccepted(otherId: "u2", username: "bob")
+        ]))
+
+        await sut.search("ali")
+
+        XCTAssertEqual(sut.targets.map(\.id), ["user:u1"],
+                       "bob ne correspond pas à « ali » et ne doit pas apparaître")
+    }
+
+    /// Une recherche dont la réponse réseau est différée ne doit JAMAIS
+    /// écraser les résultats d'une recherche PLUS RÉCENTE arrivée entre
+    /// temps. Le double contrôlable (`searchHandler` + `ResponseGate`)
+    /// retarde la réponse de la PREMIÈRE requête ("al") jusqu'à ce que la
+    /// SECONDE ("ali") ait déjà écrit `targets`.
+    func test_search_dropsStaleResponse_whenAnEarlierSearchResolvesLate() async {
+        let (sut, service) = makeSUT()
+        let staleConv = makeAPIConv("cSTALE", participantUserId: "uStale")
+        let freshConv = makeAPIConv("cFresh", participantUserId: "uFresh")
+        let gate = ResponseGate()
+
+        service.searchHandler = { query in
+            if query == "al" {
+                await gate.arriveAndWait()
+                return .success([staleConv])
+            }
+            return .success([freshConv])
+        }
+
+        let staleTask = Task { await sut.search("al") }
+        // Attend que la première recherche ait RÉELLEMENT posé searchText =
+        // "al" et atteint l'appel réseau (bloqué sur la grille) avant de
+        // lancer la seconde — élimine toute course avec le spawn du Task.
+        await gate.waitForArrival()
+
+        await sut.search("ali")
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cFresh"], "la recherche récente doit déjà être posée")
+
+        await gate.open()
+        _ = await staleTask.value
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cFresh"],
+                       "la réponse tardive de « al » ne doit jamais écraser celle de « ali »")
+    }
+}
+
+/// Rendez-vous minimal pour les tests de garde anti-réponse-périmée : la
+/// double contrôlable signale son ARRIVÉE (la requête a atteint le réseau)
+/// puis se bloque jusqu'à ce que le test l'autorise explicitement à
+/// répondre. Élimine tout timing basé sur `Task.sleep`.
+private actor ResponseGate {
+    private var hasArrived = false
+    private var isOpen = false
+    private var arrivalContinuation: CheckedContinuation<Void, Never>?
+    private var openContinuation: CheckedContinuation<Void, Never>?
+
+    func waitForArrival() async {
+        if hasArrived { return }
+        await withCheckedContinuation { arrivalContinuation = $0 }
+    }
+
+    func arriveAndWait() async {
+        hasArrived = true
+        arrivalContinuation?.resume()
+        arrivalContinuation = nil
+        if isOpen { return }
+        await withCheckedContinuation { openContinuation = $0 }
+    }
+
+    func open() {
+        isOpen = true
+        openContinuation?.resume()
+        openContinuation = nil
     }
 }

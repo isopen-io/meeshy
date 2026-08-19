@@ -15,6 +15,11 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         ConversationPage(items: [], nextCursor: nil, hasMore: false)
     )
     var searchResult: Result<[APIConversation], Error> = .success([])
+    /// Point d'injection ASYNC pour `search` — permet à un test de retarder
+    /// une réponse spécifique (garde anti-réponse-périmée de
+    /// `ForwardPickerViewModel.search`) le temps qu'une seconde recherche
+    /// aboutisse en premier. Prend le pas sur `searchResult` quand défini.
+    var searchHandler: (@Sendable (String) async -> Result<[APIConversation], Error>)?
     var getByIdResult: Result<APIConversation, Error> = .success(
         JSONStub.decode("""
         {"id":"000000000000000000000001","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}
@@ -161,9 +166,13 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
     }
 
     nonisolated func search(query: String) async throws -> [APIConversation] {
+        let handler = await MainActor.run { searchHandler }
         await MainActor.run {
             searchCallCount += 1
             lastSearchQuery = query
+        }
+        if let handler {
+            return try await handler(query).get()
         }
         return try searchResult.get()
     }
@@ -324,6 +333,7 @@ final class MockConversationService: ConversationServiceProviding, @unchecked Se
         listPageDelayNanoseconds = 0
         searchCallCount = 0
         lastSearchQuery = nil
+        searchHandler = nil
         getByIdCallCount = 0
         lastGetByIdConversationId = nil
         createCallCount = 0
