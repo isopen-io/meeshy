@@ -138,6 +138,30 @@ final class ForwardPickerViewModelTests: XCTestCase {
                        "u1 est absorbé par sa conversation directe ; u2 reste")
     }
 
+    /// Effacer la recherche doit RENDRE la liste de navigation. La sentinelle
+    /// de pagination est le seul autre écrivain de `targets`, et elle est gatée
+    /// sur `hasMore` : le témoin exige donc une liste SANS page suivante
+    /// (`hasMore == false`, le cas de tout compte de moins de 50 conversations),
+    /// sinon il passerait par accident. Sans restauration, le sélecteur reste
+    /// figé sur les résultats d'une recherche effacée jusqu'à la fermeture de
+    /// la feuille.
+    func test_search_clearedBackToEmpty_restoresConversationTargets() async {
+        let (sut, service) = makeSUT()
+        service.listPageResult = .success(ConversationPage(items: [makeConv("c1")], rawItems: [], nextCursor: "cur1", hasMore: false))
+        await sut.loadInitial()
+        XCTAssertFalse(sut.hasMore, "sans cette précondition, la sentinelle réécrirait targets et le test passerait par accident")
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:c1"])
+
+        service.searchResult = .success([makeAPIConv("c9", participantUserId: "u9")])
+        await sut.search("ali")
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:c9"], "la recherche remplace bien la liste")
+
+        await sut.search("")
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:c1"],
+                       "effacer la recherche doit restaurer les cibles de navigation")
+    }
+
     func test_search_belowTwoCharacters_doesNotHitTheNetwork() async {
         let (sut, service) = makeSUT()
         await sut.search("a")

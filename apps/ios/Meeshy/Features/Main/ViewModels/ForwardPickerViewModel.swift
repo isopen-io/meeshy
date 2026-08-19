@@ -39,6 +39,14 @@ final class ForwardPickerViewModel: ObservableObject {
     private var conversationTargets: [ForwardTarget] = []
     private var nextCursor: String?
 
+    /// Jeton monotone de recherche — jumeau de `searchTokenRef` côté web
+    /// (`apps/web/components/conversations/forward-message-modal.tsx`).
+    /// Incrémenté à CHAQUE appel de `search`, y compris quand la requête
+    /// redescend sous le seuil : sans cette invalidation, une réponse en vol
+    /// pour une saisie plus longue réécrirait la liste que l'effacement vient
+    /// de restaurer.
+    private var searchToken: Int = 0
+
     private var currentUserId: String {
         authManager.currentUser?.id ?? ""
     }
@@ -121,22 +129,34 @@ final class ForwardPickerViewModel: ObservableObject {
 
     /// Recherche serveur (conversations + contacts), au-delà des cibles déjà
     /// paginées localement. 2 caractères minimum, anti-rebond 300 ms ; une
-    /// réponse dont la requête n'est plus la requête COURANTE (`searchText` a
-    /// changé pendant l'attente) est rejetée en silence.
+    /// réponse dont le jeton n'est plus le jeton COURANT (une recherche plus
+    /// récente est partie entre temps, ou la requête est redescendue sous le
+    /// seuil) est rejetée en silence.
+    ///
+    /// Sous le seuil, `targets` RETOMBE sur les cibles de navigation : la
+    /// sentinelle de pagination est le seul autre écrivain de `targets` et elle
+    /// est gatée sur `hasMore`, faux pour tout compte de moins de 50
+    /// conversations — sans cette restauration, effacer la recherche laissait
+    /// ses résultats à l'écran jusqu'à la fermeture de la feuille.
     func search(_ query: String) async {
         searchText = query
+        searchToken &+= 1
+        let token = searchToken
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= Self.searchMinimumLength else { return }
+        guard trimmed.count >= Self.searchMinimumLength else {
+            targets = conversationTargets
+            return
+        }
 
         try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
-        guard query == searchText else { return }
+        guard token == searchToken else { return }
 
         let userId = currentUserId
         async let conversationResults = fetchSearchConversationTargets(query: trimmed, currentUserId: userId)
         async let contactResults = fetchSearchContactTargets(query: trimmed, currentUserId: userId)
         let (conversations, contacts) = await (conversationResults, contactResults)
 
-        guard query == searchText else { return }
+        guard token == searchToken else { return }
         targets = ForwardTargetMerge.merge(conversations: conversations, contacts: contacts)
     }
 
