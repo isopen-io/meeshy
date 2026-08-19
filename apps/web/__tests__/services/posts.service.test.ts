@@ -114,6 +114,42 @@ describe('postsService', () => {
       await postsService.updatePost('post-1', { content: 'Updated' });
       expect(mockApi.put).toHaveBeenCalledWith('/posts/post-1', { content: 'Updated' });
     });
+
+    // Tri-état (UpdatePostRequest.mentions) : absent = préserve, `[]` = efface,
+    // liste = remplace. Un composer qui ne gère pas les références ne doit
+    // RIEN envoyer — surtout pas `[]`, qui détruirait les déclarées à chaque
+    // édition. Ces trois cas sont typés explicitement en `UpdatePostRequest`
+    // pour que le champ existe au niveau du TYPE, pas seulement au runtime.
+    it('omits mentions from the body when the caller does not touch them', async () => {
+      mockApi.put.mockResolvedValue({ success: true });
+      const body: import('@/services/posts.service').UpdatePostRequest = { content: 'Updated' };
+
+      await postsService.updatePost('post-1', body);
+
+      expect(mockApi.put.mock.calls[0][1]).not.toHaveProperty('mentions');
+    });
+
+    it('forwards an empty mentions array to erase all declared references', async () => {
+      mockApi.put.mockResolvedValue({ success: true });
+      const body: import('@/services/posts.service').UpdatePostRequest = { mentions: [] };
+
+      await postsService.updatePost('post-1', body);
+
+      expect(mockApi.put).toHaveBeenCalledWith('/posts/post-1', { mentions: [] });
+    });
+
+    it('forwards a populated mentions list to replace the declared set', async () => {
+      mockApi.put.mockResolvedValue({ success: true });
+      const body: import('@/services/posts.service').UpdatePostRequest = {
+        mentions: [{ userId: 'u-a', display: 'NOTE' }],
+      };
+
+      await postsService.updatePost('post-1', body);
+
+      expect(mockApi.put).toHaveBeenCalledWith('/posts/post-1', {
+        mentions: [{ userId: 'u-a', display: 'NOTE' }],
+      });
+    });
   });
 
   describe('deletePost', () => {

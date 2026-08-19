@@ -53,6 +53,15 @@ export interface UpdatePostRequest {
   readonly moodEmoji?: string;
   /** Ids of attached media (PostMedia) to detach during the edit. */
   readonly removeMediaIds?: readonly string[];
+  /**
+   * Declared, non-INLINE references only — TRI-STATE, exactly like
+   * `CreatePostRequest.mentions` above: absent preserves the declared set,
+   * `[]` erases it, a populated list replaces it. A composer that doesn't
+   * surface a reference picker MUST leave this field untouched — sending `[]`
+   * would silently destroy every reference the author declared, on every
+   * unrelated edit (caption tweak, visibility change, media removal).
+   */
+  readonly mentions?: readonly PostReferenceInput[];
 }
 
 export interface RepostRequest {
