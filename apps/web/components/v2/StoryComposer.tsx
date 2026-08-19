@@ -9,10 +9,17 @@ import { toast } from 'sonner';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
+import { ReferencePicker } from '@/components/composer/ReferencePicker';
+import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
+import { useReferences } from '@/hooks/composer/useReferences';
+import { removingHandle } from '@meeshy/shared/utils/composer-references';
+import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
 
 type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
 
@@ -35,6 +42,7 @@ interface StoryComposerProps {
     /// alimenté par le picker à l'inc.2.
     visibilityUserIds?: string[];
     mediaIds?: string[];
+    mentions?: readonly PostReferenceInput[];
   }) => void;
   defaultVisibility?: StoryVisibility;
 }
@@ -150,6 +158,8 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
   const [visibility, setVisibility] = useState<StoryVisibility>(defaultVisibility);
   // W3 inc.2 — audience explicite des visibilités EXCEPT/ONLY.
   const [visibilityUserIds, setVisibilityUserIds] = useState<string[]>([]);
+  const { references, pick, drop, clear: clearReferences, payload: referencesPayload } = useReferences();
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
 
   const token = useAuthStore(s => s.authToken);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -197,6 +207,16 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     handleFilesSelected(filesToAdd);
   }, [mediaCounts, handleFilesSelected, t]);
 
+  const handlePickReference = useCallback(
+    (person: { username: string; userId?: string }, display: PostReferenceDisplay) => {
+      pick(person, 'picker', display);
+      if (display !== 'INLINE') {
+        setContent((c) => removingHandle(person.username, c));
+      }
+    },
+    [pick]
+  );
+
   const handlePublish = useCallback(() => {
     const mediaIds = uploadedAttachments.map(att => att.id);
     const firstVisualMedia = uploadedAttachments.find((att) => {
@@ -238,13 +258,15 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
       visibility,
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) ? visibilityUserIds : undefined,
       mediaIds: mediaIds.length > 0 ? mediaIds : undefined,
+      ...(referencesPayload.length > 0 ? { mentions: referencesPayload } : {}),
     });
     setContent('');
     setSelectedBg(BACKGROUND_COLORS[0].value);
     setSelectedTextStyle('bold');
     setVisibilityUserIds([]);
     clearAttachments();
-  }, [content, selectedBg, selectedTextStyle, visibility, visibilityUserIds, onPublish, uploadedAttachments, clearAttachments]);
+    clearReferences();
+  }, [content, selectedBg, selectedTextStyle, visibility, visibilityUserIds, onPublish, uploadedAttachments, clearAttachments, referencesPayload, clearReferences]);
 
   const handleClose = useCallback(() => {
     onClose();
@@ -254,7 +276,8 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     setVisibility(defaultVisibility);
     setVisibilityUserIds([]);
     clearAttachments();
-  }, [onClose, clearAttachments, defaultVisibility]);
+    clearReferences();
+  }, [onClose, clearAttachments, defaultVisibility, clearReferences]);
 
   const hasContent = content.trim().length > 0 || selectedFiles.length > 0;
   // W3 inc.2 — EXCEPT/ONLY sans audience = publication bloquée (jamais de
@@ -452,6 +475,21 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
               </svg>
               {mediaCounts.audio}/{MEDIA_LIMITS.audio}
             </button>
+          </div>
+
+          {/* References */}
+          <div className="flex items-center justify-center gap-2">
+            <ReferencePicker
+              references={references}
+              onChange={handlePickReference}
+              onRemove={drop}
+              modes={REFERENCE_MODES}
+              open={referencePickerOpen}
+              onOpenChange={setReferencePickerOpen}
+            />
+            {references.length > 0 && (
+              <ReferenceChipRow references={references} onOpen={() => setReferencePickerOpen(true)} />
+            )}
           </div>
 
           {/* Color Palette */}

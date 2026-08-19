@@ -6,11 +6,18 @@ import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
+import { ReferencePicker } from '@/components/composer/ReferencePicker';
+import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
+import { useReferences } from '@/hooks/composer/useReferences';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
 import { useAuthStore } from '@/stores/auth-store';
 import { AttachmentService } from '@/services/attachmentService';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
+import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
+import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
+
+const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
 
 export interface PostPublishPayload {
   content: string;
@@ -26,6 +33,8 @@ export interface PostPublishPayload {
    * wire (the mutation strips it before calling `postsService.createPost`).
    */
   optimisticMedia?: readonly PostMedia[];
+  /** Declared, non-INLINE references only — absent (not `[]`) when no one is referenced. */
+  mentions?: readonly PostReferenceInput[];
 }
 
 export interface PostComposerProps {
@@ -76,6 +85,8 @@ function PostComposer({
   const [postType, setPostType] = useState<PostType>('REEL');
   const [isExpanded, setIsExpanded] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const { references, pick, drop, clear: clearReferences, payload: referencesPayload } = useReferences();
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
@@ -179,6 +190,21 @@ function PostComposer({
     setMediaError(null);
   }, [handleRemoveFile]);
 
+  // A person typed as `@handle` in the caption is INLINE server-side (the
+  // gateway derives it from the text — Task 1). Moving her to a declared
+  // mode from the picker only makes sense once her handle leaves the
+  // sentence, so any literal `@handle` still in the caption is stripped —
+  // a no-op when it was never there.
+  const handlePickReference = useCallback(
+    (person: { username: string; userId?: string }, display: PostReferenceDisplay) => {
+      pick(person, 'picker', display);
+      if (display !== 'INLINE') {
+        setContent((c) => removingHandle(person.username, c));
+      }
+    },
+    [pick]
+  );
+
   const handlePublish = useCallback(() => {
     const trimmed = content.trim();
     const mediaIds = uploadedAttachments.map((att) => att.id);
@@ -205,6 +231,9 @@ function PostComposer({
             order,
           }))
         : undefined,
+      // Never `mentions: []` — absence means "not touched", `[]` erases the
+      // declared references server-side (tri-state, Non-régression table).
+      ...(referencesPayload.length > 0 ? { mentions: referencesPayload } : {}),
     });
 
     setContent('');
@@ -213,7 +242,8 @@ function PostComposer({
     setMediaError(null);
     setPostType('REEL');
     clearAttachments();
-  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments]);
+    clearReferences();
+  }, [content, disabled, isUploading, onPublish, visibility, visibilityUserIds, uploadedAttachments, effectivePostType, clearAttachments, referencesPayload, clearReferences]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -344,6 +374,15 @@ function PostComposer({
                     🎥
                   </button>
 
+                  <ReferencePicker
+                    references={references}
+                    onChange={handlePickReference}
+                    onRemove={drop}
+                    modes={REFERENCE_MODES}
+                    open={referencePickerOpen}
+                    onOpenChange={setReferencePickerOpen}
+                  />
+
                   {/* Visibility picker */}
                   <div className="relative">
                     <button
@@ -453,6 +492,12 @@ function PostComposer({
                   selectedIds={visibilityUserIds}
                   onChange={setVisibilityUserIds}
                 />
+              </div>
+            )}
+
+            {isExpanded && references.length > 0 && (
+              <div className="mt-2">
+                <ReferenceChipRow references={references} onOpen={() => setReferencePickerOpen(true)} />
               </div>
             )}
           </div>

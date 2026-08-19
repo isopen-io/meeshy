@@ -5,15 +5,22 @@ import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogHeader, DialogBody, DialogFooter } from './Dialog';
 import { Button } from './Button';
+import { ReferencePicker } from '@/components/composer/ReferencePicker';
+import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
+import { useReferences } from '@/hooks/composer/useReferences';
+import { removingHandle } from '@meeshy/shared/utils/composer-references';
+import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
 
 // ============================================================================
 // Types
 // ============================================================================
 
+const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
+
 export interface StatusComposerProps {
   open: boolean;
   onClose: () => void;
-  onPublish: (status: { moodEmoji: string; content?: string }) => void;
+  onPublish: (status: { moodEmoji: string; content?: string; mentions?: readonly PostReferenceInput[] }) => void;
   currentStatus?: { moodEmoji: string; content?: string };
 }
 
@@ -32,6 +39,8 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
   const { t } = useI18n('common');
   const [selectedEmoji, setSelectedEmoji] = useState<string>(currentStatus?.moodEmoji ?? '');
   const [content, setContent] = useState<string>(currentStatus?.content ?? '');
+  const { references, pick, drop, clear: clearReferences, payload: referencesPayload } = useReferences();
+  const [referencePickerOpen, setReferencePickerOpen] = useState(false);
 
   // Sync state when currentStatus changes or dialog opens
   useEffect(() => {
@@ -41,21 +50,34 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
     }
   }, [open, currentStatus]);
 
+  const handlePickReference = useCallback(
+    (person: { username: string; userId?: string }, display: PostReferenceDisplay) => {
+      pick(person, 'picker', display);
+      if (display !== 'INLINE') {
+        setContent((c) => removingHandle(person.username, c));
+      }
+    },
+    [pick]
+  );
+
   const handlePublish = useCallback(() => {
     if (!selectedEmoji) return;
     onPublish({
       moodEmoji: selectedEmoji,
       content: content.trim() || undefined,
+      ...(referencesPayload.length > 0 ? { mentions: referencesPayload } : {}),
     });
+    clearReferences();
     onClose();
-  }, [selectedEmoji, content, onPublish, onClose]);
+  }, [selectedEmoji, content, onPublish, onClose, referencesPayload, clearReferences]);
 
   const handleClear = useCallback(() => {
     setSelectedEmoji('');
     setContent('');
+    clearReferences();
     onPublish({ moodEmoji: '', content: undefined });
     onClose();
-  }, [onPublish, onClose]);
+  }, [onPublish, onClose, clearReferences]);
 
   const handleContentChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,7 +142,15 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
               'transition-colors duration-300'
             )}
           />
-          <div className="text-right">
+          <div className="flex items-center justify-between">
+            <ReferencePicker
+              references={references}
+              onChange={handlePickReference}
+              onRemove={drop}
+              modes={REFERENCE_MODES}
+              open={referencePickerOpen}
+              onOpenChange={setReferencePickerOpen}
+            />
             <span
               className={cn(
                 'text-xs transition-colors duration-300',
@@ -132,6 +162,9 @@ function StatusComposer({ open, onClose, onPublish, currentStatus }: StatusCompo
               {content.length}/{MAX_CONTENT_LENGTH}
             </span>
           </div>
+          {references.length > 0 && (
+            <ReferenceChipRow references={references} onOpen={() => setReferencePickerOpen(true)} />
+          )}
         </div>
 
         {/* Live preview */}
