@@ -5,13 +5,19 @@ import MeeshyUI
 
 // MARK: - ForwardPickerSheet
 
-/// Picker de transfert hybride (spec 2026-08-19, Volet A.6) :
+/// Picker de transfert hybride (spec 2026-08-19, Volet A.6/A.8) :
 /// - toucher une LIGNE = sélectionner (mode multi) → barre basse « Envoyer (N) » ;
 /// - le bouton en fin de ligne = envoi IMMÉDIAT à cette seule cible (et retire
 ///   la ligne de la sélection si elle y était — jamais de doublon au batch) ;
 /// - une cible servie n'est plus sélectionnable ; un échec affiche sa RAISON
 ///   et se réessaie.
-/// L'envoi passe par `MessageForwardService` (chemin unique, offline compris).
+///
+/// La liste est pilotée par `ForwardPickerViewModel` (pagination par curseur
+/// + recherche serveur conversations/contacts, `ForwardTarget` fusionnés) —
+/// une cible peut donc être une conversation existante OU un contact SANS
+/// conversation encore ouverte. L'envoi passe par `MessageForwardService`
+/// (chemin unique, offline compris) ; c'est LUI qui résout — et au besoin crée
+/// — la conversation directe d'un contact, à l'envoi et jamais à la sélection.
 struct ForwardPickerSheet: View {
     let message: Message
     let sourceConversationId: String
@@ -25,28 +31,31 @@ struct ForwardPickerSheet: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
-    @State private var conversations: [Conversation] = []
-    @State private var isLoading = true
-    @State private var searchText = ""
-    @State private var model = ForwardPickerModel()
-    /// Première cible servie de l'ouverture — retenue pour que la confirmation
-    /// posée À LA FERMETURE sache quelle conversation ouvrir.
+    @StateObject private var pickerModel = ForwardPickerViewModel()
+    /// Machine à états PAR LIGNE (idle/selected/sending/sent/failed), keyée
+    /// sur `ForwardTarget.id` — distincte de `pickerModel`, qui pilote la
+    /// LISTE (pagination/recherche).
+    @State private var sendState = ForwardPickerModel()
+    /// Première cible servie qui portait déjà un `conversationId` connu —
+    /// retenue pour que la confirmation posée À LA FERMETURE sache quelle
+    /// conversation ouvrir. Un contact tout juste rejoint n'alimente pas ce
+    /// champ : `MessageForwardService` ne renvoie que l'issue de l'envoi, pas
+    /// la conversation qu'il a pu créer — le toast reste alors non tappable
+    /// (cf. `didServeAnyTarget`) plutôt que de naviguer vers un id inventé.
     @State private var firstServedConversation: Conversation?
+    /// Au moins une cible a été servie cette ouverture — condition MINIMALE
+    /// pour que le toast paraisse, y compris quand aucune n'était une
+    /// conversation déjà résolue.
+    @State private var didServeAnyTarget = false
     @State private var successToastFired = false
-    @State private var loadFailed = false
 
     private var forwardService: MessageForwardServiceProviding { MessageForwardService.shared }
 
-    private var filteredConversations: [Conversation] {
-        if searchText.isEmpty {
-            return conversations.filter { $0.id != sourceConversationId }
-        }
-        let query = searchText.lowercased()
-        return conversations.filter { conv in
-            conv.id != sourceConversationId
-                && (conv.displayName.lowercased().contains(query)
-                    || conv.name.lowercased().contains(query))
-        }
+    /// La conversation SOURCE du message ne doit jamais apparaître comme
+    /// cible — transférer un message dans sa propre conversation n'a pas de
+    /// sens. Un contact (pas encore de conversation) n'est jamais concerné.
+    private var visibleTargets: [ForwardTarget] {
+        pickerModel.targets.filter { $0.conversationId != sourceConversationId }
     }
 
     var body: some View {
@@ -57,12 +66,12 @@ struct ForwardPickerSheet: View {
                 Divider()
                     .overlay(theme.textMuted.opacity(0.2))
 
-                if isLoading {
+                if isColdStartLoading {
                     Spacer()
                     ProgressView()
                         .tint(Color(hex: accentColor))
                     Spacer()
-                } else if conversations.isEmpty && loadFailed {
+                } else if visibleTargets.isEmpty && loadFailed {
                     // Cold-start load failure — distinct from a genuinely empty
                     // list so the user gets a recoverable Retry rather than a
                     // misleading "no conversations". Reuses the conversation-list
@@ -74,9 +83,9 @@ struct ForwardPickerSheet: View {
                         actionLabel: String(localized: "conversations.error.retry", defaultValue: "Réessayer", bundle: .main),
                         accentColor: accentColor,
                         compact: true,
-                        onAction: { Task { await retryLoad() } }
+                        onAction: { Task { await pickerModel.loadInitial() } }
                     )
-                } else if filteredConversations.isEmpty {
+                } else if visibleTargets.isEmpty {
                     EmptyStateView(
                         icon: "bubble.left.and.bubble.right",
                         title: String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main),
@@ -87,8 +96,19 @@ struct ForwardPickerSheet: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            ForEach(filteredConversations) { conv in
-                                conversationRow(conv)
+                            ForEach(visibleTargets) { target in
+                                targetRow(target)
+                            }
+
+                            // Sentinelle de pagination — inactive pendant une
+                            // recherche : `pickerModel.targets` y contient des
+                            // résultats fusionnés (conversations + contacts),
+                            // pas la page en cours, et enchaîner `loadMore()`
+                            // par-dessus viderait/écraserait le filtre.
+                            if pickerModel.hasMore, pickerModel.paginationState == .idle, pickerModel.searchText.isEmpty {
+                                Color.clear
+                                    .frame(height: 1)
+                                    .onAppear { Task { await pickerModel.loadMore() } }
                             }
                         }
                     }
@@ -106,10 +126,13 @@ struct ForwardPickerSheet: View {
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Search a conversation", bundle: .main))
+            .searchable(text: $pickerModel.searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Search a conversation", bundle: .main))
+            .adaptiveOnChange(of: pickerModel.searchText) { _, newValue in
+                Task { await pickerModel.search(newValue) }
+            }
         }
         .task {
-            await loadConversations()
+            await pickerModel.loadInitial()
         }
         .withStatusBubble()
         // Seul site d'émission du toast succès : la feuille est PARTIE, donc
@@ -200,34 +223,47 @@ struct ForwardPickerSheet: View {
         }
     }
 
-    // MARK: - Conversation Row
+    // MARK: - Loading state
+
+    private var isColdStartLoading: Bool {
+        pickerModel.targets.isEmpty && pickerModel.paginationState == .loadingMore
+    }
+
+    private var loadFailed: Bool {
+        if case .error = pickerModel.paginationState { return true }
+        return false
+    }
+
+    // MARK: - Target Row
 
     /// Les lectures de singleton (thème via `ForwardPickerRow`, statuts via
     /// `statusViewModel`) restent ICI : la rangée ne reçoit que des VALEURS,
     /// condition de son portillon `.equatable()`.
-    private func conversationRow(_ conv: Conversation) -> some View {
+    private func targetRow(_ target: ForwardTarget) -> some View {
         ForwardPickerRow(
-            id: conv.id,
-            name: conv.displayName,
-            typeLabel: conv.type.rawValue,
-            memberCount: conv.memberCount,
-            avatarURL: conv.avatar,
-            avatarAccentHex: conv.accentColor,
-            favoriteEmoji: conv.userState.reaction,
-            moodEmoji: conv.participantUserId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+            id: target.id,
+            name: target.title,
+            typeLabel: target.subtitle ?? "",
+            memberCount: 0,
+            avatarURL: target.avatarURL,
+            avatarAccentHex: DynamicColorGenerator.colorForName(target.title),
+            favoriteEmoji: nil,
+            moodEmoji: target.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
             accentHex: accentColor,
             isDark: isDark,
-            state: model.state(of: conv.id),
-            a11yName: conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main),
+            state: sendState.state(of: target.id),
+            a11yName: target.title.isEmpty
+                ? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)
+                : target.title,
             onTap: {
                 // Tap de LIGNE = sélection (no-op sur une cible servie/en cours).
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    model.tapRow(conv.id)
+                    sendState.tapRow(target.id)
                 }
                 HapticFeedback.light()
             },
-            onSend: { send(conv) },
-            onMoodTap: conv.participantUserId.flatMap { statusViewModel.moodTapHandler(for: $0) }
+            onSend: { send(target) },
+            onMoodTap: target.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
         )
         .equatable()
     }
@@ -236,11 +272,11 @@ struct ForwardPickerSheet: View {
 
     @ViewBuilder
     private var batchSendBar: some View {
-        if model.hasSelection {
+        if sendState.hasSelection {
             Button {
                 batchSend()
             } label: {
-                Text(String(format: String(localized: "forward.send-selected", defaultValue: "Envoyer (%d)", bundle: .main), model.selectedIds.count))
+                Text(String(format: String(localized: "forward.send-selected", defaultValue: "Envoyer (%d)", bundle: .main), sendState.selectedIds.count))
                     .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -256,83 +292,50 @@ struct ForwardPickerSheet: View {
 
     // MARK: - Actions
 
-    private func loadConversations() async {
-        // Cache-first: surface the locally-cached conversations instantly (same
-        // store/key as the conversation list) so the forward picker never shows
-        // a spinner when data is already known, then revalidate in background.
-        let cached = await CacheCoordinator.shared.conversations.load(for: "list")
-        switch cached {
-        case .fresh(let data, _):
-            conversations = data
-            isLoading = false
-        case .stale(let data, _):
-            conversations = data
-            isLoading = false
-            await refreshConversations()
-        case .expired, .empty:
-            await refreshConversations()
-        }
-    }
-
-    private func refreshConversations() async {
-        do {
-            let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.offsetPaginatedRequest(
-                endpoint: "/conversations",
-                offset: 0,
-                limit: 50
-            )
-            if response.success {
-                let userId = AuthManager.shared.currentUser?.id ?? ""
-                let payload = response.data
-                // Decode off the main actor so opening the picker never hitches.
-                conversations = await Task.detached(priority: .userInitiated) {
-                    payload.map { $0.toConversation(currentUserId: userId) }
-                }.value
-                loadFailed = false
-            } else {
-                loadFailed = true
-            }
-        } catch {
-            loadFailed = true
-        }
-        isLoading = false
-    }
-
-    private func retryLoad() async {
-        loadFailed = false
-        isLoading = true
-        await refreshConversations()
-    }
-
     /// Envoi immédiat à UNE cible (bouton par-ligne, ou une étape du batch).
-    private func send(_ conv: Conversation) {
-        guard model.beginSend(conv.id) else { return }
-        Task { await perform(conv) }
+    private func send(_ target: ForwardTarget) {
+        guard sendState.beginSend(target.id) else { return }
+        Task { await perform(target) }
     }
 
     /// Envoi groupé aux cibles sélectionnées, en séquence — les cibles déjà
     /// servies en sont exclues par construction (`ForwardPickerModel`).
     private func batchSend() {
-        let ids = withAnimation { model.beginBatch() }
-        let targets = ids.compactMap { id in conversations.first(where: { $0.id == id }) }
+        let ids = withAnimation { sendState.beginBatch() }
+        let targets = ids.compactMap { id in visibleTargets.first(where: { $0.id == id }) }
         Task {
-            for conv in targets { await perform(conv) }
+            for target in targets { await perform(target) }
         }
     }
 
-    private func perform(_ conv: Conversation) async {
+    /// Résolution ET envoi passent tous les deux par `MessageForwardService` —
+    /// une conversation déjà connue (`target.conversationId`) part
+    /// directement ; un contact sans conversation en obtient une, créée par
+    /// le service AU MOMENT DE CET APPEL, jamais avant (invariant produit :
+    /// sélectionner un contact puis fermer la feuille ne crée rien).
+    private func perform(_ target: ForwardTarget) async {
         let outcome = await forwardService.forward(
             message: message,
             sourceConversationId: sourceConversationId,
-            to: conv.id
+            to: target
         )
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            model.finishSend(conv.id, outcome: outcome)
+            sendState.finishSend(target.id, outcome: outcome)
         }
         switch outcome {
         case .sent, .queuedOffline:
             HapticFeedback.success()
-            if firstServedConversation == nil { firstServedConversation = conv }
+            didServeAnyTarget = true
+            if firstServedConversation == nil, let conversationId = target.conversationId {
+                firstServedConversation = Conversation(
+                    id: conversationId,
+                    identifier: conversationId,
+                    type: .direct,
+                    title: target.title,
+                    avatar: target.avatarURL,
+                    participantUserId: target.userId
+                )
+            }
         case .failed:
             HapticFeedback.error()
         }
@@ -346,14 +349,16 @@ struct ForwardPickerSheet: View {
     /// au lieu d'invoquer l'action — c'est déjà la raison pour laquelle les
     /// ÉCHECS s'affichent in-sheet (cf. `sendControl`). Le succès se voit donc
     /// in-sheet, ligne par ligne, via la pastille « Transféré » ; le toast
-    /// tappable — seul chemin vers « ouvrir la cible » (spec A.5) — n'est émis
-    /// qu'une fois la feuille partie. Un seul toast par ouverture, sur la
-    /// PREMIÈRE cible servie.
+    /// tappable — quand une conversation navigable est connue (spec A.5) — n'est
+    /// émis qu'une fois la feuille partie. Un seul toast par ouverture, sur la
+    /// PREMIÈRE cible servie ; une cible qui vient de créer sa conversation
+    /// (contact) donne un toast SANS action tappable plutôt que de naviguer
+    /// vers un id inventé.
     private func fireDeferredSuccessToast() {
-        guard !successToastFired, let conv = firstServedConversation else { return }
+        guard !successToastFired, didServeAnyTarget else { return }
         successToastFired = true
         let title = String(localized: "forward.success", defaultValue: "Message transféré", bundle: .main)
-        guard let onOpenConversation else {
+        guard let onOpenConversation, let conv = firstServedConversation else {
             FeedbackToastManager.shared.showSuccess(title)
             return
         }

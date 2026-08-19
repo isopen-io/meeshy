@@ -29,11 +29,21 @@ final class MessageForwardServiceTests: XCTestCase {
 
     private func makeSUT(
         online: Bool = true
-    ) -> (sut: MessageForwardService, api: MockAPIClientForApp, queue: FakeOfflineMessageQueue) {
+    ) -> (sut: MessageForwardService, api: MockAPIClientForApp, queue: FakeOfflineMessageQueue, creator: MockConversationCreator) {
         let api = MockAPIClientForApp()
         let queue = FakeOfflineMessageQueue()
-        let sut = MessageForwardService(api: api, queue: queue, isOnline: { online })
-        return (sut, api, queue)
+        let creator = MockConversationCreator()
+        let sut = MessageForwardService(api: api, queue: queue, isOnline: { online }, conversationCreator: creator)
+        return (sut, api, queue, creator)
+    }
+
+    private func makeConversation(id: String) -> Conversation {
+        MeeshyConversation(id: id, identifier: id, type: .direct)
+    }
+
+    private func makeContactTarget(userId: String = "u1", title: String = "Alice") -> ForwardTarget {
+        ForwardTarget(id: "user:\(userId)", kind: .contact, conversationId: nil, userId: userId,
+                      title: title, subtitle: nil, avatarURL: nil)
     }
 
     private func stubSendSuccess(_ api: MockAPIClientForApp, target: String) {
@@ -59,7 +69,7 @@ final class MessageForwardServiceTests: XCTestCase {
     // MARK: - Payload
 
     func test_forward_online_postsForwardedFromId_withoutAttachmentIds() async throws {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         stubSendSuccess(api, target: target)
 
         let outcome = await sut.forward(
@@ -79,7 +89,7 @@ final class MessageForwardServiceTests: XCTestCase {
     }
 
     func test_forward_mediaOnly_omitsContent() async throws {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         stubSendSuccess(api, target: target)
 
         _ = await sut.forward(message: makeMessage(content: ""), sourceConversationId: sourceConvId, to: target)
@@ -90,7 +100,7 @@ final class MessageForwardServiceTests: XCTestCase {
     }
 
     func test_forward_emptySourceConversationId_omitsTheField() async throws {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         stubSendSuccess(api, target: target)
 
         _ = await sut.forward(message: makeMessage(), sourceConversationId: "", to: target)
@@ -106,7 +116,7 @@ final class MessageForwardServiceTests: XCTestCase {
     /// pour que l'index unique `(conversationId, clientMessageId)` du gateway
     /// absorbe le cas où le premier POST avait en réalité abouti.
     func test_forward_retryAfterFailure_reusesClientMessageId() async throws {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.serverError(500, "boom")
 
         let failure = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
@@ -131,7 +141,7 @@ final class MessageForwardServiceTests: XCTestCase {
     /// (P2002 → la ligne EXISTANTE revient en succès), donnant une UI
     /// « Transféré » sans qu'aucun message ne soit créé.
     func test_forward_afterConfirmedSend_usesFreshClientMessageId() async throws {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         stubSendSuccess(api, target: target)
 
         let first = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
@@ -148,7 +158,7 @@ final class MessageForwardServiceTests: XCTestCase {
     }
 
     func test_forward_distinctTargets_useDistinctClientMessageIds() async throws {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.serverError(500, "boom")
 
         _ = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: target)
@@ -163,7 +173,7 @@ final class MessageForwardServiceTests: XCTestCase {
     // MARK: - Offline
 
     func test_forward_offline_enqueuesDurably() async throws {
-        let (sut, api, queue) = makeSUT(online: false)
+        let (sut, api, queue, _) = makeSUT(online: false)
 
         let outcome = await sut.forward(
             message: makeMessage(content: "x"),
@@ -201,7 +211,7 @@ final class MessageForwardServiceTests: XCTestCase {
     // MARK: - Échec
 
     func test_forward_serverRefusal_surfacesReason() async {
-        let (sut, api, _) = makeSUT()
+        let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.serverError(400, "Un message à vue unique ne peut pas être transféré")
 
         let outcome = await sut.forward(message: makeMessage(content: "x"), sourceConversationId: nil, to: target)
@@ -211,5 +221,71 @@ final class MessageForwardServiceTests: XCTestCase {
         }
         XCTAssertTrue(reason.contains("vue unique"),
                       "la raison serveur doit survivre jusqu'à l'affichage — reçu : \(reason)")
+    }
+
+    // MARK: - Résolution de cible (ForwardTarget)
+
+    /// Une cible déjà rattachée à une conversation part directement : la
+    /// résolution ne doit jamais appeler `createDirectConversation` quand
+    /// `conversationId` est déjà connu.
+    func test_forward_toExistingConversationTarget_skipsCreationAndSends() async throws {
+        let (sut, api, _, creator) = makeSUT()
+        stubSendSuccess(api, target: target)
+        let existing = ForwardTarget(id: "conv:\(target)", kind: .conversation, conversationId: target,
+                                      userId: nil, title: "Équipe", subtitle: nil, avatarURL: nil)
+
+        let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: existing)
+
+        XCTAssertEqual(outcome, .sent)
+        XCTAssertEqual(creator.createCallCount, 0, "une conversation déjà connue ne doit jamais déclencher de création")
+        XCTAssertEqual(api.requestEndpoints, ["/conversations/\(target)/messages"])
+    }
+
+    /// Invariant produit : la conversation directe n'est créée QU'À L'ENVOI —
+    /// jamais à la sélection. Cette preuve tient parce que `forward(...)` est
+    /// le SEUL point d'entrée qui touche `createDirectConversation` ; la
+    /// sélection d'une cible dans le picker n'appelle jamais ce service.
+    func test_forward_toContactWithoutConversation_createsItOnceThenSends() async throws {
+        let (sut, api, _, creator) = makeSUT()
+        creator.result = .success(makeConversation(id: "new-conv"))
+        stubSendSuccess(api, target: "new-conv")
+        let contactTarget = makeContactTarget()
+
+        XCTAssertEqual(creator.createCallCount, 0, "aucune création avant l'envoi")
+        let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: contactTarget)
+
+        XCTAssertEqual(outcome, .sent)
+        XCTAssertEqual(creator.createCallCount, 1)
+        XCTAssertEqual(creator.lastUserId, "u1")
+        XCTAssertEqual(api.requestEndpoints, ["/conversations/new-conv/messages"])
+    }
+
+    func test_forward_toContact_whenCreationFails_doesNotSend() async {
+        let (sut, api, _, creator) = makeSUT()
+        creator.result = .failure(APIError.serverError(403, "USER_BLOCKED"))
+        let contactTarget = makeContactTarget()
+
+        let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: contactTarget)
+
+        guard case .failed(let reason) = outcome else {
+            return XCTFail("expected .failed, got \(outcome)")
+        }
+        XCTAssertTrue(reason.contains("USER_BLOCKED"))
+        XCTAssertEqual(api.postCount, 0, "la création a échoué — aucun POST de message ne doit partir")
+    }
+
+    /// Un contact ABSOLUMENT sans `userId` ni `conversationId` (cas défensif,
+    /// non produit par `ForwardPickerViewModel` en pratique) échoue proprement
+    /// plutôt que de forcer un unwrap.
+    func test_forward_targetWithNeitherConversationNorUser_failsWithoutCreatingOrSending() async {
+        let (sut, api, _, creator) = makeSUT()
+        let emptyTarget = ForwardTarget(id: "user:orphan", kind: .contact, conversationId: nil,
+                                         userId: nil, title: "?", subtitle: nil, avatarURL: nil)
+
+        let outcome = await sut.forward(message: makeMessage(), sourceConversationId: nil, to: emptyTarget)
+
+        guard case .failed = outcome else { return XCTFail("expected .failed, got \(outcome)") }
+        XCTAssertEqual(creator.createCallCount, 0)
+        XCTAssertEqual(api.postCount, 0)
     }
 }

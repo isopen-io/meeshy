@@ -155,9 +155,16 @@ final class ForwardPickerSuccessToastGuardTests: XCTestCase {
     }
 
     /// L'envoi lui-même ne doit rien émettre : c'est le défaut d'origine.
+    ///
+    /// Signature `ForwardTarget` depuis 2026-08-19 (Task 8, forward-reach) —
+    /// le picker envoie désormais à une conversation existante OU un contact
+    /// sans conversation encore ouverte ; la clé de dédup/état de ligne
+    /// (`ForwardTarget.id`, préfixée `conv:`/`user:`) ne survit pas à un
+    /// aller-retour par `Conversation`. La garde SUIT ce renommage légitime :
+    /// elle continue de prouver que `perform(_:)` n'émet aucun toast.
     func test_performSend_emitsNoToast() throws {
         let perform = try functionBody(
-            after: "private func perform(_ conv: Conversation) async",
+            after: "private func perform(_ target: ForwardTarget) async",
             in: try strippedSource()
         )
 

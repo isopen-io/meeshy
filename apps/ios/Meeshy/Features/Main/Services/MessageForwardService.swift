@@ -10,6 +10,7 @@ enum ForwardOutcome: Equatable {
 
 protocol MessageForwardServiceProviding {
     func forward(message: Message, sourceConversationId: String?, to targetConversationId: String) async -> ForwardOutcome
+    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget) async -> ForwardOutcome
 }
 
 /// Chemin UNIQUE du transfert de message (spec 2026-08-19, Volet A.3) : tous
@@ -35,16 +36,22 @@ final class MessageForwardService: MessageForwardServiceProviding {
     private let api: APIClientProviding
     private let queue: OfflineMessageQueueing
     private let isOnline: () -> Bool
+    private let conversationCreator: ConversationCreating
+    private let authManager: AuthManaging
     private var clientMessageIds: [String: String] = [:]
 
     init(
         api: APIClientProviding = APIClient.shared,
         queue: OfflineMessageQueueing = OfflineQueue.shared,
-        isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline }
+        isOnline: @escaping () -> Bool = { NetworkMonitor.shared.isOnline },
+        conversationCreator: ConversationCreating = ConversationCreator(),
+        authManager: AuthManaging = AuthManager.shared
     ) {
         self.api = api
         self.queue = queue
         self.isOnline = isOnline
+        self.conversationCreator = conversationCreator
+        self.authManager = authManager
     }
 
     func forward(message: Message, sourceConversationId: String?, to targetConversationId: String) async -> ForwardOutcome {
@@ -81,13 +88,50 @@ final class MessageForwardService: MessageForwardServiceProviding {
             )
             clientMessageIds.removeValue(forKey: dedupKey)
             return .sent
-        } catch let APIError.serverError(_, serverMessage) {
-            return .failed(reason: serverMessage ?? Self.genericFailure)
-        } catch let error as APIError {
-            return .failed(reason: error.errorDescription ?? Self.genericFailure)
         } catch {
-            return .failed(reason: error.localizedDescription)
+            return .failed(reason: Self.failureReason(for: error))
         }
+    }
+
+    /// Résout la cible AVANT de transférer, puis délègue au chemin unique
+    /// ci-dessus — le `clientMessageId` de dédup est donc calculé APRÈS
+    /// résolution.
+    ///
+    /// - Une cible qui porte déjà `conversationId` (issue d'une conversation
+    ///   existante) part directement.
+    /// - Une cible SANS conversation (un contact) en obtient une via
+    ///   `createDirectConversation`, IDEMPOTENTE côté serveur : elle renvoie
+    ///   la conversation existante (200) plutôt que d'en recréer une seconde.
+    ///
+    /// La résolution — et donc toute création de conversation — n'a lieu
+    /// QU'ICI, à l'envoi. Sélectionner un contact dans le picker puis fermer
+    /// la feuille sans envoyer ne crée jamais de conversation vide.
+    func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget) async -> ForwardOutcome {
+        if let conversationId = target.conversationId {
+            return await forward(message: message, sourceConversationId: sourceConversationId, to: conversationId)
+        }
+        guard let userId = target.userId else {
+            return .failed(reason: Self.genericFailure)
+        }
+        do {
+            let conversation = try await conversationCreator.createDirectConversation(
+                with: userId,
+                currentUserId: authManager.currentUser?.id ?? ""
+            )
+            return await forward(message: message, sourceConversationId: sourceConversationId, to: conversation.id)
+        } catch {
+            return .failed(reason: Self.failureReason(for: error))
+        }
+    }
+
+    private static func failureReason(for error: Error) -> String {
+        if case let APIError.serverError(_, serverMessage) = error {
+            return serverMessage ?? genericFailure
+        }
+        if let apiError = error as? APIError {
+            return apiError.errorDescription ?? genericFailure
+        }
+        return error.localizedDescription
     }
 
     private static var genericFailure: String {
