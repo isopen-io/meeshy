@@ -466,7 +466,7 @@ final class StoryModelsTests: XCTestCase {
             repostOf: repostOf, originalRepostOfId: originalRepostOfId, isQuote: false,
             moodEmoji: nil, audioUrl: audioUrl, audioDuration: nil, storyEffects: ownStoryEffects,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
-            isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
+            isViewedByMe: nil, currentUserReactions: nil, viaUsername: nil
         )
     }
 

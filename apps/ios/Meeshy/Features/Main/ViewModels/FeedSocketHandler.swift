@@ -293,7 +293,9 @@ extension PostRecord {
             mediaJson: Self.encode(post.media),
             reactionSummaryJson: Self.encode(post.reactionSummary),
             repostOfJson: Self.encode(post.repostOf),
-            mentionedUsersJson: Self.encode(post.mentionedUsers),
+            // Colonne conservée en base (pas de migration), mais plus écrite :
+            // `APIPost.mentionedUsers` n'a jamais eu de source côté gateway.
+            mentionedUsersJson: nil,
             translationsJson: Self.encode(post.translations),
             createdAt: post.createdAt,
             updatedAt: post.updatedAt,

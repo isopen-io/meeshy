@@ -624,3 +624,109 @@ describe('reconcilePostMentions — rétractation', () => {
     expect(prisma.notification.deleteMany).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('reconcilePostMentions — changement de mode', () => {
+  // « Une liste remplace l'ensemble déclaré » vaut aussi quand la personne y
+  // était déjà : changer de mode et choisir un mode sont le même geste côté
+  // composer. Sans écriture, le mode choisi n'existe que dans l'UI de l'auteur.
+  it('écrit le nouveau mode d\'une personne déjà référencée', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-bob', display: 'SILENT' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte sans arobase',
+      declared: [{ userId: 'u-bob', display: 'NOTE' }],
+    });
+
+    expect(prisma.postMention.updateMany).toHaveBeenCalledWith({
+      where: { postId: 'post-1', mentionedUserId: { in: ['u-bob'] } },
+      data: { display: 'NOTE' },
+    });
+    expect(prisma.postMention.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('bascule en INLINE une déclarée que le texte s\'est mis à nommer', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-alice', display: 'PINNED' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const mentionService = makeMentionService();
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'bravo @alice',
+      declared: [],
+    });
+
+    expect(prisma.postMention.updateMany).toHaveBeenCalledWith({
+      where: { postId: 'post-1', mentionedUserId: { in: ['u-alice'] } },
+      data: { display: 'INLINE' },
+    });
+  });
+
+  it('ne touche à rien quand aucun mode ne change', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-bob', display: 'NOTE' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService: makeNotifier(), post: POST,
+      content: 'texte sans arobase',
+      declared: [{ userId: 'u-bob', display: 'NOTE' }],
+    });
+
+    expect(prisma.postMention.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('ne renotifie pas quelqu\'un dont seul le mode a changé', async () => {
+    const prisma = makePrisma({
+      postMention: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { mentionedUserId: 'u-bob', display: 'SILENT' },
+        ]),
+        deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
+      },
+    });
+    const mentionService = makeMentionService({
+      extractMentions: jest.fn<any>().mockReturnValue([]),
+      resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
+    });
+    const notificationService = makeNotifier();
+
+    await reconcilePostMentions({
+      prisma, mentionService, notificationService, post: POST,
+      content: 'texte sans arobase',
+      declared: [{ userId: 'u-bob', display: 'NOTE' }],
+    });
+
+    expect(notificationService.createPostMentionNotificationsBatch).not.toHaveBeenCalled();
+  });
+});

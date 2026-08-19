@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Règles PURES de la mention « @ » dans un composeur.
 ///
@@ -102,5 +103,91 @@ public nonisolated enum ComposerMentionQuery {
             ordered.append(handle)
         }
         return ordered
+    }
+}
+
+/// Une personne que l'auteur a choisi de nommer, et COMMENT.
+///
+/// `userId` quand un sélecteur l'a rendu, `username` toujours : c'est lui qui
+/// survit à un brouillon repris trois jours plus tard, là où un id devrait être
+/// persisté en parallèle des effets.
+public nonisolated struct ComposerReference: Sendable, Equatable {
+    public let username: String
+    public let userId: String?
+    public var display: PostReferenceDisplay
+
+    public init(username: String, userId: String? = nil, display: PostReferenceDisplay) {
+        self.username = username
+        self.userId = userId
+        self.display = display
+    }
+}
+
+/// Les règles PURES de l'état « qui ce contenu nomme, et comment ».
+///
+/// Ni SwiftUI, ni réseau — c'est ce qui les rend testables en millisecondes, et
+/// c'est ce qui les fera SURVIVRE à la convergence des composers Reel / Post /
+/// Story : l'interface changera, la règle non.
+public nonisolated enum ComposerReferences {
+
+    /// Ajoute une personne, ou change son mode si elle est déjà là.
+    ///
+    /// EN PLACE, pas en fin de liste : choisir un mode et en changer sont le
+    /// même geste côté UI, et voir la pastille sauter au bout de la rangée à
+    /// chaque changement donnerait l'impression d'avoir ajouté quelqu'un.
+    public static func upsert(
+        _ reference: ComposerReference,
+        into references: [ComposerReference]
+    ) -> [ComposerReference] {
+        let key = reference.username.lowercased()
+        guard let index = references.firstIndex(where: { $0.username.lowercased() == key }) else {
+            return references + [reference]
+        }
+        var updated = references
+        updated[index].display = reference.display
+        return updated
+    }
+
+    /// Retire une personne. Insensible à la casse — le serveur résout les
+    /// pseudos de la même façon.
+    public static func remove(
+        username: String,
+        from references: [ComposerReference]
+    ) -> [ComposerReference] {
+        let key = username.lowercased()
+        return references.filter { $0.username.lowercased() != key }
+    }
+
+    /// Ce que la publication DÉCLARE au serveur : les non-INLINE, et elles
+    /// seules.
+    ///
+    /// INLINE est absent par construction — le serveur le dérive en relisant
+    /// les `@handle` du texte, et le déclarer ouvrirait un second chemin vers le
+    /// même fait, que le premier désaccord ferait diverger.
+    public static func payload(_ references: [ComposerReference]) -> [PostMentionInput] {
+        references.compactMap { reference in
+            guard reference.display != .inline else { return nil }
+            if let userId = reference.userId {
+                return PostMentionInput(userId: userId, username: nil, display: reference.display.rawValue)
+            }
+            return PostMentionInput(userId: nil, username: reference.username, display: reference.display.rawValue)
+        }
+    }
+
+    /// Retire un `@handle` du texte, avec l'espace qu'il laisserait derrière lui.
+    ///
+    /// C'est la transition INLINE → autre chose : passer une référence en badge,
+    /// en note ou en silence n'a de sens que si le pseudo quitte la phrase.
+    /// Frontière de mot à droite : `@alice` ne doit pas emporter `@alicia`.
+    public static func removingHandle(_ username: String, from text: String) -> String {
+        let escaped = NSRegularExpression.escapedPattern(for: username)
+        guard let regex = try? NSRegularExpression(
+            pattern: "\\s*@\(escaped)(?![\\p{L}\\p{N}_.-])",
+            options: [.caseInsensitive]
+        ) else { return text }
+
+        let range = NSRange(text.startIndex..., in: text)
+        let stripped = regex.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+        return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

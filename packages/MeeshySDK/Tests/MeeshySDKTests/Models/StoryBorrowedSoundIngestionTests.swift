@@ -42,7 +42,7 @@ final class StoryBorrowedSoundIngestionTests: XCTestCase {
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: effects,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil,
             isRepostedByMe: nil, isViewedByMe: nil, currentUserReactions: nil,
-            mentionedUsers: nil, viaUsername: nil
+            viaUsername: nil
         )
     }
 

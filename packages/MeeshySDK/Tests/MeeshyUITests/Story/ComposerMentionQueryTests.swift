@@ -1,5 +1,7 @@
 import XCTest
+import Testing
 @testable import MeeshyUI
+@testable import MeeshySDK
 
 /// Les règles PURES de la mention « @ ». Elles servent trois surfaces — le
 /// composeur de post, l'éditeur de texte de story, et le contrôleur de mention
@@ -103,5 +105,75 @@ final class ComposerMentionQueryTests: XCTestCase {
 
     func test_handlesInAll_withoutAnyHandle_isEmpty() {
         XCTAssertTrue(ComposerMentionQuery.handles(inAll: ["Bonjour", "contact@exemple.com"]).isEmpty)
+    }
+}
+
+struct ComposerReferencesTests {
+
+    @Test func test_upsert_newUsername_appends() {
+        let result = ComposerReferences.upsert(
+            ComposerReference(username: "alice", userId: nil, display: .note),
+            into: []
+        )
+        #expect(result.map(\.username) == ["alice"])
+        #expect(result[0].display == .note)
+    }
+
+    @Test func test_upsert_existingUsername_replacesModeInPlace() {
+        // Choisir un mode et en changer sont le MÊME geste : la personne ne doit
+        // pas être ajoutée deux fois, et elle ne doit pas sauter en fin de liste.
+        let existing = [
+            ComposerReference(username: "alice", userId: nil, display: .pinned),
+            ComposerReference(username: "bob", userId: nil, display: .silent),
+        ]
+        let result = ComposerReferences.upsert(
+            ComposerReference(username: "Alice", userId: nil, display: .note),
+            into: existing
+        )
+
+        #expect(result.count == 2)
+        #expect(result[0].username == "alice")
+        #expect(result[0].display == .note)
+        #expect(result[1].username == "bob")
+    }
+
+    @Test func test_remove_isCaseInsensitive() {
+        let existing = [ComposerReference(username: "alice", userId: nil, display: .note)]
+        #expect(ComposerReferences.remove(username: "ALICE", from: existing).isEmpty)
+    }
+
+    @Test func test_payload_carriesModeAndDropsNothing() {
+        let refs = [
+            ComposerReference(username: "alice", userId: nil, display: .pinned),
+            ComposerReference(username: nil == nil ? "bob" : "", userId: "u-bob", display: .silent),
+        ]
+        let payload = ComposerReferences.payload(refs)
+
+        #expect(payload.count == 2)
+        #expect(payload[0].username == "alice")
+        #expect(payload[0].display == "PINNED")
+        #expect(payload[1].userId == "u-bob")
+        #expect(payload[1].display == "SILENT")
+    }
+
+    @Test func test_payload_neverDeclaresInline() {
+        // INLINE est dérivé par le serveur. Le déclarer ouvrirait un second
+        // chemin vers le même fait, et les deux divergeraient.
+        let refs = [ComposerReference(username: "alice", userId: nil, display: .inline)]
+        #expect(ComposerReferences.payload(refs).isEmpty)
+    }
+
+    @Test func test_removingHandle_dropsTheHandleAndItsSpacing() {
+        #expect(ComposerReferences.removingHandle("alice", from: "Soirée avec @alice hier")
+                == "Soirée avec hier")
+        #expect(ComposerReferences.removingHandle("alice", from: "@alice")
+                == "")
+        #expect(ComposerReferences.removingHandle("alice", from: "bravo @Alice !")
+                == "bravo !")
+    }
+
+    @Test func test_removingHandle_leavesOtherHandlesAlone() {
+        #expect(ComposerReferences.removingHandle("alice", from: "@alice et @alicia")
+                == "et @alicia")
     }
 }

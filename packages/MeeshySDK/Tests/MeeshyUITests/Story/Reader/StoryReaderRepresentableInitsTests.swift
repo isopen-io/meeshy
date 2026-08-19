@@ -52,7 +52,7 @@ final class StoryReaderRepresentableInitsTests: XCTestCase {
             moodEmoji: nil, audioUrl: nil, audioDuration: nil,
             storyEffects: nil, translations: nil, isLikedByMe: nil,
             isBookmarkedByMe: nil, isRepostedByMe: nil,
-            isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
+            isViewedByMe: nil, currentUserReactions: nil, viaUsername: nil
         )
         let rep = StoryReaderRepresentable(post: post, preferredLanguage: "fr", mute: false)
         XCTAssertEqual(rep.preferredLanguages, ["fr"])

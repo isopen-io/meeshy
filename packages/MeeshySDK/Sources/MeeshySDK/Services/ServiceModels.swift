@@ -247,14 +247,33 @@ public struct UpdatePostRequest: Encodable, Sendable {
 public struct PostMentionInput: Encodable, Sendable, Equatable {
     public let userId: String?
     public let username: String?
+    /// `PINNED` | `NOTE` | `SILENT`. Jamais `INLINE` : le serveur le dérive du
+    /// texte, et le déclarer ouvrirait un second chemin vers le même fait.
+    ///
+    /// `nil` reste accepté par le serveur, qui le lit PINNED — c'est ce que
+    /// faisait l'ancien canal CANVAS, et c'est ce qui garde les versions déjà
+    /// installées fonctionnelles.
+    public let display: String?
 
-    public init(userId: String? = nil, username: String? = nil) {
+    public init(userId: String? = nil, username: String? = nil, display: String? = nil) {
         self.userId = userId
         self.username = username
+        self.display = display
     }
 
+    /// Conservé sans label pour les appelants existants qui référencent CETTE
+    /// surcharge comme valeur de fonction (`.map(PostMentionInput.handle)`) —
+    /// `display` reste `nil`, lu PINNED côté serveur, comme avant ce chantier.
     public static func handle(_ username: String) -> PostMentionInput {
-        PostMentionInput(userId: nil, username: username)
+        PostMentionInput(userId: nil, username: username, display: nil)
+    }
+
+    public static func handle(_ username: String, display: PostReferenceDisplay) -> PostMentionInput {
+        PostMentionInput(userId: nil, username: username, display: display.rawValue)
+    }
+
+    public static func id(_ userId: String, display: PostReferenceDisplay) -> PostMentionInput {
+        PostMentionInput(userId: userId, username: nil, display: display.rawValue)
     }
 }
 

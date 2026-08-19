@@ -190,7 +190,17 @@ public struct APIPost: Sendable {
     public let isRepostedByMe: Bool?
     public let isViewedByMe: Bool?
     public let currentUserReactions: [String]?
-    public let mentionedUsers: [MentionedUser]?
+    /// Les personnes que ce contenu nomme, avec leur mode. Résolues au
+    /// chargement côté serveur, donc porteuses du profil À JOUR.
+    ///
+    /// Les SILENT n'y figurent QUE pour la personne concernée et pour l'auteur
+    /// (le serveur projette au détail, filtre au niveau du select pour un feed).
+    /// `nil` sur un serveur non encore déployé — décodage tolérant, même
+    /// patron que `postOpenCount`/`trackingLinks` plus haut.
+    public var mentions: [PostReference]? = nil
+    /// Le droit d'ouvrir ce contenu s'il est expiré. `nil` sur un serveur non
+    /// encore déployé — traité comme `.none`.
+    public var referenceAccess: ReferenceAccess? = nil
     public let viaUsername: String?
     /// Outbound-link tracking mappings minted by the gateway. Parsed from the
     /// top-level `trackingLinks` (socket `post:created` / `story:created` /
@@ -211,7 +221,7 @@ extension APIPost: Decodable {
         case media, comments, repostOf, originalRepostOfId, isQuote, moodEmoji
         case audioUrl, audioDuration, storyEffects, translations
         case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
-        case currentUserReactions, mentionedUsers, viaUsername
+        case currentUserReactions, mentions, referenceAccess, viaUsername
         case trackingLinks, metadata
     }
 
@@ -273,7 +283,8 @@ extension APIPost: Decodable {
         isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe)
         isViewedByMe = try c.decodeIfPresent(Bool.self, forKey: .isViewedByMe)
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
-        mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
+        mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
+        referenceAccess = try c.decodeIfPresent(ReferenceAccess.self, forKey: .referenceAccess)
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
         // (socket), else recover from the REST `metadata` envelope. Tolerant.
@@ -417,9 +428,6 @@ extension APIPost {
             translations: translations, originalLanguage: originalLanguage, preferredLanguages: langs
         )
 
-        if let mentionedUsers {
-            UserDisplayNameCache.shared.trackFromMentionedUsers(mentionedUsers)
-        }
         if let username = author.username {
             UserDisplayNameCache.shared.track(username: username, displayName: author.name)
         }

@@ -27,7 +27,7 @@ final class PostServiceHashtagTests: XCTestCase {
             originalRepostOfId: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
             translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
-            isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
+            isViewedByMe: nil, currentUserReactions: nil, viaUsername: nil
         )
     }
 
