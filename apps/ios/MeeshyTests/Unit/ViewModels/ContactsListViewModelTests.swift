@@ -74,11 +74,8 @@ final class ContactsListViewModelTests: XCTestCase {
             receiverId: "me",
             status: "accepted"
         )
-        friendService.receivedRequestsResult = .success(
+        friendService.allFriendRequestsResult = .success(
             FriendRequestFixture.makePaginated(requests: [newFriend])
-        )
-        friendService.sentRequestsResult = .success(
-            FriendRequestFixture.makePaginated(requests: [])
         )
 
         FriendshipCache.shared.didAcceptRequest(from: "eve")
@@ -89,7 +86,7 @@ final class ContactsListViewModelTests: XCTestCase {
 
         withExtendedLifetime(sut) {
             XCTAssertGreaterThanOrEqual(
-                friendService.receivedRequestsCallCount,
+                friendService.allFriendRequestsCallCount,
                 1,
                 "Cache addition must trigger a SWR refetch to hydrate the user record"
             )
@@ -114,10 +111,7 @@ final class ContactsListViewModelTests: XCTestCase {
         await yieldMainActor()
 
         let (sut, friendService) = makeSUT()
-        friendService.receivedRequestsResult = .success(
-            FriendRequestFixture.makePaginated(requests: [])
-        )
-        friendService.sentRequestsResult = .success(
+        friendService.allFriendRequestsResult = .success(
             FriendRequestFixture.makePaginated(requests: [])
         )
 
@@ -127,7 +121,7 @@ final class ContactsListViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertGreaterThanOrEqual(
-            friendService.receivedRequestsCallCount,
+            friendService.allFriendRequestsCallCount,
             1,
             "A fresh cache that lags behind FriendshipCache must trigger a background revalidate"
         )
@@ -139,8 +133,7 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let accepted = FriendRequestFixture.make(id: "r1", senderId: "other1", receiverId: "me", status: "accepted", senderUsername: "alice")
         let pending = FriendRequestFixture.make(id: "r2", senderId: "other2", receiverId: "me", status: "pending", senderUsername: "bob")
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted, pending]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [accepted, pending]))
 
         await sut.loadFriends()
 
@@ -152,8 +145,7 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let received = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice")
         let sent = FriendRequestFixture.make(id: "r2", senderId: "me", receiverId: "bob", status: "accepted", receiverUsername: "bob")
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [received]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [sent]))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [received, sent]))
 
         await sut.loadFriends()
 
@@ -167,12 +159,31 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let fromReceived = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice")
         let fromSent = FriendRequestFixture.make(id: "r2", senderId: "me", receiverId: "alice", status: "accepted", receiverUsername: "alice")
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [fromReceived]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [fromSent]))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [fromReceived, fromSent]))
 
         await sut.loadFriends()
 
         XCTAssertEqual(sut.friends.count, 1)
+    }
+
+    /// La régression que ce chantier corrige : `/friend-requests/received`
+    /// filtre `pending` en dur côté serveur, donc une relation acceptée où
+    /// je suis le RECEVEUR n'y apparaissait jamais. `allFriendRequests`
+    /// couvre les deux sens via `/users/friend-requests`.
+    func test_loadFriends_includesAcceptedRequestsWhereUserIsReceiver() async {
+        let (sut, friendService) = makeSUT(currentUserId: "me")
+        friendService.allFriendRequestsResult = .success(
+            FriendRequestFixture.makePaginated(requests: [
+                FriendRequestFixture.make(id: "r1", senderId: "other", receiverId: "me", status: "accepted")
+            ])
+        )
+
+        await sut.loadFriends(forceNetwork: true)
+
+        XCTAssertEqual(
+            sut.friends.map(\.id), ["other"],
+            "une relation acceptée où je suis le receveur DOIT apparaître dans mes contacts"
+        )
     }
 
     // MARK: - Filtering
@@ -181,8 +192,7 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let online = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice", senderIsOnline: true)
         let offline = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob", senderIsOnline: false)
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [online, offline]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [online, offline]))
 
         await sut.loadFriends()
         sut.setFilter(.online)
@@ -195,8 +205,7 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let online = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice", senderIsOnline: true)
         let offline = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob", senderIsOnline: false)
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [online, offline]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [online, offline]))
 
         await sut.loadFriends()
         sut.setFilter(.offline)
@@ -211,8 +220,7 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let alice = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice")
         let bob = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob")
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [alice, bob]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [alice, bob]))
 
         await sut.loadFriends()
         sut.search("ali")
@@ -227,8 +235,7 @@ final class ContactsListViewModelTests: XCTestCase {
         let (sut, mock) = makeSUT()
         let offline = FriendRequestFixture.make(id: "r1", senderId: "alice", receiverId: "me", status: "accepted", senderUsername: "alice", senderIsOnline: false)
         let online = FriendRequestFixture.make(id: "r2", senderId: "bob", receiverId: "me", status: "accepted", senderUsername: "bob", senderIsOnline: true)
-        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [offline, online]))
-        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: []))
+        mock.allFriendRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [offline, online]))
 
         await sut.loadFriends()
 

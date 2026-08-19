@@ -327,6 +327,9 @@ private final class ThrowingFriendService: FriendServiceProviding, @unchecked Se
             error: nil
         )
     }
+    func allFriendRequests(status: String?, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
+        throw MeeshyError.network(.noConnection)
+    }
     func sendFriendRequest(receiverId: String, message: String?) async throws -> FriendRequest {
         throw MeeshyError.network(.noConnection)
     }

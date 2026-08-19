@@ -94,6 +94,27 @@ final class FriendServiceTests: XCTestCase {
         XCTAssertEqual(result.data.count, 1)
     }
 
+    // MARK: - allFriendRequests
+
+    func test_allFriendRequests_callsUsersEndpoint_withStatusFilter() async throws {
+        let pagination = OffsetPagination(total: 0, hasMore: false, limit: 100, offset: 0)
+        let response = OffsetPaginatedAPIResponse<[FriendRequest]>(
+            success: true, data: [], pagination: pagination, error: nil
+        )
+        mock.stub("/users/friend-requests", result: response)
+
+        _ = try await service.allFriendRequests(status: "accepted", offset: 0, limit: 100)
+
+        XCTAssertEqual(
+            mock.lastRequest?.endpoint, "/users/friend-requests",
+            "les deux sens ne sont rendus que par /users/friend-requests — /friend-requests/received filtre pending en dur"
+        )
+        XCTAssertTrue(
+            mock.lastRequest?.queryItems?.contains(URLQueryItem(name: "status", value: "accepted")) ?? false,
+            "le statut doit voyager en query item, jamais concatene dans l'endpoint (perdu par components.queryItems = ... dans APIClient)"
+        )
+    }
+
     // MARK: - respond
 
     func test_respond_accepted_callsPatchEndpoint() async throws {

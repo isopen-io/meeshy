@@ -6,6 +6,10 @@ public protocol FriendServiceProviding: Sendable {
     func sendFriendRequest(receiverId: String, message: String?) async throws -> FriendRequest
     func receivedRequests(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
     func sentRequests(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
+    /// Les DEUX sens et tous les statuts (ou un seul via `status`).
+    /// `/friend-requests/received` filtre `pending` en dur côté serveur : une
+    /// relation acceptée dont l'utilisateur est le RECEVEUR n'y apparaît jamais.
+    func allFriendRequests(status: String?, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]>
     func respond(requestId: String, accepted: Bool) async throws -> FriendRequest
     func deleteRequest(requestId: String) async throws
     func sendEmailInvitation(email: String) async throws
@@ -47,6 +51,32 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
             endpoint: "/friend-requests/sent",
             offset: offset,
             limit: limit
+        )
+    }
+
+    // MARK: - All Friend Requests (both directions)
+
+    /// `offsetPaginatedRequest` only forwards `limit`/`offset` as query items —
+    /// it has no slot for `status`. Concatenating `?status=…` onto the endpoint
+    /// string would silently lose it anyway: `APIClient.requestWithHeaders`
+    /// parses the endpoint into `URLComponents` then does
+    /// `components.queryItems = queryItems`, which REPLACES whatever query the
+    /// endpoint string carried instead of merging with it. So this call goes
+    /// through the generic `request(endpoint:queryItems:)` with a single query
+    /// item array carrying `status`, `limit`, and `offset` together.
+    public func allFriendRequests(status: String? = "accepted", offset: Int = 0, limit: Int = 100) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
+        var queryItems = [
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)")
+        ]
+        if let status, !status.isEmpty {
+            queryItems.append(URLQueryItem(name: "status", value: status))
+        }
+        return try await api.request(
+            endpoint: "/users/friend-requests",
+            method: "GET",
+            body: nil,
+            queryItems: queryItems
         )
     }
 

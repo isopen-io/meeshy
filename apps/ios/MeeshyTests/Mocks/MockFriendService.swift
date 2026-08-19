@@ -13,6 +13,9 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
     var sentRequestsResult: Result<OffsetPaginatedAPIResponse<[FriendRequest]>, Error> = .success(
         OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     )
+    var allFriendRequestsResult: Result<OffsetPaginatedAPIResponse<[FriendRequest]>, Error> = .success(
+        OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
+    )
     var respondResult: Result<FriendRequest, Error> = .failure(NSError(domain: "test", code: 0))
     var deleteResult: Result<Void, Error> = .success(())
     var sendEmailInvitationResult: Result<Void, Error> = .success(())
@@ -29,6 +32,11 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
     var sentRequestsCallCount = 0
     var lastSentOffset: Int?
     var lastSentLimit: Int?
+
+    var allFriendRequestsCallCount = 0
+    var lastAllFriendRequestsStatus: String?
+    var lastAllFriendRequestsOffset: Int?
+    var lastAllFriendRequestsLimit: Int?
 
     var respondCallCount = 0
     var lastRespondRequestId: String?
@@ -62,6 +70,14 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
         return try sentRequestsResult.get()
     }
 
+    func allFriendRequests(status: String?, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[FriendRequest]> {
+        allFriendRequestsCallCount += 1
+        lastAllFriendRequestsStatus = status
+        lastAllFriendRequestsOffset = offset
+        lastAllFriendRequestsLimit = limit
+        return try allFriendRequestsResult.get()
+    }
+
     func respond(requestId: String, accepted: Bool) async throws -> FriendRequest {
         respondCallCount += 1
         lastRespondRequestId = requestId
@@ -92,6 +108,10 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
         sentRequestsCallCount = 0
         lastSentOffset = nil
         lastSentLimit = nil
+        allFriendRequestsCallCount = 0
+        lastAllFriendRequestsStatus = nil
+        lastAllFriendRequestsOffset = nil
+        lastAllFriendRequestsLimit = nil
         respondCallCount = 0
         lastRespondRequestId = nil
         lastRespondAccepted = nil

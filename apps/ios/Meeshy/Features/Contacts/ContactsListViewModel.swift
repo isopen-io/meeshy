@@ -159,14 +159,26 @@ final class ContactsListViewModel: ObservableObject {
 
     private func fetchFriendsFromNetwork(cacheKey: String) async {
         do {
-            async let receivedResponse = friendService.receivedRequests(offset: 0, limit: 100)
-            async let sentResponse = friendService.sentRequests(offset: 0, limit: 100)
-
-            let (received, sent) = try await (receivedResponse, sentResponse)
+            // `/friend-requests/received` filtre `pending` en dur côté serveur :
+            // une relation acceptée où je suis le RECEVEUR n'y apparaît jamais.
+            // `allFriendRequests` couvre les deux sens via `/users/friend-requests`,
+            // donc on pagine jusqu'à épuisement au lieu de fusionner deux endpoints.
+            var collected: [FriendRequest] = []
+            var offset = 0
+            let pageSize = 100
+            while true {
+                let page = try await friendService.allFriendRequests(status: "accepted", offset: offset, limit: pageSize)
+                collected.append(contentsOf: page.data)
+                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
+                // le repli sur la taille de page garde le comportement correct.
+                let more = page.pagination?.hasMore ?? (page.data.count == pageSize)
+                if !more || page.data.isEmpty { break }
+                offset += pageSize
+            }
 
             friends = FriendListAggregator.aggregate(
-                received: received.data,
-                sent: sent.data,
+                received: collected,
+                sent: [],
                 currentUserId: currentUserId
             )
 
