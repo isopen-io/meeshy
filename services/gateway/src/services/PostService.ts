@@ -2127,9 +2127,16 @@ export class PostService {
       targetType?: PostType;
       content?: string;
       isQuote?: boolean;
-      /** Audience choisie par le reposteur. Absente ⇒ on hérite de l'original
-       *  (comportement historique). Un repost n'étant permis que sur un
-       *  original PUBLIC, toute valeur ne fait que RESTREINDRE la portée. */
+      /** Audience choisie par le reposteur. Absente ⇒ on hérite de l'original.
+       *
+       *  Cette doc affirmait jusqu'au 2026-08-19 : « un repost n'étant permis
+       *  que sur un original PUBLIC, toute valeur ne fait que RESTREINDRE la
+       *  portée ». La prémisse est ABOLIE — la republication est ouverte aux
+       *  originaux non publics, et la restriction n'est donc plus DÉDUITE mais
+       *  VÉRIFIÉE : voir la loi d'audience appliquée plus bas
+       *  (`isRepostVisibilityAllowed`, 403 `REPOST_AUDIENCE_WIDENING`). Ne pas
+       *  rétablir le raisonnement par déduction : c'est lui qui laissait ce
+       *  champ sans garde propre. */
       visibility?: PostVisibility;
     } = {},
   ) {

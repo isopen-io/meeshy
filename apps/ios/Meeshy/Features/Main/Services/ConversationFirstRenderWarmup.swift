@@ -50,9 +50,38 @@ import MeeshySDK
 /// appelant — un `AnyView` posé seulement au SITE D'APPEL ne suffit pas,
 /// l'appelant doit quand même résoudre le type concret avant de le boxer.
 /// Seule l'érasure à la DÉCLARATION de chaque maillon coupe la chaîne. Les
-/// six propriétés ci-dessus sont maintenant toutes `AnyView` — vérifié par
-/// 20+ relances consécutives sur device sans crash, drapeau `reading_modes`
-/// actif (mode réel, pas de contournement `.bubbles`).
+/// six propriétés ci-dessus ont alors toutes été passées en `AnyView`.
+///
+/// **Cette conclusion était FAUSSE, et sa vérification aussi (2026-08-19).**
+/// La rédaction d'origine affirmait « vérifié par 20+ relances consécutives
+/// sur device sans crash ». Les rapports `.ips` du device la démentent : le
+/// même débordement a continué de tuer l'app APRÈS cette campagne — 2026-08-18
+/// 23:42, 2026-08-19 06:16, 08:35, 08:38, tous dans
+/// `floatingHeaderSectionBody`. Vingt lancements sans crash ne prouvaient rien :
+/// le cache de métadonnées est GLOBAL au process, donc une relance trouve chaud
+/// ce que la précédente a résolu. L'absence d'un crash intermittent n'est pas
+/// une preuve.
+///
+/// Ce qui a réellement éteint la classe, le 2026-08-19 :
+/// 1. La couche `Compatibility/` était le multiplicateur — `adaptiveOnChange`
+///    (233 sites) et `adaptiveGlass` (87) étaient des `@ViewBuilder` portant un
+///    `if #available`, donc un `_ConditionalContent` qui embarque les DEUX
+///    branches : le type de l'appelant DOUBLAIT à chaque appel. Convertis en
+///    `ViewModifier`.
+/// 2. L'érasure de CHAQUE maillon de la chaîne, y compris les quatre couches
+///    de `body` (`bodyWithSheets`/`bodyWithCovers`/`bodyWithLifecycle`/
+///    `bodyContent`) que la campagne du 2026-08-17 n'avait pas touchées — la
+///    profondeur du type passait de 87 niveaux à moins de 40.
+/// 3. Garde de non-régression qui MESURE la grandeur au lieu d'espérer
+///    l'absence de crash : `ConversationViewBodyTypeDepthTests`.
+///
+/// Vérification de ce lot : 31 lancements sur device, l'ancien binaire crashant
+/// 2 fois en 3 minutes sur ce même chemin. Détail complet :
+/// `docs/crash-audit-ios-2026-08-19.md`.
+///
+/// **Ce warm-up est un échafaudage à retirer** (risque R5 de l'audit) : sa
+/// raison d'être disparaît avec le correctif ci-dessus, et il a lui-même causé
+/// un crash (deux graphes SwiftUI actifs, `Meeshy-2026-08-17-161136.ips`).
 @MainActor
 enum ConversationFirstRenderWarmup {
     private static var done = false

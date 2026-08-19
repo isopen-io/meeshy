@@ -70,8 +70,13 @@ public extension View {
     }
 }
 
-/// Builds the iOS 26 `Glass` value from the agnostic params. Free function so it
-/// is callable from the `@ViewBuilder` body (which can't hold local statements).
+/// Construit la valeur `Glass` d'iOS 26 depuis les paramètres agnostiques.
+///
+/// Fonction libre parce que son appelant est un corps `@ViewBuilder`, qui ne
+/// peut pas porter d'instructions locales. Depuis le 2026-08-19 cet appelant
+/// n'est plus une extension de `View` mais le `body(content:)` des
+/// `ViewModifier` ci-dessous — la contrainte est la même, la localisation a
+/// changé.
 @available(iOS 26.0, *)
 private func makeMeeshyGlass(tint: Color?, interactive: Bool) -> Glass {
     var glass: Glass = .regular

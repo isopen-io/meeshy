@@ -544,7 +544,11 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Reshare (republier la story) — non-auteur + story publique.
+            // 4. Republier la story — non-auteur, TOUTE audience (D1,
+            // 2026-08-19). La mention « story publique » qui figurait ici
+            // décrivait le gate `isPublicStory` retiré de `railPlan` : c'est
+            // désormais la loi d'audience qui borne le RÉSULTAT
+            // (`StoryRepostAudience`), plus l'appartenance au rail.
             // Réintroduit 2026-06-18 après finalisation du flux serveur : route
             // via le snapshot de repost (`PostService.repost` targetType .story).
             // Le gateway duplique le média + l'audio source et copie storyEffects

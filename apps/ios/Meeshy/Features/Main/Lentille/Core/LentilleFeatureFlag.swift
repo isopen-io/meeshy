@@ -36,10 +36,12 @@ import Foundation
 /// « Activer les bêta » ON active tout le système de modes de lecture au TAP
 /// NORMAL d'une conversation (l'orchestrateur GELÉ décide Bulles/Résumé/
 /// Focal/Rivière comme toujours, avec les données réelles). `isEnabled`
-/// (ci-dessous) porte cette cascade à TROIS étages, réservée à
-/// `.readingModes` — `.lentilleList` NE CHANGE PAS (reste défaut OFF, hors
-/// périmètre bêta pour l'instant ; **ÉLARGI le 2026-08-19, voir
-/// `isCoveredByBetaProgramme`**) :
+/// (ci-dessous) porte cette cascade à TROIS étages, à l'époque réservée à
+/// `.readingModes` — `.lentilleList` restait alors défaut OFF, hors périmètre
+/// bêta. **Cette réserve est levée depuis le 2026-08-19** : les deux drapeaux
+/// sont couverts, voir `isCoveredByBetaProgramme` pour la loi À DATE et son
+/// motif. Le paragraphe ci-dessous décrit donc l'état du 2026-08-16, conservé
+/// comme historique :
 /// 1. `environment[environmentKey]` — surcharge process, INCHANGÉE (tests/CI).
 /// 2. `defaults.object(forKey: userDefaultsKey) != nil` — la clé
 ///    `meeshy.flag.reading_modes` a été posée EXPLICITEMENT (réglages cachés

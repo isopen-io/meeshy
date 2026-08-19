@@ -2448,9 +2448,31 @@ export class NotificationService {
     // garde n'a plus d'objet : elle taisait précisément les gens que l'auteur
     // venait de désigner.
     //
-    // Ce qui protège à sa place vit dans le composer, pas ici : il avertit
-    // l'auteur quand la personne choisie n'appartient pas à son audience. C'est
-    // la SEULE protection restante — ne pas la traiter comme cosmétique.
+    // CE QUI PROTÈGE RÉELLEMENT — à ne pas se tromper de gardien.
+    //
+    // La rédaction d'origine désignait l'avertissement du composer comme « la
+    // SEULE protection restante ». C'est FAUX, et dangereusement : un
+    // avertissement d'interface ne protège rien côté serveur, et cette phrase
+    // invite à croire que l'ACL de lecture serait retirable. Une revue de
+    // sécurité automatique s'y est d'ailleurs laissé prendre le 2026-08-19 et a
+    // classé ce bloc en IDOR à haute gravité.
+    //
+    // Le vrai gardien est un GRANT PERSISTÉ, vérifié à la lecture :
+    //   PostMention                              (table, `post_user_mention_unique`)
+    //     → isUserReferencedInPost               (postVisibility.ts)
+    //       → canUserViewPost(..., includeReferenced: true)
+    //         → canUserConsumePost               (verdict de LECTURE)
+    //
+    // L'extrait ne part donc qu'à des utilisateurs qui sont EFFECTIVEMENT
+    // autorisés à ouvrir le post : la notification ne leur apprend rien qu'ils
+    // ne puissent déjà lire. L'ordre le garantit — `createPostMentions` est
+    // `await`é AVANT `createPostMentionNotificationsBatch` (postMentions.ts),
+    // donc pas de fenêtre où la notification précéderait le grant.
+    //
+    // L'avertissement du composer reste utile, mais il est de l'UX : il évite à
+    // l'auteur d'ouvrir son contenu sans le vouloir. Il n'est pas la garde.
+    // Retirer le grant persisté ou `includeReferenced`, EN REVANCHE, rouvrirait
+    // une vraie fuite.
     const audience = params.mentionedUserIds;
     if (audience.length === 0) return;
 

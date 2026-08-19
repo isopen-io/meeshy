@@ -121,6 +121,15 @@ extension BubbleStandardLayout {
     /// is bounded; demangling a 4-deep `_ConditionalContent` tree per call
     /// site is not. This also lets SwiftUI cache the cell's structural
     /// identity across body re-evaluations.
+    ///
+    /// **Nécessaire mais PAS suffisant (constat du 2026-08-19).** Cette
+    /// extraction a borné les CELLULES ; la GRILLE, elle, restait un
+    /// `@ViewBuilder` dont le `switch items.count` à 4 branches entrait en
+    /// entier dans le type de `BubbleStandardLayout.body`. Trois `.ips` device
+    /// du 2026-08-10 sont morts ICI malgré ce correctif, sur
+    /// `com.apple.uikit.datasource.diffing` — un thread à 512 Ko, la moitié du
+    /// main thread. C'est l'érasure de `visualMediaGrid` à sa DÉCLARATION qui a
+    /// fermé la classe (voir sa doc).
     fileprivate func makeGridCell(_ attachment: MessageAttachment, cellPointWidth: CGFloat, overflowCount: Int = 0, solo: Bool = false) -> BubbleGridCell {
         BubbleGridCell(
             attachment: attachment,

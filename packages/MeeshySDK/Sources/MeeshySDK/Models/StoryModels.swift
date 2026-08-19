@@ -339,6 +339,15 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// Optional author-assigned clip name (persisted, backward-compatible).
     public var name: String?
 
+    /// `User.id` quand cet objet EST un badge de référence, `nil` pour du texte
+    /// libre.
+    ///
+    /// Sans lui, la dérivation INLINE côté serveur relit le badge comme une
+    /// mention de texte et écrase le mode choisi par l'auteur : un badge est un
+    /// objet texte portant `@pseudo`, indistinguable d'une phrase. Il sert aussi
+    /// au rendu, qui traite un badge comme une étiquette tappable.
+    public var referenceUserId: String?
+
     enum CodingKeys: String, CodingKey {
         case id, text, x, y, scale, rotation, zIndex, anchor
         case fontSize, fontFamily
@@ -348,7 +357,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
-        case isLocked, keyframes, name
+        case isLocked, keyframes, name, referenceUserId
         // Legacy keys — decoder only
         case content, textSize, displayDuration
     }
@@ -2498,8 +2507,16 @@ public struct RepostRequest: Encodable {
     public let targetType: String?
     /// Audience choisie par le REPOSTEUR. `nil` ⇒ la gateway hérite de la
     /// visibilité de l'original. Sans ce champ, le sélecteur d'audience du
-    /// composer de repost n'atteignait aucune couche : tout repost sortait
-    /// PUBLIC, seule visibilité qu'un original repostable puisse avoir.
+    /// composer de repost n'atteignait aucune couche : tout repost sortait avec
+    /// la visibilité de l'original.
+    ///
+    /// La phrase « PUBLIC, seule visibilité qu'un original repostable puisse
+    /// avoir » qui closait ce commentaire n'est plus vraie depuis le
+    /// 2026-08-19 : la republication est ouverte aux originaux non publics. La
+    /// valeur envoyée ici est VÉRIFIÉE par le serveur contre la loi d'audience
+    /// — même audience ou plus restreinte, jamais plus large (403
+    /// `REPOST_AUDIENCE_WIDENING`). Le miroir client de cette loi est
+    /// `StoryRepostAudience` (MeeshyUI).
     public let visibility: String?
 
     public init(content: String? = nil, isQuote: Bool = false,
