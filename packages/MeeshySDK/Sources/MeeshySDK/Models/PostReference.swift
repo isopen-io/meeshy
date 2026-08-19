@@ -76,4 +76,16 @@ public enum ReferenceAccess: String, Codable, Sendable {
     case granted
     /// Droit éteint : écran « ce contenu n'est plus disponible ».
     case consumed
+
+    /// Un verdict inconnu se lit `none` plutôt que de faire échouer le décodage
+    /// du post entier : la liste de stories est décodée en tableau STRICT, donc
+    /// un seul post qui lève emporte le lot — c'est déjà la raison pour laquelle
+    /// `APIPost` tolère un `storyEffects` malformé.
+    ///
+    /// `none` et non `granted` : un verdict qu'on ne comprend pas ne doit rien
+    /// OUVRIR, il doit rendre la main à la règle d'audience ordinaire.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ReferenceAccess(rawValue: raw) ?? .none
+    }
 }

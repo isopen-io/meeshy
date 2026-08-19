@@ -283,7 +283,17 @@ extension APIPost: Decodable {
         isRepostedByMe = try c.decodeIfPresent(Bool.self, forKey: .isRepostedByMe)
         isViewedByMe = try c.decodeIfPresent(Bool.self, forKey: .isViewedByMe)
         currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
-        mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
+        // Même résilience que `storyEffects` ci-dessus, et pour la même raison :
+        // une seule référence illisible ne doit pas emporter le post, ni le lot
+        // de stories dans lequel il voyage. `nil` — et non `[]` — parce que les
+        // consommateurs lisent `nil` comme « pas d'avis » : le surlignage
+        // historique est conservé, là où un ensemble vide ne linkifierait plus
+        // rien du tout.
+        do {
+            mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
+        } catch {
+            mentions = nil
+        }
         referenceAccess = try c.decodeIfPresent(ReferenceAccess.self, forKey: .referenceAccess)
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`

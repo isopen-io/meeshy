@@ -65,4 +65,32 @@ struct PostReferenceTests {
         #expect(post.mentions == nil)
         #expect(post.referenceAccess == nil)
     }
+
+    @Test func test_post_withUnknownReferenceAccess_stillDecodes() throws {
+        // Un verdict ajouté côté serveur ne doit pas rendre le post illisible :
+        // la liste de stories est décodée en tableau STRICT, donc un seul post
+        // qui lève emporte le lot entier — même piège que `storyEffects`, dont
+        // le décodage est déjà tolérant pour cette raison. Repli sur `none` :
+        // un verdict qu'on ne comprend pas ne doit rien OUVRIR.
+        let json = """
+        {"id":"p1","type":"STORY","visibility":"PUBLIC","createdAt":"2026-08-19T10:00:00.000Z","author":{"id":"u1","username":"alice","displayName":null,"avatar":null},"referenceAccess":"FUTURE_VERDICT"}
+        """
+
+        let post = try decodePost(json)
+
+        #expect(post.referenceAccess == ReferenceAccess.none)
+    }
+
+    @Test func test_post_withMalformedMention_stillDecodes() throws {
+        // Une seule référence illisible ne doit pas emporter le post — ni, par
+        // ricochet, le lot de stories dans lequel il voyage. La rangée « Avec …
+        // » disparaît, le contenu reste.
+        let json = """
+        {"id":"p1","type":"POST","visibility":"PUBLIC","createdAt":"2026-08-19T10:00:00.000Z","author":{"id":"u1","username":"alice","displayName":null,"avatar":null},"mentions":[{"userId":"u2"}]}
+        """
+
+        let post = try decodePost(json)
+
+        #expect(post.mentions == nil)
+    }
 }
