@@ -364,6 +364,32 @@ describe('getFriendRequests — GET /users/friend-requests', () => {
 
     expect(mockSendPaginatedSuccess).toHaveBeenCalledWith(reply, [], expect.objectContaining({ total: 0 }));
   });
+
+  it('filters the where clause by status when `status` is provided', async () => {
+    const { route, pr, reply } = setup();
+    const req = makeReq({ query: { offset: '0', limit: '20', status: 'accepted' } });
+
+    await route.handler(req, reply);
+
+    expect(pr.friendRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { OR: [{ senderId: USER_ID }, { receiverId: USER_ID }], status: 'accepted' },
+      })
+    );
+    expect(pr.friendRequest.count).toHaveBeenCalledWith({
+      where: { OR: [{ senderId: USER_ID }, { receiverId: USER_ID }], status: 'accepted' },
+    });
+  });
+
+  it('does not filter by status when `status` is absent — non-regression', async () => {
+    const { route, pr, reply } = setup();
+    const req = makeReq({ query: {} });
+
+    await route.handler(req, reply);
+
+    const [findManyArgs] = pr.friendRequest.findMany.mock.calls[0];
+    expect(findManyArgs.where).not.toHaveProperty('status');
+  });
 });
 
 // ─── POST /users/friend-requests ─────────────────────────────────────────────
