@@ -1,9 +1,14 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 import { ForwardMessageModal } from '../../../components/conversations/forward-message-modal';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { conversationsService } from '@/services/conversations.service';
+import { contactsDirectoryService } from '@/services/contacts-directory.service';
+import { useFriendRequestsV2 } from '@/hooks/v2/use-friend-requests-v2';
 import type { Conversation, Message } from '@meeshy/shared/types';
+import type { ForwardTarget } from '@/lib/forward-target-merge';
 
 // Mock hooks
 jest.mock('@/hooks/useI18n', () => ({
@@ -17,6 +22,7 @@ jest.mock('@/hooks/useI18n', () => ({
         'forward.failed': 'Échec du transfert',
         'forward.send': 'Envoyer',
         'forward.close': 'Fermer',
+        'forward.search-error': 'La recherche a échoué. Réessayez.',
       };
       return translations[key] || key;
     },
@@ -44,6 +50,20 @@ jest.mock('sonner', () => ({
     success: jest.fn(),
     error: jest.fn(),
   },
+}));
+
+// Anti-rebond neutralisé : les tests avancent au rythme des re-renders, pas
+// d'un minuteur réel (même motif que UserPicker.test.tsx / AudienceUserPicker).
+jest.mock('use-debounce', () => ({
+  useDebounce: (value: unknown) => [value],
+}));
+
+jest.mock('@/hooks/v2/use-friend-requests-v2', () => ({
+  useFriendRequestsV2: jest.fn(),
+}));
+
+jest.mock('@/services/contacts-directory.service', () => ({
+  contactsDirectoryService: { list: jest.fn() },
 }));
 
 // Mock UI components
@@ -89,13 +109,42 @@ jest.mock('@/components/ui/avatar', () => ({
   ),
 }));
 
-jest.mock('@/components/ui/scroll-area', () => ({
-  ScrollArea: ({ children }: { children: React.ReactNode }) => (
-    <div data-testid="scroll-area">{children}</div>
-  ),
-}));
-
 const mockSendMessage = meeshySocketIOService.sendMessage as jest.Mock;
+const mockUseFriendRequestsV2 = useFriendRequestsV2 as jest.Mock;
+const mockDirectoryList = contactsDirectoryService.list as jest.Mock;
+
+// IntersectionObserver instrumenté — capture le callback pour piloter la
+// sentinelle depuis les tests (même motif que ConversationMessagesModal dans
+// UserDetailSections.test.tsx).
+let capturedIOCallback: IntersectionObserverCallback | null = null;
+class MockIntersectionObserver implements IntersectionObserver {
+  readonly root: Element | Document | null = null;
+  readonly rootMargin: string = '';
+  readonly scrollMargin: string = '';
+  readonly thresholds: ReadonlyArray<number> = [];
+  constructor(cb: IntersectionObserverCallback) {
+    capturedIOCallback = cb;
+  }
+  observe = jest.fn();
+  unobserve = jest.fn();
+  disconnect = jest.fn();
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+beforeAll(() => {
+  (global as unknown as { IntersectionObserver: unknown }).IntersectionObserver = MockIntersectionObserver;
+});
+
+const triggerIntersection = (element: Element) => {
+  act(() => {
+    capturedIOCallback?.(
+      [{ isIntersecting: true, target: element } as IntersectionObserverEntry],
+      {} as IntersectionObserver,
+    );
+  });
+};
 
 const makeConversation = (overrides: Partial<Conversation> = {}): Conversation =>
   ({
@@ -154,13 +203,18 @@ const defaultProps = {
   ],
 };
 
-const renderModal = (props = {}) =>
+const renderModal = (props: Record<string, unknown> = {}) =>
   render(<ForwardMessageModal {...defaultProps} {...props} />);
 
 describe('ForwardMessageModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    capturedIOCallback = null;
     mockSendMessage.mockResolvedValue({ success: true, messageId: 'srv-1' });
+    mockUseFriendRequestsV2.mockReturnValue({ connected: [] });
+    mockDirectoryList.mockResolvedValue({ contacts: [], hasMore: false });
+    jest.spyOn(conversationsService, 'searchConversations').mockResolvedValue([]);
+    jest.spyOn(conversationsService, 'createConversation').mockResolvedValue({ id: 'unused-conv' } as never);
   });
 
   it('rend la liste des conversations en excluant la conversation source', () => {
@@ -319,5 +373,117 @@ describe('ForwardMessageModal', () => {
 
     expect(mockSendMessage.mock.calls[1][7]).toMatch(/^cid_/);
     expect(mockSendMessage.mock.calls[1][7]).not.toBe(firstCid);
+  });
+
+  // ==========================================================================
+  // Task 11 : scroll infini, recherche unifiée, contact sans conversation
+  // ==========================================================================
+
+  it('charge la page suivante quand la sentinelle devient visible', async () => {
+    const loadMore = jest.fn();
+    renderModal({ hasMore: true, isLoadingMore: false, onLoadMore: loadMore });
+
+    triggerIntersection(screen.getByTestId('forward-load-more-sentinel'));
+
+    await waitFor(() => expect(loadMore).toHaveBeenCalledTimes(1));
+  });
+
+  it('ne pagine pas pendant une recherche', async () => {
+    const loadMore = jest.fn();
+    renderModal({ hasMore: true, isLoadingMore: false, onLoadMore: loadMore });
+
+    await userEvent.type(screen.getByRole('textbox'), 'alice');
+
+    expect(screen.queryByTestId('forward-load-more-sentinel')).toBeNull();
+    expect(loadMore).not.toHaveBeenCalled();
+  });
+
+  it('crée la conversation directe à l’envoi, jamais à la sélection', async () => {
+    const createConversation = jest.spyOn(conversationsService, 'createConversation')
+      .mockResolvedValue({ id: 'new-conv' } as never);
+    const contactsOverride: ForwardTarget[] = [
+      { id: 'user:u1', kind: 'contact', userId: 'u1', title: 'Alice' },
+    ];
+    renderModal({ contactsOverride });
+
+    await userEvent.click(screen.getByTestId('forward-row-user:u1'));
+    expect(createConversation).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByTestId('forward-send-user:u1'));
+    await waitFor(() => expect(createConversation).toHaveBeenCalledTimes(1));
+    expect(createConversation).toHaveBeenCalledWith({ type: 'direct', participantIds: ['u1'] });
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      'new-conv',
+      'Hello world',
+      'en',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      expect.stringMatching(/^cid_/),
+      'msg-1',
+      'conv-src',
+    );
+  });
+
+  it("distingue un échec réseau du carnet d'une recherche sans résultat", async () => {
+    mockDirectoryList.mockRejectedValue(new Error('network down'));
+    renderModal();
+
+    await userEvent.type(screen.getByRole('textbox'), 'zzzintrouvable');
+
+    await waitFor(() => {
+      expect(screen.getByTestId('forward-search-error')).toBeInTheDocument();
+    });
+  });
+
+  it("n'affiche aucune erreur quand la recherche unifiée ne trouve simplement rien", async () => {
+    renderModal();
+
+    await userEvent.type(screen.getByRole('textbox'), 'zzzintrouvable');
+
+    await waitFor(() => expect(mockDirectoryList).toHaveBeenCalled());
+    expect(screen.queryByTestId('forward-search-error')).toBeNull();
+  });
+
+  it('trouve un contact du carnet introuvable en conversation et envoie après création', async () => {
+    mockDirectoryList.mockResolvedValue({
+      contacts: [
+        {
+          id: 'd9',
+          displayName: 'Bob Carnet',
+          isOnMeeshy: true,
+          matchedUser: { id: 'u42', username: 'bobc', displayName: 'Bob Carnet' },
+        },
+      ],
+      hasMore: false,
+    });
+    const createConversation = jest.spyOn(conversationsService, 'createConversation')
+      .mockResolvedValue({ id: 'conv-bob' } as never);
+    renderModal();
+
+    await userEvent.type(screen.getByRole('textbox'), 'bob carnet');
+
+    await waitFor(() => expect(screen.getByTestId('forward-row-user:u42')).toBeInTheDocument());
+
+    await userEvent.click(screen.getByTestId('forward-send-user:u42'));
+
+    await waitFor(() =>
+      expect(createConversation).toHaveBeenCalledWith({ type: 'direct', participantIds: ['u42'] }),
+    );
+    await waitFor(() =>
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        'conv-bob',
+        'Hello world',
+        'en',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        expect.stringMatching(/^cid_/),
+        'msg-1',
+        'conv-src',
+      ),
+    );
   });
 });

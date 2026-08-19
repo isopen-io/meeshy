@@ -809,7 +809,8 @@
       "send": "Send",
       "send-selected": "Send ({count})",
       "sent": "Message forwarded",
-      "failed": "Forwarding failed"
+      "failed": "Forwarding failed",
+      "search-error": "Search failed. Try again."
     }
   },
   "bubbleStream": {

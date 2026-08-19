@@ -811,7 +811,8 @@
       "send": "Enviar",
       "send-selected": "Enviar ({count})",
       "sent": "Mensagem encaminhada",
-      "failed": "Falha ao encaminhar"
+      "failed": "Falha ao encaminhar",
+      "search-error": "A pesquisa falhou. Tente novamente."
     }
   },
   "bubbleStream": {

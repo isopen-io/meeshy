@@ -1,22 +1,27 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { useDebounce } from 'use-debounce';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Search, Send, Check, Loader2, Forward } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 import { useUser } from '@/stores';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { conversationsService } from '@/services/conversations.service';
+import { contactsDirectoryService, type DirectoryContact } from '@/services/contacts-directory.service';
+import { useFriendRequestsV2 } from '@/hooks/v2/use-friend-requests-v2';
 import { ForwardPickerModel, type TargetState } from '@/lib/forward-picker-model';
+import { mergeForwardTargets, type ForwardTarget } from '@/lib/forward-target-merge';
 import { generateClientMessageId } from '@/utils/client-message-id';
 import { getConversationNameOnly } from './conversation-item/conversation-utils';
 import { resolveOtherDirectParticipantUser } from './lentille/lentille-row-utils';
 import type { Conversation, Message } from '@meeshy/shared/types';
+import type { FriendRequest } from '@/types/contacts';
 
 interface ForwardMessageModalProps {
   isOpen: boolean;
@@ -24,15 +29,69 @@ interface ForwardMessageModalProps {
   message: Message;
   sourceConversationId?: string;
   conversations: readonly Conversation[];
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  /**
+   * Seam de test uniquement : remplace les contacts dérivés de
+   * `useFriendRequestsV2().connected`, pour isoler un scénario de contact sans
+   * avoir à reconstituer une relation d'amitié complète. JAMAIS fourni par un
+   * appelant en production.
+   */
+  contactsOverride?: readonly ForwardTarget[];
 }
 
 const stateKey = (state: TargetState): string =>
   typeof state === 'object' ? 'failed' : state;
 
-type LabelledTarget = {
-  readonly conversation: Conversation;
-  readonly label: string;
-};
+// Les data-testid existants (`forward-row-conv-a`) portent l'id de
+// conversation NU ; une cible « contact » sans conversation n'en a pas et
+// retombe sur l'id du ForwardTarget (`user:<id>`). Les deux contrats
+// coexistent — ni l'un ni l'autre n'est renommé.
+const rowIdOf = (target: ForwardTarget): string => target.conversationId ?? target.id;
+
+type DirectParticipant = { id?: string; displayName?: string; username?: string; avatar?: string | null } | null;
+
+function conversationToTarget(conversation: Conversation, currentUserId: string | null): ForwardTarget {
+  const other: DirectParticipant =
+    conversation.type === 'direct'
+      ? (resolveOtherDirectParticipantUser(conversation, currentUserId) as DirectParticipant)
+      : null;
+  const title = getConversationNameOnly(conversation, () => other);
+  return {
+    id: `conv:${conversation.id}`,
+    kind: 'conversation',
+    conversationId: conversation.id,
+    userId: other?.id,
+    title,
+    subtitle: conversation.type,
+    avatarUrl: other?.avatar ?? conversation.avatar ?? undefined,
+  };
+}
+
+function friendRequestToTarget(request: FriendRequest, currentUserId: string | null): ForwardTarget | null {
+  const other = request.senderId === currentUserId ? request.receiver : request.sender;
+  if (!other?.id) return null;
+  return {
+    id: `user:${other.id}`,
+    kind: 'contact',
+    userId: other.id,
+    title: other.displayName || other.username || other.id,
+    avatarUrl: other.avatar ?? undefined,
+  };
+}
+
+function directoryContactToTarget(contact: DirectoryContact): ForwardTarget | null {
+  const matched = contact.matchedUser;
+  if (!matched?.id) return null;
+  return {
+    id: `user:${matched.id}`,
+    kind: 'contact',
+    userId: matched.id,
+    title: matched.displayName || matched.username || contact.displayName || matched.id,
+    avatarUrl: matched.avatar,
+  };
+}
 
 export function ForwardMessageModal({
   isOpen,
@@ -40,11 +99,22 @@ export function ForwardMessageModal({
   message,
   sourceConversationId,
   conversations,
+  hasMore = false,
+  isLoadingMore = false,
+  onLoadMore,
+  contactsOverride,
 }: ForwardMessageModalProps) {
   const { t } = useI18n('conversations');
   const currentUser = useUser();
   const currentUserId = currentUser?.id ?? null;
+  const { connected } = useFriendRequestsV2({ enabled: isOpen, currentUserId: currentUserId ?? undefined });
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery] = useDebounce(searchQuery, 300);
+  const [remoteResults, setRemoteResults] = useState<readonly ForwardTarget[]>([]);
+  const [searchError, setSearchError] = useState(false);
+  const searchTokenRef = useRef(0);
+
   const modelRef = useRef(new ForwardPickerModel());
   const hasToastedRef = useRef(false);
   // Registre des envois NON CONFIRMÉS, par (message source, cible). Le gateway
@@ -56,41 +126,166 @@ export function ForwardMessageModal({
   // retirée au succès confirmé pour qu'un re-transfert volontaire reste un
   // envoi neuf.
   const clientMessageIdsRef = useRef(new Map<string, string>());
+  // Conversation créée pour une cible « contact » (rowId -> conversationId) :
+  // un retry après échec réutilise le MÊME fil au lieu d'en ouvrir un second.
+  const pendingConversationIdsRef = useRef(new Map<string, string>());
   const [, bump] = useReducer((x: number) => x + 1, 0);
+
+  // Instantané au montage/réouverture — `setConversations` (pagination hook)
+  // COLLAPSE toutes les pages en une seule au fil d'écritures tierces ; relire
+  // `conversations` en continu ferait retomber le scroll de la modale à la
+  // première page en plein chargement. Le snapshot est ensuite ÉTENDU (jamais
+  // remplacé) par les nouveaux ids apportés par `onLoadMore`.
+  const [localConversations, setLocalConversations] = useState<readonly Conversation[]>(conversations);
+  const seenConversationIdsRef = useRef<Set<string>>(new Set(conversations.map((c) => c.id)));
 
   useEffect(() => {
     if (!isOpen) return;
     modelRef.current = new ForwardPickerModel();
     hasToastedRef.current = false;
+    pendingConversationIdsRef.current = new Map();
     setSearchQuery('');
+    setRemoteResults([]);
+    setSearchError(false);
+    setLocalConversations(conversations);
+    seenConversationIdsRef.current = new Set(conversations.map((c) => c.id));
     bump();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, message.id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const seen = seenConversationIdsRef.current;
+    const additions = conversations.filter((c) => !seen.has(c.id));
+    if (additions.length === 0) return;
+    additions.forEach((c) => seen.add(c.id));
+    setLocalConversations((prev) => [...prev, ...additions]);
+  }, [conversations, isOpen]);
+
+  const isBrowsing = searchQuery.trim().length === 0;
+
+  // Refs pour ne PAS reconstruire l'observateur à chaque changement de
+  // hasMore/isLoadingMore (motif `UserConversationsSection.tsx:282`) — seule
+  // l'ouverture de la modale ou le basculement recherche/liste doit le faire.
+  const hasMoreRef = useRef(hasMore);
+  const isLoadingMoreRef = useRef(isLoadingMore);
+  const onLoadMoreRef = useRef(onLoadMore);
+  useEffect(() => { hasMoreRef.current = hasMore; }, [hasMore]);
+  useEffect(() => { isLoadingMoreRef.current = isLoadingMore; }, [isLoadingMore]);
+  useEffect(() => { onLoadMoreRef.current = onLoadMore; }, [onLoadMore]);
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || !isBrowsing) return;
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && hasMoreRef.current && !isLoadingMoreRef.current) {
+          onLoadMoreRef.current?.();
+        }
+      },
+      { root: scrollRef.current, rootMargin: '120px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [isOpen, isBrowsing]);
 
   // Le gateway ne pose PAS de `title` sur un tête-à-tête (« le frontend résout
   // le nom de l'interlocuteur ») : sans le SSOT, la ligne afficherait
   // l'identifiant technique `mshy_direct-…` et la recherche par prénom ne
   // trouverait rien.
-  const labelledTargets = useMemo<readonly LabelledTarget[]>(
+  const conversationTargets = useMemo<readonly ForwardTarget[]>(
     () =>
-      conversations
+      localConversations
         .filter((conv) => conv.id !== sourceConversationId)
-        .map((conv) => ({
-          conversation: conv,
-          label: getConversationNameOnly(conv, () =>
-            resolveOtherDirectParticipantUser(conv, currentUserId),
-          ),
-        })),
-    [conversations, sourceConversationId, currentUserId],
+        .map((conv) => conversationToTarget(conv, currentUserId)),
+    [localConversations, sourceConversationId, currentUserId],
   );
 
-  const targets = useMemo(() => {
+  const connectedTargets = useMemo<readonly ForwardTarget[]>(() => {
+    if (contactsOverride) return contactsOverride;
+    return connected
+      .map((request) => friendRequestToTarget(request, currentUserId))
+      .filter((target): target is ForwardTarget => target !== null);
+  }, [contactsOverride, connected, currentUserId]);
+
+  const browsingTargets = useMemo(
+    () => mergeForwardTargets(conversationTargets, connectedTargets),
+    [conversationTargets, connectedTargets],
+  );
+
+  // Recherche unifiée (Step 4) : filtre immédiat et synchrone du snapshot
+  // local (conversations + contacts connectés), augmenté — jamais remplacé —
+  // par la recherche distante une fois le débounce écoulé. `searchConversations`
+  // avale ses erreurs réseau et rend `[]` (indiscernable d'un « aucun
+  // résultat ») ; `contactsDirectoryService.list` PROPAGE les siennes, c'est
+  // donc l'unique signal fiable pour distinguer un échec d'une liste vide ici.
+  useEffect(() => {
+    if (!isOpen) return;
+    const query = debouncedQuery.trim();
+    if (query.length < 2) {
+      setRemoteResults([]);
+      setSearchError(false);
+      return;
+    }
+    const token = ++searchTokenRef.current;
+    setSearchError(false);
+    Promise.allSettled([
+      conversationsService.searchConversations(query),
+      contactsDirectoryService.list({ q: query, limit: 20 }),
+    ]).then(([conversationsOutcome, directoryOutcome]) => {
+      if (searchTokenRef.current !== token) return; // réponse obsolète, ignorée
+      const remoteConversationTargets =
+        conversationsOutcome.status === 'fulfilled'
+          ? conversationsOutcome.value
+              .filter((conv) => conv.id !== sourceConversationId)
+              .map((conv) => conversationToTarget(conv, currentUserId))
+          : [];
+      const directoryTargets =
+        directoryOutcome.status === 'fulfilled'
+          ? directoryOutcome.value.contacts
+              .map(directoryContactToTarget)
+              .filter((target): target is ForwardTarget => target !== null)
+          : [];
+      setRemoteResults(mergeForwardTargets(remoteConversationTargets, directoryTargets));
+      setSearchError(directoryOutcome.status === 'rejected');
+    });
+  }, [debouncedQuery, isOpen, sourceConversationId, currentUserId]);
+
+  const targets = useMemo<readonly ForwardTarget[]>(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return labelledTargets;
-    return labelledTargets.filter(({ label }) => label.toLowerCase().includes(query));
-  }, [labelledTargets, searchQuery]);
+    if (!query) return browsingTargets;
+    const localMatches = browsingTargets.filter((target) => target.title.toLowerCase().includes(query));
+    return mergeForwardTargets(localMatches, remoteResults);
+  }, [browsingTargets, searchQuery, remoteResults]);
+
+  const targetsByRowId = useMemo(() => {
+    const map = new Map<string, ForwardTarget>();
+    targets.forEach((target) => map.set(rowIdOf(target), target));
+    return map;
+  }, [targets]);
+
+  const resolveConversationId = useCallback(async (target: ForwardTarget): Promise<string> => {
+    if (target.conversationId) return target.conversationId;
+    const rowId = rowIdOf(target);
+    const pending = pendingConversationIdsRef.current;
+    const existing = pending.get(rowId);
+    if (existing) return existing;
+    if (!target.userId) throw new Error('missing userId for contact target');
+    // La création n'a lieu QU'À L'ENVOI, jamais à la sélection.
+    const created = await conversationsService.createConversation({
+      type: 'direct',
+      participantIds: [target.userId],
+    });
+    pending.set(rowId, created.id);
+    return created.id;
+  }, []);
 
   const transmit = useCallback(
-    async (conversationId: string) => {
+    async (rowId: string, conversationId: string) => {
       const model = modelRef.current;
       const clientMessageIds = clientMessageIdsRef.current;
       const cidKey = `${message.id}:${conversationId}`;
@@ -111,14 +306,14 @@ export function ForwardMessageModal({
         );
         const ok = result?.success ?? false;
         if (ok) clientMessageIds.delete(cidKey);
-        model.finishSend(conversationId, ok, ok ? undefined : t('forward.failed', 'Échec du transfert'));
+        model.finishSend(rowId, ok, ok ? undefined : t('forward.failed', 'Échec du transfert'));
         if (ok && !hasToastedRef.current) {
           hasToastedRef.current = true;
           toast.success(t('forward.sent', 'Message transféré'));
         }
       } catch (error) {
         model.finishSend(
-          conversationId,
+          rowId,
           false,
           error instanceof Error && error.message
             ? error.message
@@ -130,27 +325,49 @@ export function ForwardMessageModal({
     [message.content, message.originalLanguage, message.id, sourceConversationId, t],
   );
 
-  const handleImmediateSend = useCallback(
-    (conversationId: string) => {
-      if (!modelRef.current.beginSend(conversationId)) return;
-      bump();
-      void transmit(conversationId);
+  const sendToTarget = useCallback(
+    async (target: ForwardTarget) => {
+      const rowId = rowIdOf(target);
+      try {
+        const conversationId = await resolveConversationId(target);
+        await transmit(rowId, conversationId);
+      } catch (error) {
+        modelRef.current.finishSend(
+          rowId,
+          false,
+          error instanceof Error && error.message ? error.message : t('forward.failed', 'Échec du transfert'),
+        );
+        bump();
+      }
     },
-    [transmit],
+    [resolveConversationId, transmit, t],
+  );
+
+  const handleImmediateSend = useCallback(
+    (rowId: string) => {
+      if (!modelRef.current.beginSend(rowId)) return;
+      bump();
+      const target = targetsByRowId.get(rowId);
+      if (!target) return;
+      void sendToTarget(target);
+    },
+    [sendToTarget, targetsByRowId],
   );
 
   const handleBatchSend = useCallback(() => {
     const batch = modelRef.current.beginBatch();
     bump();
     void (async () => {
-      for (const id of batch) {
-        await transmit(id);
+      for (const rowId of batch) {
+        const target = targetsByRowId.get(rowId);
+        if (!target) continue;
+        await sendToTarget(target);
       }
     })();
-  }, [transmit]);
+  }, [sendToTarget, targetsByRowId]);
 
-  const handleRowTap = useCallback((conversationId: string) => {
-    modelRef.current.tapRow(conversationId);
+  const handleRowTap = useCallback((rowId: string) => {
+    modelRef.current.tapRow(rowId);
     bump();
   }, []);
 
@@ -177,19 +394,26 @@ export function ForwardMessageModal({
             />
           </div>
 
-          <ScrollArea className="h-72">
+          {!isBrowsing && searchError && (
+            <p data-testid="forward-search-error" className="text-xs text-destructive px-1">
+              {t('forward.search-error', 'La recherche a échoué. Réessayez.')}
+            </p>
+          )}
+
+          <div ref={scrollRef} className="h-72 overflow-y-auto">
             <div className="space-y-1 pr-2">
-              {targets.map(({ conversation: conv, label }) => {
-                const state = modelRef.current.state(conv.id);
+              {targets.map((target) => {
+                const rowId = rowIdOf(target);
+                const state = modelRef.current.state(rowId);
                 const key = stateKey(state);
                 const isSelected = state === 'selected';
                 const isSending = state === 'sending';
                 const isSent = state === 'sent';
                 const failedReason = typeof state === 'object' ? state.failed : null;
                 return (
-                  <div key={conv.id}>
+                  <div key={rowId}>
                     <div
-                      data-testid={`forward-row-${conv.id}`}
+                      data-testid={`forward-row-${rowId}`}
                       data-state={key}
                       role="button"
                       tabIndex={0}
@@ -200,34 +424,36 @@ export function ForwardMessageModal({
                         isSelected && 'bg-primary/10 border-primary',
                         isSent && 'opacity-70 cursor-default',
                       )}
-                      onClick={() => handleRowTap(conv.id)}
+                      onClick={() => handleRowTap(rowId)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          handleRowTap(conv.id);
+                          handleRowTap(rowId);
                         }
                       }}
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={conv.avatar} />
-                          <AvatarFallback>{label.slice(0, 1).toUpperCase()}</AvatarFallback>
+                          <AvatarImage src={target.avatarUrl} />
+                          <AvatarFallback>{target.title.slice(0, 1).toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="min-w-0">
-                          <p className="font-medium truncate">{label}</p>
-                          <p className="text-xs text-muted-foreground">{conv.type}</p>
+                          <p className="font-medium truncate">{target.title}</p>
+                          {target.subtitle && (
+                            <p className="text-xs text-muted-foreground">{target.subtitle}</p>
+                          )}
                         </div>
                         {isSelected && <Check className="h-4 w-4 text-primary flex-shrink-0" />}
                       </div>
                       <Button
-                        data-testid={`forward-send-${conv.id}`}
+                        data-testid={`forward-send-${rowId}`}
                         variant={isSent ? 'ghost' : 'outline'}
                         size="sm"
                         disabled={isSending || isSent}
                         aria-label={t('forward.send', 'Envoyer')}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleImmediateSend(conv.id);
+                          handleImmediateSend(rowId);
                         }}
                       >
                         {isSending ? (
@@ -241,7 +467,7 @@ export function ForwardMessageModal({
                     </div>
                     {failedReason !== null && (
                       <p
-                        data-testid={`forward-failed-${conv.id}`}
+                        data-testid={`forward-failed-${rowId}`}
                         className="px-2.5 pt-1 text-xs text-destructive"
                       >
                         {failedReason || t('forward.failed', 'Échec du transfert')}
@@ -250,8 +476,9 @@ export function ForwardMessageModal({
                   </div>
                 );
               })}
+              {isBrowsing && <div data-testid="forward-load-more-sentinel" ref={sentinelRef} />}
             </div>
-          </ScrollArea>
+          </div>
         </div>
 
         <DialogFooter>

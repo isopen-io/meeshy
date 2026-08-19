@@ -811,7 +811,8 @@
       "send": "Enviar",
       "send-selected": "Enviar ({count})",
       "sent": "Mensaje reenviado",
-      "failed": "Error al reenviar"
+      "failed": "Error al reenviar",
+      "search-error": "La búsqueda falló. Inténtalo de nuevo."
     }
   },
   "bubbleStream": {

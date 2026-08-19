@@ -903,6 +903,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
             message={forwardingMessage}
             sourceConversationId={forwardingMessage.conversationId || effectiveSelectedId || undefined}
             conversations={conversations}
+            hasMore={hasMoreConversations}
+            isLoadingMore={isLoadingMoreConversations}
+            onLoadMore={loadMoreConversations}
           />
         )}
       </>
@@ -1096,6 +1099,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           message={forwardingMessage}
           sourceConversationId={forwardingMessage.conversationId || effectiveSelectedId || undefined}
           conversations={conversations}
+          hasMore={hasMoreConversations}
+          isLoadingMore={isLoadingMoreConversations}
+          onLoadMore={loadMoreConversations}
         />
       )}
     </div>

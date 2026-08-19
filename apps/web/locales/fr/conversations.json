@@ -813,7 +813,8 @@
       "send": "Envoyer",
       "send-selected": "Envoyer ({count})",
       "sent": "Message transféré",
-      "failed": "Échec du transfert"
+      "failed": "Échec du transfert",
+      "search-error": "La recherche a échoué. Réessayez."
     }
   },
   "bubbleStream": {
