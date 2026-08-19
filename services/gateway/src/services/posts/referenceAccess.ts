@@ -49,12 +49,18 @@ export const REFERENCE_VIEW_WINDOW_MS = 24 * 3600_000;
 /**
  * Le cœur PUR de la décision — une fois qu'on sait qu'une référence existe.
  *
- * Extrait pour être appelé par LES DEUX lectures : `resolveReferenceAccess`
- * (unitaire, un `findUnique`) et `PostFeedService.getStories` (le tray,
- * résolu en mémoire depuis un `findMany` groupé — un `findUnique` par story y
- * serait N+1). Sans cette extraction, les deux auraient porté chacune sa
- * propre copie de la même règle, et l'une aurait fini par diverger de
- * l'autre — c'est exactement le risque que cette unité existe pour fermer.
+ * Extrait pour être appelé par TROIS lectures : `resolveReferenceAccess`
+ * (unitaire, un `findUnique` — le verdict posé sur la charge utile),
+ * `PostFeedService.getStories` (le tray, résolu en mémoire depuis un
+ * `findMany` groupé — un `findUnique` par story y serait N+1), et
+ * `isReferenceStillOpen` (`postVisibility.ts` — l'ACL, qui garde le fil de
+ * commentaires, les réponses, la room `post:join` et les notifications).
+ * Sans cette extraction, chacune aurait porté sa propre copie de la même
+ * règle, et l'une aurait fini par diverger des autres — c'est exactement le
+ * risque que cette unité existe pour fermer. C'est d'ailleurs ce qui s'est
+ * produit côté ACL : elle testait l'EXISTENCE de la ligne, ignorait
+ * `expiredViewAt`, et ouvrait donc tout ce qu'elle garde à un droit déjà
+ * dépensé.
  *
  * Ne décide PAS `none` : l'absence de référence se constate différemment
  * selon la lecture (une ligne `null`, une clé absente d'une `Map`), donc
