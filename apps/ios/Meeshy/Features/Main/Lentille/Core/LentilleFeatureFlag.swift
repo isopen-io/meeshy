@@ -38,7 +38,8 @@ import Foundation
 /// Focal/Rivière comme toujours, avec les données réelles). `isEnabled`
 /// (ci-dessous) porte cette cascade à TROIS étages, réservée à
 /// `.readingModes` — `.lentilleList` NE CHANGE PAS (reste défaut OFF, hors
-/// périmètre bêta pour l'instant) :
+/// périmètre bêta pour l'instant ; **ÉLARGI le 2026-08-19, voir
+/// `isCoveredByBetaProgramme`**) :
 /// 1. `environment[environmentKey]` — surcharge process, INCHANGÉE (tests/CI).
 /// 2. `defaults.object(forKey: userDefaultsKey) != nil` — la clé
 ///    `meeshy.flag.reading_modes` a été posée EXPLICITEMENT (réglages cachés
@@ -115,13 +116,38 @@ nonisolated enum LentilleFeatureFlag {
     /// dictionnaire d'environnement, pour ne jamais dépendre du process réel
     /// ni y laisser de résidu. La surcharge process prime : `"1"` force ON,
     /// `"0"` force OFF, toute autre valeur (y compris absente) retombe :
-    /// - `.lentilleList`/`.riviereMode` → `defaults.bool(forKey:)` (défaut
-    ///   `false`, INCHANGÉ) ;
-    /// - `.readingModes` → clé EXPLICITEMENT posée (`object(forKey:) != nil`)
+    /// - `.riviereMode` → `defaults.bool(forKey:)` (défaut `false`) ;
+    /// - `.readingModes`/`.lentilleList` (2026-08-19) → clé EXPLICITEMENT posée (`object(forKey:) != nil`)
     ///   ⇒ sa valeur ; sinon `BetaFeaturesPreference.isEnabled` MAIS
     ///   uniquement si cette préférence est EXPRIMÉE — sans quoi
     ///   `defaults.bool(forKey:)`, donc `false` (retrait I-075 du
     ///   2026-08-18 : absence ⇒ OFF, docstring du type ci-dessus).
+    /// Drapeaux que la bascule « Activer les bêta » (Réglages) gouverne
+    /// lorsqu'ils n'ont pas de valeur propre.
+    ///
+    /// **Élargissement produit du 2026-08-19** — `.lentilleList` rejoint
+    /// `.readingModes`. Le second amendement I-075 (2026-08-16) l'avait
+    /// laissé dehors « pour l'instant » ; l'usage a montré le défaut de ce
+    /// découpage : la bascule des Réglages était le SEUL interrupteur bêta
+    /// offert à l'utilisateur, et `lentille_list` n'en avait AUCUN —
+    /// `setForDebug` n'a aucun site d'appel de production. Activer la bêta
+    /// n'affichait donc jamais la liste Lentille, sans que rien ne l'explique.
+    /// Un seul interrupteur, une seule signification.
+    ///
+    /// `.riviereMode` reste dehors (R-133, docstring du cas) : la Rivière est
+    /// un choix séparé que le programme bêta n'ouvre jamais tout seul.
+    ///
+    /// Ce que l'élargissement NE change PAS : l'étage 1 (env) et l'étage 2
+    /// (clé propre posée, dans les deux sens) priment toujours, et une
+    /// préférence bêta JAMAIS EXPRIMÉE ne vaut toujours pas opt-in
+    /// (« absence ⇒ OFF », retrait du 2026-08-18).
+    private var isCoveredByBetaProgramme: Bool {
+        switch self {
+        case .readingModes, .lentilleList: return true
+        case .riviereMode: return false
+        }
+    }
+
     func isEnabled(
         defaults: UserDefaults = .standard,
         environment: [String: String] = ProcessInfo.processInfo.environment
@@ -131,11 +157,11 @@ nonisolated enum LentilleFeatureFlag {
         case "0": return false
         default: break
         }
-        // Étage 3, réservé à `.readingModes` — la condition
-        // `isExplicitlySet` EST le retrait du 2026-08-18 : sans elle, une
-        // préférence bêta jamais touchée rendait `true` (son défaut ON) et
-        // allumait les modes de lecture sur toute installation neuve.
-        if case .readingModes = self,
+        // Étage 3 — la condition `isExplicitlySet` EST le retrait du
+        // 2026-08-18 : sans elle, une préférence bêta jamais touchée rendait
+        // `true` (son défaut ON) et allumait ces surfaces sur toute
+        // installation neuve. `.riviereMode` en est délibérément exclu (R-133).
+        if isCoveredByBetaProgramme,
            defaults.object(forKey: userDefaultsKey) == nil,
            BetaFeaturesPreference.isExplicitlySet(defaults: defaults, environment: environment) {
             return BetaFeaturesPreference.isEnabled(defaults: defaults, environment: environment)

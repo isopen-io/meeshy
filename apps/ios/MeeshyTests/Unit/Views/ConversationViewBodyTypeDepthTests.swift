@@ -15,9 +15,14 @@ import SwiftUI
 /// La trame fautive est toujours le décodeur de métadonnées RÉCURSIF du
 /// runtime Swift (`swift_getTypeByMangledName` →
 /// `TypeDecoder::decodeMangledType` ⇄ `decodeGenericArgs`), atteint depuis
-/// ~90 trames d'AttributeGraph SwiftUI. Chaque niveau d'imbrication du type
-/// concret coûte ~7,5 Ko de pile (tampons `SmallVector` en ligne) : au-delà
-/// de ~130 niveaux, les 1008 Ko du main thread sont épuisés.
+/// ~90 trames d'AttributeGraph SwiftUI.
+///
+/// Coût par niveau, dérivé du dump : les 1008 Ko ont été consommés par 137
+/// trames, dont ~90 de traversée SwiftUI/AttributeGraph (petites, ~2 Ko →
+/// ~180 Ko). Les ~47 trames restantes sont celles du démangleur et se
+/// partagent ~828 Ko, soit **~17 Ko par niveau** (gros tampons `SmallVector`
+/// en ligne). Au-delà d'une cinquantaine de niveaux atteints depuis le fond
+/// du graphe, la pile du main thread est épuisée.
 ///
 /// **Pourquoi `AnyView` n'y suffit pas** — et pourquoi cette garde ne teste
 /// PAS la présence d'`AnyView`. `AnyView` plafonne le type vu par
@@ -47,12 +52,13 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
 
     /// Profondeur d'imbrication générique maximale tolérée pour un `body`.
     ///
-    /// 40 niveaux × ~7,5 Ko ≈ 300 Ko de récursion du démangleur : tient dans
-    /// les 1008 Ko du main thread même atteint depuis le fond de
-    /// l'AttributeGraph (~90 trames ≈ 400 Ko déjà consommés), et tient aussi
-    /// dans les 512 Ko d'un thread secondaire — cas
-    /// `com.apple.uikit.datasource.diffing` de `BubbleStandardLayout`
-    /// (3 `.ips` du 2026-08-10).
+    /// 40 niveaux × ~17 Ko ≈ 680 Ko de récursion du démangleur : tient dans
+    /// les ~828 Ko qui restent sous une position profonde de l'AttributeGraph
+    /// (cf. dérivation en tête de fichier), là où 87 niveaux débordaient.
+    /// Marge volontairement conservée : le thread
+    /// `com.apple.uikit.datasource.diffing` de `BubbleStandardLayout` n'a que
+    /// 512 Ko (3 `.ips` du 2026-08-10), et le graphe peut être plus profond
+    /// sur d'autres écrans.
     private static let maxSafeNestingDepth = 40
 
     func test_conversationViewBody_nestingStaysWithinStackBudget() throws {
@@ -76,9 +82,9 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
             """
             \(label) imbrique son type concret sur \(measured.depth) niveaux \
             (budget \(Self.maxSafeNestingDepth)). Le décodeur de métadonnées Swift \
-            récurse une fois par niveau à ~7,5 Ko de pile : \(measured.depth) niveaux \
-            ≈ \(measured.depth * 7500 / 1024) Ko, à comparer aux 1008 Ko du main \
-            thread dont ~400 sont déjà pris par l'AttributeGraph au moment de la \
+            récurse une fois par niveau à ~17 Ko de pile : \(measured.depth) niveaux \
+            ≈ \(measured.depth * 17_000 / 1024) Ko, à comparer aux 1008 Ko du main \
+            thread dont ~180 sont déjà pris par la traversée SwiftUI au moment de la \
             résolution. Découper en structs `View` NOMINALES (chacune crée un nœud \
             d'attribut où SwiftUI déroule la pile) ou en `ViewModifier` — un \
             `AnyView` de plus ne ferait que déplacer le crash au maillon suivant.

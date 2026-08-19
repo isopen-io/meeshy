@@ -147525,43 +147525,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يفعّل ميزات بيتا، بما في ذلك أوضاع القراءة التي تختار تلقائيًا طريقة فتح المحادثة (فوكال، الملخص...)."
+            "value": "يفعّل ميزات بيتا: أوضاع القراءة التي تختار تلقائيًا طريقة فتح المحادثة (سكريبت، الملخص…)، وتجميع لينتيّ لقائمة المحادثات."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aktiviert Beta-Funktionen, darunter Lesemodi, die beim Öffnen automatisch die Ansicht einer Unterhaltung wählen (Focal, Zusammenfassung …)."
+            "value": "Aktiviert Beta-Funktionen: Lesemodi, die beim Öffnen automatisch die Ansicht einer Unterhaltung wählen (Script, Zusammenfassung …), sowie die Lentille-Gruppierung der Unterhaltungsliste."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enables beta features, including reading modes that automatically pick how a conversation opens (Focal, Summary…)."
+            "value": "Enables beta features: reading modes that automatically pick how a conversation opens (Script, Summary…) and the Lentille grouping of the conversation list."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Activa las funciones beta, incluidos los modos de lectura que eligen automáticamente cómo se abre una conversación (Focal, Resumen…)."
+            "value": "Activa las funciones beta: los modos de lectura que eligen automáticamente cómo se abre una conversación (Script, Resumen…) y la agrupación Lentille de la lista de conversaciones."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Active les fonctionnalités bêta, dont les modes de lecture qui choisissent automatiquement la vue d'une conversation à l'ouverture (Focal, Résumé…)."
+            "value": "Active les fonctionnalités bêta : les modes de lecture qui choisissent automatiquement la vue d'une conversation à l'ouverture (Script, Résumé…) et le classement Lentille de la liste des conversations."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Attiva le funzionalità beta, tra cui le modalità di lettura che scelgono automaticamente come si apre una conversazione (Focal, Riepilogo…)."
+            "value": "Attiva le funzionalità beta: le modalità di lettura che scelgono automaticamente come si apre una conversazione (Script, Riepilogo…) e il raggruppamento Lentille dell'elenco delle conversazioni."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ativa os recursos beta, incluindo os modos de leitura que escolhem automaticamente como uma conversa é aberta (Focal, Resumo…)."
+            "value": "Ativa os recursos beta: os modos de leitura que escolhem automaticamente como uma conversa é aberta (Script, Resumo…) e o agrupamento Lentille da lista de conversas."
           }
         }
       }

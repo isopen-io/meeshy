@@ -639,12 +639,25 @@ struct SettingsView: View {
     // MARK: - Beta Section
 
     /// I-075 — « Activer les bêta » (amendement produit 2026-08-16). Toggle
-    /// de PLEIN DROIT (écrit `BetaFeaturesPreference.setEnabled`, jamais
-    /// `LentilleFeatureFlag.setForDebug`) : OFF ⇒ l'item « Focal (bêta) » du
-    /// menu d'appui long de la liste disparaît (`ConversationListView+Overlays
-    /// .swift`, `ConversationContextMenuView.morePanel`) ; ce que cet item
-    /// FAIT à l'ouverture (forçage éphémère, aucune écriture de préférence de
-    /// mode) reste inchangé par ce réglage.
+    /// de PLEIN DROIT : il écrit `BetaFeaturesPreference.setEnabled`, jamais
+    /// `LentilleFeatureFlag.setForDebug`.
+    ///
+    /// **Portée réelle depuis le 2026-08-19** — c'est le SEUL interrupteur
+    /// bêta offert à l'utilisateur, et il gouverne désormais les deux
+    /// drapeaux qui n'ont pas d'interrupteur propre
+    /// (`LentilleFeatureFlag.isCoveredByBetaProgramme`) :
+    /// - `reading_modes` — les modes de lecture décident de la vue à
+    ///   l'ouverture d'une conversation (Script, Résumé…) ;
+    /// - `lentille_list` — le classement Lentille de la liste
+    ///   (`lentilleGroupConversations`, `LentillePeekView`).
+    ///
+    /// `riviere_mode` reste EN DEHORS (R-133) : un choix séparé.
+    /// Dans les deux cas, une clé de drapeau posée explicitement prime sur ce
+    /// réglage — c'est le seul moyen d'en couper un sans couper le programme.
+    ///
+    /// L'ancienne rédaction décrivait l'item « Focal (bêta) » du menu d'appui
+    /// long comme la chose gardée par ce toggle : cet item a été RETIRÉ avec
+    /// le mode Focal le 2026-08-18 (`docs/focal-retrait-ios-2026-08-18.md`).
     private var betaSection: some View {
         settingsSection(title: String(localized: "settings.section.beta", bundle: .main), icon: "flask.fill", color: MeeshyColors.trackingAccentHex) {
             VStack(alignment: .leading, spacing: 0) {

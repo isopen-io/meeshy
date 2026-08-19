@@ -8,6 +8,19 @@ import MeeshyUI
 @MainActor
 final class ConversationListViewModelTests: XCTestCase {
 
+    /// Trois témoins de groupement de cette suite vérifient le sectionnement
+    /// LEGACY (section « other »). Ils tenaient leur précondition d'une
+    /// absence non maîtrisée ; voir `LentilleListFlagPin` pour le détail.
+    override func setUp() {
+        super.setUp()
+        pinLentilleListFlagOff()
+    }
+
+    override func tearDown() {
+        unpinLentilleListFlag()
+        super.tearDown()
+    }
+
     // MARK: - Factory
 
     private func makeSUT(

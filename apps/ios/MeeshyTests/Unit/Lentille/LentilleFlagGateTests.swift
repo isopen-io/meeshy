@@ -126,15 +126,60 @@ final class LentilleFlagGateTests: XCTestCase {
         XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: environment))
     }
 
-    /// La bêta n'affecte JAMAIS `lentilleList` — hors périmètre bêta pour
-    /// l'instant (docstring `LentilleFeatureFlag`, second amendement).
-    func test_betaFeaturesOn_neverEnablesLentilleList() {
+    /// Une bêta NON EXPRIMÉE ne suffit pas — c'est le « absence ⇒ OFF » du
+    /// retrait du 2026-08-18, qui survit à l'élargissement du 2026-08-19.
+    /// Une installation neuve n'allume donc rien toute seule, malgré le
+    /// défaut ON de `BetaFeaturesPreference`.
+    func test_betaFeaturesNeverExpressed_doesNotEnableLentilleList() {
         let defaults = makeIsolatedDefaults()
         // `defaults` fraîche ⇒ BetaFeaturesPreference résout déjà à `true`
         // (défaut ON) sans rien poser explicitement.
         XCTAssertTrue(BetaFeaturesPreference.isEnabled(defaults: defaults, environment: [:]), "Décor : la bêta doit être ON pour que ce test soit discriminant.")
 
         XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
+    }
+
+    /// **Élargissement produit du 2026-08-19** — « Activer les bêta » allume
+    /// AUSSI la liste Lentille, plus seulement les modes de lecture.
+    ///
+    /// Motif : la bascule des réglages était le seul interrupteur bêta offert
+    /// à l'utilisateur, et `lentille_list` n'en avait AUCUN — `setForDebug`
+    /// n'a aucun site d'appel de production. Une personne qui activait la
+    /// bêta ne pouvait donc pas voir la liste Lentille, ni comprendre
+    /// pourquoi. Un seul interrupteur, une seule signification.
+    func test_betaFeaturesExplicitlyOn_enablesLentilleList() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+
+        XCTAssertTrue(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
+    }
+
+    /// Symétrie : couper la bêta explicitement coupe la liste.
+    func test_betaFeaturesExplicitlyOff_disablesLentilleList() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(false, defaults: defaults)
+
+        XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
+    }
+
+    /// La clé propre du drapeau PRIME toujours sur la bêta (étage 2 > étage
+    /// 3) — c'est le seul moyen de couper la liste Lentille seule sans
+    /// renoncer au reste du programme bêta.
+    func test_lentilleListExplicitlyOff_beatsBetaOn() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+        defaults.set(false, forKey: LentilleFeatureFlag.lentilleList.userDefaultsKey)
+
+        XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
+    }
+
+    /// La Rivière reste HORS du programme bêta (R-133) : activer la bêta ne
+    /// l'ouvre jamais toute seule, elle demeure un choix séparé.
+    func test_betaFeaturesExplicitlyOn_neverEnablesRiviereMode() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+
+        XCTAssertFalse(LentilleFeatureFlag.riviereMode.isEnabled(defaults: defaults, environment: [:]))
     }
 
     // MARK: - setForDebug
