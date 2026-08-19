@@ -161,6 +161,38 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
 });
 
 /**
+ * Les références VISIBLES d'un post — jamais les silencieuses.
+ *
+ * Le filtre vit dans le `select`, pas dans une projection applicative : une
+ * charge utile identique pour tous les lecteurs ne peut pas fuiter. Le détail
+ * du post, lui, projette (voir `postReferences.ts`) — mais c'est une lecture
+ * unitaire, jamais un feed mis en cache sous une clé partagée.
+ *
+ * Piège Prisma-Mongo : `{ display: { not: 'SILENT' } }` ne matche PAS les
+ * lignes où le champ est ABSENT — c'est-à-dire toutes celles écrites avant le
+ * discriminant, qui se lisent pourtant INLINE et doivent donc apparaître. D'où
+ * le `OR` explicite sur les trois modes visibles plus l'absence.
+ *
+ * La relation s'appelle `postMentions`, pas `mentions` : le schéma nomme
+ * `Post.postMentions` là où `PostComment.mentions` et `Message.mentions`
+ * portent le nom court. La clé EXPOSÉE au client reste `mentions`, via le
+ * remappage `withMentions`.
+ */
+export const postMentionInclude = Prisma.validator<Prisma.Post$postMentionsArgs>()({
+  where: {
+    OR: [
+      { display: { in: ['INLINE', 'PINNED', 'NOTE'] } },
+      { display: { isSet: false } },
+      { display: null },
+    ],
+  },
+  select: {
+    display: true,
+    mentionedUser: { select: authorSelect },
+  },
+});
+
+/**
  * Nested repost preview shape attached to every Post response.
  *
  * Includes `originalLanguage` + `translations` — required by the Prisme
@@ -198,6 +230,16 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     shareCount: true,
     bookmarkCount: true,
     impressionCount: true,
+    // Les références du post ORIGINAL, sous la MÊME forme que la racine. Sans
+    // ce select, `repostOf.mentions` valait TOUJOURS `undefined` : le web, sans
+    // jeu validé à opposer au texte cité, retombait sur sa regex locale et
+    // linkifiait n'importe quel `@handle` vers un profil inexistant — le lien
+    // mort que la validation serveur existe pour supprimer.
+    //
+    // La constante est PARTAGÉE, pas recopiée : un filtre dupliqué divergerait
+    // au premier mode ajouté, et c'est lui qui garde les silencieuses hors
+    // d'une charge utile servie à toute une audience.
+    postMentions: postMentionInclude,
   },
 });
 
@@ -233,38 +275,6 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
       author: { select: authorSelect },
       media: mediaInclude,
     },
-  },
-});
-
-/**
- * Les références VISIBLES d'un post — jamais les silencieuses.
- *
- * Le filtre vit dans le `select`, pas dans une projection applicative : une
- * charge utile identique pour tous les lecteurs ne peut pas fuiter. Le détail
- * du post, lui, projette (voir `postReferences.ts`) — mais c'est une lecture
- * unitaire, jamais un feed mis en cache sous une clé partagée.
- *
- * Piège Prisma-Mongo : `{ display: { not: 'SILENT' } }` ne matche PAS les
- * lignes où le champ est ABSENT — c'est-à-dire toutes celles écrites avant le
- * discriminant, qui se lisent pourtant INLINE et doivent donc apparaître. D'où
- * le `OR` explicite sur les trois modes visibles plus l'absence.
- *
- * La relation s'appelle `postMentions`, pas `mentions` : le schéma nomme
- * `Post.postMentions` là où `PostComment.mentions` et `Message.mentions`
- * portent le nom court. La clé EXPOSÉE au client reste `mentions`, via le
- * remappage `withMentions`.
- */
-export const postMentionInclude = Prisma.validator<Prisma.Post$postMentionsArgs>()({
-  where: {
-    OR: [
-      { display: { in: ['INLINE', 'PINNED', 'NOTE'] } },
-      { display: { isSet: false } },
-      { display: null },
-    ],
-  },
-  select: {
-    display: true,
-    mentionedUser: { select: authorSelect },
   },
 });
 

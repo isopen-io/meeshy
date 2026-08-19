@@ -43,14 +43,23 @@ jest.mock('../../../../services/posts/PostTranslationService', () => ({
   PostTranslationService: { shared: { translatePost: jest.fn<any>().mockResolvedValue(undefined) } },
 }));
 
+const mockExtractMentions = jest.fn<any>().mockReturnValue([]);
+const mockResolveUsernames = jest.fn<any>().mockResolvedValue(new Map());
+const mockCreatePostMentions = jest.fn<any>().mockResolvedValue(undefined);
+
 jest.mock('../../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn<any>().mockResolvedValue([]),
   MentionService: jest.fn().mockImplementation(() => ({
-    extractMentions: jest.fn<any>().mockReturnValue([]),
-    resolveUsernames: jest.fn<any>().mockResolvedValue(new Map()),
-    createPostMentions: jest.fn<any>().mockResolvedValue(undefined),
+    extractMentions: (...args: any[]) => mockExtractMentions(...args),
+    resolveUsernames: (...args: any[]) => mockResolveUsernames(...args),
+    createPostMentions: (...args: any[]) => mockCreatePostMentions(...args),
   })),
 }));
+
+// Le jeu de références est RELU après écriture (postReferences.readPostReferences) :
+// sans ce délégué, la charge utile retomberait sur la relation chargée AVANT
+// que la moindre ligne n'existe.
+const mockPostMentionFindMany = jest.fn<any>().mockResolvedValue([]);
 
 jest.mock('../../../../services/HashtagService', () => ({
   HashtagService: jest.fn().mockImplementation(() => ({
@@ -112,7 +121,17 @@ function makeSocialEvents() {
 
 async function buildApp(): Promise<{ app: FastifyInstance; socialEvents: ReturnType<typeof makeSocialEvents> }> {
   const app = Fastify({ logger: false });
-  const prisma = {} as any;
+  const prisma = {
+    postMention: {
+      findMany: (...args: any[]) => mockPostMentionFindMany(...args),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    notification: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+  } as any;
   const requiredAuth = async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
@@ -134,6 +153,9 @@ describe('la relation `postMentions` ne quitte jamais le serveur sous son nom', 
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetPostById.mockResolvedValue(null);
+    mockExtractMentions.mockReturnValue([]);
+    mockResolveUsernames.mockResolvedValue(new Map());
+    mockPostMentionFindMany.mockResolvedValue([]);
   });
 
   it('aplatit les références d\'une story republiée, réponse ET événement', async () => {
@@ -178,6 +200,12 @@ describe('la relation `postMentions` ne quitte jamais le serveur sous son nom', 
       id: POST_ID, type: 'STORY', authorId: USER_ID, visibility: 'FRIENDS',
       visibilityUserIds: [], content: 'edité', postMentions: [MENTION_ROW],
     });
+    // La référence déclarée SURVIT à une édition qui ne parle pas d'elle
+    // (tri-état) ; c'est le jeu RELU qui le prouve, pas la relation rendue par
+    // `updatePost`, qui date d'avant la réconciliation.
+    mockPostMentionFindMany
+      .mockResolvedValueOnce([{ mentionedUserId: 'u-alice', display: 'NOTE' }])
+      .mockResolvedValueOnce([MENTION_ROW]);
     const { app, socialEvents } = await buildApp();
 
     const res = await app.inject({
@@ -202,19 +230,28 @@ describe('la relation `postMentions` ne quitte jamais le serveur sous son nom', 
     await app.close();
   });
 
-  it('aplatit l\'événement de création — même forme qu\'à l\'édition', async () => {
+  // La relation que `createPost` rend est vide PAR CONSTRUCTION : elle a été
+  // chargée avant que la résolution n'écrive la moindre ligne. C'est le jeu
+  // RELU qui doit sortir — `[]` se lirait comme un verdict chez les deux
+  // clients, et l'auteur verrait son propre `@alice` en texte mort.
+  it('aplatit l\'événement de création — et porte le jeu RELU, pas la relation vide', async () => {
     mockCreatePost.mockResolvedValue({
       id: POST_ID, type: 'POST', authorId: USER_ID, visibility: 'PUBLIC',
-      visibilityUserIds: [], postMentions: [],
+      visibilityUserIds: [], content: 'bravo @alice', postMentions: [],
     });
+    mockExtractMentions.mockReturnValue(['alice']);
+    mockResolveUsernames.mockResolvedValue(new Map([['alice', { id: 'u-alice' }]]));
+    mockPostMentionFindMany.mockResolvedValue([MENTION_ROW]);
     const { app, socialEvents } = await buildApp();
 
-    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'neuf' } });
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'bravo @alice' } });
 
     expect(res.statusCode).toBe(201);
+    expect(res.json().data).not.toHaveProperty('postMentions');
+    expect(res.json().data.mentions).toEqual([FLAT_MENTION]);
     const broadcast = socialEvents.broadcastPostCreated.mock.calls[0][0] as Record<string, unknown>;
     expect(broadcast).not.toHaveProperty('postMentions');
-    expect(broadcast.mentions).toEqual([]);
+    expect(broadcast.mentions).toEqual([FLAT_MENTION]);
     await app.close();
   });
 });

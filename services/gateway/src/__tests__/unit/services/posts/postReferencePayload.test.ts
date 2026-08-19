@@ -60,4 +60,36 @@ describe('withMentions', () => {
 
     expect(withMentions(already).mentions).toEqual(already.mentions);
   });
+
+  // Un repost cite le texte de l'ORIGINAL. Sans ses références, le web
+  // (`PostContentText`) n'a aucun jeu validé à opposer au texte et relinkifie
+  // tous les `@handle` : le lien mort que ce chantier existe pour supprimer.
+  it('descend dans le post ORIGINAL d\'une republication', () => {
+    const payload = withMentions({ id: 'repost-1', postMentions: [], repostOf: { id: 'p0', postMentions: [ROW] } });
+
+    const nested = payload.repostOf as Record<string, unknown>;
+    expect(nested).not.toHaveProperty('postMentions');
+    expect(nested.mentions).toEqual([
+      { userId: 'u-alice', username: 'alice', displayName: 'Alice B.', avatar: 'a.png', display: 'NOTE' },
+    ]);
+  });
+
+  it('rend une liste vide sur un original sans référence — un verdict, jamais une clé absente', () => {
+    const payload = withMentions({ id: 'repost-1', postMentions: [], repostOf: { id: 'p0', postMentions: [] } });
+
+    expect((payload.repostOf as Record<string, unknown>).mentions).toEqual([]);
+  });
+
+  it('laisse intacte une projection qui ne charge pas les références de l\'original', () => {
+    // `trayStorySelect` ne sélectionne pas `postMentions` sur `repostOf` :
+    // fabriquer `mentions: []` y prononcerait un verdict que le serveur n'a
+    // jamais rendu.
+    const lean = { id: 'p0', media: [] };
+
+    expect(withMentions({ id: 'repost-1', postMentions: [], repostOf: lean }).repostOf).toBe(lean);
+  });
+
+  it('ne fabrique pas d\'imbriqué sur un post qui n\'est pas une republication', () => {
+    expect(withMentions({ id: 'p1', postMentions: [], repostOf: null }).repostOf).toBeNull();
+  });
 });

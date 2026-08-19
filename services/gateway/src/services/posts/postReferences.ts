@@ -7,8 +7,11 @@
  * une personne qui change de nom apparaît sous son nom actuel.
  */
 
+import type { PrismaClient } from '@meeshy/shared/prisma/client';
+
 import type { PostMentionDisplayValue } from './postMentions';
 import { readDisplay } from './postMentions';
+import { postMentionInclude } from './postIncludes';
 
 export interface PostReference {
   readonly userId: string;
@@ -42,6 +45,59 @@ export function toPostReferences(rows: readonly PostMentionRow[] | undefined): P
       display: readDisplay(row.display),
     }];
   });
+}
+
+/** La seule surface Prisma que la relecture touche. */
+export type PostReferenceReaderPrisma = Pick<PrismaClient, 'postMention'>;
+
+/**
+ * Le jeu de références d'un post, RELU en base.
+ *
+ * Il n'y a pas d'autre façon d'en connaître l'état après une écriture : le
+ * document que rend `createPost` a chargé sa relation AVANT que la résolution
+ * n'écrive la moindre ligne, et celui que rend `updatePost` sort de sa propre
+ * transaction, donc d'avant la réconciliation. Servir ces relations-là donnait
+ * `mentions: []` à la création — par construction — et le jeu PRÉ-édition à
+ * l'édition.
+ *
+ * Lit TOUT, silencieuses comprises : les deux consommateurs ne veulent pas la
+ * même chose (la réponse va à l'auteur, qui voit ses silencieuses ; le
+ * broadcast va à une audience, qui ne doit rien en savoir), et c'est
+ * `projectReferencesForViewer` qui tranche, jamais la requête.
+ *
+ * `undefined` en échec, jamais `[]` : rien n'a pu être établi, et l'appelant
+ * doit alors garder ce que la relation portait — un `[]` inventé serait lu
+ * comme un verdict par les deux clients.
+ */
+export async function readPostReferences(params: {
+  prisma: PostReferenceReaderPrisma;
+  postId: string;
+  onError?: (error: unknown) => void;
+}): Promise<PostReference[] | undefined> {
+  try {
+    const rows = await params.prisma.postMention.findMany({
+      where: { postId: params.postId },
+      select: postMentionInclude.select,
+    });
+    return toPostReferences(rows);
+  } catch (error) {
+    params.onError?.(error);
+    return undefined;
+  }
+}
+
+/**
+ * Pose le jeu RELU sur une charge utile, à la place de la relation qu'elle
+ * porte. `undefined` = rien de relu : la charge garde sa relation, que
+ * `withMentions` aplatira comme avant.
+ */
+export function graftReferences(
+  post: Record<string, unknown>,
+  references: readonly PostReference[] | undefined
+): Record<string, unknown> {
+  if (references === undefined) return post;
+  const { postMentions, ...rest } = post;
+  return { ...rest, mentions: [...references] };
 }
 
 /**
@@ -90,8 +146,34 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   post: T
 ): Omit<T, 'postMentions' | 'mentions'> & { mentions: PostReference[] } {
   const { postMentions, mentions, ...rest } = post;
-  if (postMentions === undefined && Array.isArray(mentions)) {
-    return { ...rest, mentions: mentions as PostReference[] };
-  }
-  return { ...rest, mentions: toPostReferences(postMentions as never) };
+  const flat = postMentions === undefined && Array.isArray(mentions)
+    ? { ...rest, mentions: mentions as PostReference[] }
+    : { ...rest, mentions: toPostReferences(postMentions as never) };
+  return withNestedRepostMentions(flat);
+}
+
+/**
+ * Le post ORIGINAL d'une republication porte ses propres références, et la
+ * même conversion leur est due.
+ *
+ * Un repost CITE le texte de l'original : sans jeu validé en face, le client
+ * retombe sur sa regex locale et linkifie n'importe quel `@handle` du texte
+ * cité vers un profil inexistant — exactement le lien mort que la validation
+ * serveur existe pour supprimer.
+ *
+ * Deux abstentions délibérées. Une relation ABSENTE (`trayStorySelect` ne
+ * charge pas les références de l'original) reste absente : fabriquer
+ * `mentions: []` y prononcerait un verdict que le serveur n'a jamais rendu, et
+ * `[]` se lit comme un verdict chez les deux clients. Et la récursion s'arrête
+ * au premier niveau, parce que `repostOfInclude` ne charge pas son propre
+ * `repostOf` — il n'y a jamais de troisième étage.
+ */
+function withNestedRepostMentions<T>(post: T): T {
+  const repostOf = (post as { repostOf?: unknown }).repostOf;
+  if (!repostOf || typeof repostOf !== 'object') return post;
+
+  const nested = repostOf as { postMentions?: unknown; mentions?: unknown };
+  if (nested.postMentions === undefined && nested.mentions === undefined) return post;
+
+  return { ...post, repostOf: withMentions(nested) };
 }

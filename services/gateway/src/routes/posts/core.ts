@@ -9,7 +9,14 @@ import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } f
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
-import { withMentions } from '../../services/posts/postReferences';
+import type { ResolvedPostMentions } from '../../services/posts/postMentions';
+import {
+  withMentions,
+  graftReferences,
+  readPostReferences,
+  projectReferencesForViewer,
+  type PostReference,
+} from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -52,6 +59,26 @@ export function registerCoreRoutes(
   const mentionService = new MentionService(prisma);
   const hashtagService = new HashtagService(prisma);
 
+  /**
+   * Le jeu FINAL des références d'un post, à servir après une écriture.
+   *
+   * Trois états, et les distinguer est tout l'intérêt : la résolution n'a rien
+   * pu établir (`undefined` — l'appelant garde ce que la relation portait, une
+   * mention périmée valant mieux qu'une mention détruite), le post ne nomme
+   * plus personne (`[]` sans ouvrir de requête — le cas de l'immense majorité
+   * des publications), ou il en nomme, et la seule source de leur profil et de
+   * leur mode est la base d'APRÈS l'écriture.
+   */
+  const finalReferences = async (
+    postId: string,
+    resolved: ResolvedPostMentions,
+    onError: (error: unknown) => void
+  ): Promise<PostReference[] | undefined> => {
+    if (!resolved.reconciled) return undefined;
+    if (resolved.mentionedUserIds.length === 0) return [];
+    return readPostReferences({ prisma, postId, onError });
+  };
+
   // POST /posts — Create a new post
   //
   // Per-route bodyLimit 1MB : suffisant pour content (5KB max) + storyEffects
@@ -92,28 +119,6 @@ export function registerCoreRoutes(
           return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
         },
       });
-
-      // Broadcast via Socket.IO
-      const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
-        const postType = parsed.data.type ?? 'POST';
-        // `withMentions` AUSSI sur l'événement : une charge utile temps réel est
-        // une charge utile. Servie sous le nom de la relation Prisma
-        // (`postMentions`), elle ne se décode pas — la clé exposée est
-        // `mentions`, ici comme dans la réponse rendue plus bas.
-        const broadcastPost = withMentions(
-          hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>
-        ) as unknown as Post;
-        if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
-        } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
-        } else {
-          // U1 — echo the request cmid so an offline author reconciles its
-          // optimistic temp post (keyed by cmid) with this server post.
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast post created failed'));
-        }
-      }
 
       // Trigger async translation for text content (fire-and-forget).
       //
@@ -194,6 +199,51 @@ export function registerCoreRoutes(
       // sur `friend_new_post`, sinon un ami nommé reçoit les deux.
       const mentionedUserIdsForDedup = [...createdMentions.mentionedUserIds];
 
+      // Le jeu FINAL, relu APRÈS l'écriture des lignes. `createPost` a chargé
+      // sa relation avant que `resolvePostMentions` n'existe pour ce post : la
+      // servir telle quelle rendait `mentions: []` PAR CONSTRUCTION, et les
+      // deux clients lisent `[]` comme un verdict (« personne ne matche »),
+      // pas comme une absence de savoir — l'auteur voyait son propre `@alice`
+      // en texte mort.
+      const references = await finalReferences((post as any).id as string, createdMentions, (err: unknown) => {
+        fastify.log.error(`[POST /posts] post reference reload failed: ${err}`);
+      });
+
+      // Broadcast via Socket.IO — APRÈS la résolution, seul instant où les
+      // références du post existent. Avant, l'événement partait avec la
+      // relation vide qu'il venait de charger.
+      const socialEvents = fastify.socialEvents;
+      if (socialEvents) {
+        // La charge utile temps réel est servie à une AUDIENCE : elle reste
+        // neutre, sans les silencieuses — même règle que le `select` des feeds
+        // (`postMentionInclude`), appliquée ici parce que le jeu relu, lui, les
+        // porte toutes.
+        const broadcastReferences = references && projectReferencesForViewer({
+          references,
+          authorId: authContext.registeredUser.id,
+          viewerId: undefined,
+        });
+        // `withMentions` AUSSI sur l'événement : une charge utile temps réel est
+        // une charge utile. Servie sous le nom de la relation Prisma
+        // (`postMentions`), elle ne se décode pas — la clé exposée est
+        // `mentions`, ici comme dans la réponse rendue plus bas.
+        const broadcastPost = withMentions(
+          graftReferences(
+            hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
+            broadcastReferences
+          )
+        ) as unknown as Post;
+        if (postType === 'STORY') {
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
+        } else if (postType === 'STATUS') {
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
+        } else {
+          // U1 — echo the request cmid so an offline author reconciles its
+          // optimistic temp post (keyed by cmid) with this server post.
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast post created failed'));
+        }
+      }
+
       if (postContent) {
         const hashtags = hashtagService.extractHashtags(postContent);
         if (hashtags.length > 0) {
@@ -221,7 +271,13 @@ export function registerCoreRoutes(
         });
       }
 
-      return sendSuccess(reply, withMentions(hoistLocation(post as unknown as Record<string, unknown>)), { statusCode: 201 });
+      // La réponse va à l'AUTEUR, et lui voit tout — y compris les silencieuses
+      // qu'il vient de poser, sans quoi il ne pourrait plus en retirer une.
+      return sendSuccess(
+        reply,
+        withMentions(graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references)),
+        { statusCode: 201 }
+      );
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -244,7 +300,12 @@ export function registerCoreRoutes(
 
       reply.header('Cache-Control', 'private, no-cache');
 
-      return sendSuccess(reply, hoistLocation(post as unknown as Record<string, unknown>));
+      // `getPostById` a déjà aplati ET projeté la racine pour CE lecteur —
+      // `withMentions` y est neutre. Ce qu'il reste à faire est l'imbriqué : le
+      // post ORIGINAL d'une republication porte, lui, la relation sous son nom
+      // de schéma (`repostOfInclude`), et un client ne décode pas
+      // `repostOf.postMentions`.
+      return sendSuccess(reply, withMentions(hoistLocation(post as unknown as Record<string, unknown>)));
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -298,7 +359,7 @@ export function registerCoreRoutes(
       // prévient que les entrants. Le bloc qui vivait ici recréait sans jamais
       // supprimer, et renotifiait tout le monde à chaque édition.
       const editedContent = (post as any).content as string | undefined;
-      await reconcilePostMentions({
+      const reconciled = await reconcilePostMentions({
         prisma,
         mentionService,
         notificationService: fastify.notificationService,
@@ -326,6 +387,15 @@ export function registerCoreRoutes(
         },
       });
 
+      // Le jeu FINAL, relu APRÈS la réconciliation. `updatePost` rend son
+      // document DANS sa transaction, donc d'avant : servir sa relation
+      // laissait une référence révoquée affichée chez tous les lecteurs, que
+      // rien n'invalidait ensuite (le web remplace le post en cache sans
+      // refetch), et privait l'édition de toute façon d'annoncer une entrante.
+      const references = await finalReferences(postId, reconciled, (err: unknown) => {
+        fastify.log.error(`[PUT /posts/:postId] post reference reload failed: ${err}`);
+      });
+
       {
         const editHashtags = editedContent ? hashtagService.extractHashtags(editedContent) : [];
         if (editHashtags.length > 0) {
@@ -345,13 +415,20 @@ export function registerCoreRoutes(
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         const updatedPostType = (post as any).type as string;
+        // Charge utile d'AUDIENCE : neutre, sans les silencieuses. Même règle
+        // qu'à la création.
+        const broadcastReferences = references && projectReferencesForViewer({
+          references,
+          authorId: authContext.registeredUser.id,
+          viewerId: undefined,
+        });
         // Second chemin d'enrichissement (le premier est la création
         // ci-dessus) : le lieu — posé à la création OU modifié/retiré par
         // l'édition (tri-état `location`, merge metadata dans `updatePost`)
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = withMentions(
-          hoistLocation(post as unknown as Record<string, unknown>)
+          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences)
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {
           // Même prédicat que le reset d'engagement du service — les deux ne
@@ -366,7 +443,11 @@ export function registerCoreRoutes(
         }
       }
 
-      return sendSuccess(reply, withMentions(hoistLocation(post as unknown as Record<string, unknown>)));
+      // La réponse va à l'AUTEUR — seul autorisé à éditer — et lui voit tout.
+      return sendSuccess(
+        reply,
+        withMentions(graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references))
+      );
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });

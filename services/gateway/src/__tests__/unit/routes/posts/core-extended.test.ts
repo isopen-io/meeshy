@@ -476,6 +476,17 @@ describe('PUT /posts/:postId — références servies depuis la relation', () =>
         mentionedUser: { id: 'user-alice', username: 'alice', displayName: 'Alice', avatar: null },
       }],
     });
+    // La charge utile ne vient PAS de la relation ci-dessus — `updatePost` la
+    // rend d'avant la réconciliation. Elle vient de la relecture, deuxième
+    // appel à `postMention.findMany` (le premier est l'ensemble pré-édition).
+    mockExtractMentions.mockReturnValueOnce(['alice']);
+    mockResolveUsernames.mockResolvedValueOnce(new Map([['alice', { id: 'user-alice' }]]));
+    mockPostMentionFindMany
+      .mockResolvedValueOnce([{ mentionedUserId: 'user-alice', display: 'NOTE' }])
+      .mockResolvedValueOnce([{
+        display: 'NOTE',
+        mentionedUser: { id: 'user-alice', username: 'alice', displayName: 'Alice', avatar: null },
+      }]);
     const res = await app.inject({
       method: 'PUT', url: `/posts/${POST_ID}`,
       payload: { content: 'Updated @alice content' },
