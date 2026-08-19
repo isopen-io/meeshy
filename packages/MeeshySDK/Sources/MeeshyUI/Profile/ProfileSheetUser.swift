@@ -111,6 +111,15 @@ extension ProfileSheetUser {
         )
     }
 
+    public static func from(reference: PostReference) -> ProfileSheetUser {
+        ProfileSheetUser(
+            userId: reference.userId,
+            username: reference.username,
+            displayName: reference.displayName,
+            avatarURL: reference.avatar
+        )
+    }
+
     public static func from(feedComment: FeedComment) -> ProfileSheetUser {
         ProfileSheetUser(
             userId: feedComment.authorId.isEmpty ? nil : feedComment.authorId,

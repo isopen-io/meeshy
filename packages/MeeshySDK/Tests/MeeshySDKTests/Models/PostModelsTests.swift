@@ -200,6 +200,49 @@ final class PostModelsTests: XCTestCase {
         XCTAssertEqual(feedPost.viewCount, 4)
     }
 
+    func test_apiPost_toFeedPost_carriesMentionsThrough() throws {
+        let json = """
+        {
+            "id": "post5",
+            "type": "POST",
+            "content": "Soirée avec @alice",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a5", "username": "eve"},
+            "mentions": [
+                {"userId": "u-alice", "username": "alice", "displayName": "Alice B.", "display": "NOTE"}
+            ]
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        let feedPost = apiPost.toFeedPost()
+
+        XCTAssertEqual(feedPost.mentions?.count, 1)
+        XCTAssertEqual(feedPost.mentions?.first?.username, "alice")
+        XCTAssertEqual(feedPost.mentions?.first?.display, .note)
+        XCTAssertEqual(feedPost.validMentionUsernames, ["alice"])
+    }
+
+    func test_apiPost_toFeedPost_withoutMentions_feedPostMentionsStaysNil() throws {
+        // Un serveur pas encore déployé ne sert pas `mentions` : le champ doit
+        // rester `nil`, jamais un tableau vide — sinon le renderer en aval
+        // (`validMentionUsernames`) croirait que le serveur s'est prononcé et
+        // délinkifierait tout.
+        let json = """
+        {
+            "id": "post6",
+            "type": "POST",
+            "content": "Sans référence",
+            "createdAt": "2026-01-15T10:30:00.000Z",
+            "author": {"id": "a6", "username": "frank"}
+        }
+        """.data(using: .utf8)!
+        let apiPost = try makeDecoder().decode(APIPost.self, from: json)
+        let feedPost = apiPost.toFeedPost()
+
+        XCTAssertNil(feedPost.mentions)
+        XCTAssertNil(feedPost.validMentionUsernames)
+    }
+
     func test_APIPost_missingImpressionCount_defaultsToZero() throws {
         let json = """
         {
@@ -260,6 +303,17 @@ final class PostModelsTests: XCTestCase {
 
         let withoutMedia = FeedPost(author: "C", content: "D")
         XCTAssertFalse(withoutMedia.hasMedia)
+    }
+
+    func test_feedPost_mentions_roundTripsThroughCodable() throws {
+        var post = FeedPost(author: "A", content: "Avec @bob")
+        post.mentions = [PostReference(userId: "u-bob", username: "bob", display: .note)]
+
+        let data = try JSONEncoder().encode(post)
+        let decoded = try JSONDecoder().decode(FeedPost.self, from: data)
+
+        XCTAssertEqual(decoded.mentions?.first?.username, "bob")
+        XCTAssertEqual(decoded.mentions?.first?.display, .note)
     }
 
     func test_feedPost_mediaUrl_returnsFirstMediaUrl() {

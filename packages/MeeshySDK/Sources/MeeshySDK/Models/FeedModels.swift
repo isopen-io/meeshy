@@ -541,6 +541,21 @@ public struct FeedPost: Identifiable, Sendable {
     /// (`APIPost.location`) puis PERDUE au passage domaine (constat user
     /// 2026-07-30, aucune carte sur les posts).
     public var location: SharedPlace? = nil
+    /// Les personnes que ce post nomme, avec leur mode. Miroir de
+    /// `APIPost.mentions` — `nil` tant que le réseau ne l'a pas fourni (post
+    /// pas encore rafraîchi depuis un serveur qui ne le sert pas encore, OU
+    /// projection GRDB du cache qui ne persiste pas encore ce champ). Les
+    /// consommateurs (renderer, `ReferenceNoteRow`) traitent `nil` comme « pas
+    /// d'avis » — jamais comme « personne » : `[]` dirait « le serveur s'est
+    /// prononcé, personne ne matche », `nil` dit « ne rien changer ».
+    public var mentions: [PostReference]? = nil
+
+    /// `validUsernames` prêt pour `MessageTextRenderer.render` : `nil` quand
+    /// `mentions` est `nil` (repli sur le comportement historique — tout
+    /// `@handle` est linkifié), un `Set` — possiblement vide — sinon.
+    public var validMentionUsernames: Set<String>? {
+        mentions.map { Set($0.map { $0.username.lowercased() }) }
+    }
 
     public var hasMedia: Bool { !media.isEmpty }
     public var mediaUrl: String? { media.first?.url }
@@ -638,7 +653,7 @@ extension FeedPost: Codable {
         case viewCount, postOpenCount, impressionCount, qualifiedViewCount, playCount
         case repost, repostAuthor, isQuote, media
         case originalLanguage, translations, translatedContent
-        case storyEffects, audioUrl, location
+        case storyEffects, audioUrl, location, mentions
     }
 
     public init(from decoder: Decoder) throws {
@@ -680,6 +695,7 @@ extension FeedPost: Codable {
         storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)
         let stableId = authorId.isEmpty ? author : authorId
         authorColor = DynamicColorGenerator.colorForPost(authorId: stableId, type: type, originalLanguage: originalLanguage)
     }
@@ -718,6 +734,7 @@ extension FeedPost: Codable {
         try c.encodeIfPresent(storyEffects, forKey: .storyEffects)
         try c.encodeIfPresent(audioUrl, forKey: .audioUrl)
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(mentions, forKey: .mentions)
     }
 }
 

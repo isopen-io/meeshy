@@ -310,7 +310,7 @@ struct FeedPostCard: View {
                     if isLocationOnlyPost {
                         EmptyView()
                     } else if isTextExpanded {
-                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(effectiveContent, color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap, validUsernames: post.validMentionUsernames)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -327,7 +327,7 @@ struct FeedPostCard: View {
                             .accessibilityAddTraits(.isButton)
                             .accessibilityHint(String(localized: "a11y.feed.post.see_less.hint", defaultValue: "Réduit le texte", bundle: .main))
                     } else {
-                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap)
+                        MessageTextRenderer.render(truncation.text + (truncation.isTruncated ? "..." : ""), color: theme.textPrimary, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: postLinkTint, trackedLinks: post.trackedLinkMap.isEmpty ? nil : post.trackedLinkMap, validUsernames: post.validMentionUsernames)
                             .lineLimit(nil)
                             .tint(postLinkTint)
                             .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
@@ -405,6 +405,16 @@ struct FeedPostCard: View {
                 .onTapGesture {
                     onTapPost?(post)
                 }
+
+                // « Avec … » + marqueur personnel — HORS de la zone tappable
+                // ci-dessus : ses chips ouvrent CHACUN un profil différent, pas
+                // le post entier.
+                ReferenceNoteRow(
+                    references: post.mentions ?? [],
+                    currentUserId: AuthManager.shared.currentUser?.id,
+                    accentColor: postLinkTint,
+                    onTapReference: { selectedProfileUser = .from(reference: $0) }
+                )
 
                 // Embed vidéo (YouTube) détecté dans le contenu : player façade
                 // (vignette → lecture inline), hors du geste d'ouverture du post.
@@ -1328,6 +1338,7 @@ extension FeedPostCard: Equatable {
             && lhs.post.shareCount == rhs.post.shareCount
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.content == rhs.post.content
+            && lhs.post.mentions == rhs.post.mentions
             && lhs.post.translatedContent == rhs.post.translatedContent
             && (lhs.post.translations?.count ?? 0) == (rhs.post.translations?.count ?? 0)
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded

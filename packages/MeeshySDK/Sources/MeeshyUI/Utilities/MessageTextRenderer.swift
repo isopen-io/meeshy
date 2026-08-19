@@ -39,6 +39,13 @@ public enum MessageTextRenderer {
     /// gateway tracking redirect: a `.urlLink` whose raw string is a key (with a
     /// trailing-punctuation-trimmed fallback) links to `https://meeshy.me/l/<token>`
     /// instead of the raw URL — the DISPLAYED text stays the raw URL.
+    /// Pass `validUsernames` when the caller KNOWS who really exists (posts,
+    /// stories, réels — anywhere `PostReference` is available): only pseudos in
+    /// this set become tappable links, the rest stay plain text. `nil` (the
+    /// default) keeps EVERY `@handle` linkified — the historical behavior, and
+    /// what messages pass since their surlignage already comes from
+    /// `validatedMentions` upstream. An empty `Set` is NOT the same as `nil`: it
+    /// means the caller checked and nobody matched, so nothing links.
     /// Callers that omit these parameters retain identical behavior to before.
     public static func render(
         _ text: String,
@@ -50,10 +57,11 @@ public enum MessageTextRenderer {
         usesRelativeFont: Bool = false,
         mentionDisplayNames: [String: String]? = nil,
         highlightTerm: String? = nil,
-        trackedLinks: [String: String]? = nil
+        trackedLinks: [String: String]? = nil,
+        validUsernames: Set<String>? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
-        let segments = parse(text, mentionDisplayNames: mentionDisplayNames)
+        let segments = parse(text, mentionDisplayNames: mentionDisplayNames, validUsernames: validUsernames)
         let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
         return buildText(segments, fontSize: fontSize, color: color, mentionColor: mentionColor, hashtagColor: hashtagColor, accentColor: accentColor, usesRelativeFont: usesRelativeFont, mentionDisplayNames: mentionDisplayNames, highlightRanges: ranges, fullText: text, trackedLinks: trackedLinks)
     }
@@ -156,8 +164,13 @@ public enum MessageTextRenderer {
         pattern: #"(?<![a-zA-Z0-9])m\+([a-zA-Z0-9]+)"#
     )
 
+    // Tiret INCLUS — aligné sur `MENTION_HANDLE_CHARS` (`\w-`, SSOT
+    // `packages/shared/utils/mention-parser.ts`), lui-même la classe de
+    // caractères de la validation username (`/^[a-zA-Z0-9_-]+$/`). Sans le
+    // tiret, `@marie-claire` matchait seulement `@marie` : le lien pointait
+    // vers quelqu'un d'autre.
     private static let mentionRegex = try! NSRegularExpression(
-        pattern: #"(?<![a-zA-Z0-9])@([a-zA-Z0-9_]{1,30})"#
+        pattern: #"(?<![a-zA-Z0-9])@([a-zA-Z0-9_-]{1,30})"#
     )
 
     // `#` + 1-50 caractères Unicode lettre/chiffre/underscore. PAS de tiret
@@ -277,7 +290,12 @@ public enum MessageTextRenderer {
     // `internal` (pas `private`) — même précédent que `resolvedLinkURL` : accès
     // direct depuis les tests via `@testable import`, sans exposer publiquement
     // un détail d'implémentation hors du module.
-    static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
+    static func parse(
+        _ text: String,
+        inherited: Styles = [],
+        mentionDisplayNames: [String: String]? = nil,
+        validUsernames: Set<String>? = nil
+    ) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
         guard length > 0 else { return [] }
@@ -354,7 +372,7 @@ public enum MessageTextRenderer {
                     }
                 }()
                 let inner = ns.substring(with: match.range(at: 1))
-                segments.append(contentsOf: parse(inner, inherited: inherited.union(style)))
+                segments.append(contentsOf: parse(inner, inherited: inherited.union(style), validUsernames: validUsernames))
 
             case .meeshyLink:
                 let token = ns.substring(with: match.range(at: 1))
@@ -366,8 +384,15 @@ public enum MessageTextRenderer {
             case .mention:
                 let username = ns.substring(with: match.range(at: 1))
                 let display = ns.substring(with: match.range)
-                if let url = URL(string: "https://meeshy.me/u/\(username)") {
+                // `validUsernames == nil` → unconditional link, the historical
+                // behavior messages rely on. Non-nil → only a pseudo the caller
+                // vouched for becomes tappable; an unknown one stays plain text
+                // instead of dangling a link to a profile that doesn't exist.
+                let isValidated = validUsernames.map { $0.contains(username.lowercased()) } ?? true
+                if isValidated, let url = URL(string: "https://meeshy.me/u/\(username)") {
                     segments.append(.mentionLink(display: display, url: url, username: username))
+                } else if !isValidated {
+                    segments.append(.text(display, inherited))
                 }
 
             case .displayNameMention(let username):

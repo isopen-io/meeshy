@@ -301,7 +301,8 @@ struct ReelFeedCard: View, Equatable {
                     mentionColor: MeeshyColors.mentionColor(isDark: true),
                     hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                     accentColor: .white,
-                    usesRelativeFont: true
+                    usesRelativeFont: true,
+                    validUsernames: post.validMentionUsernames
                 )
                     .tint(.white)
                     .lineLimit(2)

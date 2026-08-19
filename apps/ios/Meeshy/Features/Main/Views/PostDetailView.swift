@@ -1295,7 +1295,7 @@ struct PostDetailView: View {
                 ? truncation.text + "..."
                 : effectiveContent
             VStack(alignment: .leading, spacing: 2) {
-                MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark), hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark), accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks)
+                MessageTextRenderer.render(bodyText, fontSize: 16, color: theme.textPrimary, mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark), hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark), accentColor: Color(hex: accentColor), trackedLinks: postTrackedLinks, validUsernames: post.validMentionUsernames)
                     .tint(Color(hex: accentColor))
                 if truncation.isTruncated {
                     Text(isTextExpanded
@@ -1364,6 +1364,18 @@ struct PostDetailView: View {
                     .padding(.top, 8)
             }
             } // if !post.isStory
+
+            // « Avec … » + marqueur personnel — indépendant de `isStory` : NOTE
+            // et SILENT n'ont pas de représentation sur le canevas, donc une
+            // story référencée a besoin de la même rangée qu'un post plat.
+            ReferenceNoteRow(
+                references: post.mentions ?? [],
+                currentUserId: AuthManager.shared.currentUser?.id,
+                accentColor: Color(hex: accentColor),
+                onTapReference: { selectedProfileUser = .from(reference: $0) }
+            )
+            .padding(.horizontal, 16)
+            .padding(.top, 6)
         }
     }
 

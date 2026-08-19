@@ -466,6 +466,7 @@ extension APIPost {
         feedPost.location = location
         // Outbound-link tracking map (runtime-only, like the counters above).
         feedPost.trackedLinkMap = trackedLinkMap
+        feedPost.mentions = mentions
         return feedPost
     }
 
