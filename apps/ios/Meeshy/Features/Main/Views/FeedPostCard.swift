@@ -634,26 +634,39 @@ struct FeedPostCard: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
 
-                    // Repost indicator inline — compact source attribution right
-                    // after the author pseudo ("a republié de @handle"), so the
-                    // embedded story/quote cell no longer needs a verbose
-                    // "Reposté de @handle" block.
+                    // Attribution de republication, juste après le pseudo :
+                    // l'icône, puis l'AUTEUR D'ORIGINE — rien d'autre (directive
+                    // user 2026-08-19). La formule « a republié de @handle »
+                    // disait en toutes lettres ce que l'icône dit déjà, et
+                    // poussait le handle en bout de ligne, là où la troncature
+                    // le mangeait en premier sur une carte étroite : le seul
+                    // mot qui porte l'information était le premier sacrifié.
+                    //
+                    // Rien ne se perd pour VoiceOver : la phrase complète
+                    // devient l'étiquette du groupe, l'icône restant muette.
+                    // Elle serait sinon lue « @handle » sans dire pourquoi.
                     if post.repostAuthor != nil {
+                        let handle = post.repost?.authorUsername ?? post.repostAuthor
                         HStack(spacing: 3) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.caption2)
-                                .accessibilityHidden(true)
-                            if let handle = post.repost?.authorUsername ?? post.repostAuthor {
-                                Text(String(format: String(localized: "feed.post.reposted_from", defaultValue: "a republié de @%@", bundle: .main), handle))
+                            if let handle {
+                                Text("@\(handle)")
                                     .font(.caption)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
-                            } else {
-                                Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
-                                    .font(.caption)
                             }
                         }
                         .foregroundColor(theme.textMuted)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(
+                            handle.map {
+                                String(format: String(localized: "feed.post.reposted_from",
+                                                      defaultValue: "a republié de @%@",
+                                                      bundle: .main), $0)
+                            } ?? String(localized: "feed.post.reposted",
+                                        defaultValue: "a republié", bundle: .main)
+                        )
                     }
                 }
 
