@@ -191,3 +191,49 @@ public nonisolated enum ComposerReferences {
         return stripped.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
+
+/// D'où vient le geste — et donc quel mode un simple tap pose.
+///
+/// Deux entrées, deux défauts, parce que les deux gestes ne veulent pas dire la
+/// même chose : depuis le chip, on nomme quelqu'un SANS l'écrire (le plus
+/// discret gagne) ; depuis la liste `@`, on est en train de l'écrire (l'inline
+/// gagne). L'appui long ouvre le même choix dans les deux cas.
+public nonisolated enum ReferencePickerContext: Sendable {
+    case picker
+    case textList
+
+    var tapDefault: PostReferenceDisplay {
+        switch self {
+        case .picker: return .silent
+        case .textList: return .inline
+        }
+    }
+}
+
+/// Le geste posé sur une personne : le tap, qui ne dit rien du mode, ou le
+/// choix explicite sorti de l'appui long.
+public nonisolated enum ReferenceGesture: Sendable {
+    case tap
+    case choose(PostReferenceDisplay)
+}
+
+/// La transition d'état d'un geste de sélection — pure, donc testable sans UI.
+public nonisolated enum ReferencePickerLogic {
+    public static func apply(
+        _ gesture: ReferenceGesture,
+        username: String,
+        userId: String?,
+        to references: [ComposerReference],
+        context: ReferencePickerContext
+    ) -> [ComposerReference] {
+        let display: PostReferenceDisplay
+        switch gesture {
+        case .tap: display = context.tapDefault
+        case .choose(let chosen): display = chosen
+        }
+        return ComposerReferences.upsert(
+            ComposerReference(username: username, userId: userId, display: display),
+            into: references
+        )
+    }
+}

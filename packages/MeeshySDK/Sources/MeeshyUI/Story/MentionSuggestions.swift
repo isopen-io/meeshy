@@ -72,20 +72,49 @@ final class MentionSuggestionsModel: ObservableObject {
 /// `@…` est en cours de frappe. Le choix rend le PSEUDO à l'appelant, qui
 /// décide quoi en faire — l'insérer dans un texte, ou poser une pastille sur
 /// un canevas.
-struct MentionSuggestionList: View {
+///
+/// `contextMenu:` est la SECONDE porte de la grammaire de geste : le tap pose
+/// le mode par défaut de la surface, l'appui long ouvre le choix. Un appelant
+/// qui ne le fournit pas garde une liste à un seul geste — et surtout AUCUN
+/// menu attaché, un `.contextMenu` vide ouvrant une bulle sans entrée.
+struct MentionSuggestionList<Menu: View>: View {
     let query: String
     /// Hauteur maximale du panneau. 200 pt au-dessus d'un champ de saisie (on
     /// ne masque pas ce qu'on écrit) ; sans borne dans une sheet dédiée.
-    var maxHeight: CGFloat = 200
+    let maxHeight: CGFloat
     let onSelect: (UserSearchResult) -> Void
+    let contextMenu: (UserSearchResult) -> Menu
+    /// `Menu == EmptyView` peut venir d'un appelant qui n'en veut pas comme
+    /// d'un menu réellement vide : seul l'init sait laquelle des deux surfaces
+    /// a été demandée, et c'est lui qui pose ce drapeau.
+    private let attachesContextMenu: Bool
     @StateObject private var model = MentionSuggestionsModel()
+
+    init(query: String,
+         maxHeight: CGFloat = 200,
+         onSelect: @escaping (UserSearchResult) -> Void,
+         @ViewBuilder contextMenu: @escaping (UserSearchResult) -> Menu) {
+        self.init(query: query, maxHeight: maxHeight, onSelect: onSelect,
+                  contextMenu: contextMenu, attachesContextMenu: true)
+    }
+
+    private init(query: String,
+                 maxHeight: CGFloat,
+                 onSelect: @escaping (UserSearchResult) -> Void,
+                 contextMenu: @escaping (UserSearchResult) -> Menu,
+                 attachesContextMenu: Bool) {
+        self.query = query
+        self.maxHeight = maxHeight
+        self.onSelect = onSelect
+        self.contextMenu = contextMenu
+        self.attachesContextMenu = attachesContextMenu
+    }
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(spacing: 0) {
                 ForEach(model.candidates) { user in
-                    Button { onSelect(user) } label: { MentionSuggestionRow(user: user) }
-                        .buttonStyle(.plain)
+                    row(for: user)
                     if user.id != model.candidates.last?.id {
                         Divider().padding(.leading, 58)
                     }
@@ -108,6 +137,34 @@ struct MentionSuggestionList: View {
         .adaptiveOnChange(of: query) { _, newValue in
             model.update(query: newValue)
         }
+    }
+
+    /// Le menu est posé SUR le `Button`, jamais dans son label : un `Button`
+    /// avale la séquence de gestes, et l'appui long n'ouvrirait alors jamais
+    /// rien (piège déjà payé sur le scrub de story).
+    @ViewBuilder
+    private func row(for user: UserSearchResult) -> some View {
+        if attachesContextMenu {
+            rowButton(for: user).contextMenu { contextMenu(user) }
+        } else {
+            rowButton(for: user)
+        }
+    }
+
+    private func rowButton(for user: UserSearchResult) -> some View {
+        Button { onSelect(user) } label: { MentionSuggestionRow(user: user) }
+            .buttonStyle(.plain)
+    }
+}
+
+extension MentionSuggestionList where Menu == EmptyView {
+    /// Liste à un seul geste — la frappe `@` d'une surface qui n'offre pas
+    /// encore le choix de mode.
+    init(query: String,
+         maxHeight: CGFloat = 200,
+         onSelect: @escaping (UserSearchResult) -> Void) {
+        self.init(query: query, maxHeight: maxHeight, onSelect: onSelect,
+                  contextMenu: { _ in EmptyView() }, attachesContextMenu: false)
     }
 }
 
@@ -139,15 +196,36 @@ struct MentionSuggestionRow: View {
     }
 }
 
-// MARK: - Picker plein (action « @ » du composer de story)
+// MARK: - Picker plein (chip « Mentionner » des composers)
 
-/// Épingler quelqu'un sur une story SANS l'écrire dans une phrase (directive
-/// user 2026-08-18). Le geste est une ACTION, pas une frappe : on cherche, on
-/// choisit, une pastille se pose sur le canevas.
+/// La feuille du chip « Mentionner ».
+///
+/// Elle NE SE FERME PAS au tap : on en ajoute plusieurs d'affilée sans rouvrir
+/// quoi que ce soit. Les déjà-référencées remontent en tête avec la pastille de
+/// leur mode ; un tap dessus rouvre le même menu — changer de mode et choisir un
+/// mode sont le même geste, il n'y a rien de nouveau à apprendre.
+///
+/// Elle PILOTE l'ensemble et rend l'ensemble MIS À JOUR : elle ne décide de
+/// rien d'autre, le composer appelant choisissant quoi en faire (poser un badge
+/// sur le canevas, par exemple) — règle de pureté SDK.
 struct StoryMentionPickerSheet: View {
-    let onSelect: (UserSearchResult) -> Void
+    let references: [ComposerReference]
+    /// Les modes que CE contenu peut réellement montrer. Un post n'a aucune
+    /// couche de positionnement : lui proposer un badge promettrait un
+    /// affichage qui n'arriverait jamais.
+    let modes: [PostReferenceDisplay]
+    let onChange: ([ComposerReference]) -> Void
+
     @Environment(\.dismiss) private var dismiss
     @State private var query = ""
+
+    init(references: [ComposerReference],
+         modes: [PostReferenceDisplay] = PostReferenceDisplay.declarable,
+         onChange: @escaping ([ComposerReference]) -> Void) {
+        self.references = references
+        self.modes = modes
+        self.onChange = onChange
+    }
 
     var body: some View {
         // En-tête explicite plutôt qu'une `NavigationStack` : la sheet est
@@ -155,36 +233,142 @@ struct StoryMentionPickerSheet: View {
         // qui met les insets de safe area à zéro — la même raison qui a fait
         // écrire l'en-tête à la main dans `AudienceUserPickerView`.
         VStack(spacing: 0) {
-            ZStack {
-                Text(String(localized: "story.mention.title", defaultValue: "Mentionner", bundle: .module))
-                    .font(.system(size: 16, weight: .semibold))
-                HStack {
-                    Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
-                    Spacer()
-                }
+            header
+            searchField
+            if !references.isEmpty { alreadyReferenced }
+            if query.isEmpty {
+                sectionTitle(String(localized: "reference.sheet.contacts",
+                                    defaultValue: "Contacts", bundle: .module))
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 10)
-
-            HStack(spacing: 10) {
-                Image(systemName: "at").foregroundStyle(.secondary)
-                TextField(String(localized: "story.mention.search", defaultValue: "Rechercher une personne…", bundle: .module),
-                          text: $query)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
-
             MentionSuggestionList(query: query, maxHeight: .infinity) { user in
-                onSelect(user)
-                dismiss()
+                // Tap = SILENT : depuis ce chip on nomme quelqu'un SANS
+                // l'écrire, donc le plus discret gagne. Pas de `dismiss()` —
+                // on en ajoute plusieurs d'affilée.
+                onChange(ReferencePickerLogic.apply(
+                    .tap, username: user.username, userId: user.id,
+                    to: references, context: .picker
+                ))
+                HapticFeedback.light()
+            } contextMenu: { user in
+                ReferenceModeMenu(modes: modes) { mode in
+                    onChange(ReferencePickerLogic.apply(
+                        .choose(mode), username: user.username, userId: user.id,
+                        to: references, context: .picker
+                    ))
+                }
             }
         }
         .modifier(AudiencePickerPresentationStyle())
+    }
+
+    private var header: some View {
+        ZStack {
+            Text(String(localized: "reference.sheet.title", defaultValue: "Mentionner", bundle: .module))
+                .font(.system(size: 16, weight: .semibold))
+            HStack {
+                Spacer()
+                // « Terminé » et non « Annuler » : chaque choix est déjà
+                // appliqué au composer, il n'y a plus rien à annuler ici.
+                Button(String(localized: "common.done", defaultValue: "Terminé", bundle: .module)) { dismiss() }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 18)
+        .padding(.bottom, 10)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "at").foregroundStyle(.secondary)
+            TextField(String(localized: "story.mention.search", defaultValue: "Rechercher une personne…", bundle: .module),
+                      text: $query)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 8)
+    }
+
+    /// Les personnes déjà nommées, avec la pastille de leur mode. C'est le seul
+    /// endroit d'où une référence SILENCIEUSE se voit — et donc le seul d'où
+    /// elle se retire.
+    private var alreadyReferenced: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            sectionTitle(String(localized: "reference.sheet.alreadyReferenced",
+                                defaultValue: "Déjà référencées", bundle: .module))
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(references, id: \.username) { reference in
+                        referenceChip(reference)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            // Nommer quelqu'un lui ouvre le contenu même hors de l'audience
+            // choisie : c'est une conséquence du geste, elle se dit là où le
+            // geste se pose.
+            Text(String(localized: "reference.audienceWarning",
+                        defaultValue: "Cette personne pourra voir ce contenu même hors de l'audience choisie",
+                        bundle: .module))
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+        }
+        .padding(.bottom, 10)
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        HStack {
+            Text(text)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 4)
+    }
+
+    private func referenceChip(_ reference: ComposerReference) -> some View {
+        HStack(spacing: 4) {
+            // `Menu` et non `contextMenu` : sur une pastille déjà posée, le
+            // geste attendu est un TAP — changer de mode et en choisir un sont
+            // le même geste.
+            Menu {
+                ReferenceModeMenu(modes: modes) { mode in
+                    onChange(ReferencePickerLogic.apply(
+                        .choose(mode), username: reference.username, userId: reference.userId,
+                        to: references, context: .picker
+                    ))
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: reference.display.symbolName)
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("@\(reference.username)")
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                }
+                .foregroundStyle(reference.display == .silent ? Color.secondary : Color.primary)
+            }
+
+            Button {
+                onChange(ComposerReferences.remove(username: reference.username, from: references))
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) @\(reference.username)")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 10)
+        .padding(.vertical, 7)
+        .frame(minHeight: 36)
+        .background(Capsule().fill(Color(.secondarySystemBackground)))
     }
 }
