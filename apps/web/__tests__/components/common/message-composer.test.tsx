@@ -428,6 +428,68 @@ describe('MessageComposer', () => {
     });
   });
 
+  describe('Attachment Permissions', () => {
+    it('accepte tout quand la prop est absente', () => {
+      const { container } = render(<MessageComposer {...defaultProps} />);
+
+      expect(screen.getByRole('button', { name: /Attach file/i })).toBeInTheDocument();
+      const fileInput = container.querySelector('input[type="file"]');
+      expect(fileInput?.getAttribute('accept')).toContain('image/*');
+      expect(fileInput?.getAttribute('accept')).toContain('video/*');
+      expect(fileInput?.getAttribute('accept')).toContain('application/pdf');
+    });
+
+    it("ne rend aucun bandeau d'interdiction", () => {
+      render(
+        <MessageComposer
+          {...defaultProps}
+          attachmentPermissions={{ canSendImages: false, canSendFiles: false }}
+        />
+      );
+
+      expect(screen.queryByText(/non autoris/i)).not.toBeInTheDocument();
+    });
+
+    it('masque le trombone quand ni image ni fichier ne sont permis', () => {
+      render(
+        <MessageComposer
+          {...defaultProps}
+          attachmentPermissions={{ canSendImages: false, canSendFiles: false }}
+        />
+      );
+
+      expect(screen.queryByRole('button', { name: /Attach file/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Record voice message/i })).toBeInTheDocument();
+    });
+
+    it("n'accepte que les images quand seules les images sont permises", () => {
+      const { container } = render(
+        <MessageComposer
+          {...defaultProps}
+          attachmentPermissions={{ canSendImages: true, canSendFiles: false }}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Attach file/i })).toBeInTheDocument();
+      const fileInput = container.querySelector('input[type="file"]');
+      expect(fileInput?.getAttribute('accept')).toBe('image/*');
+    });
+
+    it('restreint aux fichiers non-image quand seuls les fichiers sont permis', () => {
+      const { container } = render(
+        <MessageComposer
+          {...defaultProps}
+          attachmentPermissions={{ canSendImages: false, canSendFiles: true }}
+        />
+      );
+
+      expect(screen.getByRole('button', { name: /Attach file/i })).toBeInTheDocument();
+      const fileInput = container.querySelector('input[type="file"]');
+      expect(fileInput?.getAttribute('accept')).not.toContain('image/*');
+      expect(fileInput?.getAttribute('accept')).toContain('application/pdf');
+    });
+  });
+
   describe('Accessibility', () => {
     it('has accessible send button', () => {
       render(<MessageComposer {...defaultProps} value="Hello" />);

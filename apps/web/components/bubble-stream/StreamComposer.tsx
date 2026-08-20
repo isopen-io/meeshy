@@ -67,7 +67,6 @@ export const StreamComposer = memo(forwardRef<unknown, StreamComposerProps>(
       token,
       userRole,
       placeholder,
-      permissionHints,
       withSafeArea = false,
     } = props;
 
@@ -93,7 +92,6 @@ export const StreamComposer = memo(forwardRef<unknown, StreamComposerProps>(
             token={token}
             userRole={userRole}
             conversationId={conversationId}
-            permissionHints={permissionHints}
           />
         </div>
       </div>

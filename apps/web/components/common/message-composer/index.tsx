@@ -62,8 +62,14 @@ interface MessageComposerProps {
   token?: string;
   userRole?: string;
   conversationId?: string;
-  permissionHints?: string[];
+  /** Autorisations d'envoi de la personne dans CETTE conversation. Absentes =
+   *  tout est permis (conversations ordinaires). */
+  attachmentPermissions?: { canSendImages: boolean; canSendFiles: boolean };
 }
+
+const FULL_ATTACHMENT_ACCEPT = 'image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.md,.sh,.js,.ts,.py,.zip';
+const IMAGE_ONLY_ATTACHMENT_ACCEPT = 'image/*';
+const NON_IMAGE_ATTACHMENT_ACCEPT = 'video/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.md,.sh,.js,.ts,.py,.zip';
 
 /**
  * Fonction pour formater la date en fonction du jour
@@ -234,6 +240,24 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
       );
     }, [composerState, props.value, props.onChange]);
 
+    // Droit d'affichage du trombone : sans `attachmentPermissions`, tout est
+    // permis (conversations ordinaires). Le micro n'entre jamais dans ce calcul.
+    const canAttach = useMemo(() => (
+      props.attachmentPermissions === undefined
+      || props.attachmentPermissions.canSendImages
+      || props.attachmentPermissions.canSendFiles
+    ), [props.attachmentPermissions]);
+
+    // Types acceptés par l'input caché, dérivés des mêmes autorisations.
+    const attachmentAccept = useMemo(() => {
+      if (props.attachmentPermissions === undefined) return FULL_ATTACHMENT_ACCEPT;
+      const { canSendImages, canSendFiles } = props.attachmentPermissions;
+      if (canSendImages && canSendFiles) return FULL_ATTACHMENT_ACCEPT;
+      if (canSendImages) return IMAGE_ONLY_ATTACHMENT_ACCEPT;
+      if (canSendFiles) return NON_IMAGE_ATTACHMENT_ACCEPT;
+      return '';
+    }, [props.attachmentPermissions]);
+
     return (
       <div
         className={containerClassName}
@@ -385,20 +409,6 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           </div>
         ) : null}
 
-        {/* Permission hints for anonymous users */}
-        {props.permissionHints && props.permissionHints.length > 0 ? (
-          <div className="flex flex-wrap gap-1.5 px-1 mb-1.5">
-            {props.permissionHints.map((hint) => (
-              <span
-                key={hint}
-                className="inline-flex items-center text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full"
-              >
-                {hint}
-              </span>
-            ))}
-          </div>
-        ) : null}
-
         {/* Textarea */}
         <Textarea
           ref={composerState.textareaRef}
@@ -456,6 +466,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
             onMicClick={composerState.handleMicrophoneClick}
             onAttachmentClick={composerState.handleAttachmentClick}
             disabled={props.isComposingEnabled === false || composerState.isUploading || composerState.isCompressing}
+            canAttach={canAttach}
           />
 
           {/* Location - Animated appearance */}
@@ -526,7 +537,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           id="message-composer-file-input"
           className="hidden"
           onChange={composerState.handleFileInputChange}
-          accept="image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.md,.sh,.js,.ts,.py,.zip"
+          accept={attachmentAccept}
           capture={undefined}
           aria-label={t('composer.attachFiles')}
         />
