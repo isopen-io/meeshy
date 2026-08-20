@@ -41,6 +41,7 @@ import me.meeshy.sdk.media.InMemoryNetworkConditionMonitor
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.NetworkCondition
+import me.meeshy.sdk.model.SentimentLevel
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
@@ -800,6 +801,56 @@ class ChatViewModelTest {
 
         assertThat(vm.state.value.draft).isEqualTo("just typing along")
         assertThat(vm.state.value.clipboardContent).isNull()
+    }
+
+    @Test
+    fun composer_sentiment_is_null_for_a_blank_draft() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.composerSentiment).isNull()
+    }
+
+    @Test
+    fun composer_sentiment_reflects_positive_typing() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.onDraftChange("i love this amazing day")
+
+        assertThat(vm.state.value.composerSentiment).isEqualTo(SentimentLevel.VERY_POSITIVE)
+    }
+
+    @Test
+    fun composer_sentiment_reflects_negative_typing() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.onDraftChange("this is awful and horrible")
+
+        assertThat(vm.state.value.composerSentiment).isEqualTo(SentimentLevel.NEGATIVE)
+    }
+
+    @Test
+    fun composer_sentiment_is_neutral_for_wordless_sentiment_text() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.onDraftChange("meeting at noon today")
+
+        assertThat(vm.state.value.composerSentiment).isEqualTo(SentimentLevel.NEUTRAL)
+    }
+
+    @Test
+    fun composer_sentiment_clears_when_the_draft_is_emptied() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+        vm.onDraftChange("i love this")
+        assertThat(vm.state.value.composerSentiment).isNotNull()
+
+        vm.onDraftChange("")
+
+        assertThat(vm.state.value.composerSentiment).isNull()
     }
 
     @Test

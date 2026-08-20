@@ -2,6 +2,53 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Composer live sentiment shipped** (slice `composer-live-sentiment`,
+> feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the
+> **live-sentiment** half). **Step 0**: no open `claude/apps/android/*` PR to merge first (checked
+> the remote heads + `list_pull_requests --head isopen-io:claude/apps/android` → `[]`; the previous
+> slice `conversation-lock-open-gate` is merged as #3221). Branched off `origin/main` (`3ccd8a72`)
+> clean, branch created as the literal first action before any edit. This container **reaches
+> `dl.google.com`** (curl → 200), so the SDK bootstrapped and the **full local gate ran here**
+> (assembleDebug + testDebugUnitTest) — not only on CI.
+>
+> **The gap, re-proved by reading source**: a zero-hit grep for `Sentiment` across `apps/android`
+> confirmed the composer had no sentiment surface. iOS ships TWO distinct sentiment scorers — the
+> **agent's #2 candidate conflated them**: (1) the message-detail sheet's `MessageDetailSentimentTab`
+> uses Apple's `NLTagger` (on-device **ML**), which has **no portable Android equivalent** (a
+> faithful port is impossible — the scores would differ), so it is deliberately **out of scope**;
+> (2) the composer's `SmartContextZone` uses `TextAnalyzer.computeSentiment`, a **dictionary**
+> (FR/EN/ES/DE weighted words) scorer that IS portable. This slice ports (2).
+>
+> **Pure core (`:core:model`)**: `SentimentAnalyzer.score(text)` — lowercase, tokenize on whitespace
+> with leading/trailing punctuation trimmed (Unicode punctuation categories), sum the dictionary
+> hits (positive dict consulted first), normalize `sum / wordCount * 2`, clamp to `[-1, 1]` — a
+> faithful port of iOS `computeSentiment`. `SentimentLevel` (7 buckets + glyphs + `from(score)` with
+> iOS's exact thresholds: neutral band `[-0.1, 0.1]` inclusive, `-0.6`→NEGATIVE, `0.3`→POSITIVE,
+> `0.6`→VERY_POSITIVE).
+>
+> **Wiring**: `ChatUiState.composerSentiment` — a pure computed getter (same idiom as the existing
+> `composerAffordances`) that returns `null` on a blank draft (no glyph shown) else
+> `SentimentLevel.from(SentimentAnalyzer.score(draft))`. `ChatScreen`'s composer renders it as the
+> input field's `trailingIcon` (the mood emoji), with a localized "Message tone" content
+> description. No new plumbing — it rides the existing `draft` state, so every keystroke re-derives it
+> exactly like the mention state already does.
+>
+> **Tests**: +20 `SentimentTest` (`from` boundary buckets incl. both neutral edges, the 7 glyphs,
+> `score` empty/blank/punctuation-only → 0, single-word clamp both signs, word-count normalization,
+> mixed sum, case-insensitivity, punctuation trimming, non-English dictionaries, end-to-end
+> text→level, determinism) + 5 `ChatViewModelTest` (null on blank; positive/negative/neutral typing
+> map to the right level; clears when the draft empties). Reducer/scorer branch coverage effectively
+> total; the Compose `trailingIcon` is exempt glue per TDD-COVERAGE. Strings ×1 (`chat_composer_sentiment`)
+> across EN/FR/ES/PT.
+>
+> **Env**: the outbound proxy rate-limits Gradle's **parallel** first-fetch of uncached artifacts
+> (`429 Too Many Requests` on `repo.maven.apache.org`); a direct `curl` of the same artifact returns
+> 200. Ran the gate under a 429-aware retry loop (`--max-workers=2`); each attempt warms more of the
+> cache until it goes green (NOTES). **Gotcha logged**: `pkill -f 'gradlew'` self-terminates the
+> retry script (its own command line contains "gradlew").
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` green across all modules locally before push.
+
 > On 2026-08-20 **Conversation lock open-gate shipped** (slice `conversation-lock-open-gate`,
 > feature-parity's Conversations lock composite — the "open-gate on tap" sub-gap left open by
 > `conversation-lock-menu`). **Step 0**: checked the full open-PR list (8 open, none on a

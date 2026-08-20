@@ -792,3 +792,26 @@ Append-only log of gotchas and decisions that save time next run.
   `_state.value.isLocked(id)` (a mirror collected off the store's flow, one dispatch behind). A tap
   landing in the same frame as a just-applied unlock must see the truth, not the lagging mirror —
   same discipline `onLockToggle` already followed.
+
+## Slice `composer-live-sentiment` (2026-08-20)
+- **iOS has TWO sentiment scorers; only one is portable — check which surface you're porting.**
+  `MessageDetailSentimentTab` (the message-detail sheet) scores with Apple's `NLTagger` (on-device
+  **ML**) — no Android equivalent produces the same numbers, so a faithful parity port is
+  impossible; it is out of scope. The composer's `SmartContextZone` scores with
+  `TextAnalyzer.computeSentiment`, a **dictionary** (FR/EN/ES/DE weighted words) — fully portable and
+  JVM-testable. A slice-picking agent conflated the two ("add a sentiment tab to the message
+  detail"); reading BOTH iOS sources before committing caught it. When a feature exists in two
+  places, confirm the one you're mirroring uses portable logic, not a platform ML API.
+- **The proxy rate-limits Gradle's PARALLEL first-fetch, not the artifacts.** A cold module graph
+  (`assembleDebug` pulling guava/gson/kotlin-stdlib-jdk8/serialization-plugin poms for the first
+  time) draws a burst of `429 Too Many Requests` from `repo.maven.apache.org`; a single `curl` of the
+  exact same URL returns 200 immediately. Fix: a 429-aware retry loop at `--max-workers=2` — each
+  attempt caches more until it goes green. Don't read the first 429 as a broken build.
+- **`pkill -f 'gradlew'` self-terminates your retry script.** `pkill -f` matches the full command
+  line, and a bash `-c` loop that runs `./gradlew …` HAS "gradlew" in its own command line, so it
+  kills itself (exit 144, no output). Never prefix a gradle loop with `pkill -f gradlew`.
+- **A pure computed getter on the UiState is the cheapest possible composer wiring.**
+  `ChatUiState.composerSentiment` derives the mood glyph straight from the existing `draft` field
+  (same idiom as `composerAffordances`) — null on blank, `SentimentLevel.from(score(draft))`
+  otherwise — so no `onDraftChange` edit, no new state field, no plumbing. The getter is testable via
+  the public API both directly and through `vm.onDraftChange(...) → state.composerSentiment`.

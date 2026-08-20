@@ -231,6 +231,15 @@ data class ChatUiState(
     /** True when at least one effect is armed — drives the composer's active-effects accent. */
     val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
 
+    /** The composer's live sentiment glyph, derived from the current [draft] via the
+     * pure [SentimentAnalyzer] (parity iOS `TextAnalyzer`/`SmartContextZone`, the
+     * dictionary scorer). Null when the composer is empty — no glyph is shown for a
+     * blank field; a non-blank draft with no sentiment words resolves to
+     * [SentimentLevel.NEUTRAL]. */
+    val composerSentiment: SentimentLevel?
+        get() = draft.takeIf { it.isNotBlank() }
+            ?.let { SentimentLevel.from(SentimentAnalyzer.score(it)) }
+
     /** Every currently-pinned message, newest-pin first — drives the pinned-messages sheet. */
     val pinnedMessages: List<PinnedMessageRow> get() = PinnedMessagesList.of(messages.map { it.toPinnable() })
 
