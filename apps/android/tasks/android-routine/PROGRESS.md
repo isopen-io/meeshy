@@ -2,6 +2,65 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Composer attachment-ladder tray shipped** (slice `chat-composer-attachment-ladder`,
+> feature-parity's Chat `[◐] Attachment ladder` sub-gap "an emoji-ladder tray grouping the entries";
+> also feeds the umbrella `[ ] Universal composer`). **Step 0**: no open `claude/apps/android/*` slice PR
+> to merge first — the open-PR sweep (listed WITHOUT a head filter, per the typing-slice NOTES lesson) held
+> only an iOS session (#3236) and five Dependabot; none on an android-routine branch. Branched off
+> `origin/main` (`65af14d5`). This container **reaches `dl.google.com`** (200), so the full local gate ran
+> here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools `13114758` `--channel=3` + the
+> `android-37` symlink alias, Gradle 8.13 curl-fetched (wrapper still 403s through the proxy — same env quirk
+> as the last three slices).
+>
+> **The gap, re-proved by reading source (scout + independent verify)**: iOS's composer opens a "+" carousel
+> (`UniversalComposerBar+Attachments.carouselTiles`) offering Photo/Camera/File/Location/Voice/Emoji as
+> distinct discs; Android's composer had a **single** `AttachFile` `IconButton` firing `filePicker.launch("*/*")`
+> directly (`ChatScreen.kt:2812`) — no grouped tray, no photo/camera/location/voice/emoji distinction. Two
+> other composer buttons (`Mic`, effects) sat beside it. The remaining conversation-row gaps
+> (ephemeral/view-once/story-ring/mood) were confirmed **backend-wire-blocked** (the gateway conversation
+> preview payload excludes deleted/ephemeral/view-once and carries no per-user story state — `emitConversationPreviewUpdate.ts`
+> selects `where { deletedAt: null }` and never hoists those flags), so the honest move was this composer
+> (outbound-only) slice, not another row micro-tint that would need a new server field.
+>
+> **Pure core (`:feature:chat`)**: `ComposerAttachmentLadder.tiles(affordances, hasRecentMediaStrip=false,
+> showCamera=true, showLocation=true, showVoice=true, showEmoji=true) → List<AttachmentTile>`. Two gate
+> families mirror iOS: **permission** off `ComposerAffordances` (Photo+Camera ride `canSendImages ||
+> canSendVideos`; File→`canSendFiles`; Location→`canSendLocations`; Voice→`canSendAudios`; Emoji→`canSendText`)
+> and **host-capability** off the `show*` flags (iOS gates on `on* != nil`). Photo suppressed under a
+> recent-media strip (iOS `onRecentMediaSelected == nil`; Android has no strip, defaulted off, branch kept for
+> the day one lands). Order is the iOS carousel order; each `AttachmentTile` carries its iOS gradient hex
+> (`9B59B6/F8B500/45B7D1/2ECC71/E74C3C/FF9F43`) so colour parity is a pure, tested fact. Built with an
+> immutable `listOfNotNull { takeIf }` — no mutation, order-preserving. **SOTA over iOS**: the tile decision,
+> buried in a SwiftUI `View` computed property (untestable without a UI host), is a framework-free SSOT with
+> every branch JVM-covered.
+>
+> **Wiring (Compose glue, coverage-exempt)**: `ComposerAttachmentTray` (new file) renders the resolved tiles
+> as a horizontal carousel of circular gradient discs + labels (parity `carouselTile`). The composer's lone
+> `AttachFile` button becomes an `Add`/`Close` toggle (`attachmentTrayOpen`) that opens the tray above the
+> composer Row (hidden while recording or read-only). Kind→handler map: Photo → `filePicker.launch("image/*")`,
+> File → `*/*`, Voice → `requestVoiceRecording()` (the standalone Mic button stays for now — quick access —
+> since Voice also lives in the tray). Camera/Location/Emoji host flags are passed **off** at the call site
+> (`showCamera=false, showLocation=false, showEmoji=false`) because no handler exists yet — so the resolver
+> yields exactly Photo/File/Voice today and never renders a dead-end tile; each flag flips on the day its
+> handler lands.
+>
+> **Tests**: +14 `ComposerAttachmentLadderTest` — full posture (all six in order); recent-strip suppresses
+> Photo but keeps Camera; capture arms (both / image-only / video-only / neither); no-file drops File;
+> Location/Voice/Emoji each need BOTH permission and host flag (both arms); read-only participant keeps its
+> permitted attachment tiles but loses Emoji; fully-denied → empty; partial subset preserves canonical order;
+> the live chat-screen posture (camera/location/emoji off) yields Photo/File/Voice; colour parity locked for
+> all six. **RED-proof (mutation)**: flipping `canCapture` from `||` to `&&` fails **exactly** 2 tests
+> (video-only, image-only) — 15 run, 2 failed, no collateral — restored after.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` for `:feature:chat` green locally (BUILD SUCCESSFUL);
+> full-project gate re-run for the PR. Reviewer PASS.
+>
+> **Next**: Candidate 2 from the scout — the finer send-lifecycle glyph (sub-200 ms "invisible" reveal +
+> "slow" tier) on `:core:model` `SendLifecycleResolver`, driven purely by the local send-start timestamp vs
+> `now` (no wire field). iOS source `BubbleDeliveryCheck.swift` (`SendingClockGlyph.shouldRevealImmediately`,
+> `revealDelay = 0.2`) has a ready Swift test twin to mirror. Or continue the composer line by landing a real
+> photo-specific `PickVisualMedia` launcher so Photo and File become genuinely distinct pickers.
+
 > On 2026-08-20 **Conversation-row activity-heat gradient shipped** (slice
 > `conversation-row-activity-heat`, feature-parity's Conversations "rich last-message preview"
 > `[~]` — the `activity-heat` sub-gap that same line listed as pending alongside `tags` (just
