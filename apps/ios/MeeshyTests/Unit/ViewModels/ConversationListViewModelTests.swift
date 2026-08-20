@@ -825,10 +825,11 @@ final class ConversationListViewModelTests: XCTestCase {
     private func makeParticipantJoinedEvent(
         conversationId: String,
         userId: String,
-        memberCount: Int? = nil
+        memberCount: Int? = nil,
+        memberCountCapped: Bool? = nil
     ) -> ParticipantJoinedEvent {
         JSONStub.decode("""
-        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"\(Self.memberCountJSONField(memberCount))}
+        {"conversationId":"\(conversationId)","userId":"\(userId)","displayName":"Zoé","joinedAt":"2026-08-11T10:00:00.000Z"\(Self.memberCountJSONField(memberCount, capped: memberCountCapped))}
         """)
     }
 
@@ -844,8 +845,10 @@ final class ConversationListViewModelTests: XCTestCase {
 
     /// `nil` produit un JSON SANS la clé — c'est la forme exacte d'un gateway
     /// antérieur au contrat, et donc le seul moyen d'exercer le repli.
-    private static func memberCountJSONField(_ memberCount: Int?) -> String {
-        memberCount.map { ",\"memberCount\":\($0)" } ?? ""
+    private static func memberCountJSONField(_ memberCount: Int?, capped: Bool? = nil) -> String {
+        let countField = memberCount.map { ",\"memberCount\":\($0)" } ?? ""
+        let cappedField = capped.map { ",\"memberCountCapped\":\($0)" } ?? ""
+        return countField + cappedField
     }
 
     private func makeParticipantBannedEvent(
@@ -1036,27 +1039,59 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_memberCountAfterMembershipEvent_posesTheAbsoluteCount_ignoringTheDelta() {
         // Le cas qui prouve la règle : le cache a dérivé (2 alors que le serveur
         // en compte 9). Un incrément rendrait 3 et garderait la dérive à vie.
-        XCTAssertEqual(
-            ConversationListViewModel.memberCountAfterMembershipEvent(current: 2, absolute: 9, delta: +1), 9)
-        XCTAssertEqual(
-            ConversationListViewModel.memberCountAfterMembershipEvent(current: 2, absolute: 9, delta: -1), 9)
+        let up = ConversationListViewModel.memberCountAfterMembershipEvent(
+            current: 2, currentCapped: false, absolute: 9, absoluteCapped: nil, delta: +1)
+        XCTAssertEqual(up.count, 9)
+        XCTAssertFalse(up.capped)
+        let down = ConversationListViewModel.memberCountAfterMembershipEvent(
+            current: 2, currentCapped: false, absolute: 9, absoluteCapped: nil, delta: -1)
+        XCTAssertEqual(down.count, 9)
     }
 
     func test_memberCountAfterMembershipEvent_fallsBackToTheDelta_whenTheServerSendsNoCount() {
         // Gateway antérieur au contrat : le delta reste le seul repli.
         XCTAssertEqual(
-            ConversationListViewModel.memberCountAfterMembershipEvent(current: 4, absolute: nil, delta: +1), 5)
+            ConversationListViewModel.memberCountAfterMembershipEvent(
+                current: 4, currentCapped: false, absolute: nil, absoluteCapped: nil, delta: +1).count, 5)
         XCTAssertEqual(
-            ConversationListViewModel.memberCountAfterMembershipEvent(current: 4, absolute: nil, delta: -1), 3)
+            ConversationListViewModel.memberCountAfterMembershipEvent(
+                current: 4, currentCapped: false, absolute: nil, absoluteCapped: nil, delta: -1).count, 3)
     }
 
     func test_memberCountAfterMembershipEvent_neverGoesNegative() {
         XCTAssertEqual(
-            ConversationListViewModel.memberCountAfterMembershipEvent(current: 0, absolute: nil, delta: -1), 0,
+            ConversationListViewModel.memberCountAfterMembershipEvent(
+                current: 0, currentCapped: false, absolute: nil, absoluteCapped: nil, delta: -1).count, 0,
             "un décrément de repli sur un cache déjà à zéro rendrait un effectif négatif")
         XCTAssertEqual(
-            ConversationListViewModel.memberCountAfterMembershipEvent(current: 3, absolute: -2, delta: -1), 0,
+            ConversationListViewModel.memberCountAfterMembershipEvent(
+                current: 3, currentCapped: false, absolute: -2, absoluteCapped: nil, delta: -1).count, 0,
             "un absolu aberrant n'a pas plus le droit de produire un effectif négatif")
+    }
+
+    func test_memberCountAfterMembershipEvent_posesTheCappedFlagWithTheAbsolute() {
+        // Cap 199+ : l'effectif arrive plafonné avec son drapeau — les deux se
+        // posent ensemble, et un drapeau absent sur un absolu se lit « exact ».
+        let capped = ConversationListViewModel.memberCountAfterMembershipEvent(
+            current: 2, currentCapped: false, absolute: 199, absoluteCapped: true, delta: +1)
+        XCTAssertEqual(capped.count, 199)
+        XCTAssertTrue(capped.capped)
+
+        let exact = ConversationListViewModel.memberCountAfterMembershipEvent(
+            current: 199, currentCapped: true, absolute: 150, absoluteCapped: nil, delta: -1)
+        XCTAssertEqual(exact.count, 150)
+        XCTAssertFalse(exact.capped, "un absolu exact efface le drapeau local")
+    }
+
+    func test_memberCountAfterMembershipEvent_freezesTheDeltaOnACappedCount() {
+        // Un compteur à « 199+ » décrit un effectif AU-DELÀ du seuil : un ±1
+        // de repli (gateway antérieur) ne peut pas le faire bouger sans mentir.
+        for delta in [+1, -1] {
+            let kept = ConversationListViewModel.memberCountAfterMembershipEvent(
+                current: 199, currentCapped: true, absolute: nil, absoluteCapped: nil, delta: delta)
+            XCTAssertEqual(kept.count, 199)
+            XCTAssertTrue(kept.capped)
+        }
     }
 
     func test_socketParticipantJoined_posesTheServerCount_ratherThanIncrementingAStaleOne() async throws {
@@ -1074,6 +1109,46 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.conversations[0].memberCount, 9,
             "un incrément aurait rendu 3 et laissé la dérive intacte — définitivement, le cache disque la persistant")
+    }
+
+    func test_socketParticipantJoined_posesTheCappedFlagFromThePayload() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 150
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(
+                conversationId: "conv1", userId: "someone-else",
+                memberCount: 199, memberCountCapped: true
+            )
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 199)
+        XCTAssertTrue(sut.conversations[0].memberCountCapped,
+            "le drapeau 199+ du payload doit se poser avec l'effectif — c'est lui qui fait afficher « 199+ »")
+    }
+
+    func test_socketParticipantJoined_keepsACappedCountFrozen_whenTheServerSendsNoCount() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        var conversation = makeConversation(id: "conv1")
+        conversation.memberCount = 199
+        conversation.memberCountCapped = true
+        sut.conversations = [conversation]
+
+        messageSocket.participantJoined.send(
+            makeParticipantJoinedEvent(conversationId: "conv1", userId: "someone-else")
+        )
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.conversations[0].memberCount, 199,
+            "un incrément de repli sur « 199+ » afficherait 200 alors que le vrai compte est inconnu")
+        XCTAssertTrue(sut.conversations[0].memberCountCapped)
     }
 
     func test_socketParticipantSelfLeft_posesTheServerCount_ratherThanSubtractingFromAStaleOne() async throws {

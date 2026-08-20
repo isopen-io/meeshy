@@ -1010,6 +1010,11 @@ public struct ParticipantJoinedEvent: Decodable, Sendable {
     /// Absent (`nil`) sur un gateway antérieur à ce contrat, où l'incrément
     /// reste le seul repli disponible.
     public let memberCount: Int?
+
+    /// Vrai quand `memberCount` arrive plafonné à 199 (cap d'affichage
+    /// « 199+ », broadcast unique pour toute la room). À POSER avec lui ;
+    /// absent quand l'effectif transmis est exact.
+    public let memberCountCapped: Bool?
 }
 
 public struct ParticipantLeftEvent: Decodable, Sendable {
@@ -1023,6 +1028,11 @@ public struct ParticipantLeftEvent: Decodable, Sendable {
     /// ne se rattrape jamais d'un événement manqué. `nil` sur un gateway
     /// antérieur, où le décrément reste le seul repli.
     public let memberCount: Int?
+
+    /// Vrai quand `memberCount` arrive plafonné à 199 (cap d'affichage
+    /// « 199+ », broadcast unique pour toute la room). À POSER avec lui ;
+    /// absent quand l'effectif transmis est exact.
+    public let memberCountCapped: Bool?
 }
 
 public struct ParticipantBannedEvent: Decodable, Sendable {
@@ -1050,6 +1060,11 @@ public struct ParticipantBannedEvent: Decodable, Sendable {
     /// le poser est exact dans les deux cas. Le court-circuit sur
     /// `didEndMembership` ne subsiste que pour un gateway qui ne l'envoie pas.
     public let memberCount: Int?
+
+    /// Vrai quand `memberCount` arrive plafonné à 199 (cap d'affichage
+    /// « 199+ », broadcast unique pour toute la room). À POSER avec lui ;
+    /// absent quand l'effectif transmis est exact.
+    public let memberCountCapped: Bool?
 }
 
 public struct ParticipantUnbannedEvent: Decodable, Sendable {
@@ -1067,6 +1082,11 @@ public struct ParticipantUnbannedEvent: Decodable, Sendable {
     /// Effectif ACTIF APRÈS la levée, absolu — à POSER. Même lecture que sur
     /// `ParticipantBannedEvent` : présent, il tranche `membershipRestored`.
     public let memberCount: Int?
+
+    /// Vrai quand `memberCount` arrive plafonné à 199 (cap d'affichage
+    /// « 199+ », broadcast unique pour toute la room). À POSER avec lui ;
+    /// absent quand l'effectif transmis est exact.
+    public let memberCountCapped: Bool?
 }
 
 public struct ConversationClosedEvent: Decodable, Sendable {

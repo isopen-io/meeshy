@@ -141,6 +141,9 @@ public struct PaginatedParticipantsPagination: Decodable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool
     public let totalCount: Int?
+    /// Vrai quand `totalCount` est plafonné à 199 (lecteur non admin
+    /// plateforme) — l'affichage d'un total rend alors « 199+ ».
+    public let totalCountCapped: Bool?
 }
 
 private extension String {

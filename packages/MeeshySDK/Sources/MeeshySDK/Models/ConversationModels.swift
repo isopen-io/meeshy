@@ -154,6 +154,9 @@ public struct APIConversation: Decodable, Sendable {
     public let communityId: String?
     public let isActive: Bool?
     public let memberCount: Int?
+    /// Vrai quand `memberCount` arrive plafonné à 199 (lecteur non admin
+    /// plateforme) — à propager tel quel vers `MeeshyConversation`.
+    public let memberCountCapped: Bool?
     public let isAnnouncementChannel: Bool?
     public let defaultWriteRole: String?
     public let slowModeSeconds: Int?
@@ -198,6 +201,7 @@ public struct APIConversation: Decodable, Sendable {
         id: String, type: String, identifier: String? = nil, title: String? = nil,
         description: String? = nil, avatar: String? = nil, banner: String? = nil,
         communityId: String? = nil, isActive: Bool? = nil, memberCount: Int? = nil,
+        memberCountCapped: Bool? = nil,
         isAnnouncementChannel: Bool? = nil, defaultWriteRole: String? = nil,
         slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil,
         lastMessageAt: Date? = nil, participants: [APIParticipant]? = nil,
@@ -215,6 +219,7 @@ public struct APIConversation: Decodable, Sendable {
         self.id = id; self.type = type; self.identifier = identifier; self.title = title
         self.description = description; self.avatar = avatar; self.banner = banner
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
+        self.memberCountCapped = memberCountCapped
         self.isAnnouncementChannel = isAnnouncementChannel; self.defaultWriteRole = defaultWriteRole
         self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
         self.lastMessageAt = lastMessageAt; self.participants = participants
@@ -354,6 +359,7 @@ extension APIConversation {
             banner: banner, communityId: communityId,
             isActive: isActive ?? true,
             memberCount: memberCount ?? participants?.count ?? 2,
+            memberCountCapped: memberCountCapped ?? false,
             lastMessageAt: lastMessageAt ?? lastMessage?.createdAt ?? createdAt,
             encryptionMode: encryptionMode ?? (convType == .direct ? "e2ee" : nil),
             createdAt: createdAt, updatedAt: updatedAt ?? createdAt,

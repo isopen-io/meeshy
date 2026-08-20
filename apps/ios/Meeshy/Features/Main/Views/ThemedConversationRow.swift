@@ -349,7 +349,7 @@ struct ThemedConversationRow: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
                 .imageScale(.small)
             if conversation.memberCount > 1 {
-                Text("\(conversation.memberCount)")
+                Text(conversation.memberCountDisplay)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
             }
         }

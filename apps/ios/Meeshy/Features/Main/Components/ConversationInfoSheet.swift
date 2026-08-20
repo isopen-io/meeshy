@@ -365,7 +365,7 @@ struct ConversationInfoSheet: View {
                 Image(systemName: "person.2.fill")
                     .font(MeeshyFont.relative(10))
                     .foregroundColor(theme.textMuted)
-                Text("\(conversation.memberCount)")
+                Text(conversation.memberCountDisplay)
                     .font(MeeshyFont.relative(12, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
             }

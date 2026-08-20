@@ -195,7 +195,7 @@ struct ConversationPreviewView: View {
                         HStack(spacing: 3) {
                             Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
                                 .font(.caption2)
-                            Text("\(conversation.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
+                            Text(conversation.memberCountDisplay + " " + String(localized: "unit.members", defaultValue: "membres"))
                                 .font(.caption2.weight(.medium))
                         }
                         .foregroundColor(headerContentColor.opacity(0.9))

@@ -243,6 +243,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var communityId: String?
     public var isActive: Bool = true
     public var memberCount: Int = 0
+    /// Vrai quand `memberCount` est plafonné à 199 par le serveur (lecteur non
+    /// admin plateforme) — l'affichage rend « 199+ ». Doit survivre au
+    /// round-trip Codable : la conversation est persistée telle quelle en GRDB.
+    public var memberCountCapped: Bool = false
     public var lastMessageAt: Date
     public var encryptionMode: String?
     public let createdAt: Date
@@ -609,6 +613,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public init(id: String = UUID().uuidString, identifier: String, type: ConversationType = .direct,
                 title: String? = nil, description: String? = nil, avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil,
                 communityId: String? = nil, isActive: Bool = true, memberCount: Int = 2,
+                memberCountCapped: Bool = false,
                 lastMessageAt: Date = Date(), encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
                 unreadCount: Int = 0, lastMessagePreview: String? = nil,
@@ -633,6 +638,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.id = id; self.identifier = identifier; self.type = type
         self.title = title; self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
+        self.memberCountCapped = memberCountCapped
         self.lastMessageAt = lastMessageAt; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.isAnnouncementChannel = isAnnouncementChannel
@@ -688,7 +694,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         // Conversation-level
         case id, identifier, type, title, description, avatar, avatarThumbHash, banner, bannerThumbHash
-        case communityId, isActive, memberCount, lastMessageAt, encryptionMode, createdAt, updatedAt
+        case communityId, isActive, memberCount, memberCountCapped, lastMessageAt, encryptionMode, createdAt, updatedAt
         case lastMessagePreview, lastMessageTranslations, lastMessageOriginalLanguage
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
@@ -728,6 +734,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.communityId = try c.decodeIfPresent(String.self, forKey: .communityId)
         self.isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
         self.memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        self.memberCountCapped = try c.decodeIfPresent(Bool.self, forKey: .memberCountCapped) ?? false
         self.lastMessageAt = try c.decode(Date.self, forKey: .lastMessageAt)
         self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -822,6 +829,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(communityId, forKey: .communityId)
         try c.encode(isActive, forKey: .isActive)
         try c.encode(memberCount, forKey: .memberCount)
+        try c.encode(memberCountCapped, forKey: .memberCountCapped)
         try c.encode(lastMessageAt, forKey: .lastMessageAt)
         try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode)
         try c.encode(createdAt, forKey: .createdAt)

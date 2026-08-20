@@ -215,8 +215,26 @@ class ConversationListViewModel: ObservableObject {
     /// Le plancher à zéro vaut pour les DEUX branches : un décrément de repli
     /// sur un cache déjà à zéro rendrait un effectif négatif, et un absolu
     /// aberrant n'a pas plus le droit d'en produire un.
-    static func memberCountAfterMembershipEvent(current: Int, absolute: Int?, delta: Int) -> Int {
-        max(0, absolute ?? (current + delta))
+    ///
+    /// Cap 199+ : l'absolu arrive avec son drapeau `memberCountCapped` et les
+    /// deux se POSENT ensemble (drapeau absent sur un absolu = exact). Sans
+    /// absolu, un compteur local plafonné reste GELÉ : « 199+ » décrit un
+    /// effectif au-delà du seuil, un ±1 de repli ne peut pas le faire bouger
+    /// sans mentir — le vrai compte est inconnu du client.
+    static func memberCountAfterMembershipEvent(
+        current: Int,
+        currentCapped: Bool,
+        absolute: Int?,
+        absoluteCapped: Bool?,
+        delta: Int
+    ) -> (count: Int, capped: Bool) {
+        if let absolute {
+            return (max(0, absolute), absoluteCapped == true)
+        }
+        if currentCapped {
+            return (current, true)
+        }
+        return (max(0, current + delta), false)
     }
 
     // MARK: - List Mutators (centralised write surface)
@@ -1210,11 +1228,15 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, event.userId != self.currentUserId else { return }
                 guard let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                let resolved = Self.memberCountAfterMembershipEvent(
                     current: self.conversations[index].memberCount,
+                    currentCapped: self.conversations[index].memberCountCapped,
                     absolute: event.memberCount,
+                    absoluteCapped: event.memberCountCapped,
                     delta: +1
                 )
+                self.conversations[index].memberCount = resolved.count
+                self.conversations[index].memberCountCapped = resolved.capped
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -1239,11 +1261,15 @@ class ConversationListViewModel: ObservableObject {
                     self.dropConversationLeftByMe(at: index)
                     return
                 }
-                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                let resolved = Self.memberCountAfterMembershipEvent(
                     current: self.conversations[index].memberCount,
+                    currentCapped: self.conversations[index].memberCountCapped,
                     absolute: event.memberCount,
+                    absoluteCapped: event.memberCountCapped,
                     delta: -1
                 )
+                self.conversations[index].memberCount = resolved.count
+                self.conversations[index].memberCountCapped = resolved.capped
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -1277,11 +1303,15 @@ class ConversationListViewModel: ObservableObject {
                 // (`apps/web/hooks/queries/use-socket-cache-sync.ts`).
                 guard event.memberCount != nil || event.didEndMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                let resolved = Self.memberCountAfterMembershipEvent(
                     current: self.conversations[index].memberCount,
+                    currentCapped: self.conversations[index].memberCountCapped,
                     absolute: event.memberCount,
+                    absoluteCapped: event.memberCountCapped,
                     delta: -1
                 )
+                self.conversations[index].memberCount = resolved.count
+                self.conversations[index].memberCountCapped = resolved.capped
                 self.schedulePersist()
             }
             .store(in: &cancellables)
@@ -1295,11 +1325,15 @@ class ConversationListViewModel: ObservableObject {
                 // tranche `didRestoreMembership`.
                 guard event.memberCount != nil || event.didRestoreMembership else { return }
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
-                self.conversations[index].memberCount = Self.memberCountAfterMembershipEvent(
+                let resolved = Self.memberCountAfterMembershipEvent(
                     current: self.conversations[index].memberCount,
+                    currentCapped: self.conversations[index].memberCountCapped,
                     absolute: event.memberCount,
+                    absoluteCapped: event.memberCountCapped,
                     delta: +1
                 )
+                self.conversations[index].memberCount = resolved.count
+                self.conversations[index].memberCountCapped = resolved.capped
                 self.schedulePersist()
             }
             .store(in: &cancellables)
