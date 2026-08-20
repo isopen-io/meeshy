@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.FlowRow
@@ -105,6 +106,7 @@ import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
+import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.CollapsibleSection
@@ -617,6 +619,7 @@ private fun ConversationRowContent(
                     .weight(1f)
                     .padding(horizontal = MeeshySpacing.md),
             ) {
+                ConversationTagsRow(currentTags)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isPinned) {
                         Icon(
@@ -733,6 +736,59 @@ private fun ConversationRowContent(
             onLockToggle = onLockToggle,
         )
     }
+}
+
+/**
+ * Conversation-row tag chips with a width-based "+N" overflow badge — parity iOS
+ * `ThemedConversationRow.tagsRow`. The fit decision is the pure [ConversationTagRow];
+ * this Composable only supplies the real available width (via [BoxWithConstraints],
+ * an improvement over iOS's hardcoded 200pt estimate) and paints the chips. Each
+ * chip's colour is the deterministic [DynamicColorGenerator.colorForName] so the same
+ * tag name reads the same colour everywhere.
+ */
+@Composable
+private fun ConversationTagsRow(tags: List<String>) {
+    if (tags.isEmpty()) return
+    BoxWithConstraints {
+        val fit = ConversationTagRow.fit(tags, maxWidth.value.toDouble())
+        Row(
+            modifier = Modifier.padding(bottom = MeeshySpacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.xs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            fit.visible.forEach { tag -> ConversationTagChip(tag) }
+            if (fit.remaining > 0) {
+                Text(
+                    text = stringResource(R.string.conversations_row_tags_overflow, fit.remaining),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MeeshyTheme.tokens.textSecondary,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MeeshyTheme.tokens.textSecondary.copy(alpha = 0.10f))
+                        .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversationTagChip(tag: String) {
+    val color = hexColor(DynamicColorGenerator.colorForName(tag))
+    Text(
+        text = tag,
+        style = MaterialTheme.typography.labelSmall,
+        fontWeight = FontWeight.Medium,
+        color = color,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(color.copy(alpha = 0.14f))
+            .padding(horizontal = MeeshySpacing.sm, vertical = 2.dp),
+    )
 }
 
 /** Fixed favorite-reaction choices — parity iOS `ConversationListView+Overlays`'s "Favori" submenu. */

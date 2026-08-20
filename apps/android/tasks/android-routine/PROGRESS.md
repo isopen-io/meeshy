@@ -2,6 +2,55 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation-row tag chips shipped** (slice `conversation-row-tag-chips`,
+> feature-parity's Conversations "rich last-message preview" `[~]` — the `tags` sub-gap that line
+> listed as pending). **Step 0**: no open `claude/apps/android/*` PR to merge first — the open-PR
+> list held only parallel `claude/brave-archimedes-*` / `claude/intelligent-noether-*` sessions, a
+> Jules branch, and five Dependabot; none on an android-routine slice branch, and the one Android
+> Dependabot PR (#3139, `setup-android` bump) is CI-infra, not this lane. Branched off `origin/main`
+> (`408a49ea`) as the literal first action. This container **reaches `dl.google.com`** (curl → 200),
+> so the full local gate ran here.
+>
+> **The gap, re-proved by reading source**: Android already lets you *edit* per-conversation tags
+> (`ConversationTagsEditor` + the context-menu "Tags" dialog persist a `List<String>` into
+> `resolvedPreferences.tags`) but **never displayed them on the row** — a grep for `TagChip`/tag
+> rendering under `feature/conversations/` found only the editor dialog. iOS's `ThemedConversationRow`
+> renders a tags row at the top of the row via the pure `visibleTagsInfo` (width-based fit with a
+> "+N" overflow badge) + `MeeshyConversationTag.estimatedWidth` (`name.count*7+22`, CoreModels.swift).
+>
+> **Pure core (`:feature:conversations`)**: new `ConversationTagRow` — `estimatedWidth(name)` and
+> `fit(tags, availableWidth) → Fit(visible, remaining)`, a faithful port of iOS's algorithm: iterate
+> tags accumulating width+spacing(6), reserve the badge width(32)+spacing for any non-final tag,
+> stop at the first that doesn't fit, and **always force at least one tag** so a row with tags never
+> renders empty. **Placed in `:feature:conversations`, not on the `:core:model` tag type where iOS
+> parks `estimatedWidth`** — it's a row-layout heuristic, not a property of the wire model (SDK
+> purity: models stay layout-agnostic; a deliberate cleaner-than-iOS placement).
+>
+> **Wiring (Compose glue, coverage-exempt)**: `ConversationTagsRow(currentTags)` at the top of the
+> row content Column, inside a `BoxWithConstraints` so the fit sees the **real** available width —
+> an improvement over iOS's hardcoded `availableWidth = 200`. Each chip's colour is the deterministic
+> `DynamicColorGenerator.colorForName` SSOT (same tag name → same colour everywhere), rendered as a
+> translucent capsule; the "+N" badge is a neutral `textSecondary` capsule. String ×1
+> (`conversations_row_tags_overflow` = `+%1$d`, `translatable="false"` — a locale-invariant numeric).
+>
+> **Tests**: +10 `ConversationTagRowTest` — `estimatedWidth` (chars×7+padding; empty name = padding);
+> `fit` empty→nothing; all-fit; force-first-when-none-fits; badge reserved so a later tag hides;
+> **final tag exempt from the reserve** (width 79 passes only because the last tag skips the badge
+> reserve); stop-at-first-overflow keeps the earlier ones; remainder count for a hidden tail. Every
+> branch of `fit` exercised (both spacing arms, both reserve arms, fit/break, force-first). The
+> `BoxWithConstraints`/chip rendering is thin Compose glue, exempt per TDD-COVERAGE.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` green (10/10 new), then full
+> `assembleDebug` + `testDebugUnitTest` across all modules green locally. SDK bootstrapped as
+> `platforms;android-37.0` via the newer cmdline-tools `13114758` on `--channel=3`, aliased to the
+> `android-37` hash AGP 8.13 wants; the Gradle 8.13 wrapper download 403'd through the proxy so a
+> `curl`-fetched distribution was run directly (env notes in NOTES). Reviewer PASS.
+>
+> **Next**: continue the Conversations row indicators — `presence` dot / `story-ring` / `mood` on the
+> avatar, or `activity-heat`. Presence has the biggest UX payoff and its SSOT (`getUserPresenceStatus`
+> / `PresenceState`) is already ported; the row `MeeshyAvatar` already accepts a `presence` param but
+> the list VM does not yet feed live per-conversation presence — that wiring is the next slice's core.
+
 > On 2026-08-20 **Conversation-row typing preview shipped** (slice `conversation-row-typing-indicator`,
 > feature-parity's Conversations "rich last-message preview" `[~]` — the `typing` sub-gap that line
 > itself listed as pending). **Step 0 — an open android-routine PR WAS found and merged first**: my
