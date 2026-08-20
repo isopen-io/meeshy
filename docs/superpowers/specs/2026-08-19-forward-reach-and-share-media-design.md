@@ -57,6 +57,19 @@ pas — on ne propose pas d'envoyer un média privé dans un salon public homony
 que les conversations dont il est membre (drapeau déjà porté par le modèle) ; la route n'est pas
 modifiée sur ce point (elle sert aussi la recherche globale, qui veut ces résultats).
 
+**Révision du 2026-08-19 (décision du user)** : l'émission des `participants` est **restreinte aux
+conversations dont l'appelant est MEMBRE** — les publier pour un salon `public`/`global` qu'il n'a pas
+rejoint (jusqu'à cinq identités : identifiant, pseudo, nom affiché) est une exposition refusée ; les
+autres reçoivent un tableau vide. Le drapeau d'appartenance **`isMember`**, calculé serveur pour la
+page entière en une seule requête `participant.findMany` (colonne branchée sur `isAnonymous` :
+`Participant.id` pour un invité de lien, `User.id` pour un compte) et déclaré dans
+`conversationMinimalSchema`, devient le **signal officiel du filtre client** sur les deux plateformes.
+Il supprime au passage un faux négatif silencieux : `participants` étant tronqué à cinq, un membre
+d'un salon public de cinquante personnes n'y figurait pas et **son propre salon disparaissait de sa
+recherche** — cas indécidable côté client, deux salons publics (rejoint ou non) rendant exactement le
+même corps. `isMember` absent = gateway antérieur : les clients retombent sur l'heuristique
+historique, jamais sur « pas membre ».
+
 ### S.2 `GET /users/friend-requests` doit dire s'il reste des pages
 
 L'endpoint rend bien les **deux sens et tous les statuts** (`routes/users/devices.ts:22`, `:81-86`),
