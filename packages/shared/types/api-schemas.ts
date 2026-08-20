@@ -1433,6 +1433,19 @@ export const conversationMinimalSchema = {
       items: conversationParticipantMinimalSchema,
       description: 'Conversation participants (limited) — used by iOS SDK for DM name resolution'
     },
+    // Appartenance de l'APPELANT à cette conversation, calculée serveur.
+    // `GET /conversations/search` retourne aussi les salons `public`/`global`
+    // dont il n'est PAS membre (elle sert la recherche globale) ; sur décision
+    // du user (2026-08-19) elle n'y émet plus AUCUN participant, et ce drapeau
+    // est le seul signal d'appartenance. L'heuristique cliente qu'il remplace
+    // lisait le tableau `participants`, tronqué à cinq : dans un salon public
+    // de cinquante membres, un membre légitime n'y figure pas et son propre
+    // salon disparaissait de sa recherche. Même piège que `cursorPagination`
+    // ci-dessous : non déclaré ici, `fast-json-stringify` le retire du fil.
+    isMember: {
+      type: 'boolean',
+      description: "L'appelant est un participant actif de cette conversation (ABSENT sur les routes qui ne le calculent pas)"
+    },
     userPreferences: {
       type: 'array',
       items: {

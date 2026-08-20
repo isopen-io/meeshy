@@ -114,6 +114,14 @@ function createMockPrisma() {
   return {
     user: { findMany: jest.fn<any>() },
     conversation: { findMany: jest.fn<any>() },
+    // La recherche résout l'appartenance de l'appelant pour toute la page
+    // (elle commande l'émission des participants) : le double rend membre de
+    // ce que la page contient.
+    participant: {
+      findMany: jest.fn<any>().mockImplementation(async (args: any) =>
+        (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({ conversationId }))
+      ),
+    },
     message: {
       findFirst: jest.fn<any>(),
       findMany: jest.fn<any>(),

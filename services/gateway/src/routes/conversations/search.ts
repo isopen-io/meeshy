@@ -193,6 +193,33 @@ export function registerSearchRoutes(
       // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
       const readStatusService = new MessageReadStatusService(prisma);
       const conversationIds = conversations.map(c => c.id);
+
+      // Appartenance de l'appelant, résolue UNE fois pour la page entière.
+      // La clause `WHERE` ci-dessus laisse délibérément passer les salons
+      // `public`/`global` dont l'appelant n'est PAS membre (la recherche
+      // globale les veut) : ce drapeau est le seul signal qui les distingue,
+      // et il commande l'émission des participants juste en dessous.
+      //
+      // `authContext.userId` porte un `User.id` pour un compte mais un
+      // `Participant.id` pour un invité de lien partagé : la COLONNE se
+      // branche sur la nature de la clé, comme
+      // `socketio/utils/participant-resolver.ts`. Interroger `userId` avec un
+      // `Participant.id` ne matcherait RIEN — une liste vide, pas une erreur,
+      // donc un invité privé de toutes ses conversations en silence
+      // (contre-exemple documenté : `_emitUnreadCountsSnapshot`).
+      const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
+      const memberships = conversationIds.length > 0
+        ? await prisma.participant.findMany({
+            where: {
+              conversationId: { in: conversationIds },
+              isActive: true,
+              ...(isAnonymousViewer ? { id: userId } : { userId })
+            },
+            select: { conversationId: true }
+          })
+        : [];
+      const memberConversationIds = new Set(memberships.map(p => p.conversationId));
+
       const unreadCountMap = conversationIds.length > 0
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
         : new Map<string, number>();
@@ -228,6 +255,7 @@ export function registerSearchRoutes(
 
       // Transformer les conversations pour un payload léger (search)
       const results = conversations.map((conversation) => {
+        const isMember = memberConversationIds.has(conversation.id);
         const displayTitle = (conversation as any).type === 'direct'
           ? (conversation.title || null)
           : (conversation.title && conversation.title.trim() !== ''
@@ -293,16 +321,30 @@ export function registerSearchRoutes(
           isActive: conversation.isActive,
           communityId: conversation.communityId,
           memberCount: (conversation as any)._count?.participants ?? 0,
+          // Signal d'appartenance officiel du filtre client (sélecteur de
+          // transfert iOS/web) : il remplace une heuristique qui lisait le
+          // tableau ci-dessous, tronqué à cinq — donc aveugle dans un salon
+          // public de cinquante membres, où elle écartait à tort le salon d'un
+          // membre légitime.
+          isMember,
           // Déjà chargés par le `include` ci-dessus (au plus 5) : sans cette
           // recopie, une conversation DIRECTE trouvée par la recherche arrive
           // sans titre (forcé à `null` pour les directs) ET sans personne —
           // illisible à l'écran et non déduplicable côté client.
-          participants: (conversation.participants ?? []).map((p: any) => ({
-            id: p.id,
-            userId: p.userId,
-            displayName: p.displayName,
-            user: p.user ? { id: p.user.id, username: p.user.username, displayName: p.user.displayName } : null,
-          })),
+          //
+          // Réservés aux MEMBRES sur décision du user (2026-08-19) : cette
+          // route rend aussi les salons `public`/`global` dont l'appelant
+          // n'est pas membre, et y publier jusqu'à cinq identités (id, pseudo,
+          // nom affiché) est une exposition refusée. `isMember` porte seul ce
+          // que le client en tirait.
+          participants: isMember
+            ? (conversation.participants ?? []).map((p: any) => ({
+                id: p.id,
+                userId: p.userId,
+                displayName: p.displayName,
+                user: p.user ? { id: p.user.id, username: p.user.username, displayName: p.user.displayName } : null,
+              }))
+            : [],
           lastMessage,
           // Prisme Linguistique de la ligne de liste — jumeau de `core.ts`.
           // Les deux colonnes vivent dans le MÊME document Mongo que le message

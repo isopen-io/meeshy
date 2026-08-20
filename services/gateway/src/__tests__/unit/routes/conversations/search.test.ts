@@ -102,6 +102,14 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversation: {
       findMany: jest.fn<any>().mockResolvedValue([]),
     },
+    // La route résout l'appartenance de l'appelant pour toute la page (elle
+    // commande l'émission des participants). Le double rend l'appelant membre
+    // de ce que la page contient — l'hypothèse implicite de ces fixtures.
+    participant: {
+      findMany: jest.fn<any>().mockImplementation(async (args: any) =>
+        (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({ conversationId }))
+      ),
+    },
     ...overrides,
   };
 }
