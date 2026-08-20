@@ -210,7 +210,7 @@ footer .mono{font-size:11.5px}
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
     <span>rév. 2 (2026-08-20) : revue totale 4 axes — 62 constats examinés, 33 réels intégrés · entrées externes (P18) · continuité &amp; PiP (P19) · rupture vécue (P20) · spécimen des 18 styles (P21) · O12–O16</span>
     <span>rév. 3 (2026-08-20) : alignement de lecture O17 (sentinelle — P20) · rév. 4 : revue d'intégration (9+13 constats appliqués) · iconographie des contrôles (P22) · éditeurs trim·crop·cut (P23) · cas d'usage carrousels &amp; audio (P24) · rév. 5 : cycle final (10 constats — point d'attache F1, temps réel F3, glyphes prod P22)</span>
-    <span>rév. 6 (2026-08-20) : P0 — tableau de bord d'avancement (camembert + matrice fait·testé·reste, maintenu à CHAQUE gate) · <b>lot A EXÉCUTÉ : 10/10 tâches, gate 795 suites vertes</b></span>
+    <span>rév. 7 (2026-08-20) : P0 maintenu à l'arrivée sur main — <b>lot A SUR MAIN</b> (10/10 tâches, gate 795 suites vertes) · sentinelle O17 active, drapeaux OFF</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -244,7 +244,7 @@ footer .mono{font-size:11.5px}
       <ul class="legendlist" style="max-width:none">
         <li><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:#34D399;flex:0 0 auto"></span><span><b>Fait &amp; testé — 10 tâches (19,6 %)</b> : lot A intégral (A1→A8), gate
           <span class="mono">795 suites / 18 685 tests verts</span>, 11 commits TDD sur
-          <span class="mono">feat/composer-lot-a</span> — en attente de merge sur main.</span></li>
+          <span class="mono">feat/composer-lot-a</span> — <b>SUR MAIN</b> (2026-08-20, commits rejoués en linéaire, gate <span class="mono">c3bc02a17</span>).</span></li>
         <li><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--acc);flex:0 0 auto"></span><span><b>Planifié, plans revus — 35 tâches (68,6 %)</b> : lots B (7) · C (10) · D (5) ·
           E (5) · F (8), chaque plan passé par les cycles de revue adversariale.</span></li>
         <li><span style="display:inline-block;width:11px;height:11px;border-radius:3px;background:var(--line);flex:0 0 auto"></span><span><b>À planifier — 6 tâches (11,8 %)</b> : lot G (entrées externes — plan à écrire
@@ -252,7 +252,7 @@ footer .mono{font-size:11.5px}
       </ul>
       <p style="font-size:12.5px;color:var(--ink2);margin-top:10px"><b>Drapeaux de production</b> (l'état qui rend le merge de A inerte) :
         <span class="mono">CANVAS_V3_READ=OFF</span> · <span class="mono">CANVAS_V3_WRITE_STRICT=OFF</span> ·
-        plancher <span class="mono">X-App-Version</span> désarmé — la sentinelle O17, elle, sera active dès le merge.</p>
+        plancher <span class="mono">X-App-Version</span> désarmé — la sentinelle O17, elle, est ACTIVE depuis l'arrivée sur main.</p>
     </div>
   </div>
 
@@ -260,16 +260,16 @@ footer .mono{font-size:11.5px}
   <div class="scrollx"><table>
     <thead><tr><th>Feature</th><th>Lot</th><th>Spécifié</th><th>Implémenté</th><th>Testé</th><th>Sur main</th><th>Reste à faire</th></tr></thead>
     <tbody>
-      <tr class="grp"><td colspan="7">Contrat &amp; gateway — LOT A : EXÉCUTÉ (gate 795 suites vertes, commit ceacbcc4a)</td></tr>
-      <tr><td>Schéma Zod CanvasV3 + kinds réservés refusés</td><td class="mono">A1</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 8/8</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Fixtures gelées (6 docs, v1 réaliste)</td><td class="mono">A2</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 2/2</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Convertisseur v1→v3 + golden GELÉ (letterbox U20, translations C6, transcriptions C7, champs vivants U21, racine G3, mediaObjects)</td><td class="mono">A3</td><td class="ok">✓</td><td class="ok">✓ (+fix mediaObjects attrapé par le vérificateur)</td><td class="ok">✓ 21/21</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Lecture sous CANVAS_V3_READ (racine + repost imbriqué)</td><td class="mono">A4</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 4/4 + 8 suites voisines</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Négociation O17 + sentinelle localisée (threading services, broadcast F3, gardes de source)</td><td class="mono">A4b</td><td class="ok">✓</td><td class="ok">✓ resolveWireForm pur</td><td class="ok">✓ 9 cas dont feed/tray e2e</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Écriture stricte 426/400 sous CANVAS_V3_WRITE_STRICT (storeUrl par X-App-Platform)</td><td class="mono">A5</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 6 cas + inertie OFF</td><td class="ab">—</td><td>merge, puis armement post-B/C/F5b/H</td></tr>
-      <tr><td>Plancher X-App-Version + GET /app/min-version</td><td class="mono">A6</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ (absence passe, R6)</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Claim des stickers posés (MEDIA_NOT_CLAIMED)</td><td class="mono">A7</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td><td class="ab">—</td><td>merge du lot</td></tr>
-      <tr><td>Pipeline de traduction des objets texte en v3 (scenes[].objects[] par id)</td><td class="mono">A7b</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 4 cas + non-régression v1</td><td class="ab">—</td><td>merge du lot</td></tr>
+      <tr class="grp"><td colspan="7">Contrat &amp; gateway — LOT A : EXÉCUTÉ &amp; SUR MAIN (gate 795 suites vertes, commit c3bc02a17)</td></tr>
+      <tr><td>Schéma Zod CanvasV3 + kinds réservés refusés</td><td class="mono">A1</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 8/8</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Fixtures gelées (6 docs, v1 réaliste)</td><td class="mono">A2</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 2/2</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Convertisseur v1→v3 + golden GELÉ (letterbox U20, translations C6, transcriptions C7, champs vivants U21, racine G3, mediaObjects)</td><td class="mono">A3</td><td class="ok">✓</td><td class="ok">✓ (+fix mediaObjects attrapé par le vérificateur)</td><td class="ok">✓ 21/21</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Lecture sous CANVAS_V3_READ (racine + repost imbriqué)</td><td class="mono">A4</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 4/4 + 8 suites voisines</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Négociation O17 + sentinelle localisée (threading services, broadcast F3, gardes de source)</td><td class="mono">A4b</td><td class="ok">✓</td><td class="ok">✓ resolveWireForm pur</td><td class="ok">✓ 9 cas dont feed/tray e2e</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Écriture stricte 426/400 sous CANVAS_V3_WRITE_STRICT (storeUrl par X-App-Platform)</td><td class="mono">A5</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 6 cas + inertie OFF</td><td class="ok">✓</td><td>armement post-B/C/F5b/H</td></tr>
+      <tr><td>Plancher X-App-Version + GET /app/min-version</td><td class="mono">A6</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ (absence passe, R6)</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Claim des stickers posés (MEDIA_NOT_CLAIMED)</td><td class="mono">A7</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td><td>—</td></tr>
+      <tr><td>Pipeline de traduction des objets texte en v3 (scenes[].objects[] par id)</td><td class="mono">A7b</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ 4 cas + non-régression v1</td><td class="ok">✓</td><td>—</td></tr>
       <tr class="grp"><td colspan="7">Noyau SDK iOS — LOT B : plans revus, exécution À LANCER (le gel A3 est clos : B peut démarrer)</td></tr>
       <tr><td>Modèles Swift CanvasV3 + migration ⇄ vs golden PARTAGÉ</td><td class="mono">B1-B2</td><td class="ok">✓</td><td class="ab">—</td><td class="ab">—</td><td class="ab">—</td><td>tout (TDD, scheme MeeshySDK-Package)</td></tr>
       <tr><td>Migration one-shot des brouillons</td><td class="mono">B3</td><td class="ok">✓</td><td class="ab">—</td><td class="ab">—</td><td class="ab">—</td><td>tout</td></tr>
@@ -291,11 +291,11 @@ footer .mono{font-size:11.5px}
       <tr><td>Android : lecture v3 + émission v3 + X-Canvas-Caps</td><td class="mono">H</td><td class="ok">✓ (G1, mêmes fixtures)</td><td class="ab">—</td><td class="ab">—</td><td class="ab">—</td><td>équipe Android — condition d'ARMEMENT des deux drapeaux</td></tr>
     </tbody>
   </table></div>
-  <div class="callout"><b>Comment lire « Sur main ».</b> Le lot A vit sur
-  <span class="mono">feat/composer-lot-a</span> (11 commits TDD, worktree dédié) — son gate est
-  vert mais l'ordre de merge de la spec (A → B → F → D → E → C → G) commande le passage sur main ;
-  la colonne bascule à ✓ au merge, et le camembert ne compte une tâche qu'au gate PROUVÉ (rouge
-  puis vert au runner), jamais à l'écriture du code.</div>
+  <div class="callout"><b>Comment lire « Sur main ».</b> Le lot A (11 commits TDD) est sur
+  main — arrivée INERTE par construction : drapeaux OFF, seule la sentinelle O17 est active.
+  L'ordre de la spec (A → B → F → D → E → C → G) commande les merges suivants ; la colonne
+  bascule à ✓ au merge, et le camembert ne compte une tâche qu'au gate PROUVÉ (rouge puis vert
+  au runner), jamais à l'écriture du code.</div>
 </div></section>
 
 <!-- ================================================================ P1 -->

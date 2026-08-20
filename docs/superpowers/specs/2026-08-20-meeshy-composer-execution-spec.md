@@ -14,8 +14,8 @@ Rév. 7 (2026-08-20) : cycle final — point d'attache de la négociation TRANCH
 (threading du lecteur à travers les SERVICES, F1), exception temps réel (F3),
 ligne « v3 invalide » (F5), `volume?` au payload media (F10)
 Rév. 8 (2026-08-20) : P0 tableau de bord vivant (règle de maintenance en §E) ;
-lot A EXÉCUTÉ — 10/10 tâches TDD, gate 795 suites vertes, branche
-`feat/composer-lot-a` en attente de merge
+lot A EXÉCUTÉ et SUR MAIN (2026-08-20, gate c3bc02a17) — 10/10 tâches TDD,
+795 suites vertes, arrivée inerte (drapeaux OFF), sentinelle O17 active
 Design source : `./2026-08-19-meeshy-composer-design.md` (+ planches P1–P24)
 Ce document est la sortie de la revue totale : il fige les décisions, définit le
 contrat commun, et découpe l'exécution en **huit lots** (six parallélisables
