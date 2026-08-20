@@ -25,6 +25,13 @@
     <string name="conversations_preview_typing">%1$s está a escrever…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_preview_loading">Carregando…</string>
+    <string name="conversations_preview_expired">Mensagem expirada</string>
+    <string name="conversations_preview_hidden">Mensagem oculta</string>
+    <string name="conversations_preview_view_once">Mensagem de visualização única</string>
+    <string name="conversations_preview_expired_content_description">última mensagem expirada</string>
+    <string name="conversations_preview_hidden_content_description">última mensagem oculta</string>
+    <string name="conversations_preview_view_once_content_description">última mensagem: visualização única</string>
+    <string name="conversations_preview_ephemeral_content_description">mensagem efémera</string>
     <string name="conversations_search">Pesquisar</string>
     <string name="conversations_search_hint">Pesquisar conversas</string>
     <string name="conversations_search_close">Fechar pesquisa</string>

@@ -14,6 +14,14 @@ data class LastMessagePreviewLabels(
     val you: String,
     val senderFormat: String,
     val draftPrefix: String,
+    // Kind-aware labels (parity with iOS `LastMessageSummaryKind` —
+    // `packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageSummaryKind.swift`).
+    // Defaults let existing callers stay compile-compatible while a locale that
+    // hasn't shipped the strings yet transparently falls back to the sender-prefixed
+    // body (see `messageSummaryLine`) rather than a blank row.
+    val expired: String = "",
+    val hidden: String = "",
+    val viewOnce: String = "",
 )
 
 /**
@@ -58,6 +66,69 @@ fun lastMessagePreview(
     }
     if (body.isEmpty()) return labels.none
     if (!showSender) return body
+    val sender = when {
+        currentUserId != null && message.senderId == currentUserId -> labels.you
+        else -> message.senderName?.takeIf { it.isNotBlank() }
+    }
+    return if (sender == null) body else labels.senderFormat.format(sender, body)
+}
+
+/**
+ * Composes the row's summary line once typing/draft have been ruled out. The
+ * returned [SummaryLine] carries both the display text and the classified
+ * [MessageSummaryKind] so the Compose row can pick a kind-appropriate style
+ * (icon, italic, colour) without re-classifying.
+ *
+ * Sender-prefix rules — parity with iOS `ThemedConversationRow.lastMessagePreviewView`:
+ *   * [MessageSummaryKind.EXPIRED]: label alone, no sender prefix (the message is gone).
+ *   * [MessageSummaryKind.HIDDEN] / [MessageSummaryKind.VIEW_ONCE]: sender-prefixed
+ *     when [showSender] is true, so a group row still tells you *who* posted the
+ *     hidden / view-once content.
+ *   * [MessageSummaryKind.EPHEMERAL_ACTIVE] / [MessageSummaryKind.STANDARD]: reuse
+ *     [lastMessagePreview] verbatim — same media-type body + sender-prefix rule.
+ *
+ * A blank kind-specific label (partial locale) transparently falls through to the
+ * standard body path — a partial translation must not leave the row visually empty.
+ */
+fun messageSummaryLine(
+    message: ApiConversationLastMessage?,
+    currentUserId: String?,
+    showSender: Boolean,
+    labels: LastMessagePreviewLabels,
+    nowMillis: Long,
+): SummaryLine {
+    val kind = MessageSummaryKind.of(message, nowMillis)
+    return when (kind) {
+        MessageSummaryKind.STANDARD, MessageSummaryKind.EPHEMERAL_ACTIVE -> SummaryLine(
+            text = lastMessagePreview(message, currentUserId, showSender, labels),
+            kind = kind,
+        )
+        MessageSummaryKind.EXPIRED -> SummaryLine(
+            text = labels.expired.takeIf { it.isNotBlank() }
+                ?: lastMessagePreview(message, currentUserId, showSender = false, labels),
+            kind = kind,
+        )
+        MessageSummaryKind.HIDDEN -> SummaryLine(
+            text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.hidden),
+            kind = kind,
+        )
+        MessageSummaryKind.VIEW_ONCE -> SummaryLine(
+            text = kindLabelWithSender(message, currentUserId, showSender, labels, labels.viewOnce),
+            kind = kind,
+        )
+    }
+}
+
+private fun kindLabelWithSender(
+    message: ApiConversationLastMessage?,
+    currentUserId: String?,
+    showSender: Boolean,
+    labels: LastMessagePreviewLabels,
+    kindLabel: String,
+): String {
+    val body = kindLabel.takeIf { it.isNotBlank() }
+        ?: return lastMessagePreview(message, currentUserId, showSender, labels)
+    if (!showSender || message == null) return body
     val sender = when {
         currentUserId != null && message.senderId == currentUserId -> labels.you
         else -> message.senderName?.takeIf { it.isNotBlank() }

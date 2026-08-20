@@ -5,6 +5,34 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-20 — "wire doesn't carry X" is a client-side blind spot claim, verify at the serializer
+
+Slice `conversation-row-message-summary-kind` (see PROGRESS.md). Previous run's Next-line hint
+said the message-body-kind slice would need to *widen the wire contract* because
+`ApiConversationLastMessage` "doesn't carry `expiresAt`, `deletedAt`, `viewOnce`". True in the
+Kotlin DTO — but **false at the serializer**: `services/gateway/src/routes/conversations/core.ts:971`
+spreads the full Prisma `Message` object onto `lastMessage` via `...msgRest` after stripping only
+`translations` and `originalLanguage`. Prisma's `Message` model has `isBlurred`, `isViewOnce`,
+`expiresAt` (`packages/shared/prisma/schema.prisma:635-698`), so they reach every client TODAY.
+
+The widening was 3 defaulted Kotlin fields — no wire contract change, no gateway PR, no iOS
+sync needed. Rule for next time: before designing a slice around "add fields to the wire",
+grep the gateway serializer for `...msg` / `...spread` — a spread that only excludes a small
+denylist means every column reaches every client already.
+
+## 2026-08-20 — Android SDK bootstrap: alias `android-37 → android-37.0` after auto-install
+
+Fresh container: `apps/android/build.gradle.kts` pins `compileSdk = 37`, so Gradle
+auto-triggers `Install Android SDK Platform 37.0` on first task. The install lands in
+`$HOME/android-sdk/platforms/android-37.0/`, but Gradle looks up the alias `android-37` (no
+version suffix) — build fails with `Failed to find target with hash string 'android-37' in:
+/root/android-sdk`. Fix (idempotent):
+```bash
+ln -sfn android-37.0 $HOME/android-sdk/platforms/android-37
+```
+`meeshy.sh check` runs green after. Also seen in the 2026-08-20 activity-heat / tags slices —
+this is now the standard bootstrap glitch.
+
 ## Slice `conversation-row-activity-heat` (2026-08-20)
 - **Expose the SSOT palette, not just the primary hex.** Twice now I've watched a caller reach for a
   *pair* of accent hues (`primary` + `secondary`) that already lived on

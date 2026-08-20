@@ -1602,8 +1602,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       SSOT dans `:sdk-core/theme` expose la `ColorPalette` complète (primary+secondary+accent) —
       `accentHex()` en devient le shortcut `primary` — et la ligne mémorise la palette une fois
       via `remember(conversation)`, alimentant le brush `primary → secondary` de fond avec les
-      alphas calculés + l'`accent` de l'avatar + les deux labels teintés) ;
-      ephemeral/expired/hidden/view-once, presence/story-ring/mood pending
+      alphas calculés + l'`accent` de l'avatar + les deux labels teintés) ; **message-summary-kind
+      done** (slice `conversation-row-message-summary-kind`, 2026-08-20 : port iOS
+      `LastMessageSummaryKind` — pur `:feature:conversations` `MessageSummaryKind.of(message,
+      nowMillis)` classifie 5 kinds `{ STANDARD, HIDDEN, VIEW_ONCE, EPHEMERAL_ACTIVE, EXPIRED }`
+      dans l'ordre iOS EXACT — expired `<=` inclusif au bord > blurred > view-once > future
+      expiresAt > standard ; `messageSummaryLine` compose la ligne kind-aware avec le préfixe
+      sender pour HIDDEN/VIEW_ONCE mais label seul pour EXPIRED (parité iOS `.expired` arm) ;
+      `ApiConversationLastMessage` widen additif `isBlurred`/`isViewOnce`/`expiresAt` — le
+      gateway les répandait déjà via `...msgRest` (`services/gateway/src/routes/conversations/
+      core.ts:971`) donc pas de contrat wire à renégocier ; `RowPreview.kind` défaulté et
+      overload `conversationRowPreview(SummaryLine)` propage le kind au Compose ;
+      `ConversationRowPreviewLine` composable pique (icône, teinte, italic) par kind —
+      HourglassEmpty/textMuted/italic pour EXPIRED, VisibilityOff/textSecondary/italic pour
+      HIDDEN, LocalFireDepartment/accent/italic pour VIEW_ONCE, Timer/standardColor pour
+      EPHEMERAL_ACTIVE ; 7 strings × 4 locales portées de `Localizable.xcstrings` iOS —
+      partial-locale fallback via labels defaultés à `""` retombant sur le body standard) ;
+      presence/story-ring/mood pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
