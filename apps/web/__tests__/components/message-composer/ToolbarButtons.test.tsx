@@ -129,4 +129,48 @@ describe('ToolbarButtons', () => {
     expect(screen.getByLabelText('Record voice message')).toBeInTheDocument();
     expect(screen.getByLabelText('Attach file')).toBeInTheDocument();
   });
+
+  it('ne rend pas le trombone quand les pièces jointes ne sont pas permises', () => {
+    const handleMicClick = jest.fn();
+    const handleAttachmentClick = jest.fn();
+
+    render(
+      <ToolbarButtons
+        onMicClick={handleMicClick}
+        onAttachmentClick={handleAttachmentClick}
+        canAttach={false}
+      />
+    );
+
+    expect(screen.queryByLabelText('Attach file')).not.toBeInTheDocument();
+  });
+
+  it('rend toujours le micro, même sans droit de pièce jointe', () => {
+    const handleMicClick = jest.fn();
+    const handleAttachmentClick = jest.fn();
+
+    render(
+      <ToolbarButtons
+        onMicClick={handleMicClick}
+        onAttachmentClick={handleAttachmentClick}
+        canAttach={false}
+      />
+    );
+
+    expect(screen.getByLabelText('Record voice message')).toBeInTheDocument();
+  });
+
+  it('rend le trombone par défaut quand la prop est absente', () => {
+    const handleMicClick = jest.fn();
+    const handleAttachmentClick = jest.fn();
+
+    render(
+      <ToolbarButtons
+        onMicClick={handleMicClick}
+        onAttachmentClick={handleAttachmentClick}
+      />
+    );
+
+    expect(screen.getByLabelText('Attach file')).toBeInTheDocument();
+  });
 });
