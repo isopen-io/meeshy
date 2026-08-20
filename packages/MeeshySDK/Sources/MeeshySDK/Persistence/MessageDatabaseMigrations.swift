@@ -302,5 +302,15 @@ public enum MessageDatabaseMigrations {
                 t.column("errorMessage", .text)
             }
         }
+
+        // Task 10, round 2 de revue — `OutboxRecord.waitingForFanoutOriginSince`.
+        // Nullable : les lignes déjà sur disque n'ont jamais rencontré ce cas
+        // (NULL décodé en `nil`, jamais d'échec — même convention que les
+        // autres colonnes optionnelles de ce fichier).
+        migrator.registerMigration("outbox_v3_waiting_for_fanout_origin_since") { db in
+            try db.alter(table: "outbox") { t in
+                t.add(column: "waitingForFanoutOriginSince", .datetime)
+            }
+        }
     }
 }

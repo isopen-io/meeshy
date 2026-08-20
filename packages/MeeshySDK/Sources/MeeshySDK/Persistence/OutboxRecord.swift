@@ -113,6 +113,24 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
     public let createdAt: Date
     public var updatedAt: Date
     public var nextAttemptAt: Date
+    /// Task 10, round 2 de revue (Important) — l'instant où CETTE ligne a
+    /// été différée pour la PREMIÈRE FOIS parce qu'elle attend sa cible
+    /// d'origine de fan-out (`OutboxDeferralError.waitingForFanoutOrigin`).
+    /// `nil` tant que la ligne n'a jamais rencontré ce cas.
+    ///
+    /// Distinct de `createdAt` À DESSEIN : pour une copie de fan-out,
+    /// `createdAt` porte l'horodatage du PARTAGE posé par l'extension (voir
+    /// `SharePendingShare.createdAt`), qui peut précéder de plusieurs JOURS
+    /// l'entrée réelle de cette ligne dans l'outbox — la reprise n'a lieu
+    /// qu'au démarrage de l'app (`SharePendingSendConsumer.consumeAll`).
+    /// Mesurer `OutboxFlusher.fanoutOriginWaitTimeout` depuis `createdAt`
+    /// rouvrait donc, pour toute reprise différée, le défaut Critical corrigé
+    /// au round 1. Ce champ, lui, est posé au moment du premier report RÉEL
+    /// et PERSISTE avec la ligne (donc survit à un redémarrage de l'app),
+    /// sans jamais retoucher `createdAt` — qui porte l'ordre de départ
+    /// (l'epsilon du round 1) et la règle « ne pas antidater un partage
+    /// repris ».
+    public var waitingForFanoutOriginSince: Date?
 
     public init(
         id: String = UUID().uuidString,
@@ -126,7 +144,8 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
         lastError: String? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        nextAttemptAt: Date = Date()
+        nextAttemptAt: Date = Date(),
+        waitingForFanoutOriginSince: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -140,5 +159,6 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.nextAttemptAt = nextAttemptAt
+        self.waitingForFanoutOriginSince = waitingForFanoutOriginSince
     }
 }

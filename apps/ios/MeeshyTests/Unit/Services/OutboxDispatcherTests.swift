@@ -153,6 +153,43 @@ final class OutboxDispatcherTests: XCTestCase {
         }
     }
 
+    // MARK: - sendMessage: fan-out copy carrying local AUDIO → NSError 501 (round 2 fix, Minor)
+
+    /// Round 2 de revue (Minor) — même garde 501 que le test ci-dessus, mais
+    /// sur la branche AUDIO (`localAudioPath`/`localAudioPaths`) : le
+    /// garde-fou est placé une seule fois AVANT les deux `if` (couverture
+    /// structurelle des deux chemins socket), mais seule la branche média
+    /// visuelle était exercée par un test avant ce round. `localAudioPath`
+    /// (scalaire) suffit à emprunter la branche — pas besoin du tableau
+    /// `localAudioPaths` pour la même garde.
+    func test_dispatch_sendMessage_withLocalAudioAndFanoutCopy_throwsCode501() async {
+        let item = OfflineQueueItem(
+            id: "qid-fanout-audio",
+            clientMessageId: "cid-fanout-audio",
+            conversationId: "conv-abc",
+            content: "",
+            originalLanguage: nil,
+            replyToId: nil,
+            forwardedFromId: nil,
+            forwardedFromConversationId: nil,
+            attachmentIds: nil,
+            localAudioPath: "pending-audio/cid-fanout-audio.m4a",
+            copyAttachmentsFromClientMessageId: "cid_origin",
+            createdAt: Date()
+        )
+        let record = makeRecord(kind: .sendMessage, payload: encode(item), id: "ofq_fanout-audio")
+
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected dispatch to throw code 501 for local audio + fan-out copy")
+        } catch let error as NSError {
+            XCTAssertEqual(error.domain, "OutboxDispatcher")
+            XCTAssertEqual(error.code, 501)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
     // MARK: - sendMessage: unknown id prefix → silent drop
 
     func test_dispatch_sendMessage_whenIdHasUnknownPrefix_dropsWithoutThrowing() async {

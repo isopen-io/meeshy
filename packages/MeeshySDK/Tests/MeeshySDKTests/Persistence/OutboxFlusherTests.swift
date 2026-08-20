@@ -332,6 +332,11 @@ final class OutboxFlusherTests: XCTestCase {
     /// par `.exhausted` comme n'importe quel autre échec — remontée à
     /// l'utilisateur, retryable manuellement, jamais perdue en silence ET
     /// jamais bloquée pour l'éternité.
+    ///
+    /// Round 2 de revue — `createdAt` reste FRAIS ici à dessein : la borne
+    /// est désormais mesurée depuis `waitingForFanoutOriginSince` (premier
+    /// report RÉEL, déjà ancien) et non plus depuis `createdAt`, précisément
+    /// pour ne plus reproduire le défaut Important corrigé par ce round.
     func test_flush_waitingForFanoutOrigin_pastTheTimeout_resumesConsumingBudget() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
@@ -339,13 +344,16 @@ final class OutboxFlusherTests: XCTestCase {
         let now = Date()
         let longAgo = now.addingTimeInterval(-OutboxFlusher.fanoutOriginWaitTimeout - 60)
         // Déjà 4 échecs — une tentative normale de plus l'épuise, EXACTEMENT
-        // comme test_flush_marksExhausted_after5Attempts.
+        // comme test_flush_marksExhausted_after5Attempts. La ligne a déjà été
+        // différée pour cette raison il y a longtemps (`waitingForFanoutOriginSince`),
+        // bien que fraîchement entrée dans l'outbox (`createdAt: now`).
         try await pool.write { db in
             try OutboxRecord(
                 id: "fanout-stale", kind: .sendMessage, conversationId: "c1",
                 clientMessageId: "cid_fanout_stale",
                 payload: Data(), status: .pending, attempts: 4, lastError: nil,
-                createdAt: longAgo, updatedAt: longAgo, nextAttemptAt: now
+                createdAt: now, updatedAt: longAgo, nextAttemptAt: now,
+                waitingForFanoutOriginSince: longAgo
             ).insert(db)
         }
 
@@ -363,6 +371,50 @@ final class OutboxFlusherTests: XCTestCase {
             "Passé la fenêtre d'attente, la ligne doit reprendre le chemin d'échec normal jusqu'à épuisement")
         XCTAssertEqual(after.attempts, 5,
             "Le budget recommence à être consommé une fois la fenêtre d'attente dépassée")
+    }
+
+    /// Task 10, round 2 de revue (Important) — la borne doit se mesurer
+    /// depuis l'ENTRÉE RÉELLE de la ligne dans cette file, pas depuis
+    /// `createdAt` : pour une copie de fan-out, `createdAt` porte
+    /// l'horodatage du PARTAGE posé par l'extension
+    /// (`SharePendingShare.createdAt`), qui peut précéder de plusieurs JOURS
+    /// l'insertion réelle de la ligne — `SharePendingSendConsumer.consumeAll`
+    /// ne tourne qu'au démarrage de l'app ou au retour en avant-plan. Une
+    /// ligne dont le partage est vieux de 3 jours mais qui vient d'entrer
+    /// dans la file ne doit PAS voir son tout premier passage consommer le
+    /// budget de tentatives.
+    func test_flush_waitingForFanoutOrigin_resumedDaysLater_stillDoesNotConsumeRetryBudgetOnFirstAttempt() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        // Le PARTAGE est né il y a 3 jours dans l'extension — largement hors
+        // `fanoutOriginWaitTimeout` — mais la ligne n'entre dans l'outbox que
+        // MAINTENANT (reprise différée au démarrage de l'app).
+        let shareBornDaysAgo = now.addingTimeInterval(-3 * 24 * 60 * 60)
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "fanout-resumed", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_fanout_resumed",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: shareBornDaysAgo, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutboxDispatcher(
+                failure: OutboxDeferralError.waitingForFanoutOrigin(clientMessageId: "cid_origin"))
+        )
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "fanout-resumed")!
+        }
+        XCTAssertEqual(after.status, .pending,
+            "La première tentative d'une ligne reprise en différé ne doit pas l'exhauster, même si son PARTAGE est vieux de plusieurs jours")
+        XCTAssertEqual(after.attempts, 4,
+            "Le premier passage dans la file ne doit pas consommer le budget, quel que soit l'âge du partage d'origine dans l'extension")
     }
 
     func test_flush_marksExhausted_after5Attempts() async throws {

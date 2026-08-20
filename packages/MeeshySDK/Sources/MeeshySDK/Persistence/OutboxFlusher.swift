@@ -362,16 +362,20 @@ public actor OutboxFlusher {
     /// dans ce fichier. Passé ce délai, la ligne rejoint le chemin d'échec
     /// normal (consomme `attempts`, `.exhausted` en ~30s de plus avec les
     /// défauts prod) au lieu d'attendre indéfiniment.
+    ///
+    /// Round 2 de revue — mesurée depuis `OutboxRecord
+    /// .waitingForFanoutOriginSince` (l'entrée RÉELLE de la ligne dans cette
+    /// attente), jamais depuis `createdAt` : voir la doc de ce champ pour le
+    /// POURQUOI (`createdAt`, pour une copie de fan-out, porte l'horodatage
+    /// du partage posé par l'EXTENSION, potentiellement plusieurs jours avant
+    /// que la ligne n'entre réellement dans cette file).
     public static let fanoutOriginWaitTimeout: TimeInterval = 30 * 60
 
-    /// Garde dédiée pour `OutboxDeferralError.waitingForFanoutOrigin` — même
-    /// forme que les trois gardes ci-dessus, bornée par
-    /// `fanoutOriginWaitTimeout` (voir sa doc pour le POURQUOI de la borne).
-    private static func isWaitingForFanoutOrigin(
-        _ error: Error, rowCreatedAt: Date, now: Date
-    ) -> Bool {
-        guard case OutboxDeferralError.waitingForFanoutOrigin = error else { return false }
-        return now.timeIntervalSince(rowCreatedAt) < fanoutOriginWaitTimeout
+    /// Round 2 de revue — vrai tant que `waitingSince` (le premier report RÉEL
+    /// de cette ligne, pas sa naissance) est dans la fenêtre
+    /// `fanoutOriginWaitTimeout`.
+    private static func isWithinFanoutOriginWaitWindow(since waitingSince: Date, now: Date) -> Bool {
+        now.timeIntervalSince(waitingSince) < fanoutOriginWaitTimeout
     }
 
     /// Journal des tentatives (spec 2026-07-08 message-send-failure-retry-flow) :
@@ -445,12 +449,7 @@ public actor OutboxFlusher {
             // flush au reconnect (NWPath / socket reconnect / boot) rejoue
             // la file en FIFO — l'ordre de composition est préservé.
             //
-            // Task 10, round 1 — même exemption pour une ligne qui ATTEND sa
-            // dépendance (fan-out de partage), mais BORNÉE dans le temps
-            // (`isWaitingForFanoutOrigin`, contrairement aux deux
-            // précédentes) : voir la doc de `fanoutOriginWaitTimeout`.
-            if Self.isSessionExpiry(error) || Self.isNetworkTransportError(error)
-                || Self.isWaitingForFanoutOrigin(error, rowCreatedAt: current.createdAt, now: Date()) {
+            if Self.isSessionExpiry(error) || Self.isNetworkTransportError(error) {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()
@@ -466,6 +465,43 @@ public actor OutboxFlusher {
                     outboxFlusherLog.error("Deferred state not persisted for \(current.id, privacy: .public), row left inflight: \(error.localizedDescription, privacy: .public)")
                 }
                 return
+            }
+
+            // Task 10, round 1 — même exemption pour une ligne qui ATTEND sa
+            // dépendance (fan-out de partage), mais BORNÉE dans le temps,
+            // contrairement aux deux précédentes : voir la doc de
+            // `fanoutOriginWaitTimeout`.
+            //
+            // Round 2 de revue — la borne ne se mesure PLUS depuis
+            // `current.createdAt` (défaut corrigé ici : voir la doc de
+            // `OutboxRecord.waitingForFanoutOriginSince`). Premier report de
+            // CETTE ligne pour cette raison → on marque l'instant, PERSISTÉ
+            // avec la ligne (survit donc à un redémarrage). Les reports
+            // suivants relisent le même instant plutôt que de le recalculer.
+            if case OutboxDeferralError.waitingForFanoutOrigin = error {
+                let now = Date()
+                let waitingSince = current.waitingForFanoutOriginSince ?? now
+                current.waitingForFanoutOriginSince = waitingSince
+                if Self.isWithinFanoutOriginWaitWindow(since: waitingSince, now: now) {
+                    current.lastError = String(describing: error)
+                    current.status = .pending
+                    current.updatedAt = now
+                    current.nextAttemptAt = now.addingTimeInterval(maxBackoff)
+                    let deferredSnapshot = current
+                    do {
+                        try await pool.write { db in
+                            try deferredSnapshot.update(db)
+                        }
+                    } catch {
+                        // La ligne reste `.inflight` : elle ne sera rejouée
+                        // qu'au prochain reclaim de périmés, pas au prochain
+                        // flush.
+                        outboxFlusherLog.error("Deferred state not persisted for \(current.id, privacy: .public), row left inflight: \(error.localizedDescription, privacy: .public)")
+                    }
+                    return
+                }
+                // Passé la fenêtre : rejoint le chemin d'échec normal
+                // ci-dessous — `attempts` recommence à être consommé.
             }
 
             current.attempts += 1
