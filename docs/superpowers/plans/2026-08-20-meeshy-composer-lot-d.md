@@ -48,11 +48,11 @@ public enum Plan2DLayout {
 }
 ```
 
-- [ ] **Step 1: Tests rouges (Swift Testing)** — construire un `StoryEffects` en mémoire (init à défauts, vérifié) portant : 1 texte `startTime: 1, endTime: 4` + 2 keyframes, 1 sticker SANS timing, 1 fond (`background` couleur), 1 chip audio, `timelineDuration: 10`. Attendre :
+- [ ] **Step 1: Tests rouges (Swift Testing)** — construire un `StoryEffects` en mémoire (init à défauts, vérifié) portant : 1 texte `startTime: 1, duration: 3` (le modèle n'a PAS d'`endTime` — c'est `duration`, `StoryModels.swift:369` ; fin = start + duration) + 2 keyframes, 1 sticker SANS timing, 1 fond (`background` couleur), 1 chip audio, `timelineDuration: 10`. Attendre :
   1. l'ordre des pistes est `fg… → content… → bg…` et, dans fg, z décroissant ;
   2. le texte est `.timed(1, 4)` avec `keyframeTimes == [1, 2]` ;
   3. le sticker est `.ghost` (O4 — jamais `.timed(0, 10)` : un défaut n'est pas un choix) ;
-  4. le fond est une piste `.bg` et boucle ⇒ `.ghost` aussi ;
+  4. le fond est une piste `.bg` et, SANS timing propre, `.ghost` (la « boucle » n'a aucune représentation modèle pour un fond couleur — la règle testable est l'absence de timing) ;
   5. `x(forTime:)` : t=0 ⇒ 0 ; t=slideDuration ⇒ laneWidth (zoom .fit) ; zoom .detail double l'échelle ;
   6. AUCUNE piste pour un `StoryEffects()` vide (pas de rangées fantômes de structure).
 - [ ] **Step 2: Rouge.** **Step 3:** implémenter — mapping familles→pistes (mêmes plans que la table §C2 : texte/sticker/lieu/dessin → fg, chips audio → content, fond → bg), tri stable, PURE (aucun import UI au-delà de CoreGraphics). **Step 4: Vert.** **Step 5: Commit.**
@@ -67,10 +67,10 @@ public enum Plan2DLayout {
 
 - [ ] **Step 1: Tests rouges (source)** —
   1. le corps dessine via UN `Canvas {` (barres, losanges, fantômes) — INTERDIT : `ForEach` sur `keyframeTimes` produisant des vues (le budget P15 : jamais une vue par keyframe) ;
-  2. la règle graduée réutilise la logique existante de dérivation par largeur de libellé (référencer le symbole réel du module `Timeline/Logic` au moment de l'implémentation et le figer dans l'assertion — le piège « graduation à pas fixe » est documenté) ;
-  3. la hauteur de lane est la constante 52 pt EXISTANTE du module (pas un littéral neuf) ;
+  2. la règle graduée réutilise la dérivation par largeur de libellé de `Timeline/Views/Overlay/RulerView.swift` (`:58` « Dérivé de la largeur d'un libellé », `minLabelSpacing:64`, `labelHalfWidth:105`) — c'est LÀ qu'elle vit, pas dans `Logic/` ;
+  3. la hauteur de lane : le module n'a PAS de constante nommée (52 n'existe qu'en littéral aux sites d'appel, `StoryTimelineView.swift:502/511/518/531`) — cette tâche EXTRAIT `TimelineMetrics.laneHeight = 52`, remplace les quatre littéraux (Timeline/** possédé par D), et la garde ancre la constante ainsi créée ;
   4. les gestes : drag vertical ⇒ échange de z DANS le plan (traverser un plan = cran net, pas de continu) ; drag de bord ⇒ `timing.start/end` ; tap ⇒ ouvre l'Inspector EXISTANT (`Views/Inspector`) — l'assertion vérifie l'appel, pas la sheet.
-- [ ] **Step 2: Rouge.** **Step 3:** implémenter (deux zooms ; fantôme = cadre pointillé pleine lane ; barres = format-couleur par plan). **Step 4: Vert.** **Step 5: Commit.**
+- [ ] **Step 2: Rouge.** **Step 3:** implémenter (deux zooms ; fantôme = cadre pointillé pleine lane ; barres = format-couleur par plan). **Virtualisation (P15) — déscopée avec justification** : le schéma v3 borne à 60 objets/scène, donc ≤ ~60 pistes dessinées en un passe Canvas — la virtualisation ne se déclenche que si le banc D4 la réclame, jamais par principe. **Step 4: Vert.** **Step 5: Commit.**
 
 ---
 
@@ -90,9 +90,9 @@ public enum Plan2DLayout {
 **Files:**
 - Test: `packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DRenderMeasureTests.swift`
 
-- [ ] **Step 1:** écrire le banc : `measure {}` XCTest sur le rendu hors écran (`ImageRenderer` du `Plan2DView`) d'un plan de **30 pistes** dont 10 timées avec 6 keyframes chacune, aux deux zooms. Budget inscrit dans le test : **p50 < 8 ms par passe** sur le simulateur de référence (marge ×5 vs A11 réel — le chiffre simulateur n'est PAS une preuve device, c'est un garde-fou de régression).
-- [ ] **Step 2:** exécuter, NOTER les chiffres dans le message de commit. Si le budget casse : c'est un STOP de lot (remonter au porteur produit avec les chiffres), pas une dérogation silencieuse.
-- [ ] **Step 3:** consigner dans le commit : la mesure device réelle (A11/iPhone 8) reste à faire au premier accès matériel — dette EXPLICITE, elle ne disparaît pas du plan.
+- [ ] **Step 1:** écrire le banc : `measure {}` XCTest sur le rendu hors écran (`ImageRenderer` du `Plan2DView`) d'un plan de **30 pistes** dont 10 timées avec 6 keyframes chacune, aux deux zooms. Le seuil inscrit dans le test est un GARDE-FOU DE RÉGRESSION **provisoire et non-spec** (revue Fable n°11 : aucun chiffre p50 n'existe dans la spec) — il sera RECALÉ sur la mesure device du Step 2, qui est la seule qui compte.
+- [ ] **Step 2: LA MESURE DEVICE EST UN CRITÈRE DE SORTIE DU LOT** (spec §D lot D : « mesure chronométrée sur A11/équivalent AVANT merge — le risque n°1 de P15 se lève ici, pas en aval »). Chronométrer sur un appareil A11/équivalent réel ; consigner les chiffres dans le commit. **Pas d'appareil disponible ⇒ STOP de lot remonté au porteur produit — le lot NE MERGE PAS sur un chiffre simulateur.**
+- [ ] **Step 3:** si la mesure device casse le budget d'usage (saccade perceptible au scrub) : STOP documenté avec chiffres — la virtualisation (D2) devient alors le premier chantier, pas une dérogation silencieuse.
 
 ---
 

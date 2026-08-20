@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Fichiers POSSÉDÉS : `apps/ios/Meeshy/Features/Main/Views/StoryViewerView*.swift`, `FeedPostCard.swift`, `PostDetailView.swift`, `ReelsView*.swift`/`ReelsViewModel.swift`. (C possède RootView/Composer ; aucun chevauchement.)
+- Fichiers POSSÉDÉS : `apps/ios/Meeshy/Features/Main/Views/StoryViewerView*.swift`, `FeedPostCard.swift`, `PostDetailView.swift`, `ReelsPlayerView.swift`, `ReelFeedCard.swift`, `ViewModels/ReelsViewModel.swift`, `Components/BackgroundSoundBadge.swift` (nouveau). (Revue Fable n°6 : `ReelsView*.swift` n'existe pas — les vrais fichiers Réels sont nommés ici, et C n'en touche AUCUN.)
 - Consomme (gelé) : `BackgroundAudioAnnouncement` + `AudioChipDisplay.backgroundAnnouncement(...)` (B5), `MeeshyScenePlayer(document:mode:)` (B4), `StoryEffects.canvasV3` (B7).
 - Les invariants du reader sont des LOIS : rail figé à l'entrée du slide, né en pause, le cache gèle le fade — aucune assertion existante ne doit rougir.
 - Cellules du fil : hauteur EXPLICITE autour du player (le piège self-sizing récursif est documenté) — jamais de hosting self-sizing.
@@ -25,7 +25,7 @@
 **Files:**
 - Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift` (header — l'actuel note+onde/marquee ad hoc)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift` (rangée auteur, après `↻ @handle`)
-- Modify: `apps/ios/Meeshy/Features/Main/Views/ReelsView.swift` (rangée auteur)
+- Modify: `apps/ios/Meeshy/Features/Main/Views/ReelsPlayerView.swift` (rangée auteur — le vrai fichier)
 - Create: `apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift` (LA vue commune — ♫〰 ou marquee crédit, à partir de l'enum B5)
 - Test: `apps/ios/MeeshyTests/Unit/Views/BackgroundSoundBadgeTests.swift` + garde `BackgroundAnnouncementWiringGuardTests.swift`
 
@@ -42,7 +42,7 @@
 ### Task E2: Le bouton 🔇 — trois surfaces, monté si piste seulement
 
 **Files:**
-- Modify: `FeedPostCard.swift` (rangée d'engagement), `PostDetailView.swift`, `StoryViewerView+Sidebar.swift` (le rail a déjà son muet — assertion de non-régression seulement), `ReelsView.swift` (idem si présent, sinon ajout)
+- Modify: `FeedPostCard.swift` (rangée d'engagement), `PostDetailView.swift`, `StoryViewerView+Sidebar.swift` (le rail a déjà son muet — assertion de non-régression seulement), `ReelsPlayerView.swift` (idem si présent, sinon ajout)
 - Test: `apps/ios/MeeshyTests/Unit/Views/MuteButtonExistenceGuardTests.swift`
 
 - [ ] **Step 1: Tests rouges (source)** — carte et détail : le bouton n'est monté QUE si `announcement != .none` (loi 6 — même condition d'existence que l'annonce, un seul prédicat partagé, pas deux) ; le tap bascule le muet du LECTEUR LOCAL de la surface (l'état global du viewer story reste `isGlobalMuted`, inchangé) ; l'icône dit l'état (`speaker.slash` ↔ `speaker.wave.2`).
@@ -60,7 +60,7 @@
   1. quand `post.storyEffects?.canvasV3 != nil`, la carte monte `MeeshyScenePlayer(document:…, mode: .card, …)` — et le mode `.card` est né en pause + muet (déjà verrouillé côté SDK par `ScenePlayerConfig`, l'assertion ici vérifie le MODE passé) ;
   2. le player est enveloppé d'un `.frame(height:` EXPLICITE (aspect 9:16 borné par une hauteur max de carte — le piège self-sizing récursif est la raison, la citer en commentaire) ;
   3. le tap route vers le plein écran EXISTANT (même chemin que l'embed de story reposté — pas de nouveau viewer) ;
-  4. AUCUN `AVPlayer`/décodage actif dans la carte (assertion négative : le mode `.card` seul, jamais `.reader`).
+  4. AUCUN `AVPlayer`/décodage actif dans la carte (assertion négative : le mode `.card` seul, jamais `.reader`). DÉCISION CONSIGNÉE (revue Fable n°25) : la carte de POST naît en pause — c'est une surface NEUVE, le mouvement est au tap ; les cartes RÉEL du fil GARDENT leur autoplay muet existant (`ReelFeedAutoplayCoordinator`, intouché) — le « autoplay muet » de P15 reste vrai là où il existait.
 - [ ] **Step 2-5:** rouge → implémentation → vert → captures de la carte (avec scène / sans scène) → commit.
 
 ---
@@ -71,7 +71,7 @@
 - Modify: `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift` (l'hôte canvas de `StoryCardView`)
 - Test: `apps/ios/MeeshyTests/Unit/Views/StoryViewerScenePlayerGuardTests.swift`
 
-- [ ] **Step 1: Test rouge (source)** — `StoryCardView` monte `MeeshyScenePlayer(… mode: .reader …)` à l'endroit exact où vivait l'hôte canvas direct ; les couches de chrome (progress bars, header, rail, `ReferenceNoteRow`, commentaires) sont INCHANGÉES autour (assertions positives sur leur présence — la refonte ne touche que la couche contenu) ; l'ancien hôte direct n'est plus référencé DANS ce fichier (il vit désormais sous le ScenePlayer, côté SDK).
+- [ ] **Step 1: Test rouge (source)** — `StoryCardView` monte `MeeshyScenePlayer(… mode: .reader …)` à l'endroit exact où vivait l'hôte canvas direct (`StoryReaderRepresentable`, `StoryViewerView+Canvas.swift:1192` — défini côté SDK `Story/Canvas/`, possédé par B : le swap est le point de couture B4→E4) ; les couches de chrome (progress bars, header, rail, `ReferenceNoteRow`, commentaires) sont INCHANGÉES autour (assertions positives sur leur présence — la refonte ne touche que la couche contenu) ; l'ancien hôte direct n'est plus référencé DANS ce fichier (il vit désormais sous le ScenePlayer, côté SDK).
 - [ ] **Step 2: Rouge.**
 - [ ] **Step 3: Implémenter** — swap minimal : le document vient de `currentStory.storyEffects` (v3 → `canvasV3` ; legacy → `CanvasV3(migrating:)` B2 — un seul chemin de sortie). Les bindings existants (lecture/pause, muet, progression) passent par les paramètres du player.
 - [ ] **Step 4: `meeshy.sh test` COMPLET** — c'est la tâche à plus fort rayon : TOUTES les suites du viewer (scrub, gestes, invariants, référence expirée, NOTE row) doivent rester vertes SANS modification. Une suite qui rougit = le swap a trahi un invariant : corriger le swap, jamais le test.

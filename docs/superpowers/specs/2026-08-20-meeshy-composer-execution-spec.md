@@ -153,7 +153,10 @@ Keyframe { time, x?, y?, scale?, opacity?, volume?, easing? }   // existant, inc
   `type === 'STORY'`). Défaut : plancher vide = porte désarmée. Le client, sur
   426 OU sur le plancher lu au bootstrap (`GET /app/min-version`), monte une
   porte bloquante (écran + lien App Store — l'OS n'installe pas à notre place).
-- **Lecture** : `convertStoryEffectsForWire(post)` — UN helper, appliqué aux
+- **Lecture** : `convertStoryEffectsForWire(post)` — UN helper, DERRIÈRE le
+  drapeau `CANVAS_V3_READ` (défaut OFF : le merge de A est inerte en lecture ;
+  l'activation est simultanée au déploiement du lot F — c'est l'acte qui rend
+  le lockstep de R6 VRAI, rév. 3 n°13), appliqué aux
   mêmes points d'aplatissement que `withMentions` (chaîne connue et testée).
   Permanent : l'archive est éternelle, `/republish` copie des blobs v1 (R5).
 - **Brouillons locaux** : `StoryDraftStore` migre one-shot v1→v3 au premier
@@ -201,19 +204,24 @@ dans son worktree.
   refactorant le moteur existant (A du §A) ; lois de lecture reprises (né en
   pause, cache/fade, boucle=fond, rail figé) ; résolveur audio promu (B3.4/5) ;
   migration `StoryDraftStore` ; garde de source anti-profondeur-de-type.
-- **Possède** : `MeeshySDK/Models/CanvasV3*.swift`, `MeeshyUI/Story/Canvas/*`,
-  `MeeshyUI/Story/ScenePlayer*.swift`, `StoryDraftStore`.
-- **Consomme** : fixtures §C4. **Produit** : l'API ScenePlayer + `MeeshyObject`
+- **Possède** : `MeeshySDK/Models/CanvasV3*.swift`, `MeeshySDK/Models/StoryModels.swift` (B7 — décodage du fil), `MeeshyUI/Story/Canvas/*`,
+  `MeeshyUI/Story/ScenePlayer*.swift`, `MeeshyUI/Story/Controls/AudioChipDisplay.swift` (B5), `StoryDraftStore`.
+- **Consomme** : fixtures §C4. **Produit** : l'API ScenePlayer + les types `CanvasV3` (`ObjectV3`…)
   (les signatures ci-dessus SONT le gel pour C/D/E).
 - **DoD** : scheme `MeeshySDK-Package` vert ; fixtures décodées et rendues ;
   gardes source vertes.
 
 ### Lot C — Composer chrome & intentions (apps/ios)
 - **Mission** : plateau (3 jetons) / scène / socle permanent ; `ComposerIntent`
-  8 portes et profils ; zone contextuelle (règle d'apparition + garde de source
-  anti-UI-morte) ; capture appui long ; collage `PasteButton` + « Mes stickers »
-  récents (store app-side, LRU 64 Mo sur `DiskCacheStore`) ; Étagère =
-  MyStoriesView + file + archive ; porte bloquante 426/plancher.
+  8 profils DÉFINIS, portes CÂBLÉES v1 = tray + feed (mood route vers son
+  composer, S3 ; `.reelTab` HORS v1 — aucun point d'entrée réels n'existe au
+  dépôt, les Réels sont un overlay sans bouton de création — rév. 3, revue
+  Fable n°5) ; garde anti-UI-morte PAR PROFIL (les capacités refusées ne sont
+  pas montées — la zone contextuelle elle-même reste celle du composer SDK,
+  « rien par défaut » complet = post-v1, rév. 3 n°10) ; capture appui long ;
+  collage `PasteButton` + « Mes stickers » récents (store app-side, LRU 64 Mo
+  sur `DiskCacheStore`) ; Étagère = MyStoriesView + onglets file & archive ;
+  porte bloquante 426/plancher.
 - **Possède** : `apps/ios/.../Composer/*` (nouveau), `MyStoriesView`, points
   d'entrée (tray/feed/réels/mood inchangé), `APIClient` header version (SDK —
   coordonné avec B, fichier distinct `Networking/`).
@@ -226,12 +234,14 @@ dans son worktree.
   dessin en un passe, keyframes AFFICHÉS (losanges) mais édités à l'inspecteur
   (S4) ; réutilise lanes 52 pt + graduation dérivée des libellés.
 - **Possède** : `MeeshyUI/Story/Timeline/*` (remplacement des 32 vues).
-- **Consomme** : `MeeshyObject` (B). **DoD** : SDK vert + harnais de rendu
+- **Consomme** : les types `CanvasV3` (B) via un adaptateur RUNTIME (le composer édite `StoryEffects`). **DoD** : SDK vert + harnais de rendu
   existant ; mesure chronométrée sur A11/équivalent AVANT merge (le risque n° 1
   de P15 se lève ici, pas en aval).
 
 ### Lot E — Viewers & cartes (apps/ios lecture)
-- **Mission** : chrome Story/Réel/carte Post sur ScenePlayer ; CanvasPlayer en
+- **Mission** : chrome Story/carte Post sur ScenePlayer ; Réels v1 = annonce du
+  fond + 🔇 (la bascule du pipeline vidéo des réels vers le ScenePlayer est
+  POST-v1 — rév. 3, revue Fable n°9) ; CanvasPlayer en
   carte (budget 1 lecteur actif, hauteur explicite — jamais self-sizing) ;
   annonce du fond (B3.3-5) + bouton 🔇 trois surfaces ; `↻` (déjà conforme iOS).
 - **Possède** : `StoryViewerView*`, `FeedPostCard`, `PostDetailView`,

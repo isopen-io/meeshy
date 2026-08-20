@@ -324,9 +324,14 @@ Mêmes cas que la rév. 1 du plan, avec DEUX assertions corrigées sur les clés
 - Modify: `services/gateway/src/services/posts/postReferences.ts`
 - Test: `services/gateway/src/__tests__/unit/routes/posts/storyEffectsWire.test.ts`
 
-- [ ] **Step 1: Tests rouges** — TROIS cas : (1) post STORY v1 en base ⇒ `GET /posts/:id` sert `storyEffects.v === 3` ; (2) post v3 ⇒ ressort `toEqual` inchangé ; (3) **repost d'une story v1 SANS références chargées** ⇒ `repostOf.storyEffects.v === 3` (c'est le chemin early-return de `withNestedRepostMentions:176`).
+- [ ] **Step 1: Tests rouges** — QUATRE cas : (1) drapeau ON : post STORY v1 en base ⇒ `GET /posts/:id` sert `storyEffects.v === 3` ; (2) drapeau ON : post v3 ⇒ ressort `toEqual` inchangé ; (3) drapeau ON : **repost d'une story v1 SANS références chargées** ⇒ `repostOf.storyEffects.v === 3` (chemin early-return de `withNestedRepostMentions:176`) ; (4) drapeau OFF (défaut) : le blob v1 ressort TEL QUEL — A est inerte en lecture tant que F n'est pas déployé.
 - [ ] **Step 2: Rouge.**
-- [ ] **Step 3: Intégrer** — dans `withMentions` (racine) ET dans `withNestedRepostMentions` **AVANT son early-return** :
+- [ ] **Step 3: Intégrer** — DERRIÈRE UN DRAPEAU (revue Fable n°13 : entre le
+  déploiement de A et celui de F, le web ne lit que les familles legacy — servir
+  v3 pendant cette fenêtre viderait les stories web ; le drapeau rend le
+  lockstep VRAI) : `CANVAS_V3_READ=1` (env, défaut OFF ⇒ A merge INERTE en
+  lecture ; l'activation se fait au déploiement de F). Dans `withMentions`
+  (racine) ET dans `withNestedRepostMentions` **AVANT son early-return** :
 
 ```typescript
 // withNestedRepostMentions — la conversion du blob précède le tri des
@@ -444,6 +449,9 @@ Un objet `sticker`/`media` du canvas dont `payload.mediaId`/`payload.postMediaId
 - [ ] `cd packages/shared && bun run build` — **vérifier que `dist/types/canvas-v3.js` existe** (le critère anti-crashloop).
 - [ ] `cd services/gateway && npx tsc --noEmit` — 0 erreur.
 - [ ] `bun run test:coverage` — toutes suites vertes, seuils tenus.
+- [ ] `CANVAS_V3_READ` est OFF par défaut — le merge de A ne change RIEN à la
+  lecture en production ; l'activation est un acte de déploiement, simultané à
+  la mise en ligne du lot F (le lockstep de R6, opérationnalisé).
 - [ ] Le lot merge PREMIER.
 
 ## Self-review (rév. 2)

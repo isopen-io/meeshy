@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Plancher **iOS 16** ; `PasteButton` (16+) est la SEULE lecture du presse-papiers (O9).
-- Fichiers POSSÉDÉS (règle worktree) : `apps/ios/Meeshy/Features/Main/Composer/*` (nouveau), `MyStoriesView.swift`, `RootView.swift`/`RootViewComponents.swift` (points d'entrée seulement), SDK : `Networking/APIClient.swift`, `MeeshyUI/Story/StoryComposerView+Canvas.swift` (geste d'appui long UNIQUEMENT — B possède `Canvas/`, D possède `Timeline/` : pas de chevauchement).
+- Fichiers POSSÉDÉS (règle worktree) : `apps/ios/Meeshy/Features/Main/Composer/*` (nouveau), `MyStoriesView.swift`, `StoryTrayActions.swift` (porte création), `RootView.swift`/`RootViewComponents.swift` (points d'entrée seulement), SDK : `Networking/APIClient.swift`, `MeeshyUI/Story/StoryComposerView+Canvas.swift` (geste d'appui long UNIQUEMENT — B possède `Canvas/`, D possède `Timeline/` : pas de chevauchement). AUCUN fichier Réels (revue Fable n°5-6 : l'entrée `.reelTab` est HORS v1, voir C1).
 - `project.pbxproj`/`project.yml` : CE lot merge DERNIER et régénère (`xcodegen generate`) — les fichiers de test neufs de C sont enregistrés là, jamais avant.
 - Toute UI neuve passe les 4 gardes du dépôt : catalogue 7 langues, clés mortes, RTL, `==` manuel sur les vues Equatable.
 - Consomme (gelé) : `MeeshyScenePlayer(document:mode:)` + `ScenePlayerConfig` (B4), `StoryEffects.canvasV3` (B7), contrat 426 racine + `GET /app/min-version` (A5/A6).
@@ -31,20 +31,32 @@
 - Produces (gelé pour C2/C3) :
 
 ```swift
+struct ComposerIntent: Equatable {
+    let origin: ComposerOrigin
+}
 enum ComposerOrigin: Equatable {
     case storyTray, feedComposer, reelTab, moodChip
     case repost(ofPostId: String), edit(postId: String), draft(id: String), share
 }
+enum ComposerFormat: Equatable { case story, post, reel, status }   // défini ICI — aucun PostFormat n'existe au dépôt
+enum ComposerOpening: Equatable { case cameraReady, keyboardOnContent, videoCameraReady, moodGrid, resume }
+enum LegacyComposer: Equatable { case statusComposer, repostComposer, storyEdit }
 struct ComposerProfile: Equatable {
-    let initialFormat: PostFormat           // .story/.post/.reel/.status
-    let showsSlides: Bool                   // R et M : false
-    let showsTimeline: Bool                 // M : false
-    let opensWith: ComposerOpening          // .cameraReady/.keyboardOnContent/.videoCameraReady/.moodGrid/...
+    let initialFormat: ComposerFormat
+    let showsSlides: Bool                   // reel et status : false
+    let showsTimeline: Bool                 // status : false
+    let opensWith: ComposerOpening
     let allowsCapture: Bool                 // repost : false
-    let routesToLegacy: LegacyComposer?     // .statusComposer (mood) / .repostComposer / .storyEdit — S3 & périmètre v1
+    let routesToLegacy: LegacyComposer?     // statusComposer (S3) / repostComposer / storyEdit — périmètre v1
 }
-enum ComposerProfile { static func profile(for origin: ComposerOrigin) -> ComposerProfile }
+extension ComposerProfile {
+    static func profile(for origin: ComposerOrigin) -> ComposerProfile
+}
 ```
+**Périmètre `.reelTab` (revue Fable n°5)** : le profil est DÉFINI (la table est
+complète) mais AUCUN point d'entrée réels n'existe au dépôt — les Réels sont un
+overlay lancé depuis le fil, sans bouton de création. Le câblage `.reelTab` est
+HORS v1 ; il attend qu'un point d'entrée produit existe (spec §D lot C amendée).
 
 - [ ] **Step 1: Tests rouges** — la table de P5, un cas par porte : `.storyTray → (.story, cameraReady, slides:true)` ; `.feedComposer → (.post, keyboardOnContent)` ; `.reelTab → (.reel, videoCameraReady, slides:false)` ; `.moodChip → routesToLegacy == .statusComposer` (S3 : rien ne change pour le mood) ; `.repost → allowsCapture == false, routesToLegacy == .repostComposer` ; `.edit → routesToLegacy == .storyEdit` ; `.draft/.share → (.post modifiable)`. Huit tests, noms `test_profile_<origin>_<attente>`.
 - [ ] **Step 2: Rouge** (types absents). **Step 3:** implémenter la table — un `switch` exhaustif, AUCUNE logique au-delà (les profils sont des données). **Step 4: Vert** (`-only-testing:MeeshyTests/ComposerIntentTests`). **Step 5: Commit.**
@@ -61,7 +73,7 @@ enum ComposerProfile { static func profile(for origin: ComposerOrigin) -> Compos
 **Interfaces:**
 - Produces : `MeeshyComposerHost(intent: ComposerIntent)` — l'unique porte visible. `PlateauTint { .noir, .indigoProfond, .violetProfond }` persisté `@AppStorage("composer.plateau.tint")` (O6).
 
-- [ ] **Step 1: Tests rouges** — (1) `PlateauTint` : 3 cas, hex exacts (`#000000`, `#1E1B4B` = indigo950 du système, `#2E1065`), défaut `.indigoProfond` ; (2) garde de source sur `MeeshyComposerHost` : contient `StoryComposerView(` (il ENVELOPPE l'atelier SDK — anti-réécriture), contient `MeeshyScenePlayer` avec `.preview` (l'œil du socle EST le lecteur), contient les trois zones dans l'ordre `audience`→`preview`→`publish` et AUCUN `hidden`/retrait conditionnel sur le socle (loi 5 : le socle ne bouge jamais).
+- [ ] **Step 1: Tests rouges** — (1) `PlateauTint` : 3 cas, hex exacts (`#000000`, `#1E1B4B` = indigo950 du système, `#2E1065`), défaut `.indigoProfond` ; (2) garde de source sur `MeeshyComposerHost` : contient `StoryComposerView(` (il ENVELOPPE l'atelier SDK — anti-réécriture), contient `MeeshyScenePlayer` avec `.preview` (l'œil du socle EST le lecteur), contient les trois zones dans l'ordre `audience`→`preview`→`publish` et AUCUN `hidden`/retrait conditionnel sur le socle (loi 5) ; (3) **garde anti-UI-morte par PROFIL** (spec §D lot C « zone contextuelle », revue Fable n°10) : le host conditionne les capacités au profil — `allowsCapture == false` ⇒ le chemin capture n'est PAS monté (assertion source sur le `if profile.allowsCapture`), même règle pour `showsSlides`/`showsTimeline`. La zone contextuelle elle-même RESTE celle du composer SDK existant (rien par défaut = post-v1, à l'écriture v3 native — déscope consigné).
 - [ ] **Step 2: Rouge.**
 - [ ] **Step 3: Implémenter** — structure du host :
 
@@ -88,7 +100,7 @@ struct MeeshyComposerHost: View {
     }
 }
 ```
-Le `draftDocument` de l'aperçu vient de `CanvasV3(migrating: viewModel.currentEffects)` (B2) — l'aperçu lit CE que la publication enverra.
+Le `draftDocument` de l'aperçu vient de `CanvasV3(migrating: viewModel.currentEffects)` (B2) — et depuis la règle d'encodage B7 (« encode = toujours v3 migré du runtime courant »), c'est PAR CONSTRUCTION ce que la publication enverra : même fonction, même instant.
 - [ ] **Step 4: Vert + les 4 gardes UI** (clés du socle dans le catalogue 7 langues ; RTL ; `==`). **Step 5: Commit.**
 
 ---
@@ -96,12 +108,11 @@ Le `draftDocument` de l'aperçu vient de `CanvasV3(migrating: viewModel.currentE
 ### Task C3: Les portes — chaque entrée fixe l'intention
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift` (porte `.storyTray` — l'état `StoryViewModel.showStoryComposer` reste le déclencheur, la présentation racine documentée y pointe le host)
+- Modify: `apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift` (porte `.storyTray` — l'état `StoryViewModel.showStoryComposer` reste le déclencheur, la présentation racine `:175` pointe le host)
 - Modify: `apps/ios/Meeshy/Features/Main/Views/RootViewComponents.swift` (porte `.feedComposer` : `showFullComposer`)
-- Modify: point d'entrée réels (bouton « + » de l'onglet) → `.reelTab`
 - Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerEntryGuardTests.swift` (source)
 
-- [ ] **Step 1: Tests rouges (source)** — les trois sites présentent `MeeshyComposerHost(intent:)` avec la BONNE origine ; le chip mood présente TOUJOURS `StatusComposerView` (S3, assertion négative : le fichier mood ne référence pas le host) ; plus AUCUN site ne présente `StoryComposerView` NU hors du host (grep source : seule occurrence autorisée = dans `MeeshyComposerHost.swift`).
+- [ ] **Step 1: Tests rouges (source)** — les DEUX portes câblées (tray, feed) présentent `MeeshyComposerHost(intent:)` avec la BONNE origine ; le chip mood présente TOUJOURS `StatusComposerView` (S3, assertion négative) ; et la garde de nudité RE-SCOPÉE (revue Fable n°3) : le site de CRÉATION (`StoryTrayActions.swift`) ne présente plus `StoryComposerView` nu — les DEUX sites de la liste blanche restent exemptés PAR NOM avec leur raison : `StoryTrayView.swift:28` (ÉDITION, périmètre v1 : ce lot route sans migrer) et `StoryViewerView.swift:915` (REPOST, fichier possédé par le lot E — y toucher violerait la règle worktree).
 - [ ] **Step 2: Rouge. Step 3:** câbler les trois portes. **Step 4: Vert + `meeshy.sh build`. Step 5: Commit.**
 
 ---
@@ -144,10 +155,18 @@ PasteButton(payloadType: UIImage.self) { images in
     guard let image = images.first else { return }
     let sticker = StickerImport.downsampled(image, maxSide: 512)   // ImageIO
     Task { await StickerLibraryStore.shared.add(sticker) }
-    onPaste(sticker)   // → fgMediaItem du composer (chemin existant)
+    onPaste(sticker)   // → le chemin de la CAPTURE (UIImage déjà décodé)
 }
 ```
-La grille « Mes stickers » (récents, appui long = retirer) alimente le même `onPaste`.
+**Point d'entrée réel (revue Fable n°14)** : `fgMediaItem` est un
+`PhotosPickerItem` (`StoryComposerView.swift:37`) — inconstructible depuis une
+`UIImage`. Le chemin qui accepte une `UIImage` décodée est celui de la CAPTURE
+(« la caméra livre un UIImage déjà décodé », `+Media.swift:462`) : `onPaste`
+appelle CETTE entrée du ViewModel — la lire au premier pas et figer son nom
+dans la garde. La grille « Mes stickers » (récents, appui long = retirer)
+alimente le même `onPaste`. RISQUE NOMMÉ : aucun précédent in-repo de
+`PasteButton`/`UIImage: Transferable` — si le payloadType coince au premier
+run, repli CONSIGNÉ : `UIPasteControl` (UIKit, représentable), même contrat O9.
 - [ ] **Step 4: Vert + gardes UI.** **Step 5: Commit.**
 
 ---
@@ -169,8 +188,14 @@ La grille « Mes stickers » (récents, appui long = retirer) alimente le même 
 - Modify: `apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift`
 - Test: `apps/ios/MeeshyTests/Unit/Composer/EtagereSectionsTests.swift`
 
-- [ ] **Step 1: Tests rouges** — le modèle de sections (pur) : `sections(published:drafts:queued:archived:)` rend l'ordre FILE → BROUILLONS → PUBLIÉES → ARCHIVE, masque les sections vides, et une entrée de file porte son état (`sending/retrying`). La source de la file est `StoryPublishQueue` EXISTANTE (lecture seule ici).
-- [ ] **Step 2-5:** rouge → sections branchées sur l'existant (Published/Drafts déjà rendus — vérifié à l'écran ; on AJOUTE, on ne déplace pas) → vert + gardes → commit.
+- [ ] **Step 1: Tests rouges** — `MyStoriesView` est à ONGLETS (`MyStoriesTab`,
+  `:92` — revue Fable n°20 : pas une liste ordonnée inter-sections). Le modèle
+  pur testé : l'enum s'étend à QUATRE onglets `file · brouillons · publiées ·
+  archive` (les deux existants INCHANGÉS), une entrée de file porte son état
+  (`sending/retrying`), l'onglet file disparaît quand la file est vide. Source :
+  `StoryPublishQueue` existante, lecture seule.
+- [ ] **Step 2-5:** rouge → deux cases ajoutées à l'enum + leurs vues (les
+  onglets Published/Drafts ne bougent pas d'une ligne) → vert + gardes → commit.
 
 ---
 

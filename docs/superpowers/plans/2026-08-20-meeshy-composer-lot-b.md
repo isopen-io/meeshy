@@ -209,7 +209,7 @@ migration vide silencieusement le second.
 ```swift
 public enum ScenePlayerMode: Equatable { case reader, preview, card }
 public struct ScenePlayerConfig: Equatable {
-    public let startsPaused: Bool     // preview/card : né en pause (invariant)
+    public let startsPaused: Bool     // TOUS les modes : né en pause (invariant du dépôt)
     public let isMuted: Bool          // card : muet (règle du fil)
     public let loops: Bool            // card : boucle
     public let showsChrome: Bool      // reader seul
@@ -223,7 +223,7 @@ public struct MeeshyScenePlayer: View {
 }
 ```
 
-- [ ] **Step 1: Test rouge sur la RÈGLE (pure)** — `ScenePlayerConfig(mode:)` : `.reader → startsPaused false… showsChrome true` ; `.preview → startsPaused true, muted false, chrome false` ; `.card → paused true, muted true, loops true, chrome false`. Trois assertions par mode. (Les invariants « né en pause » des modes non-reader sont ICI, testables sans monter de vue.)
+- [ ] **Step 1: Test rouge sur la RÈGLE (pure)** — `ScenePlayerConfig(mode:)` : `.reader → startsPaused TRUE, showsChrome true` (l'invariant « canvas né en pause » du dépôt vaut POUR LE READER : la lecture démarre par la commande du viewer — « 4 chemins relancent la lecture » — jamais à la naissance ; revue Fable n°4) ; `.preview → startsPaused true, muted false, chrome false` ; `.card → paused true, muted true, loops true, chrome false`. Trois assertions par mode : les TROIS modes naissent en pause.
 - [ ] **Step 2: Rouge.** 
 - [ ] **Step 3: Implémenter** — `MeeshyScenePlayer.body` = l'hôte canvas EXISTANT nourri par `StoryEffects(rendering: document, sceneIndex:)` (B2) + la config du mode. Chercher le représentable hôte actuel (celui que le reader monte — `StoryCanvasUIView` via son wrapper) et l'envelopper ; AUCUNE réécriture de rendu. Paramètres opaques uniquement (pureté SDK : l'accent arrive en hex, pas de ThemeManager).
 - [ ] **Step 4: Garde de source anti-profondeur** — test XCTest lisant le fichier (patron `strippingComments` du dépôt) : interdit `#available` en cascade et `func …<Content: View>` imbriqués dans ScenePlayer/* ; exige que `body` référence l'hôte UIKit existant (le nom trouvé au Step 3, littéral dans l'assertion).
@@ -276,9 +276,39 @@ Aucun lot ne possédait ce point. Il est ici : le miroir client du
 **Interfaces:**
 - Produces: `StoryEffects.canvasV3: CanvasV3?` — `nil` pour un blob legacy ; renseigné quand le fil a servi du v3 (le lot E s'en sert pour `MeeshyScenePlayer(document:)`). Les consommateurs LEGACY (viewer, export) continuent de lire les familles runtime, reconstruites par le pont B2 — AUCUN site d'appel ne change.
 
-- [ ] **Step 1: Tests rouges** — (1) décoder un JSON `StoryEffects` dont le contenu est la fixture `v1-legacy-full.v3.json` : `textObjects[0].text == "Salut"` (le pont a rempli le runtime) ET `canvasV3 != nil` avec `canvasV3?.sound?.source == .library(soundId: "snd_nuits_ete")` ; (2) décoder le blob v1 fixture : comportement INCHANGÉ, `canvasV3 == nil` ; (3) round-trip `Codable` d'un StoryEffects issu de v3 : réencode en **v3** (jamais en familles legacy — une story rééditée ne doit pas régresser de format).
+**La règle d'encodage (revue Fable n°1-2, BLOQUANTS)** : `encode(to:)` encode
+**TOUJOURS v3, migré du runtime COURANT** (`CanvasV3(migrating: self)`), jamais
+depuis un `canvasV3` mémorisé. Deux défauts mortels tombaient sinon : une
+composition NEUVE (canvasV3 nil) partait en familles legacy et prenait le 426 de
+SON PROPRE serveur (`PostService.createStory:479` encode `sanitizedEffects` tel
+quel — vérifié) ; et une story ÉDITÉE ré-encodait le document d'origine,
+perdant les éditions en silence (PUT + autosave brouillon). Avec la règle,
+TOUS les écrivains existants (création, édition, autosave `StoryDraftStore:349`)
+émettent v3 sans qu'aucun site d'appel ne change — et l'aperçu du socle (C2)
+lit exactement ce que la publication enverra, par construction.
+`canvasV3` reste un SNAPSHOT DE LECTURE (le document tel que le fil l'a servi,
+pour `MeeshyScenePlayer(document:)`) — jamais une source d'encodage.
+
+- [ ] **Step 1: Tests rouges** — (1) décoder un JSON `StoryEffects` dont le
+  contenu est la fixture `v1-legacy-full.v3.json` : `textObjects[0].text ==
+  "Salut"` (le pont a rempli le runtime) ET `canvasV3?.sound?.source ==
+  .library(soundId: "snd_nuits_ete")` ; (2) décoder le blob v1 fixture :
+  comportement INCHANGÉ, `canvasV3 == nil` ; (3) **une composition FRAÎCHE**
+  (`StoryEffects()` + un texte) encode un JSON qui porte `"v":3` — le cas du
+  426-par-son-propre-serveur ; (4) **mutation** : décoder v3, MUTER le runtime
+  (`textObjects[0].text = "Edité"`), réencoder ⇒ le JSON v3 porte « Edité »
+  (jamais le document d'origine) ; (5) round-trip v3 sans mutation : stable.
 - [ ] **Step 2: Rouge.**
-- [ ] **Step 3: Implémenter** — en tête de `StoryEffects.init(from decoder:)` : ajouter `case v` aux CodingKeys ; si `try c.decodeIfPresent(Int.self, forKey: .v) == 3`, décoder `CanvasV3(from: decoder)` (un `Decoder` Foundation accepte plusieurs containers), poser `self = StoryEffects(rendering: doc, sceneIndex: 0)` puis `self.canvasV3 = doc` et `return`. `encode(to:)` : si `canvasV3 != nil`, encoder LE DOCUMENT v3 tel quel et rien d'autre.
+- [ ] **Step 3: Implémenter** — décodage : en tête de
+  `StoryEffects.init(from decoder:)` (init custom vérifié, `:1721`), ajouter
+  `case v` aux CodingKeys ; si `decodeIfPresent(Int.self, forKey: .v) == 3`,
+  décoder `CanvasV3(from: decoder)` puis `self = StoryEffects(rendering: doc,
+  sceneIndex: 0)` ; `self.canvasV3 = doc` ; return. Encodage :
+  `CanvasV3(migrating: self).encode(to: encoder)` — inconditionnel.
+  RISQUE NOMMÉ (aucun précédent in-repo de double container sur un même
+  `Decoder`) : si Foundation refuse au premier run, repli CONSIGNÉ — décoder le
+  champ en `Data`/JSON brut au niveau des modèles PARENTS (APIPost/StoryItem)
+  et re-décoder en deux passes ; le test (1) reste le juge.
 - [ ] **Step 4: Vert.** — [ ] **Step 5: Commit.**
 
 ---

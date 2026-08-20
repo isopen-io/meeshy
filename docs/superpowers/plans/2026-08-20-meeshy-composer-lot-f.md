@@ -12,11 +12,11 @@
 
 ## Global Constraints
 
-- Fichiers POSSÉDÉS : `apps/web/components/v2/StoryViewer.tsx`, `apps/web/components/v2/CanvasV3Scene.tsx` (nouveau), `apps/web/components/v2/PostCard.tsx` (attribution + annonce), `apps/web/services/posts.service.ts` (+ leurs tests). Rien d'autre.
+- Fichiers POSSÉDÉS : `apps/web/components/v2/StoryViewer.tsx`, `apps/web/components/v2/CanvasV3Scene.tsx` (nouveau), `apps/web/components/v2/BackgroundSoundBadge.tsx` (nouveau, F3), `apps/web/components/v2/PostCard.tsx` (attribution + annonce), `apps/web/components/v2/StoryComposer.tsx` (F5 — l'appelant qui construit `storyEffects`, `:252`), `apps/web/services/posts.service.ts` (+ leurs tests). Rien d'autre.
 - Consomme (gelé) : `CanvasV3Schema`/types (`@meeshy/shared/types/canvas-v3` — même chemin d'import que `@meeshy/shared/types/post`, patron vérifié), fixtures §C4.
 - Gates : `cd apps/web && TZ=UTC bun run test` (714+ suites) — le `tsc` web n'est PAS un gate propre (piège documenté) : ne pas s'y fier, s'appuyer sur les tests.
 - Le web n'envoie PAS `X-App-Version` et ne reçoit jamais de 426 par l'en-tête (R6) — aucune porte de version côté web.
-- Dépendance : démarre après la Task A2 (fixtures) ; déploiement PRODUCTION en lockstep avec A.
+- Dépendance : démarre après la Task **A3** (le gel est clos à cette tâche — spec §C4, revue Fable n°15) ; déploiement PRODUCTION : voir F6 — le lockstep est opérationnalisé par le drapeau `CANVAS_V3_READ`.
 
 ---
 
@@ -110,7 +110,7 @@ La table des 18 styles reprend les valeurs du résolveur iOS (grasse/serif/mono/
 
 - [ ] `cd apps/web && TZ=UTC bun run test` — suites complètes vertes.
 - [ ] `cd packages/shared && bun run build` (l'import des types v3 compile).
-- [ ] Merge : après B, en parallèle de D/E (ordre spec A → B → F → D → E → C) ; **déploiement production synchronisé avec A** — c'est le lockstep qui remplace le plancher côté web.
+- [ ] Merge : après B, en parallèle de D/E (ordre spec A → B → F → D → E → C). **Le lockstep, opérationnalisé (revue Fable n°13)** : A merge avec `CANVAS_V3_READ` OFF (lecture inerte) ; quand F est EN PRODUCTION, le drapeau est armé — c'est l'acte de déploiement qui fait la simultanéité, pas une promesse de calendrier. Jamais de fenêtre où le web lirait des stories vides.
 
 ## Hors périmètre (dit une fois)
 
