@@ -1764,7 +1764,7 @@ public struct StoryEffects: Codable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        if try c.decodeIfPresent(Int.self, forKey: .v) == 3 {
+        if let mark = try c.decodeIfPresent(Int.self, forKey: .v), mark >= 3 {
             let document = try CanvasV3(from: decoder)
             self = StoryEffects(rendering: document, sceneIndex: 0)
             canvasV3 = document

@@ -74,4 +74,36 @@ struct CanvasV3WireDecodingTests {
         let reEncoded = try JSONDecoder().decode(CanvasV3.self, from: JSONEncoder().encode(effects))
         #expect(reEncoded == served)
     }
+
+    /// B8c (résilience, constat 10) : un `ObjectV3` malformé AU MILIEU d'une
+    /// scène ne fait tomber ni la scène ni le document — le décodage par
+    /// objet est lossy (miroir de `decodeLossyArrayIfPresent`, v1).
+    @Test func malformedObjectAmongMany_isSkipped_othersSurvive() throws {
+        let json = """
+        {"v":3,"scenes":[{"id":"s1","objects":[
+            {"id":"o1","kind":"text","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"content","z":0,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}},
+            {"id":"o2","kind":"text","anchor":{"t":"bogus"},"plane":"content","z":1,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}},
+            {"id":"o3","kind":"text","anchor":{"t":"free","x":0.5,"y":0.5},"plane":"content","z":2,"transform":{"scale":1,"rotation":0,"opacity":1},"payload":{}}
+        ]}]}
+        """.data(using: .utf8)!
+
+        let document = try JSONDecoder().decode(CanvasV3.self, from: json)
+        #expect(document.scenes.first?.objects.map(\.id) == ["o1", "o3"])
+
+        let effects = try JSONDecoder().decode(StoryEffects.self, from: json)
+        #expect(effects.canvasV3?.scenes.first?.objects.count == 2)
+    }
+
+    /// Constat 18 : un champ additif v3.x (`v: 4`) reste décodé par le pont —
+    /// jamais rétrogradé sur la branche legacy, qui rendrait un runtime VIDE.
+    @Test func futureMinorVersion_isStillDecoded_notBlanked() throws {
+        let raw = try fixture("v1-legacy-full.v3")
+        var obj = try #require(try JSONSerialization.jsonObject(with: raw) as? [String: Any])
+        obj["v"] = 4
+        let bumped = try JSONSerialization.data(withJSONObject: obj)
+
+        let effects = try JSONDecoder().decode(StoryEffects.self, from: bumped)
+        #expect(effects.textObjects.first?.text == "Salut")
+        #expect(effects.canvasV3?.v == 4)
+    }
 }

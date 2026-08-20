@@ -293,7 +293,15 @@ extension RepostContent: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
-        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        // Resilience: a single malformed `storyEffects` payload must NOT fail
+        // the whole decode (RepostContent/FeedPost are decoded inside strict
+        // arrays — one throwing entry would drop the entire feed page). Degrade
+        // this entry to no effects (miroir de PostModels.swift:290-293).
+        do {
+            storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        } catch {
+            storyEffects = nil
+        }
         media = try c.decodeIfPresent([FeedMedia].self, forKey: .media) ?? []
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         originalRepostOfId = try c.decodeIfPresent(String.self, forKey: .originalRepostOfId)
@@ -711,7 +719,15 @@ extension FeedPost: Codable {
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translations = try c.decodeIfPresent([String: PostTranslation].self, forKey: .translations)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
-        storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        // Resilience: a single malformed `storyEffects` payload must NOT fail
+        // the whole decode (RepostContent/FeedPost are decoded inside strict
+        // arrays — one throwing entry would drop the entire feed page). Degrade
+        // this entry to no effects (miroir de PostModels.swift:290-293).
+        do {
+            storyEffects = try c.decodeIfPresent(StoryEffects.self, forKey: .storyEffects)
+        } catch {
+            storyEffects = nil
+        }
         audioUrl = try c.decodeIfPresent(String.self, forKey: .audioUrl)
         location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         mentions = try c.decodeIfPresent([PostReference].self, forKey: .mentions)

@@ -70,6 +70,36 @@ public struct SceneV3: Equatable, Codable, Sendable {
         self.timelineDuration = timelineDuration
         self.thumbHash = thumbHash
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, objects, opening, closing, clipTransitions, timelineDuration, thumbHash
+    }
+
+    /// Décodage lossy PAR OBJET (miroir de `decodeLossyArrayIfPresent`,
+    /// `StoryModels.swift:1812`) : un `ObjectV3` malformé — un kind neuf mal
+    /// formé, une ancre au `t` inconnu — est sauté au lieu de faire tomber
+    /// tout le tableau `objects`, donc la scène, donc le document entier.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        objects = container.decodeLossyArrayIfPresent([ObjectV3].self, forKey: .objects) ?? []
+        opening = try container.decodeIfPresent([String: CanvasJSONValue].self, forKey: .opening)
+        closing = try container.decodeIfPresent([String: CanvasJSONValue].self, forKey: .closing)
+        clipTransitions = try container.decodeIfPresent([[String: CanvasJSONValue]].self, forKey: .clipTransitions)
+        timelineDuration = try container.decodeIfPresent(Double.self, forKey: .timelineDuration)
+        thumbHash = try container.decodeIfPresent(String.self, forKey: .thumbHash)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(objects, forKey: .objects)
+        try container.encodeIfPresent(opening, forKey: .opening)
+        try container.encodeIfPresent(closing, forKey: .closing)
+        try container.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
+        try container.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
+        try container.encodeIfPresent(thumbHash, forKey: .thumbHash)
+    }
 }
 
 public struct ObjectV3: Equatable, Codable, Sendable {
