@@ -308,6 +308,20 @@ export class ZmqMessageHandler extends EventEmitter {
       logger.info(`⏭️ Audio process déjà traité (taskId=${event.taskId}), ignoré`);
       return;
     }
+
+    // VALIDATION COMPLÈTE — AVANT de consommer le slot de déduplication, par
+    // symétrie stricte avec `handleTranslationCompleted`. Une frame sans
+    // `messageId` ne peut pas être persistée en aval (la transcription et les
+    // audios traduits n'ont aucun message auquel s'attacher) ; comme ZMQ SUB est
+    // at-least-once et qu'un retry du translator réutilise le même taskId,
+    // stamper le slot ici ferait dropper la re-livraison VALIDE par le guard
+    // `has(resultKey)` ci-dessus — le message resterait sans transcription ni
+    // audios. Seul un événement accepté consomme le slot.
+    if (!event.messageId) {
+      logger.error(`❌ Audio process sans messageId (taskId=${event.taskId})`);
+      return;
+    }
+
     this.processedResults.add(resultKey);
     if (this.processedResults.size > 1000) {
       const firstKey = this.processedResults.values().next().value;

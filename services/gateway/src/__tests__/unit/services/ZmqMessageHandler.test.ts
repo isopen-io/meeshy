@@ -405,6 +405,35 @@ describe('ZmqMessageHandler', () => {
       expect(emitted).toHaveLength(1);
     });
 
+    it('returns early (no emit) when event.messageId is falsy', async () => {
+      const event = makeAudioProcessCompletedEvent({ taskId: 'aud-no-mid', messageId: '' });
+      const emitted: unknown[] = [];
+      handler.on('audioProcessCompleted', (p) => emitted.push(p));
+
+      await handler.handleMessage(toBuffer(event));
+
+      expect(emitted).toHaveLength(0);
+      expect(handler.getStats().audioCompleted).toBe(0);
+    });
+
+    it('does not consume the dedup slot for a malformed frame — a valid redelivery under the same taskId still emits', async () => {
+      // ZMQ SUB is at-least-once: a retry from the translator reuses the same
+      // taskId. A first, incomplete delivery (messageId missing) must NOT stamp
+      // the dedup slot, otherwise the later VALID redelivery would be dropped and
+      // the message would never receive its transcription / translated audios.
+      const malformed = makeAudioProcessCompletedEvent({ taskId: 'aud-retry', messageId: '' });
+      const valid = makeAudioProcessCompletedEvent({ taskId: 'aud-retry', messageId: 'msg-retry' });
+      const emitted: any[] = [];
+      handler.on('audioProcessCompleted', (p) => emitted.push(p));
+
+      await handler.handleMessage(toBuffer(malformed));
+      await handler.handleMessage(toBuffer(valid));
+
+      expect(emitted).toHaveLength(1);
+      expect(emitted[0].messageId).toBe('msg-retry');
+      expect(handler.getStats().audioCompleted).toBe(1);
+    });
+
     it('emits newVoiceProfile as null when not present in event', async () => {
       const event = makeAudioProcessCompletedEvent({ taskId: 'aud-no-vp' });
       const emitted: any[] = [];
