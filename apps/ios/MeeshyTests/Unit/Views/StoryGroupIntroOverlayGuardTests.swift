@@ -3,7 +3,7 @@ import XCTest
 
 /// Source-analysis guards pour l'unification de la carte de transition
 /// inter-groupes : un SEUL rendu d'identité, `StoryAuthorIdentityCard`, partagé
-/// par l'interstitiel (`StoryGroupIntroOverlay`, durée nominale fixe 2,2 s) et par la
+/// par l'interstitiel (`StoryGroupIntroOverlay`, durée nominale fixe 500 ms) et par la
 /// face entrante du cube (`NeighborGroupCubeFace`, qui révèle l'interlude AU
 /// DOIGT depuis le 2026-07-25 — cf. le commentaire détaillé du test
 /// correspondant pour le renversement de la règle du 2026-07-14).
@@ -44,18 +44,19 @@ final class StoryGroupIntroOverlayGuardTests: XCTestCase {
         return String(source[declRange.upperBound..<closeRange.lowerBound])
     }
 
-    // MARK: - Durée fixe 2,2 s
+    // MARK: - Durée fixe 500 ms
 
-    /// Resserré de 2,6 à 2,2 s le 2026-07-26 (directive user). La garde porte
-    /// sur la constante NOMINALE uniquement : le voile met un peu plus longtemps
-    /// à disparaître pour de vrai (ses courbes de sortie sont préservées par
-    /// choix utilisateur, cf. la doc de `groupIntroDuration`), et aucun test ne
-    /// doit prétendre le contraire.
-    func test_groupIntroDuration_is2Point2Seconds() throws {
+    /// Resserré de 2,2 s à 500 ms le 2026-08-20 (directive user : « les
+    /// interludes doivent durer 500ms »). La garde porte sur la constante
+    /// NOMINALE uniquement : le voile met un peu plus longtemps à disparaître
+    /// pour de vrai (ses courbes de sortie sont préservées par choix
+    /// utilisateur, cf. la doc de `groupIntroDuration`), et aucun test ne doit
+    /// prétendre le contraire.
+    func test_groupIntroDuration_isHalfASecond() throws {
         let viewerSource = try source("Meeshy/Features/Main/Views/StoryViewerView.swift")
         XCTAssertTrue(
-            viewerSource.contains("static let groupIntroDuration: TimeInterval = 2.2"),
-            "groupIntroDuration doit être fixé à 2,2 s (directive user 2026-07-26)."
+            viewerSource.contains("static let groupIntroDuration: TimeInterval = 0.5"),
+            "groupIntroDuration doit être fixé à 500 ms (directive user 2026-08-20)."
         )
     }
 

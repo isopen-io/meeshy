@@ -145,3 +145,18 @@ découverts en vérification :
       purgées (aucune suite supprimée citée comme preuve vivante).
 - [x] Documentation : `docs/focal-retrait-ios-2026-08-18.md` +
       `apps/ios/decisions.md` (entrée 2026-08-18) + mémoire mise à jour.
+
+---
+
+# Lecteur de stories — directives user 2026-08-20 (session story-viewer)
+
+- [x] 1. Réaction : longpress-scrub du cœur supprimé — tap simple ouvre/ferme la barre d'émojis (la barre de langues garde son scrub)
+- [x] 2. Interlude : UNIQUEMENT au changement de groupe (lecture à la suite), plus jamais à la première ouverture du viewer
+- [x] 3. Interlude : durée nominale 500 ms (2,2 s avant) — recouvrement 200 ms conservé, slide révélé à 300 ms
+- [x] 4. Interlude : après « @ », le pseudo — `StoryGroup.username` portait `APIAuthor.name` (displayName) ; `applyIntroProfile` écrase désormais `intro.username` avec le vrai handle du profil
+- [x] 5. Prefetch : fenêtre d'entrée (`entryIndex` + 1 slide) des 2 groupes suivants pendant la lecture ; ouverture instantanée quand le média est local
+
+Note : le lecteur web fait DÉJÀ « clic = barre » (handleToggleReactionPicker) et n'a pas d'interlude — seul iOS divergeait, aucun changement web.
+
+## Review
+- Build app : vert (67 s). Tests ciblés : en cours (build-for-testing puis suites Story*).

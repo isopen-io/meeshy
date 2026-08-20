@@ -863,7 +863,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// est lue par la vue directement (`PresenceManager.shared`, singleton).
     struct StoryGroupIntro: Equatable {
         let userId: String
-        let username: String
+        /// À la construction (placeholder), reçoit `StoryGroup.username` — qui
+        /// porte en réalité `APIAuthor.name` (displayName ?? username). Le
+        /// profil résolu l'écrase avec le VRAI handle (`applyIntroProfile`) :
+        /// c'est lui que la carte rend après « @ » (directive user 2026-08-20).
+        var username: String
         var displayName: String?
         var bannerURL: String?
         var bannerThumbHash: String?
@@ -929,6 +933,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
         intro.displayName = user.displayName ?? (fullName.isEmpty ? nil : fullName)
+        // Le placeholder portait `StoryGroup.username` = `APIAuthor.name`
+        // (displayName ?? username) : la ligne « @… » de la carte affichait le
+        // display name. Le profil est la seule source qui connaît le handle.
+        intro.username = user.username
         intro.bannerURL = user.banner
         intro.bannerThumbHash = user.bannerThumbHash
     }

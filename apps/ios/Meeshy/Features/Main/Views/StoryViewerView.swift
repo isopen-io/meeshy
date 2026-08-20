@@ -121,28 +121,27 @@ struct StoryViewerView: View {
     /// l'interstitiel du switch s'affiche COMPLET (nom, bannière, mood) dès la
     /// première frame — plus d'enrichissement visible en second temps.
     @State var groupIntroCache: [String: StoryViewModel.StoryGroupIntro] = [:]
-    /// 2,2 s (directive user 2026-07-26, resserré depuis 2,6 s) : l'intro
-    /// présente l'identité sans ralentir l'enchaînement — assez pour lire nom
-    /// + présence.
+    /// 500 ms (directive user 2026-08-20, resserré depuis 2,2 s) : l'interlude
+    /// est un battement d'identité entre deux groupes, plus une pause.
     ///
     /// C'est la durée NOMINALE de l'interlude, pas l'instant où le voile a
     /// physiquement disparu. Deux raisons, toutes deux voulues :
     /// 1. RECOUVREMENT — l'apparition de la story entrante démarre
     ///    `StoryGroupIntroPolicy.revealOverlap` (200 ms) AVANT la fin annoncée,
-    ///    donc à t = 2,0 s : le slide monte PENDANT que le voile se retire, un
+    ///    donc à t = 300 ms : le slide monte PENDANT que le voile se retire, un
     ///    seul geste au lieu de deux temps collés bout à bout.
     /// 2. TRAÎNÉE ASSUMÉE — les courbes de sortie du voile
     ///    (`StoryGroupIntroPolicy.dismissAnimation`) sont préservées telles
     ///    quelles par choix utilisateur : le voile finit donc de s'effacer un
-    ///    peu après 2,2 s (~2,35-2,4 s, et le ressort n'a pas de fin bornée).
-    ///    Arbitrage, pas bug — on ne raccourcit pas ces courbes pour faire
-    ///    coller la constante.
+    ///    peu après 500 ms (le ressort n'a pas de fin bornée). Arbitrage, pas
+    ///    bug — on ne raccourcit pas ces courbes pour faire coller la
+    ///    constante.
     ///
     /// RENDU unique par ailleurs : l'interstitiel et la face du cube
     /// (`NeighborGroupCubeFace`, qui révèle ce même interlude au doigt depuis
     /// 2026-07-25) montrent tous deux `StoryAuthorIdentityCard` — une seule
     /// carte, deux surfaces.
-    static let groupIntroDuration: TimeInterval = 2.2
+    static let groupIntroDuration: TimeInterval = 0.5
     /// True once the visible slide's background media is fully usable (real
     /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
     /// and the centered loading spinner.
@@ -545,17 +544,13 @@ struct StoryViewerView: View {
             installPrefetchPipelineIfNeeded()
             startTimer()
             prefetchCurrentGroup()
-            // L'interlude ouvre AUSSI la première story de la session, pas
-            // seulement les changements de groupe (directive user 2026-07-25 :
-            // « maintenir les interludes partout »). L'appel vient après
-            // `startTimer()`, qui gèle la lecture tant que `showGroupIntro`.
-            presentGroupIntroIfNeeded()
-            // APRÈS l'interlude, jamais avant : `markCurrentViewed` se garde sur
-            // `showGroupIntro`, donc l'appeler plus haut (ordre historique) le
-            // laissait passer alors que l'écran d'identité allait recouvrir la
-            // story. Quand un interlude s'affiche, c'est `dismissGroupIntro`
-            // qui marquera au moment de la révélation ; sans interlude, cet
-            // appel marque tout de suite.
+            // PAS d'interlude à l'ouverture du viewer (directive user
+            // 2026-08-20 : « l'interlude s'affiche UNIQUEMENT lorsqu'on lit
+            // les groupes à la suite, non à la première ouverture ») — la
+            // story demandée s'affiche immédiatement, l'interstitiel ne vit
+            // que dans `adaptiveOnChange(of: currentGroupIndex)`. Sans
+            // interlude, `markCurrentViewed` marque tout de suite (sa garde
+            // `showGroupIntro` ne bloque que les switches de groupe).
             markCurrentViewed()
             // Pré-résolution des identités voisines dès l'ouverture : le
             // premier switch de groupe présente un interstitiel déjà complet.
@@ -673,7 +668,7 @@ struct StoryViewerView: View {
             transitionEngagement(to: currentStory)
         }
         // Interstitiel d'identité inter-groupes — au-dessus du canvas ET des
-        // contrôles (identité pleine pendant ~2,2 s, tap droite/double-tap =
+        // contrôles (identité pleine pendant ~500 ms, tap droite/double-tap =
         // skip, tap gauche = retour au groupe précédent).
         .overlay {
             if showGroupIntro, let intro = groupIntroData {
@@ -1961,14 +1956,16 @@ struct StoryViewerView: View {
 
 /// Quand présenter l'interstitiel d'identité d'un groupe.
 ///
-/// Règle simplifiée le 2026-07-25 sur directive user : l'interlude s'affiche
-/// PARTOUT — mes propres stories comprises, à l'ouverture du viewer comme à
-/// chaque changement de groupe, en avant comme en arrière. Les deux exceptions
-/// précédentes (« pas d'interlude sur mon propre groupe », « seulement au
-/// changement de groupe ») produisaient un comportement à trous, difficile à
-/// prévoir pour l'utilisateur.
+/// Règle resserrée le 2026-08-20 sur directive user : l'interlude s'affiche
+/// UNIQUEMENT quand on lit les groupes à la suite — à chaque changement de
+/// groupe, en avant comme en arrière, mes propres stories comprises — et
+/// JAMAIS à la première ouverture du viewer, qui doit être instantanée. Le
+/// site d'appel unique est donc `adaptiveOnChange(of: currentGroupIndex)` ;
+/// l'`onAppear` n'appelle plus `presentGroupIntroIfNeeded()`. La règle reste
+/// indépendante de l'identité de l'auteur (simplification 2026-07-25
+/// conservée : un filtre « est-ce moi ? » produisait un comportement à trous).
 ///
-/// Seules subsistent deux exclusions techniques : le mode preview du composer,
+/// S'y ajoutent deux exclusions techniques : le mode preview du composer,
 /// qui n'a pas d'identité à annoncer, et un groupe sans aucune story affichable.
 nonisolated enum StoryGroupIntroPolicy {
     static func shouldPresent(isPreviewMode: Bool, hasEntryStory: Bool) -> Bool {
@@ -2018,15 +2015,16 @@ nonisolated enum StoryGroupIntroPolicy {
 }
 
 extension StoryViewerView {
-    /// Présente l'interstitiel d'identité au passage au groupe d'une AUTRE
-    /// personne : placeholder immédiat (username/avatar du groupe, déjà en
-    /// main — cache-first), enrichi async (nom complet, bannière, mood) par
-    /// `resolveGroupIntro` PENDANT l'affichage. Dismiss auto au bout de
-    /// `groupIntroDuration` (2,2 s nominales — le retrait, et l'apparition du
-    /// slide qui l'accompagne, s'amorcent 200 ms plus tôt) ; le tap skippe.
-    /// Mes propres stories et le mode preview n'ont pas d'interstitiel.
-    /// Le gel de lecture passe par `shouldPauseTimer || showGroupIntro`
-    /// (timer + canvas + audio gelés en phase, reprise sans saut).
+    /// Présente l'interstitiel d'identité au CHANGEMENT de groupe (jamais à
+    /// l'ouverture du viewer — directive 2026-08-20) : placeholder immédiat
+    /// (username/avatar du groupe, déjà en main — cache-first), enrichi async
+    /// (nom complet, bannière, mood) par `resolveGroupIntro` PENDANT
+    /// l'affichage. Dismiss auto au bout de `groupIntroDuration` (500 ms
+    /// nominales — le retrait, et l'apparition du slide qui l'accompagne,
+    /// s'amorcent 200 ms plus tôt) ; le tap skippe. Le mode preview n'a pas
+    /// d'interstitiel. Le gel de lecture passe par `shouldPauseTimer ||
+    /// showGroupIntro` (timer + canvas + audio gelés en phase, reprise sans
+    /// saut).
     func presentGroupIntroIfNeeded() {
         // AVANT la garde : l'interlude du groupe QUITTÉ n'a plus lieu d'être, que
         // le groupe atteint en mérite un ou non. Annulée seulement après le
@@ -2073,7 +2071,7 @@ extension StoryViewerView {
                 groupIntroData = intro
             }
             // UN SEUL sommeil, écourté du recouvrement : le retrait du voile ET
-            // l'apparition du slide partent ensemble à 2,0 s. Surtout PAS deux
+            // l'apparition du slide partent ensemble à 300 ms. Surtout PAS deux
             // sommeils enchaînés (« armer, dormir 200 ms, animer ») — une
             // annulation entre les deux laisserait `contentOpacity` à 0, soit un
             // slide noir définitif.

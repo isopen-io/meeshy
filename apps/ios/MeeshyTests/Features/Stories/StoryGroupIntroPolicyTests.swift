@@ -1,11 +1,11 @@
 import XCTest
 @testable import Meeshy
 
-/// Directive user 2026-07-25 : « maintenir les interludes partout pour faire
-/// SIMPLE ». L'interstitiel d'identité s'affiche donc à l'ouverture du viewer
-/// comme à chaque changement de groupe, en avant comme en arrière, y compris sur
-/// mes propres stories — les deux exceptions précédentes produisaient un
-/// comportement à trous.
+/// Directive user 2026-08-20 : l'interstitiel d'identité s'affiche UNIQUEMENT
+/// quand on lit les groupes à la suite (changement de groupe, en avant comme en
+/// arrière, y compris sur mes propres stories) — JAMAIS à la première ouverture
+/// du viewer, qui doit être instantanée. La règle reste indépendante de
+/// l'identité de l'auteur (simplification 2026-07-25 conservée).
 final class StoryGroupIntroPolicyTests: XCTestCase {
 
     func test_shouldPresent_whenGroupHasAStory_isTrue() {
@@ -50,9 +50,10 @@ final class StoryGroupIntroPolicyTests: XCTestCase {
             "l'interlude ne doit plus être filtré sur l'identité de l'auteur")
     }
 
-    /// L'interlude doit aussi ouvrir la session, pas seulement les changements
-    /// de groupe : sinon la toute première story n'en a jamais.
-    func test_viewerPresentsIntroOnAppear() throws {
+    /// Directive user 2026-08-20 : l'ouverture du viewer est INSTANTANÉE —
+    /// aucun interlude à la première présentation. L'interlude ne vit QUE sur
+    /// les changements de groupe (`adaptiveOnChange(of: currentGroupIndex)`).
+    func test_viewerDoesNotPresentIntroOnAppear_butDoesOnGroupChange() throws {
         let source = try String(
             contentsOf: URL(fileURLWithPath: #filePath)
                 .deletingLastPathComponent()
@@ -67,9 +68,13 @@ final class StoryGroupIntroPolicyTests: XCTestCase {
             return XCTFail("structure du viewer inattendue")
         }
         let appearBlock = String(source[onAppear.lowerBound..<onChange.lowerBound])
+        let groupChangeBlock = String(source[onChange.lowerBound...].prefix(1200))
 
-        XCTAssertTrue(appearBlock.contains("presentGroupIntroIfNeeded()"),
-                      "l'ouverture du viewer doit présenter l'interlude")
+        XCTAssertFalse(appearBlock.contains("presentGroupIntroIfNeeded()"),
+                       "la première ouverture du viewer ne présente JAMAIS l'interlude " +
+                       "(directive 2026-08-20 : ouverture instantanée)")
+        XCTAssertTrue(groupChangeBlock.contains("presentGroupIntroIfNeeded()"),
+                      "le changement de groupe (lecture à la suite) doit présenter l'interlude")
     }
 }
 
@@ -150,13 +155,14 @@ final class StoryGroupIntroDismissAnimationTests: XCTestCase {
 
     // MARK: - Recouvrement révélation / sortie du voile
 
-    /// L'attente est écourtée du recouvrement : sur 2,2 s nominales, le retrait
-    /// du voile — et l'apparition du slide qui part avec lui — s'amorce à 2,0 s.
+    /// L'attente est écourtée du recouvrement : sur les 500 ms nominales
+    /// (directive user 2026-08-20), le retrait du voile — et l'apparition du
+    /// slide qui part avec lui — s'amorce à 300 ms.
     /// NB : on ne teste QUE l'instant de déclenchement. La disparition effective
     /// du voile est plus tardive (courbes de `dismissAnimation` préservées par
     /// choix utilisateur) et n'est volontairement épinglée nulle part.
     func test_holdDuration_advancesTheRevealByTheOverlap() {
-        XCTAssertEqual(StoryGroupIntroPolicy.holdDuration(total: 2.2), 2.0, accuracy: 0.0001)
+        XCTAssertEqual(StoryGroupIntroPolicy.holdDuration(total: 0.5), 0.3, accuracy: 0.0001)
     }
 
     /// Un interlude plus court que le recouvrement ne doit PAS produire une

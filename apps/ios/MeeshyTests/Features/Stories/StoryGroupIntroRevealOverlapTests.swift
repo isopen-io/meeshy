@@ -51,14 +51,14 @@ final class StoryGroupIntroRevealOverlapTests: XCTestCase {
     // MARK: - (b) Ancre métier
 
     /// Les deux valeurs décidées avec l'utilisateur, épinglées telles quelles :
-    /// sur les 2,2 s nominales de `StoryViewerView.groupIntroDuration`, le
-    /// retrait du voile — et l'apparition du slide qui part avec lui —
-    /// s'amorcent à 2,0 s.
-    func test_businessAnchor_overlapIs200ms_andHoldIs2Seconds() {
+    /// sur les 500 ms nominales de `StoryViewerView.groupIntroDuration`
+    /// (directive 2026-08-20), le retrait du voile — et l'apparition du slide
+    /// qui part avec lui — s'amorcent à 300 ms.
+    func test_businessAnchor_overlapIs200ms_andHoldIs300ms() {
         XCTAssertEqual(StoryGroupIntroPolicy.revealOverlap, 0.2, accuracy: 0.0001,
                        "Le recouvrement décidé est de 200 ms.")
-        XCTAssertEqual(StoryGroupIntroPolicy.holdDuration(total: 2.2), 2.0, accuracy: 0.0001,
-                       "2,2 s annoncées → révélation déclenchée à 2,0 s.")
+        XCTAssertEqual(StoryGroupIntroPolicy.holdDuration(total: 0.5), 0.3, accuracy: 0.0001,
+                       "500 ms annoncées → révélation déclenchée à 300 ms.")
     }
 
     // MARK: - (c) Jamais d'attente négative

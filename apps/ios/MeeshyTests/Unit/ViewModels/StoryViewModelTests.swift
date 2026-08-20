@@ -996,6 +996,24 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(intro.bannerThumbHash, "bh")
     }
 
+    /// Directive user 2026-08-20 : après « @ », l'interlude affiche le PSEUDO.
+    /// `StoryGroup.username` porte en réalité `APIAuthor.name` (displayName ??
+    /// username) — le profil résolu doit donc écraser `intro.username` avec le
+    /// vrai handle, sinon la carte rend « @Alice Martin ».
+    func test_resolveGroupIntro_usernameComesFromProfileHandle_notGroupDisplayName() async {
+        let group = makeIntroGroup(username: "Alice Martin")
+        sut.introProfileResolver = { _ in
+            MeeshyUser(id: group.id, username: "alice.m",
+                       firstName: "Alice", lastName: "Martin")
+        }
+        sut.introMoodFeedLoader = { [] }
+
+        let intro = await sut.resolveGroupIntro(for: group)
+
+        XCTAssertEqual(intro.username, "alice.m",
+                       "The @handle line must show the profile's username, never the group's display name")
+    }
+
     func test_resolveGroupIntro_mapsMoodFromStatusFeed() async {
         let group = makeIntroGroup()
         sut.introProfileResolver = { _ in MeeshyUser(id: group.id, username: "alice") }

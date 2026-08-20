@@ -186,11 +186,9 @@ struct StoryActionSidebarView: View {
     /// Transient scale of the heart button — driven only by `bounceHeart()`.
     @State private var heartScale: CGFloat = 1.0
 
-    @State private var scrubHoveredReactionIndex: Int?
     @State private var scrubHoveredLanguageIndex: Int?
     @State private var reactionTileFrames: [Int: CGRect] = [:]
     @State private var languageTileFrames: [Int: CGRect] = [:]
-    @State private var isScrubbingReactions = false
     @State private var isScrubbingLanguages = false
 
     /// Plan du rail FIGÉ à l'entrée du slide (voir `StoryActionRailPlan`).
@@ -237,72 +235,31 @@ struct StoryActionSidebarView: View {
         }
     }
 
-    /// Longpress (0.25 s) → la barre surgit → drag continu SANS lever le doigt :
-    /// survol des tuiles (×1.35 rebond via highlightedIndex), sélection au
-    /// relâchement. Posé en `.highPriorityGesture` sur le bouton : un tap court
-    /// (< 0.25 s) fait échouer le longpress et laisse le Button réagir
-    /// normalement ; un longpress capture la séquence — le canvas ne voit rien,
-    /// le swipe de navigation est donc structurellement neutralisé.
-    /// Ouvre la barre de réactions au moment où le longpress est ACQUIS.
-    /// Appelé des cas `.first(true)` ET `.second(true, _)` : en pratique
-    /// SwiftUI ne livre souvent JAMAIS `.first(true)` — la séquence saute
-    /// directement à `.second(true, nil)` quand le longpress aboutit
-    /// (prouvé au log HID 2026-08-11 : premier onChanged = `second(true,
-    /// nil)`). Ne traiter que `.first(true)` laissait la barre fermée à
-    /// jamais.
-    private func beginReactionScrubIfNeeded() {
-        guard !isScrubbingReactions else { return }
-        isScrubbingReactions = true
-        onScrubStateChanged(true)
+    /// Tap simple sur le cœur = la barre de réactions s'ouvre (directive user
+    /// 2026-08-20 : « enlever le longpress sur la réaction, simple touché
+    /// affiche la barre ») ; retap = fermeture. Plus AUCUN geste séquencé sur
+    /// ce bouton — la sélection se fait au tap sur une tuile de la barre
+    /// (`EmojiReactionPicker.onReact`).
+    private func toggleReactionBar() {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            showEmojiStrip = true
+            showEmojiStrip.toggle()
         }
     }
 
-    private var reactionScrubGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.25)
-            .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(StoryScrubSpace.name)))
-            .onChanged { value in
-                switch value {
-                case .first(true):
-                    beginReactionScrubIfNeeded()
-                case .second(true, let drag):
-                    beginReactionScrubIfNeeded()
-                    guard let drag else { return }
-                    let hovered = StoryScrubSelectionResolver.hoveredIndex(
-                        tileFrames: reactionTileFrames,
-                        point: drag.location,
-                        verticalTolerance: 16)
-                    if hovered != scrubHoveredReactionIndex { HapticFeedback.light() }
-                    scrubHoveredReactionIndex = hovered
-                default:
-                    break
-                }
-            }
-            .onEnded { _ in
-                let hovered = scrubHoveredReactionIndex
-                isScrubbingReactions = false
-                onScrubStateChanged(false)
-                scrubHoveredReactionIndex = nil
-                switch StoryScrubSelectionResolver.release(hoveredIndex: hovered, tileCount: quickEmojis.count) {
-                case .select(let index):
-                    triggerStoryReaction(quickEmojis[index], reactionTileFrames[index])
-                case .expand:
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        showEmojiStrip = false
-                        showFullEmojiPicker = true
-                    }
-                case .keepOpen:
-                    break // la barre reste ouverte en mode posé (tap possible)
-                }
-            }
-    }
-
-    /// Même mécanique pour la barre de langues (relâchement = sélection de la
-    /// langue ; « + » = liste complète ; hors barre = barre posée).
-    /// Même contrat que `beginReactionScrubIfNeeded` — cf. son commentaire :
-    /// le longpress est acquis à l'entrée en `.second`, pas en `.first(true)`.
+    /// Longpress (0.25 s) → la barre de langues surgit → drag continu SANS
+    /// lever le doigt : survol des tuiles (×1.35 rebond via highlightedIndex),
+    /// sélection au relâchement (« + » = liste complète ; hors barre = barre
+    /// posée). Posé en `.highPriorityGesture` sur le bouton : un tap court
+    /// (< 0.25 s) fait échouer le longpress et laisse le Button réagir
+    /// normalement ; un longpress capture la séquence — le canvas ne voit rien,
+    /// le swipe de navigation est donc structurellement neutralisé.
+    /// Ouvre la barre au moment où le longpress est ACQUIS. Appelé des cas
+    /// `.first(true)` ET `.second(true, _)` : en pratique SwiftUI ne livre
+    /// souvent JAMAIS `.first(true)` — la séquence saute directement à
+    /// `.second(true, nil)` quand le longpress aboutit (prouvé au log HID
+    /// 2026-08-11 : premier onChanged = `second(true, nil)`). Ne traiter que
+    /// `.first(true)` laissait la barre fermée à jamais.
     private func beginLanguageScrubIfNeeded() {
         guard !isScrubbingLanguages else { return }
         isScrubbingLanguages = true
@@ -445,14 +402,13 @@ struct StoryActionSidebarView: View {
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500,
                     accentOutline: storyCurrentUserHasReacted ? "heart" : nil,
-                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55"),
-                    handlesTapViaGesture: true
+                    accentOutlineColor: Color(hex: currentGroup?.avatarColor ?? "FF2D55")
                 ) {
-                    // Tap court = ❤️ immédiat (pattern Instagram/WhatsApp) —
-                    // la barre s'ouvre désormais au LONGPRESS (scrub).
-                    triggerStoryReaction("❤️", nil)
+                    // Tap simple = la barre s'ouvre (directive user 2026-08-20).
+                    // L'émoji part au tap sur une tuile de la barre — plus de
+                    // ❤️ envoyé à l'aveugle, plus de longpress.
+                    toggleReactionBar()
                 }
-                .highPriorityGesture(reactionScrubGesture)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(
@@ -462,8 +418,8 @@ struct StoryActionSidebarView: View {
                     }
                 )
                 .scaleEffect(heartScale)
-                // Bounce on every reaction that LANDS — via the quick strip,
-                // the scrub, or the full-screen picker — since heartBouncePulse
+                // Bounce on every reaction that LANDS — via the quick strip
+                // or the full-screen picker — since heartBouncePulse
                 // ticks at the flight's arrival (+Canvas.swift Layer 9), the
                 // single impact seam regardless of origin.
                 .adaptiveOnChange(of: heartBouncePulse) { _, _ in
@@ -489,7 +445,7 @@ struct StoryActionSidebarView: View {
                                     showFullEmojiPicker = true
                                 }
                             },
-                            highlightedIndex: scrubHoveredReactionIndex,
+                            highlightedIndex: nil,
                             scrubFrameSpace: StoryScrubSpace.name,
                             onTileFrames: { reactionTileFrames = $0 }
                         )

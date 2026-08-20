@@ -1329,18 +1329,24 @@ extension StoryViewerView {
         return prefetchAllMedia(for: stories[index])
     }
 
-    /// Précharge toutes les stories du groupe actuel + les 2 premières du groupe suivant.
+    /// Précharge toutes les stories du groupe actuel, puis la fenêtre d'ENTRÉE
+    /// des deux groupes suivants (directive user 2026-08-20 : « précharger les
+    /// groupes suivants » — une story déjà locale s'ouvre instantanément).
+    /// La fenêtre part de `entryIndex(of:)` — la slide sur laquelle un switch
+    /// forward atterrit réellement (première non-vue non-expirée) — et non des
+    /// 2 premières slides du groupe, souvent déjà vues donc jamais rejouées.
     func prefetchCurrentGroup() {
         guard currentGroupIndex >= 0, currentGroupIndex < groups.count else { return }
 
         groups[currentGroupIndex].stories.forEach { prefetchAllMedia(for: $0) }
 
-        let nextGroupIdx = currentGroupIndex + 1
-        if nextGroupIdx < groups.count {
-            let nextStories = groups[nextGroupIdx].stories
-            for i in 0..<min(2, nextStories.count) {
-                prefetchAllMedia(for: nextStories[i])
-            }
+        for nextGroupIdx in (currentGroupIndex + 1)...(currentGroupIndex + 2)
+        where nextGroupIdx < groups.count {
+            let nextGroup = groups[nextGroupIdx]
+            nextGroup.stories
+                .dropFirst(entryIndex(of: nextGroup))
+                .prefix(2)
+                .forEach { prefetchAllMedia(for: $0) }
         }
     }
 }

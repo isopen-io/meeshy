@@ -233,8 +233,10 @@ final class StoryViewerReactionFlowTests: XCTestCase {
 
     func test_scrubSites_optOutOfButtonTap_soTheSequencedGestureCanActivate() throws {
         let source = try sidebarSource()
-        for (site, gesture) in [("heart.fill", "reactionScrubGesture"),
-                                ("textformat.abc", "languageScrubGesture")] {
+        // Le cœur n'est PLUS un site scrub depuis le 2026-08-20 (directive
+        // user : « enlever le longpress sur la réaction, simple touché affiche
+        // la barre ») — seule la barre de langues garde le pattern longpress.
+        for (site, gesture) in [("textformat.abc", "languageScrubGesture")] {
             guard let iconPos = source.range(of: "icon: \"\(site)\""),
                   let gesturePos = source.range(of: ".highPriorityGesture(\(gesture))", range: iconPos.upperBound..<source.endIndex) else {
                 XCTFail("site \(site) ou son geste \(gesture) introuvable dans StoryViewerView+Sidebar.swift")
@@ -248,6 +250,46 @@ final class StoryViewerReactionFlowTests: XCTestCase {
         }
     }
 
+    // MARK: - Réaction : tap simple = barre (directive user 2026-08-20)
+
+    /// « Enlever le longpress sur la réaction de story, simple touché affiche
+    /// la barre. » Le cœur redevient un Button ordinaire dont le TAP ouvre la
+    /// barre de réactions — plus aucun geste séquencé longpress+drag dessus, et
+    /// plus de ❤️ envoyé à l'aveugle au tap.
+    func test_reactionButton_simpleTapOpensTheBar_noLongPressScrub() throws {
+        let source = try sidebarSource()
+
+        XCTAssertFalse(
+            source.contains("reactionScrubGesture"),
+            "le geste scrub de réaction doit avoir disparu de la sidebar — " +
+            "le tap simple ouvre la barre, il n'y a plus de longpress sur le cœur"
+        )
+
+        guard let togglePos = source.range(of: "func toggleReactionBar() {"),
+              let toggleEnd = source.range(of: "\n    }", range: togglePos.upperBound..<source.endIndex) else {
+            return XCTFail("toggleReactionBar introuvable — le tap du cœur doit avoir un pilote de barre dédié")
+        }
+        XCTAssertTrue(
+            String(source[togglePos.upperBound..<toggleEnd.lowerBound]).contains("showEmojiStrip.toggle()"),
+            "toggleReactionBar doit ouvrir/fermer la barre (showEmojiStrip.toggle())"
+        )
+
+        guard let iconPos = source.range(of: "icon: \"heart.fill\""),
+              let overlayPos = source.range(of: "EmojiReactionPicker(", range: iconPos.upperBound..<source.endIndex) else {
+            return XCTFail("site heart.fill ou son overlay EmojiReactionPicker introuvable")
+        }
+        let siteBlock = String(source[iconPos.lowerBound..<overlayPos.lowerBound])
+        XCTAssertTrue(
+            siteBlock.contains("toggleReactionBar()"),
+            "l'action de tap du cœur doit afficher la barre (toggleReactionBar), " +
+            "pas envoyer un ❤️ direct"
+        )
+        XCTAssertFalse(
+            siteBlock.contains("triggerStoryReaction(\"❤️\""),
+            "le tap sur le cœur n'envoie plus de ❤️ à l'aveugle : il affiche la barre"
+        )
+    }
+
     /// Second défaut empilé sous le premier : SwiftUI ne livre souvent JAMAIS
     /// `.first(true)` pour un `LongPressGesture.sequenced(DragGesture)` — le
     /// premier `onChanged` observé est `.second(true, nil)` (prouvé au log
@@ -256,8 +298,7 @@ final class StoryViewerReactionFlowTests: XCTestCase {
     /// d'ouverture AVANT son `guard let drag`.
     func test_scrubGestures_openTheBarOnSecondStageToo() throws {
         let source = try sidebarSource()
-        for (gestureVar, begin) in [("reactionScrubGesture", "beginReactionScrubIfNeeded()"),
-                                    ("languageScrubGesture", "beginLanguageScrubIfNeeded()")] {
+        for (gestureVar, begin) in [("languageScrubGesture", "beginLanguageScrubIfNeeded()")] {
             guard let gesturePos = source.range(of: "private var \(gestureVar)"),
                   let secondCase = source.range(of: "case .second(true, let drag):", range: gesturePos.upperBound..<source.endIndex),
                   let dragGuard = source.range(of: "guard let drag else { return }", range: secondCase.upperBound..<source.endIndex) else {
