@@ -21,12 +21,17 @@ private final class ShareStubURLProtocol: URLProtocol {
     nonisolated(unsafe) static var ficheURLToObserveAtFirstRequest: URL?
     nonisolated(unsafe) static var ficheExistedBeforeFirstRequest: Bool?
 
+    /// L'en-tête `Location` de la réponse 201 de création TUS — sans lui,
+    /// `ShareTusClient.upload` lève `.missingLocation` avant le premier PATCH.
+    nonisolated(unsafe) static var locationHeader: String?
+
     static func reset() {
         responses = []
         capturedBodies = []
         capturedURLs = []
         ficheURLToObserveAtFirstRequest = nil
         ficheExistedBeforeFirstRequest = nil
+        locationHeader = nil
     }
 
     override nonisolated class func canInit(with request: URLRequest) -> Bool { true }
@@ -67,10 +72,11 @@ private final class ShareStubURLProtocol: URLProtocol {
         let next = Self.responses.isEmpty
             ? (status: 500, body: Data())
             : Self.responses.removeFirst()
+        var fields = ["Content-Type": "application/json"]
+        if let location = Self.locationHeader { fields["Location"] = location }
         let response = HTTPURLResponse(
             url: request.url ?? URL(string: "https://stub.meeshy.test")!,
-            statusCode: next.status, httpVersion: nil,
-            headerFields: ["Content-Type": "application/json"]
+            statusCode: next.status, httpVersion: nil, headerFields: fields
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: next.body)
@@ -330,12 +336,20 @@ final class ShareSenderFanoutTests: XCTestCase {
     }
 
     /// Lot B-1 : un partage média ne poste rien, mais sa fiche part sur disque.
+    ///
+    /// `mediaRoot: nil` explicite : ce test vérifie le comportement SANS
+    /// upload (aucun attachment id encore connu), pas le seuil d'éligibilité
+    /// du lot B-2 (couvert par ses propres tests ci-dessous). Hébergé dans
+    /// Meeshy.app, `MeeshyTests` a un accès RÉEL à l'App Group — laisser le
+    /// défaut `ShareMediaStaging.mediaRootURL()` ferait tenter un upload
+    /// opportuniste bien réel pour ces 2 Ko sous le seuil, un couplage que ce
+    /// test ne doit pas porter.
     func test_send_aMediaShare_postsNothing_andDefersEverything() async throws {
         let dir = try makeDirectory()
 
         let result = await ShareSender.send(
             share: makeShare(media: [photo]), session: makeSession(),
-            urlSession: makeStubbedSession(), directory: dir)
+            urlSession: makeStubbedSession(), directory: dir, mediaRoot: nil)
 
         XCTAssertTrue(ShareStubURLProtocol.capturedBodies.isEmpty)
         XCTAssertEqual(result.targets.map(\.state), [.pending, .pending, .pending])
@@ -445,5 +459,167 @@ final class ShareSenderFanoutTests: XCTestCase {
         for id in ids {
             XCTAssertTrue(ClientMessageId.isValid(id), "« \(id) » envoyé au gateway est invalide")
         }
+    }
+
+    // MARK: - Lot B-2 : upload opportuniste
+
+    private func makeMediaRoot(bytes: Int, shareId: String = "cid_abc") throws -> URL {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-optimistic-\(UUID().uuidString)", isDirectory: true)
+        let shareDir = root.appendingPathComponent(shareId, isDirectory: true)
+        try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        try Data(repeating: 7, count: bytes).write(to: shareDir.appendingPathComponent("0.jpg"))
+        return root
+    }
+
+    /// Le chemin complet : TUS create → PATCH → un POST par cible.
+    /// `ShareStubURLProtocol` gagne au Step 1 un `locationHeader`, de sorte
+    /// que la réponse 201 de création porte bien son en-tête `Location` —
+    /// sans quoi le client lèverait `.missingLocation` avant le premier PATCH.
+    func test_send_underTheThreshold_uploadsThenPostsEveryTarget() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot(bytes: 1024)
+        ShareStubURLProtocol.locationHeader = "https://gate.meeshy.me/api/v1/uploads/abc"
+        ShareStubURLProtocol.responses = [
+            (201, Data()),                                          // TUS create
+            (200, Data("""
+            {"success":true,"data":{"attachment":{"id":"att1"}}}
+            """.utf8)),                                             // TUS patch final
+            (200, successBody(id: "srv1")),                          // cible 1
+            (200, successBody(id: "srv2")),                          // cible 2
+            (200, successBody(id: "srv3"))                           // cible 3
+        ]
+
+        let result = await ShareSender.send(
+            share: makeShare(media: [photo], conversationIds: ["conv1", "conv2", "conv3"]),
+            session: makeSession(), urlSession: makeStubbedSession(),
+            directory: dir, mediaRoot: mediaRoot)
+
+        XCTAssertEqual(result.uploadedAttachmentIds, ["att1"])
+        XCTAssertTrue(result.isFullyServed)
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent("cid_abc.json").path))
+    }
+
+    /// L'invariant produit tient aussi sur ce chemin : la première cible porte
+    /// les ids, les suivantes copient.
+    func test_send_underTheThreshold_followingTargetsCopyFromTheOrigin() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot(bytes: 1024)
+        ShareStubURLProtocol.locationHeader = "https://gate.meeshy.me/api/v1/uploads/abc"
+        ShareStubURLProtocol.responses = [
+            (201, Data()),
+            (200, Data("{\"success\":true,\"data\":{\"attachment\":{\"id\":\"att1\"}}}".utf8)),
+            (200, successBody(id: "srv1")),
+            (200, successBody(id: "srv2"))
+        ]
+
+        _ = await ShareSender.send(
+            share: makeShare(media: [photo], conversationIds: ["conv1", "conv2"]),
+            session: makeSession(), urlSession: makeStubbedSession(),
+            directory: dir, mediaRoot: mediaRoot)
+
+        // Les deux derniers corps capturés sont les POST de message.
+        let messages = ShareStubURLProtocol.capturedBodies.suffix(2)
+        let first = try decodeBody(messages.first ?? Data())
+        let second = try decodeBody(messages.last ?? Data())
+
+        XCTAssertEqual(first["attachmentIds"] as? [String], ["att1"])
+        XCTAssertNil(first["copyAttachmentsFromMessageId"])
+        XCTAssertEqual(second["copyAttachmentsFromMessageId"] as? String, "srv1")
+        XCTAssertNil(second["attachmentIds"],
+                     "réutiliser les ids les DÉPLACERAIT — le premier destinataire les perdrait")
+        XCTAssertNil(second["forwardedFromId"],
+                     "aucun destinataire ne doit voir « Transféré depuis … »")
+    }
+
+    /// Invariant 1 de la fiche : `uploadedAttachmentIds` est écrit AVANT le
+    /// premier POST. Une extension tuée entre les deux ne re-téléverserait pas
+    /// les octets — les orphelins ne sont balayés qu'à H+24.
+    func test_send_persistsUploadedAttachmentIds_beforePostingAnyTarget() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot(bytes: 1024)
+        ShareStubURLProtocol.locationHeader = "https://gate.meeshy.me/api/v1/uploads/abc"
+        ShareStubURLProtocol.responses = [
+            (201, Data()),
+            (200, Data("{\"success\":true,\"data\":{\"attachment\":{\"id\":\"att1\"}}}".utf8)),
+            (503, Data()), (503, Data()), (503, Data())
+        ]
+
+        _ = await ShareSender.send(
+            share: makeShare(media: [photo]), session: makeSession(),
+            urlSession: makeStubbedSession(), directory: dir, mediaRoot: mediaRoot)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let reread = try decoder.decode(
+            SharePendingShare.self,
+            from: try Data(contentsOf: dir.appendingPathComponent("cid_abc.json")))
+        XCTAssertEqual(reread.uploadedAttachmentIds, ["att1"])
+    }
+
+    /// Au-dessus du seuil : RIEN n'est tenté. Une feuille qui meurt au milieu
+    /// d'un upload de 400 Mo laisse un orphelin pour 24 h, sans rien accélérer.
+    func test_send_aboveTheThreshold_uploadsNothing() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot(bytes: 64)
+        let heavy = ShareStagedMedia(
+            relPath: "cid_abc/0.jpg", ext: "jpg", mime: "image/jpeg",
+            bytes: ShareLimits.opportunisticUploadBudgetBytes + 1)
+
+        let result = await ShareSender.send(
+            share: makeShare(media: [heavy]), session: makeSession(),
+            urlSession: makeStubbedSession(), directory: dir, mediaRoot: mediaRoot)
+
+        XCTAssertTrue(ShareStubURLProtocol.capturedBodies.isEmpty)
+        XCTAssertNil(result.uploadedAttachmentIds)
+        XCTAssertEqual(result.targets.map(\.state), [.pending, .pending, .pending])
+    }
+
+    /// Un upload en échec ne perd RIEN : la fiche reste, l'app reprend. C'est
+    /// ce qui rend ce lot annulable sans perte de fonction.
+    func test_send_whenTheUploadFails_fallsBackToTheDeferredPath() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot(bytes: 1024)
+        ShareStubURLProtocol.responses = [(500, Data())]
+
+        let result = await ShareSender.send(
+            share: makeShare(media: [photo]), session: makeSession(),
+            urlSession: makeStubbedSession(), directory: dir, mediaRoot: mediaRoot)
+
+        XCTAssertNil(result.uploadedAttachmentIds)
+        XCTAssertEqual(ShareSender.outcome(of: result), .deferred)
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent("cid_abc.json").path))
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: mediaRoot.appendingPathComponent("cid_abc/0.jpg").path),
+            "les octets restent : l'app les rejouera"
+        )
+    }
+
+    /// Un upload PARTIEL (2 fichiers, 1 seul abouti) ne doit pas produire un
+    /// message amputé : soit tout est prêt, soit rien ne part.
+    func test_send_whenOnlySomeFilesUpload_defersEverything() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot(bytes: 1024)
+        try Data(repeating: 8, count: 512).write(
+            to: mediaRoot.appendingPathComponent("cid_abc/1.png"))
+        let second = ShareStagedMedia(
+            relPath: "cid_abc/1.png", ext: "png", mime: "image/png", bytes: 512)
+        ShareStubURLProtocol.locationHeader = "https://gate.meeshy.me/api/v1/uploads/abc"
+        ShareStubURLProtocol.responses = [
+            (201, Data()),
+            (200, Data("{\"success\":true,\"data\":{\"attachment\":{\"id\":\"att1\"}}}".utf8)),
+            (500, Data())
+        ]
+
+        let result = await ShareSender.send(
+            share: makeShare(media: [photo, second]), session: makeSession(),
+            urlSession: makeStubbedSession(), directory: dir, mediaRoot: mediaRoot)
+
+        XCTAssertNil(result.uploadedAttachmentIds,
+                     "un jeu de pièces jointes INCOMPLET n'est pas un upload réussi")
+        XCTAssertEqual(result.targets.map(\.state), [.pending, .pending, .pending])
     }
 }

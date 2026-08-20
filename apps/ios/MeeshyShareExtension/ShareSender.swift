@@ -160,6 +160,45 @@ nonisolated extension ShareSender {
         share.isFullyServed ? .sent : .deferred
     }
 
+    /// Téléverse les octets DEPUIS l'extension, mais seulement si le partage
+    /// est assez petit pour que ça aboutisse avant la fermeture de la feuille.
+    ///
+    /// **Tout ou rien.** Un jeu de pièces jointes incomplet n'est pas un
+    /// upload réussi : envoyer un message amputé serait pire que de différer.
+    /// En cas d'échec, la fiche est inchangée et l'app rejouera avec le vrai
+    /// `TusUploadManager` du SDK, qui a checkpoint et reprise.
+    static func uploadIfEligible(
+        share: SharePendingShare,
+        session: ShareSession,
+        mediaRoot: URL?,
+        urlSession: URLSession
+    ) async -> SharePendingShare {
+        guard share.uploadedAttachmentIds == nil, !share.media.isEmpty,
+              let mediaRoot else { return share }
+
+        let total = share.media.reduce(0) { $0 + $1.bytes }
+        guard ShareLimits.isOpportunisticUploadEligible(
+            totalBytes: total, fileCount: share.media.count
+        ) else { return share }
+
+        var ids: [String] = []
+        for descriptor in share.media {
+            do {
+                ids.append(try await ShareTusClient.upload(
+                    file: mediaRoot.appendingPathComponent(descriptor.relPath),
+                    media: descriptor, session: session, urlSession: urlSession))
+            } catch {
+                ShareLog.logger.error(
+                    "Upload opportuniste abandonné (\(error.localizedDescription, privacy: .public)) — reprise par l'app")
+                return share
+            }
+        }
+
+        var updated = share
+        updated.uploadedAttachmentIds = ids
+        return updated
+    }
+
     /// Sert les cibles l'une après l'autre, en COMMITANT la fiche à chaque
     /// transition.
     ///
@@ -170,9 +209,18 @@ nonisolated extension ShareSender {
         share: SharePendingShare,
         session: ShareSession,
         urlSession: URLSession = .shared,
-        directory: URL? = SharePendingShare.directoryURL()
+        directory: URL? = SharePendingShare.directoryURL(),
+        mediaRoot: URL? = ShareMediaStaging.mediaRootURL()
     ) async -> SharePendingShare {
         var current = share
+        commit(current, in: directory)
+
+        // Lot B-2 — les petits partages partent avant la fermeture de la
+        // feuille. Les ids sont COMMITÉS avant le premier POST : une extension
+        // tuée entre les deux ne re-téléverserait pas les octets (les
+        // attachments orphelins ne sont balayés qu'à H+24).
+        current = await uploadIfEligible(
+            share: current, session: session, mediaRoot: mediaRoot, urlSession: urlSession)
         commit(current, in: directory)
 
         for index in current.targets.indices where current.targets[index].state != .sent {
