@@ -584,6 +584,50 @@ describe('Call Validation Schemas', () => {
         expect(result.data.segment).not.toHaveProperty('speakerDisplayName');
       }
     });
+
+    // Un segment temporel ne peut PAS finir avant d'avoir commencé — même
+    // classe d'invariant numérique que `nonnegative` sur les bornes, et
+    // parité stricte avec `transcriptionSegmentSchema` du package partagé
+    // (`packages/shared/utils/attachment-validators.ts`, durci itération 234).
+    // Ce schéma est le seul gate d'un chemin qui, en aval, PERSISTE le
+    // segment dans `Transcription`, l'envoie au traducteur (ZMQ) et le
+    // diffuse à TOUS les participants de l'appel — une borne temporelle
+    // renversée voyage jusque dans l'overlay de sous-titres et dans le
+    // replay `GET /calls/:callId/transcript`, sans indice d'origine.
+    it('rejects a segment whose endMs is strictly less than startMs', () => {
+      const result = socketTranscriptionSegmentSchema.safeParse({
+        callId: validMongoId,
+        segment: {
+          text: 'Hello world',
+          speakerId: 'user-1',
+          startMs: 1500,
+          endMs: 500,
+          isFinal: true,
+          confidence: 0.95,
+          language: 'en',
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    // Bornes ÉGALES admises — segment ponctuel (zero-duration marker),
+    // même classe de sanité numérique que `nonnegative` et miroir strict
+    // de la refine posée sur `transcriptionSegmentSchema` (itération 234).
+    it('accepts a zero-duration segment where endMs equals startMs', () => {
+      const result = socketTranscriptionSegmentSchema.safeParse({
+        callId: validMongoId,
+        segment: {
+          text: 'Hi',
+          speakerId: 'user-1',
+          startMs: 1500,
+          endMs: 1500,
+          isFinal: true,
+          confidence: 0.95,
+          language: 'en',
+        },
+      });
+      expect(result.success).toBe(true);
+    });
   });
 });
 

@@ -307,17 +307,31 @@ export const socketTranscriptionActiveSchema = z.object({
 
 export const socketTranscriptionSegmentSchema = z.object({
   callId: objectIdSchema,
-  segment: z.object({
-    id: z.string().min(1).max(64).optional(),
-    text: z.string().min(1).max(5000),
-    speakerId: z.string().min(1),
-    startMs: z.number().min(0),
-    endMs: z.number().min(0),
-    isFinal: z.boolean(),
-    confidence: z.number().min(0).max(1),
-    language: z.string().min(2).max(10),
-    capturedAtMs: z.number().int().min(0).optional()
-  })
+  segment: z
+    .object({
+      id: z.string().min(1).max(64).optional(),
+      text: z.string().min(1).max(5000),
+      speakerId: z.string().min(1),
+      startMs: z.number().min(0),
+      endMs: z.number().min(0),
+      isFinal: z.boolean(),
+      confidence: z.number().min(0).max(1),
+      language: z.string().min(2).max(10),
+      capturedAtMs: z.number().int().min(0).optional()
+    })
+    // Un segment temporel ne peut PAS finir avant d'avoir commencé — même
+    // classe de sanité numérique que `min(0)` sur les bornes. Bornes égales
+    // (segment ponctuel) admises. Miroir strict de `transcriptionSegmentSchema`
+    // dans `packages/shared/utils/attachment-validators.ts` (durci itération
+    // 234) : sans ce `refine`, un `startMs=1500, endMs=500` traverse le gate
+    // et se PROPAGE — ce chemin persiste le segment (`Transcription`), l'envoie
+    // au traducteur (ZMQ) et le diffuse à TOUS les participants de l'appel,
+    // qui l'inscrivent dans leur overlay de sous-titres puis dans le replay
+    // `GET /calls/:callId/transcript`, sans indice d'origine.
+    .refine((segment) => segment.endMs >= segment.startMs, {
+      message: 'endMs must be greater than or equal to startMs',
+      path: ['endMs'],
+    })
 });
 
 /**
