@@ -100,6 +100,8 @@ import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -163,6 +165,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import me.meeshy.sdk.composer.ComposerAffordances
 import me.meeshy.sdk.composer.SlowModeState
+import me.meeshy.sdk.model.ComposerLanguage
+import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
@@ -529,8 +533,10 @@ fun ChatScreen(
                     hasEffects = state.hasPendingEffects,
                     clipboardContent = state.clipboardContent,
                     sentiment = state.composerSentiment,
+                    languageCode = state.composerLanguageCode,
                     accentColor = accentColor,
                     onDraftChange = viewModel::onDraftChange,
+                    onPickLanguage = viewModel::onComposerLanguagePicked,
                     onSend = viewModel::send,
                     onOpenEffects = viewModel::openEffectsPicker,
                     onCancelEdit = viewModel::cancelEdit,
@@ -2585,8 +2591,10 @@ private fun ChatComposer(
     hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
     sentiment: SentimentLevel?,
+    languageCode: String,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
+    onPickLanguage: (String) -> Unit,
     onSend: () -> Unit,
     onOpenEffects: () -> Unit,
     onCancelEdit: () -> Unit,
@@ -2817,6 +2825,11 @@ private fun ChatComposer(
                                 tint = if (hasEffects) accentColor else MeeshyTheme.tokens.textSecondary,
                             )
                         }
+                        ComposerLanguagePill(
+                            languageCode = languageCode,
+                            accentColor = accentColor,
+                            onPick = onPickLanguage,
+                        )
                     }
                     OutlinedTextField(
                         value = draft,
@@ -2855,6 +2868,57 @@ private fun ChatComposer(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The composer's live language pill — the "smart context zone" affordance. Shows
+ * the flag of the resolved source language ([ChatUiState.composerLanguageCode]),
+ * following on-device detection as the viewer types, and opens a picker so they can
+ * override it (long messages lock the detection, exactly like iOS). Thin,
+ * coverage-exempt Compose glue over the pure [me.meeshy.sdk.model.ComposerLanguageState];
+ * the picker offers the curated [LanguageData.commonLanguageCodes] set.
+ */
+@Composable
+private fun ComposerLanguagePill(
+    languageCode: String,
+    accentColor: Color,
+    onPick: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val description = stringResource(R.string.chat_composer_language)
+    Box {
+        Text(
+            text = ComposerLanguage.flag(languageCode),
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshySpacing.sm))
+                .clickable { expanded = true }
+                .padding(horizontal = MeeshySpacing.sm, vertical = MeeshySpacing.xs)
+                .semantics { contentDescription = description },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            LanguageData.commonLanguageCodes.forEach { code ->
+                val info = LanguageData.info(code) ?: return@forEach
+                DropdownMenuItem(
+                    text = { Text("${info.flag}  ${info.nativeName}") },
+                    onClick = {
+                        expanded = false
+                        onPick(code)
+                    },
+                    trailingIcon = if (code == languageCode) {
+                        {
+                            Icon(
+                                imageVector = Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = accentColor,
+                            )
+                        }
+                    } else {
+                        null
+                    },
+                )
             }
         }
     }

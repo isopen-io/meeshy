@@ -40,6 +40,8 @@ import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ComposerLanguage
+import me.meeshy.sdk.model.ComposerLanguageState
 import me.meeshy.sdk.model.SentimentAnalyzer
 import me.meeshy.sdk.model.SentimentLevel
 import me.meeshy.sdk.media.MediaUploadItem
@@ -192,6 +194,14 @@ data class ChatUiState(
      * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
      * `ConversationScrollControlsView.isOffline`. */
     val isOffline: Boolean = false,
+    /** The composer's live source-language state — the "smart context zone" pill.
+     * Follows on-device detection as the viewer types, freezes at the 10-word lock,
+     * and honours a manual pick from the language picker ([ComposerLanguageState]). */
+    val composerLanguage: ComposerLanguageState = ComposerLanguageState(),
+    /** The fallback language the composer pill shows before any detection — the
+     * viewer's resolved content language, seeded once the session loads. Only the
+     * DISPLAY fallback; [ChatViewModel.send] resolves it authoritatively per user. */
+    val composerLanguageSeed: String = ComposerLanguage.DEFAULT,
 ) {
     val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
 
@@ -241,6 +251,12 @@ data class ChatUiState(
     val composerSentiment: SentimentLevel?
         get() = draft.takeIf { it.isNotBlank() }
             ?.let { SentimentLevel.from(SentimentAnalyzer.score(it)) }
+
+    /** The language code the composer pill shows — the live detection/override
+     * resolved against [composerLanguageSeed]. Drives the pill glyph and the picker's
+     * current selection; the same value (resolved per-user) stamps `originalLanguage`. */
+    val composerLanguageCode: String
+        get() = composerLanguage.display(composerLanguageSeed)
 
     /** Every currently-pinned message, newest-pin first — drives the pinned-messages sheet. */
     val pinnedMessages: List<PinnedMessageRow> get() = PinnedMessagesList.of(messages.map { it.toPinnable() })
@@ -475,6 +491,9 @@ class ChatViewModel @Inject constructor(
                         slowModeExempt = SlowModePolicy.isExemptRole(viewerRole),
                         encryptionMode = conversation.encryptionMode,
                         directPeerUserId = conversation.otherParticipantUserId(currentUserId),
+                        composerLanguageSeed = sessionRepository.currentUser.value
+                            ?.let { user -> LanguageResolver.resolveUserLanguage(user) }
+                            ?: it.composerLanguageSeed,
                     )
                 }
             }
@@ -828,6 +847,7 @@ class ChatViewModel @Inject constructor(
                     draft = "",
                     clipboardContent = detection.content,
                     mention = it.mention.onTextChange("", mentionRoster),
+                    composerLanguage = it.composerLanguage.onDraftChanged(""),
                 )
             }
             mentionSearchJob?.cancel()
@@ -835,7 +855,13 @@ class ChatViewModel @Inject constructor(
             persistDraft("", _state.value.replyingToMessageId)
             return
         }
-        _state.update { it.copy(draft = value, mention = it.mention.onTextChange(value, mentionRoster)) }
+        _state.update {
+            it.copy(
+                draft = value,
+                mention = it.mention.onTextChange(value, mentionRoster),
+                composerLanguage = it.composerLanguage.onDraftChanged(value),
+            )
+        }
         maybeSearchRemoteMentions(_state.value.mention.activeQuery)
         if (value.isBlank()) {
             stopTypingEmission()
@@ -848,6 +874,15 @@ class ChatViewModel @Inject constructor(
     /** Discards a captured large-paste attachment (the preview chip's remove button). */
     fun removeClipboardContent() {
         _state.update { it.copy(clipboardContent = null) }
+    }
+
+    /**
+     * Overrides the composer's source language from the language picker. The pick
+     * wins over live detection and freezes further analysis until the composer is
+     * cleared on send (iOS `TextAnalyzer.setLanguageOverride`).
+     */
+    fun onComposerLanguagePicked(code: String) {
+        _state.update { it.copy(composerLanguage = it.composerLanguage.withManualPick(code)) }
     }
 
     /**
@@ -989,6 +1024,11 @@ class ChatViewModel @Inject constructor(
         val user = sessionRepository.currentUser.value ?: return
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
+        // The composer pill is the authoritative source language: its live detection
+        // or the viewer's manual override, resolved against the user's content language.
+        val languageCode = _state.value.composerLanguage.display(
+            fallback = LanguageResolver.resolveUserLanguage(user),
+        )
         _state.update {
             it.copy(
                 draft = "",
@@ -998,6 +1038,7 @@ class ChatViewModel @Inject constructor(
                 pendingEffects = MessageEffects(),
                 isEffectsPickerOpen = false,
                 lastSelfSentAtMillis = sentAtMillis,
+                composerLanguage = ComposerLanguageState(),
             )
         }
         persistDraft("", replyToId = null)
@@ -1009,10 +1050,7 @@ class ChatViewModel @Inject constructor(
                     messageRepository.sendOptimistic(
                         conversationId = conversationId,
                         content = text,
-                        originalLanguage = ComposeLanguageDetector.detect(
-                            text,
-                            fallback = LanguageResolver.resolveUserLanguage(user),
-                        ),
+                        originalLanguage = languageCode,
                         sender = user,
                         replyToId = replyToId,
                         effects = effects,
@@ -1109,6 +1147,9 @@ class ChatViewModel @Inject constructor(
         val text = _state.value.draft.trim()
         val replyToId = _state.value.replyingToMessageId
         val effects = _state.value.pendingEffects
+        val languageCode = _state.value.composerLanguage.display(
+            fallback = LanguageResolver.resolveUserLanguage(user),
+        )
         stopTypingEmission()
         _state.update {
             it.copy(
@@ -1118,6 +1159,7 @@ class ChatViewModel @Inject constructor(
                 pendingEffects = MessageEffects(),
                 isEffectsPickerOpen = false,
                 lastSelfSentAtMillis = sentAtMillis,
+                composerLanguage = ComposerLanguageState(),
             )
         }
         persistDraft("", replyToId = null)
@@ -1129,10 +1171,7 @@ class ChatViewModel @Inject constructor(
                 messageRepository.sendOptimistic(
                     conversationId = conversationId,
                     content = text,
-                    originalLanguage = ComposeLanguageDetector.detect(
-                        text,
-                        fallback = LanguageResolver.resolveUserLanguage(user),
-                    ),
+                    originalLanguage = languageCode,
                     sender = user,
                     replyToId = replyToId,
                     effects = effects,
