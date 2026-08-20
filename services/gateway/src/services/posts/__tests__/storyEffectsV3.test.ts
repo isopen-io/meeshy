@@ -1,0 +1,132 @@
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
+import { isCanvasV3, convertV1ToV3, convertStoryEffectsForWire } from '../storyEffectsV3';
+
+const DIR = join(__dirname, '../../../../../../packages/shared/fixtures/canvas-v3');
+const v1 = (): Record<string, unknown> =>
+  JSON.parse(readFileSync(join(DIR, 'v1-legacy-full.json'), 'utf8')) as Record<string, unknown>;
+
+describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
+  it('detects v3 vs v1', () => {
+    expect(isCanvasV3({ v: 3, scenes: [] })).toBe(true);
+    expect(isCanvasV3(v1())).toBe(false);
+  });
+
+  it('converts the legacy fixture into a STRICTLY valid v3 document', () => {
+    const out = convertV1ToV3(v1());
+    expect(CanvasV3Schema.safeParse(out).success).toBe(true);
+  });
+
+  it('maps each family to its kind, on the right plane', () => {
+    const out = convertV1ToV3(v1());
+    const objs = out.scenes[0].objects;
+    const kinds = [...new Set(objs.map(o => `${o.kind}/${o.plane}`))].sort();
+    expect(kinds).toEqual(['audio/content', 'media/bg', 'place/fg', 'sticker/fg', 'text/fg'].sort());
+  });
+
+  it('text position/timing/keyframes survive (anchor free, timing kept)', () => {
+    const t = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'text');
+    expect(t?.anchor.t).toBe('free');
+    expect((t?.anchor as { x: number }).x).toBe(0.5);
+    expect(t?.timing?.start).toBe(1);
+    expect(t?.timing?.keyframes).toHaveLength(2);
+  });
+
+  it('background sound resolves PROVENANCE library from backgroundAudioId (musicTrackId deprecated ignored)', () => {
+    const out = convertV1ToV3(v1());
+    expect(out.sound).toEqual({
+      source: { t: 'library', soundId: 'snd_nuits_ete' },
+      volume: 0.6,
+      bounds: { start: 2, end: 17 },
+      transcriptions: [
+        { language: 'fr', content: 'Salut à tous' },
+        { language: 'en', content: 'Hi everyone' },
+      ],
+    });
+  });
+
+  it('legacy slideDuration is DROPPED, timelineDuration kept (authority rule)', () => {
+    const s = convertV1ToV3(v1()).scenes[0];
+    expect(s.timelineDuration).toBe(9.5);
+  });
+
+  it('transitions survive verbatim', () => {
+    const s = convertV1ToV3(v1()).scenes[0];
+    expect(s.opening).toEqual({ type: 'fade' });
+    expect(s.clipTransitions).toHaveLength(1);
+  });
+
+  it('unknown fields are IGNORED, never fatal (tolerance contract)', () => {
+    expect(() => convertV1ToV3(v1())).not.toThrow();
+  });
+
+  it('canvasAspectRatio disappears — the carrier keeps its own ratio (S8)', () => {
+    const out = convertV1ToV3(v1()) as unknown as Record<string, unknown>;
+    expect(JSON.stringify(out)).not.toContain('canvasAspectRatio');
+  });
+
+  it('place object travels whole into the payload', () => {
+    const p = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'place');
+    expect((p?.payload.place as { name?: string })?.name).toBe('Douala');
+  });
+
+  it('audio chip keeps its PostMedia reference', () => {
+    const a = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'audio');
+    expect(a?.payload.postMediaId).toBe('64b0000000000000000000aa');
+  });
+
+  it('text translations survive into the payload (Prisme par objet, C6)', () => {
+    const t = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'text');
+    expect((t?.payload.translations as Record<string, string>)?.en).toBe('Hi');
+    expect(t?.locale).toBe('fr');
+  });
+
+  it('voice transcriptions land on sound.transcriptions (karaoké, C7)', () => {
+    const out = convertV1ToV3(v1());
+    expect(out.sound?.transcriptions?.map(t => t.language)).toEqual(['fr', 'en']);
+  });
+
+  it('free anchors are remapped into the letterboxed carrier rect (U20)', () => {
+    // canvas v1 ratio 1.7777 (16:9) dans une scène 9:16 : h = (9/16)/(16/9) ≈ 0.3164,
+    // top = (1−h)/2 ≈ 0.3418 ; y' = top + y×h — un texte posé SUR le média y reste.
+    const t = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'text');
+    expect(t?.anchor.t).toBe('free');
+    expect((t?.anchor as { y: number }).y).toBeCloseTo(0.3418 + 0.2 * 0.3164, 2);
+  });
+
+  it('living sticker fields survive: baseSize, anchorPoint, fades (U21)', () => {
+    const st = convertV1ToV3(v1()).scenes[0].objects
+      .find(o => o.kind === 'sticker' && (o.payload as { emoji?: string }).emoji === '🔥');
+    expect(st?.payload.baseSize).toBe(300);
+    expect(st?.payload.fadeIn).toBe(0.3);
+  });
+
+  it('root filter lands on the bg media payload; root stickers become sticker objects (G3)', () => {
+    const objs = convertV1ToV3(v1()).scenes[0].objects;
+    const bg = objs.find(o => o.plane === 'bg');
+    expect(bg?.payload.filter).toBe('noir');
+    expect(bg?.payload.filterIntensity).toBe(0.8);
+    expect(objs.filter(o => o.kind === 'sticker').length).toBe(2);
+  });
+
+  it('root legacy text styling synthesizes a text object ONLY when textObjects is empty (G3)', () => {
+    const legacy = { textStyle: 'classic', textColor: '#FFFFFF', textPosition: 0.5 };
+    expect(convertV1ToV3({ ...legacy }, { content: 'Vieux texte' }).scenes[0].objects
+      .filter(o => o.kind === 'text').length).toBe(1);
+    expect(convertV1ToV3(v1()).scenes[0].objects
+      .filter(o => o.kind === 'text').length).toBe(1);
+  });
+
+  it('wire helper: v3 passes through UNTOUCHED, v1 converts, nullish passes', () => {
+    const v3doc = { v: 3, scenes: [{ id: 's1', objects: [] }] };
+    expect(convertStoryEffectsForWire(v3doc)).toBe(v3doc);
+    expect(isCanvasV3(convertStoryEffectsForWire(v1()))).toBe(true);
+    expect(convertStoryEffectsForWire(null)).toBeNull();
+  });
+
+  it('GOLDEN: output equals the frozen v1-legacy-full.v3.json byte-shape', () => {
+    const golden = JSON.parse(readFileSync(join(DIR, 'v1-legacy-full.v3.json'), 'utf8')) as unknown;
+    expect(convertV1ToV3(v1())).toEqual(golden);
+  });
+});

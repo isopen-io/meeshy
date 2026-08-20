@@ -1,0 +1,198 @@
+{
+  "v": 3,
+  "scenes": [
+    {
+      "id": "s1",
+      "objects": [
+        {
+          "id": "bg",
+          "kind": "media",
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "plane": "bg",
+          "z": 0,
+          "transform": {
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "payload": {
+            "background": "color:#1E1B4B",
+            "transform": {
+              "scale": 1.1,
+              "offsetX": 0.02,
+              "offsetY": 0,
+              "rotation": 0
+            },
+            "filter": "noir",
+            "filterIntensity": 0.8
+          }
+        },
+        {
+          "id": "t1",
+          "kind": "text",
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.40507397198627443
+          },
+          "plane": "fg",
+          "z": 3,
+          "transform": {
+            "scale": 1.2,
+            "rotation": 5,
+            "opacity": 1
+          },
+          "timing": {
+            "start": 1,
+            "keyframes": [
+              {
+                "time": 1,
+                "opacity": 0
+              },
+              {
+                "time": 2,
+                "opacity": 1
+              }
+            ]
+          },
+          "locale": "fr",
+          "payload": {
+            "text": "Salut",
+            "textStyle": "retro",
+            "translations": {
+              "en": "Hi"
+            }
+          }
+        },
+        {
+          "id": "st1",
+          "kind": "sticker",
+          "anchor": {
+            "t": "free",
+            "x": 0.8,
+            "y": 0.563284018675817
+          },
+          "plane": "fg",
+          "z": 4,
+          "transform": {
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "payload": {
+            "emoji": "🔥",
+            "baseSize": 300,
+            "anchorPoint": "center",
+            "fadeIn": 0.3,
+            "fadeOut": 0.5
+          }
+        },
+        {
+          "id": "sticker-3",
+          "kind": "sticker",
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5
+          },
+          "plane": "fg",
+          "z": 3,
+          "transform": {
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "payload": {
+            "emoji": "✨"
+          }
+        },
+        {
+          "id": "L1",
+          "kind": "place",
+          "anchor": {
+            "t": "free",
+            "x": 0.3,
+            "y": 0.6107470326826798
+          },
+          "plane": "fg",
+          "z": 5,
+          "transform": {
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "payload": {
+            "place": {
+              "id": "pl1",
+              "latitude": 4.0511,
+              "longitude": 9.7679,
+              "name": "Douala"
+            }
+          }
+        },
+        {
+          "id": "a1",
+          "kind": "audio",
+          "anchor": {
+            "t": "free",
+            "x": 0.5,
+            "y": 0.5316420093379086
+          },
+          "plane": "content",
+          "z": 5,
+          "transform": {
+            "scale": 1,
+            "rotation": 0,
+            "opacity": 1
+          },
+          "payload": {
+            "postMediaId": "64b0000000000000000000aa",
+            "mediaURL": null,
+            "placement": "canvas"
+          }
+        }
+      ],
+      "timelineDuration": 9.5,
+      "opening": {
+        "type": "fade"
+      },
+      "closing": {
+        "type": "slideUp"
+      },
+      "clipTransitions": [
+        {
+          "id": "ct1",
+          "fromClipId": "c1",
+          "toClipId": "c2",
+          "kind": "crossfade",
+          "duration": 0.4
+        }
+      ]
+    }
+  ],
+  "sound": {
+    "source": {
+      "t": "library",
+      "soundId": "snd_nuits_ete"
+    },
+    "volume": 0.6,
+    "bounds": {
+      "start": 2,
+      "end": 17
+    },
+    "transcriptions": [
+      {
+        "language": "fr",
+        "content": "Salut à tous"
+      },
+      {
+        "language": "en",
+        "content": "Hi everyone"
+      }
+    ]
+  }
+}
