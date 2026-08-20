@@ -1590,8 +1590,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       visibles + badge « +N » selon la largeur dispo, réservant la place du badge sauf pour le
       dernier tag et forçant au moins un tag ; le rendu `BoxWithConstraints` fournit la vraie
       largeur — mieux que le 200pt codé en dur d'iOS — et colore chaque chip via
-      `DynamicColorGenerator.colorForName` SSOT) ; ephemeral/expired/hidden/view-once/
-      activity-heat, presence/story-ring/mood pending
+      `DynamicColorGenerator.colorForName` SSOT) ; **activity-heat done** (slice
+      `conversation-row-activity-heat`, 2026-08-20 : port iOS `ThemedConversationRow.conversationHeat`
+      + `heatBackground` — pur `:feature:conversations` `ConversationActivityHeat.heat(...)`
+      calcule `0.40·recency + 0.35·unread + 0.15·members + 0.10·pinned` (muted → 0.05 floor
+      avec early return au sommet, unread saturé à 10, members saturé à 50, quatre buckets de
+      récence `<300s / <1h / <1j / <1sem / else` aux edges exclusifs `<`) + `gradient(heat,
+      isDark)` renvoie `HeatGradient(topOpacity, bottomOpacity=top·¼)` avec floor 0.03→0.13 en
+      dark et 0.02→0.10 en light ; `of(conversation, now)` lit les signaux via `resolvedPreferences`
+      + `ConversationRowTime.epochMillis` SSOT ; nouveau `ApiConversation.accentColorPalette()`
+      SSOT dans `:sdk-core/theme` expose la `ColorPalette` complète (primary+secondary+accent) —
+      `accentHex()` en devient le shortcut `primary` — et la ligne mémorise la palette une fois
+      via `remember(conversation)`, alimentant le brush `primary → secondary` de fond avec les
+      alphas calculés + l'`accent` de l'avatar + les deux labels teintés) ;
+      ephemeral/expired/hidden/view-once, presence/story-ring/mood pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,

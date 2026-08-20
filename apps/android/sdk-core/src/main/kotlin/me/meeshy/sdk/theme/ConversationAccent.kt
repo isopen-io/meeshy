@@ -5,8 +5,13 @@ import me.meeshy.sdk.model.ApiParticipant
 import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationContext
 import me.meeshy.sdk.theme.DynamicColorGenerator.ConversationType
 
-/** Deterministic accent color (hex) for a conversation, via the shared color algorithm. */
-fun ApiConversation.accentHex(): String {
+/**
+ * Deterministic accent [DynamicColorGenerator.ColorPalette] for a conversation, via the
+ * shared color algorithm — the single source of the row's `primary` avatar fill and its
+ * `secondary` heat-gradient tint (parity iOS `conversation.colorPalette`). Computed once
+ * so a row consuming both hues never re-derives the palette.
+ */
+fun ApiConversation.accentColorPalette(): DynamicColorGenerator.ColorPalette {
     val context = ConversationContext(
         name = title ?: identifier ?: id,
         type = when (type.lowercase()) {
@@ -18,8 +23,11 @@ fun ApiConversation.accentHex(): String {
         },
         memberCount = memberCount,
     )
-    return DynamicColorGenerator.colorFor(context).primary
+    return DynamicColorGenerator.colorFor(context)
 }
+
+/** Deterministic accent color (hex) for a conversation, via the shared color algorithm. */
+fun ApiConversation.accentHex(): String = accentColorPalette().primary
 
 private val directConversationTypes = setOf("direct", "dm")
 

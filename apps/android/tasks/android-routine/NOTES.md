@@ -5,6 +5,35 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## Slice `conversation-row-activity-heat` (2026-08-20)
+- **Expose the SSOT palette, not just the primary hex.** Twice now I've watched a caller reach for a
+  *pair* of accent hues (`primary` + `secondary`) that already lived on
+  `DynamicColorGenerator.ColorPalette` and rebuild it locally by calling `accentHex()` for the
+  primary and shrugging at the secondary. Fix, this slice: added `ApiConversation
+  .accentColorPalette()` in `:sdk-core/theme` alongside `accentHex()` (`accentHex()` is now its
+  `primary` shortcut). The row memoizes the palette once via `remember(conversation)` and reads both
+  hues from it — the two accent-tinted labels and the avatar `containerColor` also switch to the
+  memoized `primaryAccent`, so a hot row no longer parses the same hex 3× per render.
+- **Wrap iOS's `guard !isMuted else { return 0.05 }` short-circuit into the pure core.** A muted row
+  is pinned to the cold floor regardless of every other signal. Model it as a **single early return
+  at the top** of the function — not as a post-hoc `if (isMuted) 0.05 else max(0.05, sum)`, which
+  reads as "muted merely nudges the floor" and lets a very active muted thread bleed heat back in.
+  Guard: the "muted short-circuit" test emits maxed inputs (unread 100, members 100, pinned, most
+  recent) and asserts the result is *exactly* 0.05, not just "at most 0.05".
+- **Recency buckets use `<`, not `<=` — proved by the exact-boundary tests.** A first draft used
+  `<=` and would have hidden the transition at 300 / 3600 / 86_400 / 604_800 s under the previous
+  bucket. Four one-liner "exactly at the boundary drops to the next bucket" tests make the
+  arithmetic unambiguous and lock in parity with iOS's `seconds < 300` chain.
+- **`ConversationRowTime.epochMillis` is the SSOT for iOS's `lastMessageAt` — reuse it, don't
+  re-parse `lastMessage?.createdAt` inline.** It already threads the last-message → updatedAt →
+  createdAt cascade correctly (including a legitimate epoch-0 instant). The heat's `of(...)` reads
+  through it in one line and the whole cascade is covered by the pre-existing time-resolver tests.
+- **Layer the heat gradient *inside* `MeeshyGlassSurface`, not over it.** The glass surface already
+  applies the rounded clip + border; adding a `Modifier.background(heatBrush)` to the inner content
+  `Row` puts the tint above the glass fill but below its border — no shape mismatch, no double clip.
+  Attempting to put the brush on the surface's own modifier chain competed with its `.background(fill)`
+  and painted the tint underneath the (semi-opaque) glass fill instead of on top, muting it to zero.
+
 ## Slice `conversation-row-tag-chips` (2026-08-20)
 - **The Gradle 8.13 wrapper download 403s through this container's proxy, but the distribution
   itself is reachable.** `./gradlew` (and the direct `gradle` wrapper main) died with a 10 s

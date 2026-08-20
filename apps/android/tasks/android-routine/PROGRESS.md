@@ -2,6 +2,92 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation-row activity-heat gradient shipped** (slice
+> `conversation-row-activity-heat`, feature-parity's Conversations "rich last-message preview"
+> `[~]` — the `activity-heat` sub-gap that same line listed as pending alongside `tags` (just
+> merged) and `typing` (merged the same day)). **Step 0**: no open `claude/apps/android/*` PR to
+> merge first — the open-PR list held only parallel `claude/brave-archimedes-*` /
+> `claude/intelligent-noether-*` sessions, a Jules branch, and five Dependabot; none on an
+> android-routine slice branch, and the one Android Dependabot PR (#3139, `setup-android` bump)
+> is CI-infra, not this lane. Branched off `origin/main` (`4b6f6342`, the merge of my own
+> tag-chips slice #3232) as the literal first action. This container **reaches `dl.google.com`**
+> (curl → 200 albeit slow), so the full local gate ran here.
+>
+> **A first stale trip found by reading source, not the note**: `PROGRESS.md`'s "Next" line —
+> written before my tag-chips slice merged — recommended the *presence-dot wiring* as the next
+> follow-up, but a grep on `ConversationListScreen.kt` proved the wiring is already
+> **line 225 → 615** (`state.presenceStateFor(conversation, System.currentTimeMillis())` fed
+> into `MeeshyAvatar(presence = …)`), landed in the earlier `conversation-list-presence-dot`
+> slice. Lesson (already logged 2026-08-09): the "Next" hint is a hypothesis, not a fact —
+> grep the code before spending a run on it. Real remaining Conversations row-preview gaps
+> (`feature-parity.md:1594`): **activity-heat, presence/story-ring/mood** — of which the last
+> two are avatar affordances not represented in `ApiConversation` yet, so *activity-heat* — a
+> pure closed-form score off signals already on the wire — is the clean next slice.
+>
+> **The gap, re-proved by reading source**: iOS `ThemedConversationRow.conversationHeat`
+> (`ThemedConversationRow.swift:54-70`) computes a `[0,1]` heat as
+> `0.40·recency + 0.35·unread + 0.15·members + 0.10·pinned` (muted → floor `0.05`), and
+> `heatBackground` (lines 72-85) fades a `topLeading → bottomTrailing` linear gradient from
+> `accent.opacity(topOpacity)` to `accentSecondary.opacity(topOpacity*0.25)` — `topOpacity =
+> isDark ? (0.03 + heat*0.10) : (0.02 + heat*0.08)`. Android's row rendered a flat glass
+> surface — no heat tint, no gradient, so a hot group thread looked identical to a stale
+> archived one until the eye caught the unread badge.
+>
+> **Pure core (`:feature:conversations`)**: `ConversationActivityHeat` — framework-free (no
+> Compose, no Android time source), exposes `heat(lastActivityMillis, nowMillis, unreadCount,
+> memberCount, isPinned, isMuted): Double`, `of(conversation, nowMillis)` (reads signals off
+> the resolved preferences + `ConversationRowTime.epochMillis` SSOT — which already picks the
+> last-message → updatedAt → createdAt cascade iOS gets from `conversation.lastMessageAt`),
+> plus `gradient(heat, isDark): HeatGradient(topOpacity, bottomOpacity)`. Every constant —
+> weights, saturation caps (unread 10, members 50), the four recency bucket boundaries and
+> their exclusive `<` edges, the isDark floor/ramp coefficients — mirrors the iOS source.
+>
+> **Sibling SSOT** (`:sdk-core`): new `ApiConversation.accentColorPalette()` (`ConversationAccent.kt`)
+> exposes the full `DynamicColorGenerator.ColorPalette` (primary + secondary + accent), the
+> deterministic port of iOS `conversation.colorPalette`; the pre-existing `accentHex()` is now
+> its `primary` accessor. The row composes the palette once via `remember(conversation)` and
+> reads its two hues into `primaryAccent` / `secondaryAccent` (used by the heat gradient + the
+> avatar's `containerColor` + the two accent-tinted labels — 3 previous `hexColor(conversation
+> .accentHex())` calls collapsed to one memoized pair).
+>
+> **Wiring (Compose glue, coverage-exempt)**: the row's inner `Row` (inside `MeeshyGlassSurface`)
+> gains a `.background(Brush.linearGradient(listOf(primaryAccent.copy(alpha = topOpacity),
+> secondaryAccent.copy(alpha = bottomOpacity))))` under its existing content padding. The
+> heat brush layers under the glass fill and above the surface's rounded clip — so a cold row
+> stays a plain glass card (top α ≈ 0.02-0.03), and a hot row picks up a subtle
+> accent-secondary → accent tint whose intensity tracks the score. Zero new `.dp`, no shape
+> change, no clip conflict with the glass surface.
+>
+> **Tests**: +22 `ConversationActivityHeatTest` — muted short-circuit; 5 recency buckets
+> (isolated arms, exact-boundary drops for each of 300/3600/86_400/604_800 s proving the
+> exclusive `<` edges); null-last-activity → coldest; future-instant (clock skew) → hottest
+> bucket; unread proportional + cap at 10; members proportional + cap at 50; pinned 0.10;
+> maxed sum = 1.0 exact; realistic mixed blend; dark gradient floor 0.03→0.13 & light floor
+> 0.02→0.10; bottom = ¼ top invariant; `of(conversation, now)` reads every signal off a real
+> `ApiConversation`; `of` short-circuits muted; `of` treats a conversation with no parseable
+> timestamp as coldest recency. **+3 `ConversationAccentTest`** cover the new palette
+> (primary matches `accentHex`, secondary is distinct, deterministic across calls). Every
+> branch of `heat` and `gradient` exercised. The Compose Brush/`Modifier.background` threading
+> is thin glue, exempt per TDD-COVERAGE. **RED-proof (mutation)**: swapping `WEIGHT_UNREAD` from
+> `0.35` to `0.30` fails **exactly** 5 tests (max-sum, realistic-blend, `of`-reads-signals, and
+> the two unread arms) — 22 run, 5 failed, no collateral — restored after.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` green for the new suite, then
+> `assembleDebug` + `testDebugUnitTest` across all modules green locally. SDK bootstrapped as
+> `platforms;android-37.0` via newer cmdline-tools `13114758` on `--channel=3`, aliased to
+> `android-37`; Gradle 8.13 fetched via curl and invoked directly (the wrapper still 403s
+> through the proxy — same env quirk as the two prior slices). Reviewer PASS.
+>
+> **Next**: continue the Conversations row-preview line — the remaining sub-gaps at
+> `feature-parity.md:1594` are the message-body kinds (`ephemeral`/`expired`/`hidden`/
+> `view-once`) and avatar affordances (`story-ring`/`mood`). The message-body kinds each need
+> a wire field the current `ApiConversationLastMessage` doesn't carry yet (no `expiresAt`,
+> no `deletedAt`, no `viewOnce` flag), so the honest first move there is to widen the wire
+> DTO, not to guess kinds off the message-type string. Avatar `story-ring` is cleaner as a
+> single slice: `StoryTray` already exposes per-user unread-story state and `MeeshyAvatar`
+> already accepts `storyRing: StoryRingState`, just like it accepted `presence` before the
+> earlier wiring slice — the missing wire is a lookup key exposed on the row state.
+
 > On 2026-08-20 **Conversation-row tag chips shipped** (slice `conversation-row-tag-chips`,
 > feature-parity's Conversations "rich last-message preview" `[~]` — the `tags` sub-gap that line
 > listed as pending). **Step 0**: no open `claude/apps/android/*` PR to merge first — the open-PR
