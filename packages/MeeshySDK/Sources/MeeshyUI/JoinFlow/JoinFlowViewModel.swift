@@ -101,7 +101,7 @@ public final class JoinFlowViewModel: ObservableObject {
         isSubmitting = true
         errorMessage = nil
 
-        let birthdayString: String? = info.requireBirthday ? ISO8601DateFormatter().string(from: birthday) : nil
+        let birthdayString: String? = info.requireBirthday ? birthday.formatted(.iso8601) : nil
 
         let request = AnonymousJoinRequest(
             firstName: firstName.trimmingCharacters(in: .whitespaces),

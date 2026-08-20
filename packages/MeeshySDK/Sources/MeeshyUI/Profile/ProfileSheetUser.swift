@@ -146,22 +146,14 @@ extension ProfileSheetUser {
     public static func from(user: MeeshyUser, accentColor: String = "") -> ProfileSheetUser {
         let lastActive: Date? = {
             guard let str = user.lastActiveAt else { return nil }
-            let fmt = ISO8601DateFormatter()
-            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return fmt.date(from: str) ?? {
-                fmt.formatOptions = [.withInternetDateTime]
-                return fmt.date(from: str)
-            }()
+            return (try? Date(str, strategy: .iso8601.time(includingFractionalSeconds: true)))
+                ?? (try? Date(str, strategy: .iso8601))
         }()
 
         let createdAt: Date? = {
             guard let str = user.createdAt else { return nil }
-            let fmt = ISO8601DateFormatter()
-            fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            return fmt.date(from: str) ?? {
-                fmt.formatOptions = [.withInternetDateTime]
-                return fmt.date(from: str)
-            }()
+            return (try? Date(str, strategy: .iso8601.time(includingFractionalSeconds: true)))
+                ?? (try? Date(str, strategy: .iso8601))
         }()
 
         let resolvedDisplayName: String? = user.displayName ?? {
