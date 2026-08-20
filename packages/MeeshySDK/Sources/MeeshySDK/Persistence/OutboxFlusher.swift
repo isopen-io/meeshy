@@ -344,6 +344,36 @@ public actor OutboxFlusher {
         return false
     }
 
+    /// Task 10, round 1 de revue (Critical) — combien de temps une ligne
+    /// DÉPENDANTE (aujourd'hui : fan-out de partage,
+    /// `OutboxDeferralError.waitingForFanoutOrigin`) peut légitimement
+    /// ATTENDRE sa dépendance avant que l'exemption cesse de s'appliquer.
+    ///
+    /// Une exemption PERMANENTE — calquée telle quelle sur
+    /// `isSessionExpiry`/`isNetworkTransportError` — serait un AUTRE bug ici :
+    /// contrairement à une session (toujours rafraîchissable) ou un réseau
+    /// (toujours susceptible de revenir), la ligne ATTENDUE peut échouer
+    /// DÉFINITIVEMENT (rejet serveur permanent, épuisement de SON propre
+    /// budget). Sans borne, la ligne dépendante attendrait éternellement une
+    /// origine qui n'arrivera jamais — perte silencieuse déguisée en attente.
+    ///
+    /// Même ordre de grandeur que `staleInflightReclaimSeconds` : le pire cas
+    /// crédible d'upload TUS sur réseau lent, déjà établi comme référence
+    /// dans ce fichier. Passé ce délai, la ligne rejoint le chemin d'échec
+    /// normal (consomme `attempts`, `.exhausted` en ~30s de plus avec les
+    /// défauts prod) au lieu d'attendre indéfiniment.
+    public static let fanoutOriginWaitTimeout: TimeInterval = 30 * 60
+
+    /// Garde dédiée pour `OutboxDeferralError.waitingForFanoutOrigin` — même
+    /// forme que les trois gardes ci-dessus, bornée par
+    /// `fanoutOriginWaitTimeout` (voir sa doc pour le POURQUOI de la borne).
+    private static func isWaitingForFanoutOrigin(
+        _ error: Error, rowCreatedAt: Date, now: Date
+    ) -> Bool {
+        guard case OutboxDeferralError.waitingForFanoutOrigin = error else { return false }
+        return now.timeIntervalSince(rowCreatedAt) < fanoutOriginWaitTimeout
+    }
+
     /// Journal des tentatives (spec 2026-07-08 message-send-failure-retry-flow) :
     /// chaque dispatch d'un record `.sendMessage` — succès comme échec — ajoute
     /// une ligne `send_attempts` keyed sur le `clientMessageId`, pour la carte
@@ -414,7 +444,13 @@ public actor OutboxFlusher {
             // injoignable réseau-up) : defer sans consommer le budget, le
             // flush au reconnect (NWPath / socket reconnect / boot) rejoue
             // la file en FIFO — l'ordre de composition est préservé.
-            if Self.isSessionExpiry(error) || Self.isNetworkTransportError(error) {
+            //
+            // Task 10, round 1 — même exemption pour une ligne qui ATTEND sa
+            // dépendance (fan-out de partage), mais BORNÉE dans le temps
+            // (`isWaitingForFanoutOrigin`, contrairement aux deux
+            // précédentes) : voir la doc de `fanoutOriginWaitTimeout`.
+            if Self.isSessionExpiry(error) || Self.isNetworkTransportError(error)
+                || Self.isWaitingForFanoutOrigin(error, rowCreatedAt: current.createdAt, now: Date()) {
                 current.lastError = String(describing: error)
                 current.status = .pending
                 current.updatedAt = Date()

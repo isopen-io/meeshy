@@ -277,6 +277,94 @@ final class OutboxFlusherTests: XCTestCase {
             "An application-level URLError must keep consuming the budget")
     }
 
+    // MARK: - Task 10, round 1 de revue (Critical) — fan-out de partage : attendre sans consommer, mais PAS pour l'éternité
+
+    /// Garantie 1 — une ligne qui attend sa cible d'origine (pas encore
+    /// acquittée par le serveur) ne doit PAS voir son compteur de tentatives
+    /// monter : c'est le même budget que celui réservé aux VRAIS échecs, et
+    /// une attente légitime (upload photo/vidéo sur réseau médiocre —
+    /// dépasse couramment 30s) l'épuisait en ~30s avec les défauts prod
+    /// (2+4+8+16, maxAttempts=5) alors que rien, côté serveur, n'a jamais
+    /// refusé l'envoi.
+    func test_flush_waitingForFanoutOrigin_doesNotConsumeRetryBudget_norExhaust() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        // Ligne CRÉÉE À L'INSTANT — bien dans la fenêtre de
+        // `fanoutOriginWaitTimeout`. Déjà 4 échecs : une SEULE tentative
+        // normale de plus l'épuiserait.
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "fanout", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_fanout",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutboxDispatcher(
+                failure: OutboxDeferralError.waitingForFanoutOrigin(clientMessageId: "cid_origin"))
+        )
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "fanout")!
+        }
+        XCTAssertEqual(after.status, .pending,
+            "Une attente légitime ne doit pas exhaustée la ligne")
+        XCTAssertEqual(after.attempts, 4,
+            "Attendre l'origine ne doit PAS consommer le budget de tentatives")
+        XCTAssertGreaterThan(after.nextAttemptAt, now,
+            "La ligne est replanifiée, pas redispatchée en boucle serrée")
+    }
+
+    /// Garantie 2 — l'attente doit se TERMINER si l'origine échoue
+    /// définitivement (ou reste bloquée indéfiniment) : une exemption
+    /// PERMANENTE — calquée telle quelle sur
+    /// isSessionExpiry/isNetworkTransportError — serait un AUTRE bug ici.
+    /// Contrairement à une session (toujours rafraîchissable) ou un réseau
+    /// (toujours susceptible de revenir), l'origine attendue PEUT échouer
+    /// pour de bon. Passé `fanoutOriginWaitTimeout`, la ligne rejoint le
+    /// chemin d'échec normal : `attempts` recommence à monter, et elle finit
+    /// par `.exhausted` comme n'importe quel autre échec — remontée à
+    /// l'utilisateur, retryable manuellement, jamais perdue en silence ET
+    /// jamais bloquée pour l'éternité.
+    func test_flush_waitingForFanoutOrigin_pastTheTimeout_resumesConsumingBudget() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        let longAgo = now.addingTimeInterval(-OutboxFlusher.fanoutOriginWaitTimeout - 60)
+        // Déjà 4 échecs — une tentative normale de plus l'épuise, EXACTEMENT
+        // comme test_flush_marksExhausted_after5Attempts.
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "fanout-stale", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_fanout_stale",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: longAgo, updatedAt: longAgo, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(
+            pool: pool,
+            dispatcher: MockOutboxDispatcher(
+                failure: OutboxDeferralError.waitingForFanoutOrigin(clientMessageId: "cid_origin"))
+        )
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "fanout-stale")!
+        }
+        XCTAssertEqual(after.status, .exhausted,
+            "Passé la fenêtre d'attente, la ligne doit reprendre le chemin d'échec normal jusqu'à épuisement")
+        XCTAssertEqual(after.attempts, 5,
+            "Le budget recommence à être consommé une fois la fenêtre d'attente dépassée")
+    }
+
     func test_flush_marksExhausted_after5Attempts() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
