@@ -38,7 +38,7 @@ const SUPPORTED_CODES = new Set(
  * Miroir Swift à maintenir synchrone : `MeeshyUser.normalizeLanguageCode`
  * (packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift, `iso639ReductionMap`).
  */
-const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
+export const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
   afr: 'af', amh: 'am', ara: 'ar', ben: 'bn', bul: 'bg',
   ces: 'cs', cze: 'cs', dan: 'da', deu: 'de', ger: 'de',
   ell: 'el', gre: 'el', eng: 'en', ewe: 'ee', fas: 'fa', per: 'fa',
@@ -70,7 +70,7 @@ const ISO_639_3_TO_1: Readonly<Record<string, string>> = {
  * Miroir Swift à maintenir synchrone : `MeeshyUser.normalizeLanguageCode`
  * (packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift, `iso639ReductionMap`).
  */
-const LEGACY_ISO_639_1: Readonly<Record<string, string>> = {
+export const LEGACY_ISO_639_1: Readonly<Record<string, string>> = {
   iw: 'he', in: 'id', ji: 'yi',
 };
 

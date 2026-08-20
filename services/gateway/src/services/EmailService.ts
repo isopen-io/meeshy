@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { replaceLiteral } from '../utils/string-replace';
 
 // Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
@@ -1195,7 +1196,7 @@ export class EmailService {
 
   async sendFriendRequestEmail(data: FriendRequestEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const intro = t.friendRequest.intro.replace('{sender}', data.senderName);
+    const intro = replaceLiteral(t.friendRequest.intro, '{sender}', data.senderName);
     const avatarHtml = data.senderAvatar
       ? `<img src="${data.senderAvatar}" alt="${this.escapeHtml(data.senderName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';
@@ -1208,7 +1209,7 @@ export class EmailService {
 
   async sendFriendAcceptedEmail(data: FriendAcceptedEmailData): Promise<EmailResult> {
     const t = this.getTranslations(data.language);
-    const intro = t.friendAccepted.intro.replace('{accepter}', data.accepterName);
+    const intro = replaceLiteral(t.friendAccepted.intro, '{accepter}', data.accepterName);
     const avatarHtml = data.accepterAvatar
       ? `<img src="${data.accepterAvatar}" alt="${this.escapeHtml(data.accepterName)}" style="width:64px;height:64px;border-radius:50%;margin-bottom:10px" onerror="this.style.display='none'">`
       : '';

@@ -173,7 +173,7 @@ public struct AudienceUserPickerView: View {
     private var header: some View {
         ZStack {
             Text(title)
-                .font(.system(size: 16, weight: .semibold))
+                .font(MeeshyFont.relative(16, weight: .semibold))
                 .lineLimit(1)
             HStack {
                 Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
@@ -185,13 +185,13 @@ public struct AudienceUserPickerView: View {
                 .fontWeight(.semibold)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 18)
-        .padding(.bottom, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
             TextField(String(localized: "audience.picker.search", defaultValue: "Rechercher…", bundle: .module), text: $vm.query)
                 .autocorrectionDisabled()
@@ -204,16 +204,16 @@ public struct AudienceUserPickerView: View {
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(.secondarySystemBackground)))
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(Color(.secondarySystemBackground)))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
         .adaptiveOnChange(of: vm.query) { _, _ in
             searchTask?.cancel()
             searchTask = Task {
-                try? await Task.sleep(nanoseconds: 350_000_000)
+                try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
                 await vm.performSearch()
             }
@@ -222,25 +222,25 @@ public struct AudienceUserPickerView: View {
 
     private var selectedChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(vm.selectedUsers) { user in
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(user.displayName ?? user.username)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .lineLimit(1)
                         Button { vm.toggle(user) } label: {
-                            Image(systemName: "xmark.circle.fill").font(.system(size: 13))
+                            Image(systemName: "xmark.circle.fill").font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         }
                         .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(Capsule().fill(Color(.tertiarySystemBackground)))
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     private var resultsList: some View {
@@ -256,23 +256,23 @@ public struct AudienceUserPickerView: View {
     }
 
     private func row(_ user: UserSearchResult) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(name: user.displayName ?? user.username, context: .userListItem)
             VStack(alignment: .leading, spacing: 2) {
                 Text(user.displayName ?? user.username)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                     .lineLimit(1)
                 Text("@\(user.username)")
-                    .font(.system(size: 12))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             Spacer()
             Image(systemName: vm.isSelected(user.id) ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 20))
+                .font(MeeshyFont.relative(20))
                 .foregroundStyle(vm.isSelected(user.id) ? Color.accentColor : Color.secondary)
         }
         .contentShape(Rectangle())
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 }

@@ -246,9 +246,6 @@ struct ForwardPickerSheet: View {
             accentHex: accentColor,
             isDark: isDark,
             state: sendState.state(of: target.id),
-            a11yName: target.title.isEmpty
-                ? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)
-                : target.title,
             onTap: {
                 // Tap de LIGNE = sélection (no-op sur une cible servie/en cours).
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -394,9 +391,6 @@ struct ForwardPickerRow: View, Equatable {
     let accentHex: String
     let isDark: Bool
     let state: ForwardPickerModel.TargetState
-    /// Nom prononcé par VoiceOver dans « Transférer à … » — déjà replié sur
-    /// son libellé de repli par le parent.
-    let a11yName: String
     let onTap: () -> Void
     let onSend: () -> Void
     let onMoodTap: ((CGPoint) -> Void)?
@@ -415,7 +409,23 @@ struct ForwardPickerRow: View, Equatable {
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
             && lhs.state == rhs.state
-            && lhs.a11yName == rhs.a11yName
+    }
+
+    /// Le nom PRONONCÉ est celui qui est AFFICHÉ (`name`), jamais une autre
+    /// source : c'est le contrat « Label in Name » (WCAG 2.5.3), qui fait de
+    /// « Transférer à Maman » une commande Voice Control valide.
+    ///
+    /// Ces deux libellés se composaient auparavant depuis une entrée distincte
+    /// repliée sur « cette conversation ». Toutes les conversations directes —
+    /// l'essentiel d'un picker de transfert — y tombaient : leurs boutons
+    /// d'envoi annonçaient TOUS la même chose, et VoiceOver ne permettait plus
+    /// de distinguer la cible qu'on s'apprêtait à servir.
+    static func sendAccessibilityLabel(name: String) -> String {
+        String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), name)
+    }
+
+    static func retrySendAccessibilityLabel(name: String) -> String {
+        String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), name)
     }
 
     var body: some View {
@@ -504,14 +514,14 @@ struct ForwardPickerRow: View, Equatable {
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(MeeshyColors.error)
             }
-            .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), a11yName))
+            .accessibilityLabel(Self.retrySendAccessibilityLabel(name: name))
         case .idle, .selected:
             Button(action: onSend) {
                 Image(systemName: "paperplane.circle.fill")
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(Color(hex: accentHex))
             }
-            .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), a11yName))
+            .accessibilityLabel(Self.sendAccessibilityLabel(name: name))
         }
     }
 }

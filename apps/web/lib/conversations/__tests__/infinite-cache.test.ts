@@ -1,8 +1,8 @@
 import type { Conversation } from '@/types';
-import type { GetConversationsResponse } from '@/services/conversations/types';
 import {
   rebuildInfiniteConversationPages,
   type InfiniteConversationData,
+  type InfiniteConversationPage,
 } from '../infinite-cache';
 
 // `rebuildInfiniteConversationPages` ne lit AUCUN champ des conversations — il
@@ -11,14 +11,14 @@ import {
 // reconstruites.
 const conversation = (id: string): Conversation => ({ id }) as unknown as Conversation;
 
+// Une page STOCKÉE ne porte que `conversations` + `pagination` : les métadonnées
+// d'enveloppe delta (`deletedConversationIds`…) ne vivent jamais dans le cache.
 const page = (
   ids: readonly string[],
-  pagination: GetConversationsResponse['pagination']
-): GetConversationsResponse => ({
+  pagination: InfiniteConversationPage['pagination']
+): InfiniteConversationPage => ({
   conversations: ids.map(conversation),
   pagination,
-  deletedConversationIds: [],
-  deletedConversationIdsTruncated: false,
 });
 
 // Cache de départ : deux pages de 2, paginées par OFFSET (limit 2), la seconde
@@ -78,5 +78,20 @@ describe('rebuildInfiniteConversationPages — contrat InfiniteData (pages ↔ p
       expect(data.pageParams).toHaveLength(data.pages.length);
     }
     expect(flatIds(data)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
+  });
+
+  it('ne fabrique aucune métadonnée d’enveloppe delta sur les pages reconstruites', () => {
+    // Les pages stockées ne portent QUE `conversations` + `pagination` ; les
+    // champs `deletedConversationIds` sont des métadonnées de batch delta,
+    // consommées à la volée et jamais persistées. Le rebuild ne doit pas les
+    // ressusciter — y compris sur la page de surplus.
+    const old = twoFullPages();
+    const updated = [...old.pages.flatMap((p) => p.conversations), conversation('e')];
+
+    const result = rebuildInfiniteConversationPages(old, updated);
+
+    for (const rebuilt of result.pages) {
+      expect(Object.keys(rebuilt).sort()).toEqual(['conversations', 'pagination']);
+    }
   });
 });

@@ -12,6 +12,7 @@
 import {
   buildFocalTranslationsRecord,
   resolveFocalMessageText,
+  resolveFocalMessageDisplay,
   resolveFocalAuthorAccent,
   isFirstInFocalGroup,
   formatDayTimePillLabel,
@@ -19,7 +20,7 @@ import {
   isNewCalendarDay,
 } from '../focal-row-utils';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
-import { conversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
+import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import type { MessageTranslation } from '@meeshy/shared/types';
 
 function makeTranslation(targetLanguage: string, translatedContent: string): MessageTranslation {
@@ -92,10 +93,18 @@ describe('resolveFocalMessageText — Prisme EXCLUSIVEMENT par resolveLastMessag
   });
 });
 
-describe('resolveFocalAuthorAccent — déterministe, MÊME loi que l\'accent de conversation', () => {
-  it('rend le même accent que conversationAccentPalette pour le même nom', () => {
-    const expected = conversationAccentPalette({ name: 'Alice', type: 'direct' }).accent;
-    expect(resolveFocalAuthorAccent('Alice')).toBe(expected);
+describe('resolveFocalAuthorAccent — couleur d\'IDENTITÉ par auteur (colorForName)', () => {
+  it('rend la couleur d\'identité par nom (colorForName), la SSOT déjà utilisée par iOS pour les expéditeurs', () => {
+    expect(resolveFocalAuthorAccent('Alice')).toBe(colorForName('Alice'));
+    expect(resolveFocalAuthorAccent('Bob')).toBe(colorForName('Bob'));
+  });
+
+  it('DISTINGUE deux auteurs différents (le filet cité porte la couleur de l\'auteur cité)', () => {
+    // conversationAccentPalette ignore `name` (type/langue/thème seuls) : dérivée
+    // d\'un nom, elle rendait une couleur CONSTANTE pour tous les auteurs — le
+    // filet de citation était uniforme, contredisant « couleur de l\'auteur cité ».
+    expect(resolveFocalAuthorAccent('Alice')).not.toBe(resolveFocalAuthorAccent('Bob'));
+    expect(resolveFocalAuthorAccent('Alice')).not.toBe(resolveFocalAuthorAccent('Zorro'));
   });
 
   it('est stable (même entrée → même sortie)', () => {
@@ -104,6 +113,47 @@ describe('resolveFocalAuthorAccent — déterministe, MÊME loi que l\'accent de
 
   it('rend toujours un hex #RRGGBB valide', () => {
     expect(resolveFocalAuthorAccent('Alice')).toMatch(/^#[0-9a-fA-F]{6}$/);
+  });
+});
+
+describe('resolveFocalMessageDisplay — texte + langue RÉELLEMENT servie', () => {
+  it('rend le texte traduit ET la langue servie', () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en',
+      translations: [makeTranslation('fr', 'Bonjour')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['fr'])).toEqual({ text: 'Bonjour', language: 'fr' });
+  });
+
+  it('rend l\'original et sa langue quand aucune traduction préférée n\'existe', () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en',
+      translations: [makeTranslation('fr', 'Bonjour')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['de'])).toEqual({ text: 'Hello', language: 'en' });
+  });
+
+  it('la langue originale demandée ne traduit jamais (langue = originale)', () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en',
+      translations: [makeTranslation('en', 'SHOULD NOT WIN')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['en'])).toEqual({ text: 'Hello', language: 'en' });
+  });
+
+  it('nomme la langue SERVIE par priorité du Prisme, pas la 1re entrée insérée à texte identique', () => {
+    // pt et gl portent le MÊME texte « Olá » ; le lecteur préfère gl. Le Prisme
+    // sert bien l\'entrée gl, mais une recherche par VALEUR attribuait « pt »
+    // (première entrée dont la valeur === texte), en ordre d\'insertion.
+    const message = {
+      content: 'Hola',
+      originalLanguage: 'es',
+      translations: [makeTranslation('pt', 'Olá'), makeTranslation('gl', 'Olá')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['gl'])).toEqual({ text: 'Olá', language: 'gl' });
   });
 });
 

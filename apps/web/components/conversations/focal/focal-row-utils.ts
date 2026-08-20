@@ -20,7 +20,7 @@ import type { Message, MessageTranslation } from '@meeshy/shared/types';
 import type { Attachment } from '@meeshy/shared/types/attachment';
 import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
 import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
-import { conversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
+import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { startOfLocalDayMs } from '@meeshy/shared/utils/calendar-date';
 
 /** Tableau `Message.translations` → dictionnaire `{ langue: texte }` attendu par `resolveLastMessagePreview`. */
@@ -82,8 +82,34 @@ export function resolveFocalMessageDisplay(
     return { text, language: message.originalLanguage };
   }
 
-  const served = Object.entries(record).find(([, value]) => value === text)?.[0];
+  const served = focalServedLanguage(record, preferredLanguages);
   return { text, language: served ?? message.originalLanguage };
+}
+
+/**
+ * La langue RÉELLEMENT servie, LUE dans le MÊME ordre de priorité que
+ * `resolveLastMessagePreview` (la première langue préférée présente dans le
+ * dictionnaire) — jamais par correspondance de VALEUR. Deux traductions au
+ * texte identique (ex. `pt`/`gl` = « Olá ») rendaient l'ancienne recherche par
+ * valeur ambiguë : elle attribuait la langue de la PREMIÈRE entrée insérée dont
+ * la valeur égalait le texte, et non celle que le Prisme a réellement servie.
+ * Même filtrage que la loi partagée (chaîne non vide, minusculée) ; la casse du
+ * `targetLanguage` d'origine est préservée dans la valeur rendue.
+ */
+function focalServedLanguage(
+  record: Readonly<Record<string, string>>,
+  preferredLanguages: readonly string[]
+): string | undefined {
+  const keyByLower = new Map<string, string>();
+  for (const key of Object.keys(record)) keyByLower.set(key.toLowerCase(), key);
+  for (const lang of preferredLanguages) {
+    if (typeof lang !== 'string') continue;
+    const normalized = lang.trim().toLowerCase();
+    if (normalized === '') continue;
+    const key = keyByLower.get(normalized);
+    if (key !== undefined) return key;
+  }
+  return undefined;
 }
 
 /**
@@ -132,16 +158,20 @@ export function splitFocalAttachments(
 
 /**
  * Accent déterministe d'un auteur cité (§3.6 `senderColorHex`, §3.11 quote
- * `colorFromAuthor`) — RÉUTILISE `conversationAccentPalette` (E3, LWS-2),
- * la SEULE loi de couleur déterministe déjà gelée côté web, appliquée au nom
- * d'affichage de l'auteur plutôt qu'au nom de la conversation. Aucun
- * utilitaire de couleur PAR UTILISATEUR n'existe ailleurs sur le web
- * (re-preuve : `grep -rn "getUserColor\|senderColorHex" apps/web` — aucun
- * résultat hors ce fichier) ; dériver la même palette d'un second nom
- * conserve le déterminisme sans introduire une seconde loi de couleur.
+ * `colorFromAuthor`) — une couleur d'IDENTITÉ, propre au nom de l'auteur, pour
+ * le filet 2,5 pt « couleur de l'auteur cité » (contrat Focal §WS-3).
+ *
+ * `colorForName` (`conversation-colors.ts`) EST la SSOT de couleur par nom déjà
+ * gelée côté partagé : hash DJB2 → 39 couleurs vibrantes, miroir exact de
+ * `DynamicColorGenerator.colorForName` que l'iOS applique aux noms
+ * d'expéditeur (`MessagePersistenceActor` → `colorForName(senderName)`).
+ * `conversationAccentPalette` ne convient PAS ici : elle IGNORE son champ `name`
+ * (calcul par type/langue/thème seuls, cf. `conversation-colors.ts`), donc,
+ * dérivée d'un nom, elle rendait la MÊME couleur pour tous les auteurs — le
+ * filet de citation était uniforme, contredisant « couleur de l'auteur cité ».
  */
 export function resolveFocalAuthorAccent(displayName: string): string {
-  return conversationAccentPalette({ name: displayName, type: 'direct' }).accent;
+  return colorForName(displayName);
 }
 
 /** Deux messages sont dans le même groupe visuel s'ils partagent l'expéditeur (§WS-4 : « en tête de groupe uniquement »). */
