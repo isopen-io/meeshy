@@ -692,6 +692,32 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
     #endif
 
+    // MARK: - Decoding (shared by the two `effects_json` read sites)
+
+    /// Décodeur privé UNIQUE pour `effects_json`, partagé par `load` et
+    /// `firstSlideEffects` — les deux seuls points de lecture. Un blob `"v":3`
+    /// passe par le pont B2 (`CanvasV3` → `StoryEffects(rendering:sceneIndex:)`) ;
+    /// tout le reste décode en legacy. Sans ce partage, migrer un seul des
+    /// deux sites viderait l'autre en silence dès qu'une ligne devient v3.
+    private func decodeSlideEffects(_ json: String) -> StoryEffects? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        if let probe = try? JSONDecoder().decode(CanvasVersionProbe.self, from: data), probe.v == 3 {
+            guard let document = try? JSONDecoder().decode(CanvasV3.self, from: data) else { return nil }
+            return StoryEffects(rendering: document, sceneIndex: 0)
+        }
+        return try? JSONDecoder().decode(StoryEffects.self, from: data)
+    }
+
+    private func isAlreadyV3(_ json: String) -> Bool {
+        guard let data = json.data(using: .utf8),
+              let probe = try? JSONDecoder().decode(CanvasVersionProbe.self, from: data) else { return false }
+        return probe.v == 3
+    }
+
+    private struct CanvasVersionProbe: Decodable {
+        let v: Int?
+    }
+
     // MARK: - Load
 
     public func load(draftId: String) -> (slides: [StorySlide],
@@ -709,24 +735,48 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
             guard !rows.isEmpty else { return nil }
 
-            let slides: [StorySlide] = rows.compactMap { row in
+            let decoded: [(slide: StorySlide, migratedJSON: String?)] = rows.map { row in
                 let id: String = row["id"]
                 let content: String? = row["content"]
                 let mediaURL: String? = row["media_url"]
                 let duration: TimeInterval = row["duration"] ?? 5
                 let effectsJSONStr: String = row["effects_json"]
-                guard let effectsData = effectsJSONStr.data(using: .utf8),
-                      let effects = JSONDecoder().decodeOrLog(StoryEffects.self, from: effectsData,
-                                                              field: "story slide effects",
-                                                              id: id, logger: Logger.cache) else {
+                guard let effects = decodeSlideEffects(effectsJSONStr) else {
                     // Effets illisibles : les colonnes qui, elles, sont lisibles
                     // doivent survivre — les amputer perdait le média et la
                     // durée d'une slide seulement partiellement corrompue.
-                    return StorySlide(id: id, mediaURL: mediaURL, content: content,
-                                      duration: duration)
+                    // Échec de conversion = ligne laissée telle quelle,
+                    // jamais de réécriture ni de perte.
+                    return (StorySlide(id: id, mediaURL: mediaURL, content: content,
+                                       duration: duration), nil)
                 }
-                return StorySlide(id: id, mediaURL: mediaURL, content: content,
-                                  effects: effects, duration: duration)
+                let slide = StorySlide(id: id, mediaURL: mediaURL, content: content,
+                                       effects: effects, duration: duration)
+                guard !isAlreadyV3(effectsJSONStr),
+                      let migratedData = JSONEncoder().encodeOrLog(CanvasV3(migrating: effects),
+                                                                   field: "story slide effects (migration v3)",
+                                                                   id: id, logger: Logger.cache),
+                      let migratedJSON = String(data: migratedData, encoding: .utf8) else {
+                    return (slide, nil)
+                }
+                return (slide, migratedJSON)
+            }
+            let slides = decoded.map(\.slide)
+
+            // Migration one-shot : la persistance passe v3 au chargement — un
+            // brouillon déjà v3 n'est jamais réécrit (isAlreadyV3 ci-dessus).
+            let migrations = decoded.compactMap { entry -> (id: String, json: String)? in
+                guard let json = entry.migratedJSON else { return nil }
+                return (id: entry.slide.id, json: json)
+            }
+            if !migrations.isEmpty {
+                try db.write { db in
+                    for migration in migrations {
+                        try db.execute(
+                            sql: "UPDATE story_draft_slide SET effects_json = ? WHERE draft_id = ? AND id = ?",
+                            arguments: [migration.json, draftId, migration.id])
+                    }
+                }
             }
 
             let meta = try db.read { db in
@@ -973,12 +1023,7 @@ public final class StoryDraftStore: @unchecked Sendable {
             db,
             sql: "SELECT effects_json FROM story_draft_slide WHERE draft_id = ? ORDER BY order_index",
             arguments: [draftId])
-        for json in blobs {
-            guard let data = json.data(using: .utf8),
-                  let effects = try? JSONDecoder().decode(StoryEffects.self, from: data) else { continue }
-            return effects
-        }
-        return nil
+        return blobs.compactMap(decodeSlideEffects).first
     }
 
     /// Vignette du brouillon : la première image DANS L'ORDRE DES SLIDES dont

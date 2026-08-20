@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import MeeshySDK
 
 final class StoryDraftStoreTests: XCTestCase {
@@ -7,13 +8,14 @@ final class StoryDraftStoreTests: XCTestCase {
     /// Ces suites vérifient le contenu d'UN brouillon : un id fixe suffit.
     private let draftId = "test-draft"
     private var tempDir: URL!
+    private var dbPath: String!
 
     override func setUp() {
         super.setUp()
         tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("StoryDraftStoreTests-\(UUID().uuidString)")
         try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        let dbPath = tempDir.appendingPathComponent("test.db").path
+        dbPath = tempDir.appendingPathComponent("test.db").path
         let mediaDir = tempDir.appendingPathComponent("media")
         store = StoryDraftStore(dbPath: dbPath, mediaDirectory: mediaDir)
     }
@@ -323,7 +325,110 @@ final class StoryDraftStoreTests: XCTestCase {
         XCTAssertEqual(media.images.count, 1, "valid media untouched by empty purge")
     }
 
+    // MARK: - Migration one-shot v1 → v3 (Task B3)
+
+    /// La ligne EST le blob v1 gelé du lot A — pas une reconstruction Swift,
+    /// pour tester exactement ce qu'un vieux brouillon porte sur disque.
+    func test_load_migratesV1Blob_contentSurvives() throws {
+        try seedRawSlide(id: "s1", effectsJSON: fixtureJSON("v1-legacy-full"))
+
+        let result = try XCTUnwrap(store.load(draftId: draftId))
+        let slide = try XCTUnwrap(result.slides.first)
+
+        XCTAssertEqual(slide.effects.textObjects.first?.text, "Salut",
+                       "Le contenu du brouillon v1 doit survivre à la migration")
+    }
+
+    func test_load_migratesV1Blob_persistsReencodedAsV3() throws {
+        try seedRawSlide(id: "s1", effectsJSON: fixtureJSON("v1-legacy-full"))
+
+        _ = store.load(draftId: draftId)
+
+        let persisted = try XCTUnwrap(rawEffectsJSON(id: "s1"))
+        let data = try XCTUnwrap(persisted.data(using: .utf8))
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                 "JSON persisté illisible : \(persisted.prefix(160))")
+        XCTAssertEqual(root["v"] as? Int, 3,
+                       "La migration one-shot doit réencoder la ligne en v3 au chargement — persisté : \(persisted.prefix(160))")
+        XCTAssertNoThrow(try JSONDecoder().decode(CanvasV3.self, from: data),
+                         "La ligne migrée doit rester un document CanvasV3 décodable")
+    }
+
+    /// Le titre de la carte (`listDrafts`) passe par le SECOND point de
+    /// lecture d'`effects_json` (`firstSlideEffects`) : sans décodeur
+    /// partagé, la migration du premier point vide silencieusement celui-ci.
+    func test_load_migratesV1Blob_secondReadSiteStillResolvesTitle() throws {
+        try seedRawSlide(id: "s1", effectsJSON: fixtureJSON("v1-legacy-full"))
+        _ = store.load(draftId: draftId)
+
+        let summaries = store.listDrafts()
+
+        XCTAssertEqual(summaries.first?.title, "Salut",
+                       "firstSlideEffects doit rester capable de lire la ligne migrée")
+    }
+
+    func test_load_alreadyV3Blob_leavesRowUntouched() throws {
+        let v3JSON = try fixtureJSON("v1-legacy-full.v3")
+        try seedRawSlide(id: "s1", effectsJSON: v3JSON)
+
+        _ = store.load(draftId: draftId)
+
+        let persisted = try XCTUnwrap(rawEffectsJSON(id: "s1"))
+        XCTAssertEqual(persisted, v3JSON, "Un brouillon déjà v3 ne doit jamais être réécrit")
+    }
+
     // MARK: - Helpers
+
+    private enum FixtureError: Error, CustomStringConvertible {
+        case missing(String)
+
+        var description: String {
+            switch self {
+            case .missing(let path):
+                return "Fixture introuvable à \(path) — ajuster deletingLastPathComponent dans fixtureJSON(_:)"
+            }
+        }
+    }
+
+    /// Fixtures gelées du lot A (`packages/shared/fixtures/canvas-v3/`).
+    private func fixtureJSON(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // → MeeshyUITests/
+            .deletingLastPathComponent() // → Tests/
+            .deletingLastPathComponent() // → MeeshySDK/
+            .deletingLastPathComponent() // → packages/
+            .appendingPathComponent("shared/fixtures/canvas-v3/\(name).json")
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw FixtureError.missing(url.path)
+        }
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Insère une ligne de slide brute, en contournant `store.save()` — celui-ci
+    /// n'émet aujourd'hui que du legacy, or ces suites ont besoin de seeder
+    /// aussi bien du legacy que du v3 déjà migré.
+    private func seedRawSlide(id: String, effectsJSON: String, orderIndex: Int = 0) throws {
+        let queue = try DatabaseQueue(path: dbPath)
+        try queue.write { db in
+            try db.execute(sql: """
+                INSERT OR REPLACE INTO story_draft (id, visibility, created_at, updated_at)
+                VALUES (?, 'PUBLIC', 1, 1)
+                """, arguments: [draftId])
+            try db.execute(sql: """
+                INSERT INTO story_draft_slide (draft_id, id, order_index, content, effects_json, media_url, duration, updated_at)
+                VALUES (?, ?, ?, NULL, ?, NULL, 5, 1)
+                """, arguments: [draftId, id, orderIndex, effectsJSON])
+        }
+    }
+
+    private func rawEffectsJSON(id: String) throws -> String? {
+        let queue = try DatabaseQueue(path: dbPath)
+        return try queue.read { db in
+            try String.fetchOne(db,
+                                sql: "SELECT effects_json FROM story_draft_slide WHERE draft_id = ? AND id = ?",
+                                arguments: [draftId, id])
+        }
+    }
 
     private func createTestImage() -> UIImage {
         UIGraphicsBeginImageContext(CGSize(width: 10, height: 10))
