@@ -206,8 +206,13 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertNil(effects.clipTransitions)
     }
 
+    /// O3 (addendum rév. 3, arbitrage 3) — les transitions sont une MÉTA de
+    /// scène : sans le moindre objet visuel, le canvas n'émet aucun cadre et
+    /// n'a donc rien entre quoi transiter. Le clip que la transition relie
+    /// fait partie du cas nominal.
     func test_storyEffects_clipTransitions_canBeAssignedAndPersisted() throws {
         var effects = StoryEffects()
+        effects.mediaObjects = [StoryMediaObject(id: "a", aspectRatio: 1)]
         effects.clipTransitions = [
             StoryClipTransition(fromClipId: "a", toClipId: "b",
                                 kind: .crossfade, duration: 0.5)

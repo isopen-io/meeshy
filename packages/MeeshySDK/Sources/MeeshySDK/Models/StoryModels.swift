@@ -1627,6 +1627,20 @@ public struct StoryEffects: Codable, Sendable {
     var openingWire: [String: CanvasJSONValue]?
     var closingWire: [String: CanvasJSONValue]?
 
+    /// Mémos WIRE par objet (clé = id de l'objet) — ce que le DOCUMENT v3
+    /// porte et qu'aucune famille runtime v1 ne sait loger. Internes comme
+    /// `openingWire` : jamais encodés en v1, jamais persistés hors du pont,
+    /// réémis fidèlement au réencodage.
+    /// - `wireBandEdge` : une ancre de BANDE n'a pas de position libre ; sans
+    ///   mémo, l'aller-retour la convertirait en position libre et détruirait
+    ///   la mise en page d'un réel à bandes.
+    /// - `wireTimingEnd` : borne de fin, absente des familles v1.
+    /// - `wireAnchorPoint` : pivot NOMMÉ tel que le v1/le document le porte —
+    ///   sans lui, le pont devrait fabriquer la clé par heuristique.
+    var wireBandEdge: [String: ObjectAnchor.Edge]?
+    var wireTimingEnd: [String: Double]?
+    var wireAnchorPoint: [String: String]?
+
     // Objets canvas composites
     public var textObjects: [StoryTextObject]
     /// Pastilles de lieu posées sur la slide (hors timeline). Portées par les
@@ -1799,6 +1813,23 @@ public struct StoryEffects: Codable, Sendable {
         timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
         canvasAspectRatio = try c.decodeIfPresent(Double.self, forKey: .canvasAspectRatio)
+        wireAnchorPoint = Self.stickerAnchorPoints(c)
+    }
+
+    /// Le pivot NOMMÉ d'un sticker v1 (`anchorPoint`) n'a pas de propriété
+    /// dans `StorySticker` : sans cette lecture brute, le pont ne pourrait
+    /// que le fabriquer ou le perdre.
+    private static func stickerAnchorPoints(
+        _ c: KeyedDecodingContainer<CodingKeys>
+    ) -> [String: String]? {
+        guard let raw = try? c.decodeIfPresent([[String: CanvasJSONValue]].self,
+                                               forKey: .stickerObjects) else { return nil }
+        let pairs = raw.compactMap { object -> (String, String)? in
+            guard case .string(let id)? = object["id"],
+                  case .string(let point)? = object["anchorPoint"] else { return nil }
+            return (id, point)
+        }
+        return pairs.isEmpty ? nil : Dictionary(pairs, uniquingKeysWith: { _, last in last })
     }
 
     /// Une transition v1 Swift est une CHAÎNE (`"fade"`) ; celle du

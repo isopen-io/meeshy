@@ -70,10 +70,21 @@ private func anchorPosition(_ anchor: ObjectAnchor) -> (x: Double, y: Double) {
     }
 }
 
-private func timingV3(start: Double?, keyframes: [StoryKeyframe]?) -> TimingV3? {
+private func timingV3(start: Double?, end: Double?, keyframes: [StoryKeyframe]?) -> TimingV3? {
     let frames = keyframes.map { $0.map(KeyframeV3.init(migrating:)) }
-    guard start != nil || frames != nil else { return nil }
-    return TimingV3(start: start, end: nil, rate: nil, keyframes: frames)
+    guard start != nil || end != nil || frames != nil else { return nil }
+    return TimingV3(start: start, end: end, rate: nil, keyframes: frames)
+}
+
+private func pivotWire(_ pivot: CGPoint) -> CanvasJSONValue {
+    .object(["x": .number(Double(pivot.x)), "y": .number(Double(pivot.y))])
+}
+
+private func wireAnchor(_ memo: [String: ObjectAnchor.Edge]?,
+                        _ id: String,
+                        x: Double,
+                        y: Double) -> ObjectAnchor {
+    memo?[id].map(ObjectAnchor.band) ?? .free(x: x, y: y)
 }
 
 private extension [String: CanvasJSONValue] {
@@ -159,58 +170,43 @@ public extension CanvasV3 {
         for text in effects.textObjects {
             slot += 1
             objects.append(ObjectV3(id: text.id, kind: .text,
-                                    anchor: .free(x: text.x, y: text.y), plane: .fg,
+                                    anchor: wireAnchor(effects.wireBandEdge, text.id, x: text.x, y: text.y),
+                                    plane: .fg,
                                     z: text.zIndex,
                                     transform: TransformV3(scale: text.scale, rotation: text.rotation, opacity: 1),
-                                    timing: timingV3(start: text.startTime, keyframes: text.keyframes),
+                                    timing: timingV3(start: text.startTime,
+                                                     end: effects.wireTimingEnd?[text.id],
+                                                     keyframes: text.keyframes),
                                     locale: nonEmpty(text.sourceLanguage),
                                     payload: Self.textPayload(text)))
         }
 
         for media in effects.mediaObjects ?? [] {
             slot += 1
-            var payload: [String: CanvasJSONValue] = [
-                "postMediaId": media.postMediaId.isEmpty ? .null : .string(media.postMediaId),
-                "volume": .number(exactDouble(media.volume)),
-                "muted": .bool(media.isMuted),
-                "loop": .bool(media.loop),
-                "isBackground": .bool(media.isBackground),
-            ]
-            if let mediaURL = nonEmpty(media.mediaURL) { payload["mediaURL"] = .string(mediaURL) }
-            if !media.mediaType.isEmpty { payload["mediaType"] = .string(media.mediaType) }
-            if let duration = media.duration { payload["duration"] = .number(duration) }
             objects.append(ObjectV3(id: media.id, kind: .media,
-                                    anchor: .free(x: media.x, y: media.y), plane: .content,
+                                    anchor: wireAnchor(effects.wireBandEdge, media.id, x: media.x, y: media.y),
+                                    plane: .content,
                                     z: media.zIndex,
                                     transform: TransformV3(scale: media.scale, rotation: media.rotation, opacity: 1),
-                                    timing: timingV3(start: media.startTime, keyframes: media.keyframes),
+                                    timing: timingV3(start: media.startTime,
+                                                     end: effects.wireTimingEnd?[media.id],
+                                                     keyframes: media.keyframes),
                                     locale: nonEmpty(media.sourceLanguage),
-                                    payload: payload))
+                                    payload: Self.mediaPayload(media)))
         }
 
         for sticker in effects.stickerObjects ?? [] {
             slot += 1
-            var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.emoji)]
-            if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
-            // Golden partagé : un sticker PORTEUR (champ vivant, U21) déclare
-            // son pivot (`anchorPoint`) ; un sticker nu reste `{emoji}` (G3
-            // racine) — le runtime ne mémorise pas la présence de la clé v1.
-            let hasLivingFields = sticker.baseSize != 140 || sticker.fadeIn != nil
-                || sticker.fadeOut != nil || sticker.startTime != nil || sticker.duration != nil
-            if sticker.anchor == centerPivot {
-                if hasLivingFields { payload["anchorPoint"] = .string("center") }
-            } else {
-                payload["anchor"] = .object(["x": .number(Double(sticker.anchor.x)),
-                                             "y": .number(Double(sticker.anchor.y))])
-            }
-            if let fadeIn = sticker.fadeIn { payload["fadeIn"] = .number(fadeIn) }
-            if let fadeOut = sticker.fadeOut { payload["fadeOut"] = .number(fadeOut) }
             objects.append(ObjectV3(id: sticker.id, kind: .sticker,
-                                    anchor: .free(x: sticker.x, y: sticker.y), plane: .fg,
+                                    anchor: wireAnchor(effects.wireBandEdge, sticker.id, x: sticker.x, y: sticker.y),
+                                    plane: .fg,
                                     z: sticker.zIndex,
                                     transform: TransformV3(scale: sticker.scale, rotation: sticker.rotation, opacity: 1),
-                                    timing: timingV3(start: sticker.startTime, keyframes: nil),
-                                    payload: payload))
+                                    timing: timingV3(start: sticker.startTime,
+                                                     end: effects.wireTimingEnd?[sticker.id],
+                                                     keyframes: nil),
+                                    payload: Self.stickerPayload(sticker,
+                                                                 anchorPoint: effects.wireAnchorPoint?[sticker.id])))
         }
 
         for emoji in effects.stickers ?? [] where !emoji.isEmpty {
@@ -222,14 +218,19 @@ public extension CanvasV3 {
                                     payload: ["emoji": .string(emoji)]))
         }
 
-        if let strokes = effects.drawingStrokes, !strokes.isEmpty,
-           let wire = wireArray(strokes) {
+        let strokes = effects.drawingStrokes ?? []
+        let strokeWire = strokes.isEmpty ? nil : wireArray(strokes)
+        let drawingData = effects.drawingData.flatMap { $0.isEmpty ? nil : $0.base64EncodedString() }
+        if strokeWire != nil || drawingData != nil {
             let fallback = slot
             slot += 1
+            var payload: [String: CanvasJSONValue] = [:]
+            if let strokeWire { payload["strokes"] = .array(strokeWire) }
+            if let drawingData { payload["data"] = .string(drawingData) }
             objects.append(ObjectV3(id: "drawing", kind: .drawing,
                                     anchor: .free(x: 0.5, y: 0.5), plane: .fg,
                                     z: fallback, transform: TransformV3(),
-                                    payload: ["strokes": .array(wire)]))
+                                    payload: payload))
         }
 
         for location in effects.locationObjects {
@@ -237,14 +238,16 @@ public extension CanvasV3 {
             var payload: [String: CanvasJSONValue] = [
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
             ]
-            if location.anchor != centerPivot {
-                payload["anchor"] = .object(["x": .number(Double(location.anchor.x)),
-                                             "y": .number(Double(location.anchor.y))])
-            }
+            if location.anchor != centerPivot { payload["anchor"] = pivotWire(location.anchor) }
             objects.append(ObjectV3(id: location.id, kind: .place,
-                                    anchor: .free(x: location.x, y: location.y), plane: .fg,
+                                    anchor: wireAnchor(effects.wireBandEdge, location.id,
+                                                       x: location.x, y: location.y),
+                                    plane: .fg,
                                     z: location.zIndex,
                                     transform: TransformV3(scale: location.scale, rotation: location.rotation, opacity: 1),
+                                    timing: timingV3(start: nil,
+                                                     end: effects.wireTimingEnd?[location.id],
+                                                     keyframes: nil),
                                     payload: payload))
         }
 
@@ -252,16 +255,16 @@ public extension CanvasV3 {
             let fallback = slot
             slot += 1
             objects.append(ObjectV3(id: audio.id, kind: .audio,
-                                    anchor: .free(x: Double(audio.x), y: Double(audio.y)), plane: .content,
+                                    anchor: wireAnchor(effects.wireBandEdge, audio.id,
+                                                       x: Double(audio.x), y: Double(audio.y)),
+                                    plane: .content,
                                     z: audio.zIndex ?? fallback,
                                     transform: TransformV3(),
-                                    timing: timingV3(start: audio.startTime.map(exactDouble), keyframes: audio.keyframes),
+                                    timing: timingV3(start: audio.startTime.map(exactDouble),
+                                                     end: effects.wireTimingEnd?[audio.id],
+                                                     keyframes: audio.keyframes),
                                     locale: nonEmpty(audio.sourceLanguage),
-                                    payload: [
-                                        "postMediaId": audio.postMediaId.isEmpty ? .null : .string(audio.postMediaId),
-                                        "mediaURL": audio.mediaURL.map(CanvasJSONValue.string) ?? .null,
-                                        "placement": .string(audio.placement),
-                                    ]))
+                                    payload: Self.audioPayload(audio)))
         }
 
         if let filter = nonEmpty(effects.filter) {
@@ -292,11 +295,17 @@ public extension CanvasV3 {
             opening: effects.openingWire ?? effects.opening.map { ["type": .string($0.rawValue)] },
             closing: effects.closingWire ?? effects.closing.map { ["type": .string($0.rawValue)] },
             clipTransitions: effects.clipTransitions.map { $0.compactMap(wireObject) },
-            timelineDuration: effects.timelineDuration)
+            timelineDuration: effects.timelineDuration,
+            thumbHash: nonEmpty(effects.thumbHash))
 
         let transcriptions = (effects.voiceTranscriptions ?? [])
             .filter { !$0.language.isEmpty }
             .map { BackgroundSoundV3.Transcription(language: $0.language, content: $0.content) }
+        let variants = (effects.backgroundAudioVariants ?? [])
+            .filter { !$0.postMediaId.isEmpty && !$0.language.isEmpty }
+            .map { BackgroundSoundV3.Variant(postMediaId: $0.postMediaId,
+                                             language: $0.language,
+                                             isAutoGenerated: $0.isAutoGenerated) }
         let soundId = nonEmpty(effects.backgroundAudioId)
         let ownVoice = nonEmpty(effects.voiceAttachmentId)
         let sound: BackgroundSoundV3?
@@ -310,12 +319,91 @@ public extension CanvasV3 {
                     ? BackgroundSoundV3.Bounds(start: effects.backgroundAudioStart ?? 0,
                                                end: effects.backgroundAudioEnd ?? 0)
                     : nil,
+                variants: variants.isEmpty ? nil : variants,
                 transcriptions: transcriptions.isEmpty ? nil : transcriptions)
         } else {
             sound = nil
         }
 
-        self.init(v: 3, scenes: [scene], sound: sound)
+        // O3 — aucun objet visuel ⇒ AUCUN cadre : jamais de scène vide au fil.
+        self.init(v: 3, scenes: remapped.isEmpty ? [] : [scene], sound: sound)
+    }
+
+    private static func mediaPayload(_ media: StoryMediaObject) -> [String: CanvasJSONValue] {
+        var payload: [String: CanvasJSONValue] = [
+            "postMediaId": media.postMediaId.isEmpty ? .null : .string(media.postMediaId),
+        ]
+        if let mediaURL = nonEmpty(media.mediaURL) { payload["mediaURL"] = .string(mediaURL) }
+        if !media.mediaType.isEmpty { payload["mediaType"] = .string(media.mediaType) }
+        // `muted` accompagne TOUJOURS un volume émis (miroir du dérivé
+        // `volume <= 0` du convertisseur gateway) ; les décode-défauts sont
+        // omis, leur absence les restitue.
+        if media.volume != 1 {
+            payload["volume"] = .number(exactDouble(media.volume))
+            payload["muted"] = .bool(media.isMuted)
+        }
+        if media.loop { payload["loop"] = .bool(true) }
+        if media.isBackground { payload["isBackground"] = .bool(true) }
+        if let duration = media.duration { payload["duration"] = .number(duration) }
+        if media.aspectRatio != 1 { payload["aspectRatio"] = .number(media.aspectRatio) }
+        if media.anchor != centerPivot { payload["anchor"] = pivotWire(media.anchor) }
+        if let intrinsic = media.intrinsicDuration { payload["intrinsicDuration"] = .number(intrinsic) }
+        if let memento = media.mutedVolumeMemento {
+            payload["mutedVolumeMemento"] = .number(exactDouble(memento))
+        }
+        if let ducking = media.isDuckingDisabled { payload["isDuckingDisabled"] = .bool(ducking) }
+        if media.placement != "media" { payload["placement"] = .string(media.placement) }
+        if let fadeIn = media.fadeIn { payload["fadeIn"] = .number(fadeIn) }
+        if let fadeOut = media.fadeOut { payload["fadeOut"] = .number(fadeOut) }
+        if let name = nonEmpty(media.name) { payload["name"] = .string(name) }
+        if let thumbHash = nonEmpty(media.thumbHash) { payload["thumbHash"] = .string(thumbHash) }
+        return payload
+    }
+
+    private static func stickerPayload(_ sticker: StorySticker,
+                                       anchorPoint: String?) -> [String: CanvasJSONValue] {
+        var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.emoji)]
+        if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
+        // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
+        // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
+        if sticker.anchor == centerPivot {
+            if let anchorPoint { payload["anchorPoint"] = .string(anchorPoint) }
+        } else {
+            payload["anchor"] = pivotWire(sticker.anchor)
+        }
+        if let fadeIn = sticker.fadeIn { payload["fadeIn"] = .number(fadeIn) }
+        if let fadeOut = sticker.fadeOut { payload["fadeOut"] = .number(fadeOut) }
+        if let duration = sticker.duration { payload["duration"] = .number(duration) }
+        return payload
+    }
+
+    private static func audioPayload(_ audio: StoryAudioPlayerObject) -> [String: CanvasJSONValue] {
+        var payload: [String: CanvasJSONValue] = [
+            "postMediaId": audio.postMediaId.isEmpty ? .null : .string(audio.postMediaId),
+            "mediaURL": audio.mediaURL.map(CanvasJSONValue.string) ?? .null,
+            "placement": .string(audio.placement),
+        ]
+        // La PROVENANCE d'abord : sans `soundId`/`soundAuthorUsername`, une
+        // piste empruntée revient du fil en son « original » et la chip ment.
+        if let soundId = nonEmpty(audio.soundId) { payload["soundId"] = .string(soundId) }
+        if let username = nonEmpty(audio.soundAuthorUsername) {
+            payload["soundAuthorUsername"] = .string(username)
+        }
+        if let name = nonEmpty(audio.name) { payload["name"] = .string(name) }
+        if audio.volume != 1 { payload["volume"] = .number(exactDouble(audio.volume)) }
+        if let memento = audio.mutedVolumeMemento {
+            payload["mutedVolumeMemento"] = .number(exactDouble(memento))
+        }
+        if let isBackground = audio.isBackground { payload["isBackground"] = .bool(isBackground) }
+        if let loop = audio.loop { payload["loop"] = .bool(loop) }
+        if let duration = audio.duration { payload["duration"] = .number(exactDouble(duration)) }
+        if let fadeIn = audio.fadeIn { payload["fadeIn"] = .number(exactDouble(fadeIn)) }
+        if let fadeOut = audio.fadeOut { payload["fadeOut"] = .number(exactDouble(fadeOut)) }
+        if let variants = audio.backgroundAudioVariants, !variants.isEmpty,
+           let wire = wireArray(variants) {
+            payload["variants"] = .array(wire)
+        }
+        return payload
     }
 
     private static func textPayload(_ text: StoryTextObject) -> [String: CanvasJSONValue] {
@@ -385,9 +473,17 @@ public extension StoryEffects {
         var stickerFamily: [StorySticker] = []
         var locations: [StoryLocationObject] = []
         var audios: [StoryAudioPlayerObject] = []
+        var bandEdges: [String: ObjectAnchor.Edge] = [:]
+        var timingEnds: [String: Double] = [:]
+        var anchorPoints: [String: String] = [:]
 
         for object in scene.objects {
             let position = anchorPosition(object.anchor)
+            if case .band(let edge) = object.anchor { bandEdges[object.id] = edge }
+            if let end = object.timing?.end { timingEnds[object.id] = end }
+            if object.kind == .sticker, let point = object.payload.string("anchorPoint") {
+                anchorPoints[object.id] = point
+            }
             switch object.kind {
             case .media where object.plane == .bg:
                 background = object.payload.string("background")
@@ -406,6 +502,7 @@ public extension StoryEffects {
             case .drawing:
                 drawingStrokes = decodeWireArray(StoryDrawingStroke.self,
                                                  from: object.payload.array("strokes"))
+                drawingData = object.payload.string("data").flatMap { Data(base64Encoded: $0) }
             case .mention, .reserved:
                 continue
             }
@@ -416,6 +513,9 @@ public extension StoryEffects {
         mediaObjects = medias.isEmpty ? nil : medias
         stickerObjects = stickerFamily.isEmpty ? nil : stickerFamily
         audioPlayerObjects = audios.isEmpty ? nil : audios
+        wireBandEdge = bandEdges.isEmpty ? nil : bandEdges
+        wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
+        wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints
 
         let filterCarrier = scene.objects.first {
             $0.kind == .media && $0.plane == .content && $0.payload.string("filter") != nil
@@ -426,6 +526,7 @@ public extension StoryEffects {
         filterIntensity = filterCarrier?.payload.double("filterIntensity")
 
         timelineDuration = scene.timelineDuration
+        thumbHash = scene.thumbHash
         openingWire = scene.opening
         opening = Self.transitionEffect(scene.opening)
         closingWire = scene.closing
@@ -441,6 +542,11 @@ public extension StoryEffects {
             backgroundAudioEnd = sound.bounds?.end
             voiceTranscriptions = sound.transcriptions.map {
                 $0.map { StoryVoiceTranscription(language: $0.language, content: $0.content) }
+            }
+            backgroundAudioVariants = sound.variants.map {
+                $0.map { StoryAudioVariant(postMediaId: $0.postMediaId,
+                                           language: $0.language,
+                                           isAutoGenerated: $0.isAutoGenerated) }
             }
         }
     }
@@ -496,22 +602,32 @@ public extension StoryEffects {
     private static func mediaObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryMediaObject {
         let muted = object.payload.bool("muted") ?? false
         let volume = object.payload.double("volume").map { Float($0) } ?? 1
-        return StoryMediaObject(
+        var media = StoryMediaObject(
             id: object.id,
             postMediaId: object.payload.string("postMediaId") ?? "",
             mediaURL: object.payload.string("mediaURL"),
             mediaType: object.payload.string("mediaType") ?? "image",
-            aspectRatio: 1.0,
+            placement: object.payload.string("placement") ?? "media",
+            aspectRatio: object.payload.double("aspectRatio") ?? 1.0,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
+            anchor: pivotPoint(object.payload),
             volume: muted ? 0 : volume,
             isBackground: object.payload.bool("isBackground") ?? false,
             loop: object.payload.bool("loop") ?? false,
             zIndex: object.z,
+            intrinsicDuration: object.payload.double("intrinsicDuration"),
             startTime: object.timing?.start,
             duration: object.payload.double("duration"),
+            fadeIn: object.payload.double("fadeIn"),
+            fadeOut: object.payload.double("fadeOut"),
             sourceLanguage: object.locale,
-            keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) })
+            keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
+            thumbHash: object.payload.string("thumbHash"),
+            name: object.payload.string("name"),
+            isDuckingDisabled: object.payload.bool("isDuckingDisabled"))
+        media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
+        return media
     }
 
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
@@ -525,6 +641,7 @@ public extension StoryEffects {
             baseSize: object.payload.double("baseSize") ?? 140,
             anchor: pivotPoint(object.payload),
             startTime: object.timing?.start,
+            duration: object.payload.double("duration"),
             fadeIn: object.payload.double("fadeIn"),
             fadeOut: object.payload.double("fadeOut"))
     }
@@ -546,11 +663,23 @@ public extension StoryEffects {
             postMediaId: object.payload.string("postMediaId") ?? "",
             placement: object.payload.string("placement") ?? "overlay",
             x: CGFloat(position.x), y: CGFloat(position.y),
+            volume: object.payload.double("volume").map { Float($0) } ?? 1,
+            isBackground: object.payload.bool("isBackground"),
+            backgroundAudioVariants: decodeWireArray(StoryAudioVariant.self,
+                                                     from: object.payload.array("variants")),
             startTime: object.timing?.start.map { Float($0) },
+            duration: object.payload.double("duration").map { Float($0) },
+            loop: object.payload.bool("loop"),
+            fadeIn: object.payload.double("fadeIn").map { Float($0) },
+            fadeOut: object.payload.double("fadeOut").map { Float($0) },
             sourceLanguage: object.locale,
+            name: object.payload.string("name"),
             keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
-            mediaURL: object.payload.string("mediaURL"))
+            mediaURL: object.payload.string("mediaURL"),
+            soundId: object.payload.string("soundId"),
+            soundAuthorUsername: object.payload.string("soundAuthorUsername"))
         audio.zIndex = object.z
+        audio.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
         return audio
     }
 }
