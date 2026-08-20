@@ -607,9 +607,15 @@ illisible, jamais.
 
 **2. Tout client à jour reçoit les données.** Un client v3-capable s'annonce
 par `X-Canvas-Caps: 3` — posé au même funnel que `X-App-Version` (iOS lot C,
-Android lot H, couche fetch web lot F). Caps ≥ 3 ⇒ v3, natif ou converti.
-L'ABSENCE de cet en-tête ne bloque jamais (au contraire du plancher
-d'écriture) : elle sert la forme compatible.
+Android lot H, couche fetch web lot F). Caps ≥ 3 ⇒ v3 natif toujours, archive
+convertie quand `CANVAS_V3_READ` est armé (sinon v1, qu'il lit aussi — rév. 3,
+précision du cycle final). L'ABSENCE de cet en-tête ne bloque jamais (au
+contraire du plancher d'écriture) : elle sert la forme compatible. Le
+paramètre lecteur est THREADÉ des routes aux services de feed (le point
+d'attache, spec rév. 7/F1) ; le temps réel fait exception NOMMÉE : le
+broadcast porte une seule forme, un vieux client peut rendre un fond par
+défaut transitoire sur une story-scène v3-native, corrigé au premier fetch
+REST négocié.
 
 **3. Tout client ancien reçoit une INVITE, jamais du vide.** Le seul contenu
 qu'un vieux binaire ne sait pas lire est le v3-NATIF (composé par un client
@@ -753,8 +759,9 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
 
 Rien n'est encore implémenté, mais ce document n'est plus une proposition
 ouverte : **les arbitrages sont tranchés** — O1–O11 (O2 par le porteur
-produit) puis O12–O16 (revue totale du 2026-08-20), gelés dans la spec
-d'exécution rév. 4. **Les plans d'exécution existent** : lots A–F écrits et
+produit) puis O12–O16 (revue totale du 2026-08-20) et O17 (négociation de
+lecture — l'archive toujours restituée, la sentinelle qui invite, §6h),
+gelés dans la spec d'exécution rév. 7. **Les plans d'exécution existent** : lots A–F écrits et
 passés par deux cycles de revue adversariale (43 constats, 43 réels, tous
 intégrés) ; lot G (entrées externes) à écrire à son lancement ; lot H
 (Android, lockstep — condition d'armement des deux drapeaux) porté par

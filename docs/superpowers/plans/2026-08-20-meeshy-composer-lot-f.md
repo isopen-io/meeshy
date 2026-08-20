@@ -82,7 +82,7 @@ La table des 18 styles reprend les valeurs du résolveur iOS (grasse/serif/mono/
 
 ---
 
-### Task F3: L'annonce du fond + 🔇 — lois 3-6 côté web
+### Task F3: L'annonce du fond + 🔇 — B3.3-6 côté web
 
 **Files:**
 - Create: `apps/web/components/v2/BackgroundSoundBadge.tsx`

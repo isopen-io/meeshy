@@ -209,7 +209,7 @@ footer .mono{font-size:11.5px}
     <span>statut : SPÉCIFIÉ — arbitrages TOUS tranchés · spec d'exécution 2026-08-20 rév. 5, huit lots (A–F ∥ · G · H)</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
     <span>rév. 2 (2026-08-20) : revue totale 4 axes — 62 constats examinés, 33 réels intégrés · entrées externes (P18) · continuité &amp; PiP (P19) · rupture vécue (P20) · spécimen des 18 styles (P21) · O12–O16</span>
-    <span>rév. 3 (2026-08-20) : alignement de lecture O17 (sentinelle — P20) · rév. 4 : revue d'intégration (9+13 constats appliqués) · iconographie des contrôles (P22) · éditeurs trim·crop·cut (P23) · cas d'usage carrousels &amp; audio (P24)</span>
+    <span>rév. 3 (2026-08-20) : alignement de lecture O17 (sentinelle — P20) · rév. 4 : revue d'intégration (9+13 constats appliqués) · iconographie des contrôles (P22) · éditeurs trim·crop·cut (P23) · cas d'usage carrousels &amp; audio (P24) · rév. 5 : cycle final (10 constats — point d'attache F1, temps réel F3, glyphes prod P22)</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -262,15 +262,15 @@ footer .mono{font-size:11.5px}
       sont f(format COURANT, seed), recalculées à chaque bascule S↔P↔R. Le texte ne migre
       jamais : objets de scène et <span class="mono">content</span> restent chacun chez soi ; le
       champ nouvellement montré naît vide. Rév. 2 (U2).</p></div>
-    <div class="card"><h4>11 · Personne ne lit du vide</h4><p>L'archive est TOUJOURS
-      restituée (v1 d'origine aux anciens clients, v3 converti aux clients à jour) ; un contenu
-      v3-natif servi à un client qui ne sait pas le lire devient une SENTINELLE lisible qui
-      invite à mettre à jour — dans la langue du lecteur (P20). Rév. 3 (O17).</p></div>
     <div class="card"><h4>10 · L'audience se souvient PAR FORMAT</h4><p>Mémoires S/P/R/M
       séparées (préservation de <span class="mono">StoryVisibilityPreferenceStore</span> et
       <span class="mono">lastStatusVisibility</span>) — un post Public ponctuel ne contamine
       jamais la story intime suivante. Le chip se met en évidence quand l'audience diffère de
       l'habituelle du format. Rév. 2 (U7).</p></div>
+    <div class="card"><h4>11 · Personne ne lit du vide</h4><p>L'archive est TOUJOURS
+      restituée (v1 d'origine aux anciens clients, v3 converti aux clients à jour) ; un contenu
+      v3-natif servi à un client qui ne sait pas le lire devient une SENTINELLE lisible qui
+      invite à mettre à jour — dans la langue du lecteur (P20). Rév. 3 (O17).</p></div>
   </div>
 </div></section>
 
@@ -946,7 +946,7 @@ flowchart TD
   d'autre.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
-      <div style="display:flex;gap:2px;padding:24px 9px 4px"><span style="flex:1;height:3px;background:var(--cS);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span></div>
+      <div style="display:flex;gap:2px;padding:24px 9px 4px"><span style="flex:1;height:3px;background:var(--acc);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span></div>
       <div class="ctx" style="padding-top:2px"><span class="ob">@aïcha · 2 h · ♫〰</span><span class="ob" style="margin-left:auto">⋯</span></div>
       <div class="ctx" style="padding-top:0"><span class="ob">Avec Alice, Bob</span></div>
       <div class="sc" style="margin-top:2px"><div class="media169" style="flex:1"><span class="lbl">ScenePlayer</span></div></div>
@@ -1277,7 +1277,7 @@ flowchart TD
   composer web, ou une feature exigeant des requêtes serveur sur les objets (les votes des
   stickers interactifs sont déjà HORS blob, O10). Conséquence immédiate : l'audit des blobs est
   déclassé en hygiène, et le plan d'implémentation devient écrivable.</div>
-  <div class="callout" style="border-left-color:var(--cR)"><b>Décision du porteur produit
+  <div class="callout" style="border-left-color:var(--play)"><b>Décision du porteur produit
   (2026-08-20) — la rupture A′ est retenue</b>, contre la recommandation ci-dessus, qui reste
   consignée comme analyse. Argument : un vieux client qui tente de créer reçoit un échec NET et
   une invite de mise à jour — c'est un coût acceptable, l'idéal étant la mise à jour FORCÉE à la
@@ -1502,7 +1502,7 @@ flowchart TD
         <thead><tr><th>Blob stocké</th><th>Client caps ≥ 3</th><th>Client SANS caps (ancien)</th></tr></thead>
         <tbody>
           <tr><td><b>v1</b> (l'archive, les anciens posts)</td><td>v3 converti (si <span class="mono">CANVAS_V3_READ</span> armé — sinon v1, qu'il lit aussi)</td><td><b>v1 TEL QUEL</b> — restitution garantie par construction : sa forme d'origine</td></tr>
-          <tr><td><b>v3-natif</b> (composé par un client neuf)</td><td>v3 — toujours (il n'a pas d'autre forme)</td><td><b>sentinelle v1 localisée</b> (contenus-scène) · média porteur servi tel quel (posts/réels à attachment — on ne pose pas d'invite par-dessus une vidéo)</td></tr>
+          <tr><td><b>v3-natif</b> (composé par un client neuf — prédicat : <span class="mono">v ≥ 3</span>, la marque, jamais la validité)</td><td>v3 — toujours (il n'a pas d'autre forme ; un v3 au schéma invalide part tel quel, rendu best-effort)</td><td><b>sentinelle v1 localisée</b> (contenus-scène) · post/réel à média porteur : <span class="mono">storyEffects</span> OMIS — le média se lit, pas d'invite par-dessus une vidéo</td></tr>
         </tbody>
       </table></div>
       <ul class="klist">
@@ -1579,7 +1579,7 @@ flowchart TD
     <tbody>
       <tr class="grp"><td colspan="4">Barre haute &amp; socle</td></tr>
       <tr><td>Barre haute</td><td>Fermer · Format · Menu</td><td class="mono">xmark · chevron.down (après le nom du format) · ellipsis</td><td>le chip format porte le badge de qualification réel (<span class="mono">checkmark.seal</span> discret)</td></tr>
-      <tr><td>Socle</td><td>Audience (6 niveaux)</td><td class="mono">globe · person.2 · person.3 · lock · minus.circle (Sauf) · plus.circle (Seulement)</td><td><span class="tag tEx">existant</span> — mêmes symboles que le sélecteur actuel</td></tr>
+      <tr><td>Socle</td><td>Audience (6 niveaux)</td><td class="mono">globe · person.2.fill · person.3.fill · lock.fill · person.fill.xmark (Sauf) · person.fill.checkmark (Seulement)</td><td><span class="tag tEx">existant</span> — les glyphes de `PostVisibility.icon`, variantes .fill comprises (rév. 5 : la planche s'aligne sur la prod, jamais l'inverse)</td></tr>
       <tr><td>Socle</td><td>Aperçu · Publier</td><td class="mono">eye · arrow.up.circle.fill</td><td>Publier = pill dégradé de marque ; états in-flight (progress dans le pill) et échec (<span class="mono">exclamationmark.circle</span>)</td></tr>
       <tr class="grp"><td colspan="4">AMORCE (cible) &amp; outils</td></tr>
       <tr><td>Amorce</td><td>Content (P·R) · Texte · Sticker · Son · Lieu</td><td class="mono">text.alignleft · textformat (Aa) · face.smiling · music.note · mappin.and.ellipse</td><td>la rangée des kinds que le profil autorise (P4)</td></tr>
@@ -1590,7 +1590,7 @@ flowchart TD
       <tr><td>Dessin</td><td>Pinceau · Épaisseur · Couleur · Traits</td><td class="mono">paintbrush.pointed · lineweight · paintpalette · list.bullet</td><td><span class="tag tEx">existant</span> — panneau ouvert tant que le mode est actif</td></tr>
       <tr><td>Stickers</td><td>Mes stickers · Grille emoji · Coller</td><td class="mono">star.square.on.square · face.smiling.inverse · doc.on.clipboard</td><td>appui long sur un récent = retirer (<span class="mono">minus.circle.fill</span> en badge)</td></tr>
       <tr><td>Lieu</td><td>Rechercher · Carte · Découvrabilité · Pastille · Lieu joint</td><td class="mono">magnifyingglass · map · eye.slash/eye · mappin.circle.fill · mappin.slash (retirer)</td><td>le chip « lieu joint sans pastille » (U10) porte <span class="mono">mappin.and.ellipse</span> + xmark</td></tr>
-      <tr><td>Références</td><td>@ inline · Sélecteur · 4 modes</td><td class="mono">at · person.crop.circle.badge.plus · text.cursor (INLINE) · pin (PINNED) · person.2.wave.2 (NOTE) · eye.slash (SILENT)</td><td>appui long sur le chip = menu des modes (<span class="tag tEx">existant</span>)</td></tr>
+      <tr><td>Références</td><td>@ inline · Sélecteur · 4 modes</td><td class="mono">at · person.crop.circle.badge.plus · les 4 modes GARDENT leurs glyphes de prod (menu existant : at / person.crop.square / text.append / bell)</td><td>appui long sur le chip = menu des modes (<span class="tag tEx">existant</span>) — une ré-iconographie des modes serait un changement de langage visuel, hors périmètre (rév. 5)</td></tr>
       <tr><td>Fond</td><td>Couleur · Dégradé · Média · Chip fond</td><td class="mono">circle.fill · circle.lefthalf.filled · photo · rectangle.on.rectangle (le chip qui déplace)</td><td>le fond ne se saisit QUE par son chip (règle existante)</td></tr>
       <tr><td>Slides</td><td>Ajouter · Dupliquer · Supprimer</td><td class="mono">plus.rectangle.on.rectangle · plus.square.on.square · trash</td><td><span class="tag tEx">existant</span> — rail ≤ 10</td></tr>
       <tr class="grp"><td colspan="4">Timeline (P8) &amp; capture (P9)</td></tr>
@@ -1599,7 +1599,7 @@ flowchart TD
       <tr class="grp"><td colspan="4">Lecture (P12) &amp; transport (P19)</td></tr>
       <tr><td>Viewers</td><td>Republier · Partager · Transférer · Favori · Vues · Langues</td><td class="mono">arrow.2.squarepath (↻ — <span class="tag tEx">existant</span>, PostDetailView:1398) · square.and.arrow.up · paperplane · bookmark · eye · character.bubble (Abc)</td><td>↻ ne s'inverse pas en RTL (symbole sémantique)</td></tr>
       <tr><td>Audio</td><td>Muet · Son actif · Annonce fond</td><td class="mono">speaker.slash.fill · speaker.wave.2.fill (<span class="tag tEx">existant</span>, lot E) · music.note + onde animée (composite ♫〰 — la convention testée du header, StoryHeaderMetaGuardTests)</td><td>montés SEULEMENT si piste (B3.5-6)</td></tr>
-      <tr><td>Transport</td><td>±10 s · Play/Pause · Vitesse · AirPlay · PiP · Plein écran</td><td class="mono">gobackward.10 · goforward.10 · play.fill/pause.fill · gauge.with.needle (menu …) · airplayvideo · pip.enter/pip.exit · arrow.up.left.and.arrow.down.right</td><td><span class="tag tEx">existant</span> — VideoTransportControls, préservé (O16)</td></tr>
+      <tr><td>Transport</td><td>±10 s · Play/Pause · Vitesse · AirPlay · PiP · Plein écran</td><td class="mono">gobackward.10 · goforward.10 · play.fill/pause.fill · speedometer (la convention du dépôt — AudioEditorTool.speed) · picker AirPlay natif (AirPlayRoutePicker) · pip.enter/pip.exit · arrow.up.left.and.arrow.down.right</td><td><span class="tag tEx">existant</span> — VideoTransportControls, préservé (O16) ; la vitesse vit dans le menu « … »</td></tr>
       <tr><td>Rupture</td><td>Mise à jour requise</td><td class="mono">arrow.up.circle.fill + lien App Store</td><td>P20 — UpgradeGateView, 7 langues, RTL</td></tr>
     </tbody>
   </table></div>
@@ -1638,11 +1638,11 @@ flowchart TD
         </div>
         <span class="lbl">poignées ≥ 44 pt · haptique aux butées · le scrub AIMANTE la tête de lecture au bord</span>
       </div>
-      <div class="ctx"><span class="ob on">✂ Trim</span><span class="ob">⎯⎯ Split</span><span class="ob">◢ Fade</span><span class="ob">≫ Vitesse</span><span class="ob">🔊 Volume</span><span class="ob">Abc</span></div>
-      <div class="socle" style="justify-content:center"><span class="lbl">Simple : ✂ + Abc · Pro : les six — AudioEditorController.simpleTools</span></div>
+      <div class="ctx"><span class="ob on">✂ Trim</span><span class="ob">Abc</span><span class="ob" style="opacity:.45">Pro ▸ Split · Fade · Vitesse · Volume</span></div>
+      <div class="socle" style="justify-content:center"><span class="lbl">Simple : ✂ + Abc (AudioEditorController.simpleTools) · Pro déplie les six</span></div>
     </div><figcaption><b>Audio — trim &amp; cut.</b> Deux poignées bornent la zone GARDÉE
-    (<span class="mono">timeline.selection</span>) ; Split (<span class="mono">scissors</span>,
-    l'icône réelle du contrôleur) coupe au playhead — deux segments, chacun re-trimmable ; Fade
+    — Trim (<span class="mono">scissors</span>, l'icône réelle du contrôleur) ; Split
+    (<span class="mono">rectangle.split.2x1</span>) coupe au playhead — deux segments, chacun re-trimmable ; Fade
     pose des rampes d'entrée/sortie. La waveform est celle de l'analyseur existant
     (<span class="mono">AudioWaveformAnalyzer</span>). Le résultat nourrit les BORNES du son de
     fond (<span class="mono">bounds{start,end}</span> du contrat v3) — non destructif, l'original
@@ -1657,13 +1657,13 @@ flowchart TD
           <span class="lbl" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)">grille des tiers — coins ≥ 44 pt</span>
         </div>
       </div>
-      <div class="ctx"><span class="ob">Libre</span><span class="ob on">9:16</span><span class="ob">1:1</span><span class="ob">4:3</span><span class="ob">16:9</span><span class="ob" style="margin-left:auto">⟲ 90°</span></div>
+      <div class="ctx"><span class="ob on">Libre</span><span class="ob">1:1</span><span class="ob" style="opacity:.45">Pro ▸ tous les ratios</span><span class="ob" style="margin-left:auto">⟲ 90°</span></div>
       <div class="ctx" style="justify-content:center"><span class="lbl">molette de redressement −45°⟷+45° · double-tap = reset</span></div>
       <div class="socle" style="justify-content:center"><span class="lbl">ImageEditorModel .simple/.pro — crop, filtres, ajustements (drop.fill…)</span></div>
     </div><figcaption><b>Image — rognage.</b> Le cadre se saisit par les coins et les bords
     (cibles débordantes ≥ 44 pt), la grille des tiers apparaît AU geste et disparaît au repos ;
-    les ratios proposés dépendent de la destination (9:16 en tête pour un porteur de scène,
-    libre pour un premier plan). Rotation 90° + redressement fin. Downsample ≤ 2 048 px AVANT
+    le mode Simple garde les essentiels, Pro déplie tous les ratios (la partition
+    EXISTANTE de <span class="mono">ImageEditorModel</span> — préservée, jamais réinventée). Rotation 90° + redressement fin. Downsample ≤ 2 048 px AVANT
     décodage (le budget P15) — l'éditeur travaille sur la copie d'affichage, l'export refait le
     pipeline complet.</figcaption></figure>
     <figure class="phfig lg"><div class="ph"><div class="notch"></div>
@@ -1684,7 +1684,9 @@ flowchart TD
     </div><figcaption><b>Vidéo — trim &amp; cut.</b> Même vocabulaire que l'audio : poignées =
     bornes, Cut au playhead = deux clips (les jointures deviennent des
     <span class="mono">clipTransitions</span> — la mécanique Timeline V2 existante) ; le volume
-    par clip nourrit <span class="mono">payload.muted/volume</span> de l'objet média. En Réel, le
+    par clip nourrit <span class="mono">payload.volume</span> (ajouté au contrat §C1, rév. 7 —
+    le champ v1 `StoryMediaObject.volume` est VIVANT, règle U21) et le muet
+    <span class="mono">payload.muted</span>. En Réel, le
     trim règle la piste MAÎTRE de la timeline (P8) — la durée gardée EST
     <span class="mono">timelineDuration</span>.</figcaption></figure>
   </div>
@@ -1741,8 +1743,9 @@ flowchart TD
       <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · 🔇</span></div>
       <div class="socle"><span class="aud">@leo · <b>♫〰</b></span><span class="pub">Suivre</span></div>
     </div><figcaption><b>3 · Réel, son ORIGINAL.</b> Après l'auteur : <b>♫〰 seulement</b> (note
-    puis onde — B3.4 « si et seulement si ») ; jamais de crédit, c'est SA piste. Pas de bouton
-    « utiliser ce son » si l'extraction n'est pas autorisée (le toggle C7b). Les sous-titres
+    puis onde — B3.4 « si et seulement si ») ; jamais de crédit, c'est SA piste. Le bouton
+    « utiliser ce son » n'apparaît que si l'auteur a autorisé l'extraction de SA piste
+    (le toggle C7b — c'est LE cas qu'il gouverne). Les sous-titres
     karaoké viennent de <span class="mono">sound.transcriptions</span>, résolus au Prisme du
     lecteur.</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
@@ -1754,7 +1757,10 @@ flowchart TD
       <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · 🔇 · <b>♫ utiliser ce son</b></span></div>
       <div class="socle"><span class="aud">@nina · <b>♫ Bleu nuit · @dj_k · 0:22</b> ⟲</span><span class="pub">Suivre</span></div>
     </div><figcaption><b>4 · Réel, son de BIBLIOTHÈQUE.</b> Le crédit complet en marquee avec
-    décompte — et « utiliser ce son » au rail (l'extraction est autorisée ici). La piste boucle
+    décompte — et « utiliser ce son » au rail : pour un son de BIBLIOTHÈQUE il est TOUJOURS
+    monté (l'entité son existe, <span class="mono">soundId</span>) ; le toggle C7b
+    (<span class="mono">allowSoundExtraction</span>) ne gouverne que l'extraction d'un son
+    ORIGINAL (vignette 3). La piste boucle
     avec la vidéo (⟲). Comparer avec la vignette 3 : LA FORME DE L'ANNONCE DIT LA PROVENANCE,
     c'est tout le contrat.</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
@@ -1796,5 +1802,5 @@ flowchart TD
   <span class="mono">ReelRepostEmbedCell.swift</span>, <span class="mono">PostService.ts</span>
   (repost → POST), spec <span class="mono">2026-08-19-post-references-design.md</span>, design
   <span class="mono">2026-08-15-story-atelier-design.md</span> (§11 : 39 features recensées).</p>
-  <p class="mono">Documents sœurs : 2026-08-19-meeshy-composer-design.md (rév. 2) · 2026-08-20-meeshy-composer-execution-spec.md (rév. 5 — décisions gelées O1–O17, huit lots A–H) · revue totale 2026-08-20 : 62 constats examinés, 33 réels intégrés, 8 réfutés avec preuve · rien n'est encore implémenté · Meeshy, Prisme Linguistique</p>
+  <p class="mono">Documents sœurs : 2026-08-19-meeshy-composer-design.md (rév. 3) · 2026-08-20-meeshy-composer-execution-spec.md (rév. 7 — décisions gelées O1–O17, huit lots A–H) · revue totale 2026-08-20 : 62 constats examinés, 33 réels intégrés, 8 réfutés avec preuve · rien n'est encore implémenté · Meeshy, Prisme Linguistique</p>
 </div></footer>
