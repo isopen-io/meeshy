@@ -1578,8 +1578,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `DraftDiscard.isDiscardable`/`afterDiscard` `:feature:conversations` + effacement
       optimiste `ConversationListViewModel.discardDraft` (retrait immédiat de l'état,
       `draftStore.clear`, rollback si échec) ; la ligne perd son aperçu et redescend
-      sous le groupe flottant) ; ephemeral/expired/hidden/view-once/
-      typing, activity-heat, tags, presence/story-ring/mood pending
+      sous le groupe flottant) ; **typing preview done** (slice
+      `conversation-row-typing-indicator`, 2026-08-20 : port iOS `ThemedConversationRow`
+      priorité **typing → draft → last-message** ; pur `:feature:conversations`
+      `ConversationTypingRoster` (SSOT multi-conversation, self-exclu, stop par-user, sélection
+      déterministe) + `conversationRowPreview`/`typingPreview` ; `ConversationListViewModel`
+      collecte `typing:start`/`typing:stop` avec timeout de sûreté 15 s par typer ; la ligne
+      « … écrit » teintée accent prime sur le brouillon) ; ephemeral/expired/hidden/view-once/
+      activity-heat, tags, presence/story-ring/mood pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
