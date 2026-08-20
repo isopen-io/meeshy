@@ -52,6 +52,19 @@ final class SharePendingSendConsumerTests: XCTestCase {
         return dir
     }
 
+    /// Recule artificiellement la date de CRÉATION d'un dossier. Nécessaire
+    /// pour distinguer, dans les tests, un orphelin ANCIEN (candidat au
+    /// balayage) d'un dossier tout juste créé : `FileManager.default
+    /// .createDirectory` pose toujours la vraie date système, alors que
+    /// `sweepOrphanMediaFolders` compare cette date à un `now:` FIGÉ passé
+    /// par le test — sans ce recul explicite, un dossier créé "aujourd'hui"
+    /// comparé à un `now:` ancré dans le passé paraîtrait plus JEUNE que
+    /// l'ancre, jamais assez vieux pour franchir `orphanMediaGracePeriod`.
+    private func backdateCreation(of url: URL, by interval: TimeInterval, from now: Date) throws {
+        try FileManager.default.setAttributes(
+            [.creationDate: now.addingTimeInterval(-interval)], ofItemAtPath: url.path)
+    }
+
     /// Écrit une fiche v:1 et, si elle décrit des médias, les octets
     /// correspondants sous `<mediaRoot>/<shareId>/`. Chaque cible reçoit son
     /// PROPRE `clientMessageId` — comme le fait réellement `SharePendingShare
@@ -835,20 +848,28 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// Un dossier média ORPHELIN — sa fiche a disparu (purge de logout,
     /// suppression manuelle, crash entre les deux écritures) — n'a plus aucune
     /// chance d'être consommé. Il ne doit pas occuper le disque à vie.
+    ///
+    /// La date de création est reculée au-delà d'`orphanMediaGracePeriod` :
+    /// sans ce recul, un dossier ANCIEN aux yeux du test (mais créé par
+    /// `FileManager` à la vraie date système, donc plus RÉCENT que le `now:`
+    /// figé de 2026-07-25 ci-dessous) ne franchirait jamais le délai de
+    /// grâce — voir `backdateCreation`.
     func test_consumeAll_sweepsAnOrphanMediaFolder() async throws {
         let dir = try makeDirectory()
         let mediaRoot = try makeMediaRoot()
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
         let orphan = mediaRoot.appendingPathComponent("cid_orphelin", isDirectory: true)
         try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
         try Data(repeating: 3, count: 16).write(to: orphan.appendingPathComponent("0.jpg"))
+        try backdateCreation(
+            of: orphan, by: SharePendingSendConsumer.orphanMediaGracePeriod + 1, from: now)
         // Une fiche vivante à côté, pour prouver que la purge ne balaie pas tout.
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
         await queue.setShouldThrow(true)
 
         await SharePendingSendConsumer(queue: queue)
-            .consumeAll(in: dir, mediaRoot: mediaRoot,
-                        now: Date(timeIntervalSince1970: 1_785_000_000))
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
         XCTAssertTrue(
@@ -857,19 +878,59 @@ final class SharePendingSendConsumerTests: XCTestCase {
         )
     }
 
+    /// Même recul de date de création qu'au-dessus — sinon le dossier
+    /// "orphelin" créé pendant le test paraîtrait toujours plus frais que
+    /// `orphanMediaGracePeriod` et ne serait jamais balayé, masquant le
+    /// comportement que ce test vérifie (sortie anticipée supprimée).
     func test_consumeAll_withoutAnyFiche_stillSweepsOrphanMediaFolders() async throws {
         let dir = try makeDirectory()
         let mediaRoot = try makeMediaRoot()
+        let now = Date()
         let orphan = mediaRoot.appendingPathComponent("cid_orphelin", isDirectory: true)
         try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+        try backdateCreation(
+            of: orphan, by: SharePendingSendConsumer.orphanMediaGracePeriod + 1, from: now)
 
         await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
-            .consumeAll(in: dir, mediaRoot: mediaRoot, now: Date())
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
 
         XCTAssertFalse(
             FileManager.default.fileExists(atPath: orphan.path),
             "l'ancien code sortait TÔT quand le dossier de fiches était vide — "
             + "les octets orphelins survivaient à tout"
+        )
+    }
+
+    // MARK: - Round 1 de correction (Critical) — délai de grâce du balayage d'orphelins
+    //
+    // `ShareViewController.extractAttachments` copie les fichiers dans
+    // `share_pending_media/<shareId>/` dès `viewDidLoad` — AVANT que
+    // l'utilisateur ait choisi un destinataire. La fiche `share_pending_sends/
+    // <shareId>.json` n'est écrite qu'au tap « Envoyer » (`ShareSender.send`).
+    // Tant que l'utilisateur compose son partage, le dossier est donc
+    // STRUCTURELLEMENT absent de `liveShareIds` : sans délai de grâce, le
+    // balayage d'orphelins (introduit par cette même tâche) le prenait pour
+    // un déchet et l'effaçait au premier retour de Meeshy au premier plan —
+    // silencieusement, sans qu'aucune erreur ne remonte.
+
+    /// Un dossier tout juste créé, sans fiche, n'est PAS un orphelin : c'est
+    /// un partage en cours de composition. Preuve rouge contre le code
+    /// d'avant ce correctif — `sweepOrphanMediaFolders` n'avait alors aucune
+    /// notion d'âge et effaçait tout dossier absent de `liveShareIds`, quel
+    /// que soit le moment de sa création.
+    func test_consumeAll_keepsAFreshMediaFolder_withoutAFiche() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let inProgress = mediaRoot.appendingPathComponent("cid_en_cours", isDirectory: true)
+        try FileManager.default.createDirectory(at: inProgress, withIntermediateDirectories: true)
+        try Data(repeating: 7, count: 16).write(to: inProgress.appendingPathComponent("0.jpg"))
+
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: Date())
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: inProgress.path),
+            "un partage tout juste créé, dont la fiche n'existe pas encore, ne doit jamais être balayé"
         )
     }
 }

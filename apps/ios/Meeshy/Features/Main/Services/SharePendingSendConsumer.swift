@@ -209,6 +209,30 @@ final class SharePendingSendConsumer {
         now.timeIntervalSince(createdAt) > maxAge
     }
 
+    /// Une heure. Le dossier média EXISTE avant que la fiche ne soit écrite —
+    /// `ShareViewController.extractAttachments` copie les fichiers dès
+    /// `viewDidLoad`, avant même que l'utilisateur ait choisi un
+    /// destinataire ; la fiche n'apparaît qu'au tap « Envoyer »
+    /// (`ShareSender.send`). Tant que l'utilisateur compose son partage, le
+    /// dossier est donc STRUCTURELLEMENT absent de `liveShareIds` et
+    /// ressemble à un orphelin. Sans délai de grâce, n'importe quel retour de
+    /// Meeshy au premier plan pendant cette fenêtre (`consumeAll` tourne à
+    /// CHAQUE lancement et retour d'arrière-plan) balayait le dossier SOUS le
+    /// partage en cours — silencieusement, sans jamais remonter d'erreur ; le
+    /// tap « Envoyer » qui suivait écrivait alors une fiche référençant des
+    /// fichiers disparus, qui échouait indéfiniment.
+    ///
+    /// Une heure couvre très largement la composition normale (choix d'un
+    /// destinataire, l'ordre de la dizaine de secondes) ET une interruption
+    /// (notification, appel entrant, détour prolongé) qui ramène
+    /// l'utilisateur sur Meeshy avant qu'il ait fini. Passé ce délai, ce qui
+    /// reste est un VRAI orphelin (extension tuée entre la copie et
+    /// l'écriture de la fiche, feuille abandonnée) — l'attendre une heure de
+    /// plus coûte au plus `ShareLimits.maxTotalBytes` (500 Mio) par partage
+    /// abandonné, borné et négligeable face au risque de détruire un envoi
+    /// en cours.
+    nonisolated static let orphanMediaGracePeriod: TimeInterval = 3_600
+
     private let queue: OfflineMessageQueueing
     private let logger = Logger(subsystem: "me.meeshy.app", category: "share-consumer")
 
@@ -222,7 +246,7 @@ final class SharePendingSendConsumer {
         now: Date = Date()
     ) async {
         var liveShareIds: Set<String> = []
-        defer { sweepOrphanMediaFolders(in: mediaRoot, keeping: liveShareIds) }
+        defer { sweepOrphanMediaFolders(in: mediaRoot, keeping: liveShareIds, now: now) }
 
         guard let directory else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(
@@ -261,12 +285,14 @@ final class SharePendingSendConsumer {
     /// Un dossier média dont la fiche a disparu (purge de logout, crash entre
     /// les deux écritures) n'a plus aucune chance d'être consommé. Balayé à
     /// CHAQUE passage — et hors de la garde de sortie anticipée, sinon un
-    /// dossier de fiches vide le rendrait immortel.
-    private func sweepOrphanMediaFolders(in mediaRoot: URL?, keeping liveShareIds: Set<String>) {
+    /// dossier de fiches vide le rendrait immortel — mais seulement passé
+    /// `orphanMediaGracePeriod` : voir sa doc pour le raisonnement complet.
+    private func sweepOrphanMediaFolders(in mediaRoot: URL?, keeping liveShareIds: Set<String>, now: Date) {
         guard let mediaRoot,
               let folders = try? FileManager.default.contentsOfDirectory(
-                at: mediaRoot, includingPropertiesForKeys: nil) else { return }
+                at: mediaRoot, includingPropertiesForKeys: [.creationDateKey]) else { return }
         for folder in folders where !liveShareIds.contains(folder.lastPathComponent) {
+            guard Self.isOldEnoughToSweep(folder, now: now) else { continue }
             do {
                 try FileManager.default.removeItem(at: folder)
             } catch {
@@ -274,6 +300,27 @@ final class SharePendingSendConsumer {
                     "Dossier média orphelin \(folder.lastPathComponent, privacy: .public) non balayé : \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    /// La date de CRÉATION (`.creationDate`, le "birthtime" APFS) est l'ancre
+    /// — posée UNE SEULE FOIS par `ShareMediaStaging.prepareMediaRoot` avant
+    /// la toute première copie, et qui ne bouge plus ensuite. La date de
+    /// MODIFICATION du même dossier, elle, avance à chaque fichier copié à
+    /// l'intérieur (vérifié empiriquement sur APFS) : elle mesurerait « il y
+    /// a combien de temps ce dossier a-t-il été touché pour la dernière
+    /// fois », pas « depuis quand ce partage existe-t-il » — un mauvais
+    /// signal ici, puisqu'un partage à plusieurs pièces jointes continue de
+    /// s'écrire pendant toute la durée du chargement (`loadFileRepresentation`
+    /// est asynchrone, potentiellement lent sur iCloud).
+    ///
+    /// Un dossier dont la date de création est illisible reste protégé — au
+    /// même titre qu'une fiche datée du futur (`isExpired`), l'incertitude ne
+    /// se résout jamais en faveur de la destruction.
+    nonisolated private static func isOldEnoughToSweep(_ folder: URL, now: Date) -> Bool {
+        guard let createdAt = (try? folder.resourceValues(forKeys: [.creationDateKey]))?.creationDate else {
+            return false
+        }
+        return now.timeIntervalSince(createdAt) > orphanMediaGracePeriod
     }
 
     private func discardMedia(shareId: String, in mediaRoot: URL?) {
