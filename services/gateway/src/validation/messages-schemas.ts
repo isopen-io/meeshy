@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '@meeshy/shared/utils/time-range';
 
 const mongoId = z
   .string()
@@ -34,7 +35,13 @@ const playbackStretch = z.object({
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
   endedBy: z.enum(['pause', 'seek', 'muted', 'completed', 'dismissed', 'superseded'])
-});
+})
+  // Une écoute ne peut finir avant de commencer. Même invariant temporel que
+  // les segments de transcription (`transcriptionSegmentSchema` shared,
+  // `socketTranscriptionSegmentSchema` gateway) — déclaré une seule fois dans
+  // `@meeshy/shared/utils/time-range` (itération 238). Écoute ponctuelle
+  // (`endMs === startMs`) acceptée.
+  .refine(isMsRangeOrdered, MS_RANGE_REFINEMENT);
 
 // ============================================
 // PARAMS SCHEMAS

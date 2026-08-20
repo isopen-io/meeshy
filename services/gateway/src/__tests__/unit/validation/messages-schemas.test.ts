@@ -261,6 +261,24 @@ describe('AttachmentStatusBodySchema', () => {
     ).toBe(false);
   });
 
+  it('rejette une écoute qui finit avant de commencer (endMs < startMs)', () => {
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 500, endMs: 100, endedBy: 'pause' }],
+      }).success
+    ).toBe(false);
+  });
+
+  it('accepte une écoute ponctuelle (endMs === startMs)', () => {
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 250, endMs: 250, endedBy: 'seek' }],
+      }).success
+    ).toBe(true);
+  });
+
   it('rejette une trace sans motif de fin', () => {
     expect(
       AttachmentStatusBodySchema.safeParse({
