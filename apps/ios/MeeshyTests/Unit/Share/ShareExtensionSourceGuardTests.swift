@@ -119,7 +119,13 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
 
     /// Ne jamais s'annoncer pour un type qu'on ne sait pas traiter : Meeshy
     /// apparaîtrait dans la feuille de partage de Photos et y échouerait.
-    func test_infoPlist_advertisesOnlyTextAndURL() throws {
+    /// Contrat d'activation du lot B-1 : texte, URL, images, vidéos ET
+    /// fichiers. L'ancienne version de ce garde ne vérifiait PAS
+    /// `…SupportsFileWithMaxCount` — la troisième clé serait passée sans le
+    /// faire rougir. Les trois valeurs sont vérifiées, pas seulement la
+    /// présence des clés : c'est le plafond 20 qui contient le seau de rate
+    /// limiting PLATEFORME (300 req/min/IP, Fastify sans `trustProxy`).
+    func test_infoPlist_advertisesTextURLImageMovieAndFile() throws {
         let plist = try String(
             contentsOf: extensionDirectory.appendingPathComponent("Info.plist"),
             encoding: .utf8
@@ -128,17 +134,39 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
         XCTAssertTrue(plist.contains("NSExtensionActivationSupportsText"))
         XCTAssertTrue(plist.contains("NSExtensionActivationSupportsWebURLWithMaxCount"))
 
-        for unsupported in [
+        for key in [
             "NSExtensionActivationSupportsImageWithMaxCount",
             "NSExtensionActivationSupportsMovieWithMaxCount",
+            "NSExtensionActivationSupportsFileWithMaxCount"
+        ] {
+            XCTAssertEqual(
+                Self.integerValue(of: key, in: plist), 20,
+                "\(key) doit valoir 20 — sans la clé Meeshy n'apparaît pas dans la feuille "
+                + "de partage correspondante ; au-delà de 20 le seau de rate limiting "
+                + "plateforme rend le partage inatteignable"
+            )
+        }
+
+        for unsupported in [
             "NSExtensionActivationSupportsAttachmentsWithMinCount",
             "NSExtensionActivationSupportsAttachmentsWithMaxCount"
         ] {
             XCTAssertFalse(
                 plist.contains(unsupported),
-                "\(unsupported) annonce un type que le lot 1 ne sait pas envoyer"
+                "\(unsupported) est REDONDANTE avec les règles par type, et moins précise qu'elles"
             )
         }
+    }
+
+    /// Lit `<key>K</key> … <integer>N</integer>` sans dépendre de l'indentation.
+    private static func integerValue(of key: String, in plist: String) -> Int? {
+        guard let keyRange = plist.range(of: "<key>\(key)</key>") else { return nil }
+        let tail = plist[keyRange.upperBound...]
+        guard let open = tail.range(of: "<integer>"),
+              let close = tail.range(of: "</integer>"),
+              open.upperBound <= close.lowerBound else { return nil }
+        return Int(tail[open.upperBound..<close.lowerBound]
+            .trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     /// Sans cet entitlement, la lecture du JWT renvoie `errSecItemNotFound`
