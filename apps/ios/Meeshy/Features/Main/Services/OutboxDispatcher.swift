@@ -862,6 +862,33 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
+            // Fan-out de partage : les cibles 2..N réclament une COPIE des
+            // pièces jointes du message porté par la première — jamais un
+            // transfert, qui ferait afficher « Transféré depuis <conversation
+            // source> » au destinataire (décision user, invariant produit).
+            let fanout = ShareFanoutOriginResolver.resolve(
+                copyAttachmentsFromClientMessageId: item.copyAttachmentsFromClientMessageId,
+                resolvedServerId: try? await DependencyContainer.shared.messagePersistence
+                    .resolveServerId(for: item.copyAttachmentsFromClientMessageId ?? "")
+            )
+            let copyAttachmentsFromMessageId: String?
+            switch fanout {
+            case .notAFanout:
+                copyAttachmentsFromMessageId = nil
+            case .ready(let serverMessageId):
+                copyAttachmentsFromMessageId = serverMessageId
+            case .waitingForOrigin(let clientMessageId):
+                // Partir maintenant livrerait un message VIDE de pièces
+                // jointes. L'outbox réessaie en backoff : l'origine est dans la
+                // même file, elle partira d'abord.
+                throw NSError(
+                    domain: "OutboxDispatcher",
+                    code: 425,
+                    userInfo: [NSLocalizedDescriptionKey:
+                        "Origine de partage \(clientMessageId) pas encore acquittée"]
+                )
+            }
+
             let request = SendMessageRequest(
                 content: item.content,
                 replyToId: item.replyToId,
@@ -871,7 +898,8 @@ struct OutboxDispatcher: OutboxDispatching {
                 clientMessageId: item.clientMessageId,
                 // Lieu partagé rejoué au renvoi, comme pour un post et un
                 // commentaire : clé top-level `location`, omise quand nil.
-                location: item.location
+                location: item.location,
+                copyAttachmentsFromMessageId: copyAttachmentsFromMessageId
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request

@@ -90,16 +90,19 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/u/" />
             </intent-filter>
-            <!-- App Link : le lien d'invitation a une conversation
-                 (https://meeshy.me/join/{identifier}, CreatedShareLink.joinUrl /
-                 MyShareLink.joinUrl) ouvre l'app directement. meeshy://join/{identifier}
-                 est deja couvert par le filtre scheme-only plus haut. Meme verification
-                 assetlinks.json que le magic link ci-dessus —
-                 apps/android/docs/magic-link-app-links.md. -->
+            <!-- App Link : le lien d'invitation a une conversation ouvre l'app
+                 directement. /chat/{identifier} est la forme CANONIQUE que
+                 CreatedShareLink.joinUrl / MyShareLink.joinUrl fabriquent
+                 desormais ; /join/{identifier} reste capture pour les liens
+                 deja en circulation (le web le redirige en 308 vers /chat).
+                 meeshy://join/{identifier} est deja couvert par le filtre
+                 scheme-only plus haut. Meme verification assetlinks.json que
+                 le magic link ci-dessus — apps/android/docs/magic-link-app-links.md. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/chat/" />
                 <data android:scheme="https" android:host="meeshy.me" android:pathPrefix="/join/" />
             </intent-filter>
         </activity>

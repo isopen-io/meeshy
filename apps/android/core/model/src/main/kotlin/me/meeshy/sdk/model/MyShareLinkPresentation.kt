@@ -20,14 +20,15 @@ public val MyShareLink.displayName: String
         ?: linkId
 
 /**
- * The public, shareable join URL — `{webOrigin}/join/{identifier ?? linkId}`. Port
+ * The public, shareable URL — `{webOrigin}/chat/{identifier ?? linkId}`, the
+ * canonical share page (`/join` only survives as a 308 redirect). Port
  * of iOS `joinUrl`. A trailing slash on [webOrigin] is dropped so the path never
  * doubles up; a blank identifier falls through to the raw [MyShareLink.linkId].
  */
 public fun MyShareLink.joinUrl(webOrigin: String): String {
     val base = webOrigin.trimEnd('/')
     val slug = identifier?.takeIf { it.isNotBlank() } ?: linkId
-    return "$base/join/$slug"
+    return "$base/chat/$slug"
 }
 
 /**

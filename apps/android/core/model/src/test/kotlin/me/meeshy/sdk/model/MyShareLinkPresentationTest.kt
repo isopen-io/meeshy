@@ -51,19 +51,19 @@ class MyShareLinkPresentationTest {
     @Test
     fun joinUrl_usesTheIdentifierWhenPresent() {
         assertThat(link(identifier = "party", linkId = "link-1").joinUrl("https://meeshy.me"))
-            .isEqualTo("https://meeshy.me/join/party")
+            .isEqualTo("https://meeshy.me/chat/party")
     }
 
     @Test
     fun joinUrl_fallsBackToLinkIdWhenIdentifierBlank() {
         assertThat(link(identifier = "  ", linkId = "link-1").joinUrl("https://meeshy.me"))
-            .isEqualTo("https://meeshy.me/join/link-1")
+            .isEqualTo("https://meeshy.me/chat/link-1")
     }
 
     @Test
     fun joinUrl_dropsATrailingSlashOnTheWebOrigin() {
         assertThat(link(identifier = "party").joinUrl("https://meeshy.me/"))
-            .isEqualTo("https://meeshy.me/join/party")
+            .isEqualTo("https://meeshy.me/chat/party")
     }
 
     @Test

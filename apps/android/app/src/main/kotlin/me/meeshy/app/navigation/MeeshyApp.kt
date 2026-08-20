@@ -131,16 +131,24 @@ object Routes {
     const val GUEST_JOIN_DEEP_LINK = "meeshy://$GUEST_JOIN"
 
     /**
-     * The receiving half of `CreatedShareLink.joinUrl(webOrigin)` /
-     * `MyShareLink.joinUrl(webOrigin)` (`core:model`), which build
-     * `{webOrigin}/join/{identifier}` — `https://meeshy.me/join/{identifier}` in
-     * production. Only `meeshy://join/{identifier}` had a `navDeepLink` until this
-     * one: a conversation invite link shared as the plain web URL these two
-     * `joinUrl` helpers produce opened a browser instead of the app, on the
-     * feature whose entire purpose is inviting someone who does not have the app
-     * open yet.
+     * LEGACY receiver — `https://meeshy.me/join/{identifier}`, the shape the
+     * `joinUrl` helpers built before 2026-08-20. Links of that shape are still
+     * in the wild (old chats, old QR codes), so the app keeps claiming them ;
+     * the web 308s them to `/chat/{identifier}`. Fresh links are received by
+     * [GUEST_JOIN_CHAT_WEB_DEEP_LINK] below.
      */
     const val GUEST_JOIN_WEB_DEEP_LINK = "https://meeshy.me/$GUEST_JOIN"
+
+    /**
+     * The CANONICAL web share URL — `{webOrigin}/chat/{identifier}` — the shape
+     * `CreatedShareLink.joinUrl` / `MyShareLink.joinUrl` build since 2026-08-20
+     * (`/join/{identifier}` only survives as a 308 redirect on the web and as
+     * [GUEST_JOIN_WEB_DEEP_LINK] here, for links already in the wild). Same
+     * guest-join destination: the identifier resolves through the same
+     * `/links/:identifier` gateway route whichever path carried it.
+     */
+    const val GUEST_JOIN_CHAT_WEB_DEEP_LINK =
+        "https://meeshy.me/chat/{${GuestJoinViewModel.IDENTIFIER_ARG}}"
     fun guestJoin(identifier: String): String = "join/$identifier"
     const val CONVERSATIONS = "conversations"
     const val NEW_CONVERSATION = "conversations/new"
@@ -490,6 +498,7 @@ fun MeeshyApp(
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.GUEST_JOIN_DEEP_LINK },
                     navDeepLink { uriPattern = Routes.GUEST_JOIN_WEB_DEEP_LINK },
+                    navDeepLink { uriPattern = Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK },
                 ),
             ) {
                 GuestJoinScreen(
