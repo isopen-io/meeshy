@@ -869,6 +869,147 @@ describe('TusUploadService', () => {
     });
   });
 
+  // Le chemin `startDirectUpload` (fichiers ≤ SMALL_FILE_THRESHOLD) est le
+  // plus fréquenté des quatre chemins d'upload — vérifié séparément du bloc
+  // tus ci-dessus, qui ne couvre que `onError` / les gros fichiers.
+  describe('retry after an authentication refusal — small files (direct upload)', () => {
+    it('does not call refreshAuthToken when the upload succeeds on the first try', async () => {
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+      const att = makeAttachmentResponse();
+
+      const promise = service.uploadFiles([file]);
+
+      mockXhrInstance.responseText = JSON.stringify({ data: { attachments: [att] } });
+      mockXhrInstance.status = 200;
+      mockXhrInstance.triggerEvent('load');
+
+      await promise;
+      expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
+    });
+
+    it('does not call refreshAuthToken for a non-401 failure', async () => {
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+      const promise = service.uploadFiles([file]);
+
+      mockXhrInstance.responseText = 'Server error';
+      mockXhrInstance.status = 500;
+      mockXhrInstance.triggerEvent('load');
+
+      await expect(promise).rejects.toThrow('Upload failed with status 500');
+      expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
+    });
+
+    it('refreshes and retries exactly once on a 401, resolving with the retry response', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+      const promise = service.uploadFiles([file]);
+
+      // First attempt: refused for authentication.
+      mockXhrInstance.responseText = '';
+      mockXhrInstance.status = 401;
+      mockXhrInstance.triggerEvent('load');
+
+      // Let the refresh promise + retry scheduling flush.
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+      expect(mockXhrInstance.open).toHaveBeenCalledTimes(2);
+
+      // Retry succeeds.
+      const att = makeAttachmentResponse('att-retried');
+      mockXhrInstance.responseText = JSON.stringify({ data: { attachments: [att] } });
+      mockXhrInstance.status = 200;
+      mockXhrInstance.triggerEvent('load');
+
+      const results = await promise;
+      expect(results[0]).toMatchObject({ id: att.id });
+    });
+
+    it('fails definitively on a second 401 without a third attempt', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+      const promise = service.uploadFiles([file]);
+
+      mockXhrInstance.responseText = '';
+      mockXhrInstance.status = 401;
+      mockXhrInstance.triggerEvent('load');
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+
+      // Retry is refused again.
+      mockXhrInstance.responseText = '';
+      mockXhrInstance.status = 401;
+      mockXhrInstance.triggerEvent('load');
+
+      await expect(promise).rejects.toThrow('Upload failed with status 401');
+      // Still only ever refreshed once — no third attempt.
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+      expect(mockXhrInstance.open).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects immediately when the refresh itself fails, without a retry request', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(false);
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+      const promise = service.uploadFiles([file]);
+
+      mockXhrInstance.responseText = '';
+      mockXhrInstance.status = 401;
+      mockXhrInstance.triggerEvent('load');
+
+      await expect(promise).rejects.toThrow('Session expirée, veuillez vous reconnecter');
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+      expect(mockXhrInstance.open).toHaveBeenCalledTimes(1);
+    });
+
+    it('rebuilds the auth headers for the retry instead of reusing the stale ones', async () => {
+      const { createAuthHeaders } = jest.requireMock('@/utils/token-utils') as {
+        createAuthHeaders: jest.Mock;
+      };
+      createAuthHeaders
+        .mockReturnValueOnce({ Authorization: 'Bearer stale-token' })
+        .mockReturnValueOnce({ Authorization: 'Bearer fresh-token' });
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+
+      const service = new TusUploadService();
+      service.setToken('stale-token');
+      const file = makeSmallFile();
+      const promise = service.uploadFiles([file]).catch(() => undefined);
+
+      expect(createAuthHeaders).toHaveBeenNthCalledWith(1, 'stale-token');
+
+      mockXhrInstance.responseText = '';
+      mockXhrInstance.status = 401;
+      mockXhrInstance.triggerEvent('load');
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Le jeton refusé («stale-token») ne doit JAMAIS resservir à la
+      // reprise : le second appel lit le jeton COURANT via `undefined`,
+      // jamais le jeton d'origine déjà rejeté par le serveur.
+      expect(createAuthHeaders).toHaveBeenNthCalledWith(2, undefined);
+      expect(mockXhrInstance.setRequestHeader).toHaveBeenLastCalledWith(
+        'Authorization',
+        'Bearer fresh-token'
+      );
+
+      mockXhrInstance.responseText = JSON.stringify({ data: { attachments: [makeAttachmentResponse()] } });
+      mockXhrInstance.status = 200;
+      mockXhrInstance.triggerEvent('load');
+
+      await promise;
+    });
+  });
+
   describe('pauseAll', () => {
     it('aborts all active uploads and marks them as paused', async () => {
       const service = new TusUploadService();

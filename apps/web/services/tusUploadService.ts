@@ -313,7 +313,6 @@ export class TusUploadService {
 
   private async startDirectUpload(item: QueueItem) {
     const { file, fileId, metadata, resolve, reject } = item;
-    const authHeaders = createAuthHeaders(this.token) as Record<string, string>;
 
     this.progress.set(fileId, {
       ...this.progress.get(fileId)!,
@@ -328,44 +327,7 @@ export class TusUploadService {
         formData.append('metadata_0', JSON.stringify(metadata));
       }
 
-      const xhr = new XMLHttpRequest();
-
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          const percentage = Math.round((event.loaded / event.total) * 100);
-          this.progress.set(fileId, {
-            ...this.progress.get(fileId)!,
-            status: 'uploading',
-            percentage,
-            bytesUploaded: event.loaded,
-          });
-          this.emitProgress();
-        }
-      });
-
-      const result = await new Promise<UploadedAttachmentResponse>((res, rej) => {
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            const parsed = JSON.parse(xhr.responseText);
-            const attachments = parsed.data?.attachments || parsed.attachments || [];
-            if (attachments.length > 0) {
-              res(attachments[0]);
-            } else {
-              rej(new Error('No attachment returned'));
-            }
-          } else {
-            rej(new Error(`Upload failed with status ${xhr.status}`));
-          }
-        });
-        xhr.addEventListener('error', () => rej(new Error('Network error')));
-        xhr.addEventListener('timeout', () => rej(new Error('Upload timeout')));
-        xhr.timeout = 600000;
-        xhr.open('POST', buildApiUrl('/attachments/upload'));
-        Object.entries(authHeaders).forEach(([key, value]) => {
-          xhr.setRequestHeader(key, value as string);
-        });
-        xhr.send(formData);
-      });
+      const result = await this.sendDirectUploadRequest(item, formData, false);
 
       this.progress.set(fileId, {
         ...this.progress.get(fileId)!,
@@ -389,6 +351,79 @@ export class TusUploadService {
       this.activeUploads.delete(fileId);
       this.processQueue();
     }
+  }
+
+  /**
+   * Envoie la requête XHR d'upload direct (fichiers ≤ SMALL_FILE_THRESHOLD,
+   * chemin le plus fréquenté : `POST /attachments/upload`). Sur un refus
+   * d'authentification (401), retente EXACTEMENT une fois après un
+   * rafraîchissement réussi du jeton — même idiome que
+   * `AttachmentService.sendUploadRequest` (`attachmentService.ts`), le
+   * service le plus proche : XHR non repris, donc pas de fermeture mutable
+   * façon `hasAttemptedAuthRetry` de `startTusUpload` ci-dessus, mais un
+   * paramètre `isRetry` porté par l'appel récursif. Un jeton neuf ne sert à
+   * rien s'il n'est pas envoyé : les en-têtes sont reconstruits (jamais
+   * réutilisés) avant la nouvelle tentative, via `createAuthHeaders(undefined)`
+   * qui relit le jeton COURANT au lieu du `this.token` potentiellement périmé.
+   */
+  private sendDirectUploadRequest(
+    item: QueueItem,
+    formData: FormData,
+    isRetry: boolean
+  ): Promise<UploadedAttachmentResponse> {
+    const { fileId } = item;
+    const authHeaders = createAuthHeaders(isRetry ? undefined : this.token) as Record<string, string>;
+
+    return new Promise<UploadedAttachmentResponse>((res, rej) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentage = Math.round((event.loaded / event.total) * 100);
+          this.progress.set(fileId, {
+            ...this.progress.get(fileId)!,
+            status: 'uploading',
+            percentage,
+            bytesUploaded: event.loaded,
+          });
+          this.emitProgress();
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          const parsed = JSON.parse(xhr.responseText);
+          const attachments = parsed.data?.attachments || parsed.attachments || [];
+          if (attachments.length > 0) {
+            res(attachments[0]);
+          } else {
+            rej(new Error('No attachment returned'));
+          }
+          return;
+        }
+
+        if (xhr.status === 401 && !isRetry) {
+          apiService.refreshAuthToken().then((refreshed) => {
+            if (!refreshed) {
+              rej(new Error('Session expirée, veuillez vous reconnecter'));
+              return;
+            }
+            res(this.sendDirectUploadRequest(item, formData, true));
+          });
+          return;
+        }
+
+        rej(new Error(`Upload failed with status ${xhr.status}`));
+      });
+      xhr.addEventListener('error', () => rej(new Error('Network error')));
+      xhr.addEventListener('timeout', () => rej(new Error('Upload timeout')));
+      xhr.timeout = 600000;
+      xhr.open('POST', buildApiUrl('/attachments/upload'));
+      Object.entries(authHeaders).forEach(([key, value]) => {
+        xhr.setRequestHeader(key, value as string);
+      });
+      xhr.send(formData);
+    });
   }
 
   private emitProgress() {
