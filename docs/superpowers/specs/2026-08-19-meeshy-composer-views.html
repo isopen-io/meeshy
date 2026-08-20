@@ -562,20 +562,26 @@ flowchart TD
       <span class="mono">allowSoundExtraction</span> est enfin transmis (défaut documenté :
       déclaré, jamais envoyé).</p>
       <p><b>La loi des deux plans</b> (directive 2026-08-20) : un chip audio n'existe que pour le
-      son de PREMIER PLAN (Story · Réel). Le son de FOND n'est jamais un chip — il s'annonce
-      <span class="mono">♫〰</span> après les détails d'auteur (note PUIS onde, convention déjà
-      verrouillée par test) et boucle tant que la timeline du contenu n'est pas finie, exactement
-      comme la vidéo de fond. <span class="tag tNew">nouveau</span> un POST peut porter un son de
-      fond — carrousel compris : la piste joue pendant qu'on feuillette, liée à la timeline du
-      post, pas à la page. Le fil reste muet (règle autoplay existante) ; ♫〰 le dit.</p>
+      son de PREMIER PLAN (Story · Réel). Le son de FOND n'est jamais un chip — il s'annonce après
+      les détails d'auteur et boucle tant que la timeline du contenu n'est pas finie, exactement
+      comme la vidéo de fond. <b>Sa forme dit sa provenance</b> : <span class="mono">♫〰</span>
+      (note puis onde) SI ET SEULEMENT SI le son est ORIGINAL ; s'il vient de la bibliothèque,
+      le crédit complet <span class="mono">« titre · @pseudo · M:SS »</span> — marquee et décompte.
+      C'est l'atome de résolution EXISTANT (<span class="mono">AudioChipDisplay.resolve</span> :
+      soundId = emprunt → marquee ; piste propre → sinusoïde), promu règle des trois formats au
+      lieu d'être re-fabriqué par chaque header. <span class="tag tNew">nouveau</span> un POST peut
+      porter un son de fond — carrousel compris : la piste joue pendant qu'on feuillette, liée à la
+      timeline du post, pas à la page. Le fil reste muet (règle autoplay existante).</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>Fond (bibliothèque/fichier/micro, bornes,
           volume, variantes TTS) + chips audio premier plan posés sur la scène.</p></span>
         <span class="f"><span class="chip chP">P</span><p>Post audio (voix, transcription) et post
           « utiliser ce son » — conservés. <span class="tag tNew">nouveau</span> son de FOND
-          (carrousel compris) : boucle sur la timeline, fil muet, ♫〰 après l'auteur.</p></span>
+          (carrousel compris) : boucle sur la timeline, fil muet ; après l'auteur, ♫〰 si original,
+          crédit complet si bibliothèque.</p></span>
         <span class="f"><span class="chip chR">R</span><p>Son original + musique empruntée ;
-          chips = premier plan uniquement, le fond s'annonce ♫〰 après l'auteur.</p></span>
+          chips = premier plan uniquement. Après l'auteur : ♫〰 si piste propre,
+          « titre · @pseudo · M:SS » si emprunt.</p></span>
         <span class="f"><span class="tag tAb">M —</span><p>Un mood n'a pas de piste.</p></span>
       </div></div>
 
@@ -852,23 +858,27 @@ flowchart TD
       <div class="sc" style="margin:24px 0 0;border-radius:0;border:none">
         <div class="band"><span class="ob">Titre timé</span></div>
         <div class="media169"><span class="lbl">vidéo — boucle</span></div>
-        <div class="band"><span class="ob">♫ Nuits d'été · @aïcha · 0:15</span></div>
+        <div class="band"><span class="ob">sous-titres timés</span></div>
       </div>
       <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · ♫ utiliser ce son</span></div>
-      <div class="socle"><span class="aud">@aïcha · ♫〰</span><span class="pub">Suivre</span></div>
-    </div><figcaption><span class="chip chR">R</span> <b>Réel.</b> Pager vertical, boucle, crédit
-    sonore en marquee avec décompte, « utiliser ce son » (si extraction autorisée), captions.
-    Une story publiée = un réel de 20 h — même surface sociale, seul le TTL diffère.</figcaption></figure>
+      <div class="socle"><span class="aud">@aïcha · ♫ Nuits d'été · @sam · 0:15</span><span class="pub">Suivre</span></div>
+    </div><figcaption><span class="chip chR">R</span> <b>Réel.</b> Pager vertical, boucle,
+    « utiliser ce son » (si extraction autorisée), captions. Le fond s'annonce après l'auteur :
+    ici un EMPRUNT, donc crédit complet en marquee avec décompte — un son original n'afficherait
+    que ♫〰. Une story publiée = un réel de 20 h — même surface sociale, seul le TTL diffère.</figcaption></figure>
   </div>
   <div class="callout"><b>Invariant du rail (conservé).</b> Le plan d'actions est figé à l'entrée
   du slide — aucun bouton n'apparaît en cours de lecture. Les compteurs vivent, les surfaces non.
   Détail dans la feuille d'engagement commune ; transcription et signalement dans le menu « … ».</div>
   <div class="callout"><b>La loi des deux plans audio (2026-08-20).</b> Un chip audio = son de
-  PREMIER PLAN, Story et Réel uniquement. Le son de FOND n'est jamais un chip : il s'annonce
-  <span class="mono">♫〰</span> juste après les détails d'auteur — sur les trois formats — et
-  boucle tant que la timeline du contenu court, comme la vidéo de fond. Et <b>l'icône est le
-  verbe</b> : <span class="mono">@marc · ↻ @aïcha</span>, jamais « a republié » en toutes lettres —
-  le glyphe suffit, l'air compte (généralisé, iOS déjà conforme depuis le 2026-08-19).</div>
+  PREMIER PLAN, Story et Réel uniquement. Le son de FOND n'est jamais un chip : il s'annonce juste
+  après les détails d'auteur — sur les trois formats — et boucle tant que la timeline du contenu
+  court, comme la vidéo de fond. <b>Sa forme dit sa provenance</b> : <span class="mono">♫〰</span>
+  si et seulement si le son est ORIGINAL ; s'il vient de la bibliothèque, le crédit complet
+  <span class="mono">« titre · @pseudo · M:SS »</span> (marquee, décompte) — l'attribution d'une
+  œuvre empruntée est une INFORMATION, pas un verbe : elle ne tombe pas sous la loi 7. Celle-ci
+  reste entière ailleurs : <span class="mono">@marc · ↻ @aïcha</span>, jamais « a republié » en
+  toutes lettres (iOS conforme depuis le 2026-08-19).</div>
 </div></section>
 
 <!-- ================================================================ P13 -->
@@ -923,7 +933,7 @@ flowchart TD
       <tr><td>Références en lecture</td><td class="ok">✓ badge · « Avec … » · marqueur SILENT</td><td class="ok">✓ idem</td><td class="ok">✓ + @ valides dans l'embed</td><td class="ok">✓ « Avec … »</td></tr>
       <tr><td>Accès référencé expiré</td><td class="ok">✓ 24 h · consommé à la vue</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ok">✓ idem S</td></tr>
       <tr><td>Muet / son</td><td class="ok">✓ + mute par piste</td><td class="ok">✓ (autoplay muet)</td><td class="ok">✓</td><td class="ab">—</td></tr>
-      <tr><td>Indicateur ♫〰 après l'auteur</td><td class="ok">✓ note+onde (convention testée)</td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr><td>Fond annoncé après l'auteur</td><td class="ok">✓ ♫〰 si ORIGINAL · « titre · @pseudo · M:SS » si bibliothèque (atome AudioChipDisplay.resolve)</td><td class="nv">◆ même règle</td><td class="nv">◆ même règle</td><td class="ab">—</td></tr>
       <tr><td>Attribution ↻ sans verbe</td><td class="ab">— (pas d'attribution en story)</td><td class="ok">✓ iOS 2026-08-19 · web à aligner</td><td class="ok">✓ idem</td><td class="ab">—</td></tr>
       <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
       <tr><td>Partage externe · lien tracé</td><td class="ok">✓ /l/ token</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
@@ -966,8 +976,9 @@ flowchart TD
       de carrousel selon le contexte. PasteButton système uniquement — le presse-papiers n'est
       jamais lu hors geste, le prompt iOS ne surgit jamais.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Son de fond sur Post</h4><p>Carrousel
-      compris : la piste boucle sur la timeline du post pendant qu'on feuillette. Fil muet, ♫〰
-      après l'auteur — la story et le réel disent déjà le son ainsi.</p></div>
+      compris : la piste boucle sur la timeline du post pendant qu'on feuillette. Fil muet ; après
+      l'auteur, ♫〰 si son ORIGINAL, crédit « titre · @pseudo · M:SS » si bibliothèque — l'atome de
+      résolution existant, promu règle des trois formats.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> L'icône est le verbe</h4><p>
       <span class="mono">@marc · ↻ @aïcha</span> — jamais « a republié ». Généralisé : tout glyphe
       établi (↻, ♫〰, 👁) remplace son texte. iOS conforme depuis le 2026-08-19 ; web à aligner.</p></div>

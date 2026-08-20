@@ -274,16 +274,29 @@ champ.
 
 Un chip audio n'existe que pour le son de **premier plan** — Story et Réel, là où
 l'objet posé EST du contenu. Le son de **fond** n'est jamais un chip : il s'annonce
-`♫〰` juste après les détails d'auteur (note PUIS onde — convention du header de
-story déjà verrouillée par test) et **boucle tant que la timeline du contenu
+juste après les détails d'auteur et **boucle tant que la timeline du contenu
 court**, exactement comme la vidéo de fond.
+
+**La forme de l'annonce dit la provenance** (directive 2026-08-20) :
+
+- `♫〰` (note puis onde) **si et seulement si le son est ORIGINAL** — la piste
+  propre de l'auteur, ou le son natif de sa vidéo ;
+- **crédit complet `« titre · @pseudo · M:SS »`** (marquee, décompte) **si le son
+  vient de la bibliothèque** — une œuvre empruntée s'attribue, toujours.
+
+Ce n'est pas une règle neuve mais la PROMOTION d'un atome existant :
+`AudioChipDisplay.resolve` tranche déjà ainsi (soundId = emprunt → marquee ;
+piste propre → sinusoïde). Il devient l'unique résolveur des trois formats, au
+lieu que chaque header re-fabrique son crédit — c'était précisément une rupture
+assumée de Story Atelier, la voilà systématisée. Note sur la loi 7 (« l'icône est
+le verbe ») : l'attribution d'une œuvre empruntée est une *information*, pas un
+verbe — le crédit complet ne la contredit pas.
 
 Nouveau : **un Post peut porter un son de fond, carrousel compris.** La piste est
 liée à la timeline du post, jamais à l'index de page — on feuillette, le son
 continue (même leçon que le compteur didSet qui rembobinait la clé audio du
 composer : le temps appartient au contenu, pas à la navigation). Le fil reste muet
-(règle d'autoplay existante) ; `♫〰` dit la présence. Le Réel adopte le même
-indicateur après l'auteur.
+(règle d'autoplay existante). Le Réel adopte la même annonce après l'auteur.
 
 ## 6b. Vrais stickers, collage, bibliothèque locale (2026-08-20)
 
@@ -408,8 +421,8 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
 5. **Les viewers** — `MeeshyScenePlayer` sous les trois chromes ; les
    conventions de lecture déjà figées (durée, crédit sonore, rail figé, barre de
    langues) sont reprises telles quelles — plus la loi des deux plans audio et
-   `♫〰` après l'auteur sur Post/Réel (§6a), et l'attribution `↻` sans verbe
-   généralisée au web (§6c).
+   l'annonce du fond après l'auteur, ♫〰 ou crédit selon la provenance (§6a), et
+   l'attribution `↻` sans verbe généralisée au web (§6c).
 6. **Le nettoyage** — schéma strict côté serveur une fois l'audit fait (§8.2),
    retrait de la lecture v2.
 
