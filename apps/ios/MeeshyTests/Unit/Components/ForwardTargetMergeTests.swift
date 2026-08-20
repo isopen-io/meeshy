@@ -33,4 +33,28 @@ final class ForwardTargetMergeTests: XCTestCase {
         XCTAssertEqual(out.map(\.id), ["conv:g1", "user:u1"],
                        "un groupe n'absorbe personne — seule une conversation directe le peut")
     }
+
+    // MARK: - Appartenance (drapeau serveur, décision du user 2026-08-19)
+
+    /// Le drapeau serveur PRIME sur le tableau `participants` : celui-ci est
+    /// tronqué à cinq et n'est plus émis du tout pour un non-membre — il ne
+    /// peut donc jamais prouver la non-appartenance.
+    func test_isReachable_serverFlagWins_overTruncatedParticipants() {
+        XCTAssertTrue(ForwardTargetMerge.isReachableConversation(
+            type: "public", participantUserIds: ["u1", "u2"], currentUserId: "me", isMember: true))
+        XCTAssertFalse(ForwardTargetMerge.isReachableConversation(
+            type: "public", participantUserIds: ["me"], currentUserId: "me", isMember: false))
+    }
+
+    /// Gateway antérieur : sans drapeau, l'heuristique historique reste la
+    /// règle — un client à jour ne doit pas perdre ses résultats.
+    func test_isReachable_withoutFlag_fallsBackToParticipants() {
+        XCTAssertTrue(ForwardTargetMerge.isReachableConversation(
+            type: "public", participantUserIds: ["u1", "me"], currentUserId: "me", isMember: nil))
+        XCTAssertFalse(ForwardTargetMerge.isReachableConversation(
+            type: "public", participantUserIds: ["u1", "u2"], currentUserId: "me", isMember: nil))
+        XCTAssertTrue(ForwardTargetMerge.isReachableConversation(
+            type: "group", participantUserIds: [], currentUserId: "me", isMember: nil),
+                      "hors public/global, l'appartenance est garantie par la clause WHERE de la route")
+    }
 }

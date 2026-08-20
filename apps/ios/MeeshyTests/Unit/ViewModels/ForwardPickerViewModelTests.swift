@@ -64,7 +64,14 @@ final class ForwardPickerViewModelTests: XCTestCase {
 
     /// Un salon `public` tel que le rend `GET /conversations/search` : la route
     /// le retourne même si l'appelant n'en est PAS membre (`search.ts:131-137`).
-    private func makePublicAPIConv(_ id: String, memberUserIds: [String]) -> APIConversation {
+    ///
+    /// `isMember` est le drapeau serveur (décision du user, 2026-08-19) ; `nil`
+    /// simule un gateway antérieur, qui ne le porte pas.
+    private func makePublicAPIConv(
+        _ id: String,
+        memberUserIds: [String],
+        isMember: Bool? = nil
+    ) -> APIConversation {
         APIConversation(
             id: id,
             type: "public",
@@ -79,7 +86,8 @@ final class ForwardPickerViewModelTests: XCTestCase {
                     role: "MEMBER"
                 )
             },
-            createdAt: Date()
+            createdAt: Date(),
+            isMember: isMember
         )
     }
 
@@ -221,8 +229,8 @@ final class ForwardPickerViewModelTests: XCTestCase {
     func test_search_dropsPublicRoomWhereUserIsNotAMember() async {
         let (sut, service) = makeSUT(currentUserId: "me")
         service.searchResult = .success([
-            makePublicAPIConv("cPublic", memberUserIds: ["u1", "u2"]),
-            makePublicAPIConv("cJoined", memberUserIds: ["u1", "me"])
+            makePublicAPIConv("cPublic", memberUserIds: [], isMember: false),
+            makePublicAPIConv("cJoined", memberUserIds: ["u1", "me"], isMember: true)
         ])
 
         await sut.search("photo")
@@ -231,15 +239,47 @@ final class ForwardPickerViewModelTests: XCTestCase {
                        "un salon public dont on n'est pas membre ne doit jamais être offert comme cible")
     }
 
+    /// LE faux négatif que le drapeau serveur supprime : `participants` est
+    /// tronqué à cinq par la route, et depuis la décision du user il est même
+    /// VIDE pour un non-membre. L'heuristique cliente qui y cherchait
+    /// l'utilisateur écartait donc son PROPRE salon public dès qu'il comptait
+    /// plus de cinq personnes — un faux négatif silencieux. `isMember` est
+    /// désormais le seul signal.
+    func test_search_keepsPublicRoomFlaggedMember_evenWhenAbsentFromTheTruncatedParticipants() async {
+        let (sut, service) = makeSUT(currentUserId: "me")
+        service.searchResult = .success([
+            makePublicAPIConv("cBig", memberUserIds: ["u1", "u2", "u3", "u4", "u5"], isMember: true)
+        ])
+
+        await sut.search("photo")
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cBig"],
+                       "le drapeau serveur prime : le tableau tronqué ne prouve pas la non-appartenance")
+    }
+
+    /// Repli rétro-compatible : face à un gateway qui ne porte pas encore le
+    /// drapeau (`nil`), le client garde EXACTEMENT son comportement d'avant —
+    /// l'appartenance se lit dans `participants`. Sans ce repli, un client à
+    /// jour perdrait tous ses salons publics.
+    func test_search_withoutServerFlag_fallsBackToParticipantsHeuristic() async {
+        let (sut, service) = makeSUT(currentUserId: "me")
+        service.searchResult = .success([
+            makePublicAPIConv("cPublic", memberUserIds: ["u1", "u2"], isMember: nil),
+            makePublicAPIConv("cJoined", memberUserIds: ["u1", "me"], isMember: nil)
+        ])
+
+        await sut.search("photo")
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cJoined"],
+                       "sans drapeau serveur, l'heuristique historique reste la règle")
+    }
+
     /// Résidu de chantier : `search()` REMPLAÇAIT `targets` par les seuls
     /// résultats distants, perdant toute correspondance déjà chargée par la
-    /// pagination de navigation. Régression concrète : un salon public de
-    /// plus de 5 membres dont l'utilisateur EST membre est écarté par
-    /// `isReachableConversation` côté recherche serveur (le tableau
-    /// `participants` de `GET /conversations/search` est tronqué à 5,
-    /// l'appartenance y est donc indécidable) — sans repli local, la
-    /// conversation devient INTROUVABLE pendant une recherche alors qu'elle
-    /// est déjà dans `conversationTargets`. Jumeau web :
+    /// pagination de navigation. `ConversationService.search` avale ses erreurs
+    /// réseau et rend `[]` (indiscernable d'un « aucun résultat ») : sans repli
+    /// local, une recherche qui échoue fait DISPARAÎTRE des conversations déjà
+    /// à l'écran. Jumeau web :
     /// `apps/web/components/conversations/forward-message-modal.tsx:275-280`
     /// (`browsingTargets.filter(...).includes(query)` fusionné aux résultats
     /// distants, jamais un remplacement).

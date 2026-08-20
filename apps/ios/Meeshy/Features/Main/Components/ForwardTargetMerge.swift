@@ -46,31 +46,35 @@ enum ForwardTargetMerge {
     /// de transfert que si l'utilisateur peut y ÉCRIRE, donc s'il en est membre.
     ///
     /// La route retourne délibérément aussi les conversations `public`/`global`
-    /// dont l'appelant n'est PAS membre (`search.ts:131-137`) — elle sert aussi
-    /// la recherche globale, qui les veut. Offrir un salon public homonyme
-    /// comme cible produit « Permissions insuffisantes pour envoyer des
-    /// messages » : une cible qui ne peut jamais fonctionner.
+    /// dont l'appelant n'est PAS membre (`search.ts`) — elle sert aussi la
+    /// recherche globale, qui les veut. Offrir un salon public homonyme comme
+    /// cible produit « Permissions insuffisantes pour envoyer des messages » :
+    /// une cible qui ne peut jamais fonctionner.
     ///
-    /// Deux branches, parce que la clause `WHERE` de la route en a deux :
+    /// `isMember` est le drapeau SERVEUR (`search.ts`, décision du user
+    /// 2026-08-19) et la seule autorité quand il est présent : depuis cette
+    /// décision, la route n'émet plus AUCUN participant pour un non-membre, et
+    /// le tableau qu'elle émet pour un membre reste tronqué à cinq — il ne peut
+    /// donc ni prouver ni infirmer l'appartenance à lui seul. C'est ce qui
+    /// faisait disparaître de sa propre recherche le salon public de plus de
+    /// cinq personnes dont l'utilisateur EST membre.
+    ///
+    /// `isMember == nil` = gateway antérieur : on retombe sur l'heuristique
+    /// historique plutôt que de tout écarter.
     /// - tout type AUTRE que `public`/`global` n'a pu être trouvé que par
     ///   `participants some { userId }` — appartenance garantie par
     ///   construction, sans rien lire du corps de la réponse ;
     /// - pour `public`/`global`, seul le tableau `participants` du corps le dit.
-    ///
-    /// LIMITE CONNUE : ce tableau est tronqué à 5 par le `include` de la route.
-    /// Un salon public de plus de 5 membres dont on EST membre peut donc être
-    /// écarté à tort. Le seul correctif exact est serveur (émettre la ligne de
-    /// participant de l'appelant, ou un drapeau d'appartenance) — d'ici là, le
-    /// salon reste atteignable par la liste paginée, tandis qu'une cible
-    /// impossible ne l'est jamais.
     ///
     /// RÈGLE JUMELLE : `isReachableForwardConversation`
     /// (`apps/web/lib/forward-target-merge.ts`).
     static func isReachableConversation(
         type: String,
         participantUserIds: [String],
-        currentUserId: String
+        currentUserId: String,
+        isMember: Bool? = nil
     ) -> Bool {
+        if let isMember { return isMember }
         let openTypes: Set<String> = ["public", "global"]
         guard openTypes.contains(type.lowercased()) else { return true }
         guard !currentUserId.isEmpty else { return false }

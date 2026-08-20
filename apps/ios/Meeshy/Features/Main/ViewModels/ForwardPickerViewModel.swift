@@ -176,18 +176,21 @@ final class ForwardPickerViewModel: ObservableObject {
         let (conversations, contacts) = await (conversationResults, contactResults)
 
         guard token == searchToken else { return }
-        // Résidu (Task 6+) : `GET /conversations/search` tronque `participants`
-        // à 5, ce qui rend `isReachableConversation` incapable de statuer sur
-        // l'appartenance d'un salon `public`/`global` de plus de 5 membres —
-        // il est alors écarté même quand l'utilisateur en est membre. Les
-        // cibles déjà paginées localement (`conversationTargets`) SONT
-        // forcément atteignables (l'endpoint de liste ne rend que les
-        // conversations de l'utilisateur), donc les correspondances locales
-        // comblent ce trou plutôt que d'être écrasées. Même sémantique que le
-        // jumeau web (`forward-message-modal.tsx` : filtre local sur le titre,
-        // fusionné — jamais un remplacement). La déduplication par id de
+        // Les cibles déjà paginées localement (`conversationTargets`) SONT
+        // forcément atteignables — l'endpoint de liste ne rend que les
+        // conversations de l'utilisateur — donc les correspondances locales
+        // AUGMENTENT les résultats distants plutôt que d'être écrasées : une
+        // recherche serveur qui échoue (elle rend `[]`, indiscernable d'un
+        // « aucun résultat ») ne fait alors disparaître aucune conversation
+        // déjà à l'écran. Même sémantique que le jumeau web
+        // (`forward-message-modal.tsx` : filtre local sur le titre, fusionné —
+        // jamais un remplacement). La déduplication par id de
         // `ForwardTargetMerge.merge` absorbe le doublon quand une conversation
         // est trouvée à la fois localement et à distance.
+        //
+        // Ce repli comblait AUSSI un faux négatif du filtre d'appartenance
+        // (participants tronqués à 5) — supprimé à la source depuis que le
+        // serveur déclare `isMember`.
         let localMatches = conversationTargets.filter { $0.title.localizedCaseInsensitiveContains(trimmed) }
         targets = ForwardTargetMerge.merge(conversations: conversations + localMatches, contacts: contacts)
     }
@@ -200,7 +203,8 @@ final class ForwardPickerViewModel: ObservableObject {
                     ForwardTargetMerge.isReachableConversation(
                         type: conversation.type,
                         participantUserIds: (conversation.participants ?? []).compactMap(\.userId),
-                        currentUserId: currentUserId
+                        currentUserId: currentUserId,
+                        isMember: conversation.isMember
                     )
                 }
                 .map { $0.toConversation(currentUserId: currentUserId) }

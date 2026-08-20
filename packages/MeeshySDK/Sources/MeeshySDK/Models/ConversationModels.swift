@@ -160,6 +160,15 @@ public struct APIConversation: Decodable, Sendable {
     public let autoTranslateEnabled: Bool?
     public let lastMessageAt: Date?
     public let participants: [APIParticipant]?
+    /// Le LECTEUR est-il un participant actif de cette conversation ? Calculé
+    /// serveur, seule autorité sur la question : `GET /conversations/search`
+    /// rend aussi les salons `public`/`global` dont il n'est pas membre, et
+    /// n'y émet plus AUCUN participant (décision du user, 2026-08-19).
+    ///
+    /// `nil` = le serveur ne l'a pas dit (route qui ne le calcule pas, ou
+    /// gateway antérieur) — le lecteur retombe alors sur son comportement
+    /// d'avant, jamais sur « pas membre ».
+    public let isMember: Bool?
     public let lastMessage: APIConversationLastMessage?
     /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
     /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
@@ -200,7 +209,8 @@ public struct APIConversation: Decodable, Sendable {
         updatedAt: Date? = nil, encryptionMode: String? = nil,
         currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil,
         createdAt: Date,
-        closedAt: Date? = nil, closedBy: String? = nil
+        closedAt: Date? = nil, closedBy: String? = nil,
+        isMember: Bool? = nil
     ) {
         self.id = id; self.type = type; self.identifier = identifier; self.title = title
         self.description = description; self.avatar = avatar; self.banner = banner
@@ -217,6 +227,7 @@ public struct APIConversation: Decodable, Sendable {
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
         self.createdAt = createdAt
         self.closedAt = closedAt; self.closedBy = closedBy
+        self.isMember = isMember
     }
 }
 
