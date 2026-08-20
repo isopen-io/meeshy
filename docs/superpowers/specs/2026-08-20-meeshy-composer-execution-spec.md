@@ -86,14 +86,14 @@ S1 est remplacée par O2/A′ : la forme unique vit dans le convertisseur serveu
 Tout le parallélisme repose sur ce gel : les fixtures de §C4 sont écrites au
 jour 1 et deviennent la source de vérité des six lots.
 
-### C1. Schéma (esquisse normative — le lot A produit le Zod exact)
+### C1. Schéma (esquisse normative — le lot A produit le Zod exact, dans `packages/shared/types/canvas-v3.ts` : seul emplacement inclus au build, exporté et mappé)
 
 ```
 CanvasV3 {
   v: 3,
   scenes: [SceneV3],                    // ≥1 dès qu'un objet visuel existe (O3)
-  sound?: BackgroundSound               // fond du DOCUMENT (post/réel) — les
-}                                       // stories le portent par scène si besoin
+  sound?: BackgroundSound               // fond du DOCUMENT — un futur `sound`
+}                                       // PAR SCÈNE serait un champ additif v3.x
 SceneV3 {
   id, objects: [ObjectV3],
   opening?, closing?: TransitionEffect, // recensés — préservés tels quels
@@ -137,13 +137,22 @@ Keyframe { time, x?, y?, scale?, opacity?, volume?, easing? }   // existant, inc
 
 ### C3. La rupture propre (O2/A′)
 
-- **Écriture** : `POST/PUT /posts` valide `storyEffects` en v3 STRICT (Zod).
-  Un blob non-v3 ⇒ `426 UPGRADE_REQUIRED` `{ code, minVersion, storeUrl }`.
-- **Version plancher** : le client envoie `X-App-Version` (à CRÉER — vérifié
-  absent) ; le gateway porte `MIN_APP_VERSION` ; sous le plancher, les routes de
-  CRÉATION répondent 426. Le client, sur 426 OU sur le plancher lu au bootstrap,
-  monte une porte bloquante (écran + lien App Store — l'OS n'installe pas à
-  notre place). Le web n'a pas de plancher : il se déploie en lockstep.
+- **Écriture** (rév. 2, revue Fable n°4-5) : `POST/PUT /posts` valide
+  `storyEffects` en v3 STRICT (Zod). Deux refus DISTINCTS :
+  blob **sans `v:3`** (client du passé) ⇒ `426` avec, À LA RACINE de la réponse
+  (forme réelle de `sendError` : `error` chaîne, détails étalés) :
+  `{ success:false, error, message, code:'UPGRADE_REQUIRED', minVersion, storeUrl }` ;
+  blob **avec `v:3` mais invalide** (client NEUF cassé — l'inviter à se mettre à
+  jour serait un mensonge) ⇒ `400` `{ code:'CANVAS_INVALID', issues:[…] }`.
+- **Version plancher** (rév. 2, revue Fable n°7-8) : le natif envoie
+  `X-App-Version` (à CRÉER — vérifié absent). La porte d'en-tête ne juge que les
+  requêtes qui EN PORTENT UN : en-tête présent sous un plancher armé ⇒ 426.
+  **L'absence d'en-tête PASSE** — le web (exempt, R6) n'en enverra jamais, et
+  les vieux binaires sont attrapés par le FORMAT (426 sur blob v1), pas par
+  l'en-tête. Portée : les créations à scène (`storyEffects` présent ou
+  `type === 'STORY'`). Défaut : plancher vide = porte désarmée. Le client, sur
+  426 OU sur le plancher lu au bootstrap (`GET /app/min-version`), monte une
+  porte bloquante (écran + lien App Store — l'OS n'installe pas à notre place).
 - **Lecture** : `convertStoryEffectsForWire(post)` — UN helper, appliqué aux
   mêmes points d'aplatissement que `withMentions` (chaîne connue et testée).
   Permanent : l'archive est éternelle, `/republish` copie des blobs v1 (R5).
@@ -155,8 +164,12 @@ Keyframe { time, x?, y?, scale?, opacity?, volume?, easing? }   // existant, inc
 `packages/shared/fixtures/canvas-v3/*.json` : `minimal-text`, `story-3-slides`,
 `reel-16x9-bands`, `post-carousel-sound-library`, `post-sound-original`,
 `v1-legacy-full` (entrée) + `v1-legacy-full.v3.json` (sortie golden du
-convertisseur). Tout lot code contre ces fichiers ; les changer exige un commit
-dédié touchant les six lots — c'est voulu, c'est le gel.
+convertisseur — généré, relu à la main mapping par mapping, puis GELÉ **à la
+clôture de la Task A3** ; B2 et F ne démarrent qu'après ce commit, B1 après la
+Task A2). Tout lot code contre ces fichiers ; les changer exige un commit dédié
+touchant les six lots — c'est voulu, c'est le gel. La fixture v1 est RÉALISTE :
+ses formes sont celles des modèles Swift v1 vérifiés (place objet SharedPlace
+requis, postMediaId, clipTransitions à cinq clés), jamais des clés inventées.
 
 ---
 
@@ -171,12 +184,16 @@ dans son worktree.
   tests ; validation stricte à l'écriture + 426 ; `X-App-Version` + plancher +
   config ; réservation des kinds O10 ; claim des stickers posés (O8, réutilise
   `claimableMediaWhere`).
-- **Possède** : `packages/shared/schemas/canvas-v3.ts`, `fixtures/canvas-v3/*`,
-  `services/gateway/src/services/posts/storyEffectsV3.ts` (+ tests), middleware
-  version, retouches des routes posts (validation/426).
+- **Possède** : `packages/shared/types/canvas-v3.ts` (types/ — jamais un
+  dossier neuf hors build), `fixtures/canvas-v3/*`,
+  `services/gateway/src/services/posts/storyEffectsV3.ts` (+ tests),
+  `utils/appVersion.ts` (env lus inline — `env.ts` est un loader dotenv
+  side-effect, rien à y modifier), retouches des routes posts (validation/426).
 - **Produit** : fixtures gelées, contrat 426, helper de conversion branché.
-- **DoD** : suites gateway vertes (bun) ; golden v1→v3 ; requête sans
-  `X-App-Version` sur création story ⇒ 426 ; `tsc --noEmit` propre.
+- **DoD** : suites gateway vertes (bun) ; golden v1→v3 ; création avec blob v1
+  ⇒ 426 (format) ; en-tête présent sous plancher armé ⇒ 426 ; **absence
+  d'en-tête ⇒ passe** (web exempt, R6) ; `dist/types/canvas-v3.js` existe après
+  build ; `tsc --noEmit` propre.
 
 ### Lot B — Noyau SDK : modèle v3 + ScenePlayer (packages/MeeshySDK)
 - **Mission** : `CanvasV3` Swift (miroir manuel, convention du dépôt) ;
