@@ -59,6 +59,14 @@ export function rebuildInfiniteConversationPages(
     });
     cursor += originalLength;
   }
+  // `pageParams` DOIT rester parallèle à `pages` — c'est l'invariant du contrat
+  // `InfiniteData` de React Query (chaque page a son param). On repart d'une
+  // copie des params d'origine et on ajoute UN param pour la page de surplus,
+  // sinon le désync `pages.length > pageParams.length` s'élargit d'un cran à
+  // CHAQUE arrivée de conversation neuve (le rebuild est rejoué depuis le cache
+  // précédent), corrompant tout consommateur de `pageParams` et fragilisant le
+  // refetch/persist de React Query.
+  const rebuiltPageParams = [...old.pageParams];
   if (cursor < updated.length) {
     const last = old.pages[old.pages.length - 1];
     rebuiltPages.push({
@@ -69,10 +77,13 @@ export function rebuildInfiniteConversationPages(
         total: updated.length,
       },
     });
+    // Le param d'une page paginée par OFFSET est son offset de départ —
+    // cohérent avec `pagination.offset: cursor` posé juste au-dessus.
+    rebuiltPageParams.push(cursor);
   }
 
   return {
     pages: rebuiltPages,
-    pageParams: old.pageParams,
+    pageParams: rebuiltPageParams,
   };
 }
