@@ -81,6 +81,7 @@
     <string name="conversations_tags_field_hint">Add a tag…</string>
     <string name="conversations_tags_add_content_description">Add tag</string>
     <string name="conversations_tags_remove_content_description">Remove tag %1$s</string>
+    <string name="conversations_row_tags_overflow" translatable="false">+%1$d</string>
     <string name="conversations_action_mark_read">Mark as read</string>
     <string name="conversations_action_mark_unread">Mark as unread</string>
     <string name="conversations_action_move_to_category">Move to category</string>

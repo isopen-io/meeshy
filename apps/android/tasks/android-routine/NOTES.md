@@ -5,6 +5,31 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## Slice `conversation-row-tag-chips` (2026-08-20)
+- **The Gradle 8.13 wrapper download 403s through this container's proxy, but the distribution
+  itself is reachable.** `./gradlew` (and the direct `gradle` wrapper main) died with a 10 s
+  `SocketTimeoutException` fetching `services.gradle.org/distributions/gradle-8.13-bin.zip`, yet a
+  plain `curl -L` of the same URL returned the zip (after one 307 redirect). Workaround that let the
+  full local gate run: `curl` the distribution once, `unzip` it to `$HOME/gradle-8.13`, and invoke
+  `$HOME/gradle-8.13/bin/gradle` directly for local verification. CI on `ubuntu-latest` downloads the
+  wrapper fine — this is a container-egress quirk, not a repo problem. Don't burn time retrying the
+  wrapper; fetch-and-run.
+- **The `android-37.0` platform + `android-37` alias recipe from the typing slice still holds** and
+  is now twice-confirmed: newer cmdline-tools bundle `13114758` (the pinned `11076708` can't parse the
+  v4 SDK XML that lists 37.x), `sdkmanager --channel=3 "platforms;android-37.0"`, then
+  `ln -sfn android-37.0 $ANDROID_SDK/platforms/android-37` so AGP 8.13's `compileSdk 37` hash resolves.
+- **Port a UI heuristic into the FEATURE layer, not onto the wire model — even when iOS put it on the
+  model.** iOS hangs `estimatedWidth` off `MeeshyConversationTag` (a Codable DTO). The faithful port
+  lives in `:feature:conversations` `ConversationTagRow` instead: a character-count width heuristic is
+  row-layout logic, not a transported property, and `:core:model` stays a pure serializable DTO
+  (SDK-purity grain test). The algorithm is 100% deterministic (no real text measurement), so it's a
+  clean pure unit with full branch coverage; the Composable only feeds it `BoxWithConstraints.maxWidth`.
+- **Watch the `estimatedWidth` arithmetic when authoring boundary tests by hand.** `"ab"` is
+  `2*7+22 = 36`, not 29 — my first draft of the reserve-boundary tests used the wrong width and would
+  have asserted the wrong `visible`/`remaining`. Recompute each case against `len*7+22`, spacing 6,
+  badge 32 before trusting the expected values; the "final tag skips the reserve" test only proves its
+  point at exactly width 79 (36+38 reserve for the first, then 78 for the exempt last).
+
 ## Slice `conversation-row-typing-indicator` (2026-08-20)
 - **`advanceUntilIdle()` fast-forwards virtual time through ANY pending `delay(...)`, so it silently
   fires a safety-timeout you were trying to test AROUND, not just the immediate work.** Four VM tests

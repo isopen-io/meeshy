@@ -1584,8 +1584,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ConversationTypingRoster` (SSOT multi-conversation, self-exclu, stop par-user, sélection
       déterministe) + `conversationRowPreview`/`typingPreview` ; `ConversationListViewModel`
       collecte `typing:start`/`typing:stop` avec timeout de sûreté 15 s par typer ; la ligne
-      « … écrit » teintée accent prime sur le brouillon) ; ephemeral/expired/hidden/view-once/
-      activity-heat, tags, presence/story-ring/mood pending
+      « … écrit » teintée accent prime sur le brouillon) ; **tag chips done** (slice
+      `conversation-row-tag-chips`, 2026-08-20 : port iOS `ThemedConversationRow.tagsRow` —
+      pur `:feature:conversations` `ConversationTagRow.fit`/`estimatedWidth` calcule les tags
+      visibles + badge « +N » selon la largeur dispo, réservant la place du badge sauf pour le
+      dernier tag et forçant au moins un tag ; le rendu `BoxWithConstraints` fournit la vraie
+      largeur — mieux que le 200pt codé en dur d'iOS — et colore chaque chip via
+      `DynamicColorGenerator.colorForName` SSOT) ; ephemeral/expired/hidden/view-once/
+      activity-heat, presence/story-ring/mood pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
