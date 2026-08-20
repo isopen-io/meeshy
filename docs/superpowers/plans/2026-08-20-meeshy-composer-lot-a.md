@@ -411,6 +411,24 @@ if (nested.storyEffects != null) {
 
 ---
 
+### Task A4b: Négociation de forme à la lecture + sentinelle (O17, rév. 5)
+
+**Files:**
+- Modify: `services/gateway/src/services/posts/storyEffectsV3.ts` (le helper `convertStoryEffectsForWire` gagne `readerCaps`)
+- Modify: les routes qui appliquent `withMentions` (elles ont `request` en portée — y lire `x-canvas-caps` et le passer)
+- Test: `services/gateway/src/services/posts/__tests__/storyEffectsV3.negotiation.test.ts`
+
+**Interfaces:**
+- Produces : `convertStoryEffectsForWire(post, { canvasCaps, readerLanguage })` — table O17 (spec §C3 rév. 5) :
+  v1 + sans caps ⇒ v1 tel quel (`toEqual` l'original — restitution) ; v1 + caps ≥ 3 ⇒ v3 si `CANVAS_V3_READ` armé, sinon v1 ;
+  v3-natif + caps ≥ 3 ⇒ v3 ; **v3-natif + sans caps ⇒ sentinelle v1** : `{ background: 'color:#1E1B4B', textObjects: [{ id, text: <invite localisée>, textStyle: 'classic', x: 0.5, y: 0.45, … }] }` — texte via `resolveUserLanguage` du LECTEUR (le Prisme s'applique à l'invite ; catalogue de chaînes serveur, fr/en/… — repli fr) ; les posts à ATTACHMENT média porteur ne reçoivent pas de sentinelle (le média se lit tel quel — règle 5 d'O17).
+- La sentinelle est GÉNÉRÉE à la lecture, jamais stockée ; elle est active dès le merge (indépendante des deux drapeaux).
+
+- [ ] **Step 1: Tests rouges** — (1) blob v1, requête sans `x-canvas-caps` ⇒ le blob ressort `toEqual` ; (2) blob v1, `x-canvas-caps: 3`, `CANVAS_V3_READ=1` ⇒ v3 golden ; (3) blob v3 (fixture minimal-text), sans caps ⇒ `storyEffects.textObjects[0].text` contient l'invite dans la langue du user de test (et JAMAIS `scenes`) ; (4) blob v3, caps 3 ⇒ v3 `toEqual` ; (5) post v3 AVEC attachment média porteur, sans caps ⇒ le média est servi, `storyEffects` = sentinelle ABSENTE (nil ou omis — pas d'invite par-dessus une vidéo) ; (6) l'invite change avec `systemLanguage` du lecteur.
+- [ ] **Step 2: Rouge. Step 3: Implémenter** — la décision est une fonction PURE `resolveWireForm(blob, caps, readArmed)` testée à sec, le texte vient d'une table de chaînes locale au service. **Step 4: Vert. Step 5: Commit.**
+
+---
+
 ### Task A5: Écriture stricte — 426 pour le PASSÉ, 400 pour le CASSÉ, le tout SOUS DRAPEAU (O15)
 
 **Files:**

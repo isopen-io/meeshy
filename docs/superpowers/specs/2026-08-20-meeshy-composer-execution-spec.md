@@ -5,6 +5,9 @@ Statut : **spécifié — arbitrages TOUS tranchés**, prêt pour `writing-plans
 Rév. 4 (2026-08-20) : revue totale à 4 axes — arbitrages O12–O16 (collage,
 porte e9, partage entrant, drapeau d'écriture, continuité de lecture), loi 8,
 `translations`/`transcriptions` au contrat, lot G, §F exhaustif
+Rév. 5 (2026-08-20) : O17 négociation de forme à la LECTURE (« personne ne lit
+du vide ») — `X-Canvas-Caps`, sentinelle v1 localisée, garantie de restitution
+de l'archive posée en loi 11
 Design source : `./2026-08-19-meeshy-composer-design.md` (+ planches P1–P17)
 Ce document est la sortie de la revue totale : il fige les décisions, définit le
 contrat commun, et découpe l'exécution en **sept lots** (six parallélisables
@@ -63,6 +66,7 @@ Deux décisions de réalisabilité, qui conditionnent les lots :
 | O13 | **Porte e9 `.conversationMedia(messageId:attachmentId:)`** (revue totale C1) : appui long sur un média REÇU → « Créer un post » → composer préconfiguré, média posé — 2 gestes. v1 = matérialisation cache-first (`AttachmentMediaSaveResolver.materialize`) + re-upload TUS depuis le cache local (zéro téléchargement dans le cas nominal, offline OK) ; pont serveur MessageAttachment→PostMedia (modèle `copyForwardedAttachments`) = post-v1 §F. Gardes : `!isViewOnce` (même règle que `isForwardable`), jamais `.location` ; `isEncrypted` passe par le seul chemin re-upload local. **AUCUNE référence automatique vers l'expéditeur** — un média reçu en privé n'est pas une publication : l'attribuer d'office exposerait la relation privée (le repost pose une SILENT parce que la source est PUBLIQUE ; ici, mention manuelle seulement) | G |
 | O14 | **Partage entrant : destination « Post / Story »** (revue totale C9) dans `MeeshyShareExtension` à côté des conversations : fiche versionnée `share_pending_posts/` (motif exact `SharePendingShare`, répertoire SÉPARÉ — rétro-compat triviale), AUCUN envoi réseau depuis l'extension (elle DÉCRIT, l'app compose) ; côté app un `SharePendingPostConsumer` (décalqué des deux consumers existants, mêmes deux points d'appel : boot + avant-plan) convertit la fiche en BROUILLON de l'Étagère + bannière discrète « votre partage vous attend » au foreground — JAMAIS de modale au boot (un lancement appartient à sa cause : notification, appel). N fiches = N brouillons ; TTL 7 j, wipe-logout, plafonds `ShareLimits` conservés | G |
 | O15 | **Écriture stricte SOUS DRAPEAU** (revue totale C5) : `CANVAS_V3_WRITE_STRICT` (env, défaut OFF — le merge de A est inerte à l'écriture COMME en lecture), armé par acte de déploiement quand les TROIS écrivains émettent v3 (parc iOS large + composer web F5b + Android) ; après armement, le 426 ne sert que la longue traîne | A |
+| O17 | **Négociation de forme à la LECTURE** (porteur produit, rév. 5 : « les anciens posts/réels toujours restitués ; tout client à jour reçoit les données ; tout client ancien reçoit une donnée qui l'invite à mettre à jour »). Chaque client v3-capable annonce `X-Canvas-Caps: 3` (posé au MÊME funnel que `X-App-Version` : iOS lot C, Android lot H, **web lot F — la couche fetch, une ligne**) ; l'ABSENCE de l'en-tête ne bloque JAMAIS (contrairement au plancher O2) — elle sert la forme compatible. Règles : (1) blob v1 + client sans caps ⇒ v1 TEL QUEL — l'archive est restituée dans sa forme d'origine, garantie par construction ; (2) blob v1 + caps ≥ 3 + `CANVAS_V3_READ` armé ⇒ converti v3 ; (3) blob v3-natif + caps ≥ 3 ⇒ v3 (toujours — il n'a pas d'autre forme) ; (4) **blob v3-natif + client SANS caps ⇒ SENTINELLE v1** : un `storyEffects` v1 minimal généré à la lecture — fond sobre + un `textObject` « Mets à jour Meeshy pour voir ce contenu », localisé via `resolveUserLanguage` du LECTEUR (le Prisme s'applique même à l'invite) — jamais un canvas VIDE, jamais une erreur ; (5) un post/réel dont le PORTEUR est un attachment média reste servi tel quel aux clients sans caps (le média se lit, seuls les overlays v3 manquent — dégradation douce, pas de sentinelle par-dessus une vidéo). Les vieux RÉELS sont de purs posts vidéo : restitution garantie sans même passer par O17 | A (négociation + sentinelle), C/F/H (en-tête) |
 | O16 | **Continuité de lecture : « un seul temps, celui du contenu »** (revue totale C10) : la clé de continuité est l'IDENTITÉ du média (attachmentId/postMediaId), le moteur est `SharedAVPlayerManager` (le handoff par identité d'URL existe et est prouvé en prod — feed→Réels, inline→fullscreen, fullscreen→PiP), position froide `VideoPlaybackPositionStore`, PiP opt-in PAR SURFACE (`configurePip`), arbitrage avec le PiP d'appel = flux événementiel existant (call start → `stopAll()`). Le ScenePlayer FORMALISE ce contrat, il ne le duplique jamais | B (contrat), E |
 
 ### B2. Les simplifications retenues (S2–S8)
@@ -98,6 +102,11 @@ S1 est remplacée par O2/A′ : la forme unique vit dans le convertisseur serveu
    séparées (préservation de `StoryVisibilityPreferenceStore` et
    `lastStatusVisibility`) — un post Public ne contamine jamais la story
    intime suivante.
+11. **Personne ne lit du vide** (O17) : l'archive éternelle est TOUJOURS
+   restituée (v1 aux anciens clients — sa forme d'origine ; v3 converti aux
+   clients à jour) ; un contenu v3-natif servi à un client qui ne sait pas le
+   lire devient une SENTINELLE lisible qui invite à mettre à jour — dans la
+   langue du lecteur. Jamais un canvas vide, jamais une erreur de lecture.
 
 ---
 
@@ -191,15 +200,22 @@ Keyframe { time, x?, y?, scale?, opacity?, volume?, easing? }   // existant, inc
   `type === 'STORY'`). Défaut : plancher vide = porte désarmée. Le client, sur
   426 OU sur le plancher lu au bootstrap (`GET /app/min-version`), monte une
   porte bloquante (écran + lien App Store — l'OS n'installe pas à notre place).
-- **Lecture** : `convertStoryEffectsForWire(post)` — UN helper, DERRIÈRE le
-  drapeau `CANVAS_V3_READ` (défaut OFF : le merge de A est inerte en lecture ;
-  l'activation exige le lot F déployé ET le lecteur v3 ANDROID en prod — rév. 4
-  (G1) : Android est un TROISIÈME client complet du blob v1, il l'écrit
-  (composer story Android) et le lit (viewer) ; armer la lecture sans lui
-  viderait les stories-texte de son viewer — c'est l'acte qui rend
-  le lockstep de R6 VRAI, rév. 3 n°13 amendée), appliqué aux
-  mêmes points d'aplatissement que `withMentions` (chaîne connue et testée).
-  Permanent : l'archive est éternelle, `/republish` copie des blobs v1 (R5).
+- **Lecture** (rév. 5 — O17, la NÉGOCIATION subsume le simple drapeau) :
+  `convertStoryEffectsForWire(post, readerCaps)` — UN helper, appliqué aux
+  mêmes points d'aplatissement que `withMentions` (chaîne connue et testée :
+  les ROUTES ont `request` en portée, la capacité y est lue et passée en
+  argument). Table de décision :
+  | blob stocké | client `X-Canvas-Caps ≥ 3` | client SANS caps |
+  |---|---|---|
+  | v1 (archive) | v3 converti si `CANVAS_V3_READ` armé, sinon v1 | **v1 TEL QUEL — restitution garantie** |
+  | v3-natif | v3 (toujours) | **SENTINELLE v1 localisée** (scène) · média porteur servi tel quel (posts/réels à attachment) |
+
+  `CANVAS_V3_READ` (défaut OFF) ne gouverne QUE la conversion de l'archive ;
+  son armement exige lot F déployé ET lecteur Android v3 (G1). La sentinelle,
+  elle, est active dès le merge de A : c'est elle qui garantit qu'aucun client
+  ne rend un canvas vide quand les binaires neufs (B7) commencent à émettre du
+  v3-natif. Permanent : l'archive est éternelle, `/republish` copie des blobs
+  v1 (R5).
 - **Brouillons locaux** : `StoryDraftStore` migre one-shot v1→v3 au premier
   lancement (même table de conversion, portée Swift, testée sur fixtures).
 
@@ -227,7 +243,10 @@ dans son worktree.
 - **Mission** : schéma Zod v3 + fixtures §C4 ; convertisseur v1→v3 + golden
   tests ; validation stricte à l'écriture + 426 **sous `CANVAS_V3_WRITE_STRICT`
   (O15)** ; `X-App-Version` + plancher + config ; réservation des kinds O10 ;
-  claim des stickers posés (O8, réutilise `claimableMediaWhere`) ; **migration
+  claim des stickers posés (O8, réutilise `claimableMediaWhere`) ;
+  **négociation de forme à la lecture + sentinelle v1 localisée (O17 —
+  `X-Canvas-Caps` lu aux routes, `resolveUserLanguage` du lecteur pour le
+  texte de l'invite)** ; **migration
   du pipeline de traduction des objets texte** (revue totale C6 :
   `StoryTextObjectTranslationService.ts:98` écrit
   `storyEffects.textObjects.$i.translations.$lang` — chemin v1 MORT dans un
@@ -243,7 +262,10 @@ dans son worktree.
   création avec blob v1 ⇒ 426 (format), en-tête présent sous plancher armé ⇒
   426 ; drapeau OFF (défaut) : le blob v1 passe TEL QUEL — A merge inerte aux
   deux sens ; **absence d'en-tête ⇒ passe** (web exempt, R6) ; traduction d'un
-  texte v3 persiste dans `scenes[].objects[]` ; `dist/types/canvas-v3.js`
+  texte v3 persiste dans `scenes[].objects[]` ; **négociation O17 : blob v1 →
+  client sans caps ⇒ `toEqual` l'original (restitution) ; blob v3-natif →
+  client sans caps ⇒ sentinelle v1 dans la langue du lecteur ; caps ≥ 3 ⇒
+  v3** ; `dist/types/canvas-v3.js`
   existe après build ; `tsc --noEmit` propre.
 
 ### Lot B — Noyau SDK : modèle v3 + ScenePlayer (packages/MeeshySDK)
@@ -280,7 +302,8 @@ dans son worktree.
   « rien par défaut » complet = post-v1, rév. 3 n°10) ; capture appui long ;
   collage `PasteButton` + « Mes stickers » récents (store app-side, LRU 64 Mo
   sur `DiskCacheStore`, règle de surface O12) ; Étagère = MyStoriesView +
-  onglets file & archive ; porte bloquante 426/plancher ; **deux repêchages v1
+  onglets file & archive ; porte bloquante 426/plancher ; en-têtes
+  `X-App-Version` + `X-Canvas-Caps: 3` au funnel unique (O17) ; **deux repêchages v1
   quasi gratuits (revue totale C12) : alt text (champ d'inspecteur média —
   `PostMedia.alt` existe côté serveur, orphelin) et `allowSoundExtraction`
   enfin transmis (le champ existe, aucun appelant)**.
@@ -336,15 +359,19 @@ dans son worktree.
   `originalLanguage` enfin envoyé, **F5b : le composer web ÉMET v3**
   (`StoryComposer.tsx:252` publie aujourd'hui `{backgroundColor, textStyle,
   mediaObjects, audioPlayerObjects}` sans `v:3` — deux familles à migrer,
-  condition d'armement d'O15), collage/stickers HORS v1 web.
+  condition d'armement d'O15), **F2b : la couche fetch web annonce
+  `X-Canvas-Caps: 3` (une ligne — sans elle, le gateway servirait au web la
+  SENTINELLE pour les contenus v3-natifs, O17)**, collage/stickers HORS v1
+  web.
 - **Possède** : `apps/web/components/v2/StoryViewer.tsx`, `PostCard`, services.
 - **Consomme** : fixtures §C4. **DoD** : `bun run test` web vert ; lockstep au
   déploiement de A.
 
 ### Lot H — Android (apps/android) — LOCKSTEP, équipe Android
 - **Mission** (rév. 4, G1) : lecture v3 (le viewer Android résout les familles
-  v1 aujourd'hui — un blob v3 le vide de ses textes/stickers) + émission v3 du
-  composer story Android. Condition d'ARMEMENT des deux drapeaux :
+  v1 aujourd'hui — un blob v3 le vide de ses textes/stickers ; d'ici là, la
+  SENTINELLE O17 le couvre : sans `X-Canvas-Caps`, Android reçoit v1 + invite)
+  + émission v3 du composer story Android + en-tête `X-Canvas-Caps: 3`. Condition d'ARMEMENT des deux drapeaux :
   `CANVAS_V3_READ` exige la lecture Android en prod ; `CANVAS_V3_WRITE_STRICT`
   exige son émission. Plan détaillé côté Android, hors des lots iOS/web —
   fixtures §C4 = même gel.

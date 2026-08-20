@@ -7,7 +7,9 @@ Succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
 Planches visuelles (21 planches — inventaire exhaustif, matrice outil × format,
 revue système P15, écart SOTA P16, entrées externes P18, continuité P19, rupture
-vécue P20, spécimen des styles P21) : `./2026-08-19-meeshy-composer-views.html`
+vécue P20, spécimen des styles P21 ; à venir : iconographie des contrôles,
+éditeurs trim·crop·cut, cas d'usage carrousels & audio) :
+`./2026-08-19-meeshy-composer-views.html`
 Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
 fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c),
@@ -16,6 +18,9 @@ Révision 2 (2026-08-20, revue totale 4 axes) : entrées externes — partage en
 & média reçu → post (§6f), PiP & continuité de lecture (§6g), collage : la surface
 décide (§6b), états AMORCE/INSPECTEUR du contextuel (§4), `translations` par objet
 au contrat (§1), O12–O16 gelés dans la spec rév. 4.
+Révision 3 (2026-08-20) : l'alignement de lecture (§6h, O17) — l'archive toujours
+restituée, la sentinelle qui invite à mettre à jour ; planches P22 (iconographie),
+P23 (éditeurs trim·crop·cut), P24 (cas d'usage carrousels & réels avec audio).
 
 ---
 
@@ -580,6 +585,44 @@ Le ScenePlayer FORMALISE ce contrat (O16) :
 - la **preview du composer** garde ses players privés (canvas CALayer, loop
   muet) : le handoff de position composer→lecture est un raffinement post-v1
   (§F de la spec), dette nommée — la lecture, elle, est couverte v1.
+
+## 6h. L'alignement de lecture — personne ne lit du vide (2026-08-20, rév. 3)
+
+La question du porteur produit : « est-ce que les ANCIENS posts et réels
+restent toujours restitués ? et à un moment donné, tout client à jour reçoit
+les données, tout client précédent reçoit une donnée qui l'invite à mettre à
+jour ? » La réponse est OUI, par trois garanties dont chacune a son
+mécanisme (O17, spec rév. 5) :
+
+**1. L'archive est toujours restituée — pour tout le monde.** Un blob v1
+servi à un ancien client part TEL QUEL (sa forme d'origine — restitution
+garantie par construction) ; servi à un client à jour, il part converti v3
+par le convertisseur serveur permanent. Les anciens réels sont de purs posts
+vidéo : ils ne dépendent même pas du blob. Rien de l'existant ne devient
+illisible, jamais.
+
+**2. Tout client à jour reçoit les données.** Un client v3-capable s'annonce
+par `X-Canvas-Caps: 3` — posé au même funnel que `X-App-Version` (iOS lot C,
+Android lot H, couche fetch web lot F). Caps ≥ 3 ⇒ v3, natif ou converti.
+L'ABSENCE de cet en-tête ne bloque jamais (au contraire du plancher
+d'écriture) : elle sert la forme compatible.
+
+**3. Tout client ancien reçoit une INVITE, jamais du vide.** Le seul contenu
+qu'un vieux binaire ne sait pas lire est le v3-NATIF (composé par un client
+neuf — l'encodage B7 émet v3 dès le lot C). Pour lui, le gateway génère à la
+lecture une **sentinelle v1** : fond sobre + un `textObject` « Mets à jour
+Meeshy pour voir ce contenu », localisé via `resolveUserLanguage` du LECTEUR
+— le Prisme s'applique même à l'invite. Un post/réel dont le porteur est un
+attachment média reste servi tel quel (le média se lit, seuls les overlays
+manquent — on ne pose pas une sentinelle par-dessus une vidéo). Et à
+l'ÉCRITURE, le même vieux binaire prend le 426 + invite (O15, longue
+traîne) : les deux sens convergent vers la mise à jour, aucun ne casse.
+
+Ces trois garanties tiennent parce que l'extension est un APPAREILLAGE de
+lecture, pas un gel : `CANVAS_V3_READ` ne gouverne que la conversion de
+l'archive ; la sentinelle est active dès le merge du lot A — c'est elle qui
+couvre la fenêtre où les binaires neufs émettent du v3-natif pendant que des
+binaires anciens circulent encore.
 
 ## 7. Les arbitrages — TOUS TRANCHÉS (2026-08-20)
 

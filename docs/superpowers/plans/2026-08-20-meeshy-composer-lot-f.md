@@ -71,6 +71,17 @@ La table des 18 styles reprend les valeurs du résolveur iOS (grasse/serif/mono/
 
 ---
 
+### Task F2b: La couche fetch annonce `X-Canvas-Caps: 3` (O17, rév. 3)
+
+**Files:**
+- Modify: le wrapper fetch/API du web (le point unique qui pose `Authorization` — le localiser au premier pas, patron `apps/web/services`)
+- Test: `apps/web/__tests__/services/canvas-caps-header.test.ts`
+
+- [ ] **Step 1: Test rouge** — toute requête API sortante porte `X-Canvas-Caps: 3` (une ligne au funnel). Sans elle, le gateway servirait au web la SENTINELLE pour les contenus v3-natifs (O17 règle 4) — le test cite cette raison en nom : `it('announces v3 capability - without it the gateway serves the update sentinel', …)`.
+- [ ] **Step 2-5:** rouge → une ligne → vert → commit. Déployée AVEC F2 (le lecteur v3) — jamais avant : annoncer une capacité qu'on n'a pas ferait rendre des blobs v3 au chemin legacy.
+
+---
+
 ### Task F3: L'annonce du fond + 🔇 — lois 3-6 côté web
 
 **Files:**

@@ -208,6 +208,7 @@ footer .mono{font-size:11.5px}
     <span>statut : SPÉCIFIÉ — arbitrages TOUS tranchés · spec d'exécution 2026-08-20, six lots parallèles</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
     <span>rév. 2 (2026-08-20) : revue totale 4 axes — 62 constats examinés, 33 réels intégrés · entrées externes (P18) · continuité &amp; PiP (P19) · rupture vécue (P20) · spécimen des 18 styles (P21) · O12–O16</span>
+    <span>rév. 3 (2026-08-20) : alignement de lecture O17 (sentinelle — P20) · à venir au prochain incrément : iconographie des contrôles, éditeurs trim·crop·cut, cas d'usage carrousels &amp; audio</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -1428,11 +1429,12 @@ flowchart TD
 
 <!-- ================================================================ P20 -->
 <section id="p20"><div class="wrap">
-  <div class="prail"><span class="pnum">P20</span><h2>La rupture vécue — l'écran que la longue traîne verra <span class="tag tNew">rév. 2 · O2/O15</span></h2></div>
+  <div class="prail"><span class="pnum">P20</span><h2>La rupture vécue — écrire, lire, et ne jamais perdre <span class="tag tNew">rév. 3 · O2/O15/O17</span></h2></div>
   <p class="lede">L'écriture stricte s'arme par DRAPEAU quand les trois écrivains émettent v3
   (O15) — le 426 ne vise donc que la longue traîne des retardataires, jamais 100 % du parc.
-  Mais cette longue traîne est faite de vraies personnes : voici EXACTEMENT ce qu'elles voient,
-  et la garantie qui commande tout — <b>aucun contenu composé n'est jamais perdu</b>.</p>
+  Mais cette longue traîne est faite de vraies personnes : voici EXACTEMENT ce qu'elles voient
+  — à l'écriture ET à la lecture (O17) — et les deux garanties qui commandent tout :
+  <b>aucun contenu composé n'est jamais perdu, et personne ne lit du vide</b>.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:26px 12px 8px">
@@ -1472,11 +1474,41 @@ flowchart TD
     binaire (l'encodage B7 émet toujours v3) — l'item en échec redevient publiable d'un tap.
     Rien à re-composer, rien à comprendre.</figcaption></figure>
   </div>
+  <h3>Et la LECTURE ? — l'alignement O17, « personne ne lit du vide » (rév. 3)</h3>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="display:flex;gap:2px;padding:24px 9px 4px"><span style="flex:1;height:3px;background:var(--acc);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span></div>
+      <div class="ctx" style="padding-top:2px"><span class="ob">@aïcha · 2 h</span><span class="ob" style="margin-left:auto">⋯</span></div>
+      <div class="sc"><div style="flex:1;display:flex;align-items:center;justify-content:center;padding:14px"><span class="lbl" style="text-align:center;color:var(--phink);font-size:10px">Mets à jour Meeshy<br>pour voir ce contenu&nbsp;⬆️</span></div></div>
+      <div class="socle"><span class="aud">Répondre…</span><span class="eye">😊</span></div>
+    </div><figcaption><b>4 · Le vieux binaire lit une story v3-native.</b> Il ne reçoit JAMAIS un
+    canvas vide : le gateway génère une <b>sentinelle v1</b> (fond sobre + un objet texte) — dans
+    la LANGUE DU LECTEUR (<span class="mono">resolveUserLanguage</span> : le Prisme s'applique
+    même à l'invite). Générée à la lecture, jamais stockée, active dès le merge du lot A.</figcaption></figure>
+    <div style="flex:1;min-width:300px">
+      <div class="scrollx"><table>
+        <caption>La table de négociation (spec §C3 rév. 5) — <span class="mono">X-Canvas-Caps: 3</span> posé par tout client v3-capable (iOS lot C · Android lot H · fetch web lot F)</caption>
+        <thead><tr><th>Blob stocké</th><th>Client caps ≥ 3</th><th>Client SANS caps (ancien)</th></tr></thead>
+        <tbody>
+          <tr><td><b>v1</b> (l'archive, les anciens posts)</td><td>v3 converti (si <span class="mono">CANVAS_V3_READ</span> armé — sinon v1, qu'il lit aussi)</td><td><b>v1 TEL QUEL</b> — restitution garantie par construction : sa forme d'origine</td></tr>
+          <tr><td><b>v3-natif</b> (composé par un client neuf)</td><td>v3 — toujours (il n'a pas d'autre forme)</td><td><b>sentinelle v1 localisée</b> (contenus-scène) · média porteur servi tel quel (posts/réels à attachment — on ne pose pas d'invite par-dessus une vidéo)</td></tr>
+        </tbody>
+      </table></div>
+      <ul class="klist">
+        <li><b>Les anciens RÉELS</b> sont de purs posts vidéo — ils ne dépendent même pas du blob :
+          restitués partout, toujours, sans O17.</li>
+        <li>L'<b>absence</b> de l'en-tête ne bloque jamais (au contraire du plancher d'écriture) :
+          elle sert la forme compatible. Écriture et lecture convergent vers la même invite —
+          aucun sens ne casse.</li>
+      </ul>
+    </div>
+  </div>
   <div class="callout"><b>Qui ne voit JAMAIS ces écrans.</b> Le web (exempt de plancher — R6 :
-  il se déploie en lockstep, pas de binaire retardataire) ; tout parc à jour (l'armement O15
-  attend les trois écrivains v3) ; la LECTURE de l'archive (le convertisseur serveur est
-  permanent — une vieille story se lit toujours). La rupture est un péage de casting
-  d'ÉCRITURE pour retardataires, pas un mur.</div>
+  il se déploie en lockstep, et sa couche fetch annonce ses caps dès le lot F) ; tout parc à
+  jour (l'armement O15 attend les trois écrivains v3) ; la LECTURE de l'archive (le convertisseur
+  serveur est permanent — une vieille story se lit toujours, un vieux client la lit en v1
+  d'origine). La rupture est un péage de passage pour retardataires, jamais un mur — et jamais
+  du vide.</div>
 </div></section>
 
 <!-- ================================================================ P21 -->
