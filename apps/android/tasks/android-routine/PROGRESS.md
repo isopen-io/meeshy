@@ -47,7 +47,14 @@
 > cache until it goes green (NOTES). **Gotcha logged**: `pkill -f 'gradlew'` self-terminates the
 > retry script (its own command line contains "gradlew").
 >
-> **Verified**: `assembleDebug` + `testDebugUnitTest` green across all modules locally before push.
+> **Verified**: `assembleDebug` + `testDebugUnitTest` green across all modules locally (single-thread
+> to dodge the proxy 429 burst; one `:app` Robolectric run needed its `android-all-instrumented` jar
+> re-fetched after a warm — a proxy-throttle transient, not a test failure). **CI incident, my own
+> fault, caught by the gate**: the FIRST push (`0d227f3a`) failed the Android check with `Unresolved
+> reference 'SentimentLevel'` — I'd added the import to the two consumer files (`ChatScreen`, the
+> test) but not to `ChatViewModel.kt`, where the `composerSentiment` getter is declared. Both CI and
+> the local serial gate reproduced it identically. Fixed in `c4a5f8e5` (two imports), re-verified
+> green locally, re-pushed. Lesson logged in NOTES.
 
 > On 2026-08-20 **Conversation lock open-gate shipped** (slice `conversation-lock-open-gate`,
 > feature-parity's Conversations lock composite — the "open-gate on tap" sub-gap left open by
