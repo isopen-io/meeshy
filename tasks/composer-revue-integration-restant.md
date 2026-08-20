@@ -3,7 +3,11 @@
 Source : workflow `w1nlc9yf9` (3 lentilles + 10 vérificateurs, 2026-08-20).
 DÉJÀ CORRIGÉ (commit à suivre) : I1 comptes de lots (huit partout), I2/compteur
 de lois (onze, P1 + spec §A), résidus « six lots », footer O1–O17, carte loi 11.
-RESTE À FAIRE — chaque item vérifié réel sauf mention (overflow = non vérifié) :
+TOUT INTÉGRÉ le 2026-08-20 (commit « revue d'intégration appliquée ») : I3-I9,
+les 13 mineurs, les 4 overflow (vérifiés en appliquant : O1 déjà fait, O2 ¶
+ajouté, O3 jetons --kf/--play, O4 polices réelles P21 depuis StoryModels:59-79).
+P22-P24 écrites. Ce fichier reste comme trace ; plus rien d'ouvert ici.
+Détail historique ci-dessous :
 
 ## MAJEURS confirmés
 

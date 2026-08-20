@@ -244,11 +244,11 @@ public struct MeeshyScenePlayer: View {
 **Interfaces (GELÉES pour E/F):**
 ```swift
 public enum BackgroundAudioAnnouncement: Equatable {
-    case none                                   // pas de piste ⇒ RIEN (loi 5)
+    case none                                   // pas de piste ⇒ RIEN (B3.5)
     case original                               // ♫〰 — si et seulement si piste propre
     case credit(title: String?, username: String?, duration: TimeInterval?)
     // métadonnées nil = marquee générique « ♫ — » : la forme CRÉDIT ne
-    // dégénère JAMAIS en note+onde (provenance, loi 4)
+    // dégénère JAMAIS en note+onde (provenance, B3.4)
 }
 public extension AudioChipDisplay {
     static func backgroundAnnouncement(sound: BackgroundSoundV3?,
@@ -258,7 +258,7 @@ public extension AudioChipDisplay {
 }
 ```
 
-- [ ] **Step 1: Tests rouges** — la signature devient `.credit(title: String?, username: String?, duration: TimeInterval?)` et les quatre cas sont : `nil → .none` (existence, loi 5) ; `.original → .original` (♫〰) ; `.library` + métadonnées → `.credit("Nuits d'été", "sam", 15)` ; `.library` SANS métadonnées (cache froid) → `.credit(nil, nil, nil)` — la FORME crédit est conservée : la vue rend alors un marquee générique « ♫ — », JAMAIS la note+onde, qui signifierait « son original » et mentirait sur la provenance (loi 4, « si et seulement si » — revue Fable n°11).
+- [ ] **Step 1: Tests rouges** — la signature devient `.credit(title: String?, username: String?, duration: TimeInterval?)` et les quatre cas sont : `nil → .none` (existence, B3.5) ; `.original → .original` (♫〰) ; `.library` + métadonnées → `.credit("Nuits d'été", "sam", 15)` ; `.library` SANS métadonnées (cache froid) → `.credit(nil, nil, nil)` — la FORME crédit est conservée : la vue rend alors un marquee générique « ♫ — », JAMAIS la note+onde, qui signifierait « son original » et mentirait sur la provenance (B3.4, « si et seulement si » — revue Fable n°11).
 - [ ] **Step 2: Rouge.**
 - [ ] **Step 3: Implémenter** dans le style du fichier (lire `AudioChipDisplay.resolve` existant d'abord — même vocabulaire, même forme). Fonction PURE : aucune requête, les métadonnées arrivent en paramètres (le lot E les résout).
 - [ ] **Step 4: Vert.** — **Step 5: Commit.**

@@ -4,7 +4,7 @@
 
 **Goal:** Le web lit le v3 (rendu minimal fidèle : scène, ancres, fond, textes aux 18 styles), annonce le fond selon provenance/existence, aligne l'attribution `↻` sans verbe, et envoie enfin `originalLanguage`. Il se déploie EN LOCKSTEP avec le lot A — c'est ce qui rend la rupture sans fenêtre côté web.
 
-**Architecture:** Pas de composer web v1 (hors périmètre — le composer web actuel reste ce qu'il est). Le lot est LECTURE + deux correctifs d'écriture. Le rendu v3 est un composant React pur (`CanvasV3Scene`) monté par `StoryViewer.tsx` quand le blob porte `v:3` — le chemin legacy reste pour… rien après le lot A (le fil sert v3 partout), mais il reste le repli de tolérance.
+**Architecture:** LECTURE + trois correctifs d'écriture — dont l'émission v3 du composer story EXISTANT (F5b, condition d'armement d'O15) et l'annonce de capacités (F2b). Le composer web COMPLET (bandes, stickers, collage, nouvelles surfaces) reste hors périmètre : F5b change la FORME émise par l'écran actuel, jamais ses fonctionnalités. Le rendu v3 est un composant React pur (`CanvasV3Scene`) monté par `StoryViewer.tsx` quand le blob porte `v:3` — le chemin legacy reste pour… rien après le lot A (le fil sert v3 partout), mais il reste le repli de tolérance.
 
 **Tech Stack:** React/Next 15, TypeScript strict, Jest (`TZ=UTC bun run test`), types partagés `@meeshy/shared/types/canvas-v3`.
 
@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Fichiers POSSÉDÉS : `apps/web/components/v2/StoryViewer.tsx`, `apps/web/components/v2/CanvasV3Scene.tsx` (nouveau), `apps/web/components/v2/BackgroundSoundBadge.tsx` (nouveau, F3), `apps/web/components/v2/PostCard.tsx` (attribution + annonce), `apps/web/components/v2/StoryComposer.tsx` (F5 — l'appelant qui construit `storyEffects`, `:252`), `apps/web/services/posts.service.ts` (+ leurs tests). Rien d'autre.
+- Fichiers POSSÉDÉS : `apps/web/components/v2/StoryViewer.tsx`, `apps/web/components/v2/CanvasV3Scene.tsx` (nouveau), `apps/web/components/v2/BackgroundSoundBadge.tsx` (nouveau, F3), `apps/web/components/v2/PostCard.tsx` (attribution + annonce), `apps/web/components/v2/StoryComposer.tsx` (F5/F5b — l'appelant qui construit `storyEffects`, `:252`), `apps/web/services/posts.service.ts` (+ leurs tests). Rien d'autre.
 - Consomme (gelé) : `CanvasV3Schema`/types (`@meeshy/shared/types/canvas-v3` — même chemin d'import que `@meeshy/shared/types/post`, patron vérifié), fixtures §C4.
 - Gates : `cd apps/web && TZ=UTC bun run test` (714+ suites) — le `tsc` web n'est PAS un gate propre (piège documenté) : ne pas s'y fier, s'appuyer sur les tests.
 - Le web n'envoie PAS `X-App-Version` et ne reçoit jamais de 426 par l'en-tête (R6) — aucune porte de version côté web.
@@ -136,4 +136,4 @@ La table des 18 styles reprend les valeurs du résolveur iOS (grasse/serif/mono/
 
 ## Hors périmètre (dit une fois)
 
-Composer web (création/édition v3) · lecture ANIMÉE des timings/keyframes web · résolution d'URL des sons de bibliothèque · collage/stickers web · porte de version web (R6 l'interdit).
+Composer web COMPLET (fonctionnalités nouvelles — l'émission v3 de l'écran actuel est F5b, AU périmètre) · lecture ANIMÉE des timings/keyframes web · résolution d'URL des sons de bibliothèque · collage/stickers web · porte de version web (R6 l'interdit).

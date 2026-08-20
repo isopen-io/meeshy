@@ -74,6 +74,15 @@ spec) : `ComposerProfile` décrit l'OUVERTURE ; les capacités visibles sont
 recalculées au format COURANT à chaque bascule S↔P↔R. Le host dérive
 l'affichage de `f(formatCourant, seed)`, pas du profil figé.
 
+**Porte `.draft`/`.share` — la reprise rebascule (rév. 3, revue
+d'intégration I5, version consignée avec P5)** : `profile(for:)` reste une
+fonction de l'ORIGINE seule (table pure) — `.draft`/`.share` ouvrent en état
+transitoire `.post` avec `opensWith: .resume` ; c'est le HOST qui, une fois
+le document chargé, rebascule au format du brouillon (loi 9 : les capacités
+suivent le format courant). Le seed est matérialisé par les valeurs
+associées de `ComposerOrigin` (`.draft(id:)`, `.conversationMedia(...)`) —
+pas de champ `seed` séparé. P5 (ligne Brouillon) consigne la même version.
+
 - [ ] **Step 1: Tests rouges** — la table de P5, un cas par porte : `.storyTray → (.story, cameraReady, slides:true)` ; `.feedComposer → routesToLegacy == .feedComposer` (C4 : la porte feed reste sur sa sheet, assertion négative sur le host) ; `.reelTab → (.reel, videoCameraReady, slides:false)` ; `.moodChip → routesToLegacy == .statusComposer` (S3 : rien ne change pour le mood) ; `.repost → allowsCapture == false, routesToLegacy == .repostComposer` ; `.edit → routesToLegacy == .storyEdit` ; `.draft/.share → (.post modifiable)` ; `.conversationMedia → (.post modifiable, média en seed — profil défini, câblage lot G)`. Neuf tests, noms `test_profile_<origin>_<attente>`.
 - [ ] **Step 2: Rouge** (types absents). **Step 3:** implémenter la table — un `switch` exhaustif, AUCUNE logique au-delà (les profils sont des données). **Step 4: Vert** (`-only-testing:MeeshyTests/ComposerIntentTests`). **Step 5: Commit.**
 
@@ -89,7 +98,7 @@ l'affichage de `f(formatCourant, seed)`, pas du profil figé.
 **Interfaces:**
 - Produces : `MeeshyComposerHost(intent: ComposerIntent)` — l'unique porte visible. `PlateauTint { .noir, .indigoProfond, .violetProfond }` persisté `@AppStorage("composer.plateau.tint")` (O6).
 
-- [ ] **Step 1: Tests rouges** — (1) `PlateauTint` : 3 cas résolus par JETONS SDK, jamais par hex en dur dans le test (rév. 2, revue totale U14) — cette tâche AJOUTE d'abord à `MeeshyColors` : `plateauNoir` (#000000) et `violet950` (#2E1065, Tailwind violet-950 — même provenance que la rampe indigo) et réutilise `indigo950` (#1E1B4B) ; le test asserte `PlateauTint.noir.color == MeeshyColors.plateauNoir` etc., défaut `.indigoProfond` ; (1b) **contraste AA (revue totale U16)** : à la manière de `TextMutedContrastAATests` (loi D-18), chaque jeton de texte/icône du socle mesure ≥ 4,5:1 sur LES TROIS teintes du plateau ; (2) garde de source sur `MeeshyComposerHost` : contient `StoryComposerView(` (il ENVELOPPE l'atelier SDK — anti-réécriture), contient `MeeshyScenePlayer` avec `.preview` (l'œil du socle EST le lecteur), contient les trois zones dans l'ordre `audience`→`preview`→`publish` et AUCUN `hidden`/retrait conditionnel sur le socle (loi 5) ; (3) **garde anti-UI-morte par PROFIL** (spec §D lot C « zone contextuelle », revue Fable n°10) : le host conditionne les capacités au profil — `allowsCapture == false` ⇒ le chemin capture n'est PAS monté (assertion source sur le `if profile.allowsCapture`), même règle pour `showsSlides`/`showsTimeline`. La zone contextuelle elle-même RESTE celle du composer SDK existant (rien par défaut = post-v1, à l'écriture v3 native — déscope consigné).
+- [ ] **Step 1: Tests rouges** — (1) `PlateauTint` : 3 cas résolus par JETONS SDK, jamais par hex en dur dans le test (rév. 2, revue totale U14) — cette tâche AJOUTE d'abord à `MeeshyColors` : `plateauNoir` (#000000) et `violet950` (#2E1065, Tailwind violet-950 — même provenance que la rampe indigo) et réutilise `indigo950` (#1E1B4B) ; le test asserte `PlateauTint.noir.color == MeeshyColors.plateauNoir` etc., défaut `.indigoProfond` ; (1b) **contraste AA (revue totale U16)** : à la manière de `LentilleTextMutedContrastAATests` (loi D-18), chaque jeton de texte/icône du socle mesure ≥ 4,5:1 sur LES TROIS teintes du plateau ; (2) garde de source sur `MeeshyComposerHost` : contient `StoryComposerView(` (il ENVELOPPE l'atelier SDK — anti-réécriture), contient `MeeshyScenePlayer` avec `.preview` (l'œil du socle EST le lecteur), contient les trois zones dans l'ordre `audience`→`preview`→`publish` et AUCUN `hidden`/retrait conditionnel sur le socle (loi 5 de la doctrine P1 — « le socle ne bouge jamais ») ; (3) **garde anti-UI-morte par PROFIL** (spec §D lot C « zone contextuelle », revue Fable n°10) : le host conditionne les capacités au profil — `allowsCapture == false` ⇒ le chemin capture n'est PAS monté (assertion source sur le `if profile.allowsCapture`), même règle pour `showsSlides`/`showsTimeline`. La zone contextuelle elle-même RESTE celle du composer SDK existant (rien par défaut = post-v1, à l'écriture v3 native — déscope consigné).
 - [ ] **Step 2: Rouge.**
 - [ ] **Step 3: Implémenter** — structure du host :
 
@@ -216,6 +225,18 @@ run, repli CONSIGNÉ : `UIPasteControl` (UIKit, représentable), même contrat O
 
 - [ ] **Step 1: Test rouge (source)** — le canvas porte un `LongPressGesture(minimumDuration: 0.45)` (le seuil du reader, un seul vocabulaire) qui déclenche `showCameraCapture = true`, gardé par `viewModel.canAddMedia` et par le profil (`allowsCapture`). Périmètre v1 CONSIGNÉ dans le test : l'appui long OUVRE la capture (relâcher-photo/maintenir-vidéo vivent DANS `CameraView`, inchangée).
 - [ ] **Step 2-5:** rouge → geste (`simultaneousGesture`, ne vole pas le tap-texte ni le swipe existants — les deux gardes de source du fichier restent vertes) → vert → commit.
+
+---
+
+### Task C6b: L'auto-brouillon — « aucun contenu composé n'est jamais perdu » (M10/P20, rév. 3 — revue d'intégration I9)
+
+**Files:**
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift`
+- Test: `apps/ios/MeeshyTests/Unit/Composer/AutoDraftOnDismissTests.swift`
+
+- [ ] **Step 0: Lire d'abord** — le composer SDK a peut-être DÉJÀ un autosave (`StoryDraftStore` porte des brouillons ; chercher qui écrit dedans à la fermeture : `saveDraft`, `onDisappear`, `sceneDidEnterBackground`). Si l'autosave existe : cette tâche se réduit à l'ASSERTION de source + le toast ; consigner la source vérifiée ici et dans P10.
+- [ ] **Step 1: Tests rouges** — (1) fermer le host avec un document non vide ⇒ `StoryDraftStore` reçoit une écriture (spy/fixture), AUCUN dialogue de confirmation (M10 : zéro question) ; (2) le toast « Brouillon enregistré » est présenté avec l'action « Jeter » ; (3) une réponse 426 à la publication emprunte LE MÊME chemin (le contenu part en brouillon AVANT que la porte bloquante ne monte — c'est la garantie de P20 fig. 2) ; (4) document vide ⇒ aucune écriture, aucun toast.
+- [ ] **Step 2-5:** rouge → implémentation (un seul chemin `persistDraftAndNotify()`, appelé par la fermeture ET par le handler 426) → vert + gardes UI (libellés catalogue 7 langues) → commit.
 
 ---
 

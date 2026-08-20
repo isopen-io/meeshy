@@ -5,10 +5,10 @@ Statut : **SPÉCIFIÉ (2026-08-20) — arbitrages tous tranchés** ; exécution 
 `./2026-08-20-meeshy-composer-execution-spec.md` (8 lots, contrat gelé)
 Succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
-Planches visuelles (21 planches — inventaire exhaustif, matrice outil × format,
+Planches visuelles (24 planches — inventaire exhaustif, matrice outil × format,
 revue système P15, écart SOTA P16, entrées externes P18, continuité P19, rupture
-vécue P20, spécimen des styles P21 ; à venir : iconographie des contrôles,
-éditeurs trim·crop·cut, cas d'usage carrousels & audio) :
+vécue P20, spécimen des styles P21, iconographie des contrôles P22, éditeurs
+trim·crop·cut P23, cas d'usage carrousels & audio P24) :
 `./2026-08-19-meeshy-composer-views.html`
 Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
@@ -35,7 +35,7 @@ est un champ, jamais un outil. Le reste évolue.
 | Surface d'édition | canvas plein écran, chrome par-dessus | **scène 9:16 fixe**, posée dans un plateau sombre qui lui appartient |
 | Contenu 16:9 | rogné ou letterboxé passivement | **bandes ACTIVES** — le hors-champ est une zone de pose comme une autre |
 | Publication | barre en haut, aperçu séparé | **socle permanent en bas** : audience · aperçu · publier, jamais masqués |
-| Outils | Dock à 4 états, toujours présent | **rien par défaut** — un contrôle n'apparaît que si l'objet courant le rend possible |
+| Outils | Dock à 4 états, toujours présent | **AMORCE/INSPECTEUR — rien d'inutile** : un contrôle d'OBJET n'apparaît que si l'objet courant le rend possible ; les portes de création gardent un domicile (AMORCE, §4 — cible, I7) |
 | Timeline | repliée dans le Dock, vue unique | **plan 2D** : vertical = empilement, horizontal = durée |
 | Sans visuel | non traité | **document sans scène** — un post texte n'invente pas un canvas |
 | Lecture | Reader séparé, conventions listées | **mêmes objets, même moteur** : les 3 viewers sont trois chromes sur un noyau |
@@ -212,7 +212,9 @@ c'est le meuble qui porte la scène.
 
 **La zone contextuelle a DEUX états nommés** (revue totale C3 — la doctrine
 « vide par défaut » contredisait les wireframes qui montrent des chips hors
-sélection) :
+sélection). **Périmètre (rév. 3, I7) : c'est la CIBLE — en v1, la zone reste
+celle du composer SDK existant (lot C, déscope §F) ; AMORCE/INSPECTEUR
+arrivent avec l'écriture v3 native du composer.** Les deux états :
 
 - **AMORCE** (aucune sélection) : la rangée FIXE des kinds que le profil
   autorise — Aa · sticker · son · lieu (+ `content` pour P·R). C'est la porte
@@ -509,8 +511,10 @@ destination **« Post / Story »** à côté des conversations :
   feuille ne peut pas porter — invariant existant « l'extension copie et
   décrit, ne garantit jamais l'upload » ;
 - côté app, un `SharePendingPostConsumer` — décalqué de
-  `SharePendingSendConsumer` et `NSEPendingPostConsumer`, appelé aux MÊMES
-  deux points (boot après `configure(pool:)`, retour avant-plan) — convertit
+  `SharePendingSendConsumer`, dont il reprend les DEUX points d'appel (boot
+  après `configure(pool:)`, retour avant-plan) ; `NSEPendingPostConsumer`
+  partage le point avant-plan et prouve le motif « fichier App Group par
+  entité → consumer au réveil » pour les POSTS — convertit
   chaque fiche en **BROUILLON de l'Étagère** ;
 - l'utilisateur est prévenu par une **bannière discrète** « votre partage vous
   attend » au foreground — JAMAIS une modale au boot : un lancement appartient
@@ -528,7 +532,7 @@ posé. La mécanique réutilise l'existant pièce par pièce :
 - l'action entre dans `MessageActionResolver`/`MessageMoreSheet` (le menu
   contextuel existant — jamais un menu parallèle), avec les gardes des actions
   sœurs : `!isViewOnce` (même règle que `isForwardable`), jamais `.location` ;
-- le fichier est matérialisé **cache-first** (`AttachmentMediaSaveResolver.materialize`
+- le fichier est matérialisé **cache-first** (`AttachmentMediaSaveResolver.resolveLocalFile(for:)`
   — la cascade du flux « Enregistrer » : file:// direct → cache typé →
   téléchargement) ; dans le cas nominal les octets sont DÉJÀ sur disque,
   zéro réseau ;
@@ -633,7 +637,7 @@ l'argumentaire qui a fondé chaque décision.
 | # | Question | Option A | Option B | Recommandation |
 |---|---|---|---|---|
 | **O1** | Mentions & hashtags | segments du `content` (comme aujourd'hui) | objets de scène posables | **A pour le texte du post, B pour la scène** — les deux coexistent déjà dans le modèle (INLINE vs PINNED) ; les unifier de force perdrait l'un des deux |
-| **O2** | Migration du modèle | A : rupture · B : lecture double · C : fil inchangé | **TRANCHÉ — A′, rupture assumée** (porteur produit, 2026-08-20) | Le fil passe v3, strict. La rupture est rendue PROPRE par quatre pièces : (1) création v1 refusée net — `426 UPGRADE_REQUIRED` + message « mettez à jour » ; (2) **mise à jour forcée** : version plancher servie par le gateway + porte bloquante client (mécanisme À CRÉER — vérifié absent : aucun header de version, aucun plancher) ; (3) la LECTURE survit par **UN convertisseur serveur v1→v3 à la lecture** — sans lui, l'archive éternelle et `/republish` mouraient, ce que le refus de création ne couvre pas ; (4) brouillons locaux migrés one-shot au premier lancement. La reco C reste consignée en P17 comme analyse |
+| **O2** | Migration du modèle | A : rupture · B : lecture double · C : fil inchangé | **TRANCHÉ — A′, rupture assumée** (porteur produit, 2026-08-20) | Le fil passe v3, strict. La rupture est rendue PROPRE par quatre pièces : (1) création v1 refusée net — `426 UPGRADE_REQUIRED` + message « mettez à jour » ; (2) **mise à jour forcée** : version plancher servie par le gateway + porte bloquante client (mécanisme À CRÉER — vérifié absent : aucun header de version, aucun plancher) ; (3) la LECTURE survit par **UN convertisseur serveur v1→v3 à la lecture** — sans lui, l'archive éternelle et `/republish` mouraient, ce que le refus de création ne couvre pas ; (4) brouillons locaux migrés one-shot au premier lancement. La reco C reste consignée en P17 comme analyse. *Rév. 3 (C5/O15) : l'écriture stricte vit SOUS DRAPEAU — au merge, aucun écrivain n'émet v3 ; armée après les trois, le 426 sert la longue traîne* |
 | **O3** | Scène pour un POST | toujours une scène (vide si texte seul) | `scenes: nil` tant qu'aucun objet visuel | **B** — un cadre vide EST une invitation à le remplir, exactement le sentiment d'outillage à éviter |
 | **O4** | Timing par défaut | tout objet naît avec start=0, end=durée | timing `nil` = « suit la slide » | **B** — `nil` se distingue d'un choix, et c'est ce qui permet la piste fantôme |
 | **O5** | Bandes actives | zones dédiées (contraintes) | ancrage sémantique, objets libres de déborder | **B** — un objet peut chevaucher la limite (une bulle à cheval sur l'image), l'ancrage n'est qu'un point de référence |
@@ -716,10 +720,14 @@ blobs** en production, et une **exécution réelle sur un appareil iOS 16**.
 Chaque phase est livrable seule et laisse le produit fonctionnel.
 
 1. **Le contrat** — v3 strict (Zod, `packages/shared`) + **convertisseur
-   serveur v1→v3 à la lecture** + **version plancher & mise à jour forcée**
-   (header de version client, plancher gateway, `426`, porte bloquante iOS/web
-   — mécanisme à créer, vérifié absent du dépôt). C'est la phase qui rend la
-   rupture O2/A′ propre ; rien de visible pour un client à jour.
+   serveur v1→v3 à la lecture** + négociation O17 (sentinelle, §6h) +
+   **version plancher & mise à jour forcée** (header de version client,
+   plancher gateway, `426`, porte bloquante NATIVE — iOS et Android, lot H ;
+   le web est EXEMPT, R6 : il se déploie en lockstep). Rév. 3 (I4) : la
+   validation stricte d'écriture et le 426 vivent sous
+   `CANVAS_V3_WRITE_STRICT` (défaut OFF — le merge est inerte aux deux
+   sens), armés quand les TROIS écrivains émettent v3 (O15). « Rien de
+   visible pour un client à jour » est vrai au sens fort.
 2. **La scène** — cadre 9:16, bandes ancrables, plateau et socle permanent.
    Premier changement visible, sur le composer de story seul. Le collage d'image
    et « Mes stickers » (§6b) entrent ici : purement client, aucun contrat serveur.

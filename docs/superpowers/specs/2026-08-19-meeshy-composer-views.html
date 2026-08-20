@@ -11,6 +11,7 @@
   /* Le téléphone dépeint l'UI SOMBRE du produit : fixe dans les deux thèmes. */
   --ph:#111020; --ph2:#1A1731; --phline:#37315656; --phink:#DDD8F4; --phmut:#8F87BC;
   --phsocle:#0B0A14; --phscene:#221E3E;
+  --kf:#FFD166; --play:#FF6B6B; /* jetons d'ÉTAT des maquettes — jamais une couleur de format (U15) */
 }
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]){
@@ -174,9 +175,9 @@ td b{color:var(--ink);font-weight:600}
 .tl-bar::before{left:3px}.tl-bar::after{right:3px}
 .tl-ghost{position:absolute;inset:3px 4px;border:1.5px dashed var(--phline);border-radius:5px;
   font:500 8.5px/17px "Spline Sans Mono",monospace;color:var(--phmut);padding:0 7px}
-.kf{position:absolute;top:50%;width:7px;height:7px;background:var(--cM);
+.kf{position:absolute;top:50%;width:7px;height:7px;background:var(--kf);
   transform:translate(-50%,-50%) rotate(45deg);border-radius:1.5px}
-.playhead{position:absolute;top:0;bottom:0;width:1.5px;background:var(--cR)}
+.playhead{position:absolute;top:0;bottom:0;width:1.5px;background:var(--play)}
 
 /* ————— Mermaid & divers ————— */
 .mermaid{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px;overflow-x:auto}
@@ -193,14 +194,14 @@ footer .mono{font-size:11.5px}
 <a href="#p7">P7 Outils</a><a href="#p8">P8 Timeline</a><a href="#p9">P9 Capture</a>
 <a href="#p10">P10 Socle</a><a href="#p11">P11 Étagère</a><a href="#p12">P12 Viewers</a>
 <a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a><a href="#p16">P16 Écart SOTA</a><a href="#p17">P17 Simplification</a>
-<a href="#p18">P18 Entrées ext.</a><a href="#p19">P19 Continuité</a><a href="#p20">P20 Rupture</a><a href="#p21">P21 Styles</a>
+<a href="#p18">P18 Entrées ext.</a><a href="#p19">P19 Continuité</a><a href="#p20">P20 Rupture</a><a href="#p21">P21 Styles</a><a href="#p22">P22 Icônes</a><a href="#p23">P23 Éditeurs</a><a href="#p24">P24 Cas d'usage</a>
 </div></nav>
 
 <header><div class="wrap">
   <div class="eyebrow">Planches de navigation UI · UX — spécification visuelle</div>
   <h1>MeeshyComposer</h1>
   <p class="sub">Un seul objet pour créer — Story, Post, Réel, Mood — et un seul noyau pour lire.
-  Vingt-et-une planches : chaque vue, son comportement, et pour chaque outil la précision exacte de ce
+  Vingt-quatre planches : chaque vue, son comportement, et pour chaque outil la précision exacte de ce
   qu'il fait selon le format. <b>Toutes les features existantes sont inventoriées et préservées
   avant toute nouveauté.</b></p>
   <div class="meta">
@@ -208,7 +209,7 @@ footer .mono{font-size:11.5px}
     <span>statut : SPÉCIFIÉ — arbitrages TOUS tranchés · spec d'exécution 2026-08-20 rév. 5, huit lots (A–F ∥ · G · H)</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
     <span>rév. 2 (2026-08-20) : revue totale 4 axes — 62 constats examinés, 33 réels intégrés · entrées externes (P18) · continuité &amp; PiP (P19) · rupture vécue (P20) · spécimen des 18 styles (P21) · O12–O16</span>
-    <span>rév. 3 (2026-08-20) : alignement de lecture O17 (sentinelle — P20) · à venir au prochain incrément : iconographie des contrôles, éditeurs trim·crop·cut, cas d'usage carrousels &amp; audio</span>
+    <span>rév. 3 (2026-08-20) : alignement de lecture O17 (sentinelle — P20) · rév. 4 : revue d'intégration (9+13 constats appliqués) · iconographie des contrôles (P22) · éditeurs trim·crop·cut (P23) · cas d'usage carrousels &amp; audio (P24)</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -380,12 +381,14 @@ flowchart TD
     e5([Repost / citation])
     e6([Éditer une publication])
     e7([Brouillon de l'Étagère])
-    e8([Partage entrant iOS — P18])
+    e8([Partage entrant iOS — P18]):::p
     e9([Média reçu en conversation — P18]):::p
     e10([« + Créer » de l'Étagère])
   end
   C{{MeeshyComposer<br/>plateau · scène 9:16 · socle}}
-  e1 & e2 & e3 & e4 & e5 & e6 & e7 & e8 & e9 & e10 --> C
+  e1 & e5 & e6 & e7 & e8 & e9 & e10 --> C
+  e2 -. v1 : sheet feed C4 .-> C
+  e4 -. StatusComposer S3 .-> C
   C -->|outil requis| T[Panneau contextuel<br/>Texte · Média · Son · Dessin · Sticker · Lieu · Références · Fond]
   T --> C
   C -->|poignée ⏱| TL[Timeline — plan 2D]
@@ -444,7 +447,8 @@ flowchart TD
         bandes hachurées sont des zones d'ancrage de premier ordre (P6). Le fond est un objet du
         plan <span class="mono">.background</span>.</span></li>
       <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3).
-        <b>AMORCE</b> (aucune sélection) : la rangée fixe des kinds que le profil autorise —
+        <b>AMORCE</b> (aucune sélection — CIBLE : en v1 la zone reste celle du composer SDK,
+        déscope §F/I7) : la rangée fixe des kinds que le profil autorise —
         Aa · sticker · son · lieu (+ content pour P·R) ; la porte de création a toujours un
         domicile. <b>INSPECTEUR</b> (sélection) : les contrôles de l'objet courant, eux seuls.
         Jamais de vide-mystère, jamais de contrôle grisé — la loi 4 vaut pour les contrôles
@@ -480,7 +484,7 @@ flowchart TD
       <tr><td><b>Chip humeur</b> <span class="tag tEx">routé : StatusComposerView (S3)</span></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>pas de scène</b>. v1 ET cible : l'écran existant, inchangé — cette ligne documente le PROFIL, pas un écran neuf (M9)</td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
       <tr><td><b>Repost / citation</b></td><td><span class="chip chP">P</span></td><td>Citation posée, attribution verrouillée, SILENT auto vers l'auteur</td><td>capture caméra ; l'audience est <b>plafonnée</b> par la source</td><td>≤ source</td></tr>
       <tr><td><b>Éditer</b></td><td>celui du contenu</td><td>Scène rechargée ; références relues unitairement avant d'oser remplacer (tri-état)</td><td>changement de format (l'identité du contenu est publiée)</td><td>celle publiée</td></tr>
-      <tr><td><b>Brouillon</b></td><td>celui du brouillon</td><td>Reprise exacte, curseur où on l'a laissé</td><td>—</td><td>celle du brouillon</td></tr>
+      <tr><td><b>Brouillon</b></td><td>celui du brouillon</td><td>Reprise exacte, curseur où on l'a laissé. Mécanique (I5, consignée avec C1) : <span class="mono">profile(for:)</span> ouvre en transitoire <span class="mono">.post/.resume</span>, le host REBASCULE au format du document chargé (loi 9) — le seed vit dans les valeurs associées de l'origine</td><td>—</td><td>celle du brouillon</td></tr>
       <tr><td><b>Partage entrant</b> <span class="tag tNew">P18 · O14 · lot G</span></td><td><span class="chip chP">P</span> (modifiable)</td><td>L'extension écrit une FICHE ; l'app la convertit en BROUILLON de l'Étagère + bannière au foreground — JAMAIS de modale au boot. Reprendre le brouillon ouvre le composer, payload posé (média → scène, URL → content)</td><td>—</td><td>dernière utilisée (format P)</td></tr>
       <tr><td><b>Média reçu en conversation</b> <span class="tag tNew">e9 · O13 · lot G</span></td><td><span class="chip chP">P</span> (modifiable)</td><td>Appui long sur la bulle → « Créer un post » → média matérialisé (cache-first) déjà posé — 2 gestes. Gardes : jamais viewOnce ni location ; AUCUNE référence auto vers l'expéditeur (confidentialité)</td><td>capture caméra (le seed EST le média)</td><td>dernière utilisée (format P)</td></tr>
       <tr><td><b>« + Créer » de l'Étagère</b> <span class="tag tNew">rév. 2 · U12</span></td><td>dernier format créé (S au 1er lancement)</td><td>v1 : alias de la porte tray (routage <span class="mono">onCreateStory</span> existant) ; cible : préconfiguré comme les autres — jamais un menu de formats</td><td>—</td><td>dernière utilisée du format</td></tr>
@@ -540,9 +544,11 @@ flowchart TD
       <div class="sc" style="flex:0 0 30%;align-items:flex-start;padding:8px"><span class="lbl">content seul — AUCUNE scène<br>(scenes: nil)</span></div>
       <div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="lbl" style="color:var(--phmut)">PAS de plateau : sans scène, le composer<br>suit le thème de l'app (rév. 2, U18)</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>Document sans scène.</b> Un post texte n'invente pas de canvas ; la scène
-    naît au premier objet visuel et meurt avec le dernier (O3) — et le plateau sombre naît AVEC
-    elle (U18) : avant, le composer est aux couleurs du thème.</figcaption></figure>
+    </div><figcaption><b>Document sans scène — CIBLE (v1 : <span class="mono">FeedComposerSheet</span>,
+    I6).</b> Un post texte n'invente pas de canvas ; la scène naît au premier objet visuel et
+    meurt avec le dernier (O3) — et le plateau sombre naît AVEC elle (U18) : avant, le composer
+    est aux couleurs du thème. En v1, les documents texte/URL (porte feed, brouillons de partage
+    sans média) restent servis par la sheet feed existante.</figcaption></figure>
   </div>
   <ul class="klist" style="max-width:76ch">
     <li><b>Pourquoi l'ancre et pas des coordonnées :</b> un objet posé « à y = 0,08 » saute dès
@@ -593,7 +599,7 @@ flowchart TD
       le PasteButton de la SCÈNE produit TOUJOURS un objet média pleine qualité (≤ 2 048 px ;
       carte de carrousel si le composer est en Post sans scène) — jamais un sticker, jamais de
       side-effect bibliothèque ; celui du panneau STICKERS produit un sticker (≤ 512 px) +
-      « Mes stickers ». Une seule phrase, partout la même (P13, §6b, fixtures). Lecture du
+      « Mes stickers ». Une seule phrase, partout la même (P13, §6b, garde de source C5). Lecture du
       presse-papiers UNIQUEMENT via le bouton système (<span class="mono">PasteButton</span>,
       iOS 16+) : <span class="mono">hasImages</span> décide de MONTRER le bouton sans rien lire,
       et le prompt de confidentialité ne surgit jamais hors geste. HDR normalisé en SDR —
@@ -954,7 +960,7 @@ flowchart TD
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
         <span class="ob">@marc · ↻ @aïcha · ♫〰</span>
         <span class="ob">content natif — Prisme + badge langue</span>
-        <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">CanvasPlayer — autoplay muet, tap = plein écran</span></div></div>
+        <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">CanvasPlayer — né en pause, muet, tap = plein écran</span></div></div>
         <span class="ob">Avec Alice · ❤ 12 · 💬 4 · ↻ 2 · 🔖 · 🔇</span>
       </div>
       <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
@@ -1045,7 +1051,7 @@ flowchart TD
       <tr><td>Traductions (Prisme)</td><td class="ok">✓ natif + badge · barre langues · original au maintien</td><td class="ok">✓ natif + badge · retraduire</td><td class="ok">✓ captions traduites</td><td class="ok">✓</td></tr>
       <tr><td>Références en lecture</td><td class="ok">✓ badge · « Avec … » · marqueur SILENT</td><td class="ok">✓ idem</td><td class="ok">✓ + @ valides dans l'embed</td><td class="ok">✓ « Avec … »</td></tr>
       <tr><td>Accès référencé expiré</td><td class="ok">✓ 24 h · consommé à la vue</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ok">✓ idem S</td></tr>
-      <tr><td>Bouton audio — couper/rétablir d'un tap</td><td class="ok">✓ rail + mute par piste</td><td class="ok">✓ autoplay muet <span class="nv">◆ bouton sur CARTE et DÉTAIL (si piste)</span></td><td class="ok">✓ rail <span class="nv">◆ montré si piste seulement</span></td><td class="ab">—</td></tr>
+      <tr><td>Bouton audio — couper/rétablir d'un tap</td><td class="ok">✓ rail + mute par piste</td><td class="ok">✓ autoplay muet <span class="nv">◆ bouton sur CARTE, DÉTAIL et PLEIN ÉCRAN (si piste — le transport plein écran l'a déjà)</span></td><td class="ok">✓ rail <span class="nv">◆ montré si piste seulement</span></td><td class="ab">—</td></tr>
       <tr><td>Fond annoncé après l'auteur — seulement si une piste EXISTE</td><td class="ok">✓ ♫〰 si ORIGINAL · « titre · @pseudo · M:SS » si bibliothèque (atome AudioChipDisplay.resolve) · pas de piste ⇒ rien</td><td class="nv">◆ même règle</td><td class="nv">◆ même règle</td><td class="ab">—</td></tr>
       <tr><td>Attribution ↻ sans verbe</td><td class="ab">— (pas d'attribution en story)</td><td class="ok">✓ iOS 2026-08-19 · web à aligner</td><td class="ok">✓ idem</td><td class="ab">—</td></tr>
       <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
@@ -1152,7 +1158,7 @@ flowchart TD
   <div class="scrollx"><table>
     <thead><tr><th>Surface</th><th>Budget</th><th>Garde</th></tr></thead>
     <tbody>
-      <tr><td><b>Fil avec CanvasPlayer</b></td><td>1 lecteur ACTIF maximum, autoplay muet ; les autres cartes servent leur vignette (thumbHash existant) ; pause hors écran, pool de réutilisation</td><td>le piège « réels qui chauffent » est documenté ici — le fil ne devient jamais N décodeurs</td></tr>
+      <tr><td><b>Fil avec CanvasPlayer</b></td><td>1 lecteur ACTIF maximum ; « autoplay muet » vaut pour les cartes vidéo/réel EXISTANTES — la carte de POST à scène naît en pause (lot E) ; les autres cartes servent leur vignette (thumbHash existant) ; pause hors écran, pool de réutilisation</td><td>le piège « réels qui chauffent » est documenté ici — le fil ne devient jamais N décodeurs</td></tr>
       <tr><td><b>Scène (composer &amp; lecture)</b></td><td>1 vidéo de fond 1080p + ≤ 20 layers actifs ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
       <tr><td><b>Image collée / importée</b></td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
       <tr><td><b>« Mes stickers » (local)</b></td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
@@ -1310,7 +1316,7 @@ flowchart TD
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="ctx" style="margin-top:22px;border-color:var(--acc)"><span class="ob on">📤 Votre partage vous attend — Ouvrir</span></div>
       <div class="sc" style="opacity:.4;flex:1"><div class="media169" style="flex:1"><span class="lbl">l'app, là où l'utilisateur allait</span></div></div>
-      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">—</span></div>
+      <div class="socle" style="justify-content:center"><span class="lbl">tab bar de l'app — le socle n'existe que dans le composer</span></div>
     </div><figcaption><b>2 · Au retour dans l'app.</b> Le consumer (décalqué de
     <span class="mono">SharePendingSendConsumer</span>, mêmes deux points d'appel : boot +
     avant-plan) a converti la fiche en BROUILLON de l'Étagère ; une bannière discrète l'annonce.
@@ -1319,7 +1325,7 @@ flowchart TD
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="ob">Post ▾</span><span class="ob" style="margin-left:auto">⋯</span></div>
       <div class="sc"><div class="media169" style="flex:1"><span class="lbl">carrousel — 3 photos posées</span></div></div>
-      <div class="ctx"><span class="lbl">AMORCE : Aa · ☺ · ♫ · 📍</span></div>
+      <div class="ctx"><span class="lbl">AMORCE : ¶ · Aa · ☺ · ♫ · 📍 (cible — ¶ = content, profil P)</span></div>
       <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
     </div><figcaption><b>3 · Reprendre le brouillon.</b> Le composer s'ouvre préconfiguré
     (profil P modifiable) : médias → scène/carrousel, URL et texte → <span class="mono">content</span>.
@@ -1343,10 +1349,10 @@ flowchart TD
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="ob">Post ▾</span><span class="ob" style="margin-left:auto">⋯</span></div>
       <div class="sc"><div class="media169" style="flex:1"><span class="lbl">média posé — déjà sur disque<br>(cache-first, zéro téléchargement)</span></div></div>
-      <div class="ctx"><span class="lbl">AMORCE : Aa · ☺ · ♫ · 📍</span></div>
+      <div class="ctx"><span class="lbl">AMORCE : ¶ · Aa · ☺ · ♫ · 📍 (cible — ¶ = content, profil P)</span></div>
       <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
     </div><figcaption><b>2 · Geste 2.</b> Le composer s'ouvre, média posé — matérialisé par la
-    cascade du flux « Enregistrer » (<span class="mono">AttachmentMediaSaveResolver.materialize</span> :
+    cascade du flux « Enregistrer » (<span class="mono">AttachmentMediaSaveResolver.resolveLocalFile(for:)</span> :
     les octets sont déjà dans le cache dans le cas nominal). Publier = re-upload TUS depuis le
     cache local, offline compris. Basculer en Story ? Le champ format (loi 9).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
@@ -1401,7 +1407,7 @@ flowchart TD
         <div class="sc" style="opacity:.35;height:100%;margin:0"><div class="media169" style="flex:1"><span class="lbl">l'app — n'importe où</span></div></div>
         <div style="position:absolute;right:8px;top:8px;width:44%;aspect-ratio:16/9;border:1.5px solid var(--acc);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--phscene)"><span class="lbl" style="color:var(--acc)">PiP — 0:07 →</span></div>
       </div>
-      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">—</span></div>
+      <div class="socle" style="justify-content:center"><span class="lbl">tab bar de l'app — le socle n'existe que dans le composer</span></div>
     </div><figcaption><b>3 · PiP.</b> Swipe-down du plein écran = handoff PiP explicite (chemin
     existant) ; la flèche de retour restaure la surface SANS couper la lecture ; le ✕ du PiP
     STOPPE (jamais d'audio fantôme — les deux cas sont distingués par le moteur). Opt-in PAR
@@ -1470,7 +1476,7 @@ flowchart TD
         <span class="ob on">⇡ Story — reprise automatique de la file</span>
         <span class="lbl" style="letter-spacing:.1em;margin-top:4px">BROUILLONS</span>
         <span class="ob">📝 Story (migrée v3) · reprendre</span>
-        <span class="lbl" style="margin-top:8px">brouillons ET file migrés one-shot au premier<br>lancement — même table de conversion que le serveur</span>
+        <span class="lbl" style="margin-top:8px">brouillons migrés one-shot au premier lancement ;<br>la file REPUBLIE en v3 depuis le nouveau binaire (B7)</span>
       </div>
       <div class="socle"><span class="aud">Mes contenus</span><span class="pub">+ Créer</span></div>
     </div><figcaption><b>3 · Après la mise à jour.</b> La migration one-shot (lot B) convertit
@@ -1525,24 +1531,24 @@ flowchart TD
   sont celles du résolveur iOS (<span class="mono">StoryTextFontResolver</span>, matérialisation
   CoreText, 0 octet embarqué — sentinelle de disponibilité testée sur 18.2 et 26.1).</p>
   <div class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
-    <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p></div>
-    <div class="card"><h4>machine</h4><p style="font-size:19px;font-family:'American Typewriter','Courier New',monospace;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>manuscrit</h4><p style="font-size:22px;font-family:'Snell Roundhand','Segoe Script',cursive;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>classique</h4><p style="font-size:21px;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>calligraphie</h4><p style="font-size:20px;font-family:'Zapfino','Brush Script MT',cursive;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>cartoon</h4><p style="font-size:20px;font-family:'Chalkboard SE','Comic Sans MS',cursive;font-weight:700;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>futuriste</h4><p style="font-size:18px;letter-spacing:.22em;text-transform:uppercase;font-weight:300;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>fantaisie</h4><p style="font-size:20px;font-family:Papyrus,fantasy;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>curve</h4><p style="font-size:21px;font-style:italic;color:var(--ink)">S a l u t  ◠  m o n d e</p><p style="font-size:11px">texte sur courbe — rendu plat ici, l'arc est CoreText</p></div>
-    <div class="card"><h4>tag</h4><p style="font-size:23px;font-weight:900;font-style:italic;transform:skewX(-8deg);-webkit-text-stroke:1px var(--acc);color:transparent">Salut le monde</p></div>
-    <div class="card"><h4>italique <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-style:italic;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>rétro <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:Georgia,serif;font-weight:700;letter-spacing:.04em;color:#E8B84B;text-shadow:2px 2px 0 rgba(0,0,0,.45)">Salut le monde</p></div>
-    <div class="card"><h4>élégant <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:Didot,'Bodoni MT',serif;font-weight:300;letter-spacing:.08em;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>affiche <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:'Arial Narrow',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--ink)">Salut le monde</p></div>
-    <div class="card"><h4>bulle <span class="tag tNew">+7</span></h4><p style="font-size:19px;font-family:'Arial Rounded MT Bold','Trebuchet MS',sans-serif;font-weight:700;background:var(--acc);color:var(--acc-ink);display:inline-block;padding:3px 12px;border-radius:999px">Salut le monde</p></div>
-    <div class="card"><h4>note <span class="tag tNew">+7</span></h4><p style="font-size:17px;font-family:'American Typewriter',monospace;background:#E8DFA8;color:#221D3C;display:inline-block;padding:6px 10px;border-radius:3px;box-shadow:2px 3px 8px rgba(0,0,0,.3)">Salut le monde</p></div>
-    <div class="card"><h4>pinceau <span class="tag tNew">+7</span></h4><p style="font-size:23px;font-family:'Brush Script MT','Savoye LET',cursive;font-weight:700;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">système .black</p></div>
+    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold + glow</p></div>
+    <div class="card"><h4>machine</h4><p style="font-size:19px;font-family:Courier,'Courier New',monospace;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Courier</p></div>
+    <div class="card"><h4>manuscrit</h4><p style="font-size:22px;font-family:'Snell Roundhand','Segoe Script',cursive;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">SnellRoundhand</p></div>
+    <div class="card"><h4>classique</h4><p style="font-size:21px;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Georgia</p></div>
+    <div class="card"><h4>calligraphie</h4><p style="font-size:20px;font-family:'Zapfino','Brush Script MT',cursive;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Zapfino</p></div>
+    <div class="card"><h4>cartoon</h4><p style="font-size:20px;font-family:'Chalkboard SE','Comic Sans MS',cursive;font-weight:700;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">ChalkboardSE-Bold</p></div>
+    <div class="card"><h4>futuriste</h4><p style="font-size:19px;font-family:'Futura','Arial Narrow',sans-serif;font-weight:800;font-stretch:condensed;text-transform:uppercase;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Futura-CondensedExtraBold</p></div>
+    <div class="card"><h4>fantaisie</h4><p style="font-size:20px;font-family:Papyrus,fantasy;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Papyrus</p></div>
+    <div class="card"><h4>curve</h4><p style="font-size:22px;font-family:'Savoye LET','Snell Roundhand',cursive;color:var(--ink)">S a l u t  ◠  m o n d e</p><p style="font-size:10px" class="mono">SavoyeLetPlain — l'arc est CoreText</p></div>
+    <div class="card"><h4>tag</h4><p style="font-size:22px;font-family:'Marker Felt','Comic Sans MS',fantasy;font-weight:700;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">MarkerFelt-Wide</p></div>
+    <div class="card"><h4>italique <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-style:italic;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Georgia-Italic</p></div>
+    <div class="card"><h4>rétro <span class="tag tNew">+7</span></h4><p style="font-size:20px;font-family:'American Typewriter',serif;letter-spacing:.02em;color:#E8B84B;text-shadow:2px 2px 0 rgba(0,0,0,.45)">Salut le monde</p><p style="font-size:10px" class="mono">AmericanTypewriter</p></div>
+    <div class="card"><h4>élégant <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:Didot,'Bodoni MT',serif;font-weight:300;letter-spacing:.08em;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">Didot</p></div>
+    <div class="card"><h4>affiche <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:'Avenir Next Condensed','Arial Narrow',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">AvenirNextCondensed-Heavy</p></div>
+    <div class="card"><h4>bulle <span class="tag tNew">+7</span></h4><p style="font-size:19px;font-family:'Arial Rounded MT Bold','Trebuchet MS',sans-serif;font-weight:700;background:var(--acc);color:var(--acc-ink);display:inline-block;padding:3px 12px;border-radius:999px">Salut le monde</p><p style="font-size:10px" class="mono">ArialRoundedMTBold</p></div>
+    <div class="card"><h4>note <span class="tag tNew">+7</span></h4><p style="font-size:18px;font-family:'Noteworthy','Comic Sans MS',cursive;font-weight:700;background:#E8DFA8;color:#221D3C;display:inline-block;padding:6px 10px;border-radius:3px;box-shadow:2px 3px 8px rgba(0,0,0,.3)">Salut le monde</p><p style="font-size:10px" class="mono">Noteworthy-Bold</p></div>
+    <div class="card"><h4>pinceau <span class="tag tNew">+7</span></h4><p style="font-size:22px;font-family:'Bradley Hand','Brush Script MT',cursive;font-weight:700;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">BradleyHandITCTT-Bold</p></div>
   </div>
   <ul class="klist" style="max-width:80ch;margin-top:14px">
     <li><b>Sur média clair</b>, la bascule de lisibilité est celle du dépôt
@@ -1556,6 +1562,228 @@ flowchart TD
     <li>Les presets d'ANIMATION de texte (pop, machine à écrire…) sont une prémisse P16, post-v1 —
       des keyframes prégénérés, pas des styles.</li>
   </ul>
+</div></section>
+
+
+<!-- ================================================================ P22 -->
+<section id="p22"><div class="wrap">
+  <div class="prail"><span class="pnum">P22</span><h2>Iconographie — le SF Symbol de chaque contrôle <span class="tag tNew">rév. 4</span></h2></div>
+  <p class="lede">La loi 7 (« l'icône est le verbe ») exige que chaque glyphe soit UN symbole
+  précis, thémable, au poids du contexte — jamais un emoji littéral. Cette table est LE contrat :
+  outil par outil, sous-contrôle par sous-contrôle. Règle RTL du dépôt : les symboles SÉMANTIQUES
+  ne s'inversent pas. Les glyphes déjà en prod sont marqués <span class="tag tEx">existant</span> ;
+  le reste est la cible des lots C/D/E.</p>
+  <div class="scrollx"><table>
+    <thead><tr><th>Surface</th><th>Contrôle</th><th>SF Symbol</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr class="grp"><td colspan="4">Barre haute &amp; socle</td></tr>
+      <tr><td>Barre haute</td><td>Fermer · Format · Menu</td><td class="mono">xmark · chevron.down (après le nom du format) · ellipsis</td><td>le chip format porte le badge de qualification réel (<span class="mono">checkmark.seal</span> discret)</td></tr>
+      <tr><td>Socle</td><td>Audience (6 niveaux)</td><td class="mono">globe · person.2 · person.3 · lock · minus.circle (Sauf) · plus.circle (Seulement)</td><td><span class="tag tEx">existant</span> — mêmes symboles que le sélecteur actuel</td></tr>
+      <tr><td>Socle</td><td>Aperçu · Publier</td><td class="mono">eye · arrow.up.circle.fill</td><td>Publier = pill dégradé de marque ; états in-flight (progress dans le pill) et échec (<span class="mono">exclamationmark.circle</span>)</td></tr>
+      <tr class="grp"><td colspan="4">AMORCE (cible) &amp; outils</td></tr>
+      <tr><td>Amorce</td><td>Content (P·R) · Texte · Sticker · Son · Lieu</td><td class="mono">text.alignleft · textformat (Aa) · face.smiling · music.note · mappin.and.ellipse</td><td>la rangée des kinds que le profil autorise (P4)</td></tr>
+      <tr><td>Texte</td><td>Style · Couleur · Fond · Taille · Align · Langue</td><td class="mono">textformat.alt · paintpalette · character.textbox · textformat.size · text.aligncenter (⇄ leading/trailing : ALIGNEMENT s'inverse en RTL) · globe</td><td>la rangée des 18 familles rend « Aa » dans sa police (P21)</td></tr>
+      <tr><td>Média</td><td>Caméra · Galerie · Coller · Éditer · Premier plan</td><td class="mono">camera · photo.on.rectangle · doc.on.clipboard (PasteButton système — icône imposée) · crop.rotate · square.2.layers.3d.top.filled</td><td><span class="tag tEx">existant</span> pour caméra/galerie</td></tr>
+      <tr><td>Filtres</td><td>8 filtres + intensité</td><td class="mono">camera.filters + slider.horizontal.3</td><td>vignettes d'aperçu, le nom sous chaque vignette</td></tr>
+      <tr><td>Son</td><td>Bibliothèque · Fichier · Micro · Volume · Bornes · Extraction</td><td class="mono">music.note.list · doc.badge.plus · mic · speaker.wave.2 · timeline.selection · square.and.arrow.up.on.square</td><td>bornes = le trim de P23 ; extraction = le toggle enfin transmis (C7b)</td></tr>
+      <tr><td>Dessin</td><td>Pinceau · Épaisseur · Couleur · Traits</td><td class="mono">paintbrush.pointed · lineweight · paintpalette · list.bullet</td><td><span class="tag tEx">existant</span> — panneau ouvert tant que le mode est actif</td></tr>
+      <tr><td>Stickers</td><td>Mes stickers · Grille emoji · Coller</td><td class="mono">star.square.on.square · face.smiling.inverse · doc.on.clipboard</td><td>appui long sur un récent = retirer (<span class="mono">minus.circle.fill</span> en badge)</td></tr>
+      <tr><td>Lieu</td><td>Rechercher · Carte · Découvrabilité · Pastille · Lieu joint</td><td class="mono">magnifyingglass · map · eye.slash/eye · mappin.circle.fill · mappin.slash (retirer)</td><td>le chip « lieu joint sans pastille » (U10) porte <span class="mono">mappin.and.ellipse</span> + xmark</td></tr>
+      <tr><td>Références</td><td>@ inline · Sélecteur · 4 modes</td><td class="mono">at · person.crop.circle.badge.plus · text.cursor (INLINE) · pin (PINNED) · person.2.wave.2 (NOTE) · eye.slash (SILENT)</td><td>appui long sur le chip = menu des modes (<span class="tag tEx">existant</span>)</td></tr>
+      <tr><td>Fond</td><td>Couleur · Dégradé · Média · Chip fond</td><td class="mono">circle.fill · circle.lefthalf.filled · photo · rectangle.on.rectangle (le chip qui déplace)</td><td>le fond ne se saisit QUE par son chip (règle existante)</td></tr>
+      <tr><td>Slides</td><td>Ajouter · Dupliquer · Supprimer</td><td class="mono">plus.rectangle.on.rectangle · plus.square.on.square · trash</td><td><span class="tag tEx">existant</span> — rail ≤ 10</td></tr>
+      <tr class="grp"><td colspan="4">Timeline (P8) &amp; capture (P9)</td></tr>
+      <tr><td>Timeline</td><td>Zoom ×2 · Suivre la slide · Keyframe · Inspecteur</td><td class="mono">plus.magnifyingglass/minus.magnifyingglass · arrow.uturn.backward.circle (retour fantôme U9) · diamond.fill (losange) · slider.horizontal.3</td><td>« Suivre la slide » = l'action de l'inspecteur timing (lot D)</td></tr>
+      <tr><td>Capture</td><td>Viseur · Photo · Vidéo · Flash · Retourner</td><td class="mono">viewfinder · circle.inset.filled (relâcher) · record.circle (maintenir — TOUJOURS <span class="mono">MeeshyColors.error</span>) · bolt/bolt.slash/bolt.badge.a · arrow.triangle.2.circlepath.camera</td><td>flash 3 états <span class="tag tEx">existant</span></td></tr>
+      <tr class="grp"><td colspan="4">Lecture (P12) &amp; transport (P19)</td></tr>
+      <tr><td>Viewers</td><td>Republier · Partager · Transférer · Favori · Vues · Langues</td><td class="mono">arrow.2.squarepath (↻ — <span class="tag tEx">existant</span>, PostDetailView:1398) · square.and.arrow.up · paperplane · bookmark · eye · character.bubble (Abc)</td><td>↻ ne s'inverse pas en RTL (symbole sémantique)</td></tr>
+      <tr><td>Audio</td><td>Muet · Son actif · Annonce fond</td><td class="mono">speaker.slash.fill · speaker.wave.2.fill (<span class="tag tEx">existant</span>, lot E) · music.note + onde animée (composite ♫〰 — la convention testée du header, StoryHeaderMetaGuardTests)</td><td>montés SEULEMENT si piste (B3.5-6)</td></tr>
+      <tr><td>Transport</td><td>±10 s · Play/Pause · Vitesse · AirPlay · PiP · Plein écran</td><td class="mono">gobackward.10 · goforward.10 · play.fill/pause.fill · gauge.with.needle (menu …) · airplayvideo · pip.enter/pip.exit · arrow.up.left.and.arrow.down.right</td><td><span class="tag tEx">existant</span> — VideoTransportControls, préservé (O16)</td></tr>
+      <tr><td>Rupture</td><td>Mise à jour requise</td><td class="mono">arrow.up.circle.fill + lien App Store</td><td>P20 — UpgradeGateView, 7 langues, RTL</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>Trois règles transverses.</b> 1) Tout symbole d'ÉTAT binaire dit l'état
+  COURANT, pas l'action (<span class="mono">speaker.slash</span> = « le son est coupé ») — la
+  convention du dépôt. 2) Les poids suivent le contexte : <span class="mono">.regular</span> dans
+  les panneaux, <span class="mono">.semibold</span> au socle, jamais de mélange dans une même
+  rangée. 3) Un glyphe qui n'existe pas en SF (♫〰) est un COMPOSITE nommé et testé — jamais un
+  emoji rendu au hasard des plateformes.</div>
+</div></section>
+
+<!-- ================================================================ P23 -->
+<section id="p23"><div class="wrap">
+  <div class="prail"><span class="pnum">P23</span><h2>Éditeurs — trim, rognage, cut : audio · image · vidéo <span class="tag tNew">rév. 4</span></h2></div>
+  <p class="lede">Les trois éditeurs EXISTENT dans le SDK et sont PRÉSERVÉS tels quels — cette
+  planche fixe leur visage dans le composer et les règles de geste communes.
+  <span class="mono">AudioEditorController</span> (outils trim · split · fade · speed · volume ·
+  transcribe, modes Simple/Pro), <span class="mono">ImageEditorModel</span> (crop, ratios,
+  filtres, ajustements — Simple/Pro), <span class="mono">MeeshyVideoEditorView</span> (dock
+  d'outils, historique, export). Le composer les OUVRE depuis l'inspecteur média — il ne les
+  réécrit pas.</p>
+  <div class="phrow">
+    <figure class="phfig lg"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="lbl">Éditer l'audio — Simple</span><span class="ob" style="margin-left:auto">✓</span></div>
+      <div class="sc" style="flex:0 0 30%;align-items:center;justify-content:center;gap:6px">
+        <span class="lbl" style="font-size:14px;letter-spacing:2px">▂▄▆█▆▄▂▁▂▄▆▄▂▁▂▄█▆▄▂</span>
+        <span class="lbl">0:04,2 ──────────── 0:19,8</span>
+      </div>
+      <div class="ctx" style="flex-direction:column;align-items:stretch;gap:4px">
+        <div style="display:flex;align-items:center;gap:0">
+          <span class="ob on" style="min-width:14px;text-align:center">❙❙</span>
+          <span style="flex:1;height:26px;background:var(--phscene);border:1px solid var(--acc);border-radius:6px;position:relative">
+            <span class="lbl" style="position:absolute;left:6px;top:6px">zone gardée — glisser un bord = borne</span>
+          </span>
+          <span class="ob on" style="min-width:14px;text-align:center">❙❙</span>
+        </div>
+        <span class="lbl">poignées ≥ 44 pt · haptique aux butées · le scrub AIMANTE la tête de lecture au bord</span>
+      </div>
+      <div class="ctx"><span class="ob on">✂ Trim</span><span class="ob">⎯⎯ Split</span><span class="ob">◢ Fade</span><span class="ob">≫ Vitesse</span><span class="ob">🔊 Volume</span><span class="ob">Abc</span></div>
+      <div class="socle" style="justify-content:center"><span class="lbl">Simple : ✂ + Abc · Pro : les six — AudioEditorController.simpleTools</span></div>
+    </div><figcaption><b>Audio — trim &amp; cut.</b> Deux poignées bornent la zone GARDÉE
+    (<span class="mono">timeline.selection</span>) ; Split (<span class="mono">scissors</span>,
+    l'icône réelle du contrôleur) coupe au playhead — deux segments, chacun re-trimmable ; Fade
+    pose des rampes d'entrée/sortie. La waveform est celle de l'analyseur existant
+    (<span class="mono">AudioWaveformAnalyzer</span>). Le résultat nourrit les BORNES du son de
+    fond (<span class="mono">bounds{start,end}</span> du contrat v3) — non destructif, l'original
+    reste entier.</figcaption></figure>
+    <figure class="phfig lg"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="lbl">Recadrer — Simple</span><span class="ob" style="margin-left:auto">✓</span></div>
+      <div class="sc" style="padding:8px">
+        <div style="flex:1;border:1.5px solid var(--acc);border-radius:4px;position:relative;display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr 1fr">
+          <span style="border-right:1px dashed var(--phline);border-bottom:1px dashed var(--phline)"></span><span style="border-right:1px dashed var(--phline);border-bottom:1px dashed var(--phline)"></span><span style="border-bottom:1px dashed var(--phline)"></span>
+          <span style="border-right:1px dashed var(--phline);border-bottom:1px dashed var(--phline)"></span><span style="border-right:1px dashed var(--phline);border-bottom:1px dashed var(--phline)"></span><span style="border-bottom:1px dashed var(--phline)"></span>
+          <span style="border-right:1px dashed var(--phline)"></span><span style="border-right:1px dashed var(--phline)"></span><span></span>
+          <span class="lbl" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)">grille des tiers — coins ≥ 44 pt</span>
+        </div>
+      </div>
+      <div class="ctx"><span class="ob">Libre</span><span class="ob on">9:16</span><span class="ob">1:1</span><span class="ob">4:3</span><span class="ob">16:9</span><span class="ob" style="margin-left:auto">⟲ 90°</span></div>
+      <div class="ctx" style="justify-content:center"><span class="lbl">molette de redressement −45°⟷+45° · double-tap = reset</span></div>
+      <div class="socle" style="justify-content:center"><span class="lbl">ImageEditorModel .simple/.pro — crop, filtres, ajustements (drop.fill…)</span></div>
+    </div><figcaption><b>Image — rognage.</b> Le cadre se saisit par les coins et les bords
+    (cibles débordantes ≥ 44 pt), la grille des tiers apparaît AU geste et disparaît au repos ;
+    les ratios proposés dépendent de la destination (9:16 en tête pour un porteur de scène,
+    libre pour un premier plan). Rotation 90° + redressement fin. Downsample ≤ 2 048 px AVANT
+    décodage (le budget P15) — l'éditeur travaille sur la copie d'affichage, l'export refait le
+    pipeline complet.</figcaption></figure>
+    <figure class="phfig lg"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="lbl">Éditer la vidéo</span><span class="ob" style="margin-left:auto">✓</span></div>
+      <div class="sc" style="flex:0 0 34%"><div class="media169" style="flex:1"><span class="lbl">aperçu — la frame sous le playhead</span></div></div>
+      <div class="ctx" style="flex-direction:column;align-items:stretch;gap:4px">
+        <div style="display:flex;align-items:center;gap:0">
+          <span class="ob on" style="min-width:14px;text-align:center">❙❙</span>
+          <span style="flex:1;height:30px;background:repeating-linear-gradient(90deg,var(--phscene) 0 22px,var(--ph2) 22px 24px);border:1px solid var(--acc);border-radius:6px;position:relative">
+            <span style="position:absolute;left:38%;top:-3px;bottom:-3px;width:1.5px;background:var(--play)"></span>
+          </span>
+          <span class="ob on" style="min-width:14px;text-align:center">❙❙</span>
+        </div>
+        <span class="lbl">filmstrip de vignettes · playhead rouge sémantique · 0:02,1 → 0:14,6 · durée gardée 12,5 s</span>
+      </div>
+      <div class="ctx"><span class="ob on">✂ Trim</span><span class="ob">⎯⎯ Cut au playhead</span><span class="ob">🔊 Volume</span><span class="ob">🔇 Muet</span></div>
+      <div class="socle" style="justify-content:center"><span class="lbl">MeeshyVideoEditorView — dock, historique, export (préservés)</span></div>
+    </div><figcaption><b>Vidéo — trim &amp; cut.</b> Même vocabulaire que l'audio : poignées =
+    bornes, Cut au playhead = deux clips (les jointures deviennent des
+    <span class="mono">clipTransitions</span> — la mécanique Timeline V2 existante) ; le volume
+    par clip nourrit <span class="mono">payload.muted/volume</span> de l'objet média. En Réel, le
+    trim règle la piste MAÎTRE de la timeline (P8) — la durée gardée EST
+    <span class="mono">timelineDuration</span>.</figcaption></figure>
+  </div>
+  <div class="callout"><b>Les règles communes des trois — un seul vocabulaire.</b> 1) Les poignées
+  se saisissent à ≥ 44 pt, débordantes quand la zone est étroite (la règle M11 de la timeline).
+  2) La haptique dit les BUTÉES (début/fin, snap au playhead) — jamais le mouvement continu.
+  3) NON-DESTRUCTIF partout : l'original n'est jamais réécrit, le document porte les bornes
+  (<span class="mono">bounds</span>, <span class="mono">timing</span>) — rouvrir l'éditeur
+  retrouve tout. 4) ✓ applique, ✕ abandonne — jamais d'application au fil du geste. 5) Le
+  playhead est TOUJOURS rouge sémantique (<span class="mono">--play</span>), les poignées
+  TOUJOURS accent — aucun des deux n'emprunte une couleur de format (U15).</div>
+</div></section>
+
+<!-- ================================================================ P24 -->
+<section id="p24"><div class="wrap">
+  <div class="prail"><span class="pnum">P24</span><h2>Cas d'usage — carrousels &amp; réels, avec et sans son <span class="tag tNew">rév. 4</span></h2></div>
+  <p class="lede">Six situations concrètes, de bout en bout — ce que l'utilisateur voit ET entend.
+  Elles exercent les lois B3.3-6 (deux plans audio, provenance, existence, bouton muet), la
+  continuité (loi 8) et le carrousel dont « le temps appartient au contenu, pas à la
+  navigation ».</p>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="ob">@marc · 3 h</span>
+        <div class="sc" style="flex:1;margin:0;position:relative"><div class="media169" style="flex:1"><span class="lbl">photo 2/5</span></div>
+          <span class="lbl" style="position:absolute;right:6px;top:6px;background:var(--phsocle);border-radius:8px;padding:2px 6px">2/5</span></div>
+        <div style="display:flex;gap:3px;justify-content:center"><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span><span style="width:5px;height:5px;border-radius:3px;background:var(--acc)"></span><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span></div>
+        <span class="ob">❤ 24 · 💬 3 · ↻ · 🔖</span>
+      </div>
+      <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
+    </div><figcaption><b>1 · Carrousel simple (sans piste).</b> Pagination par points + compteur.
+    <b>AUCUN glyphe audio nulle part</b> — pas de piste ⇒ rien (B3.5) : ni ♫ barré, ni bouton 🔇.
+    L'ordre des cartes est <span class="mono">PostMedia.order</span> (écrit à l'index — le fix
+    P7). Chaque carte = une Scene du document.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="ob">@aïcha · 1 h · <b>♫ Nuits d'été · @sam · 0:15</b></span>
+        <div class="sc" style="flex:1;margin:0;position:relative"><div class="media169" style="flex:1"><span class="lbl">photo 3/4 — le son CONTINUE</span></div>
+          <span class="lbl" style="position:absolute;right:6px;bottom:6px;background:var(--phsocle);border-radius:8px;padding:2px 6px">🔇</span></div>
+        <div style="display:flex;gap:3px;justify-content:center"><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span><span style="width:5px;height:5px;border-radius:3px;background:var(--acc)"></span><span style="width:4px;height:4px;border-radius:2px;background:var(--phmut)"></span></div>
+        <span class="ob">❤ 51 · 💬 8 · ↻ 2 · 🔖</span>
+      </div>
+      <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
+    </div><figcaption><b>2 · Carrousel + son de fond (bibliothèque).</b> Le crédit COMPLET après
+    l'auteur (marquee + décompte — provenance B3.4 : une œuvre empruntée s'attribue) ; la piste
+    est liée à la TIMELINE du post : on feuillette, le son ne rembobine JAMAIS (la leçon du
+    compteur didSet). Bouton 🔇 monté car une piste existe (B3.6) ; le fil reste muet par défaut.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="margin:24px 0 0;border-radius:0;border:none">
+        <div class="band"><span class="ob">Titre timé</span></div>
+        <div class="media169"><span class="lbl">vidéo — boucle, SON ORIGINAL</span></div>
+        <div class="band"><span class="ob">sous-titres karaoké (sound.transcriptions)</span></div>
+      </div>
+      <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · 🔇</span></div>
+      <div class="socle"><span class="aud">@leo · <b>♫〰</b></span><span class="pub">Suivre</span></div>
+    </div><figcaption><b>3 · Réel, son ORIGINAL.</b> Après l'auteur : <b>♫〰 seulement</b> (note
+    puis onde — B3.4 « si et seulement si ») ; jamais de crédit, c'est SA piste. Pas de bouton
+    « utiliser ce son » si l'extraction n'est pas autorisée (le toggle C7b). Les sous-titres
+    karaoké viennent de <span class="mono">sound.transcriptions</span>, résolus au Prisme du
+    lecteur.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="margin:24px 0 0;border-radius:0;border:none">
+        <div class="band"><span class="ob">Titre</span></div>
+        <div class="media169"><span class="lbl">vidéo — boucle, musique EMPRUNTÉE</span></div>
+        <div class="band"></div>
+      </div>
+      <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · 🔇 · <b>♫ utiliser ce son</b></span></div>
+      <div class="socle"><span class="aud">@nina · <b>♫ Bleu nuit · @dj_k · 0:22</b> ⟲</span><span class="pub">Suivre</span></div>
+    </div><figcaption><b>4 · Réel, son de BIBLIOTHÈQUE.</b> Le crédit complet en marquee avec
+    décompte — et « utiliser ce son » au rail (l'extraction est autorisée ici). La piste boucle
+    avec la vidéo (⟲). Comparer avec la vignette 3 : LA FORME DE L'ANNONCE DIT LA PROVENANCE,
+    c'est tout le contrat.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="ob">@marc · ↻ @aïcha · <b>♫〰</b></span>
+        <span class="ob">« magnifique ! » — content natif Prisme</span>
+        <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">scène repostée — ScenePlayer .card, né en pause</span></div></div>
+        <span class="ob">❤ 12 · 💬 4 · 🔖 · 🔇</span>
+      </div>
+      <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
+    </div><figcaption><b>5 · Repost cité d'une story sonore.</b> L'attribution ↻ sans verbe
+    (loi 7) + ♫〰 : le son ORIGINAL de la story d'@aïcha. La carte naît en pause (mode
+    <span class="mono">.card</span>) ; le tap ouvre l'immersif QUI REPREND à la position (loi 8,
+    P19). Le chrome reste teinté par l'accent du post (<span class="mono">authorColor</span>).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="ob">Post ▾</span><span class="ob" style="margin-left:auto">⋯</span></div>
+      <div class="sc" style="flex:0 0 44%"><div class="media169" style="flex:1"><span class="lbl">carte 2/3 du carrousel en édition</span></div></div>
+      <div class="ctx"><span class="lbl">rail de scènes : [1] [●2] [3] [+]</span></div>
+      <div class="ctx"><span class="ob on">♫ Nuits d'été — bornes 0:02→0:17</span><span class="ob">✂</span></div>
+      <div class="socle"><span class="aud">👥 Amis</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>6 · Composer le cas 2.</b> Le carrousel s'édite comme des slides (1 carte
+    = 1 Scene) ; le son de fond se pose UNE fois au niveau du DOCUMENT (panneau Son), ses bornes
+    par le trim P23 (✂). L'aperçu (👁) joue exactement ce que la carte 2 rendra — feuilletage
+    compris, le son continue. WYSIWYG par construction (loi 6 de P1).</figcaption></figure>
+  </div>
+  <div class="callout"><b>La lecture croisée qui verrouille tout.</b> Vignettes 1↔2 : l'EXISTENCE
+  (B3.5) — le glyphe n'apparaît que si une piste existe. Vignettes 3↔4 : la PROVENANCE (B3.4) —
+  ♫〰 ou crédit, jamais l'un pour l'autre. Vignettes 2 et 6 : le TEMPS — la piste appartient au
+  document, pas à la page. Vignette 5 : la COMPOSITION des lois — ↻ (loi 7) + ♫〰 (B3.4) + né en
+  pause + continuité (loi 8) sur une seule carte, sans qu'aucune n'en contredise une autre.</div>
 </div></section>
 
 <footer><div class="wrap">

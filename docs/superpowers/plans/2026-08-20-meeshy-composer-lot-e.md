@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Les trois surfaces de lecture (viewer Story, carte + détail Post, Réels) servent le même noyau : annonce du fond selon PROVENANCE et EXISTENCE (lois 3-5), bouton 🔇 partout où une piste existe (loi 6), carte de post avec scène rendue par le ScenePlayer — sous les budgets de P15.
+**Goal:** Les trois surfaces de lecture (viewer Story, carte + détail Post, Réels) servent le même noyau : annonce du fond selon PROVENANCE et EXISTENCE (B3.3-5), bouton 🔇 partout où une piste existe (B3.6), carte de post avec scène rendue par le ScenePlayer — sous les budgets de P15.
 
 **Architecture:** Grâce à B7, le fil v3 arrive DÉJÀ bridgé en runtime (`StoryEffects`) : les viewers existants fonctionnent sans modification. Ce lot fait trois choses ciblées : (1) il remplace l'annonce sonore ad hoc par le résolveur B5 sur les trois surfaces ; (2) il monte le 🔇 conditionné à l'existence ; (3) il rend la scène des POSTS dans la carte via `MeeshyScenePlayer(.card)` — né en pause, hauteur EXPLICITE, zéro décodeur actif dans le fil (le budget P15 est satisfait par construction : la carte est une image vivante en pause, le mouvement est au tap).
 
@@ -30,7 +30,7 @@
 - Test: `apps/ios/MeeshyTests/Unit/Views/BackgroundSoundBadgeTests.swift` + garde `BackgroundAnnouncementWiringGuardTests.swift`
 
 **Interfaces:**
-- Produces : `BackgroundSoundBadge(announcement: BackgroundAudioAnnouncement, accentHex: String)` — rend `EmptyView` pour `.none` (loi 5 : pas de piste, RIEN — pas de placeholder), ♫〰 pour `.original`, marquee `« titre · @pseudo · M:SS »` pour `.credit` (métadonnées nil ⇒ « ♫ — », JAMAIS la note+onde).
+- Produces : `BackgroundSoundBadge(announcement: BackgroundAudioAnnouncement, accentHex: String)` — rend `EmptyView` pour `.none` (B3.5 : pas de piste, RIEN — pas de placeholder), ♫〰 pour `.original`, marquee `« titre · @pseudo · M:SS »` pour `.credit` (métadonnées nil ⇒ « ♫ — », JAMAIS la note+onde).
 - **`accentHex` = l'accent déterministe du POST** (rév. 2, revue totale C8 :
   `FeedPostCard.accentColor == post.authorColor`, `FeedPostCard.swift:93` —
   le chrome de carte entier reste teinté par lui, `surfaceGradient`/bordure
@@ -51,7 +51,7 @@
 - Modify: `FeedPostCard.swift` (rangée d'engagement), `PostDetailView.swift`, `StoryViewerView+Sidebar.swift` (le rail a déjà son muet — assertion de non-régression seulement), `ReelsPlayerView.swift` (idem si présent, sinon ajout)
 - Test: `apps/ios/MeeshyTests/Unit/Views/MuteButtonExistenceGuardTests.swift`
 
-- [ ] **Step 1: Tests rouges (source)** — carte et détail : le bouton n'est monté QUE si `announcement != .none` (loi 6 — même condition d'existence que l'annonce, un seul prédicat partagé, pas deux) ; le tap bascule le muet du LECTEUR LOCAL de la surface (l'état global du viewer story reste `isGlobalMuted`, inchangé) ; l'icône dit l'état (`speaker.slash` ↔ `speaker.wave.2`).
+- [ ] **Step 1: Tests rouges (source)** — carte et détail : le bouton n'est monté QUE si `announcement != .none` (B3.6 — même condition d'existence que l'annonce, un seul prédicat partagé, pas deux) ; le PLEIN ÉCRAN post porte déjà le mute du transport (`VideoTransportControls`) — assertion de NON-régression, il compte comme 3e surface de B3.6 (rév. 2, revue d'intégration) ; le tap bascule le muet du LECTEUR LOCAL de la surface (l'état global du viewer story reste `isGlobalMuted`, inchangé) ; l'icône dit l'état (`speaker.slash` ↔ `speaker.wave.2`).
 - [ ] **Step 2-5:** rouge → implémentation (le prédicat vit avec `backgroundSound(of:)` d'E1) → vert → commit.
 
 ---
