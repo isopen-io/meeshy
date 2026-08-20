@@ -35,4 +35,23 @@ nonisolated enum ShareLimits {
     static func fitsFileCount(_ count: Int) -> Bool { count <= maxFiles }
 
     static func fitsByteBudget(_ totalBytes: Int) -> Bool { totalBytes <= maxTotalBytes }
+
+    /// 8 Mio. Chaque fichier tient alors dans UNE tranche TUS de 10 Mio
+    /// (un POST + un PATCH), le pic mémoire reste très en deçà du plafond de
+    /// 120 Mo, et l'ensemble se termine en 2 à 4 s sur LTE — dans la fenêtre
+    /// où la feuille de partage reste vivante. Au-delà, RIEN n'est tenté : un
+    /// upload interrompu par la fermeture de la feuille laisserait des
+    /// attachments orphelins jusqu'à H+24, pour un partage que l'app aurait de
+    /// toute façon repris.
+    static let opportunisticUploadBudgetBytes = 8_388_608
+
+    /// Quatre fichiers au plus : au-delà, le nombre d'allers-retours devient
+    /// le facteur limitant, pas le volume.
+    static let opportunisticUploadMaxFiles = 4
+
+    static func isOpportunisticUploadEligible(totalBytes: Int, fileCount: Int) -> Bool {
+        fileCount > 0
+            && fileCount <= opportunisticUploadMaxFiles
+            && totalBytes <= opportunisticUploadBudgetBytes
+    }
 }

@@ -332,6 +332,9 @@ targets:
       - path: MeeshyShareExtension/ShareLimits.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
       - path: MeeshyShareExtension/SharePendingShare.swift
+      # Lot B-2 : client TUS de l'extension. LISTÉ ICI EXPRÈS — « le dépôt a
+      # déjà vécu des suites vertes par omission » (spec, § Tests et gates).
+      - path: MeeshyShareExtension/ShareTusClient.swift
       # Round 2 de revue (Critical) : ShareCancelPolicy/ShareCompletionGate,
       # les deux verrous purs du cycle de vie de l'écran de partage
       # (`ShareLifecycleGatesTests`). Même raison que les fichiers ci-dessus.
