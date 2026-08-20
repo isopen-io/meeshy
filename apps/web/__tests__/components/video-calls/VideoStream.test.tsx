@@ -2,7 +2,19 @@ import { act } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 jest.mock('@/hooks/useI18n', () => ({
-  useI18n: () => ({ t: (k: string) => k, isLoading: false }),
+  useI18n: () => ({
+    // `stream.participantLeft` carries a {name} placeholder in the real catalog;
+    // mirror it (and the real `t(key, params)` function-replacer semantics) so the
+    // interpolation test below actually exercises substitution.
+    t: (k: string, params?: Record<string, unknown>) => {
+      const template = k === 'stream.participantLeft' ? `${k} {name}` : k;
+      if (!params) return template;
+      return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+        params[key] != null ? String(params[key]) : match,
+      );
+    },
+    isLoading: false,
+  }),
 }));
 
 // Same convention as DeliveryQueueItemCard.test.tsx — stub the Radix
@@ -51,6 +63,18 @@ describe('VideoStream — disconnected overlay tracks isDisconnected both ways',
   it('shows the disconnected overlay while isDisconnected is true', () => {
     render(<VideoStream stream={null} isDisconnected participantName="Alice" />);
     expect(screen.getByText('stream.disconnected')).toBeInTheDocument();
+  });
+
+  it('inserts a participant name containing $-sequences verbatim into the participant-left line', () => {
+    // Display names are user-controlled; the "left" line must not mutilate a name
+    // like `A$&B` (String.prototype.replace would re-inject the `{name}` sentinel).
+    const trickyName = "A$&B $$ C$'D";
+    render(<VideoStream stream={null} isDisconnected participantName={trickyName} />);
+    const leftLine = screen.getByText(
+      (content, element) => element?.tagName === 'P' && content.includes(trickyName),
+    );
+    expect(leftLine).toBeInTheDocument();
+    expect(leftLine.textContent).not.toContain('{name}');
   });
 
   it('hides the disconnected overlay again once isDisconnected flips back to false', () => {

@@ -50,7 +50,16 @@ jest.mock('@/hooks/useI18n', () => ({
   // attribution tests below (Vague 131) can assert on the interpolated name
   // instead of a bare, un-interpolated translation key.
   useI18n: () => ({
-    t: (k: string) => (k.startsWith('remoteAlerts.') ? `${k} {name}` : k),
+    // Mirror the real `t(key, params)` function-replacer (hooks/use-i18n.ts) so a
+    // name is inserted verbatim through the params path, not via a hand-rolled
+    // String.prototype.replace that would re-interpret `$`-sequences.
+    t: (k: string, params?: Record<string, unknown>) => {
+      const template = k.startsWith('remoteAlerts.') ? `${k} {name}` : k;
+      if (!params) return template;
+      return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+        params[key] != null ? String(params[key]) : match,
+      );
+    },
     isLoading: false,
   }),
 }));
