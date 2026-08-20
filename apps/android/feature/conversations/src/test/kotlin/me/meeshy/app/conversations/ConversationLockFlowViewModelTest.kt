@@ -89,6 +89,9 @@ class ConversationLockFlowViewModelTest {
         storyRepository = mockk<me.meeshy.sdk.story.StoryRepository>(relaxed = true) {
             every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
         },
+        statusBarCache = mockk<me.meeshy.sdk.status.StatusBarCache>(relaxed = true) {
+            every { load(any()) } returns CacheResult.Empty
+        },
     )
 
     private fun ConversationListViewModel.enter(digits: String) {

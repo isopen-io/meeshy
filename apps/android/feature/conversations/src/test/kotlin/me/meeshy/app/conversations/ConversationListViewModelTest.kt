@@ -22,6 +22,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
@@ -48,12 +49,15 @@ import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.StarredMessages
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -140,6 +144,18 @@ class ConversationListViewModelTest {
             every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
         }
 
+    private class FixedClock(private val now: Long = 0L) : CacheClock {
+        override fun nowMillis(): Long = now
+    }
+
+    private fun statusBarCache(vararg entries: Pair<StatusFeedMode, List<StatusEntry>>): StatusBarCache =
+        StatusBarCache(FixedClock()).apply {
+            entries.forEach { (mode, statuses) -> save(mode, statuses) }
+        }
+
+    private fun status(userId: String, moodEmoji: String) =
+        StatusEntry(id = "status-$userId", userId = userId, moodEmoji = moodEmoji)
+
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
@@ -152,10 +168,11 @@ class ConversationListViewModelTest {
         messageRepo: MessageRepository = messageRepository(),
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
         storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
+        statusBarCache: StatusBarCache = statusBarCache(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, connection, session, lockStore,
-        storyRepository,
+        storyRepository, statusBarCache,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(
@@ -1418,5 +1435,52 @@ class ConversationListViewModelTest {
             advanceTimeBy(6_000)
             runCurrent()
             assertThat(vm.state.value.typingDisplayNameFor("c1")).isNull()
+        }
+
+    // --- mood-status avatar affordance (parity iOS conversationMoodStatus) ------
+
+    @Test
+    fun `the FRIENDS statuses bar paints the peer's mood emoji onto its direct row`() =
+        runTest(dispatcher) {
+            val vm = viewModel(
+                repositoryReturning(flowOf(CacheResult.Empty)),
+                session = session("me"),
+                statusBarCache = statusBarCache(
+                    StatusFeedMode.FRIENDS to listOf(status("other", "🔥")),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.moodEmojiFor(direct("c1"))).isEqualTo("🔥")
+        }
+
+    @Test
+    fun `a DISCOVER-only status never decorates a conversation row`() =
+        runTest(dispatcher) {
+            // Only the DISCOVER bar holds the status; the row reads the FRIENDS bar.
+            val vm = viewModel(
+                repositoryReturning(flowOf(CacheResult.Empty)),
+                session = session("me"),
+                statusBarCache = statusBarCache(
+                    StatusFeedMode.DISCOVER to listOf(status("other", "🎉")),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.moodEmojiFor(direct("c1"))).isNull()
+        }
+
+    @Test
+    fun `a cold statuses cache leaves every row without a mood badge`() =
+        runTest(dispatcher) {
+            val vm = viewModel(
+                repositoryReturning(flowOf(CacheResult.Empty)),
+                session = session("me"),
+                statusBarCache = statusBarCache(),
+            )
+            advanceUntilIdle()
+
+            assertThat(vm.state.value.moodStatuses).isEmpty()
+            assertThat(vm.state.value.moodEmojiFor(direct("c1"))).isNull()
         }
 }

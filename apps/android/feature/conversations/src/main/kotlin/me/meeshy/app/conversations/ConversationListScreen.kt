@@ -231,6 +231,7 @@ fun ConversationListScreen(
                                 currentUserPrefs = state.currentUser,
                                 presence = state.presenceStateFor(conversation, System.currentTimeMillis()),
                                 storyRing = state.storyRingFor(conversation, System.currentTimeMillis()),
+                                moodEmoji = state.moodEmojiFor(conversation),
                                 draft = state.draftFor(conversation.id),
                                 typingDisplayName = state.typingDisplayNameFor(conversation.id),
                                 categories = state.categories,
@@ -415,6 +416,7 @@ private fun ConversationRow(
     currentUserPrefs: MeeshyUser?,
     presence: PresenceState?,
     storyRing: StoryRingState,
+    moodEmoji: String?,
     draft: ConversationDraft?,
     typingDisplayName: String?,
     categories: List<CategoryOption>,
@@ -474,6 +476,7 @@ private fun ConversationRow(
             currentUserPrefs = currentUserPrefs,
             presence = presence,
             storyRing = storyRing,
+            moodEmoji = moodEmoji,
             draft = draft,
             typingDisplayName = typingDisplayName,
             isPinned = isPinned,
@@ -538,6 +541,7 @@ private fun ConversationRowContent(
     currentUserPrefs: MeeshyUser?,
     presence: PresenceState?,
     storyRing: StoryRingState,
+    moodEmoji: String?,
     draft: ConversationDraft?,
     typingDisplayName: String?,
     isPinned: Boolean,
@@ -644,6 +648,7 @@ private fun ConversationRowContent(
                 containerColor = primaryAccent,
                 presence = presence,
                 storyRing = storyRing,
+                moodEmoji = moodEmoji,
             )
             Column(
                 modifier = Modifier

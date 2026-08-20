@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.category.CategoryRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.StarredMessagesStore
@@ -31,6 +32,7 @@ import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.StatusEntry
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.model.UserPresence
@@ -42,6 +44,8 @@ import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.status.StatusBarCache
+import me.meeshy.sdk.status.StatusFeedMode
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.theme.otherParticipantUserId
@@ -122,6 +126,17 @@ data class ConversationListUiState(
      * (parity iOS `StoryViewModel.storyRingState` `!group.isFullyExpired()` gate).
      */
     val storyGroups: List<StoryGroup> = emptyList(),
+    /**
+     * Best-effort mirror of the shared statuses bar's live mood entries (source:
+     * [me.meeshy.sdk.status.StatusBarCache] FRIENDS bar), consumed by
+     * [moodEmojiFor] to decorate a direct-row avatar with its peer's mood emoji —
+     * port of iOS `StatusViewModel.statuses` read by
+     * `ConversationListView.conversationMoodStatus(for:)`. Empty until the status
+     * bar has ever loaded; a decorative affordance, never primary content, so it
+     * is painted once from cache with no fetch of its own (mirrors
+     * `ContactsListViewModel`).
+     */
+    val moodStatuses: List<StatusEntry> = emptyList(),
 ) {
     /** True when [conversationId] currently carries a PIN lock — drives the row's lock glyph. */
     fun isLocked(conversationId: String): Boolean = lockedConversationIds.contains(conversationId)
@@ -168,6 +183,19 @@ data class ConversationListUiState(
             nowMillis = nowEpochMillis,
         )
 
+    /**
+     * The mood emoji to overlay on [conversation]'s row avatar (parity iOS
+     * `ConversationListView.conversationMoodStatus(for:)`), or `null` for a
+     * group/community/channel/bot conversation or when the peer has no live mood
+     * status. Derived from the live [moodStatuses] mirror by [ConversationMoodStatus].
+     */
+    fun moodEmojiFor(conversation: ApiConversation): String? =
+        ConversationMoodStatus.moodEmojiFor(
+            conversation = conversation,
+            currentUserId = currentUserId,
+            statuses = moodStatuses,
+        )
+
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
         get() = conversations.isEmpty() && !showSkeleton && errorMessage == null &&
@@ -188,6 +216,7 @@ class ConversationListViewModel @Inject constructor(
     sessionRepository: SessionRepository,
     private val lockStore: ConversationLockStore,
     private val storyRepository: StoryRepository,
+    private val statusBarCache: StatusBarCache,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -368,6 +397,25 @@ class ConversationListViewModel @Inject constructor(
         observePresence()
         observeTyping()
         observeStoryGroups()
+        paintMoodStatusesFromCache()
+    }
+
+    /**
+     * Best-effort read of whatever the shared FRIENDS statuses bar already has
+     * cached ([StatusBarCache], populated whenever Feed's status bar has loaded) —
+     * synchronous, no network call of its own, so a direct row can decorate its
+     * peer's avatar with a live mood emoji the instant the list opens. Freshness is
+     * irrelevant for a decorative badge, so [valueOrNull] collapses
+     * Fresh/Stale/Syncing uniformly; a cold [CacheResult.Empty] just means no mood
+     * badges yet, exactly like iOS before its status feed has ever loaded. Mirrors
+     * the `ContactsListViewModel.paintMoodStatusesFromCache` precedent verbatim so
+     * mood resolution is identical across surfaces.
+     */
+    private fun paintMoodStatusesFromCache() {
+        val statuses = statusBarCache.load(StatusFeedMode.FRIENDS).valueOrNull.orEmpty()
+        if (statuses != _state.value.moodStatuses) {
+            _state.update { it.copy(moodStatuses = statuses) }
+        }
     }
 
     /**
