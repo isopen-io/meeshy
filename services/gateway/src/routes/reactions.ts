@@ -17,8 +17,10 @@ import {
   sendNotFound,
   sendInternalError,
   sendError,
+  sendConflict,
 } from '../utils/response.js';
 import { ReactionService, CLOSED_CONVERSATION_REACTION_ERROR } from '../services/ReactionService.js';
+import { ConflictError } from '../errors/custom-errors.js';
 import { CONVERSATION_CLOSED_EDIT_MESSAGE } from '../services/messaging/messageEditAdmission.js';
 import { notifyReactionAdded, notifyReactionRemoved } from '../services/notifications/reactionNotify.js';
 import type {
@@ -116,6 +118,10 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Not found - Message not found',
+          ...errorResponseSchema
+        },
+        409: {
+          description: 'Conflict - The maximum of 5 reactions per person on this content is reached',
           ...errorResponseSchema
         },
         410: {
@@ -238,6 +244,15 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, reaction, { statusCode: 201 });
     } catch (error) {
       fastify.log.error({ error }, 'Error adding reaction');
+
+      // Plafond des cinq réactions par personne et par objet
+      // (`packages/shared/utils/reaction-limit.ts`) : `ReactionService`
+      // lève un `ConflictError` dédié pour ce refus légitime — sans cette
+      // branche il retombait sur le `sendInternalError` du bas, un 500 pour
+      // une règle produit que l'utilisateur ne pouvait jamais comprendre.
+      if (error instanceof ConflictError) {
+        return sendConflict(reply, error.message, { code: error.code });
+      }
 
       // Gestion des erreurs spécifiques
       if (error.message === 'Invalid emoji format') {

@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { ReactionService } from '../../../services/ReactionService';
 import { MAX_REACTIONS_PER_OBJECT, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../../../errors/custom-errors';
 
 /**
  * Cinq réactions au maximum, par personne et par objet (2026-08-20) — volet
@@ -75,6 +76,18 @@ describe('ReactionService.addReaction — plafond de 5 réactions par personne e
         emoji: '🎉'
       })
     ).rejects.toThrow(REACTION_LIMIT_REACHED_MESSAGE);
+
+    // Un refus légitime, pas une panne : les routes REST (`routes/reactions.ts`,
+    // `routes/conversations/messages-advanced.ts`) trient sur `instanceof
+    // ConflictError` pour répondre 409 plutôt que de retomber sur leur 500
+    // générique. Une `Error` nue ne franchirait pas ce tri.
+    await expect(
+      service.addReaction({
+        messageId: MESSAGE_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '🎉'
+      })
+    ).rejects.toBeInstanceOf(ConflictError);
 
     expect(prisma.reaction.upsert).not.toHaveBeenCalled();
   });

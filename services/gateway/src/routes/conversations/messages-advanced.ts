@@ -43,7 +43,8 @@ import type {
   EditMessageBody
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError, sendConflict } from '../../utils/response';
+import { ConflictError } from '../../errors/custom-errors';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 
@@ -1134,6 +1135,7 @@ export function registerMessagesAdvancedRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        409: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -1246,6 +1248,15 @@ export function registerMessagesAdvancedRoutes(
 
     } catch (error: any) {
       logger.error('Error adding reaction via REST', error);
+
+      // Plafond des cinq réactions par personne et par objet
+      // (`packages/shared/utils/reaction-limit.ts`) : `ReactionService`
+      // lève un `ConflictError` dédié pour ce refus légitime — sans cette
+      // branche il retombait sur le `sendInternalError` du bas, un 500 pour
+      // une règle produit que l'utilisateur ne pouvait jamais comprendre.
+      if (error instanceof ConflictError) {
+        return sendConflict(reply, error.message, { code: error.code });
+      }
 
       // Handle specific error messages from ReactionService
       if (error.message === 'Invalid emoji format') {

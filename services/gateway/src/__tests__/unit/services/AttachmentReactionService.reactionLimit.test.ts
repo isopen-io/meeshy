@@ -13,6 +13,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { AttachmentReactionService } from '../../../services/AttachmentReactionService';
 import { MAX_REACTIONS_PER_OBJECT, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../../../errors/custom-errors';
 
 const ATTACH_ID = 'attach-001';
 const MSG_ID = 'msg-001';
@@ -62,6 +63,20 @@ describe('AttachmentReactionService.addAttachmentReaction — plafond de 5 réac
     ).rejects.toThrow(REACTION_LIMIT_REACHED_MESSAGE);
 
     expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuse avec un ConflictError — même mécanisme que les autres objets réagissables (messages, posts, commentaires)', async () => {
+    const prisma = makePrisma(MAX_REACTIONS_PER_OBJECT);
+    const svc = new AttachmentReactionService(prisma);
+
+    await expect(
+      svc.addAttachmentReaction({
+        attachmentId: ATTACH_ID,
+        messageId: MSG_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '🎉',
+      })
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 
   it('reposer un émoji déjà présent passe MÊME au plafond — un upsert qui ne fait que confirmer ne consomme aucune place', async () => {

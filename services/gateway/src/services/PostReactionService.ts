@@ -11,6 +11,7 @@
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../errors/custom-errors';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -111,9 +112,10 @@ export class PostReactionService {
       throw new Error('Post has been deleted');
     }
 
-    // Multi-réactions (2026-08-18) : plus aucun cap applicatif — la clé
-    // unique DB (postId, userId, emoji) accepte tout emoji distinct par
-    // utilisateur, à parité avec les messages et les pièces jointes.
+    // Multi-réactions (2026-08-18) : la clé unique DB (postId, userId, emoji)
+    // accepte tout emoji distinct par utilisateur, à parité avec les messages
+    // et les pièces jointes — mais le CODE plafonne ce nombre à cinq (bloc
+    // ci-dessous, 2026-08-20) : la base elle-même n'impose rien.
     const existingReaction = await this.prisma.postReaction.findFirst({
       where: {
         postId,
@@ -135,7 +137,10 @@ export class PostReactionService {
       where: { postId, userId }
     });
     if (!isReactionAllowed(existingReactionCount)) {
-      throw new Error(REACTION_LIMIT_REACHED_MESSAGE);
+      // `ConflictError` : `routes/posts/interactions.ts` (POST /posts/:postId/like,
+      // partagé par les posts, stories et statuts) trie déjà sur `instanceof
+      // ConflictError` pour répondre 409 (refus légitime), pas 500.
+      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
     }
 
     try {

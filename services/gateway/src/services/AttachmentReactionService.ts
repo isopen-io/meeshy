@@ -1,6 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../errors/custom-errors';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -54,7 +55,9 @@ export class AttachmentReactionService {
       where: { attachmentId: o.attachmentId, participantId: o.participantId },
     });
     if (!isReactionAllowed(existingReactionCount)) {
-      throw new Error(REACTION_LIMIT_REACHED_MESSAGE);
+      // `ConflictError` — même mécanisme que les autres objets réagissables
+      // (messages, posts, commentaires) : un refus légitime, pas une panne.
+      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
     }
 
     // Multi-réactions (2026-08-18, « du multiple sur tout contenu à

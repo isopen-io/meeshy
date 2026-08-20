@@ -14,6 +14,7 @@ import type {
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
+import { ConflictError } from '../errors/custom-errors.js';
 
 /**
  * Le motif « le conteneur est terminé », sous forme de CONSTANTE et non de
@@ -167,7 +168,11 @@ export class ReactionService {
       where: { messageId, participantId }
     });
     if (!isReactionAllowed(existingReactionCount)) {
-      throw new Error(REACTION_LIMIT_REACHED_MESSAGE);
+      // `ConflictError`, pas une `Error` nue : les routes REST qui exposent ce
+      // service (`routes/reactions.ts`, `routes/conversations/messages-advanced.ts`)
+      // trient sur `instanceof ConflictError` pour répondre 409 (refus légitime)
+      // plutôt que de laisser leur catch générique retomber sur un 500.
+      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
     }
 
     // Multi-réactions (2026-08-18) : la clé unique DB porte le TRIPLET

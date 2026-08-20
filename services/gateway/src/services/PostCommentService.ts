@@ -12,6 +12,7 @@ import type { RetractedNotificationAnnouncer } from './notifications/retractedNo
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../errors/custom-errors';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -586,7 +587,10 @@ export class PostCommentService {
         where: { commentId, userId },
       });
       if (!isReactionAllowed(existingReactionCount)) {
-        throw new Error(REACTION_LIMIT_REACHED_MESSAGE);
+        // `ConflictError` : la route REST (POST /posts/:postId/comments/:commentId/like)
+        // trie sur `instanceof ConflictError` pour répondre 409, comme
+        // `CommentReactionService` (premier chemin, socket).
+        throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
       }
     }
 

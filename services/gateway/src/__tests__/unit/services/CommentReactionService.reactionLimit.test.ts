@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { CommentReactionService } from '../../../services/CommentReactionService';
 import { MAX_REACTIONS_PER_OBJECT, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../../../errors/custom-errors';
 
 /**
  * Cinq réactions au maximum, par personne et par objet (2026-08-20) — volet
@@ -76,6 +77,19 @@ describe('CommentReactionService.addReaction — plafond de 5 réactions par per
     ).rejects.toThrow(REACTION_LIMIT_REACHED_MESSAGE);
 
     expect(prisma.commentReaction.create).not.toHaveBeenCalled();
+  });
+
+  it('refuse avec un ConflictError — la route (POST /posts/:postId/comments/:commentId/like) le distingue d\'une panne via `instanceof`', async () => {
+    const prisma = makePrisma(MAX_REACTIONS_PER_OBJECT);
+    const service = new CommentReactionService(prisma as any);
+
+    await expect(
+      service.addReaction({
+        commentId: COMMENT_ID,
+        userId: USER_ID,
+        emoji: '🎉'
+      })
+    ).rejects.toBeInstanceOf(ConflictError);
   });
 
   it('reposer un émoji déjà présent passe MÊME au plafond — un findFirst qui trouve déjà la réaction ne consomme aucune place', async () => {
