@@ -21,6 +21,15 @@ private final class ShareStubURLProtocol: URLProtocol {
     nonisolated(unsafe) static var ficheURLToObserveAtFirstRequest: URL?
     nonisolated(unsafe) static var ficheExistedBeforeFirstRequest: Bool?
 
+    /// Même idiome, mais ancré sur le tout premier POST DE CIBLE — les
+    /// requêtes TUS (create + patch) qui le précèdent dans le chemin média ne
+    /// comptent pas. C'est ce qui distingue « les ids d'upload sont déjà
+    /// committés avant que la première cible ne parte » de « ils ne le sont
+    /// qu'au commit de FIN de boucle » : lu après le retour de `send()`, les
+    /// deux scénarios produisent la même valeur sur disque.
+    nonisolated(unsafe) static var ficheURLToObserveAtFirstTargetPost: URL?
+    nonisolated(unsafe) static var uploadedAttachmentIdsAtFirstTargetPost: [String]?
+
     /// L'en-tête `Location` de la réponse 201 de création TUS — sans lui,
     /// `ShareTusClient.upload` lève `.missingLocation` avant le premier PATCH.
     nonisolated(unsafe) static var locationHeader: String?
@@ -31,6 +40,8 @@ private final class ShareStubURLProtocol: URLProtocol {
         capturedURLs = []
         ficheURLToObserveAtFirstRequest = nil
         ficheExistedBeforeFirstRequest = nil
+        ficheURLToObserveAtFirstTargetPost = nil
+        uploadedAttachmentIdsAtFirstTargetPost = nil
         locationHeader = nil
     }
 
@@ -65,6 +76,16 @@ private final class ShareStubURLProtocol: URLProtocol {
         // prouverait plus l'ORDRE, seulement la présence éventuelle.
         if Self.capturedURLs.isEmpty, let url = Self.ficheURLToObserveAtFirstRequest {
             Self.ficheExistedBeforeFirstRequest = FileManager.default.fileExists(atPath: url.path)
+        }
+        if let url = Self.ficheURLToObserveAtFirstTargetPost,
+           request.url?.absoluteString.hasSuffix("/messages") == true,
+           !Self.capturedURLs.contains(where: { $0.hasSuffix("/messages") }) {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            if let data = try? Data(contentsOf: url),
+               let share = try? decoder.decode(SharePendingShare.self, from: data) {
+                Self.uploadedAttachmentIdsAtFirstTargetPost = share.uploadedAttachmentIds
+            }
         }
         Self.capturedURLs.append(request.url?.absoluteString ?? "")
         Self.capturedBodies.append(request.httpBody ?? Data())
@@ -534,12 +555,27 @@ final class ShareSenderFanoutTests: XCTestCase {
     }
 
     /// Invariant 1 de la fiche : `uploadedAttachmentIds` est écrit AVANT le
-    /// premier POST. Une extension tuée entre les deux ne re-téléverserait pas
-    /// les octets — les orphelins ne sont balayés qu'à H+24.
+    /// premier POST de cible. Une extension tuée entre les deux ne
+    /// re-téléverserait pas les octets — les orphelins ne sont balayés qu'à
+    /// H+24.
+    ///
+    /// Round 2 de revue : la version précédente ne relisait le disque
+    /// qu'APRÈS le retour de `send()` — à ce moment-là, le commit de FIN de
+    /// boucle (celui qui suit chaque tentative de cible, pas le commit
+    /// pré-boucle visé par cet invariant) avait déjà réécrit la fiche avec la
+    /// même valeur d'`uploadedAttachmentIds` (ce champ ne change plus une
+    /// fois l'upload résolu). Supprimer le commit pré-boucle
+    /// (`ShareSender.swift:224`) laissait donc ce test vert. La version
+    /// ci-dessous observe le disque DEPUIS `startLoading()`, au moment
+    /// précis où part le tout PREMIER POST de cible — avant qu'aucune
+    /// réponse de cible ne soit revenue, avant qu'aucun commit de fin de
+    /// boucle n'ait pu s'exécuter. Seul le commit PRÉ-boucle peut faire
+    /// passer cette assertion.
     func test_send_persistsUploadedAttachmentIds_beforePostingAnyTarget() async throws {
         let dir = try makeDirectory()
         let mediaRoot = try makeMediaRoot(bytes: 1024)
         ShareStubURLProtocol.locationHeader = "https://gate.meeshy.me/api/v1/uploads/abc"
+        ShareStubURLProtocol.ficheURLToObserveAtFirstTargetPost = dir.appendingPathComponent("cid_abc.json")
         ShareStubURLProtocol.responses = [
             (201, Data()),
             (200, Data("{\"success\":true,\"data\":{\"attachment\":{\"id\":\"att1\"}}}".utf8)),
@@ -550,12 +586,12 @@ final class ShareSenderFanoutTests: XCTestCase {
             share: makeShare(media: [photo]), session: makeSession(),
             urlSession: makeStubbedSession(), directory: dir, mediaRoot: mediaRoot)
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        let reread = try decoder.decode(
-            SharePendingShare.self,
-            from: try Data(contentsOf: dir.appendingPathComponent("cid_abc.json")))
-        XCTAssertEqual(reread.uploadedAttachmentIds, ["att1"])
+        XCTAssertEqual(
+            ShareStubURLProtocol.uploadedAttachmentIdsAtFirstTargetPost, ["att1"],
+            "la fiche doit déjà porter les ids téléversés au moment où le tout premier POST de "
+            + "cible part — sinon une extension tuée entre l'upload et l'envoi ne "
+            + "re-téléverserait jamais les octets"
+        )
     }
 
     /// Au-dessus du seuil : RIEN n'est tenté. Une feuille qui meurt au milieu
