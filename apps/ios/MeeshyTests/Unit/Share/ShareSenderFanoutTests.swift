@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 
 /// Intercepte chaque requête et répond selon une file de réponses préparée —
 /// un partage multi-cibles émet PLUSIEURS POST, et c'est justement leur
@@ -13,10 +14,19 @@ private final class ShareStubURLProtocol: URLProtocol {
     nonisolated(unsafe) static var capturedBodies: [Data] = []
     nonisolated(unsafe) static var capturedURLs: [String] = []
 
+    /// Répertoire + nom de fiche à observer AU MOMENT du tout premier POST —
+    /// ce que `capturedBodies`/`capturedURLs` ne peuvent pas prouver, puisque
+    /// tous deux ne racontent que ce qui a été ENVOYÉ, jamais l'état du
+    /// disque à cet instant précis.
+    nonisolated(unsafe) static var ficheURLToObserveAtFirstRequest: URL?
+    nonisolated(unsafe) static var ficheExistedBeforeFirstRequest: Bool?
+
     static func reset() {
         responses = []
         capturedBodies = []
         capturedURLs = []
+        ficheURLToObserveAtFirstRequest = nil
+        ficheExistedBeforeFirstRequest = nil
     }
 
     override nonisolated class func canInit(with request: URLRequest) -> Bool { true }
@@ -44,6 +54,13 @@ private final class ShareStubURLProtocol: URLProtocol {
     }
 
     override nonisolated func startLoading() {
+        // Observé UNIQUEMENT à la toute première requête : c'est l'instant
+        // qui distingue « la fiche a été écrite AVANT le premier POST » de
+        // « elle ne l'a été qu'après » — un état de fichier lu plus tard ne
+        // prouverait plus l'ORDRE, seulement la présence éventuelle.
+        if Self.capturedURLs.isEmpty, let url = Self.ficheURLToObserveAtFirstRequest {
+            Self.ficheExistedBeforeFirstRequest = FileManager.default.fileExists(atPath: url.path)
+        }
         Self.capturedURLs.append(request.url?.absoluteString ?? "")
         Self.capturedBodies.append(request.httpBody ?? Data())
 
@@ -127,10 +144,11 @@ final class ShareSenderFanoutTests: XCTestCase {
 
     // MARK: - Le corps d'envoi
 
-    func test_body_forATextShare_carriesOnlyTheDerivedIdAndContent() throws {
-        let body = try XCTUnwrap(ShareSender.body(for: makeShare(), targetIndex: 1))
+    func test_body_forATextShare_carriesThePersistedTargetIdAndContent() throws {
+        let share = makeShare()
+        let body = try XCTUnwrap(ShareSender.body(for: share, targetIndex: 1))
 
-        XCTAssertEqual(body.clientMessageId, "cid_abc_t1")
+        XCTAssertEqual(body.clientMessageId, share.targets[1].clientMessageId)
         XCTAssertEqual(body.content, "bonjour")
         XCTAssertNil(body.attachmentIds)
         XCTAssertNil(body.copyAttachmentsFromMessageId)
@@ -200,7 +218,8 @@ final class ShareSenderFanoutTests: XCTestCase {
 
     // MARK: - L'envoi par cible
 
-    func test_send_aTextShare_postsOncePerTarget_withDerivedIds() async throws {
+    func test_send_aTextShare_postsOncePerTarget_withEachTargetsOwnPersistedId() async throws {
+        let share = makeShare()
         ShareStubURLProtocol.responses = [
             (200, successBody(id: "srv1")),
             (200, successBody(id: "srv2")),
@@ -208,13 +227,13 @@ final class ShareSenderFanoutTests: XCTestCase {
         ]
 
         let result = await ShareSender.send(
-            share: makeShare(), session: makeSession(), urlSession: makeStubbedSession())
+            share: share, session: makeSession(), urlSession: makeStubbedSession())
 
         XCTAssertEqual(ShareStubURLProtocol.capturedBodies.count, 3)
         let ids = try ShareStubURLProtocol.capturedBodies.map {
             try decodeBody($0)["clientMessageId"] as? String
         }
-        XCTAssertEqual(ids, ["cid_abc_t0", "cid_abc_t1", "cid_abc_t2"])
+        XCTAssertEqual(ids, share.targets.map(\.clientMessageId))
         XCTAssertEqual(result.targets.map(\.state), [.sent, .sent, .sent])
         XCTAssertEqual(result.targets.map(\.serverMessageId), ["srv1", "srv2", "srv3"])
         XCTAssertTrue(result.isFullyServed)
@@ -278,13 +297,30 @@ final class ShareSenderFanoutTests: XCTestCase {
 
     /// Invariant 1 : la fiche est écrite AVANT le premier POST. Une extension
     /// tuée entre les deux ne doit rien perdre.
+    ///
+    /// Round 1 de revue : la version précédente ne lisait le disque qu'APRÈS
+    /// `send()` — au retour, les 3 cibles étant `.failed`, le `commit` de fin
+    /// de BOUCLE (pas celui d'avant-boucle) avait déjà réécrit la fiche avec
+    /// les mêmes 3 cibles. Supprimer entièrement le commit pré-boucle
+    /// laissait donc ce test vert. La version ci-dessous observe le disque
+    /// DEPUIS `startLoading()`, au moment précis du tout premier POST — avant
+    /// qu'aucune réponse ne soit revenue, avant qu'aucun commit de fin de
+    /// boucle n'ait pu s'exécuter. Seul le commit PRÉ-boucle peut faire
+    /// passer cette assertion.
     func test_send_writesTheFicheBeforeTheFirstPost() async throws {
         let dir = try makeDirectory()
         ShareStubURLProtocol.responses = [(503, Data()), (503, Data()), (503, Data())]
+        ShareStubURLProtocol.ficheURLToObserveAtFirstRequest = dir.appendingPathComponent("cid_abc.json")
 
         _ = await ShareSender.send(
             share: makeShare(), session: makeSession(),
             urlSession: makeStubbedSession(), directory: dir)
+
+        XCTAssertEqual(
+            ShareStubURLProtocol.ficheExistedBeforeFirstRequest, true,
+            "la fiche doit déjà exister sur disque au moment où le tout premier POST part — "
+            + "sinon une extension tuée entre l'écriture et l'envoi perd le partage sans trace"
+        )
 
         let written = try Data(contentsOf: dir.appendingPathComponent("cid_abc.json"))
         let decoder = JSONDecoder()
@@ -329,5 +365,85 @@ final class ShareSenderFanoutTests: XCTestCase {
 
     func test_serverMessageId_onAnUnexpectedShape_isNil() {
         XCTAssertNil(ShareSender.serverMessageId(fromResponse: Data("{\"success\":true}".utf8)))
+    }
+
+    // MARK: - Grammaire serveur — LE test qui manquait (round 1 de revue)
+    //
+    // Round 1 de revue a trouvé le défaut bloquant : l'ancienne dérivation
+    // `"\(shareId)_t\(targetIndex)"` (`SharePendingShare.derivedClientMessageId`)
+    // produit `cid_<uuid>_t0`, rejeté par le motif STRICTEMENT ANCRÉ que le
+    // serveur applique sur les DEUX chemins d'envoi
+    // (`services/gateway/src/routes/conversations/messages.ts:110` en REST,
+    // `services/gateway/src/validation/socket-event-schemas.ts:11` en socket,
+    // donc aussi la reprise par la file hors-ligne) :
+    // `^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`
+    // (`packages/shared/utils/client-message-id.ts:22-23`). Aucun des 15 tests
+    // de fan-out ci-dessus ne confrontait l'identifiant produit à cette
+    // grammaire — ils passaient parce que `ShareStubURLProtocol` répond 200
+    // quel que soit le corps envoyé. Chaque cible recevait donc un 400 en
+    // production alors que la suite entière était verte.
+    //
+    // Ces tests réutilisent le validateur Swift du SDK
+    // (`ClientMessageId.isValid`, `packages/MeeshySDK/.../Utils/ClientMessageId.swift`)
+    // plutôt que de recopier le motif localement — une copie de plus serait
+    // une divergence de plus.
+
+    /// Chaque cible, à CHAQUE index, doit produire un identifiant conforme.
+    func test_body_clientMessageId_matchesTheServerGrammar_forEveryTarget() throws {
+        let share = makeShare(conversationIds: ["conv1", "conv2", "conv3"])
+
+        for index in share.targets.indices {
+            let body = try XCTUnwrap(ShareSender.body(for: share, targetIndex: index))
+            XCTAssertTrue(
+                ClientMessageId.isValid(body.clientMessageId),
+                "cible \(index) : « \(body.clientMessageId) » rejetée par le motif serveur"
+            )
+        }
+    }
+
+    /// Les DEUX bornes explicitement : la première cible (0) et la dernière
+    /// (max) — pas seulement une position médiane qui masquerait une erreur
+    /// d'off-by-one si l'implémentation venait à recalculer par plage.
+    func test_body_clientMessageId_isValid_atFirstAndLastTargetIndex() throws {
+        let share = makeShare(conversationIds: ["conv1", "conv2", "conv3", "conv4", "conv5"])
+
+        let first = try XCTUnwrap(ShareSender.body(for: share, targetIndex: 0))
+        let last = try XCTUnwrap(ShareSender.body(for: share, targetIndex: share.targets.count - 1))
+
+        XCTAssertTrue(ClientMessageId.isValid(first.clientMessageId), first.clientMessageId)
+        XCTAssertTrue(ClientMessageId.isValid(last.clientMessageId), last.clientMessageId)
+    }
+
+    // L'identifiant de la FICHE elle-même (`share.clientMessageId`, le
+    // `shareId`) n'est JAMAIS posté tel quel — il ne nomme que le fichier de
+    // reprise (`cid_abc.json`) ; seuls les identifiants PAR CIBLE, testés
+    // ci-dessus et ci-dessous, traversent le réseau. Sa propre conformité au
+    // motif est déjà garantie par construction et couverte ailleurs
+    // (`ShareSenderTests.test_makeClientMessageId_matchesTheCanonicalFormat`,
+    // `SharePendingShareTests` avec des fixtures UUID réelles) — ce fichier-ci
+    // utilise délibérément le placeholder lisible `"cid_abc"` comme `shareId`
+    // dans `makeShare()`, jamais un vrai UUID, pour la lisibilité des dizaines
+    // d'assertions existantes ; il n'y a donc rien d'utile à garder ici sans
+    // dupliquer cette couverture.
+
+    /// La preuve sur les OCTETS réellement envoyés au gateway, pas seulement
+    /// sur la valeur Swift : chaque corps capturé par le POST doit porter un
+    /// `clientMessageId` conforme.
+    func test_send_everyCapturedRequestBody_carriesAValidClientMessageId() async throws {
+        ShareStubURLProtocol.responses = [
+            (200, successBody(id: "srv1")),
+            (200, successBody(id: "srv2")),
+            (200, successBody(id: "srv3"))
+        ]
+
+        _ = await ShareSender.send(
+            share: makeShare(), session: makeSession(), urlSession: makeStubbedSession())
+
+        let ids = try ShareStubURLProtocol.capturedBodies.map {
+            try XCTUnwrap(try decodeBody($0)["clientMessageId"] as? String)
+        }
+        for id in ids {
+            XCTAssertTrue(ClientMessageId.isValid(id), "« \(id) » envoyé au gateway est invalide")
+        }
     }
 }

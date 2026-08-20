@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 
 /// La fiche est un write-ahead : elle est réécrite ATOMIQUEMENT à chaque
 /// transition (fichiers copiés, upload terminé, cible servie) et n'est
@@ -68,20 +69,32 @@ final class SharePendingShareTests: XCTestCase {
                      "le champ n'est écrit qu'APRÈS un upload réussi")
     }
 
-    // MARK: - Dérivation des identifiants par cible
+    // MARK: - Identifiant client par cible (round 1 de revue)
+    //
+    // L'ancienne dérivation `"\(shareId)_t\(index)"` produisait `cid_<uuid>_t0`
+    // — rejeté par le motif serveur strictement ancré
+    // (`packages/shared/utils/client-message-id.ts:22-23`), sur les DEUX
+    // chemins d'envoi (REST et socket). Chaque cible porte désormais son
+    // PROPRE identifiant, généré une fois par `.make()` et PERSISTÉ.
 
-    /// Une fiche décrit N cibles, mais l'enfilage est fait PAR CIBLE : chaque
-    /// cible a besoin de son propre `clientMessageId`, stable d'une reprise à
-    /// l'autre, sinon un rejeu créerait des doublons.
-    func test_derivedClientMessageId_isStableAndDistinctPerTarget() {
-        let first = SharePendingShare.derivedClientMessageId(shareId: "cid_abc", targetIndex: 0)
-        let second = SharePendingShare.derivedClientMessageId(shareId: "cid_abc", targetIndex: 1)
+    /// Une fiche décrit N cibles, mais l'enfilage est fait PAR CIBLE : deux
+    /// cibles ne doivent jamais partager le même identifiant.
+    func test_make_assignsADistinctClientMessageIdToEachTarget() {
+        let share = makeShare(conversationIds: ["conv1", "conv2", "conv3"])
+        let ids = share.targets.map(\.clientMessageId)
 
-        XCTAssertNotEqual(first, second)
-        XCTAssertEqual(first, SharePendingShare.derivedClientMessageId(shareId: "cid_abc", targetIndex: 0),
-                       "la dérivation doit être PURE : une reprise recalcule le même identifiant")
-        XCTAssertTrue(first.hasPrefix("cid_abc"),
-                      "l'identifiant de la fiche reste lisible dans celui de chaque cible")
+        XCTAssertEqual(Set(ids).count, ids.count, "chaque cible doit porter un identifiant DISTINCT")
+    }
+
+    /// LE test qui manquait avant round 1 : confronter l'identifiant produit
+    /// à la grammaire réelle du serveur, via le validateur du SDK plutôt
+    /// qu'une copie locale du motif.
+    func test_make_everyTargetClientMessageId_matchesTheServerGrammar() {
+        let share = makeShare(conversationIds: ["conv1", "conv2", "conv3"])
+
+        for id in share.targets.map(\.clientMessageId) {
+            XCTAssertTrue(ClientMessageId.isValid(id), "« \(id) » rejeté par le motif serveur")
+        }
     }
 
     // MARK: - Sérialisation

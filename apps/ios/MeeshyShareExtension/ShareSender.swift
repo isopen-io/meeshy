@@ -92,10 +92,15 @@ nonisolated extension ShareSender {
 
     /// Le corps à poster pour UNE cible — ou `nil` quand cette cible doit être
     /// laissée à l'app (média pas encore téléversé, origine pas encore
-    /// acquittée). L'extension ne devine rien : elle décrit.
+    /// acquittée, ou index hors bornes). L'extension ne devine rien : elle
+    /// décrit.
+    ///
+    /// Round 1 de revue : le `clientMessageId` posté est celui PERSISTÉ sur la
+    /// cible (`Target.clientMessageId`), plus une dérivation recalculée depuis
+    /// `share.clientMessageId` — voir la doc de `Target.clientMessageId`.
     static func body(for share: SharePendingShare, targetIndex: Int) -> ShareSendBody? {
-        let clientMessageId = SharePendingShare.derivedClientMessageId(
-            shareId: share.clientMessageId, targetIndex: targetIndex)
+        guard share.targets.indices.contains(targetIndex) else { return nil }
+        let clientMessageId = share.targets[targetIndex].clientMessageId
 
         guard !share.media.isEmpty else {
             return ShareSendBody(

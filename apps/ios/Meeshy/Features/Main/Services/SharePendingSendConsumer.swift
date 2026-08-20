@@ -45,6 +45,12 @@ final class SharePendingSendConsumer {
 
     nonisolated struct PendingTarget: Codable, Equatable {
         let conversationId: String
+        /// Miroir EXACT de `SharePendingShare.Target.clientMessageId` : PROPRE
+        /// à cette cible, écrit une seule fois par l'extension, jamais
+        /// recalculé. Round 1 de revue : l'ancienne dérivation par index
+        /// (`"\(shareId)_t\(index)"`) produisait un identifiant rejeté par le
+        /// motif serveur — voir le miroir extension pour le détail.
+        let clientMessageId: String
         var state: PendingTargetState
         var serverMessageId: String?
     }
@@ -96,16 +102,14 @@ final class SharePendingSendConsumer {
             .appendingPathComponent(mediaDirectoryName, isDirectory: true)
     }
 
-    /// L'identifiant de la fiche reste la clé de reprise ; chaque cible reçoit
-    /// un identifiant DÉRIVÉ, stable. Miroir EXACT de
-    /// `SharePendingShare.derivedClientMessageId` — une divergence produirait
-    /// un doublon serveur au lieu d'un dédoublonnage.
-    nonisolated static func derivedClientMessageId(shareId: String, targetIndex: Int) -> String {
-        "\(shareId)_t\(targetIndex)"
-    }
-
     /// Décode une fiche v:1 ; à défaut, tente l'ancien format et le PROMEUT en
     /// fiche à une cible. Une version inconnue n'est jamais devinée.
+    ///
+    /// La promotion RÉUTILISE `legacy.clientMessageId` tel quel comme
+    /// identifiant de l'unique cible : l'ancien relais à une seule cible
+    /// postait déjà cet identifiant directement (aucune dérivation par
+    /// index n'existait avant ce lot), donc il est déjà conforme au motif
+    /// serveur.
     nonisolated static func decodeRelay(_ data: Data) -> PendingShare? {
         if let share = try? decoder().decode(PendingShare.self, from: data) {
             return share.v == currentVersion ? share : nil
@@ -121,7 +125,10 @@ final class SharePendingSendConsumer {
             media: [],
             uploadedAttachmentIds: nil,
             targets: [PendingTarget(
-                conversationId: legacy.conversationId, state: .pending, serverMessageId: nil)],
+                conversationId: legacy.conversationId,
+                clientMessageId: legacy.clientMessageId,
+                state: .pending,
+                serverMessageId: nil)],
             originTargetIndex: nil
         )
     }
@@ -174,8 +181,8 @@ final class SharePendingSendConsumer {
             }
 
             do {
-                for (index, target) in share.targets.enumerated() where target.state != .sent {
-                    try await queue.enqueue(makeItem(from: share, targetIndex: index, target: target))
+                for target in share.targets where target.state != .sent {
+                    try await queue.enqueue(makeItem(from: share, target: target))
                 }
                 remove(url, reason: "relais enfilé")
             } catch {
@@ -188,18 +195,18 @@ final class SharePendingSendConsumer {
     }
 
     /// `createdAt` est préservé pour ne pas antidater le partage. Le
-    /// `clientMessageId` est DÉRIVÉ par cible : c'est lui qui garantit qu'un
+    /// `clientMessageId` est celui PERSISTÉ sur la cible
+    /// (`target.clientMessageId`, écrit une seule fois par l'extension) : ce
+    /// n'est plus une dérivation recalculée, mais il garantit toujours qu'un
     /// POST ayant abouti sans que sa réponse parvienne ne produira pas un
     /// doublon au rejeu (dédoublonnage gateway par index unique).
     private func makeItem(
         from share: PendingShare,
-        targetIndex: Int,
         target: PendingTarget
     ) -> OfflineQueueItem {
         OfflineQueueItem(
             id: UUID().uuidString,
-            clientMessageId: Self.derivedClientMessageId(
-                shareId: share.clientMessageId, targetIndex: targetIndex),
+            clientMessageId: target.clientMessageId,
             conversationId: target.conversationId,
             content: share.content ?? "",
             originalLanguage: nil,

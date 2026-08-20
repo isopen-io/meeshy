@@ -18,6 +18,12 @@ final class SharePendingSendContractTests: XCTestCase {
         ext: "jpg", mime: "image/jpeg", bytes: 2048
     )
 
+    /// `.make()` génère un `clientMessageId` ALÉATOIRE par cible (round 1 de
+    /// revue) : deux appels produiraient donc deux fiches non-`Equatable`,
+    /// alors que plusieurs tests ci-dessous appellent `makeReference()` deux
+    /// fois et comparent les résultats. Les identifiants sont donc remplacés
+    /// ici par des valeurs FIXES pour que la fiche de référence soit stable
+    /// d'un appel à l'autre.
     private func makeReference() -> SharePendingShare {
         var share = SharePendingShare.make(
             shareId: "cid_00000000-0000-4000-8000-000000000000",
@@ -27,9 +33,15 @@ final class SharePendingSendContractTests: XCTestCase {
             conversationIds: ["conv42", "conv43"]
         )
         share.uploadedAttachmentIds = ["att1"]
-        share.targets[0].state = .sent
-        share.targets[0].serverMessageId = "srv1"
-        share.targets[1].state = .failed
+        share.targets[0] = SharePendingShare.Target(
+            conversationId: "conv42",
+            clientMessageId: "cid_10000000-0000-4000-8000-000000000000",
+            state: .sent,
+            serverMessageId: "srv1")
+        share.targets[1] = SharePendingShare.Target(
+            conversationId: "conv43",
+            clientMessageId: "cid_20000000-0000-4000-8000-000000000000",
+            state: .failed)
         return share
     }
 
@@ -55,7 +67,8 @@ final class SharePendingSendContractTests: XCTestCase {
     /// après interruption réenverrait une cible déjà servie, ou en oublierait
     /// une jamais servie.
     func test_perTargetState_survivesTheCrossing() throws {
-        let data = try SharePendingShare.encoder().encode(makeReference())
+        let reference = makeReference()
+        let data = try SharePendingShare.encoder().encode(reference)
 
         let decoded = try SharePendingSendConsumer.decoder()
             .decode(SharePendingSendConsumer.PendingShare.self, from: data)
@@ -63,6 +76,7 @@ final class SharePendingSendContractTests: XCTestCase {
         XCTAssertEqual(decoded.targets.map(\.conversationId), ["conv42", "conv43"])
         XCTAssertEqual(decoded.targets.map(\.state), [.sent, .failed])
         XCTAssertEqual(decoded.targets.map(\.serverMessageId), ["srv1", nil])
+        XCTAssertEqual(decoded.targets.map(\.clientMessageId), reference.targets.map(\.clientMessageId))
     }
 
     func test_mediaDescriptors_surviveTheCrossing() throws {
@@ -118,18 +132,6 @@ final class SharePendingSendContractTests: XCTestCase {
                        SharePendingSendConsumer.currentVersion)
     }
 
-    /// L'extension POSTE avec l'identifiant dérivé (lot B-2) et l'app ENFILE
-    /// avec le même : une divergence produirait un doublon serveur au lieu
-    /// d'un dédoublonnage.
-    func test_bothSidesDeriveTheSameClientMessageIdPerTarget() {
-        for index in 0..<3 {
-            XCTAssertEqual(
-                SharePendingShare.derivedClientMessageId(shareId: "cid_abc", targetIndex: index),
-                SharePendingSendConsumer.derivedClientMessageId(shareId: "cid_abc", targetIndex: index)
-            )
-        }
-    }
-
     func test_bothSidesAgreeOnTheFileName() throws {
         let appShare = try SharePendingSendConsumer.decoder()
             .decode(
@@ -157,6 +159,11 @@ final class SharePendingSendContractTests: XCTestCase {
         XCTAssertEqual(share.content, "salut")
         XCTAssertEqual(share.targets.map(\.conversationId), ["conv7"])
         XCTAssertEqual(share.targets.map(\.state), [.pending])
+        XCTAssertEqual(
+            share.targets.map(\.clientMessageId), ["cid_legacy"],
+            "l'ancien relais postait déjà `cid_legacy` directement (aucune dérivation par index "
+            + "n'existait avant ce lot) — la promotion doit le réutiliser TEL QUEL, pas le suffixer"
+        )
         XCTAssertTrue(share.media.isEmpty)
         XCTAssertNil(share.originTargetIndex)
     }

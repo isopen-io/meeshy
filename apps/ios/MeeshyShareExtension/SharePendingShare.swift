@@ -36,11 +36,28 @@ nonisolated struct SharePendingShare: Codable, Equatable, Sendable {
 
     nonisolated struct Target: Codable, Equatable, Sendable {
         let conversationId: String
+        /// PROPRE à cette cible, généré une fois par `.make()` et PERSISTÉ —
+        /// jamais recalculé. Round 1 de revue : la dérivation
+        /// `"\(shareId)_t\(index)"` produisait `cid_<uuid>_t0`, rejetée par
+        /// le motif serveur strictement ancré
+        /// (`packages/shared/utils/client-message-id.ts:22-23`). Un
+        /// identifiant PROPRE, sorti du même générateur que
+        /// `ShareSender.makeClientMessageId()`, est conforme par
+        /// construction et n'a plus besoin d'être recalculé pour rester
+        /// stable d'une reprise à l'autre : il est déjà stable, puisqu'écrit
+        /// une seule fois.
+        let clientMessageId: String
         var state: TargetState
         var serverMessageId: String?
 
-        init(conversationId: String, state: TargetState = .pending, serverMessageId: String? = nil) {
+        init(
+            conversationId: String,
+            clientMessageId: String,
+            state: TargetState = .pending,
+            serverMessageId: String? = nil
+        ) {
             self.conversationId = conversationId
+            self.clientMessageId = clientMessageId
             self.state = state
             self.serverMessageId = serverMessageId
         }
@@ -68,14 +85,11 @@ nonisolated struct SharePendingShare: Codable, Equatable, Sendable {
     static let directoryName = "share_pending_sends"
     static let mediaDirectoryName = ShareMediaStaging.directoryName
 
-    /// L'identifiant de la fiche reste la clé de reprise ; chaque cible reçoit
-    /// un identifiant DÉRIVÉ, stable d'une reprise à l'autre. Sans stabilité,
-    /// un rejeu après interruption créerait des doublons ; sans distinction,
-    /// deux cibles écriraient les mêmes chemins de fichiers pendants.
-    static func derivedClientMessageId(shareId: String, targetIndex: Int) -> String {
-        "\(shareId)_t\(targetIndex)"
-    }
-
+    /// L'identifiant de la fiche reste la clé de reprise (nom de fichier) ;
+    /// chaque cible reçoit son PROPRE identifiant, généré une fois ici et
+    /// PERSISTÉ dans `Target.clientMessageId` — jamais recalculé depuis
+    /// l'index. Voir la doc de `Target.clientMessageId` pour le défaut que
+    /// cette conception corrige.
     static func make(
         shareId: String,
         createdAt: Date,
@@ -90,7 +104,9 @@ nonisolated struct SharePendingShare: Codable, Equatable, Sendable {
             content: content,
             media: media,
             uploadedAttachmentIds: nil,
-            targets: conversationIds.map { Target(conversationId: $0) },
+            targets: conversationIds.map {
+                Target(conversationId: $0, clientMessageId: ShareSender.makeClientMessageId())
+            },
             originTargetIndex: media.isEmpty ? nil : 0
         )
     }

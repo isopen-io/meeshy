@@ -59,12 +59,13 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertTrue(files(in: dir).isEmpty, "le fichier doit être supprimé après enfilement")
     }
 
-    /// Le `clientMessageId` forgé par l'extension traverse, mais DÉRIVÉ par
-    /// cible (`_t0`, `_t1`, …) : c'est ce qui empêche un doublon si le POST
-    /// initial avait en fait abouti et que seule la réponse s'est perdue,
-    /// tout en distinguant les cibles d'un même fan-out. Un payload legacy
-    /// (une seule `conversationId`, pas de `targets`) est promu par
-    /// `decodeRelay` en fiche à UNE cible, d'index 0 — d'où le suffixe `_t0`.
+    /// Le `clientMessageId` forgé par l'extension traverse tel quel : c'est
+    /// ce qui empêche un doublon si le POST initial avait en fait abouti et
+    /// que seule la réponse s'est perdue. Round 1 de revue : ce n'est plus
+    /// une dérivation par index (`_t0`, `_t1`, …) — l'ancien suffixe était
+    /// rejeté par le motif serveur. Un payload legacy (une seule
+    /// `conversationId`, pas de `targets`) est promu par `decodeRelay` en
+    /// fiche à UNE cible qui RÉUTILISE l'identifiant top-level tel quel.
     func test_consumeAll_preservesClientMessageIdForServerSideDedup() async throws {
         let dir = try makeDirectory()
         let cmid = "cid_11111111-1111-4111-8111-111111111111"
@@ -74,7 +75,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
 
         let ids = await queue.enqueuedClientMessageIds
-        XCTAssertEqual(ids, [cmid + "_t0"])
+        XCTAssertEqual(ids, [cmid])
     }
 
     func test_consumeAll_withSeveralPayloads_consumesAll() async throws {
@@ -185,9 +186,12 @@ final class SharePendingSendConsumerTests: XCTestCase {
         {"v":1,"clientMessageId":"cid_multi_00000000-0000-4000-8000-000000000000",\
         "createdAt":"2026-07-29T10:00:00Z","content":"bonjour","media":[],\
         "uploadedAttachmentIds":null,"originTargetIndex":null,"targets":[\
-        {"conversationId":"convSent","state":"sent","serverMessageId":"srv1"},\
-        {"conversationId":"convFailed","state":"failed","serverMessageId":null},\
-        {"conversationId":"convPending","state":"pending","serverMessageId":null}]}
+        {"conversationId":"convSent","clientMessageId":"cid_10000000-0000-4000-8000-000000000000",\
+        "state":"sent","serverMessageId":"srv1"},\
+        {"conversationId":"convFailed","clientMessageId":"cid_20000000-0000-4000-8000-000000000000",\
+        "state":"failed","serverMessageId":null},\
+        {"conversationId":"convPending","clientMessageId":"cid_30000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null}]}
         """
         try write(payload, named: "multi.json", in: dir)
         let queue = FakeOfflineMessageQueue()
@@ -213,8 +217,14 @@ final class SharePendingSendConsumerTests: XCTestCase {
     private func makePendingShare(
         clientMessageId: String = "cid_00000000-0000-4000-8000-000000000000",
         targets: [SharePendingSendConsumer.PendingTarget] = [
-            SharePendingSendConsumer.PendingTarget(conversationId: "conv1", state: .pending, serverMessageId: nil),
-            SharePendingSendConsumer.PendingTarget(conversationId: "conv2", state: .pending, serverMessageId: nil)
+            SharePendingSendConsumer.PendingTarget(
+                conversationId: "conv1",
+                clientMessageId: "cid_10000000-0000-4000-8000-000000000000",
+                state: .pending, serverMessageId: nil),
+            SharePendingSendConsumer.PendingTarget(
+                conversationId: "conv2",
+                clientMessageId: "cid_20000000-0000-4000-8000-000000000000",
+                state: .pending, serverMessageId: nil)
         ]
     ) -> SharePendingSendConsumer.PendingShare {
         SharePendingSendConsumer.PendingShare(
