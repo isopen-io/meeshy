@@ -169,6 +169,148 @@ final class SharePendingSendConsumerTests: XCTestCase {
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0)
     }
+
+    // MARK: - Filtre par cible (revue Task 4, constat Important 2)
+
+    /// LA raison d'être des Tasks 3/4 : une fiche multi-cibles ne doit
+    /// réenfiler QUE les cibles pas encore `sent`. Vérifie l'IDENTITÉ des
+    /// cibles enfilées (leurs `conversationId`), pas seulement leur nombre —
+    /// un simple décompte de deux enfilages passerait AUSSI avec le mauvais
+    /// filtre (`!= .pending` laisse également passer deux cibles, mais pas
+    /// les MÊMES : `convSent` + `convFailed` au lieu de `convFailed` +
+    /// `convPending`).
+    func test_consumeAll_withMultiTargetShare_reenqueuesOnlyTargetsNotYetSent() async throws {
+        let dir = try makeDirectory()
+        let payload = """
+        {"v":1,"clientMessageId":"cid_multi_00000000-0000-4000-8000-000000000000",\
+        "createdAt":"2026-07-29T10:00:00Z","content":"bonjour","media":[],\
+        "uploadedAttachmentIds":null,"originTargetIndex":null,"targets":[\
+        {"conversationId":"convSent","state":"sent","serverMessageId":"srv1"},\
+        {"conversationId":"convFailed","state":"failed","serverMessageId":null},\
+        {"conversationId":"convPending","state":"pending","serverMessageId":null}]}
+        """
+        try write(payload, named: "multi.json", in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(
+            items.map(\.conversationId), ["convFailed", "convPending"],
+            "la cible déjà `sent` ne doit JAMAIS repartir, et les deux autres doivent partir DANS L'ORDRE de la fiche"
+        )
+        XCTAssertTrue(files(in: dir).isEmpty, "la fiche entièrement enfilée est supprimée")
+    }
+
+    // MARK: - commit(_:in:) (revue Task 4, constat Important 1)
+    //
+    // `commit` n'a aujourd'hui aucun appelant en production (Tasks 8/9 le
+    // brancheront à la reprise d'une fiche interrompue) : ces tests sont donc
+    // la SEULE garde de ses deux invariants avant ce câblage. Miroir des tests
+    // déjà écrits sur `SharePendingShare.commit(in:)` côté extension
+    // (`SharePendingShareTests.swift`), pour la même raison.
+
+    private func makePendingShare(
+        clientMessageId: String = "cid_00000000-0000-4000-8000-000000000000",
+        targets: [SharePendingSendConsumer.PendingTarget] = [
+            SharePendingSendConsumer.PendingTarget(conversationId: "conv1", state: .pending, serverMessageId: nil),
+            SharePendingSendConsumer.PendingTarget(conversationId: "conv2", state: .pending, serverMessageId: nil)
+        ]
+    ) -> SharePendingSendConsumer.PendingShare {
+        SharePendingSendConsumer.PendingShare(
+            v: SharePendingSendConsumer.currentVersion,
+            clientMessageId: clientMessageId,
+            createdAt: Date(timeIntervalSince1970: 1_785_000_000),
+            content: "bonjour",
+            media: [],
+            uploadedAttachmentIds: nil,
+            targets: targets,
+            originTargetIndex: nil
+        )
+    }
+
+    func test_commit_withPendingTargets_writesTheFiche() throws {
+        let dir = try makeDirectory()
+        let share = makePendingShare()
+
+        try SharePendingSendConsumer.commit(share, in: dir)
+
+        let written = try Data(contentsOf: dir.appendingPathComponent(share.fileName))
+        let decoded = try SharePendingSendConsumer.decoder()
+            .decode(SharePendingSendConsumer.PendingShare.self, from: written)
+        XCTAssertEqual(decoded, share)
+    }
+
+    /// Invariant 1 : chaque transition réécrit la fiche avec l'état COURANT,
+    /// pas l'état initial — une reprise doit retrouver l'ÉTAT COURANT.
+    func test_commit_afterATransition_overwritesWithTheNewState() throws {
+        let dir = try makeDirectory()
+        var share = makePendingShare()
+        try SharePendingSendConsumer.commit(share, in: dir)
+
+        share.targets[0].state = .sent
+        share.targets[0].serverMessageId = "srv1"
+        try SharePendingSendConsumer.commit(share, in: dir)
+
+        let reread = try SharePendingSendConsumer.decoder().decode(
+            SharePendingSendConsumer.PendingShare.self,
+            from: try Data(contentsOf: dir.appendingPathComponent(share.fileName))
+        )
+        XCTAssertEqual(reread.targets[0].state, .sent)
+        XCTAssertEqual(reread.targets[0].serverMessageId, "srv1")
+        XCTAssertEqual(reread.targets[1].state, .pending)
+    }
+
+    /// Invariant 2, et c'est LE point : une seule cible servie ne supprime
+    /// rien. La supprimer perdrait les autres cibles SANS TRACE.
+    func test_commit_withOneTargetServed_keepsTheFiche() throws {
+        let dir = try makeDirectory()
+        var share = makePendingShare()
+        share.targets[0].state = .sent
+
+        try SharePendingSendConsumer.commit(share, in: dir)
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: dir.appendingPathComponent(share.fileName).path),
+            "la fiche n'est supprimée QUE lorsque TOUTES les cibles sont servies"
+        )
+    }
+
+    func test_commit_withEveryTargetServed_removesTheFiche() throws {
+        let dir = try makeDirectory()
+        var share = makePendingShare()
+        try SharePendingSendConsumer.commit(share, in: dir)
+
+        share.targets[0].state = .sent
+        share.targets[1].state = .sent
+        try SharePendingSendConsumer.commit(share, in: dir)
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: dir.appendingPathComponent(share.fileName).path))
+    }
+
+    // MARK: - mediaDirectoryURL() (revue Task 4, constat Important 1)
+
+    /// Composition pure au même titre que `directoryURL()` : même conteneur
+    /// App Group, nom de dossier distinct. Une divergence de nom ou de
+    /// conteneur ferait relire un dossier que personne ne remplit — même
+    /// défaut que celui déjà corrigé pour `recent_contacts`.
+    func test_mediaDirectoryURL_sharesTheContainerOfDirectoryURL_withItsOwnName() {
+        let media = SharePendingSendConsumer.mediaDirectoryURL()
+        let relay = SharePendingSendConsumer.directoryURL()
+
+        guard let media, let relay else {
+            XCTAssertNil(media, "les deux doivent être indisponibles ENSEMBLE, jamais un seul")
+            XCTAssertNil(relay)
+            return
+        }
+
+        XCTAssertEqual(media.lastPathComponent, "share_pending_media")
+        XCTAssertEqual(
+            media.deletingLastPathComponent(), relay.deletingLastPathComponent(),
+            "les deux dossiers doivent vivre dans le MÊME conteneur App Group"
+        )
+    }
 }
 
 // MARK: - Test helpers on FakeOfflineMessageQueue
