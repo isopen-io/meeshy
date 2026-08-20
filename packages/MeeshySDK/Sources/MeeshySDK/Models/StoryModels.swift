@@ -1640,6 +1640,12 @@ public struct StoryEffects: Codable, Sendable {
     /// ThumbHash of the composite canvas screenshot (computed client-side at publish time)
     public var thumbHash: String?
 
+    /// Document v3 tel que le FIL l'a servi — SNAPSHOT DE LECTURE, jamais une
+    /// source d'encodage : `encode(to:)` repart toujours du runtime courant,
+    /// sans quoi une story éditée réémettrait le document d'origine et
+    /// perdrait l'édition en silence. `nil` = le fil a servi du legacy v1.
+    public var canvasV3: CanvasV3?
+
     // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
     public var backgroundTransform: StoryBackgroundTransform?
 
@@ -1732,10 +1738,17 @@ public struct StoryEffects: Codable, Sendable {
         case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
         case canvasAspectRatio
         case musicTrackId, musicStartTime, musicEndTime
+        case v
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        if try c.decodeIfPresent(Int.self, forKey: .v) == 3 {
+            let document = try CanvasV3(from: decoder)
+            self = StoryEffects(rendering: document, sceneIndex: 0)
+            canvasV3 = document
+            return
+        }
         background = try c.decodeIfPresent(String.self, forKey: .background)
         textStyle = try c.decodeIfPresent(String.self, forKey: .textStyle)
         textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
@@ -1809,42 +1822,60 @@ public struct StoryEffects: Codable, Sendable {
         return (effect, wire)
     }
 
+    /// Le fil n'accepte plus que le canvas v3 : l'encodage part TOUJOURS du
+    /// runtime courant, jamais du `canvasV3` mémorisé — une composition neuve
+    /// (aucun document servi) et une story éditée émettent donc l'une comme
+    /// l'autre l'état réel du canvas.
     public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encodeIfPresent(background, forKey: .background)
-        try c.encodeIfPresent(textStyle, forKey: .textStyle)
-        try c.encodeIfPresent(textColor, forKey: .textColor)
-        try c.encodeIfPresent(textPosition, forKey: .textPosition)
-        try c.encodeIfPresent(filter, forKey: .filter)
-        try c.encodeIfPresent(filterIntensity, forKey: .filterIntensity)
-        try c.encodeIfPresent(stickers, forKey: .stickers)
-        try c.encodeIfPresent(textAlign, forKey: .textAlign)
-        try c.encodeIfPresent(textSize, forKey: .textSize)
-        try c.encodeIfPresent(textBg, forKey: .textBg)
-        try c.encodeIfPresent(textOffsetY, forKey: .textOffsetY)
-        try c.encodeIfPresent(stickerObjects, forKey: .stickerObjects)
-        try c.encodeIfPresent(textPositionPoint, forKey: .textPositionPoint)
-        try c.encodeIfPresent(drawingData, forKey: .drawingData)
-        try c.encodeIfPresent(drawingStrokes, forKey: .drawingStrokes)
-        try c.encodeIfPresent(backgroundAudioId, forKey: .backgroundAudioId)
-        try c.encodeIfPresent(backgroundAudioVolume, forKey: .backgroundAudioVolume)
-        try c.encodeIfPresent(backgroundAudioStart, forKey: .backgroundAudioStart)
-        try c.encodeIfPresent(backgroundAudioEnd, forKey: .backgroundAudioEnd)
-        try c.encodeIfPresent(voiceAttachmentId, forKey: .voiceAttachmentId)
-        try c.encodeIfPresent(voiceTranscriptions, forKey: .voiceTranscriptions)
-        try c.encodeIfPresent(opening, forKey: .opening)
-        try c.encodeIfPresent(closing, forKey: .closing)
-        try c.encode(textObjects, forKey: .textObjects)
-        try c.encode(locationObjects, forKey: .locationObjects)
-        try c.encodeIfPresent(mediaObjects, forKey: .mediaObjects)
-        try c.encodeIfPresent(audioPlayerObjects, forKey: .audioPlayerObjects)
-        try c.encodeIfPresent(backgroundAudioVariants, forKey: .backgroundAudioVariants)
-        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
-        try c.encodeIfPresent(backgroundTransform, forKey: .backgroundTransform)
-        try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
-        try c.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
-        try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
-        try c.encodeIfPresent(canvasAspectRatio, forKey: .canvasAspectRatio)
+        try CanvasV3(migrating: self).encode(to: encoder)
+    }
+
+    /// Forme v1 COMPLÈTE des effets — l'empreinte LOCALE dont l'écran dépend.
+    /// Le canvas v3 absorbe le ratio, le thumbHash et le stylage racine ; le
+    /// composer, lui, doit repeindre dès que l'un d'eux bouge. Jamais envoyée
+    /// au fil : `encode(to:)` reste la seule voie du réseau.
+    public var runtimeSnapshot: RuntimeSnapshot { RuntimeSnapshot(effects: self) }
+
+    public struct RuntimeSnapshot: Encodable {
+        public let effects: StoryEffects
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(effects.background, forKey: .background)
+            try c.encodeIfPresent(effects.textStyle, forKey: .textStyle)
+            try c.encodeIfPresent(effects.textColor, forKey: .textColor)
+            try c.encodeIfPresent(effects.textPosition, forKey: .textPosition)
+            try c.encodeIfPresent(effects.filter, forKey: .filter)
+            try c.encodeIfPresent(effects.filterIntensity, forKey: .filterIntensity)
+            try c.encodeIfPresent(effects.stickers, forKey: .stickers)
+            try c.encodeIfPresent(effects.textAlign, forKey: .textAlign)
+            try c.encodeIfPresent(effects.textSize, forKey: .textSize)
+            try c.encodeIfPresent(effects.textBg, forKey: .textBg)
+            try c.encodeIfPresent(effects.textOffsetY, forKey: .textOffsetY)
+            try c.encodeIfPresent(effects.stickerObjects, forKey: .stickerObjects)
+            try c.encodeIfPresent(effects.textPositionPoint, forKey: .textPositionPoint)
+            try c.encodeIfPresent(effects.drawingData, forKey: .drawingData)
+            try c.encodeIfPresent(effects.drawingStrokes, forKey: .drawingStrokes)
+            try c.encodeIfPresent(effects.backgroundAudioId, forKey: .backgroundAudioId)
+            try c.encodeIfPresent(effects.backgroundAudioVolume, forKey: .backgroundAudioVolume)
+            try c.encodeIfPresent(effects.backgroundAudioStart, forKey: .backgroundAudioStart)
+            try c.encodeIfPresent(effects.backgroundAudioEnd, forKey: .backgroundAudioEnd)
+            try c.encodeIfPresent(effects.voiceAttachmentId, forKey: .voiceAttachmentId)
+            try c.encodeIfPresent(effects.voiceTranscriptions, forKey: .voiceTranscriptions)
+            try c.encodeIfPresent(effects.opening, forKey: .opening)
+            try c.encodeIfPresent(effects.closing, forKey: .closing)
+            try c.encode(effects.textObjects, forKey: .textObjects)
+            try c.encode(effects.locationObjects, forKey: .locationObjects)
+            try c.encodeIfPresent(effects.mediaObjects, forKey: .mediaObjects)
+            try c.encodeIfPresent(effects.audioPlayerObjects, forKey: .audioPlayerObjects)
+            try c.encodeIfPresent(effects.backgroundAudioVariants, forKey: .backgroundAudioVariants)
+            try c.encodeIfPresent(effects.thumbHash, forKey: .thumbHash)
+            try c.encodeIfPresent(effects.backgroundTransform, forKey: .backgroundTransform)
+            try c.encodeIfPresent(effects.slideDuration, forKey: .slideDuration)
+            try c.encodeIfPresent(effects.timelineDuration, forKey: .timelineDuration)
+            try c.encodeIfPresent(effects.clipTransitions, forKey: .clipTransitions)
+            try c.encodeIfPresent(effects.canvasAspectRatio, forKey: .canvasAspectRatio)
+        }
     }
 
     /// Forme du canvas de ce slide, dérivée de `canvasAspectRatio` (défaut portrait).

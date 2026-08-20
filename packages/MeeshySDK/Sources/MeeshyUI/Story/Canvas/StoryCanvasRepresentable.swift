@@ -302,12 +302,24 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// state rather than silently dropping a real update.
     internal static func slidesEqualForCanvas(_ a: StorySlide, _ b: StorySlide) -> Bool {
         guard a.id == b.id else { return false }
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        guard let lhs = try? encoder.encode(a),
-              let rhs = try? encoder.encode(b) else {
+        guard let lhs = canvasFingerprint(a), let rhs = canvasFingerprint(b) else {
             return false
         }
         return lhs == rhs
+    }
+
+    /// L'empreinte joint les DEUX formes : celle du fil (canvas v3, qui porte
+    /// les objets) et la forme runtime des effets. Le fil absorbe le ratio de
+    /// canvas, le thumbHash, le dessin legacy et le stylage racine — s'y fier
+    /// seul rendrait le canvas aveugle à ces éditions, exactement le défaut
+    /// que l'empreinte a été écrite pour fermer.
+    private static func canvasFingerprint(_ slide: StorySlide) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let wire = try? encoder.encode(slide),
+              let runtime = try? encoder.encode(slide.effects.runtimeSnapshot) else {
+            return nil
+        }
+        return wire + runtime
     }
 }

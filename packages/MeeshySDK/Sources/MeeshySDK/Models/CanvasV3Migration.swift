@@ -31,6 +31,16 @@ private func wireObject<T: Encodable>(_ value: T) -> [String: CanvasJSONValue]? 
     return try? JSONDecoder().decode([String: CanvasJSONValue].self, from: data)
 }
 
+private func wireArray<T: Encodable>(_ value: [T]) -> [CanvasJSONValue]? {
+    guard let data = try? JSONEncoder().encode(value) else { return nil }
+    return try? JSONDecoder().decode([CanvasJSONValue].self, from: data)
+}
+
+private func decodeWireArray<T: Decodable>(_ type: T.Type, from array: [CanvasJSONValue]?) -> [T]? {
+    guard let array, let data = try? JSONEncoder().encode(array) else { return nil }
+    return try? JSONDecoder().decode([T].self, from: data)
+}
+
 private func decodeWire<T: Decodable>(_ type: T.Type, from object: [String: CanvasJSONValue]?) -> T? {
     guard let object, let data = try? JSONEncoder().encode(object) else { return nil }
     return try? JSONDecoder().decode(type, from: data)
@@ -79,6 +89,11 @@ private extension [String: CanvasJSONValue] {
 
     func bool(_ key: String) -> Bool? {
         if case .bool(let value)? = self[key] { return value }
+        return nil
+    }
+
+    func array(_ key: String) -> [CanvasJSONValue]? {
+        if case .array(let value)? = self[key] { return value }
         return nil
     }
 
@@ -207,13 +222,30 @@ public extension CanvasV3 {
                                     payload: ["emoji": .string(emoji)]))
         }
 
+        if let strokes = effects.drawingStrokes, !strokes.isEmpty,
+           let wire = wireArray(strokes) {
+            let fallback = slot
+            slot += 1
+            objects.append(ObjectV3(id: "drawing", kind: .drawing,
+                                    anchor: .free(x: 0.5, y: 0.5), plane: .fg,
+                                    z: fallback, transform: TransformV3(),
+                                    payload: ["strokes": .array(wire)]))
+        }
+
         for location in effects.locationObjects {
             slot += 1
+            var payload: [String: CanvasJSONValue] = [
+                "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
+            ]
+            if location.anchor != centerPivot {
+                payload["anchor"] = .object(["x": .number(Double(location.anchor.x)),
+                                             "y": .number(Double(location.anchor.y))])
+            }
             objects.append(ObjectV3(id: location.id, kind: .place,
                                     anchor: .free(x: location.x, y: location.y), plane: .fg,
                                     z: location.zIndex,
                                     transform: TransformV3(scale: location.scale, rotation: location.rotation, opacity: 1),
-                                    payload: ["place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null]))
+                                    payload: payload))
         }
 
         for audio in effects.audioPlayerObjects ?? [] {
@@ -371,7 +403,10 @@ public extension StoryEffects {
                 if let location = Self.locationObject(object, at: position) { locations.append(location) }
             case .audio:
                 audios.append(Self.audioObject(object, at: position))
-            case .drawing, .mention, .reserved:
+            case .drawing:
+                drawingStrokes = decodeWireArray(StoryDrawingStroke.self,
+                                                 from: object.payload.array("strokes"))
+            case .mention, .reserved:
                 continue
             }
         }
@@ -501,7 +536,8 @@ public extension StoryEffects {
             place: place,
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
-            zIndex: object.z)
+            zIndex: object.z,
+            anchor: pivotPoint(object.payload))
     }
 
     private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {

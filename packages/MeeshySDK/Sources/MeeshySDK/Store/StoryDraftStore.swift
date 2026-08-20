@@ -418,6 +418,22 @@ public final class StoryDraftStore: @unchecked Sendable {
                         arguments: [draftId]
                     )
                 }
+                // Empreinte de la carte de brouillon. Le canvas v3 — la forme
+                // que `effects_json` persiste — n'a pas de logement pour le
+                // `thumbHash` (métadonnée de slide, pas objet de scène) : sans
+                // cette clé, la carte perdrait sa vignette dès le premier
+                // enregistrement. Absent = effacé, comme les autres méta.
+                if let thumbHash = slides.first?.effects.thumbHash {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'thumbHash', ?)",
+                        arguments: [draftId, thumbHash]
+                    )
+                } else {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'thumbHash'",
+                        arguments: [draftId]
+                    )
+                }
                 // `created_at` n'est posé qu'à la première écriture : le
                 // `COALESCE` sur la ligne existante évite de rajeunir un
                 // brouillon à chaque autosave.
@@ -1003,7 +1019,8 @@ public final class StoryDraftStore: @unchecked Sendable {
                             .first(where: { !$0.isEmpty }),
                         coverFileURL: try coverFileURL(db, draftId: id),
                         backgroundHex: try firstSlideEffects(db, draftId: id)?.background,
-                        thumbHash: try firstSlideEffects(db, draftId: id)?.thumbHash,
+                        thumbHash: try Self.metaValue(db, draftId: id, key: "thumbHash")
+                            ?? firstSlideEffects(db, draftId: id)?.thumbHash,
                         pendingPublishAt: Self.dateFromMeta(
                             try Self.metaValue(db, draftId: id, key: "pendingPublishAt")),
                         lastPublishError: try Self.metaValue(db, draftId: id, key: "lastPublishError"),
