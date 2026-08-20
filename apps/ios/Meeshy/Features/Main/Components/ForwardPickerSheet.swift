@@ -428,6 +428,33 @@ struct ForwardPickerRow: View, Equatable {
         String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), name)
     }
 
+    /// Compteur pluralisé « • N membres » — le pluriel est choisi par le
+    /// catalogue (`variations.plural`), pas gravé dans la chaîne. La ligne
+    /// n'affichait le compteur qu'à `memberCount > 0`, or le français range
+    /// N = 1 dans le SINGULIER : sans variation, une conversation à un seul
+    /// membre lisait « • 1 membres ». Défaut mineur en apparence, mais lu par
+    /// VoiceOver sur chaque ligne du picker (élément combiné) — c'est-à-dire
+    /// répété autant de fois qu'il y a de cibles.
+    ///
+    /// `bundle` et `locale` vont par PAIRE (idiome `PostStatAccessibility`) :
+    /// le bundle choisit la TABLE (`fr.lproj` / `en.lproj`), le locale choisit
+    /// la RÈGLE plurielle. Fixer l'un sans l'autre rendrait le test vert en
+    /// local (simu français) et rouge en CI (simu anglais).
+    static func membersCountLabel(_ count: Int,
+                                  bundle: Bundle = .main,
+                                  locale: Locale = .current) -> String {
+        String(
+            format: String(
+                localized: "forward.members-count",
+                defaultValue: "\u{2022} %d membres",
+                bundle: bundle,
+                locale: locale
+            ),
+            locale: locale,
+            count
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 12) {
@@ -454,7 +481,7 @@ struct ForwardPickerRow: View, Equatable {
                             .foregroundColor(theme.textMuted)
 
                         if memberCount > 0 {
-                            Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), memberCount))
+                            Text(Self.membersCountLabel(memberCount))
                                 .font(MeeshyFont.relative(12))
                                 .foregroundColor(theme.textMuted)
                         }
