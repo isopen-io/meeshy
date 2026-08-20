@@ -10,7 +10,29 @@ import {
 } from '@meeshy/shared/types/attachment';
 import { createAuthHeaders } from '@/utils/token-utils';
 import { buildApiUrl } from '@/lib/config';
+import { apiService } from '@/services/api.service';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+
+/**
+ * Extrait le statut HTTP d'une erreur tus-js-client sans dépendre de la classe
+ * `DetailedError` (duck-typing sur `originalResponse.getStatus()`, la forme
+ * documentée par la bibliothèque — cf. `lib/index.d.ts`). `unknown` en entrée :
+ * `onError` peut aussi recevoir une simple `Error` sans réponse HTTP.
+ */
+function getHttpStatus(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('originalResponse' in error)) {
+    return undefined;
+  }
+  const originalResponse = (error as { originalResponse: unknown }).originalResponse;
+  if (
+    typeof originalResponse !== 'object' ||
+    originalResponse === null ||
+    typeof (originalResponse as { getStatus?: unknown }).getStatus !== 'function'
+  ) {
+    return undefined;
+  }
+  return (originalResponse as { getStatus: () => number }).getStatus();
+}
 
 export type FileUploadStatus = 'queued' | 'uploading' | 'complete' | 'error' | 'paused';
 
@@ -170,6 +192,11 @@ export class TusUploadService {
       tusMetadata.userId = authHeaders['X-Session-Token'];
     }
 
+    // Plafonne la reprise sur refus d'authentification à UNE tentative pour
+    // cette instance d'upload (fermeture, pas un champ de QueueItem : chaque
+    // gros fichier a sa propre instance tus, jamais partagée entre elles).
+    let hasAttemptedAuthRetry = false;
+
     const upload = new Upload(file, {
       endpoint: buildApiUrl('/uploads'),
       chunkSize: TUS_CHUNK_SIZE,
@@ -177,6 +204,35 @@ export class TusUploadService {
       metadata: tusMetadata,
       headers: authHeaders,
       onError: (error) => {
+        const status = getHttpStatus(error);
+
+        if (status === 401 && !hasAttemptedAuthRetry) {
+          hasAttemptedAuthRetry = true;
+          apiService.refreshAuthToken().then((refreshed) => {
+            if (!refreshed) {
+              this.activeUploads.delete(fileId);
+              this.progress.set(fileId, {
+                ...this.progress.get(fileId)!,
+                status: 'error',
+                error: 'Session expirée, veuillez vous reconnecter',
+              });
+              this.emitProgress();
+              reject(new Error('Session expirée, veuillez vous reconnecter'));
+              this.processQueue();
+              return;
+            }
+
+            // Un jeton neuf ne sert à rien s'il n'est pas envoyé : les en-têtes
+            // sont reconstruits (jamais réutilisés) sur la MÊME instance `upload`.
+            // Sa propriété `url` (fixée par le POST de création, si atteint) est
+            // préservée : `start()` reprend via une requête HEAD à l'offset déjà
+            // accepté par le serveur, au lieu de retéléverser le fichier entier.
+            upload.options.headers = createAuthHeaders(undefined) as Record<string, string>;
+            upload.start();
+          });
+          return;
+        }
+
         this.activeUploads.delete(fileId);
         this.progress.set(fileId, {
           ...this.progress.get(fileId)!,

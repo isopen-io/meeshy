@@ -28,6 +28,12 @@ jest.mock('@/services/auth-manager.service', () => ({
   },
 }));
 
+jest.mock('@/services/api.service', () => ({
+  apiService: {
+    refreshAuthToken: jest.fn(),
+  },
+}));
+
 jest.mock('@meeshy/shared/types/attachment', () => ({
   getSizeLimit: jest.fn(() => 4294967296),
   getAttachmentType: jest.fn(() => 'document'),
@@ -39,11 +45,13 @@ jest.mock('@meeshy/shared/types/attachment', () => ({
 }));
 
 import { Upload } from 'tus-js-client';
+import { apiService } from '@/services/api.service';
 
 type TusCallbacks = {
   onError?: (err: Error) => void;
   onProgress?: (bytesUploaded: number, bytesTotal: number) => void;
   onSuccess?: () => void;
+  headers?: Record<string, string>;
 };
 
 let capturedCallbacks: TusCallbacks = {};
@@ -53,6 +61,10 @@ let mockUploadInstance: {
   start: jest.Mock;
   abort: jest.Mock;
   lastResponse: { getBody: () => string } | undefined;
+  // Référence à l'objet `options` passé au constructeur — même objet que
+  // `capturedCallbacks` (pas une copie). Une reprise après rafraîchissement
+  // doit muter `options.headers` sur CETTE instance, jamais en créer une neuve.
+  options: TusCallbacks;
 };
 
 // Arrays to capture all instances/callbacks when multiple uploads run concurrently
@@ -73,6 +85,7 @@ const MockUpload = jest.fn().mockImplementation(
       start: jest.fn(),
       abort: jest.fn(),
       lastResponse: undefined as { getBody: () => string } | undefined,
+      options,
     };
     mockUploadInstances.push(instance);
     mockUploadInstance = instance;
@@ -121,6 +134,17 @@ const makeLargeFile = (name = 'large.mp4', type = 'video/mp4'): File => {
   const file = new File(['a'], name, { type });
   Object.defineProperty(file, 'size', { get: () => SMALL_FILE_THRESHOLD + 1, configurable: true });
   return file;
+};
+
+// Reproduit la forme d'un DetailedError de tus-js-client (originalResponse.getStatus()),
+// sans dépendre de la classe réelle : le mock du module ne l'exporte pas et onError
+// doit distinguer un refus d'authentification par duck-typing, pas par instanceof.
+const makeHttpError = (status: number, message = 'Unauthorized'): Error & {
+  originalResponse: { getStatus: () => number };
+} => {
+  const error = new Error(message) as Error & { originalResponse: { getStatus: () => number } };
+  error.originalResponse = { getStatus: () => status };
+  return error;
 };
 
 const makeAttachmentResponse = (id = 'att-1'): UploadedAttachmentResponse => ({
@@ -653,6 +677,194 @@ describe('TusUploadService', () => {
       capturedCallbacks.onError?.(new Error(''));
 
       await expect(promise).rejects.toThrow('Upload failed');
+    });
+  });
+
+  describe('retry after an authentication refusal', () => {
+    it('does not call refreshAuthToken when the upload succeeds on the first try', async () => {
+      const service = new TusUploadService();
+      const file = makeLargeFile();
+      const att = makeAttachmentResponse();
+
+      const promise = service.uploadFiles([file]);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      mockUploadInstance.lastResponse = {
+        getBody: () => JSON.stringify({ data: { attachment: att } }),
+      };
+      capturedCallbacks.onSuccess?.();
+
+      await promise;
+      expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
+    });
+
+    it('does not call refreshAuthToken for a non-401 failure', async () => {
+      const service = new TusUploadService();
+      const file = makeLargeFile();
+
+      const promise = service.uploadFiles([file]);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      capturedCallbacks.onError?.(makeHttpError(500, 'Server error'));
+
+      await expect(promise).rejects.toThrow('Server error');
+      expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
+    });
+
+    it('refreshes and retries exactly once on a 401, resolving with the retry response', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+      const service = new TusUploadService();
+      const file = makeLargeFile();
+
+      const promise = service.uploadFiles([file]);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // First attempt: refused for authentication.
+      capturedCallbacks.onError?.(makeHttpError(401));
+
+      // Let the refresh promise flush.
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+      expect(mockUploadInstance.start).toHaveBeenCalledTimes(2);
+
+      // Retry succeeds.
+      const att = makeAttachmentResponse('att-retried');
+      mockUploadInstance.lastResponse = {
+        getBody: () => JSON.stringify({ data: { attachment: att } }),
+      };
+      capturedCallbacks.onSuccess?.();
+
+      const results = await promise;
+      expect(results[0]).toMatchObject({ id: att.id });
+    });
+
+    it('resumes the SAME upload instance instead of creating a new one or restarting from zero', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+      const service = new TusUploadService();
+      const file = makeLargeFile();
+
+      const promise = service.uploadFiles([file]).catch(() => undefined);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Some bytes were already accepted by the server before the refusal.
+      capturedCallbacks.onProgress?.(4096, SMALL_FILE_THRESHOLD + 1);
+
+      capturedCallbacks.onError?.(makeHttpError(401));
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      // Exactly one Upload() was ever constructed for this file: the retry
+      // reuses the existing instance (and its `url`/offset) via `.start()`
+      // rather than recreating the transfer from scratch.
+      expect((Upload as jest.Mock).mock.calls.length).toBe(1);
+      // findPreviousUploads() is the cross-session (urlStorage) resumption
+      // path; the in-flight retry must not go through it a second time.
+      expect(mockUploadInstance.findPreviousUploads).toHaveBeenCalledTimes(1);
+      // The bytes already accepted before the refusal are preserved, not reset.
+      const progress = service.getProgress();
+      expect(progress.files[0]?.bytesUploaded).toBe(4096);
+
+      mockUploadInstance.lastResponse = {
+        getBody: () => JSON.stringify({ data: { attachment: makeAttachmentResponse() } }),
+      };
+      capturedCallbacks.onSuccess?.();
+
+      await promise;
+    });
+
+    it('fails definitively on a second 401 without a third attempt', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+      const service = new TusUploadService();
+      const file = makeLargeFile();
+
+      const promise = service.uploadFiles([file]);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      capturedCallbacks.onError?.(makeHttpError(401));
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+
+      // Retry is refused again.
+      capturedCallbacks.onError?.(makeHttpError(401));
+
+      await expect(promise).rejects.toThrow('Unauthorized');
+      // Still only ever refreshed once — no third attempt.
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+      expect(mockUploadInstance.start).toHaveBeenCalledTimes(2);
+    });
+
+    it('rejects immediately when the refresh itself fails, without a retry request', async () => {
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(false);
+      const service = new TusUploadService();
+      const file = makeLargeFile();
+
+      const promise = service.uploadFiles([file]);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const startCallsBeforeRefusal = mockUploadInstance.start.mock.calls.length;
+      capturedCallbacks.onError?.(makeHttpError(401));
+
+      await expect(promise).rejects.toThrow();
+      expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+      expect(mockUploadInstance.start).toHaveBeenCalledTimes(startCallsBeforeRefusal);
+    });
+
+    it('rebuilds the auth headers for the retry instead of reusing the stale ones', async () => {
+      const { createAuthHeaders } = jest.requireMock('@/utils/token-utils') as {
+        createAuthHeaders: jest.Mock;
+      };
+      createAuthHeaders
+        .mockReturnValueOnce({ Authorization: 'Bearer stale-token' })
+        .mockReturnValueOnce({ Authorization: 'Bearer fresh-token' });
+      (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+
+      const service = new TusUploadService();
+      service.setToken('stale-token');
+      const file = makeLargeFile();
+
+      const promise = service.uploadFiles([file]).catch(() => undefined);
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockUploadInstance.options.headers).toEqual({ Authorization: 'Bearer stale-token' });
+
+      capturedCallbacks.onError?.(makeHttpError(401));
+
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(createAuthHeaders).toHaveBeenCalledTimes(2);
+      expect(mockUploadInstance.options.headers).toEqual({ Authorization: 'Bearer fresh-token' });
+
+      mockUploadInstance.lastResponse = {
+        getBody: () => JSON.stringify({ data: { attachment: makeAttachmentResponse() } }),
+      };
+      capturedCallbacks.onSuccess?.();
+
+      await promise;
     });
   });
 
