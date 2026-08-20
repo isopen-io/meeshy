@@ -261,6 +261,28 @@ public extension AudioChipDisplay {
 
 ---
 
+### Task B7: Décodage du FIL v3 — le point d'étranglement client (trou inter-lots fermé)
+
+**Contexte** : après le lot A, le fil sert du v3 dans `storyEffects` — mais
+`StoryItem`/`APIPost` décodent ce champ en `StoryEffects` (struct v1, tout en
+`decodeIfPresent`) : un blob v3 donnerait un runtime VIDE, silencieusement.
+Aucun lot ne possédait ce point. Il est ici : le miroir client du
+`withMentions` serveur.
+
+**Files:**
+- Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` (`StoryEffects.init(from:)` + propriété `canvasV3`)
+- Test: `packages/MeeshySDK/Tests/MeeshySDKTests/Models/Story/CanvasV3WireDecodingTests.swift`
+
+**Interfaces:**
+- Produces: `StoryEffects.canvasV3: CanvasV3?` — `nil` pour un blob legacy ; renseigné quand le fil a servi du v3 (le lot E s'en sert pour `MeeshyScenePlayer(document:)`). Les consommateurs LEGACY (viewer, export) continuent de lire les familles runtime, reconstruites par le pont B2 — AUCUN site d'appel ne change.
+
+- [ ] **Step 1: Tests rouges** — (1) décoder un JSON `StoryEffects` dont le contenu est la fixture `v1-legacy-full.v3.json` : `textObjects[0].text == "Salut"` (le pont a rempli le runtime) ET `canvasV3 != nil` avec `canvasV3?.sound?.source == .library(soundId: "snd_nuits_ete")` ; (2) décoder le blob v1 fixture : comportement INCHANGÉ, `canvasV3 == nil` ; (3) round-trip `Codable` d'un StoryEffects issu de v3 : réencode en **v3** (jamais en familles legacy — une story rééditée ne doit pas régresser de format).
+- [ ] **Step 2: Rouge.**
+- [ ] **Step 3: Implémenter** — en tête de `StoryEffects.init(from decoder:)` : ajouter `case v` aux CodingKeys ; si `try c.decodeIfPresent(Int.self, forKey: .v) == 3`, décoder `CanvasV3(from: decoder)` (un `Decoder` Foundation accepte plusieurs containers), poser `self = StoryEffects(rendering: doc, sceneIndex: 0)` puis `self.canvasV3 = doc` et `return`. `encode(to:)` : si `canvasV3 != nil`, encoder LE DOCUMENT v3 tel quel et rien d'autre.
+- [ ] **Step 4: Vert.** — [ ] **Step 5: Commit.**
+
+---
+
 ### Task B6: Gate final du lot
 
 - [ ] Scheme `MeeshySDK-Package` COMPLET vert (les deux cibles de test).
