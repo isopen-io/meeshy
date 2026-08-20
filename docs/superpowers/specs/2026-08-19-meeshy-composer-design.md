@@ -2,7 +2,7 @@
 
 Date : 2026-08-19
 Statut : **SPÉCIFIÉ (2026-08-20) — arbitrages tous tranchés** ; exécution :
-`./2026-08-20-meeshy-composer-execution-spec.md` (6 lots parallèles, contrat gelé)
+`./2026-08-20-meeshy-composer-execution-spec.md` (7 lots, contrat gelé)
 Succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
 Planches visuelles (16 planches, inventaire exhaustif + matrice outil × format +
@@ -11,6 +11,10 @@ Révision 2026-08-20 : revue complète (optimisation · performance · compat 16
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
 fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c),
 recensement complété + écart SOTA (§6d).
+Révision 2 (2026-08-20, revue totale 4 axes) : entrées externes — partage entrant
+& média reçu → post (§6f), PiP & continuité de lecture (§6g), collage : la surface
+décide (§6b), états AMORCE/INSPECTEUR du contextuel (§4), `translations` par objet
+au contrat (§1), O12–O16 gelés dans la spec rév. 4.
 
 ---
 
@@ -65,6 +69,9 @@ MeeshyObject
 ├── transform       : scale, rotation, opacity            ← UNE définition
 ├── timing          : start?, end?, keyframes[]            ← UNE définition, optionnelle
 ├── payload         : le propre de chaque kind
+│                     (text : + translations {lang: contenu} — le Prisme par
+│                      objet a un LOGEMENT au contrat ; résolution lecteur =
+│                      ordre du prisme, JAMAIS translations.first)
 └── locale          : langue d'origine déclarée            ← alimente le Prisme, §6
 ```
 
@@ -130,7 +137,9 @@ d'entrée. Un seul type, plusieurs profils.
 ComposerIntent {
   origin  : .storyTray | .feedComposer | .reelTab | .moodChip
             | .repost(of:) | .edit(of:) | .draft(id:) | .share(payload:)
-  seed    : ce que l'origine apporte déjà (média capturé, post cité, brouillon…)
+            | .conversationMedia(messageId:, attachmentId:)   // e9 — §6f, O13
+  seed    : ce que l'origine apporte déjà (média capturé, post cité, brouillon,
+            média reçu matérialisé…)
 }
 ```
 
@@ -138,7 +147,7 @@ Le profil dérivé de `origin` fixe **quatre** choses, jamais plus :
 
 | | ce que l'origine décide |
 |---|---|
-| **format initial** | `.storyTray → STORY`, `.reelTab → REEL`, `.feedComposer → POST`, `.moodChip → STATUS` |
+| **format initial** | `.storyTray → STORY`, `.reelTab → REEL`, `.feedComposer → POST`, `.moodChip → STATUS`, `.conversationMedia → POST` (modifiable) |
 | **capacités visibles** | un repost n'offre pas de capture caméra ; un mood n'offre pas la timeline |
 | **état d'ouverture** | story → caméra prête ; post → clavier levé sur `content` ; repost → citation déjà posée |
 | **audience par défaut** | héritée du contexte (repost : plafonnée par la source, cf. `isRepostVisibilityAllowed`) |
@@ -146,6 +155,25 @@ Le profil dérivé de `origin` fixe **quatre** choses, jamais plus :
 Le format reste **changeable** après coup — c'est un champ, pas une identité —
 mais il n'est jamais *demandé*. Personne ne choisit « je fais une story » dans
 un menu : on tape sur le tray, et le composer sait.
+
+**La porte ne fixe que l'état INITIAL** (rév. 2, revue totale U2). Les
+capacités visibles sont une fonction du FORMAT COURANT (et du seed), recalculée
+à chaque bascule — basculer S→P fait apparaître le champ `content` (qui naît
+VIDE), basculer P→S fait réapparaître les slides. **Le texte ne migre
+jamais** : les objets de scène restent des objets, le `content` reste du
+contenu — aucune conversion silencieuse dans un sens ni dans l'autre.
+
+**L'audience « dernière utilisée » est PAR FORMAT** (rév. 2, revue totale U7) —
+mémoires S/P/R/M séparées : un post Public ponctuel ne contamine jamais la
+story intime suivante. C'est la PRÉSERVATION d'un comportement existant
+(`StoryVisibilityPreferenceStore` côté stories, `lastStatusVisibility` côté
+mood), pas un mécanisme neuf. Le chip du socle se met en évidence quand
+l'audience diffère de l'habituelle du format.
+
+**Le « + Créer » de l'Étagère est une porte comme les autres** (rév. 2, revue
+totale U12) : format = dernier format créé par l'utilisateur (STORY au premier
+lancement — c'est déjà le bouton `onCreateStory` de MyStoriesView), audience =
+dernière utilisée du format. Préconfiguré, jamais un menu.
 
 **Le point de vigilance**, appris à nos dépens sur `UnifiedPostComposer` : un
 profil qui masque une capacité ne doit pas laisser le code de cette capacité
@@ -162,9 +190,9 @@ c'est le meuble qui porte la scène.
 
 ```
 ┌─────────────────────────────┐
-│  ▸ contextuel : n'apparaît   │  ← rien par défaut
-│    que si l'objet courant    │
-│    le rend possible          │
+│  ▸ contextuel : AMORCE ou    │  ← deux états nommés, jamais vide-mystère
+│    INSPECTEUR selon la       │
+│    sélection (règle infra)   │
 │                              │
 │      ┌───────────────┐       │
 │      │               │       │
@@ -176,20 +204,58 @@ c'est le meuble qui porte la scène.
 └─────────────────────────────┘
 ```
 
-**Règle d'apparition** — un contrôle n'existe à l'écran que si trois conditions
-sont vraies à la fois : l'objet courant l'accepte, le profil l'autorise, et
-l'action a un effet ici et maintenant. Sinon il n'est pas grisé : il n'est pas
-là. C'est ce qui fait disparaître le sentiment d'outillage.
+**La zone contextuelle a DEUX états nommés** (revue totale C3 — la doctrine
+« vide par défaut » contredisait les wireframes qui montrent des chips hors
+sélection) :
 
-**Le socle ne bouge jamais.** L'audience reste lisible pendant toute la
+- **AMORCE** (aucune sélection) : la rangée FIXE des kinds que le profil
+  autorise — Aa · sticker · son · lieu (+ `content` pour P·R). C'est la porte
+  de création : l'action primaire du composer a toujours un domicile visible.
+- **INSPECTEUR** (un objet sélectionné) : les contrôles de l'objet courant,
+  et eux seuls.
+
+**Règle d'apparition** (loi 4, portée PRÉCISÉE) — elle s'applique aux
+*contrôles d'objet*, pas aux portes de création : un contrôle d'objet n'existe
+à l'écran que si trois conditions sont vraies à la fois — l'objet courant
+l'accepte, le profil l'autorise, et l'action a un effet ici et maintenant.
+Sinon il n'est pas grisé : il n'est pas là. C'est ce qui fait disparaître le
+sentiment d'outillage.
+
+**Le socle ne bouge jamais — et il n'a que TROIS membres** : audience ·
+aperçu · publier (rév. 2, revue totale M13). Le sélecteur de FORMAT vit en
+barre HAUTE (« Story ▾ » — rév. 2, M8 : P2 le plaçait au socle, P4 en barre
+haute ; la barre haute gagne, le socle est réservé à la publication) ; la
+qualification réel est un badge du chip format, non interactif ; la langue de
+publication vit dans le panneau — elle ne fait surface que si la détection
+contredit la langue système. L'audience reste lisible pendant toute la
 composition — c'est la seule information dont l'erreur est irréversible après
 publication. L'aperçu et le bouton publier l'accompagnent : on doit pouvoir
 partir à tout moment, sans chercher.
 
-**Appui long = capture.** Sur la scène vide comme sur un objet média : maintenir
-prend une photo (relâcher court) ou filme (maintenir). Aucun bouton dédié, aucun
-mode à armer. Le geste conservé du reader (hold 0,45 s + slop 24 px, cf. les
-conventions déjà figées) devient ici le geste de prise de vue.
+**Une exception NOMMÉE à la loi 4, au socle seulement** (rév. 2, revue totale
+U6) : dans le sélecteur d'audience d'un repost, les niveaux interdits par le
+plafonnement (FRIENDS/COMMUNITY incomparables) restent VISIBLES, verrouillés,
+avec la raison en une ligne (« borné par la publication de @source »). Une
+liste silencieusement amputée se lit comme un bug ; l'audience mérite la
+pédagogie que la loi 4 refuse aux outils.
+
+**Le plateau n'existe que quand une scène existe** (rév. 2, revue totale U18 —
+cohérent avec O3 : la scène naît au premier objet visuel). Un document SANS
+scène (post texte) suit le thème de l'app, jetons ThemeManager ; le plateau
+sombre apparaît AVEC la première scène. Un utilisateur en thème clair qui tape
+un post texte ne bascule pas dans un meuble sombre qui n'a rien à porter.
+Sur iPad, la scène 9:16 reste centrée dans le plateau élargi — le plateau
+absorbe la largeur, la scène jamais (rév. 2, G6).
+
+**Appui long = capture.** Maintenir sur la scène OUVRE LE VISEUR (v1 —
+`CameraView` existant, geste réversible : glisser hors viseur = annuler) ; la
+cible post-v1 est le viseur inline où relâcher court = photo, maintenir =
+vidéo. Aucun bouton dédié, aucun mode à armer. Le geste conservé du reader
+(hold 0,45 s + slop 24 px, cf. les conventions déjà figées) devient ici le
+geste de prise de vue — et comme il porte d'autres verbes ailleurs (pause au
+reader, retirer dans « Mes stickers », menu de modes sur le chip Références),
+la planche P9 publie LA table geste × contexte qui rend chaque sens
+prédictible (rév. 2, revue totale U4).
 
 **Post et Réel : le texte reste du contenu.** Le texte principal voyage en
 `Post.content` — indexé, traduit, rendu natif dans le feed — et non comme objet
@@ -252,15 +318,21 @@ même moteur.
 | Fenêtre | 20 h puis archive | permanent | permanent |
 
 Tout ce que la demande énumère devient une propriété du noyau, donc valable dans
-les trois d'un coup : **hashtags et références** (objets `mention`/`hashtag`, ou
-segments du `content` — cf. §7), **annotations**, **objets background/foreground
-par layers**, **traduction par objet**, **géolocalisation en métadonnée ET en
-objet épinglable**.
+les trois d'un coup : **références** (objets `mention` posés, ou segments du
+`content` — cf. §7 ; les kinds `hashtag` et `annotation` sont RÉSERVÉS au
+schéma, hors v1 — O1/S5), **objets background/foreground par layers**,
+**traduction par objet**, **géolocalisation en métadonnée ET en objet
+épinglable**.
 
 **La géolocalisation, une source et deux rendus.** `metadata.place` est la
 vérité ; l'objet `kind: place` en est un rendu posé sur la scène, avec la même
 transform que les autres (donc scalable, animable, ancrable à une bande). Poser
-la pastille renseigne la métadonnée ; retirer la pastille ne perd pas le lieu.
+la pastille renseigne la métadonnée ; retirer la pastille ne perd pas le lieu —
+**mais le lieu n'est JAMAIS joint invisible** (rév. 2, revue totale U10) : dès
+que `metadata.place` existe sans pastille, un chip « 📍 lieu joint » apparaît
+(panneau Lieu + rappel au socle, à côté de l'audience), tap = le retirer. Une
+seule surface de vérité visible — l'inverse exact de la fuite que le cas C5 de
+Story Atelier corrigeait.
 C'est l'option retenue par Story Atelier (cas C5) — reprise sans changement,
 parce que l'inverse a déjà causé une fuite iOS où le lieu partait sans que
 l'utilisateur l'ait posé.
@@ -313,18 +385,28 @@ composer : le temps appartient au contenu, pas à la navigation). Le fil reste m
 
 ## 6b. Vrais stickers, collage, bibliothèque locale (2026-08-20)
 
-**Coller une image** devient un geste de premier ordre : dans la scène (objet
-`media`/`sticker`) ou dans le carrousel (nouvelle carte) selon le contexte du
-composer. Lecture du presse-papiers UNIQUEMENT via le bouton système
-(`PasteButton`/`UIPasteControl`, iOS 16+) — `hasImages` décide de MONTRER le
-bouton sans rien lire, le prompt de confidentialité ne surgit jamais hors geste.
-Downsample à l'import (≤ 2 048 px, ImageIO) ; HDR normalisé SDR.
+**Coller une image : LA SURFACE DÉCIDE** (O12 — revue totale C2 : deux cartes
+disaient deux pipelines pour le même geste, une photo collée devenait
+silencieusement un sticker 512 px). La règle, une phrase, partout la même :
 
-**Les vrais stickers entrent par cette même porte.** Bitmoji, Memoji, Genmoji et
-tout clavier tiers copient des images : coller en fait un sticker posé — et
-l'ajoute à **« Mes stickers »**, la bibliothèque personnelle. Dès iOS 18, les
-glyphes clavier inline (`NSAdaptiveImageGlyph`) arrivent en bonus ; le collage
-reste le chemin universel 16→27.
+- le `PasteButton` de la **scène** (ou du composer Post) produit TOUJOURS un
+  **objet `media`** — pleine qualité, downsample ≤ 2 048 px, carte de carrousel
+  si le composer est en Post sans scène ;
+- le `PasteButton` du **panneau Stickers** produit un **sticker posé**
+  (PNG ≤ 512 px) ET l'ajoute à « Mes stickers » ;
+- la promotion média→sticker est une action EXPLICITE de l'inspecteur
+  (« Garder dans Mes stickers ») — jamais un side-effect.
+
+Lecture du presse-papiers UNIQUEMENT via le bouton système
+(`PasteButton`/`UIPasteControl`, iOS 16+) — `hasImages` décide de MONTRER le
+bouton sans rien lire, le prompt de confidentialité ne surgit jamais hors
+geste. HDR normalisé SDR.
+
+**Les vrais stickers entrent par le panneau.** Bitmoji, Memoji, Genmoji et
+tout clavier tiers copient des images : coller DANS LE PANNEAU STICKERS en fait
+un sticker posé — et l'ajoute à **« Mes stickers »**, la bibliothèque
+personnelle. Dès iOS 18, les glyphes clavier inline (`NSAdaptiveImageGlyph`)
+arrivent en bonus ; le collage reste le chemin universel 16→27.
 
 **La bibliothèque est LOCALE — feature d'application, pas de plateforme.** Aucune
 synchronisation backend, jamais (DiskCacheStore, policy dédiée, LRU 64 Mo,
@@ -400,6 +482,104 @@ Ce que la passe NE touche pas — le cœur du gain : scène 9:16 à bandes activ
 socle permanent, profils d'intention, loi des deux plans audio, bouton 🔇,
 collage, `↻` sans verbe, les 18 styles.
 
+## 6f. Les entrées externes (2026-08-20, rév. 2)
+
+Deux portes manquaient au recensement : celle qui vient d'AILLEURS (la feuille
+de partage iOS) et celle qui vient de l'INBOX (un média reçu en conversation).
+Les deux réutilisent l'infrastructure vérifiée du dépôt — rien ne se réinvente.
+
+**Partage entrant — l'extension DÉCRIT, l'app compose (O14).**
+`MeeshyShareExtension` existe et n'envoie aujourd'hui que vers des
+conversations (texte + 1 URL + ≤ 20 fichiers, staging streaming App Group
+`share_pending_media/`, fiche de reprise atomique `share_pending_sends/`,
+envoi TUS opportuniste ≤ 8 Mio — `ShareViewController.swift`,
+`ShareMediaStaging.swift`, `SharePendingShare.swift`). Elle gagne une
+destination **« Post / Story »** à côté des conversations :
+
+- l'extension écrit une fiche versionnée dans un répertoire SÉPARÉ
+  (`share_pending_posts/`, motif exact de `SharePendingShare` — un répertoire
+  distinct isole les cycles de vie et garde la rétro-compat triviale) et NE
+  TENTE AUCUN envoi réseau : un post exige des choix (audience, scène) que la
+  feuille ne peut pas porter — invariant existant « l'extension copie et
+  décrit, ne garantit jamais l'upload » ;
+- côté app, un `SharePendingPostConsumer` — décalqué de
+  `SharePendingSendConsumer` et `NSEPendingPostConsumer`, appelé aux MÊMES
+  deux points (boot après `configure(pool:)`, retour avant-plan) — convertit
+  chaque fiche en **BROUILLON de l'Étagère** ;
+- l'utilisateur est prévenu par une **bannière discrète** « votre partage vous
+  attend » au foreground — JAMAIS une modale au boot : un lancement appartient
+  à sa cause (tap de notification, appel entrant). N fiches = N brouillons ;
+  un partage vieux de plusieurs jours reste un brouillon, pas une embuscade ;
+- cycle de vie des octets : grâce 1 h, TTL 7 j, wipe-logout
+  (`WidgetDataManager.wipeAll`) — les mécanismes existants, branchés sur le
+  nouveau répertoire ; plafonds `ShareLimits` conservés (20 fichiers, 500 Mio).
+
+**Média reçu → post : la porte e9 (O13).** Depuis un média reçu en
+conversation, créer un post tient en 2 gestes : appui long sur la bulle →
+« Créer un post » → composer préconfiguré (profil P modifiable), média déjà
+posé. La mécanique réutilise l'existant pièce par pièce :
+
+- l'action entre dans `MessageActionResolver`/`MessageMoreSheet` (le menu
+  contextuel existant — jamais un menu parallèle), avec les gardes des actions
+  sœurs : `!isViewOnce` (même règle que `isForwardable`), jamais `.location` ;
+- le fichier est matérialisé **cache-first** (`AttachmentMediaSaveResolver.materialize`
+  — la cascade du flux « Enregistrer » : file:// direct → cache typé →
+  téléchargement) ; dans le cas nominal les octets sont DÉJÀ sur disque,
+  zéro réseau ;
+- v1 = **re-upload TUS depuis le cache local** (pipeline
+  `uploadContext:"post"` + `createPost(mediaIds:)` existant, offline compris) ;
+  le pont serveur MessageAttachment→PostMedia (modèle
+  `copyForwardedAttachments`, qui réutilise le blob sans copie) est la cible
+  post-v1 — l'économie de bande passante, pas le geste ;
+- un média `isEncrypted` passe par le SEUL chemin re-upload local (le blob
+  serveur est chiffré) ; un **document** reçu devient une pièce jointe du post
+  sans scène — jamais un objet, jamais une carte de carrousel ;
+- **AUCUNE référence automatique vers l'expéditeur** : un média reçu en privé
+  n'est pas une publication — l'attribuer d'office exposerait la relation
+  privée. Le repost pose une SILENT parce que la source est PUBLIQUE ; ici,
+  mention manuelle seulement. C'est une règle de confidentialité, pas une
+  omission.
+
+## 6g. PiP & continuité de lecture (2026-08-20, rév. 2)
+
+**Loi 8 — un seul temps, celui du contenu.** La position de lecture et l'état
+de piste survivent au changement de chrome : carte → détail → plein écran →
+PiP. Le contenu ne rembobine jamais parce que l'écran a changé.
+
+Ce n'est pas un vœu : le dépôt possède DÉJÀ le moteur, et la loi ne fait que
+nommer son contrat. `SharedAVPlayerManager` (singleton MeeshyUI) est l'unique
+moteur vidéo hors canvas ; la continuité existe par **identité d'URL** —
+`load()` est un no-op si `urlString == activeURL`, donc la surface suivante
+adopte le player et sa position (prouvé en prod : feed→Réels
+`ReelsPlayerView.swift:1547-1580`, inline→fullscreen
+`MeeshyVideoPlayer+Renderers.swift:519-545`, fullscreen→PiP au swipe-down
+`:719-733`). La position froide est persistée par attachmentId
+(`VideoPlaybackPositionStore`, zone morte de reprise) ; le PiP est intégré au
+moteur (`configurePip`, `canStartPictureInPictureAutomaticallyFromInline`,
+restauration in-app vs fermeture X distinguées) et **opt-in par surface**
+(`MeeshyVideoSurface.enablesPip = false` par défaut — attacher un controller
+arme l'auto-PiP système) ; le transport complet existe
+(`VideoTransportControls` : ±10 s, scrub prioritaire, vitesse, AirPlay, PiP).
+
+Le ScenePlayer FORMALISE ce contrat (O16) :
+
+- la clé de continuité devient l'**identité du média**
+  (attachmentId/postMediaId) plutôt que la chaîne d'URL — l'URL résolue varie
+  (cache local vs distante), l'identité non ;
+- pour le kind `media` porteur en lecture, le rendu passe par
+  `SharedAVPlayerManager` — JAMAIS un AVPlayer privé, qui perdrait d'un coup
+  la continuité, la télémétrie de consommation (WatchSample, watch progress)
+  et l'arbitrage global (`PlaybackCoordinator`, un seul média joue) ;
+- l'arbitrage avec le **PiP d'appel** reste le flux événementiel existant :
+  début d'appel → `stopAll()` → le PiP vidéo meurt ; tout `play()` est gaté
+  sur `!isCallActive` (`MediaSessionCoordinator`) — deux contrôleurs, un seul
+  vivant, sans registre neuf ;
+- le **mute** suit la surface sur les cartes (autoplay muet du fil) et le
+  CONTENU en immersif — dé-muter le détail ne dé-mute pas le fil ;
+- la **preview du composer** garde ses players privés (canvas CALayer, loop
+  muet) : le handoff de position composer→lecture est un raffinement post-v1
+  (§F de la spec), dette nommée — la lecture, elle, est couverte v1.
+
 ## 7. Les arbitrages — TOUS TRANCHÉS (2026-08-20)
 
 Décisions gelées dans la spec d'exécution
@@ -418,7 +598,7 @@ l'argumentaire qui a fondé chaque décision.
 | **O8** | Sticker posé : format d'upload ? | média du contenu claimable (TUS/PostMedia) | inline dans le blob (base64) | **A** — jamais d'inline : le blob est plafonné à 256 Ko et un sticker fantôme serait la répétition des « médias web jamais rattachés » |
 | **O9** | Lecture du presse-papiers | PasteButton/UIPasteControl uniquement | lecture programmatique + gestion du prompt | **A** — le prompt système hors geste brûle la confiance ; `hasImages` suffit pour l'affordance |
 | **O10** | Stickers interactifs : où vivent les votes ? | table serveur légère dédiée | dans le blob storyEffects | **A** — le blob est plafonné et illisible pour l'agrégation ; le sticker reste un objet, la donnée vit à côté |
-| **O11** | Publication programmée | best-effort client (Étagère + BGTask) | `scheduledAt` serveur | **B pour l'annoncer, A comme prémisse silencieuse** — un « programmé » qui dépend de la vie de l'app ne se promet pas |
+| **O11** | Publication programmée | best-effort client (Étagère + BGTask) | `scheduledAt` serveur | **B pour l'annoncer** — un « programmé » qui dépend de la vie de l'app ne se promet pas. *(Rév. 2 : la « prémisse silencieuse A » est ABANDONNÉE — le gel O11 est hors v1 INTÉGRAL, prémisse comprise ; un design qui la recommandait contredisait la spec.)* |
 
 ---
 
@@ -511,10 +691,20 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
    serveur, lui, RESTE tant que l'archive porte du v1 — elle est éternelle
    (« ne plus jamais supprimer ») ; sa mort passe par une migration batch de
    l'archive, tâche d'hygiène optionnelle et jamais bloquante.
+7. **Les entrées externes** (lot G, après C) — porte e9 « média reçu → post »
+   et destination Post/Story du partage entrant (§6f) : le composer devient
+   joignable depuis TOUT ce que l'utilisateur reçoit ou possède.
 
 ---
 
 ## 10. Statut
 
-Rien n'est encore implémenté, mais ce document n'est plus une proposition ouverte : **les onze arbitrages sont tranchés** (O2 par le porteur produit ; O1, O3–O11 gelés dans la spec d'exécution du 2026-08-20, avec le découpage en six lots parallèles). Les points de §8
-demandent un arbitrage produit avant qu'un plan d'implémentation soit écrit.
+Rien n'est encore implémenté, mais ce document n'est plus une proposition
+ouverte : **les arbitrages sont tranchés** — O1–O11 (O2 par le porteur
+produit) puis O12–O16 (revue totale du 2026-08-20), gelés dans la spec
+d'exécution rév. 4. **Les plans d'exécution existent** : lots A–F écrits et
+passés par deux cycles de revue adversariale (43 constats, 43 réels, tous
+intégrés) ; lot G (entrées externes) à écrire à son lancement. Les inconnues
+de §8 ne sont plus des questions ouvertes mais des GATES de lots : la mesure
+A11 est un critère de sortie du lot D (pas d'appareil ⇒ STOP), l'audit des
+blobs v1 est l'intrant du convertisseur du lot A.

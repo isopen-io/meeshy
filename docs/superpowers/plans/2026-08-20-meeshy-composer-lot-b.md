@@ -134,7 +134,11 @@ struct CanvasV3MigrationTests {
         let fx = StoryEffects(rendering: doc, sceneIndex: 0)
         #expect(fx.textObjects.count == 1)
         #expect(fx.textObjects[0].textStyle == "retro")
-        #expect(fx.stickerObjects?.count == 1)
+        #expect(fx.textObjects[0].sourceLanguage == "fr")            // locale → sourceLanguage (C6)
+        #expect(fx.textObjects[0].translations?["en"] == "Hi")       // le Prisme survit au pont
+        #expect(fx.stickerObjects?.count == 2)                       // st1 + '✨' racine (G3)
+        #expect(fx.stickerObjects?[0].baseSize == 300)               // champ vivant (U21)
+        #expect(fx.voiceTranscriptions?.map(\.language) == ["fr", "en"])  // karaoké (C7)
         // Clés v1 RÉELLES (revue Fable n°3) : place est un OBJET SharedPlace
         // requis, l'audio référence PostMedia par postMediaId.
         #expect(fx.locationObjects.count == 1)
@@ -161,7 +165,7 @@ struct CanvasV3MigrationTests {
 ```
 
 - [ ] **Step 2: Rouge.**
-- [ ] **Step 3: Implémenter** les deux inits en MIROIR STRICT de `storyEffectsV3.ts` (A3) — mêmes défauts (`scale:1, opacity:1, z: fallback`), même sort pour `slideDuration` (ignoré) et `musicTrackId` (ignoré), `canvasAspectRatio` absorbé. Le pont de rendu inverse remet chaque kind dans sa famille (payload → champs nommés) ; les ancres `.band` deviennent des positions `y` normalisées (`top → 0.08`, `bottom → 0.92`) le temps que le moteur apprenne les bandes — CONSTANTES nommées, documentées comme provisoires.
+- [ ] **Step 3: Implémenter** les deux inits en MIROIR STRICT de `storyEffectsV3.ts` (A3) — mêmes défauts (`scale:1, opacity:1, z: fallback`), même sort pour `slideDuration` (ignoré) et `musicTrackId` (ignoré), `canvasAspectRatio` absorbé **avec le REMAP des ancres `.free` dans le rect letterboxé (U20 — même formule que le convertisseur gateway, le golden partagé l'atteste)** ; les règles rév. 4 de la table §C2 valent ici aussi : `translations`/`sourceLanguage` (C6), `voiceTranscriptions → sound.transcriptions` (C7), champs vivants du sticker (U21), `filter`/racine (G3). Le pont de rendu inverse remet chaque kind dans sa famille (payload → champs nommés) ; les ancres `.band` deviennent des positions `y` normalisées (`top → 0.08`, `bottom → 0.92`) le temps que le moteur apprenne les bandes — CONSTANTES nommées, documentées comme provisoires.
 - [ ] **Step 4: Vert.** — **Step 5: Commit.**
 
 ---
@@ -225,7 +229,7 @@ public struct MeeshyScenePlayer: View {
 
 - [ ] **Step 1: Test rouge sur la RÈGLE (pure)** — `ScenePlayerConfig(mode:)` : `.reader → startsPaused TRUE, showsChrome true` (l'invariant « canvas né en pause » du dépôt vaut POUR LE READER : la lecture démarre par la commande du viewer — « 4 chemins relancent la lecture » — jamais à la naissance ; revue Fable n°4) ; `.preview → startsPaused true, muted false, chrome false` ; `.card → paused true, muted true, loops true, chrome false`. Trois assertions par mode : les TROIS modes naissent en pause.
 - [ ] **Step 2: Rouge.** 
-- [ ] **Step 3: Implémenter** — `MeeshyScenePlayer.body` = l'hôte canvas EXISTANT nourri par `StoryEffects(rendering: document, sceneIndex:)` (B2) + la config du mode. Chercher le représentable hôte actuel (celui que le reader monte — `StoryCanvasUIView` via son wrapper) et l'envelopper ; AUCUNE réécriture de rendu. Paramètres opaques uniquement (pureté SDK : l'accent arrive en hex, pas de ThemeManager).
+- [ ] **Step 3: Implémenter** — `MeeshyScenePlayer.body` = l'hôte canvas EXISTANT nourri par `StoryEffects(rendering: document, sceneIndex:)` (B2) + la config du mode. Chercher le représentable hôte actuel (celui que le reader monte — `StoryCanvasUIView` via son wrapper) et l'envelopper ; AUCUNE réécriture de rendu. Paramètres opaques uniquement (pureté SDK : l'accent arrive en hex, pas de ThemeManager). **Deux lois du contrat (spec rév. 4)** : O16 — le kind `media` porteur en LECTURE joue via `SharedAVPlayerManager` (clé = identité du média ; jamais d'AVPlayer privé, qui perdrait continuité, télémétrie WatchSample et arbitrage PlaybackCoordinator — les players privés du canvas de COMPOSITION, eux, restent) ; C6 — la résolution des `translations` d'un texte suit l'ordre du Prisme du lecteur, JAMAIS `translations.first` (règle critique du dépôt).
 - [ ] **Step 4: Garde de source anti-profondeur** — test XCTest lisant le fichier (patron `strippingComments` du dépôt) : interdit `#available` en cascade et `func …<Content: View>` imbriqués dans ScenePlayer/* ; exige que `body` référence l'hôte UIKit existant (le nom trouvé au Step 3, littéral dans l'assertion).
 - [ ] **Step 5: Vert (scheme package).** — **Step 6: Commit.**
 

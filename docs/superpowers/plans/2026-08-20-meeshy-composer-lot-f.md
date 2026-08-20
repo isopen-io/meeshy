@@ -106,11 +106,22 @@ La table des 18 styles reprend les valeurs du résolveur iOS (grasse/serif/mono/
 
 ---
 
+### Task F5b: Le composer web ÉMET v3 (revue totale C5 — condition d'armement d'O15)
+
+**Files:**
+- Modify: `apps/web/components/v2/StoryComposer.tsx` (`:252` — le `onPublish` construit `{backgroundColor, textStyle, mediaObjects, audioPlayerObjects}` sans `v:3`)
+- Test: `apps/web/__tests__/components/story-composer-emits-v3.test.tsx`
+
+- [ ] **Step 1: Tests rouges** — publier depuis le composer web produit un `storyEffects` avec `v === 3` : le fond couleur devient l'objet `media` de plan `bg` (payload couleur), chaque `mediaObject` un objet `media`, chaque `audioPlayerObject` un objet `audio` de plan `content`, le `textStyle` global suit la règle G3 (texte racine → objet text SEULEMENT si aucun objet texte) ; la fixture `minimal-text` sert de forme de référence ; `CanvasV3Schema.safeParse(payload).success === true` (le schéma partagé est LE test).
+- [ ] **Step 2-5:** rouge → un builder pur `buildCanvasV3(state)` (miroir de la table §C2 pour les DEUX familles du composer web — il n'a que mediaObjects/audioPlayerObjects/fond/style) → vert → commit. Tant qu'O15 n'est pas armé, le gateway accepte les deux formes — le déploiement de F5b est PRÉALABLE à l'armement, jamais simultané.
+
+---
+
 ### Task F6: Gate final
 
 - [ ] `cd apps/web && TZ=UTC bun run test` — suites complètes vertes.
 - [ ] `cd packages/shared && bun run build` (l'import des types v3 compile).
-- [ ] Merge : après B, en parallèle de D/E (ordre spec A → B → F → D → E → C). **Le lockstep, opérationnalisé (revue Fable n°13)** : A merge avec `CANVAS_V3_READ` OFF (lecture inerte) ; quand F est EN PRODUCTION, le drapeau est armé — c'est l'acte de déploiement qui fait la simultanéité, pas une promesse de calendrier. Jamais de fenêtre où le web lirait des stories vides.
+- [ ] Merge : après B, en parallèle de D/E (ordre spec A → B → F → D → E → C). **Le lockstep, opérationnalisé (revue Fable n°13 ; rév. 2, G1)** : A merge avec `CANVAS_V3_READ` OFF (lecture inerte) ; le drapeau s'arme quand F est EN PRODUCTION **et que le lecteur v3 Android l'est aussi (lot H — Android lit et écrit le blob v1, l'armer sans lui vide ses stories-texte)** — c'est l'acte de déploiement qui fait la simultanéité, pas une promesse de calendrier. Jamais de fenêtre où un client lirait des stories vides. L'ÉCRITURE stricte (O15, `CANVAS_V3_WRITE_STRICT`) a sa propre condition : F5b déployé + parc iOS + composer Android.
 
 ## Hors périmètre (dit une fois)
 

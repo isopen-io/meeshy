@@ -31,6 +31,12 @@
 
 **Interfaces:**
 - Produces : `BackgroundSoundBadge(announcement: BackgroundAudioAnnouncement, accentHex: String)` — rend `EmptyView` pour `.none` (loi 5 : pas de piste, RIEN — pas de placeholder), ♫〰 pour `.original`, marquee `« titre · @pseudo · M:SS »` pour `.credit` (métadonnées nil ⇒ « ♫ — », JAMAIS la note+onde).
+- **`accentHex` = l'accent déterministe du POST** (rév. 2, revue totale C8 :
+  `FeedPostCard.accentColor == post.authorColor`, `FeedPostCard.swift:93` —
+  le chrome de carte entier reste teinté par lui, `surfaceGradient`/bordure
+  `:498/:501` : assertion de NON-régression dans la garde de câblage). Sur
+  carte claire (thème light), le badge suit le précédent
+  `mentionColor`/`hashtagColor` pour rester AA (revue totale U16).
 
 - [ ] **Step 1: Tests rouges** — la vue : `.none ⇒` corps vide (garde de source : `EmptyView`) ; `.original ⇒` note+onde (les deux glyphes, note PUIS onde — la convention testée du header) ; `.credit("Nuits d'été","sam",15) ⇒` texte contenant `Nuits d'été · @sam · 0:15` ; `.credit(nil,nil,nil) ⇒` contient `♫` et PAS l'onde. Garde de câblage : les TROIS surfaces appellent `AudioChipDisplay.backgroundAnnouncement(` et montent `BackgroundSoundBadge` ; le header de story ne fabrique PLUS son affichage sonore ad hoc (assertion négative sur l'ancien chemin, commentaires filtrés).
 - [ ] **Step 2: Rouge.**

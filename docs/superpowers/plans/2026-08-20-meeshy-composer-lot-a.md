@@ -136,6 +136,9 @@ const ObjectV3Schema = z.object({
   }),
   timing: TimingSchema.optional(),
   locale: z.string().min(2).max(8).optional(),
+  // payload permissif PAR CONTRAT — il porte notamment, pour kind:text,
+  // `translations: {lang: contenu}` (Prisme par objet, spec §C1 rév. 4/C6) :
+  // le convertisseur A3 et le golden en font foi, pas une contrainte Zod.
   payload: z.record(z.string(), z.unknown()),
 });
 
@@ -146,6 +149,12 @@ const BackgroundSoundSchema = z.object({
   ]),
   volume: z.number().min(0).max(1).default(1),
   bounds: z.object({ start: z.number().min(0), end: z.number().min(0) }).optional(),
+  // Sous-titres voix par langue (karaoké = Prisme audio) — logement du
+  // `voiceTranscriptions` racine v1 (spec §C1 rév. 4, revue totale C7).
+  transcriptions: z.array(z.object({
+    language: z.string().min(2).max(8),
+    content: z.string(),
+  })).optional(),
 });
 
 const SceneV3Schema = z.object({
@@ -240,10 +249,19 @@ describe('canvas-v3 fixtures (le gel inter-lots)', () => {
   "backgroundAudioVolume": 0.6,
   "backgroundAudioStart": 2,
   "backgroundAudioEnd": 17,
+  "voiceTranscriptions": [
+    { "language": "fr", "content": "Salut à tous" },
+    { "language": "en", "content": "Hi everyone" }
+  ],
   "textObjects": [ { "id": "t1", "text": "Salut", "textStyle": "retro", "x": 0.5, "y": 0.2,
     "scale": 1.2, "rotation": 5, "zIndex": 3, "startTime": 1,
+    "sourceLanguage": "fr", "translations": { "en": "Hi" },
     "keyframes": [ { "time": 1, "opacity": 0 }, { "time": 2, "opacity": 1 } ] } ],
-  "stickerObjects": [ { "id": "st1", "emoji": "🔥", "x": 0.8, "y": 0.7, "scale": 1, "rotation": 0, "zIndex": 4 } ],
+  "filter": "noir",
+  "filterIntensity": 0.8,
+  "stickers": ["✨"],
+  "stickerObjects": [ { "id": "st1", "emoji": "🔥", "x": 0.8, "y": 0.7, "scale": 1, "rotation": 0, "zIndex": 4,
+    "baseSize": 300, "anchorPoint": "center", "fadeIn": 0.3, "fadeOut": 0.5 } ],
   "locationObjects": [ { "id": "L1",
     "place": { "id": "pl1", "latitude": 4.0511, "longitude": 9.7679, "name": "Douala" },
     "x": 0.3, "y": 0.85, "scale": 1, "rotation": 0, "zIndex": 5 } ],
@@ -289,6 +307,47 @@ Mêmes cas que la rév. 1 du plan, avec DEUX assertions corrigées sur les clés
     const a = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'audio');
     expect(a?.payload.postMediaId).toBe('64b0000000000000000000aa');
   });
+
+  it('text translations survive into the payload (Prisme par objet, C6)', () => {
+    const t = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'text');
+    expect((t?.payload.translations as Record<string, string>)?.en).toBe('Hi');
+    expect(t?.locale).toBe('fr');   // sourceLanguage → locale (§C2 rév. 4)
+  });
+
+  it('voice transcriptions land on sound.transcriptions (karaoké, C7)', () => {
+    const out = convertV1ToV3(v1());
+    expect(out.sound?.transcriptions?.map(t => t.language)).toEqual(['fr', 'en']);
+  });
+
+  it('free anchors are remapped into the letterboxed carrier rect (U20)', () => {
+    // canvas v1 ratio 1.7777 (16:9) dans une scène 9:16 : h = (9/16)/(16/9) ≈ 0.3164,
+    // top = (1−h)/2 ≈ 0.3418 ; y' = top + y×h — un texte posé SUR le média y reste.
+    const t = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'text');
+    expect(t?.anchor.t).toBe('free');
+    expect((t?.anchor as { y: number }).y).toBeCloseTo(0.3418 + 0.2 * 0.3164, 2);
+  });
+
+  it('living sticker fields survive: baseSize, anchorPoint, fades (U21)', () => {
+    const st = convertV1ToV3(v1()).scenes[0].objects.find(o => o.kind === 'sticker' && (o.payload as {emoji?:string}).emoji === '🔥');
+    expect(st?.payload.baseSize).toBe(300);
+    expect(st?.payload.fadeIn).toBe(0.3);
+  });
+
+  it('root filter lands on the bg media payload; root stickers become sticker objects (G3)', () => {
+    const objs = convertV1ToV3(v1()).scenes[0].objects;
+    const bg = objs.find(o => o.plane === 'bg');
+    expect(bg?.payload.filter).toBe('noir');
+    expect(bg?.payload.filterIntensity).toBe(0.8);
+    expect(objs.filter(o => o.kind === 'sticker').length).toBe(2);   // st1 + '✨' racine
+  });
+
+  it('root legacy text styling synthesizes a text object ONLY when textObjects is empty (G3)', () => {
+    const legacy = { textStyle: 'classic', textColor: '#FFFFFF', textPosition: 0.5 };
+    expect(convertV1ToV3({ ...legacy }, { content: 'Vieux texte' }).scenes[0].objects
+      .filter(o => o.kind === 'text').length).toBe(1);
+    expect(convertV1ToV3(v1()).scenes[0].objects
+      .filter(o => o.kind === 'text').length).toBe(1);   // t1 seul — racine IGNORÉE si textObjects
+  });
 ```
 
 (et l'assertion des kinds/plans reste : `['audio/content','media/bg','place/fg','sticker/fg','text/fg']`.)
@@ -311,6 +370,12 @@ Mêmes cas que la rév. 1 du plan, avec DEUX assertions corrigées sur les clés
     };
     objects.push(o);
   }
+  // §C2 rév. 4 : le Prisme par objet et le karaoké SURVIVENT à la conversion.
+  // Dans le mapping textObjects : sourceLanguage → locale, translations →
+  // payload.translations (copiées telles quelles). Au niveau document :
+  // voiceTranscriptions (racine v1) → sound.transcriptions — en créant
+  // `sound: { source: { t: 'original' }, volume: 1 }` si aucune piste de
+  // bibliothèque n'existe mais que des transcriptions sont présentes.
 ```
 
 - [ ] **Step 4: Générer PUIS geler le golden** (procédure rév. 1 : écrire une fois, relire À LA MAIN chaque mapping de la table §C2, retirer l'écriture, décommenter le test GOLDEN).
@@ -346,7 +411,7 @@ if (nested.storyEffects != null) {
 
 ---
 
-### Task A5: Écriture stricte — 426 pour le PASSÉ, 400 pour le CASSÉ
+### Task A5: Écriture stricte — 426 pour le PASSÉ, 400 pour le CASSÉ, le tout SOUS DRAPEAU (O15)
 
 **Files:**
 - Create: `services/gateway/src/utils/appVersion.ts` (constantes + comparateur — créées ICI car A5 les consomme)
@@ -357,11 +422,21 @@ if (nested.storyEffects != null) {
 **Interfaces:**
 - Produces — contrat d'erreur **À LA RACINE**, forme réelle de `sendError` (`response.ts:83-89`) :
   `{ success:false, error:'…', message:'…', code:'UPGRADE_REQUIRED', minVersion:'…', storeUrl:'…' }` (426)
+  — `storeUrl` résolu par l'en-tête `X-App-Platform` (`ios` → App Store,
+  `android` → Play Store ; absent ⇒ Apple par défaut — rév. 4 G1 : Android est
+  un client v1 complet, un lien Apple sur son 426 serait absurde)
   et `{ success:false, error:'…', code:'CANVAS_INVALID', issues:[…] }` (400, via `options.details = { issues }`).
   C'est CE contrat que les lots C et F lisent — spec §C3 amendée en conformité.
 - Règle (spec §C3 rév. 2) : blob **sans `v:3`** ⇒ 426 (client du passé) ; blob **avec `v:3` invalide** ⇒ 400 (client neuf cassé — l'inviter à « se mettre à jour » serait un mensonge).
+- **Règle rév. 4 (revue totale C5) : TOUTE la validation stricte vit derrière
+  `CANVAS_V3_WRITE_STRICT` (env, défaut OFF)** — au merge de A, AUCUN écrivain
+  n'émet v3 (100 % du parc iOS, `StoryComposer.tsx:252` web, Android) : un 426
+  inconditionnel serait une panne totale de création de story au jour J.
+  Drapeau OFF ⇒ le blob v1 passe TEL QUEL (comportement actuel intact) ;
+  l'armement est un acte de déploiement, postérieur aux trois écrivains v3
+  (iOS lot C large, web F5b, Android). Symétrique exact de `CANVAS_V3_READ`.
 
-- [ ] **Step 1: Tests rouges** — (1) v1-shaped ⇒ 426, `body.code === 'UPGRADE_REQUIRED'`, `body.minVersion` présent À LA RACINE ; (2) `v:3` + kind réservé ⇒ 400, `body.code === 'CANVAS_INVALID'`, `body.issues` contient `KIND_RESERVED` ; (3) v3 valide (fixture minimal-text) ⇒ 201 puis GET rend le blob `toEqual` ; (4) mêmes gardes sur `PUT /posts/:id`.
+- [ ] **Step 1: Tests rouges** — les cas (1)-(4) s'exécutent DRAPEAU ARMÉ (`CANVAS_V3_WRITE_STRICT=1` posé/reset par test, même pattern que CANVAS_V3_READ en A4) : (1) v1-shaped ⇒ 426, `body.code === 'UPGRADE_REQUIRED'`, `body.minVersion` présent À LA RACINE ; (2) `v:3` + kind réservé ⇒ 400, `body.code === 'CANVAS_INVALID'`, `body.issues` contient `KIND_RESERVED` ; (3) v3 valide (fixture minimal-text) ⇒ 201 puis GET rend le blob `toEqual` ; (4) mêmes gardes sur `PUT /posts/:id` ; **(5) drapeau OFF (défaut) : le blob v1-shaped de (1) ⇒ 201 — le merge est INERTE à l'écriture.**
 - [ ] **Step 2: Rouge.**
 - [ ] **Step 3: Implémenter** :
 
@@ -441,6 +516,24 @@ Garde dans `core.ts` (création avec `storyEffects` présent OU `type === 'STORY
 ### Task A7: Claim des stickers posés (O8) — inchangé (rév. 1)
 
 Un objet `sticker`/`media` du canvas dont `payload.mediaId`/`payload.postMediaId` est une chaîne DOIT appartenir à `body.mediaIds` ⇒ sinon 400 `MEDIA_NOT_CLAIMED`. Le claim lui-même reste `claimableMediaWhere` — jamais dupliqué. Test rouge → implémentation → vert → commit.
+
+---
+
+### Task A7b: Le pipeline de traduction des objets texte parle v3 (revue totale C6)
+
+**Files:**
+- Modify: `services/gateway/src/services/posts/StoryTextObjectTranslationService.ts` (persistance `:98` : `storyEffects.textObjects.$i.translations.$lang` — chemin v1 MORT dans un document v3 ; trigger et broadcast alentour)
+- Test: `services/gateway/src/__tests__/unit/services/posts/storyTextObjectTranslationV3.test.ts`
+
+**Interfaces:**
+- Consomme : `isCanvasV3` (A3), `CANVAS_V3_WRITE_STRICT` (A5).
+- Règle : sur un document `v:3`, la traduction d'un objet texte persiste dans
+  `storyEffects.scenes.$s.objects.$o.payload.translations.$lang` (l'objet ciblé
+  par id, jamais par index aveugle) ; sur un blob v1 (drapeau OFF, archive), le
+  chemin actuel reste inchangé. Le broadcast conserve sa forme.
+
+- [ ] **Step 1: Tests rouges** — (1) post v3 en base + traduction reçue ⇒ le `$set` Mongo vise `scenes.0.objects.<idx>.payload.translations.en` (l'index résolu par id d'objet) ; (2) post v1 ⇒ le `$set` actuel `textObjects.<i>.translations.en` inchangé (non-régression) ; (3) le trigger se déclenche pour un doc v3 dont un objet text a du contenu (aujourd'hui il lit `effects.textObjects` — vérifié `PostService.ts:381-394`) ; (4) l'index de recherche composé (`composeStoryContent`) intègre les textes v3.
+- [ ] **Step 2: Rouge. Step 3: Implémenter** — un résolveur de chemin unique `translationSetPath(blob, objectId, lang)` testé à sec, branché aux deux écritures ; le trigger énumère `textes = blob v3 ? scenes[].objects[kind=text] : textObjects`. **Step 4: Vert. Step 5: Commit.**
 
 ---
 
