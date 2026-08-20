@@ -24,7 +24,7 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
-import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3 } from '../../services/posts/storyEffectsV3';
+import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 /**
@@ -121,6 +121,31 @@ function rejectNonV3StoryEffects(
   return false;
 }
 
+/**
+ * Claim des stickers posés (spec O8, tâche A7) — même drapeau que l'écriture
+ * stricte. Un objet `sticker`/`media` du canvas v3 qui référence un média par
+ * id (`payload.mediaId`/`payload.postMediaId`) doit appartenir à
+ * `body.mediaIds` : c'est ce qui l'expose au claim de propriété réel —
+ * `claimableMediaWhere` dans PostService, jamais dupliqué ici. Création
+ * uniquement : à l'édition, le canvas référence légitimement des médias déjà
+ * attachés au post (hors de `body.mediaIds` par contrat tri-état).
+ * Rend `true` si le 400 est parti (l'appelant sort).
+ */
+function rejectUnclaimedCanvasMedia(
+  reply: FastifyReply,
+  storyEffects: unknown,
+  mediaIds: readonly string[] | undefined
+): boolean {
+  if (process.env.CANVAS_V3_WRITE_STRICT !== '1') return false;
+  const unclaimed = unclaimedCanvasMediaIds(storyEffects, mediaIds ?? []);
+  if (unclaimed.length === 0) return false;
+  sendBadRequest(reply, 'Canvas references media outside the claimed set', {
+    code: 'MEDIA_NOT_CLAIMED',
+    details: { mediaIds: unclaimed },
+  });
+  return true;
+}
+
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
@@ -178,6 +203,10 @@ export function registerCoreRoutes(
       }
 
       if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {
+        return;
+      }
+
+      if (rejectUnclaimedCanvasMedia(reply, parsed.data.storyEffects, parsed.data.mediaIds)) {
         return;
       }
 

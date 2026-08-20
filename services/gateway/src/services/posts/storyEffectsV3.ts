@@ -201,6 +201,42 @@ export function convertV1ToV3(
   return doc;
 }
 
+/**
+ * Claim des stickers posés (spec O8) — un objet `sticker`/`media` du canvas
+ * v3 qui référence un média par id (`payload.mediaId`/`payload.postMediaId`,
+ * chaîne non vide) doit le CLAIMER via `body.mediaIds`. Rend les ids
+ * référencés qui MANQUENT à la liste claimée, dédupliqués, dans l'ordre de
+ * scène. La propriété du média reste jugée par `claimableMediaWhere`
+ * (PostService) — jamais dupliquée ici : cette fonction ne juge que
+ * l'appartenance. Blob non-v3 ⇒ [] (l'archive v1 n'est pas concernée).
+ */
+const CLAIM_BEARING_KINDS: ReadonlySet<string> = new Set(['sticker', 'media']);
+const CLAIM_PAYLOAD_KEYS = ['mediaId', 'postMediaId'] as const;
+
+export function unclaimedCanvasMediaIds(
+  blob: unknown,
+  claimedMediaIds: readonly string[]
+): string[] {
+  if (!isCanvasV3(blob)) return [];
+  const claimed = new Set(claimedMediaIds);
+  const unclaimed: string[] = [];
+  for (const scene of asArray((blob as { scenes?: unknown }).scenes)) {
+    for (const object of asArray(scene.objects)) {
+      if (typeof object.kind !== 'string' || !CLAIM_BEARING_KINDS.has(object.kind)) continue;
+      const payload = typeof object.payload === 'object' && object.payload !== null
+        ? (object.payload as Record<string, unknown>)
+        : {};
+      for (const key of CLAIM_PAYLOAD_KEYS) {
+        const id = str(payload[key]);
+        if (id !== undefined && !claimed.has(id) && !unclaimed.includes(id)) {
+          unclaimed.push(id);
+        }
+      }
+    }
+  }
+  return unclaimed;
+}
+
 export function convertStoryEffectsForWire(effects: unknown): unknown {
   if (effects == null) return effects;
   if (isCanvasV3(effects)) return effects;
