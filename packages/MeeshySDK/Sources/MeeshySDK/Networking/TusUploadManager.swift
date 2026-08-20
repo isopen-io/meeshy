@@ -75,13 +75,32 @@ public actor TusUploadManager {
     nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
+    private let urlSession: URLSession
+    private let checkpointStore: TusUploadCheckpointStore
+    /// Recovery from a stale bearer token mid-PATCH (single-session policy —
+    /// the server no longer catches an expired JWT with the session-token
+    /// fallback). Delegates to the SAME refresh entry point `APIClient` uses
+    /// (`AuthManager.refreshSession(force:)`) rather than reimplementing it —
+    /// injectable so tests can stub success/failure without touching the
+    /// real `AuthManager.shared` singleton.
+    private let refreshAuthSession: @Sendable (_ force: Bool) async throws -> String
 
     public nonisolated var progressPublisher: AnyPublisher<UploadQueueProgress, Never> {
         progressSubject.eraseToAnyPublisher()
     }
 
-    public init(baseURL: URL) {
+    public init(
+        baseURL: URL,
+        urlSession: URLSession = .shared,
+        checkpointStore: TusUploadCheckpointStore = .shared,
+        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String = { force in
+            try await AuthManager.shared.refreshSession(force: force)
+        }
+    ) {
         self.baseURL = baseURL
+        self.urlSession = urlSession
+        self.checkpointStore = checkpointStore
+        self.refreshAuthSession = refreshAuthSession
     }
 
     deinit {
@@ -199,7 +218,12 @@ public actor TusUploadManager {
         }
     }
 
-    private func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
+    /// `internal` (not `private`) so `MeeshySDKTests` can drive the PATCH
+    /// state machine directly — the same rationale as `sha256Hex` below:
+    /// a pure-enough I/O sequence exercised without going through
+    /// `uploadFile`'s queue/background-task ceremony.
+    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
+        var credential = credential
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
@@ -209,7 +233,7 @@ public actor TusUploadManager {
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
         let checkpointKey = try Self.sha256Hex(of: fileURL)
-        let store = TusUploadCheckpointStore.shared
+        let store = checkpointStore
 
         // Step 1: Resolve patchURL — either resume from a stored checkpoint
         // or POST a fresh upload session.
@@ -274,6 +298,12 @@ public actor TusUploadManager {
         }
         fileHandle.seek(toFileOffset: UInt64(offset))
 
+        // Retry budget for an authentication refusal (401) — EXACTLY one
+        // refresh-and-retry per upload attempt. A second 401 after that
+        // retry is definitive: hammering the server on an unrecoverable
+        // token would be worse than surfacing the failure.
+        var hasRetriedAfterAuthRefusal = false
+
         while offset < fileSize {
             let remaining = fileSize - offset
             let readSize = min(Int64(chunkSize), remaining)
@@ -289,7 +319,7 @@ public actor TusUploadManager {
             patchReq.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
             patchReq.httpBody = chunk
 
-            let (responseData, patchResponse) = try await URLSession.shared.data(for: patchReq)
+            let (responseData, patchResponse) = try await urlSession.data(for: patchReq)
             guard let patchHttp = patchResponse as? HTTPURLResponse else {
                 throw URLError(.badServerResponse)
             }
@@ -351,6 +381,39 @@ public actor TusUploadManager {
                 offset = serverOffset
                 await store.updateOffset(checkpointKey: checkpointKey, offset: serverOffset)
 
+            case 401:
+                // Stale bearer token mid-upload. Unlike an ordinary API call
+                // through `APIClient`, PATCH gets a flat 401 here — the
+                // single-session policy means the server no longer catches
+                // an expired JWT with a session-token fallback. Only a
+                // Bearer credential is refreshable (an anonymous
+                // `X-Session-Token` has no refresh mechanism, and calling
+                // `AuthManager` for it would be meaningless — or worse,
+                // would touch an unrelated logged-in session on the same
+                // device). Refresh EXACTLY once, then re-anchor on the
+                // server's own reported offset (HEAD, same recovery call as
+                // the 409 branch) rather than trust the local `offset` —
+                // resuming from a diverged local counter, or restarting the
+                // whole session, are both worse than the defect this fixes.
+                guard credential.isAccount, !hasRetriedAfterAuthRefusal else {
+                    Self.logger.error("PATCH 401 at offset \(offset, privacy: .public) — no retry available, failing definitively")
+                    throw MeeshyError.auth(.sessionExpired)
+                }
+                hasRetriedAfterAuthRefusal = true
+                Self.logger.warning("PATCH 401 at offset \(offset, privacy: .public) — refreshing session and retrying once")
+                let freshToken: String
+                do {
+                    freshToken = try await refreshAuthSession(true)
+                } catch {
+                    Self.logger.error("PATCH 401 recovery — session refresh failed, failing definitively")
+                    throw MeeshyError.auth(.sessionExpired)
+                }
+                credential = .bearer(freshToken)
+                let serverOffset = try await headOffset(patchURL: patchURL, credential: credential)
+                fileHandle.seek(toFileOffset: UInt64(serverOffset))
+                offset = serverOffset
+                await store.updateOffset(checkpointKey: checkpointKey, offset: serverOffset)
+
             case 404, 410:
                 // Server has GC'd this upload session. Drop the checkpoint
                 // and surface a retryable error so the caller (queue) can
@@ -398,7 +461,7 @@ public actor TusUploadManager {
         }
         createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 
-        let (_, createResponse) = try await URLSession.shared.data(for: createReq)
+        let (_, createResponse) = try await urlSession.data(for: createReq)
         guard let httpResponse = createResponse as? HTTPURLResponse,
               httpResponse.statusCode == 201,
               let location = httpResponse.value(forHTTPHeaderField: "Location") else {
@@ -416,7 +479,7 @@ public actor TusUploadManager {
         req.httpMethod = "HEAD"
         req.setValue(credential.value, forHTTPHeaderField: credential.header)
         req.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-        let (_, resp) = try await URLSession.shared.data(for: req)
+        let (_, resp) = try await urlSession.data(for: req)
         guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
