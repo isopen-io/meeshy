@@ -179,17 +179,19 @@ describe('SharedConversationExperience — un écran, trois rendus', () => {
     expect(view.closest('.h-\\[100dvh\\]')).not.toBeNull();
   });
 
-  // Un invité anonyme sans droit fichier NI droit image ne doit jamais voir
-  // de trombone ni de bandeau — le composer se charge de la restitution
-  // (couvert par message-composer.test.tsx). Ici, le maillon vérifié est le
-  // passage des deux booléens du lien jusqu'à `BubbleStreamPage`.
+  // Un invité anonyme avec droits asymétriques : images OUI, fichiers NON.
+  // Le mapper vérifié est le passage des deux booléens du lien jusqu'à
+  // `BubbleStreamPage` (couvert par message-composer.test.tsx pour les
+  // conséquences visuelles). Ici on vérifie que `allowAnonymousImages` →
+  // `canSendImages` et `allowAnonymousFiles` → `canSendFiles` — une inversion
+  // ferait échouer ce test asymétrique contrairement à une fixture symétrique.
   it('threads the link attachment rights to the live shared view as booleans', async () => {
     mockGetConversationData.mockResolvedValue(
       makeLinkData({
         link: {
           ...makeLinkData().link,
           allowAnonymousFiles: false,
-          allowAnonymousImages: false,
+          allowAnonymousImages: true,
         },
         currentUser: {
           id: 'anon-1',
@@ -207,7 +209,7 @@ describe('SharedConversationExperience — un écran, trois rendus', () => {
     const view = await screen.findByTestId('live-shared-view');
     expect(view).toHaveAttribute(
       'data-attachment-permissions',
-      JSON.stringify({ canSendImages: false, canSendFiles: false })
+      JSON.stringify({ canSendImages: true, canSendFiles: false })
     );
   });
 
