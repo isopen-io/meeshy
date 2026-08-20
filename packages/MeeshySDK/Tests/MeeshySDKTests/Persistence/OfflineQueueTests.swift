@@ -67,6 +67,57 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertNil(item.attachmentIds)
     }
 
+    // MARK: - Fan-out de partage
+
+    /// La ligne d'outbox porte un identifiant LOCAL (le `clientMessageId` de
+    /// la cible d'origine), pas un identifiant serveur : au moment de
+    /// l'enfilage, l'origine n'a pas encore été envoyée. Le dispatcher le
+    /// résoudra en identifiant serveur au moment de partir.
+    func test_item_carriesCopyAttachmentsFromClientMessageId() throws {
+        let item = OfflineQueueItem(
+            conversationId: "conv-2", content: "bonjour",
+            clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromClientMessageId: "cid_abc_t0")
+
+        XCTAssertEqual(item.copyAttachmentsFromClientMessageId, "cid_abc_t0")
+        XCTAssertNil(item.forwardedFromId,
+                     "un partage multi-destinataires COPIE, il ne transfère jamais")
+        XCTAssertNil(item.attachmentIds,
+                     "réutiliser les ids DÉPLACERAIT les pièces jointes du premier destinataire")
+    }
+
+    func test_item_roundTripsCopyAttachmentsFromClientMessageId() throws {
+        let item = OfflineQueueItem(
+            conversationId: "conv-2", content: "bonjour",
+            clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromClientMessageId: "cid_abc_t0")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(
+            OfflineQueueItem.self, from: try encoder.encode(item))
+        XCTAssertEqual(decoded.copyAttachmentsFromClientMessageId, "cid_abc_t0")
+    }
+
+    /// Les lignes déjà sur le disque des utilisateurs doivent continuer à
+    /// décoder sans migration — même convention que `attachmentKinds` et
+    /// `localAudioPaths`.
+    func test_item_decodesLegacyRowsWithoutTheNewField() throws {
+        let legacy = Data("""
+        {"id":"o1","clientMessageId":"cid_x","conversationId":"c1","content":"hi",\
+        "createdAt":"2026-08-19T10:00:00Z"}
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(OfflineQueueItem.self, from: legacy)
+
+        XCTAssertNil(decoded.copyAttachmentsFromClientMessageId)
+    }
+
     // MARK: - OfflineQueueItem Codable
 
     func test_item_codableRoundtrip() throws {

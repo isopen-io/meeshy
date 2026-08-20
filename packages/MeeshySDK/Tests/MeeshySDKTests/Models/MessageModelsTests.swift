@@ -407,4 +407,57 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertEqual(post.previewText, "legacy")
         XCTAssertEqual(post.shareCount, 0) // défaut quand absent
     }
+
+    // MARK: - Fan-out de partage : copier, jamais transférer
+
+    private func encodedKeys(_ request: SendMessageRequest) throws -> Set<String> {
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        return Set(json.keys)
+    }
+
+    /// La diffusion multi-destinataires d'un partage crée des messages qui
+    /// COPIENT les pièces jointes du premier — jamais des transferts. Un
+    /// transfert ferait afficher « Transféré depuis <conversation source> »
+    /// aux destinataires suivants : partager vers « Famille » puis
+    /// « Collègues » révélerait « Famille » aux collègues.
+    func test_sendMessageRequest_carriesCopyAttachmentsFromMessageId() throws {
+        let request = SendMessageRequest(
+            content: "bonjour", clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromMessageId: "srv1")
+
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(json["copyAttachmentsFromMessageId"] as? String, "srv1")
+    }
+
+    func test_sendMessageRequest_withCopyMode_carriesNoForwardMetadata() throws {
+        let keys = try encodedKeys(SendMessageRequest(
+            content: "bonjour", clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromMessageId: "srv1"))
+
+        XCTAssertFalse(keys.contains("forwardedFromId"),
+                       "un destinataire ne doit JAMAIS voir « Transféré depuis … »")
+        XCTAssertFalse(keys.contains("forwardedFromConversationId"))
+    }
+
+    /// Réutiliser les mêmes `attachmentIds` les DÉPLACERAIT
+    /// (`associateAttachmentsToMessage` est un `updateMany`) : le premier
+    /// destinataire perdrait ses pièces jointes.
+    func test_sendMessageRequest_withCopyMode_carriesNoAttachmentIds() throws {
+        let keys = try encodedKeys(SendMessageRequest(
+            content: nil, clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromMessageId: "srv1"))
+
+        XCTAssertFalse(keys.contains("attachmentIds"))
+        XCTAssertTrue(keys.contains("copyAttachmentsFromMessageId"))
+    }
+
+    func test_sendMessageRequest_withoutCopyMode_omitsTheKeyEntirely() throws {
+        let keys = try encodedKeys(SendMessageRequest(content: "bonjour"))
+
+        XCTAssertFalse(keys.contains("copyAttachmentsFromMessageId"),
+                       "un optionnel nil ne doit pas partir en `null`")
+    }
 }

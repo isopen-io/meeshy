@@ -605,8 +605,19 @@ public struct SendMessageRequest: Encodable, Sendable {
     /// `location` passé à `parseSharedPlace`). L'encodage synthétisé omet les
     /// optionnels nil : un `location` nil n'apparaît PAS dans le corps envoyé.
     public var location: SharedPlace?
+    /// Fan-out de partage — clé JSON `copyAttachmentsFromMessageId`. Le serveur
+    /// crée de NOUVELLES `MessageAttachment` pointant les MÊMES fichiers
+    /// (`filePath`/`fileUrl`) que celles du message source, **sans** écrire
+    /// `forwardedFromId` : aucun destinataire ne voit de badge « Transféré
+    /// depuis … ». Réutiliser les `attachmentIds` de la source les
+    /// DÉPLACERAIT (`associateAttachmentsToMessage` est un `updateMany`,
+    /// `AttachmentService.ts:161-173`), ce qui les retirerait au premier
+    /// destinataire. Contrat serveur :
+    /// `docs/superpowers/plans/2026-08-19-forward-reach.md` Task 5.
+    /// L'encodage synthétisé omet les optionnels nil.
+    public var copyAttachmentsFromMessageId: String?
 
-    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil) {
+    public init(content: String?, originalLanguage: String? = nil, replyToId: String? = nil, storyReplyToId: String? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, expiresAt: Date? = nil, ephemeralDuration: Int? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, effectFlags: UInt32? = nil, isEncrypted: Bool? = nil, encryptionMode: String? = nil, clientMessageId: String? = nil, location: SharedPlace? = nil, copyAttachmentsFromMessageId: String? = nil) {
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
         self.content = content; self.originalLanguage = originalLanguage
         self.replyToId = replyToId; self.storyReplyToId = storyReplyToId; self.forwardedFromId = forwardedFromId
@@ -616,6 +627,7 @@ public struct SendMessageRequest: Encodable, Sendable {
         self.isBlurred = isBlurred; self.effectFlags = effectFlags
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.location = location
+        self.copyAttachmentsFromMessageId = copyAttachmentsFromMessageId
     }
 }
 

@@ -60,6 +60,15 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// disque des utilisateurs continuent à décoder sans migration (même
     /// convention que `attachmentKinds` / `localAudioPaths`).
     public let location: SharedPlace?
+    /// Fan-out de partage — le `clientMessageId` LOCAL de la cible qui porte
+    /// les octets. Au moment de l'enfilage, cette cible n'a pas encore été
+    /// envoyée : son identifiant SERVEUR n'existe pas. `OutboxDispatcher` le
+    /// résout au moment de partir (`PendingIdRecord`) et, à défaut, réessaie
+    /// plus tard. `nil` pour tout message ordinaire ET pour les lignes écrites
+    /// avant ce champ — décodé en `decodeIfPresent` pour que les payloads déjà
+    /// sur le disque des utilisateurs continuent à décoder sans migration
+    /// (même convention que `attachmentKinds` / `localAudioPaths`).
+    public let copyAttachmentsFromClientMessageId: String?
     public let createdAt: Date
 
     public init(
@@ -75,7 +84,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPath: String? = nil,
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        copyAttachmentsFromClientMessageId: String? = nil
     ) {
         self.id = UUID().uuidString
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -91,6 +101,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
         self.location = location
+        self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.createdAt = Date()
     }
 
@@ -111,6 +122,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
         location: SharedPlace? = nil,
+        copyAttachmentsFromClientMessageId: String? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -127,6 +139,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
         self.location = location
+        self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.createdAt = createdAt
     }
 
@@ -145,6 +158,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case localAudioPaths
         case localMediaPaths
         case location
+        case copyAttachmentsFromClientMessageId
         case createdAt
     }
 
@@ -165,6 +179,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
         // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
         self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
+        self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
@@ -184,6 +199,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
         try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
         try c.encodeIfPresent(location, forKey: .location)
+        try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)
         try c.encode(createdAt, forKey: .createdAt)
     }
 }
@@ -1910,6 +1926,10 @@ public actor OfflineQueue {
                         // L'édition ne porte que le texte : le lieu du send en
                         // attente est conservé, pas silencieusement perdu.
                         location: item.location,
+                        // Idem pour le fan-out de partage : éditer un envoi en
+                        // attente ne doit pas lui faire perdre sa copie de
+                        // pièces jointes.
+                        copyAttachmentsFromClientMessageId: item.copyAttachmentsFromClientMessageId,
                         createdAt: item.createdAt
                     )
                     let mergedPayload: Data
