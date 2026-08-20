@@ -9,7 +9,6 @@ import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { parseUserAgent } from '../services/GeoIPService';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -87,74 +86,43 @@ export type UnifiedAuthRequest = FastifyRequest & {
 
 // ===== REPLI PAR SESSION DE CONFIANCE =====
 
-export type ApplicationSignal = 'web' | 'native' | null;
-
 /**
- * Classifie un couple (User-Agent brut, nom de navigateur reconnu) en
- * signal d'application — task-1-fix-round-5, décision produit « une
- * application à la fois » : le repli de session de confiance ne doit
- * rattraper un JWT expiré que si les deux justificatifs proviennent de LA
- * MÊME application (jamais web ↔ mobile).
+ * Retrouve une session de confiance ACTIVE, liée au MÊME `userId`, pour ce
+ * jeton de session — politique UNIQUE partagée par tout appelant qui a
+ * besoin d'identifier « quelle session de confiance appuie ce jeton de
+ * session » (aujourd'hui : `POST /refresh`, `routes/auth/magic-link.ts`,
+ * pour glisser la fenêtre d'expiration de la session — cf. sa propre
+ * documentation).
  *
- * `'web'` = navigateur reconnu (`browserName` peuplé) ; `'native'` =
- * application iOS/Android (aucun navigateur reconnu) ; `null` =
- * indéterminable (aucun User-Agent capturé) — le seul état où la prudence
- * du round 5 s'applique : refuser plutôt qu'accorder.
+ * task-1-fix-round-6 (décision du propriétaire, après clarification d'une
+ * mauvaise lecture au round 5) : « une forme de connexion à la fois »,
+ * jamais « une application à la fois » — être connecté depuis plusieurs
+ * applications (web + iOS + Android) à la fois est un usage EXPLICITEMENT
+ * légitime. Le round 5 avait ajouté ici une comparaison d'application
+ * (`classifyApplicationSignal`) qui pénalisait cet usage sans jamais rien
+ * protéger — une revue adverse a démontré, par exécution, qu'elle reposait
+ * sur un `User-Agent` librement falsifiable. Retirée : cette fonction ne
+ * discrimine plus JAMAIS sur `userAgent`/`browserName`.
  *
- * Discriminant choisi après vérification EMPIRIQUE (`ua-parser-js`, le même
- * parseur que `GeoIPService.parseUserAgent`, qui peuple déjà
- * `UserSession.browserName` à la création — aucune logique dupliquée) :
- * - iOS (`URLSession` par défaut, aucun override) → `"Meeshy/1
- *   CFNetwork/1408.0.4 Darwin/22.5.0"` → AUCUN navigateur détecté.
- * - Android (OkHttp par défaut) → `"okhttp/4.12.0"` → AUCUN navigateur
- *   détecté.
- * - Web mobile (Safari sur iPhone) → `browser.name: "Mobile Safari"`.
- * - Web desktop (Chrome/Firefox/…) → `browser.name` toujours peuplé.
- *
- * `browserName` sépare donc PARFAITEMENT ces quatre cas réels, alors que
- * `deviceType`/`isMobile` ne le peuvent PAS : Safari mobile ET l'app iOS
- * native obtiennent toutes deux `isMobile: true` (forme de l'appareil, pas
- * nature de l'application) — `GeoIPService.mergeClientHeaders` force
- * `type: 'mobile'` sur `X-Meeshy-Platform: ios` SANS jamais toucher
- * `browser`. `browserName` (présence/absence), contrairement à une
- * comparaison exacte de chaîne d'agent utilisateur, reste stable d'une mise
- * à jour de navigateur/OS à l'autre — seul `browserVersion` change.
- */
-function classifyApplicationSignal(userAgent: string | null, browserName: string | null): ApplicationSignal {
-  if (!userAgent) return null;
-  return browserName ? 'web' : 'native';
-}
-
-/**
- * Politique UNIQUE de repli d'un JWT expiré vers une session de confiance —
- * extraite pour que tout chemin d'upload/route qui n'appelle pas
- * `createAuthContext` directement (task-1-fix-round-3, I3 :
- * `routes/uploads/tus-handler.ts` ; task-1-fix-round-5 : `routes/auth/
- * magic-link.ts`, `POST /refresh`) puisse reprendre EXACTEMENT cette
- * politique plutôt que d'en réinventer une divergente.
- *
- * AVANT (round 3) : `tus-handler.ts` testait `if (authHeader) {…} else if
- * (sessionToken) {…}` — EXCLUSIF. Un `Authorization` présent, même expiré,
- * empêchait TOUJOURS de regarder `X-Session-Token`, alors que le client web
- * envoie délibérément les deux en-têtes (`createAuthHeaders`,
- * `apps/web/lib/token-utils.ts`) précisément pour permettre ce repli.
- *
- * Vérifie deux choses : une session de confiance ACTIVE, liée au MÊME
- * `userId`, existe en base pour ce jeton de session — ET (task-1-fix-round-5)
- * cette session provient de la MÊME application que la requête en cours
- * (`requestUserAgent`). Ne devient jamais un mécanisme d'authentification à
- * lui seul — l'appelant doit déjà savoir QUEL `userId` chercher, et ne doit
- * le faire qu'après avoir constaté une expiration (`jwt.TokenExpiredError`),
- * jamais après une signature invalide : un jeton forgé reste refusé sans
- * recours, qu'une session de confiance existe ou non — la confiance vient de
- * la session, jamais du JWT.
+ * Ce que cette fonction NE fait PLUS (round 6, cf. `middleware/auth.ts`
+ * `createRegisteredUserContext` et `routes/uploads/tus-handler.ts`) : servir
+ * de rattrapage d'un ÉCHEC de vérification de jeton d'authentification (JWT
+ * expiré ou à signature invalide). Le propriétaire a explicitement écarté ce
+ * mélange de deux FORMES de justificatif — un jeton d'authentification et un
+ * jeton de session ne se substituent plus l'un à l'autre nulle part, y
+ * compris pour un jeton expiré. Un jeton forgé (signature invalide) reste,
+ * comme avant, refusé sans aucun recours — la confiance vient exclusivement
+ * de la session, jamais du JWT, mais la session elle-même ne rattrape plus
+ * rien : voir `routes/auth/magic-link.ts` (`POST /refresh`) pour l'unique
+ * endroit où l'expiration d'un JWT authentique reste tolérée — par le JWT
+ * lui-même (`ignoreExpiration`), jamais par un repli de session.
  */
 export async function findTrustedSession(
   prisma: Pick<PrismaClient, 'userSession'>,
-  params: { userId: string; sessionToken: string; requestUserAgent: string | null }
+  params: { userId: string; sessionToken: string }
 ): Promise<{ id: string } | null> {
   const hashedSessionToken = hashSessionToken(params.sessionToken);
-  const session = await prisma.userSession.findFirst({
+  return prisma.userSession.findFirst({
     where: {
       sessionToken: hashedSessionToken,
       userId: params.userId,
@@ -163,20 +131,6 @@ export async function findTrustedSession(
       expiresAt: { gt: new Date() },
     },
   });
-
-  if (!session) return null;
-
-  const requestBrowserName = params.requestUserAgent
-    ? parseUserAgent(params.requestUserAgent)?.browser ?? null
-    : null;
-  const requestSignal = classifyApplicationSignal(params.requestUserAgent, requestBrowserName);
-  const sessionSignal = classifyApplicationSignal(session.userAgent, session.browserName);
-
-  if (requestSignal === null || sessionSignal === null || requestSignal !== sessionSignal) {
-    return null;
-  }
-
-  return { id: session.id };
 }
 
 // ===== SERVICE =====
@@ -189,15 +143,14 @@ export class AuthMiddleware {
 
   async createAuthContext(
     authorizationHeader?: string,
-    sessionToken?: string,
-    requestUserAgent?: string | null
+    sessionToken?: string
   ): Promise<UnifiedAuthContext> {
     const jwtToken = authorizationHeader?.startsWith('Bearer ')
       ? authorizationHeader.slice(7)
       : null;
 
     if (jwtToken) {
-      return this.createRegisteredUserContext(jwtToken, sessionToken, requestUserAgent);
+      return this.createRegisteredUserContext(jwtToken, sessionToken);
     }
 
     if (sessionToken) {
@@ -209,64 +162,41 @@ export class AuthMiddleware {
 
   private async createRegisteredUserContext(
     jwtToken: string,
-    sessionToken?: string,
-    requestUserAgent?: string | null
+    sessionToken?: string
   ): Promise<UnifiedAuthContext> {
     try {
+      // task-1-fix-round-6 — AVANT : un `jwt.TokenExpiredError` accompagné
+      // d'un `sessionToken` retombait sur `jwt.decode` (non vérifié) puis
+      // sur `findTrustedSession` pour rattraper l'expiration. Le propriétaire
+      // a explicitement écarté ce mélange de DEUX FORMES de justificatif —
+      // un jeton d'authentification expiré est désormais refusé ici sans
+      // aucun recours, quelle que soit la session de confiance présentée.
+      // Cette tolérance n'existe plus QUE sur `POST /refresh`
+      // (`routes/auth/magic-link.ts`), la route dont c'est la raison d'être.
       let jwtPayload: Record<string, unknown>;
-      let jwtExpired = false;
 
+      // Cache JWT verification result to avoid repeated HMAC-SHA256 per request
+      const tokenHash = crypto.createHash('sha256').update(jwtToken).digest('hex');
+      const jwtCacheKey = `jwt:v:${tokenHash}`;
+      const cache = getCacheStore();
+      let cachedPayload: Record<string, unknown> | null = null;
       try {
-        // Cache JWT verification result to avoid repeated HMAC-SHA256 per request
-        const tokenHash = crypto.createHash('sha256').update(jwtToken).digest('hex');
-        const jwtCacheKey = `jwt:v:${tokenHash}`;
-        const cache = getCacheStore();
-        let cachedPayload: Record<string, unknown> | null = null;
-        try {
-          const raw = await cache.get(jwtCacheKey);
-          if (raw) cachedPayload = JSON.parse(raw) as Record<string, unknown>;
-        } catch { /* cache miss — proceed to verify */ }
+        const raw = await cache.get(jwtCacheKey);
+        if (raw) cachedPayload = JSON.parse(raw) as Record<string, unknown>;
+      } catch { /* cache miss — proceed to verify */ }
 
-        if (cachedPayload) {
-          jwtPayload = cachedPayload;
-        } else {
-          jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
-          try {
-            await cache.set(jwtCacheKey, JSON.stringify(jwtPayload), JWT_VERIFY_CACHE_TTL);
-          } catch { /* non-fatal */ }
-        }
-      } catch (error) {
-        if (error instanceof jwt.TokenExpiredError && sessionToken) {
-          jwtPayload = jwt.decode(jwtToken) as Record<string, unknown>;
-          jwtExpired = true;
-        } else {
-          throw error;
-        }
+      if (cachedPayload) {
+        jwtPayload = cachedPayload;
+      } else {
+        jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
+        try {
+          await cache.set(jwtCacheKey, JSON.stringify(jwtPayload), JWT_VERIFY_CACHE_TTL);
+        } catch { /* non-fatal */ }
       }
 
       const jwtUserId = jwtPayload.userId as string;
 
-      if (jwtExpired && sessionToken) {
-        const trustedSession = await findTrustedSession(this.prisma, {
-          userId: jwtUserId,
-          sessionToken,
-          requestUserAgent: requestUserAgent ?? null,
-        });
-
-        if (!trustedSession) {
-          throw new Error('JWT expired and no valid trusted session found');
-        }
-
-        this.prisma.userSession.update({
-          where: { id: trustedSession.id },
-          data: { lastActivityAt: new Date() }
-        }).catch(err => {
-          authLogger.warn('Failed to update trusted session lastActivityAt', { err });
-        });
-      }
-
       const cacheKey = `auth:user:${jwtUserId}`;
-      const cache = getCacheStore();
 
       type CachedUserRow = {
         id: string;
@@ -404,7 +334,10 @@ export class AuthMiddleware {
         }
       }
 
-      if (sessionToken && !jwtExpired) {
+      // round 6 — plus de concept de « JWT expiré mais accepté » à ce niveau
+      // (il aurait déjà levé plus haut) : dès qu'on atteint ce point, le JWT
+      // est valide et non expiré. Bookkeeping pur, ne décide jamais rien.
+      if (sessionToken) {
         const hashedSessionToken = hashSessionToken(sessionToken);
         this.prisma.userSession.update({
           where: { sessionToken: hashedSessionToken },
@@ -578,8 +511,7 @@ export function createUnifiedAuthMiddleware(
     try {
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
-        request.headers['x-session-token'] as string,
-        request.headers['user-agent'] as string | undefined
+        request.headers['x-session-token'] as string
       );
 
       if (options.requireAuth && !authContext.isAuthenticated) {
