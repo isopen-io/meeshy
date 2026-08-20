@@ -16,6 +16,7 @@ import {
 import { createAuthHeaders } from '@/utils/token-utils';
 import { buildApiUrl } from '@/lib/config';
 import { logger } from '@/utils/logger';
+import { apiService } from '@/services/api.service';
 
 export class AttachmentService {
   /**
@@ -82,8 +83,27 @@ export class AttachmentService {
       hasMetadata: !!metadataArray
     });
 
-    // Utiliser l'utilitaire pour créer les bons headers d'authentification
-    const authHeaders = createAuthHeaders(token);
+    return AttachmentService.sendUploadRequest(formData, token, onProgress, false);
+  }
+
+  /**
+   * Envoie la requête XHR d'upload. Sur un refus d'authentification (401),
+   * retente EXACTEMENT une fois après un rafraîchissement réussi du jeton —
+   * jamais plus, pour ne pas marteler le serveur sur un jeton irrécupérable.
+   * Un jeton neuf ne sert à rien s'il n'est pas envoyé : les en-têtes sont
+   * reconstruits (jamais réutilisés) avant la nouvelle tentative.
+   */
+  private static sendUploadRequest(
+    formData: FormData,
+    token: string | undefined,
+    onProgress: ((percentage: number, loaded: number, total: number) => void) | undefined,
+    isRetry: boolean
+  ): Promise<UploadMultipleResponse> {
+    // Sur la tentative initiale, on respecte le jeton explicite de l'appelant.
+    // Sur la reprise, on ignore volontairement ce jeton potentiellement
+    // périmé et on laisse createAuthHeaders() résoudre le jeton COURANT
+    // (rafraîchi entre-temps) — c'est la reconstruction des en-têtes.
+    const authHeaders = createAuthHeaders(isRetry ? undefined : token);
 
     // Utiliser XMLHttpRequest pour le progress tracking
     return new Promise((resolve, reject) => {
@@ -136,17 +156,31 @@ export class AttachmentService {
             logger.error('[Attachment]', 'Failed to parse response', { error });
             reject(new Error('Failed to parse response'));
           }
-        } else {
-          logger.error('[Attachment]', 'Upload failed', {
-            status: xhr.status,
-            response: xhr.responseText.substring(0, 500)
+          return;
+        }
+
+        if (xhr.status === 401 && !isRetry) {
+          logger.warn('[Attachment]', 'Upload refusé pour authentification, rafraîchissement puis une seule reprise');
+          apiService.refreshAuthToken().then((refreshed) => {
+            if (!refreshed) {
+              logger.error('[Attachment]', 'Rafraîchissement du jeton échoué, abandon définitif');
+              reject(new Error('Session expirée, veuillez vous reconnecter'));
+              return;
+            }
+            resolve(AttachmentService.sendUploadRequest(formData, token, onProgress, true));
           });
-          try {
-            const error = JSON.parse(xhr.responseText);
-            reject(new Error(error.error || 'Upload failed'));
-          } catch {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
-          }
+          return;
+        }
+
+        logger.error('[Attachment]', 'Upload failed', {
+          status: xhr.status,
+          response: xhr.responseText.substring(0, 500)
+        });
+        try {
+          const error = JSON.parse(xhr.responseText);
+          reject(new Error(error.error || 'Upload failed'));
+        } catch {
+          reject(new Error(`Upload failed with status ${xhr.status}`));
         }
       });
 

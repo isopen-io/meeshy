@@ -134,7 +134,14 @@ class ApiService {
     return headers;
   }
 
-  private async refreshAuthToken(): Promise<boolean> {
+  /**
+   * Rafraîchit le jeton d'authentification, en coalesçant les appels
+   * concurrents sur une seule requête réseau. Public : c'est l'UNIQUE point
+   * de rafraîchissement du dépôt web — les chemins qui contournent `request()`
+   * (upload XHR brut, etc.) doivent l'appeler plutôt que de réimplémenter la
+   * logique de rafraîchissement.
+   */
+  async refreshAuthToken(): Promise<boolean> {
     if (this.isRefreshing && this.refreshPromise) {
       return this.refreshPromise;
     }

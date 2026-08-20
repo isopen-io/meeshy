@@ -1,4 +1,5 @@
 import { AttachmentService } from '@/services/attachmentService';
+import { apiService } from '@/services/api.service';
 import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   getSizeLimit,
@@ -12,6 +13,12 @@ jest.mock('@/lib/config', () => ({
 
 jest.mock('@/utils/token-utils', () => ({
   createAuthHeaders: jest.fn(() => ({ Authorization: 'Bearer test-token' })),
+}));
+
+jest.mock('@/services/api.service', () => ({
+  apiService: {
+    refreshAuthToken: jest.fn(),
+  },
 }));
 
 jest.mock('@meeshy/shared/types/attachment', () => ({
@@ -290,14 +297,17 @@ describe('AttachmentService', () => {
     });
 
     it('rejects with error message from JSON error body on non-2xx response', async () => {
+      // 403 (not 401): a permissions refusal is not an authentication refusal
+      // and must go through the plain non-2xx path, never the refresh+retry one.
       const file = makeFile('photo.jpg', 100);
       const promise = AttachmentService.uploadFiles([file]);
 
-      mockXhrInstance.responseText = JSON.stringify({ error: 'Unauthorized' });
-      mockXhrInstance.status = 401;
+      mockXhrInstance.responseText = JSON.stringify({ error: 'Forbidden' });
+      mockXhrInstance.status = 403;
       mockXhrInstance.triggerEvent('load');
 
-      await expect(promise).rejects.toThrow('Unauthorized');
+      await expect(promise).rejects.toThrow('Forbidden');
+      expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
     });
 
     it('falls back to status-based error when error body is not JSON', async () => {
@@ -539,6 +549,130 @@ describe('AttachmentService', () => {
       mockXhrInstance.triggerEvent('load');
 
       await expect(promise).rejects.toThrow('Upload failed');
+    });
+
+    describe('retry after an authentication refusal', () => {
+      it('does not call refreshAuthToken when the upload succeeds on the first try', async () => {
+        const file = makeFile('photo.jpg', 100);
+        const promise = AttachmentService.uploadFiles([file]);
+
+        mockXhrInstance.responseText = JSON.stringify({ success: true, attachments: [] });
+        mockXhrInstance.status = 200;
+        mockXhrInstance.triggerEvent('load');
+
+        await promise;
+        expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
+      });
+
+      it('does not call refreshAuthToken for a non-401 failure', async () => {
+        const file = makeFile('photo.jpg', 100);
+        const promise = AttachmentService.uploadFiles([file]);
+
+        mockXhrInstance.responseText = JSON.stringify({ error: 'File too large' });
+        mockXhrInstance.status = 413;
+        mockXhrInstance.triggerEvent('load');
+
+        await expect(promise).rejects.toThrow('File too large');
+        expect(apiService.refreshAuthToken).not.toHaveBeenCalled();
+      });
+
+      it('refreshes and retries exactly once on a 401, resolving with the retry response', async () => {
+        (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+        const file = makeFile('photo.jpg', 100);
+        const promise = AttachmentService.uploadFiles([file]);
+
+        // First attempt: refused for authentication.
+        mockXhrInstance.responseText = JSON.stringify({ error: 'Unauthorized' });
+        mockXhrInstance.status = 401;
+        mockXhrInstance.triggerEvent('load');
+
+        // Let the refresh promise + retry scheduling flush.
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+        expect(mockXhrInstance.open).toHaveBeenCalledTimes(2);
+
+        // Retry succeeds.
+        const expected = { success: true, attachments: [{ id: 'att-retried' }] };
+        mockXhrInstance.responseText = JSON.stringify(expected);
+        mockXhrInstance.status = 200;
+        mockXhrInstance.triggerEvent('load');
+
+        const result = await promise;
+        expect(result).toEqual(expected);
+      });
+
+      it('fails definitively on a second 401 without a third attempt', async () => {
+        (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+        const file = makeFile('photo.jpg', 100);
+        const promise = AttachmentService.uploadFiles([file]);
+
+        mockXhrInstance.responseText = JSON.stringify({ error: 'Unauthorized' });
+        mockXhrInstance.status = 401;
+        mockXhrInstance.triggerEvent('load');
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+
+        // Retry is refused again.
+        mockXhrInstance.responseText = JSON.stringify({ error: 'Unauthorized' });
+        mockXhrInstance.status = 401;
+        mockXhrInstance.triggerEvent('load');
+
+        await expect(promise).rejects.toThrow('Unauthorized');
+        // Still only ever refreshed once — no third attempt.
+        expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+        expect(mockXhrInstance.open).toHaveBeenCalledTimes(2);
+      });
+
+      it('rejects immediately when the refresh itself fails, without a retry request', async () => {
+        (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(false);
+        const file = makeFile('photo.jpg', 100);
+        const promise = AttachmentService.uploadFiles([file]);
+
+        mockXhrInstance.responseText = JSON.stringify({ error: 'Unauthorized' });
+        mockXhrInstance.status = 401;
+        mockXhrInstance.triggerEvent('load');
+
+        await expect(promise).rejects.toThrow();
+        expect(apiService.refreshAuthToken).toHaveBeenCalledTimes(1);
+        expect(mockXhrInstance.open).toHaveBeenCalledTimes(1);
+      });
+
+      it('rebuilds the auth headers for the retry instead of resending the stale ones', async () => {
+        const { createAuthHeaders } = jest.requireMock('@/utils/token-utils') as {
+          createAuthHeaders: jest.Mock;
+        };
+        createAuthHeaders
+          .mockReturnValueOnce({ Authorization: 'Bearer stale-token' })
+          .mockReturnValueOnce({ Authorization: 'Bearer fresh-token' });
+        (apiService.refreshAuthToken as jest.Mock).mockResolvedValue(true);
+
+        const file = makeFile('photo.jpg', 100);
+        const promise = AttachmentService.uploadFiles([file], 'stale-token');
+
+        mockXhrInstance.responseText = JSON.stringify({ error: 'Unauthorized' });
+        mockXhrInstance.status = 401;
+        mockXhrInstance.triggerEvent('load');
+
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(createAuthHeaders).toHaveBeenCalledTimes(2);
+        expect(mockXhrInstance.setRequestHeader).toHaveBeenLastCalledWith(
+          'Authorization',
+          'Bearer fresh-token'
+        );
+
+        mockXhrInstance.responseText = JSON.stringify({ success: true, attachments: [] });
+        mockXhrInstance.status = 200;
+        mockXhrInstance.triggerEvent('load');
+
+        await promise;
+      });
     });
   });
 
