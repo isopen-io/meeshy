@@ -10,7 +10,6 @@ import {
   UPLOAD_LIMITS,
 } from '@meeshy/shared/types/attachment';
 import jwt from 'jsonwebtoken';
-import { findTrustedSession } from '../../middleware/auth';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
@@ -70,21 +69,17 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
    * `onIncomingRequest` (task-1-fix-round-3, I1 : compare l'appelant au
    * propriétaire déjà figé, sur GET/HEAD/PATCH/DELETE d'un upload existant).
    *
-   * Le repli JWT expiré → session de confiance (task-1-fix-round-3, I3)
-   * s'applique aux DEUX call sites à dessein : un téléversement long — le cas
-   * d'usage même de ce protocole resumable — peut voir son JWT expirer
-   * PENDANT une reprise (PATCH), pas seulement à la création. Une identité ne
-   * s'établit jamais par un décodage non vérifié SEUL : seule une expiration
-   * (`jwt.TokenExpiredError` — jsonwebtoken vérifie la signature AVANT
-   * l'expiration, donc ce cas ne passe jamais par une signature invalide)
-   * obtient le repli, et seulement si une session de confiance ACTIVE existe
-   * en base pour ce `userId` précis ET provient de la MÊME application que
-   * la requête en cours (task-1-fix-round-5, « une application à la fois » —
-   * `User-Agent` de la requête transmis à `findTrustedSession`), reprise
-   * TELLE QUELLE de `middleware/auth.ts` (`findTrustedSession`). Une
-   * signature invalide reste refusée sans recours, qu'une session de
-   * confiance existe ou non — la confiance vient de la session, jamais du
-   * JWT.
+   * task-1-fix-round-6 — AVANT (rounds 3 à 5) : un `jwt.TokenExpiredError`
+   * accompagné d'un `X-Session-Token` retombait sur `findTrustedSession`
+   * pour rattraper l'expiration, y compris PENDANT une reprise (PATCH) —
+   * exactement le cas d'usage de ce protocole resumable pour un
+   * téléversement long. Le propriétaire a explicitement écarté ce mélange de
+   * DEUX FORMES de justificatif (« une forme de connexion à la fois ») : un
+   * jeton d'authentification expiré est désormais refusé ici sans aucun
+   * recours, quelle que soit la session de confiance présentée — CONSÉQUENCE
+   * ACCEPTÉE : un téléversement long dont le JWT expire en cours de route
+   * échoue désormais, là où il était rattrapé jusqu'ici. Une signature
+   * invalide (jeton forgé) reste, comme avant, refusée sans aucun recours.
    *
    * Retourne `null` sur tout échec d'authentification — ne lève jamais
    * elle-même : chaque appelant choisit son propre code HTTP.
@@ -93,36 +88,19 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
     const h = headers as any;
     const authHeader = h?.get?.('authorization') ?? h?.authorization;
     const sessionToken = h?.get?.('x-session-token') ?? h?.['x-session-token'];
-    const requestUserAgentRaw = h?.get?.('user-agent') ?? h?.['user-agent'];
-    const requestUserAgent = requestUserAgentRaw ? String(requestUserAgentRaw) : null;
 
     if (authHeader) {
       const token = String(authHeader).replace(/^Bearer\s+/i, '');
-      let jwtPayload: { userId?: string; sub?: string } | null = null;
-      let trustedFallbackUserId: string | null = null;
+      let jwtPayload: { userId?: string; sub?: string };
       try {
         jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: string; sub?: string };
       } catch (err) {
-        if (err instanceof jwt.TokenExpiredError && sessionToken) {
-          const decoded = jwt.decode(token) as { userId?: string; sub?: string } | null;
-          const candidateUserId = decoded?.userId || decoded?.sub || null;
-          const trustedSession = candidateUserId
-            ? await findTrustedSession(prisma, { userId: candidateUserId, sessionToken: String(sessionToken), requestUserAgent })
-            : null;
-
-          if (!trustedSession) {
-            logger.warn('[TUS] Expired JWT with no valid trusted session — rejecting');
-            return null;
-          }
-          trustedFallbackUserId = candidateUserId;
-        } else {
-          logger.warn('[TUS] JWT verification failed — rejecting', {
-            reason: err instanceof Error ? err.message : 'unknown',
-          });
-          return null;
-        }
+        logger.warn('[TUS] JWT verification failed — rejecting', {
+          reason: err instanceof Error ? err.message : 'unknown',
+        });
+        return null;
       }
-      const userId = trustedFallbackUserId ?? (jwtPayload!.userId || jwtPayload!.sub || null);
+      const userId = jwtPayload.userId || jwtPayload.sub || null;
       if (!userId) return null;
       return { userId, isAnonymous: false, anonymousShareLinkId: null };
     }
