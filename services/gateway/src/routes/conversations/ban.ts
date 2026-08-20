@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
+import { presentMemberCount } from '@meeshy/shared/utils/member-visibility'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
@@ -132,7 +133,7 @@ export function registerBanRoutes(
             // ci-dessous rend ce raisonnement inutile pour qui le lit — le
             // drapeau reste pour les clients qui décomptent encore.
             membershipEnded: ban.membershipEnded,
-            memberCount: remaining.length,
+            ...presentMemberCount(remaining.length),
           },
         })
 
@@ -270,7 +271,7 @@ export function registerBanRoutes(
             // Les compteurs de membres des clients suivent ce champ, pas
             // l'événement.
             membershipRestored: unban.membershipRestored,
-            memberCount: remaining.length,
+            ...presentMemberCount(remaining.length),
           },
         })
       }

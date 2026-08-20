@@ -5,6 +5,8 @@ import {
   resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -320,7 +322,10 @@ export function registerSearchRoutes(
           banner: conversation.banner,
           isActive: conversation.isActive,
           communityId: conversation.communityId,
-          memberCount: (conversation as any)._count?.participants ?? 0,
+          // Cap 199+ : même présentation que la liste et le détail.
+          ...presentMemberCount((conversation as any)._count?.participants ?? 0, {
+            viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+          }),
           // Signal d'appartenance officiel du filtre client (sélecteur de
           // transfert iOS/web) : il remplace une heuristique qui lisait le
           // tableau ci-dessous, tronqué à cinq — donc aveugle dans un salon

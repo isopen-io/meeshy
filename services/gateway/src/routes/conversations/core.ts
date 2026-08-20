@@ -5,6 +5,8 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
   generateDefaultConversationTitle,
@@ -947,7 +949,10 @@ export function registerCoreRoutes(
 
         return {
           ...conversationData,
-          memberCount: activeMembers.participants,
+          // Cap 199+ : l'effectif exact est réservé aux admins plateforme.
+          ...presentMemberCount(activeMembers.participants, {
+            viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+          }),
           participants: membersWithUser,
           title: displayTitle,
           // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
@@ -1210,7 +1215,10 @@ export function registerCoreRoutes(
         ...conversationData,
         participants: gatedParticipants,
         title: displayTitle,
-        memberCount: _count.participants,
+        // Même cap 199+ que la liste : deux surfaces, une seule présentation.
+        ...presentMemberCount(_count.participants, {
+          viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+        }),
         unreadCount
       });
 

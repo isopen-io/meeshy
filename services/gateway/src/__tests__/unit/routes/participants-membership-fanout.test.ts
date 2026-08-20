@@ -238,6 +238,34 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
     expect(joined.payload.memberCount).toBe(4);
   });
 
+  // Le fanout est un broadcast unique vers toute la room : l'effectif y est
+  // plafonné à 199 pour tout le monde (un admin plateforme récupère l'exact au
+  // prochain fetch REST — c'est le compromis du canal partagé).
+  it('plafonne l\'effectif du fanout à 199 avec drapeau au-delà de 199 membres', async () => {
+    emitted = [];
+    prisma = createMockPrisma([
+      { id: 'p-actor', userId: ACTOR_ID },
+      ...Array.from({ length: 249 }, (_, i) => ({ id: `p-big-${i}`, userId: null })),
+    ]);
+    fastify = createMockFastify();
+    registerParticipantsRoutes(fastify as any, prisma, jest.fn(), jest.fn());
+    (fastify as any).socketIOHandler = {
+      getManager: () => ({
+        getIO: () => createRecordingIO(emitted),
+        joinUserToConversationRoom: jest.fn<any>().mockResolvedValue(undefined),
+        invalidateParticipantCache: jest.fn(),
+      }),
+    };
+    (fastify as any).notificationService = createMockNotificationService();
+    prisma.participant.findFirst.mockResolvedValueOnce(actorParticipant('admin')).mockResolvedValue(null);
+
+    await addTarget();
+
+    const joined = emitted.find((e) => e.event === 'conversation:participant-joined')!;
+    expect(joined.payload.memberCount).toBe(199);
+    expect(joined.payload.memberCountCapped).toBe(true);
+  });
+
   it('laisse conversation:joined intact sur la seule room du fil', async () => {
     await addTarget();
 
@@ -308,6 +336,40 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       userId: TARGET_ID,
       displayName: 'Removed User',
     });
+  });
+
+  it('plafonne l\'effectif des restants à 199 avec drapeau au-delà', async () => {
+    emitted = [];
+    prisma = createMockPrisma([
+      { id: 'p-actor', userId: ACTOR_ID },
+      ...Array.from({ length: 249 }, (_, i) => ({ id: `p-big-${i}`, userId: null })),
+    ]);
+    fastify = createMockFastify();
+    registerParticipantsRoutes(fastify as any, prisma, jest.fn(), jest.fn());
+    (fastify as any).socketIOHandler = {
+      getManager: () => ({
+        getIO: () => createRecordingIO(emitted),
+        invalidateParticipantCache: jest.fn(),
+      }),
+    };
+    (fastify as any).notificationService = createMockNotificationService();
+    prisma.participant.findFirst
+      .mockResolvedValueOnce(actorParticipant('creator'))
+      .mockResolvedValue({ id: 'p-removed', displayName: 'Removed User' });
+
+    const route = fastify.routes.find((r) => r.method === 'DELETE')!;
+    await route.handler(
+      {
+        params: { id: CONV_ID, userId: TARGET_ID },
+        authContext: { isAuthenticated: true, isAnonymous: false, userId: ACTOR_ID },
+        server: {},
+      },
+      createMockReply()
+    );
+
+    const left = emitted.find((e) => e.event === 'conversation:participant-left')!;
+    expect(left.payload.memberCount).toBe(199);
+    expect(left.payload.memberCountCapped).toBe(true);
   });
 
   it("n'émet qu'UNE fois — un appareil du retiré resté dans la room ne double pas", async () => {

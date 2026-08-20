@@ -171,6 +171,40 @@ describe('GET /conversations/search — conversations found', () => {
   });
 });
 
+describe('GET /conversations/search — cap 199+ du memberCount', () => {
+  it('plafonne à 199 avec drapeau pour un lecteur non admin plateforme', async () => {
+    const prisma = makePrisma({
+      conversation: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { ...mockConversation, _count: { participants: 250 } },
+        ]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/conversations/search?q=test' });
+    const body = res.json();
+    expect(body.data[0].memberCount).toBe(199);
+    expect(body.data[0].memberCountCapped).toBe(true);
+    await app.close();
+  });
+
+  it('sert l\'effectif exact sans drapeau à un admin plateforme', async () => {
+    const prisma = makePrisma({
+      conversation: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { ...mockConversation, _count: { participants: 250 } },
+        ]),
+      },
+    });
+    const app = await buildApp({ prisma, registeredUser: { role: 'ADMIN' } });
+    const res = await app.inject({ method: 'GET', url: '/conversations/search?q=test' });
+    const body = res.json();
+    expect(body.data[0].memberCount).toBe(250);
+    expect(body.data[0].memberCountCapped).toBeUndefined();
+    await app.close();
+  });
+});
+
 describe('GET /conversations/search — conversation with last message', () => {
   it('returns 200 and includes lastMessage with sender info', async () => {
     const convWithMessage = {

@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
+import { presentMemberCount } from '@meeshy/shared/utils/member-visibility'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
@@ -176,7 +177,7 @@ export function registerLeaveRoutes(
             // manqué (hors ligne, trou de reconnexion) laisse une dérive que
             // rien ne rattrape, et que les deux clients PERSISTENT (cache disque
             // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
-            memberCount: remaining.length,
+            ...presentMemberCount(remaining.length),
           },
         })
 

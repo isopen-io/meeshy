@@ -2,6 +2,12 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import {
+  ACTIVE_MEMBER_LISTING_LIMIT,
+  isMemberListingRestricted,
+  presentMemberCount
+} from '@meeshy/shared/utils/member-visibility';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -22,6 +28,116 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
+
+const participantListUserSelect = {
+  user: {
+    select: {
+      id: true,
+      username: true,
+      firstName: true,
+      lastName: true,
+      displayName: true,
+      avatar: true,
+      role: true,
+      isOnline: true,
+      lastActiveAt: true,
+      systemLanguage: true,
+      regionalLanguage: true,
+      customDestinationLanguage: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  }
+} as const;
+
+type ParticipantActivityStat = {
+  messageCount?: number;
+  lastMessageAt?: string | null;
+};
+
+/**
+ * Listing restreint : les N participants actifs les plus actifs de la
+ * conversation, classés par `ConversationMessageStats.participantStats`
+ * (messageCount puis lastMessageAt — clé `statsAuthorKey` : User.id pour un
+ * inscrit, Participant.id pour un anonyme), complétés par les présents/anciens
+ * quand les stats ne suffisent pas. Filtres et pagination opèrent SUR cette
+ * liste bornée : un simple membre ne peut pas énumérer l'annuaire complet,
+ * ni par curseur ni par recherche.
+ */
+async function loadMostActiveParticipants(options: {
+  prisma: PrismaClient;
+  conversationId: string;
+  filters: { onlineOnly?: string; role?: string; search?: string };
+  cursor?: string;
+  pageLimit: number;
+}): Promise<{ participants: any[]; hasMore: boolean; nextCursor: string | null }> {
+  const { prisma, conversationId, filters, cursor, pageLimit } = options;
+
+  const statsRow = await prisma.conversationMessageStats.findUnique({
+    where: { conversationId },
+    select: { participantStats: true }
+  });
+  const rawStats = statsRow?.participantStats;
+  const parsedStats = ((typeof rawStats === 'string' ? JSON.parse(rawStats) : rawStats) ??
+    {}) as Record<string, ParticipantActivityStat>;
+  const rankedKeys = Object.entries(parsedStats)
+    .sort(
+      ([, a], [, b]) =>
+        (b.messageCount ?? 0) - (a.messageCount ?? 0) ||
+        (b.lastMessageAt ?? '').localeCompare(a.lastMessageAt ?? '')
+    )
+    .map(([key]) => key)
+    .slice(0, ACTIVE_MEMBER_LISTING_LIMIT * 2);
+
+  const ranked = rankedKeys.length > 0
+    ? await prisma.participant.findMany({
+        where: {
+          conversationId,
+          isActive: true,
+          OR: [{ userId: { in: rankedKeys } }, { id: { in: rankedKeys } }]
+        },
+        include: participantListUserSelect
+      })
+    : [];
+
+  const ordered: any[] = [];
+  const taken = new Set<string>();
+  for (const key of rankedKeys) {
+    if (ordered.length >= ACTIVE_MEMBER_LISTING_LIMIT) break;
+    const match = ranked.find((p) => !taken.has(p.id) && (p.userId === key || p.id === key));
+    if (match) {
+      taken.add(match.id);
+      ordered.push(match);
+    }
+  }
+  if (ordered.length < ACTIVE_MEMBER_LISTING_LIMIT) {
+    const fill = await prisma.participant.findMany({
+      where: { conversationId, isActive: true, id: { notIn: [...taken] } },
+      orderBy: [{ isOnline: 'desc' }, { joinedAt: 'asc' }],
+      take: ACTIVE_MEMBER_LISTING_LIMIT - ordered.length,
+      include: participantListUserSelect
+    });
+    ordered.push(...fill);
+  }
+
+  const searchTerm = filters.search?.trim().toLowerCase() ?? '';
+  const filtered = ordered.filter(
+    (p) =>
+      (filters.onlineOnly !== 'true' || p.isOnline) &&
+      (!filters.role || p.role === filters.role.toLowerCase()) &&
+      (!searchTerm || (p.displayName ?? '').toLowerCase().includes(searchTerm))
+  );
+
+  const startIndex = cursor ? filtered.findIndex((p) => p.id === cursor) + 1 : 0;
+  const page = filtered.slice(startIndex, startIndex + pageLimit);
+  const hasMore = startIndex + page.length < filtered.length;
+  return {
+    participants: page,
+    hasMore,
+    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null
+  };
+}
 
 /**
  * Enregistre les routes de gestion des participants
@@ -78,7 +194,8 @@ export function registerParticipantsRoutes(
               properties: {
                 nextCursor: { type: 'string', nullable: true, description: 'Cursor for next page' },
                 hasMore: { type: 'boolean', description: 'Whether there are more results' },
-                totalCount: { type: 'integer', nullable: true, description: 'Total number of participants' }
+                totalCount: { type: 'integer', nullable: true, description: 'Total number of participants (capped at 199 for non platform admins)' },
+                totalCountCapped: { type: 'boolean', nullable: true, description: 'True when totalCount is capped at 199 — display "199+"' }
               }
             }
           }
@@ -105,70 +222,109 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
       }
 
-      const whereConditions: any = {
-        conversationId: conversationId,
-        isActive: true
-      };
-
-      if (onlineOnly === 'true') {
-        whereConditions.isOnline = true;
-      }
-
-      if (role) {
-        whereConditions.role = role.toLowerCase();
-      }
-
-      if (search && search.trim().length > 0) {
-        const searchTerm = search.trim();
-        whereConditions.displayName = {
-          contains: searchTerm,
-          mode: 'insensitive'
-        };
-      }
-
       const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+      const platformRole = authRequest.authContext.registeredUser?.role ?? null;
 
-      // Cursor-based pagination: skip the cursor record, ordered by id for stable pagination
-      const cursorOption = cursor ? { id: cursor } : undefined;
-
-      const participants = await prisma.participant.findMany({
-        where: whereConditions,
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              role: true,
-              isOnline: true,
-              lastActiveAt: true,
-              systemLanguage: true,
-              regionalLanguage: true,
-              customDestinationLanguage: true,
-              isActive: true,
-              createdAt: true,
-              updatedAt: true
-            }
+      // Restriction top-99 : un USER plateforme (ou anonyme) qui n'est que
+      // simple member de la conversation ne voit que les plus actifs — sauf
+      // s'il tient un rôle au-dessus de member dans la communauté hôte
+      // (un admin de communauté supervise TOUS les membres de ses salons).
+      let restricted = false;
+      if (isMemberListingRestricted({ platformRole, conversationRole: null, communityRole: null })) {
+        // Même précédence d'identité que resolveCallerParticipant :
+        // participantId (anonyme) d'abord, userId (inscrit) ensuite.
+        const viewer = await prisma.participant.findFirst({
+          where: authRequest.authContext.participantId
+            ? { id: authRequest.authContext.participantId, conversationId, isActive: true }
+            : { conversationId, userId: authRequest.authContext.userId, isActive: true },
+          select: { id: true, role: true, userId: true }
+        });
+        const conversationRole = viewer?.role ?? null;
+        if (isMemberListingRestricted({ platformRole, conversationRole, communityRole: null })) {
+          let communityRole: string | null = null;
+          const parentCommunity = await prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { communityId: true }
+          });
+          if (parentCommunity?.communityId && viewer?.userId) {
+            const membership = await prisma.communityMember.findFirst({
+              where: {
+                communityId: parentCommunity.communityId,
+                userId: viewer.userId,
+                isActive: true
+              },
+              select: { role: true }
+            });
+            communityRole = membership?.role ?? null;
           }
-        },
-        orderBy: { id: 'asc' },
-        take: pageLimit + 1,
-        ...(cursorOption ? { cursor: cursorOption, skip: 1 } : {})
-      });
+          restricted = isMemberListingRestricted({ platformRole, conversationRole, communityRole });
+        }
+      }
 
-      const hasMore = participants.length > pageLimit;
-      const paginatedParticipants = hasMore ? participants.slice(0, pageLimit) : participants;
-      const nextCursor = hasMore ? paginatedParticipants[paginatedParticipants.length - 1]?.id : null;
+      let paginatedParticipants: any[];
+      let hasMore: boolean;
+      let nextCursor: string | null;
 
-      // Total count for accurate header display
+      if (restricted) {
+        const page = await loadMostActiveParticipants({
+          prisma,
+          conversationId,
+          filters: { onlineOnly, role, search },
+          cursor,
+          pageLimit
+        });
+        paginatedParticipants = page.participants;
+        hasMore = page.hasMore;
+        nextCursor = page.nextCursor;
+      } else {
+        const whereConditions: any = {
+          conversationId: conversationId,
+          isActive: true
+        };
+
+        if (onlineOnly === 'true') {
+          whereConditions.isOnline = true;
+        }
+
+        if (role) {
+          whereConditions.role = role.toLowerCase();
+        }
+
+        if (search && search.trim().length > 0) {
+          const searchTerm = search.trim();
+          whereConditions.displayName = {
+            contains: searchTerm,
+            mode: 'insensitive'
+          };
+        }
+
+        // Cursor-based pagination: skip the cursor record, ordered by id for stable pagination
+        const cursorOption = cursor ? { id: cursor } : undefined;
+
+        const participants = await prisma.participant.findMany({
+          where: whereConditions,
+          include: participantListUserSelect,
+          orderBy: { id: 'asc' },
+          take: pageLimit + 1,
+          ...(cursorOption ? { cursor: cursorOption, skip: 1 } : {})
+        });
+
+        hasMore = participants.length > pageLimit;
+        paginatedParticipants = hasMore ? participants.slice(0, pageLimit) : participants;
+        nextCursor = hasMore ? paginatedParticipants[paginatedParticipants.length - 1]?.id : null;
+      }
+
+      // Total count for accurate header display — même cap 199+ que le
+      // memberCount des conversations : l'effectif exact est réservé aux
+      // admins plateforme.
       const totalCount = await prisma.participant.count({
         where: {
           conversationId: conversationId,
           isActive: true
         }
+      });
+      const presentedTotal = presentMemberCount(totalCount, {
+        viewerSeesExactCount: isGlobalAdmin(platformRole ?? '')
       });
 
       // Présence des co-participants : montrable (co-participation = contexte
@@ -227,7 +383,8 @@ export function registerParticipantsRoutes(
         pagination: {
           nextCursor,
           hasMore,
-          totalCount
+          totalCount: presentedTotal.memberCount,
+          ...(presentedTotal.memberCountCapped ? { totalCountCapped: true } : {})
         }
       });
 
@@ -625,7 +782,10 @@ export function registerParticipantsRoutes(
             // est actif depuis l'écriture juste au-dessus, donc il compte, mais
             // il ne figure pas dans `audience`. Une seconde requête ne rendrait
             // rien de plus.
-            memberCount: audience.length + 1,
+            //
+            // Plafonné à 199 pour TOUTE la room (broadcast unique) : un admin
+            // plateforme récupère l'exact au prochain fetch REST.
+            ...presentMemberCount(audience.length + 1),
           },
         });
       }
@@ -840,7 +1000,8 @@ export function registerParticipantsRoutes(
               leftAt: leftAt.toISOString(),
               // Compte ABSOLU — `remaining` est déjà chargé pour nommer les
               // rooms, et un delta ne rattrape jamais un événement manqué.
-              memberCount: remaining.length
+              // Plafonné à 199 pour toute la room, comme le fanout d'arrivée.
+              ...presentMemberCount(remaining.length)
             }
           });
 

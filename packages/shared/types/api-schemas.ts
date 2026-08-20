@@ -1174,7 +1174,8 @@ export const conversationSchema = {
     // Community
     communityId: { type: 'string', nullable: true, description: 'Parent community ID' },
     isActive: { type: 'boolean', description: 'Conversation is active' },
-    memberCount: { type: 'number', description: 'Number of members (denormalized)' },
+    memberCount: { type: 'number', description: 'Number of members (capped at 199 for non platform admins)' },
+    memberCountCapped: { type: 'boolean', nullable: true, description: 'True when memberCount is capped at 199 — display "199+"' },
 
     // Participants
     participants: {
@@ -1354,7 +1355,8 @@ export const conversationMinimalSchema = {
     banner: { type: 'string', nullable: true, description: 'Banner URL' },
     isActive: { type: 'boolean', description: 'Is conversation active' },
     communityId: { type: 'string', nullable: true, description: 'Community ID if linked' },
-    memberCount: { type: 'number', description: 'Member count' },
+    memberCount: { type: 'number', description: 'Member count (capped at 199 for non platform admins)' },
+    memberCountCapped: { type: 'boolean', nullable: true, description: 'True when memberCount is capped at 199 — display "199+"' },
     lastMessage: { ...messageMinimalSchema, nullable: true, description: 'Last message' },
     lastMessageAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last message timestamp' },
     // Prisme Linguistique de la ligne de liste. Sans ces deux déclarations,

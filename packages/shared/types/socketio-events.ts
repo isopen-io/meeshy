@@ -1572,6 +1572,12 @@ export interface ConversationParticipantBannedEventData {
    * qui décomptent encore.
    */
   readonly memberCount?: number;
+  /**
+   * Vrai quand `memberCount` est plafonné à 199 (cap d'affichage « 199+ »,
+   * broadcast unique pour toute la room). À POSER avec `memberCount` ; absent
+   * quand l'effectif transmis est exact.
+   */
+  readonly memberCountCapped?: boolean;
 }
 
 export interface ConversationParticipantUnbannedEventData {
@@ -1590,6 +1596,12 @@ export interface ConversationParticipantUnbannedEventData {
    * Effectif ACTIF APRÈS la levée, absolu — à poser plutôt qu'à incrémenter.
    */
   readonly memberCount?: number;
+  /**
+   * Vrai quand `memberCount` est plafonné à 199 (cap d'affichage « 199+ »,
+   * broadcast unique pour toute la room). À POSER avec `memberCount` ; absent
+   * quand l'effectif transmis est exact.
+   */
+  readonly memberCountCapped?: boolean;
 }
 
 export interface ConversationParticipantJoinedEventData {
@@ -1612,6 +1624,12 @@ export interface ConversationParticipantJoinedEventData {
    * repli disponible.
    */
   readonly memberCount?: number;
+  /**
+   * Vrai quand `memberCount` est plafonné à 199 (cap d'affichage « 199+ »,
+   * broadcast unique pour toute la room). À POSER avec `memberCount` ; absent
+   * quand l'effectif transmis est exact.
+   */
+  readonly memberCountCapped?: boolean;
 }
 
 export interface ConversationParticipantLeftEventData {
@@ -1626,6 +1644,12 @@ export interface ConversationParticipantLeftEventData {
    * seul repli disponible.
    */
   readonly memberCount?: number;
+  /**
+   * Vrai quand `memberCount` est plafonné à 199 (cap d'affichage « 199+ »,
+   * broadcast unique pour toute la room). À POSER avec `memberCount` ; absent
+   * quand l'effectif transmis est exact.
+   */
+  readonly memberCountCapped?: boolean;
 }
 
 export interface ConversationUpdatedEventData {

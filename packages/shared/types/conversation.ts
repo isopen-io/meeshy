@@ -328,6 +328,12 @@ export interface Conversation {
   readonly isActive: boolean;
   readonly isArchived?: boolean;
   readonly memberCount: number;
+  /**
+   * Vrai quand `memberCount` est plafonné à 199 pour ce lecteur (non admin
+   * plateforme) — les clients affichent « 199+ ». Absent = valeur exacte.
+   * @see utils/member-visibility.ts presentMemberCount()
+   */
+  readonly memberCountCapped?: boolean;
 
   // ===== LEGACY COMPATIBILITY =====
   readonly isGroup?: boolean;

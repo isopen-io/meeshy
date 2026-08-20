@@ -69,6 +69,12 @@ function createMockPrisma() {
     user: {
       findFirst: jest.fn<any>(),
     },
+    conversationMessageStats: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
+    communityMember: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
   } as any;
 }
 
@@ -264,6 +270,10 @@ describe('registerParticipantsRoutes', () => {
   // GET /conversations/:id/participants
   // =========================================================================
   describe('GET /conversations/:id/participants', () => {
+    // MODERATOR plateforme par défaut : un lecteur EXEMPT de la restriction
+    // top-99, pour que les témoins historiques du listing complet (tri id asc,
+    // pagination curseur) gardent leur chemin. Les témoins de la restriction
+    // fournissent leur propre contexte USER/member.
     function createGetRequest(overrides: Record<string, unknown> = {}) {
       return {
         params: { id: VALID_CONV_ID },
@@ -272,6 +282,7 @@ describe('registerParticipantsRoutes', () => {
           isAuthenticated: true,
           isAnonymous: false,
           userId: VALID_USER_ID,
+          registeredUser: { id: VALID_USER_ID, role: 'MODERATOR' },
         },
         ...overrides,
       };
@@ -640,6 +651,215 @@ describe('registerParticipantsRoutes', () => {
           orderBy: { id: 'asc' },
         })
       );
+    });
+
+    // ── Cap 199+ du totalCount : l'effectif exact est réservé aux admins ─────
+    it('plafonne pagination.totalCount à 199 avec drapeau pour un lecteur non admin plateforme', async () => {
+      const route = getRoute(mockFastify, 'GET', '/participants');
+      mockedCanAccess.mockResolvedValue(true);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.count.mockResolvedValue(500);
+      const reply = createMockReply();
+
+      await route.handler(createGetRequest(), reply);
+
+      const pagination = reply.send.mock.calls[0][0].pagination;
+      expect(pagination.totalCount).toBe(199);
+      expect(pagination.totalCountCapped).toBe(true);
+    });
+
+    it('sert le totalCount exact sans drapeau à un admin plateforme', async () => {
+      const route = getRoute(mockFastify, 'GET', '/participants');
+      mockedCanAccess.mockResolvedValue(true);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      mockPrisma.participant.count.mockResolvedValue(500);
+      const reply = createMockReply();
+
+      await route.handler(
+        createGetRequest({
+          authContext: {
+            isAuthenticated: true,
+            isAnonymous: false,
+            userId: VALID_USER_ID,
+            registeredUser: { id: VALID_USER_ID, role: 'ADMIN' },
+          },
+        }),
+        reply
+      );
+
+      const pagination = reply.send.mock.calls[0][0].pagination;
+      expect(pagination.totalCount).toBe(500);
+      expect(pagination.totalCountCapped).toBeUndefined();
+    });
+
+    // ── Restriction top-99 : un USER simple membre ne voit que les plus actifs
+    describe('restriction top-99 pour un USER simple membre', () => {
+      const U1 = '61a000000000000000000001';
+      const U2 = '61a000000000000000000002';
+      const U3 = '61a000000000000000000003';
+      const P1 = '61b000000000000000000001';
+      const P2 = '61b000000000000000000002';
+      const P3 = '61b000000000000000000003';
+      const COMMUNITY_ID = '61c000000000000000000001';
+
+      function restrictedContext() {
+        return {
+          isAuthenticated: true,
+          isAnonymous: false,
+          userId: VALID_USER_ID,
+          registeredUser: { id: VALID_USER_ID, role: 'USER' },
+        };
+      }
+
+      function primeRestrictedViewer() {
+        mockedCanAccess.mockResolvedValue(true);
+        // La résolution du rôle du lecteur dans la conversation : simple member.
+        mockPrisma.participant.findFirst.mockResolvedValue({
+          id: PARTICIPANT_ID,
+          role: 'member',
+          userId: VALID_USER_ID,
+        });
+      }
+
+      it('sert les plus actifs d\'abord (stats), puis le complément, jamais l\'annuaire', async () => {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        primeRestrictedViewer();
+        mockPrisma.conversationMessageStats.findUnique.mockResolvedValue({
+          participantStats: {
+            [U1]: { messageCount: 5, lastMessageAt: '2026-08-01T00:00:00Z' },
+            [U2]: { messageCount: 10, lastMessageAt: '2026-08-02T00:00:00Z' },
+          },
+        });
+        const p1 = createParticipant({ id: P1, userId: U1, displayName: 'Uno' });
+        const p2 = createParticipant({ id: P2, userId: U2, displayName: 'Dos' });
+        const p3 = createParticipant({ id: P3, userId: U3, displayName: 'Tres', isOnline: false });
+        mockPrisma.participant.findMany
+          .mockResolvedValueOnce([p1, p2])
+          .mockResolvedValueOnce([p3]);
+        mockPrisma.participant.count.mockResolvedValue(3);
+        const reply = createMockReply();
+
+        await route.handler(createGetRequest({ authContext: restrictedContext() }), reply);
+
+        const response = reply.send.mock.calls[0][0];
+        expect(response.data.map((d: any) => d.id)).toEqual([P2, P1, P3]);
+        expect(response.pagination.hasMore).toBe(false);
+      });
+
+      it('borne la liste restreinte à 99 même quand la page demandée est plus large', async () => {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        primeRestrictedViewer();
+        const stats: Record<string, { messageCount: number; lastMessageAt: string }> = {};
+        const actives = Array.from({ length: 120 }, (_, i) => {
+          const userId = `61d0000000000000000${String(i).padStart(5, '0')}`;
+          const id = `61e0000000000000000${String(i).padStart(5, '0')}`;
+          stats[userId] = { messageCount: 200 - i, lastMessageAt: '2026-08-01T00:00:00Z' };
+          return createParticipant({ id, userId, displayName: `User${i}` });
+        });
+        mockPrisma.conversationMessageStats.findUnique.mockResolvedValue({ participantStats: stats });
+        mockPrisma.participant.findMany.mockResolvedValueOnce(actives);
+        mockPrisma.participant.count.mockResolvedValue(500);
+        const reply = createMockReply();
+
+        await route.handler(
+          createGetRequest({ authContext: restrictedContext(), query: { limit: '100' } }),
+          reply
+        );
+
+        const response = reply.send.mock.calls[0][0];
+        expect(response.data).toHaveLength(99);
+        expect(response.pagination.hasMore).toBe(false);
+      });
+
+      it('cherche dans le top-99 en mémoire — jamais par displayName en base', async () => {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        primeRestrictedViewer();
+        mockPrisma.conversationMessageStats.findUnique.mockResolvedValue({
+          participantStats: {
+            [U1]: { messageCount: 5, lastMessageAt: null },
+            [U2]: { messageCount: 3, lastMessageAt: null },
+          },
+        });
+        const p1 = createParticipant({ id: P1, userId: U1, displayName: 'Alice' });
+        const p2 = createParticipant({ id: P2, userId: U2, displayName: 'Bob' });
+        mockPrisma.participant.findMany
+          .mockResolvedValueOnce([p1, p2])
+          .mockResolvedValueOnce([]);
+        mockPrisma.participant.count.mockResolvedValue(2);
+        const reply = createMockReply();
+
+        await route.handler(
+          createGetRequest({ authContext: restrictedContext(), query: { search: 'bob' } }),
+          reply
+        );
+
+        const response = reply.send.mock.calls[0][0];
+        expect(response.data.map((d: any) => d.id)).toEqual([P2]);
+        for (const call of mockPrisma.participant.findMany.mock.calls) {
+          expect(call[0].where.displayName).toBeUndefined();
+        }
+      });
+
+      it('exempte un admin de la communauté qui héberge la conversation', async () => {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        primeRestrictedViewer();
+        mockPrisma.conversation.findUnique.mockResolvedValue({ communityId: COMMUNITY_ID });
+        mockPrisma.communityMember.findFirst.mockResolvedValue({ role: 'admin' });
+        mockPrisma.participant.findMany.mockResolvedValue([]);
+        const reply = createMockReply();
+
+        await route.handler(createGetRequest({ authContext: restrictedContext() }), reply);
+
+        expect(mockPrisma.conversationMessageStats.findUnique).not.toHaveBeenCalled();
+        expect(mockPrisma.participant.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ orderBy: { id: 'asc' } })
+        );
+      });
+
+      it('restreint un lecteur anonyme (aucun rôle plateforme)', async () => {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        mockedCanAccess.mockResolvedValue(true);
+        mockPrisma.participant.findFirst.mockResolvedValue({
+          id: TARGET_PARTICIPANT_ID,
+          role: 'member',
+          userId: null,
+        });
+        mockPrisma.participant.findMany.mockResolvedValue([]);
+        const reply = createMockReply();
+
+        await route.handler(
+          createGetRequest({
+            authContext: {
+              isAuthenticated: true,
+              isAnonymous: true,
+              userId: TARGET_PARTICIPANT_ID,
+              participantId: TARGET_PARTICIPANT_ID,
+            },
+          }),
+          reply
+        );
+
+        expect(mockPrisma.conversationMessageStats.findUnique).toHaveBeenCalled();
+      });
+
+      it('laisse le listing complet à un rôle de conversation au-dessus de member', async () => {
+        const route = getRoute(mockFastify, 'GET', '/participants');
+        mockedCanAccess.mockResolvedValue(true);
+        mockPrisma.participant.findFirst.mockResolvedValue({
+          id: PARTICIPANT_ID,
+          role: 'moderator',
+          userId: VALID_USER_ID,
+        });
+        mockPrisma.participant.findMany.mockResolvedValue([]);
+        const reply = createMockReply();
+
+        await route.handler(createGetRequest({ authContext: restrictedContext() }), reply);
+
+        expect(mockPrisma.conversationMessageStats.findUnique).not.toHaveBeenCalled();
+        expect(mockPrisma.participant.findMany).toHaveBeenCalledWith(
+          expect.objectContaining({ orderBy: { id: 'asc' } })
+        );
+      });
     });
 
     it('should return 500 on unexpected error', async () => {

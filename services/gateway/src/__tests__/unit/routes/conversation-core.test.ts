@@ -154,6 +154,7 @@ import { registerCoreRoutes } from '../../../routes/conversations/core';
 // Le cap n'est pas recopié ici : un témoin de troncature qui invente son propre
 // seuil passe au vert le jour où le vrai bouge.
 import { CONVERSATION_TOMBSTONE_LIMIT } from '../../../routes/conversations/utils/delta-tombstones';
+import { MEMBER_COUNT_DISPLAY_CAP } from '@meeshy/shared/utils/member-visibility';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -480,6 +481,60 @@ describe('registerCoreRoutes', () => {
       await getListHandler(fastify)(req, reply);
 
       expect('_count' in reply._body.data[0]).toBe(false);
+    });
+
+    // ── Cap 199+ : l'effectif exact est réservé aux admins plateforme ────────
+    // Au-delà de 199 membres, la liste sert `memberCount: 199` +
+    // `memberCountCapped: true` ; seuls ADMIN/BIGBOSS reçoivent la valeur
+    // exacte. Le drapeau absent signifie « non plafonné » pour les clients.
+    it('plafonne memberCount à 199 avec drapeau pour un lecteur non admin plateforme', async () => {
+      const conv = makeConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP + 51 } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(reply._body.data[0].memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP);
+      expect(reply._body.data[0].memberCountCapped).toBe(true);
+    });
+
+    it('sert l\'effectif exact sans drapeau à un admin plateforme', async () => {
+      const conv = makeConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP + 51 } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      for (const role of ['ADMIN', 'BIGBOSS']) {
+        const req = makeRequest({
+          authContext: {
+            isAuthenticated: true,
+            userId: USER_ID,
+            registeredUser: { id: USER_ID, role },
+            isAnonymous: false,
+            sessionToken: null,
+          },
+          query: {},
+        });
+        const reply = makeReply();
+
+        await getListHandler(fastify)(req, reply);
+
+        expect(reply._body.data[0].memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP + 51);
+        expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+      }
+    });
+
+    it('ne pose aucun drapeau à 199 membres ou moins', async () => {
+      const conv = makeConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP } });
+      prisma.conversation.findMany.mockResolvedValue([conv]);
+
+      const req = makeRequest({ query: {} });
+      const reply = makeReply();
+
+      await getListHandler(fastify)(req, reply);
+
+      expect(reply._body.data[0].memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP);
+      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
     });
 
     it('returns empty list with default pagination', async () => {
@@ -1360,6 +1415,49 @@ describe('registerCoreRoutes', () => {
         reply,
         expect.objectContaining({ id: CONV_ID, unreadCount: expect.any(Number) })
       );
+    });
+
+    // Même cap 199+ que la liste : le détail servait l'effectif exact au même
+    // moment — deux valeurs sous un même nom de champ selon la surface.
+    it('plafonne memberCount à 199 avec drapeau pour un lecteur non admin plateforme', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        makeFullConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP + 1 } })
+      );
+      prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+
+      const req = makeRequest({ params: { id: CONV_ID } });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      const sent = mockSendSuccess.mock.calls[0][1];
+      expect(sent.memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP);
+      expect(sent.memberCountCapped).toBe(true);
+    });
+
+    it('sert l\'effectif exact sans drapeau à un admin plateforme sur le détail', async () => {
+      prisma.conversation.findFirst.mockResolvedValue(
+        makeFullConversation({ _count: { participants: MEMBER_COUNT_DISPLAY_CAP + 1 } })
+      );
+      prisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        authContext: {
+          isAuthenticated: true,
+          userId: USER_ID,
+          registeredUser: { id: USER_ID, role: 'ADMIN' },
+          isAnonymous: false,
+          sessionToken: null,
+        },
+      });
+      const reply = makeReply();
+
+      await getDetailHandler(fastify)(req, reply);
+
+      const sent = mockSendSuccess.mock.calls[0][1];
+      expect(sent.memberCount).toBe(MEMBER_COUNT_DISPLAY_CAP + 1);
+      expect(sent.memberCountCapped).toBeUndefined();
     });
 
     const makeDetailParticipant = (overrides: any = {}) => ({
