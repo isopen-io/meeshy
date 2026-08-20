@@ -752,6 +752,107 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     // MARK: - Helpers
 
+    // MARK: - Avis d'arrivée enrichi (pseudo, nom donné, règles du lien)
+
+    func test_joinNotice_carriesEnrichedIdentityAndLinkRules() {
+        var msg = makeMessage(
+            content: "ano_Jc_n045 a rejoint la conversation — visiteur sans compte",
+            messageSource: .system
+        )
+        msg.joinNotice = JoinNoticeMetadata(
+            participantId: "p1",
+            displayName: "ano_Jc_n045",
+            isAnonymous: true,
+            viaShareLink: true,
+            username: "ano_Jc_n045",
+            givenName: "Jc Nm",
+            linkRules: .init(canSendMessages: true, canSendFiles: false, canSendImages: true)
+        )
+
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.joinNotice?.username, "ano_Jc_n045")
+        XCTAssertEqual(content.joinNotice?.givenName, "Jc Nm")
+        XCTAssertEqual(
+            content.joinNotice?.linkRules,
+            .init(canSendMessages: true, canSendFiles: false, canSendImages: true)
+        )
+    }
+
+    // MARK: - Loi de présentation de l'avis d'arrivée
+
+    /// Le nom DONNÉ prime, le pseudo `ano_…` descend en @handle — chacun à sa
+    /// place. Sans nom donné, le pseudo reste le nom principal et le handle
+    /// disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
+    func test_joinNoticePresentation_putsGivenNameFirstAndPseudoAsHandle() {
+        let notice = BubbleContent.JoinNotice(
+            displayName: "ano_Jc_n045",
+            isAnonymous: true,
+            viaShareLink: true,
+            fallbackText: "repli",
+            username: "ano_Jc_n045",
+            givenName: "Jc Nm",
+            linkRules: nil
+        )
+
+        let presentation = JoinNoticePresentation(notice: notice)
+
+        XCTAssertEqual(presentation.primaryName, "Jc Nm")
+        XCTAssertEqual(presentation.handle, "@ano_Jc_n045")
+        XCTAssertTrue(presentation.showsNoAccountBadge)
+    }
+
+    func test_joinNoticePresentation_withoutGivenName_showsNoRedundantHandle() {
+        let notice = BubbleContent.JoinNotice(
+            displayName: "ano_bob",
+            isAnonymous: true,
+            viaShareLink: true,
+            fallbackText: "repli",
+            username: "ano_bob",
+            givenName: nil,
+            linkRules: nil
+        )
+
+        let presentation = JoinNoticePresentation(notice: notice)
+
+        XCTAssertEqual(presentation.primaryName, "ano_bob")
+        XCTAssertNil(presentation.handle)
+    }
+
+    func test_joinNoticePresentation_registeredMember_hasNoBadgeAndNoRules() {
+        let notice = BubbleContent.JoinNotice(
+            displayName: "Alice Smith",
+            isAnonymous: false,
+            viaShareLink: false,
+            fallbackText: "repli",
+            username: nil,
+            givenName: nil,
+            linkRules: nil
+        )
+
+        let presentation = JoinNoticePresentation(notice: notice)
+
+        XCTAssertEqual(presentation.primaryName, "Alice Smith")
+        XCTAssertNil(presentation.handle)
+        XCTAssertFalse(presentation.showsNoAccountBadge)
+        XCTAssertNil(presentation.rules)
+    }
+
+    func test_joinNoticePresentation_carriesLinkRules() {
+        let rules = JoinNoticeMetadata.LinkRules(canSendMessages: true, canSendFiles: false, canSendImages: true)
+        let notice = BubbleContent.JoinNotice(
+            displayName: "ano_bob",
+            isAnonymous: true,
+            viaShareLink: true,
+            fallbackText: "repli",
+            username: "ano_bob",
+            givenName: "Bob",
+            linkRules: rules
+        )
+
+        XCTAssertEqual(JoinNoticePresentation(notice: notice).rules, rules)
+    }
+
     private func makeMessage(
         id: String = "m1",
         content: String,

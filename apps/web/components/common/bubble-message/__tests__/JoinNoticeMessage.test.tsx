@@ -44,6 +44,26 @@ describe('JoinNoticeMessage', () => {
     expect(screen.getByTestId('join-notice').textContent).toContain('ano_bob_sm123');
   });
 
+  // Le nom DONNÉ prime, le pseudo `ano_…` descend en @handle — chacun à sa
+  // place. Sans nom donné, le pseudo reste le nom principal et le handle
+  // disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
+  it('met le nom donné en premier et le pseudo en @handle', () => {
+    render(
+      <JoinNoticeMessage
+        metadata={notice({ givenName: 'Bob Martin', username: 'ano_bob_sm123' }) as never}
+      />
+    );
+
+    expect(screen.getByTestId('join-notice').textContent).toContain('Bob Martin');
+    expect(screen.getByTestId('join-notice-handle').textContent).toBe('@ano_bob_sm123');
+  });
+
+  it('sans nom donné, aucun handle redondant', () => {
+    render(<JoinNoticeMessage metadata={notice({ username: 'ano_bob_sm123' }) as never} />);
+
+    expect(screen.queryByTestId('join-notice-handle')).toBeNull();
+  });
+
   it('marque d’un fantôme celui qui n’a pas de compte', () => {
     const { container } = render(<JoinNoticeMessage metadata={notice() as never} />);
 

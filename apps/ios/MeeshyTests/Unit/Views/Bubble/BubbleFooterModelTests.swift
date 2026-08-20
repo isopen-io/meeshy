@@ -25,6 +25,19 @@ final class BubbleFooterModelTests: XCTestCase {
 
     // MARK: - Timestamp toujours visible
 
+    // MARK: - SenderIdentity.handle — « @ » seul n'est pas une identité
+
+    /// Le fil sert un pseudo VIDE pour un participant anonyme (`username: ""`)
+    /// et la bulle affichait un « @ » nu sous son nom.
+    func test_senderHandle_emptyOrNilUsername_yieldsNoHandle() {
+        XCTAssertNil(SenderIdentity.handle(fromUsername: nil))
+        XCTAssertNil(SenderIdentity.handle(fromUsername: ""))
+    }
+
+    func test_senderHandle_prefixesUsername() {
+        XCTAssertEqual(SenderIdentity.handle(fromUsername: "atabeth"), "@atabeth")
+    }
+
     func test_make_directNonLastSent_showsTimestamp() {
         // Nouveau contrat : l'heure s'affiche sur TOUTES les bulles, y compris
         // une bulle envoyée intermédiaire en conversation directe.

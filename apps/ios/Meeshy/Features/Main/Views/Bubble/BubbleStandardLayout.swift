@@ -1106,7 +1106,7 @@ struct BubbleStandardLayout: View {
         let showFlags = showTranslation && hasAnyTranslation
         let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
             name: content.senderName ?? "?",
-            username: message.senderUsername.map { "@\($0)" },
+            username: SenderIdentity.handle(fromUsername: message.senderUsername),
             role: nil,
             avatarURL: message.senderAvatarURL,
             accentColor: message.senderColor ?? contactColor,

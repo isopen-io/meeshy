@@ -1186,6 +1186,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // Tolerant: a malformed / future-shape call-summary blob must not fail
         // the whole cached-message decode (mirrors the APIMessage path).
         callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
+        // Même tolérance que callSummary — et surtout : sans ce décodage, le
+        // round-trip GRDB PERDAIT l'avis d'arrivée (CodingKey déclarée mais
+        // jamais lue) et toute conversation rouverte retombait sur la vue
+        // système générique (icône téléphone) avec le repli français.
+        joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .joinNotice)
         // Same tolerance as callSummary: a malformed location blob must not
         // fail the whole cached-message decode.
         location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
@@ -1245,6 +1250,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encode(recipientCount, forKey: .recipientCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
+        try c.encodeIfPresent(joinNotice, forKey: .joinNotice)
         try c.encodeIfPresent(location, forKey: .location)
         if !trackedLinkMap.isEmpty {
             try c.encode(trackedLinkMap, forKey: .trackedLinkMap)

@@ -15,6 +15,20 @@ import Foundation
 /// Jumeau TypeScript : `packages/shared/utils/join-notice.ts` — toute évolution
 /// touche les deux.
 public struct JoinNoticeMetadata: Codable, Sendable, Equatable {
+    /// Ce que le lien d'entrée autorise à l'arrivant — présent seulement quand
+    /// la porte est un lien de partage.
+    public struct LinkRules: Codable, Sendable, Equatable {
+        public let canSendMessages: Bool
+        public let canSendFiles: Bool
+        public let canSendImages: Bool
+
+        public init(canSendMessages: Bool, canSendFiles: Bool, canSendImages: Bool) {
+            self.canSendMessages = canSendMessages
+            self.canSendFiles = canSendFiles
+            self.canSendImages = canSendImages
+        }
+    }
+
     /// `Participant.id` de l'arrivant — il est l'auteur de son propre avis.
     public let participantId: String
     public let displayName: String
@@ -22,16 +36,33 @@ public struct JoinNoticeMetadata: Codable, Sendable, Equatable {
     public let isAnonymous: Bool
     /// Entré par un lien de partage, ou ajouté/invité par un membre.
     public let viaShareLink: Bool
+    /// Pseudo stable (`ano_…` pour un visiteur sans compte).
+    public let username: String?
+    /// Nom humain donné au formulaire d'entrée (prénom/nom), s'il existe.
+    public let givenName: String?
+    public let linkRules: LinkRules?
 
-    public init(participantId: String, displayName: String, isAnonymous: Bool, viaShareLink: Bool) {
+    public init(
+        participantId: String,
+        displayName: String,
+        isAnonymous: Bool,
+        viaShareLink: Bool,
+        username: String? = nil,
+        givenName: String? = nil,
+        linkRules: LinkRules? = nil
+    ) {
         self.participantId = participantId
         self.displayName = displayName
         self.isAnonymous = isAnonymous
         self.viaShareLink = viaShareLink
+        self.username = username
+        self.givenName = givenName
+        self.linkRules = linkRules
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, participantId, displayName, isAnonymous, viaShareLink
+        case username, givenName, linkRules
     }
 
     /// `kind` est un GARDE, pas une décoration.
@@ -56,6 +87,11 @@ public struct JoinNoticeMetadata: Codable, Sendable, Equatable {
         // lien ». Une valeur absente ne doit jamais devenir une affirmation.
         isAnonymous = try c.decodeIfPresent(Bool.self, forKey: .isAnonymous) ?? false
         viaShareLink = try c.decodeIfPresent(Bool.self, forKey: .viaShareLink) ?? false
+        // Enrichissements optionnels — un avis antérieur reste reconnu, et des
+        // règles malformées valent absence (jamais un droit affirmé).
+        username = try c.decodeIfPresent(String.self, forKey: .username)
+        givenName = try c.decodeIfPresent(String.self, forKey: .givenName)
+        linkRules = try? c.decodeIfPresent(LinkRules.self, forKey: .linkRules)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -65,5 +101,8 @@ public struct JoinNoticeMetadata: Codable, Sendable, Equatable {
         try c.encode(displayName, forKey: .displayName)
         try c.encode(isAnonymous, forKey: .isAnonymous)
         try c.encode(viaShareLink, forKey: .viaShareLink)
+        try c.encodeIfPresent(username, forKey: .username)
+        try c.encodeIfPresent(givenName, forKey: .givenName)
+        try c.encodeIfPresent(linkRules, forKey: .linkRules)
     }
 }

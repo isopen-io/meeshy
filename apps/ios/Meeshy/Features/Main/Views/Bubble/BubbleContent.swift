@@ -170,6 +170,12 @@ nonisolated struct BubbleContent: Equatable {
         /// Repli français écrit par le gateway, servi aux surfaces sans rendu
         /// dédié et aux lecteurs plus anciens que ce `kind`.
         let fallbackText: String
+        /// Pseudo stable (`ano_…` pour un visiteur sans compte).
+        let username: String?
+        /// Nom humain donné au formulaire d'entrée, s'il existe.
+        let givenName: String?
+        /// Ce que le lien d'entrée autorise — absent hors lien de partage.
+        let linkRules: JoinNoticeMetadata.LinkRules?
     }
 
     let messageId: String

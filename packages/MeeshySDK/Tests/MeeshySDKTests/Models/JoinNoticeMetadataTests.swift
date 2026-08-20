@@ -102,4 +102,69 @@ final class JoinNoticeMetadataTests: XCTestCase {
 
         XCTAssertNil(message(metadata: call).joinNotice)
     }
+
+    // MARK: - Champs enrichis (pseudo, nom donné, règles du lien)
+
+    func test_decode_readsUsernameGivenNameAndLinkRules() {
+        let enriched = valid.merging([
+            "username": "ano_Jc_n045",
+            "givenName": "Jc Nm",
+            "linkRules": ["canSendMessages": true, "canSendFiles": false, "canSendImages": true],
+        ]) { _, new in new }
+
+        let notice = decode(enriched)
+
+        XCTAssertEqual(notice?.username, "ano_Jc_n045")
+        XCTAssertEqual(notice?.givenName, "Jc Nm")
+        XCTAssertEqual(notice?.linkRules?.canSendMessages, true)
+        XCTAssertEqual(notice?.linkRules?.canSendFiles, false)
+        XCTAssertEqual(notice?.linkRules?.canSendImages, true)
+    }
+
+    /// Un avis antérieur à ces champs reste reconnu à l'identique — rien
+    /// d'affirmé sur la foi d'une absence.
+    func test_decode_absentEnrichedFieldsStayNil() {
+        let notice = decode(valid)
+
+        XCTAssertNil(notice?.username)
+        XCTAssertNil(notice?.givenName)
+        XCTAssertNil(notice?.linkRules)
+    }
+
+    // MARK: - Round-trip cache (GRDB persiste MeeshyMessage en Codable)
+
+    /// LE bug du combiné téléphonique : `joinNotice` avait sa CodingKey mais
+    /// ni décodage ni encodage — perdu au round-trip disque, toute conversation
+    /// ROUVERTE retombait sur la vue système générique (icône téléphone) avec
+    /// le repli français, alors que la vue dédiée existait.
+    func test_meeshyMessage_codableRoundTrip_preservesJoinNotice() throws {
+        var message = MeeshyMessage(
+            id: "sys-1",
+            conversationId: "conv-1",
+            senderId: "p1",
+            content: "ano_bob a rejoint la conversation — visiteur sans compte",
+            messageSource: .system
+        )
+        message.joinNotice = JoinNoticeMetadata(
+            participantId: "p1",
+            displayName: "ano_bob",
+            isAnonymous: true,
+            viaShareLink: true,
+            username: "ano_bob",
+            givenName: "Bob Martin",
+            linkRules: .init(canSendMessages: true, canSendFiles: false, canSendImages: true)
+        )
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let revived = try decoder.decode(MeeshyMessage.self, from: encoder.encode(message))
+
+        XCTAssertEqual(revived.messageSource, .system)
+        XCTAssertEqual(revived.joinNotice?.displayName, "ano_bob")
+        XCTAssertEqual(revived.joinNotice?.username, "ano_bob")
+        XCTAssertEqual(revived.joinNotice?.givenName, "Bob Martin")
+        XCTAssertEqual(revived.joinNotice?.linkRules?.canSendImages, true)
+    }
 }

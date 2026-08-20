@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// Vues "systeme" affichees a la place du contenu d'une bulle :
@@ -145,45 +146,91 @@ struct BubbleSystemNoticeView: View, Equatable {
 /// Le masque et la mention « sans compte » vont ENSEMBLE : un glyphe seul ne se
 /// lit ni par VoiceOver ni par quelqu'un qui ignore la convention — et c'est
 /// l'information la plus utile quand la porte est un lien public.
+/// Loi de présentation de l'avis d'arrivée — décidable à part de SwiftUI.
+///
+/// Le nom DONNÉ au formulaire prime, le pseudo `ano_…` descend en @handle —
+/// chacun à sa place. Sans nom donné, le pseudo reste le nom principal et le
+/// handle disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
+struct JoinNoticePresentation: Equatable {
+    let primaryName: String
+    let handle: String?
+    let showsNoAccountBadge: Bool
+    let rules: JoinNoticeMetadata.LinkRules?
+
+    init(notice: BubbleContent.JoinNotice) {
+        let givenName = notice.givenName?.isEmpty == false ? notice.givenName : nil
+        self.primaryName = givenName ?? notice.displayName
+        let username = notice.username?.isEmpty == false ? notice.username : nil
+        self.handle = username.flatMap { $0 == (givenName ?? notice.displayName) ? nil : "@\($0)" }
+        self.showsNoAccountBadge = notice.isAnonymous
+        self.rules = notice.linkRules
+    }
+}
+
 struct BubbleJoinNoticeView: View, Equatable {
     let notice: BubbleContent.JoinNotice
     let isDark: Bool
 
     var body: some View {
-        HStack(spacing: 0) {
+        let presentation = JoinNoticePresentation(notice: notice)
+        let hasDetailRow = presentation.handle != nil || presentation.rules != nil
+
+        return HStack(spacing: 0) {
             Spacer(minLength: 24)
 
-            HStack(spacing: 6) {
-                Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(notice.isAnonymous ? .purple : ThemeManager.shared.textMuted)
+            VStack(spacing: 3) {
+                HStack(spacing: 6) {
+                    Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundColor(notice.isAnonymous ? .purple : ThemeManager.shared.textMuted)
 
-                Text(label)
-                    .font(MeeshyFont.relative(12.5, weight: .medium))
-                    .foregroundColor(ThemeManager.shared.textMuted)
-                    .multilineTextAlignment(.center)
+                    Text(label(for: presentation))
+                        .font(MeeshyFont.relative(12.5, weight: .medium))
+                        .foregroundColor(ThemeManager.shared.textMuted)
+                        .multilineTextAlignment(.center)
 
-                if notice.isAnonymous {
-                    Text(String(
-                        localized: "bubble.joinNotice.noAccount",
-                        defaultValue: "sans compte",
-                        bundle: .main
-                    ))
-                    .font(MeeshyFont.relative(10.5, weight: .semibold))
-                    .foregroundColor(.purple)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.purple.opacity(isDark ? 0.22 : 0.12)))
-                    .accessibilityIdentifier("bubble-join-notice-no-account")
+                    if presentation.showsNoAccountBadge {
+                        Text(String(
+                            localized: "bubble.joinNotice.noAccount",
+                            defaultValue: "sans compte",
+                            bundle: .main
+                        ))
+                        .font(MeeshyFont.relative(10.5, weight: .semibold))
+                        .foregroundColor(.purple)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.purple.opacity(isDark ? 0.22 : 0.12)))
+                        .accessibilityIdentifier("bubble-join-notice-no-account")
+                    }
+                }
+
+                if hasDetailRow {
+                    HStack(spacing: 8) {
+                        if let handle = presentation.handle {
+                            Text(handle)
+                                .font(MeeshyFont.relative(10.5, weight: .medium))
+                                .foregroundColor(ThemeManager.shared.textMuted.opacity(0.85))
+                                .accessibilityIdentifier("bubble-join-notice-handle")
+                        }
+                        if let rules = presentation.rules {
+                            if presentation.handle != nil {
+                                Text("·")
+                                    .font(MeeshyFont.relative(10.5))
+                                    .foregroundColor(ThemeManager.shared.textMuted.opacity(0.5))
+                                    .accessibilityHidden(true)
+                            }
+                            JoinNoticeRulesStrip(rules: rules)
+                        }
+                    }
                 }
             }
             .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, 7)
+            .padding(.vertical, hasDetailRow ? 8 : 7)
             .background(
-                Capsule()
+                RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
                     .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                     .overlay(
-                        Capsule()
+                        RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
                             .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
                     )
             )
@@ -195,12 +242,54 @@ struct BubbleJoinNoticeView: View, Equatable {
         .padding(.vertical, 4)
     }
 
-    private var label: String {
-        guard !notice.displayName.isEmpty else { return notice.fallbackText }
+    private func label(for presentation: JoinNoticePresentation) -> String {
+        guard !presentation.primaryName.isEmpty else { return notice.fallbackText }
         return String(
             localized: "bubble.joinNotice.joined",
-            defaultValue: "\(notice.displayName) a rejoint la conversation",
+            defaultValue: "\(presentation.primaryName) a rejoint la conversation",
             bundle: .main
         )
+    }
+}
+
+/// Ce que le lien d'entrée autorise à l'arrivant, en trois glyphes : écrire,
+/// joindre un fichier, envoyer une photo. Un droit accordé est teinté, un
+/// droit refusé reste éteint — l'œil lit la rangée d'un coup, VoiceOver dit
+/// chaque règle en toutes lettres.
+struct JoinNoticeRulesStrip: View, Equatable {
+    let rules: JoinNoticeMetadata.LinkRules
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ruleGlyph(
+                "bubble.left.fill",
+                allowed: rules.canSendMessages,
+                label: rules.canSendMessages
+                    ? String(localized: "bubble.joinNotice.rule.messages.allowed", defaultValue: "peut écrire des messages", bundle: .main)
+                    : String(localized: "bubble.joinNotice.rule.messages.denied", defaultValue: "ne peut pas écrire de messages", bundle: .main)
+            )
+            ruleGlyph(
+                "paperclip",
+                allowed: rules.canSendFiles,
+                label: rules.canSendFiles
+                    ? String(localized: "bubble.joinNotice.rule.files.allowed", defaultValue: "peut envoyer des fichiers", bundle: .main)
+                    : String(localized: "bubble.joinNotice.rule.files.denied", defaultValue: "ne peut pas envoyer de fichiers", bundle: .main)
+            )
+            ruleGlyph(
+                "photo.fill",
+                allowed: rules.canSendImages,
+                label: rules.canSendImages
+                    ? String(localized: "bubble.joinNotice.rule.images.allowed", defaultValue: "peut envoyer des photos", bundle: .main)
+                    : String(localized: "bubble.joinNotice.rule.images.denied", defaultValue: "ne peut pas envoyer de photos", bundle: .main)
+            )
+        }
+        .accessibilityIdentifier("bubble-join-notice-rules")
+    }
+
+    private func ruleGlyph(_ systemName: String, allowed: Bool, label: String) -> some View {
+        Image(systemName: systemName)
+            .font(MeeshyFont.relative(9.5, weight: .semibold))
+            .foregroundColor(allowed ? .purple : ThemeManager.shared.textMuted.opacity(0.35))
+            .accessibilityLabel(label)
     }
 }

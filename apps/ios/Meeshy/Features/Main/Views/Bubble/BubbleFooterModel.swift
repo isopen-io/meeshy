@@ -26,6 +26,13 @@ struct SenderIdentity: Equatable, Sendable {
     let moodEmoji: String?
     let presence: PresenceState?
     let storyRing: StoryRingState
+
+    /// « @pseudo » — ou rien. Le fil sert un pseudo VIDE pour un participant
+    /// anonyme, et un « @ » nu sous le nom n'est pas une identité.
+    static func handle(fromUsername username: String?) -> String? {
+        guard let username, !username.isEmpty else { return nil }
+        return "@\(username)"
+    }
 }
 
 /// Pure, synchronously-built descriptor of a bubble footer. No I/O, no async.

@@ -94,7 +94,10 @@ extension BubbleContent {
                 displayName: notice.displayName,
                 isAnonymous: notice.isAnonymous,
                 viaShareLink: notice.viaShareLink,
-                fallbackText: message.content
+                fallbackText: message.content,
+                username: notice.username,
+                givenName: notice.givenName,
+                linkRules: notice.linkRules
             )
         } else {
             self.joinNotice = nil

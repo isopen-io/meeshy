@@ -32,6 +32,13 @@ export const JoinNoticeMessage = memo(function JoinNoticeMessage({
 }: JoinNoticeMessageProps) {
   const { t } = useI18n('bubbleStream');
 
+  // Le nom DONNÉ prime, le pseudo `ano_…` descend en @handle — chacun à sa
+  // place. Sans nom donné, le pseudo reste le nom principal et le handle
+  // disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
+  const primaryName = metadata.givenName || metadata.displayName;
+  const handle =
+    metadata.username && metadata.username !== primaryName ? `@${metadata.username}` : null;
+
   return (
     <div className="flex justify-center px-4 py-1.5" data-testid="join-notice">
       <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600 dark:bg-gray-800/60 dark:text-gray-300">
@@ -42,8 +49,16 @@ export const JoinNoticeMessage = memo(function JoinNoticeMessage({
           />
         )}
         <span className="truncate">
-          {t('joinNotice.joined', { name: metadata.displayName })}
+          {t('joinNotice.joined', { name: primaryName })}
         </span>
+        {handle && (
+          <span
+            data-testid="join-notice-handle"
+            className="flex-shrink-0 truncate text-[10px] text-gray-400 dark:text-gray-500"
+          >
+            {handle}
+          </span>
+        )}
         {metadata.isAnonymous && (
           <span
             data-testid="join-notice-no-account"
