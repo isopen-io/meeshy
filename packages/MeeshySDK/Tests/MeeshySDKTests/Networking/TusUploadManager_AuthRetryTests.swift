@@ -337,6 +337,92 @@ final class TusUploadManager_AuthRetryTests: XCTestCase {
         XCTAssertEqual(refresh.callCount, 1)
     }
 
+    // MARK: - The refresh call itself fails: definitive, no retry
+
+    /// `refreshAuthSession` throwing (e.g. the refresh network call itself
+    /// fails) is a DIFFERENT branch from "refresh succeeded but the retried
+    /// PATCH got a second 401" (covered above). Nothing else in this file
+    /// configures the refresh spy to fail — the only other failing case is
+    /// the spy's own `Result<String, Error>` plumbing, never exercised.
+    func test_patch401_refreshItselfFails_convertsToSessionExpired_noRetry() async throws {
+        struct RefreshTransportError: Error {}
+        let file = try writeFile(bytes: 128)
+        let refresh = RefreshSpy()
+        refresh.result = .failure(RefreshTransportError())
+        let manager = try makeManager(refresh: refresh)
+
+        TusAuthRetryStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/f"], body: Data()),
+            .init(status: 401, headers: [:], body: Data())
+        ]
+
+        do {
+            _ = try await manager.performTusUpload(
+                fileURL: file, mimeType: "application/octet-stream",
+                credential: .bearer("stale-token")
+            )
+            XCTFail("a refresh call that itself fails must surface as a definitive session-expired error")
+        } catch {
+            guard let meeshyError = error as? MeeshyError, case .auth(.sessionExpired) = meeshyError else {
+                XCTFail("expected MeeshyError.auth(.sessionExpired), got \(error)")
+                return
+            }
+        }
+
+        XCTAssertEqual(TusAuthRetryStubURLProtocol.methods, ["POST", "PATCH"],
+            "no HEAD, no second PATCH — a failed refresh must not attempt to recover an offset that was never granted")
+        XCTAssertEqual(refresh.callCount, 1,
+            "the refresh must be attempted exactly once — its own failure must never trigger a second attempt")
+    }
+
+    // MARK: - Retry budget is per-UPLOAD, not per-CHUNK
+
+    /// `hasRetriedAfterAuthRefusal` is declared once, before the chunk loop
+    /// (`TusUploadManager.swift`, just above `while offset < fileSize`) — so
+    /// the one-retry budget is shared by every chunk of a single upload, not
+    /// reset per chunk. A 10.3 MB file only ever produces ONE retryable 401
+    /// (all prior tests here), which can't distinguish "budget resets per
+    /// chunk" from "budget is per upload". A file spanning three real 10 MB
+    /// chunks can: consume the retry on chunk 2, then refuse chunk 3 — if
+    /// the budget were (wrongly) per-chunk, chunk 3 would get its own
+    /// refresh; since it's per-upload, chunk 3 must fail net with NO second
+    /// refresh.
+    func test_patch401_onThirdChunk_afterRetryAlreadyConsumedOnSecondChunk_isDefinitive_noSecondRefresh() async throws {
+        let chunkSize = 10_485_760 // == TusUploadManager.chunkSize
+        let fileSize = 2 * chunkSize + 500_000 // forces 3 real PATCH chunks
+        let file = try writeFile(bytes: fileSize)
+        let refresh = RefreshSpy()
+        refresh.result = .success("fresh-token-G")
+        let manager = try makeManager(refresh: refresh)
+
+        TusAuthRetryStubURLProtocol.exchanges = [
+            .init(status: 201, headers: ["Location": "https://stub.meeshy.test/api/v1/uploads/g"], body: Data()),
+            .init(status: 200, headers: [:], body: Data()),                                       // chunk 1 OK
+            .init(status: 401, headers: [:], body: Data()),                                        // chunk 2 refused — consumes the retry
+            .init(status: 200, headers: ["Upload-Offset": "\(chunkSize)"], body: Data()),           // HEAD recovery
+            .init(status: 200, headers: [:], body: Data()),                                        // chunk 2 retried OK
+            .init(status: 401, headers: [:], body: Data())                                          // chunk 3 refused — budget already spent
+        ]
+
+        do {
+            _ = try await manager.performTusUpload(
+                fileURL: file, mimeType: "application/octet-stream",
+                credential: .bearer("stale-token")
+            )
+            XCTFail("a 401 on the THIRD chunk, after the single retry was already spent on the second, must be definitive")
+        } catch {
+            guard let meeshyError = error as? MeeshyError, case .auth(.sessionExpired) = meeshyError else {
+                XCTFail("expected MeeshyError.auth(.sessionExpired), got \(error)")
+                return
+            }
+        }
+
+        XCTAssertEqual(TusAuthRetryStubURLProtocol.methods, ["POST", "PATCH", "PATCH", "HEAD", "PATCH", "PATCH"],
+            "no second HEAD, no fourth PATCH — the retry budget spent on chunk 2 does not replenish for chunk 3")
+        XCTAssertEqual(refresh.callCount, 1,
+            "chunk 3's 401 must NOT trigger a second refresh — the one-retry budget is per UPLOAD, not per CHUNK")
+    }
+
     // MARK: - Regression: other explicitly-handled codes are untouched
 
     func test_patch404_stillThrowsRetriableError_unaffectedByAuthHandling() async throws {
