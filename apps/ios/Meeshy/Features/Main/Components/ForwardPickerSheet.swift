@@ -321,7 +321,7 @@ struct ForwardPickerSheet: View {
             to: target
         )
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-            sendState.finishSend(target.id, outcome: outcome)
+            sendState.finishSend(target.id, succeeded: outcome.succeeded, reason: outcome.failureReason)
         }
         switch outcome {
         case .sent(let conversationId), .queuedOffline(let conversationId):

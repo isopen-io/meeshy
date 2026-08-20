@@ -15,6 +15,22 @@ enum ForwardOutcome: Equatable {
     case failed(reason: String)
 }
 
+/// Traduction de l'issue riche vers l'issue PRIMITIVE que `ForwardPickerModel`
+/// expose (le modèle est partagé avec l'extension de partage, sans SDK).
+/// Un enfilage durable VAUT un envoi pour l'affichage — l'outbox garantit la
+/// livraison.
+extension ForwardOutcome {
+    var succeeded: Bool {
+        if case .failed = self { return false }
+        return true
+    }
+
+    var failureReason: String? {
+        if case .failed(let reason) = self { return reason }
+        return nil
+    }
+}
+
 protocol MessageForwardServiceProviding {
     func forward(message: Message, sourceConversationId: String?, to targetConversationId: String) async -> ForwardOutcome
     func forward(message: Message, sourceConversationId: String?, to target: ForwardTarget) async -> ForwardOutcome

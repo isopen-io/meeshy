@@ -257,6 +257,14 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: MeeshyShareExtension
+      # PRÉCÉDENT NOUVEAU : un fichier de l'APP compilé dans une app-extension.
+      # `project.yml` ne connaissait que l'inverse (helpers d'extension compilés
+      # dans MeeshyTests). L'écran de partage a besoin de la MÊME machine à
+      # états que le sélecteur de transfert — la réécrire produirait deux
+      # sémantiques de sélection divergentes pour un même geste.
+      # Le fichier n'importe QUE Foundation ; garde :
+      # `ForwardPickerModelPortabilityGuardTests`.
+      - path: Meeshy/Features/Main/Components/ForwardPickerModel.swift
     settings:
       INFOPLIST_FILE: MeeshyShareExtension/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension

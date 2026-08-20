@@ -21,7 +21,7 @@ final class ForwardPickerModelTests: XCTestCase {
     func test_tapRow_onSentTarget_isNoop() {
         var model = ForwardPickerModel()
         model.beginSend("a")
-        model.finishSend("a", outcome: .sent(conversationId: "c1"))
+        model.finishSend("a", succeeded: true, reason: nil)
         model.tapRow("a")
         XCTAssertEqual(model.state(of: "a"), .sent,
                        "une cible déjà servie n'est plus sélectionnable")
@@ -42,7 +42,7 @@ final class ForwardPickerModelTests: XCTestCase {
         model.tapRow("a")
         model.tapRow("b")
         model.beginSend("a")
-        model.finishSend("a", outcome: .sent(conversationId: "c1"))
+        model.finishSend("a", succeeded: true, reason: nil)
         model.tapRow("a")
         let batch = model.beginBatch()
         XCTAssertEqual(batch, ["b"], "l'envoi groupé ne reprend jamais une cible déjà servie")
@@ -53,31 +53,40 @@ final class ForwardPickerModelTests: XCTestCase {
         var model = ForwardPickerModel()
         model.beginSend("a")
         XCTAssertFalse(model.beginSend("a"), "un envoi en cours ne se double pas")
-        model.finishSend("a", outcome: .sent(conversationId: "c1"))
+        model.finishSend("a", succeeded: true, reason: nil)
         XCTAssertFalse(model.beginSend("a"), "une cible servie ne se renvoie pas")
     }
 
     func test_finishSend_failed_keepsReason_andAllowsRetry() {
         var model = ForwardPickerModel()
         model.beginSend("a")
-        model.finishSend("a", outcome: .failed(reason: "Un message à vue unique ne peut pas être transféré"))
+        model.finishSend("a", succeeded: false, reason: "Un message à vue unique ne peut pas être transféré")
         XCTAssertEqual(model.state(of: "a"), .failed("Un message à vue unique ne peut pas être transféré"))
         XCTAssertTrue(model.beginSend("a"), "un échec reste réessayable")
     }
 
-    func test_finishSend_queuedOffline_countsAsSent() {
+    func test_finishSend_succeededWithoutReason_marksTheTargetSent() {
         var model = ForwardPickerModel()
         model.beginSend("a")
-        model.finishSend("a", outcome: .queuedOffline(conversationId: "c1"))
+        model.finishSend("a", succeeded: true, reason: nil)
         XCTAssertEqual(model.state(of: "a"), .sent,
-                       "un enfilage durable vaut envoi pour l'affichage — l'outbox garantit la livraison")
+                       "un enfilage durable vaut envoi pour l'affichage — l'outbox garantit la livraison ; "
+                       + "la traduction ForwardOutcome → succeeded appartient à l'app, pas au modèle")
     }
 
     func test_tapRow_onFailedTarget_selectsItForBatchRetry() {
         var model = ForwardPickerModel()
         model.beginSend("a")
-        model.finishSend("a", outcome: .failed(reason: "x"))
+        model.finishSend("a", succeeded: false, reason: "x")
         model.tapRow("a")
         XCTAssertEqual(model.state(of: "a"), .selected)
+    }
+
+    func test_finishSend_failedWithoutReason_stillCarriesAnEmptyReason() {
+        var model = ForwardPickerModel()
+        model.beginSend("a")
+        model.finishSend("a", succeeded: false, reason: nil)
+        XCTAssertEqual(model.state(of: "a"), .failed(""),
+                       "un échec sans motif reste un échec réessayable, pas un succès")
     }
 }

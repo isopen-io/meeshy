@@ -9,7 +9,9 @@ import Foundation
 /// 4. envoyer par-ligne une cible sélectionnée la retire de la sélection —
 ///    l'envoi groupé ne peut JAMAIS produire un doublon, par construction.
 /// RÈGLE JUMELLE : apps/web/lib/forward-picker-model.ts — toute évolution
-/// touche les deux sites.
+/// touche les deux sites. Ce fichier est aussi compilé dans
+/// `MeeshyShareExtension` : il n'importe QUE `Foundation`, et
+/// `ForwardPickerModelPortabilityGuardTests` l'y maintient.
 struct ForwardPickerModel: Equatable {
     enum TargetState: Equatable {
         case idle
@@ -48,12 +50,17 @@ struct ForwardPickerModel: Equatable {
         }
     }
 
-    mutating func finishSend(_ id: String, outcome: ForwardOutcome) {
+    /// L'issue est PRIMITIVE (`succeeded` + `reason`) et non l'issue riche
+    /// déclarée dans `MessageForwardService.swift` : ce fichier est compilé
+    /// DANS `MeeshyShareExtension`, qui n'a aucune dépendance SDK, alors que
+    /// `MessageForwardService.swift` `import MeeshySDK`. La jumelle web a la
+    /// même signature depuis toujours (`forward-picker-model.ts:44` —
+    /// `finishSend(id, ok, reason?)`). La traduction depuis l'issue riche
+    /// appartient à l'app (`succeeded` / `.failureReason`, portés par une
+    /// extension côté service).
+    mutating func finishSend(_ id: String, succeeded: Bool, reason: String?) {
         guard state(of: id) == .sending else { return }
-        switch outcome {
-        case .sent, .queuedOffline: states[id] = .sent
-        case .failed(let reason): states[id] = .failed(reason)
-        }
+        states[id] = succeeded ? .sent : .failed(reason ?? "")
     }
 
     mutating func beginBatch() -> [String] {
