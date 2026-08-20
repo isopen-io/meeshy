@@ -112,6 +112,14 @@ public final class SharedAVPlayerManager: ObservableObject {
 
     private init() {}
 
+    /// Le player DÉJÀ chargé pour cette pièce jointe, ou `nil` si le
+    /// gestionnaire en porte une autre (O16). Lecture seule : demander la
+    /// continuité ne charge rien et ne préempte aucune surface en cours.
+    public func loadedPlayer(matching attachmentId: String) -> AVPlayer? {
+        guard self.attachmentId == attachmentId else { return nil }
+        return player
+    }
+
     // MARK: - Load
 
     public func load(urlString: String, attachmentId: String? = nil) {

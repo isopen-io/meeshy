@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import AVFoundation
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -53,12 +54,47 @@ final class ScenePlayerModeTests: XCTestCase {
         XCTAssertEqual(player.host.storyItem.storyEffects?.textObjects.first?.text, "Hello")
     }
 
-    func test_hostPause_followsTheIsPlayingCommand() {
+    // MARK: - `ScenePlayerConfig` câblée : la naissance, la boucle, la chrome
+
+    func test_hostIsBornPaused_whateverTheInitialCommandSays() {
         let paused = Self.player(document: Self.textDocument(), mode: .reader, isPlaying: false)
         XCTAssertTrue(paused.host.isPaused)
 
         let playing = Self.player(document: Self.textDocument(), mode: .reader, isPlaying: true)
-        XCTAssertFalse(playing.host.isPaused)
+        XCTAssertTrue(playing.host.isPaused,
+                      "startsPaused : monter le player avec la commande LEVÉE ne démarre pas la lecture")
+    }
+
+    func test_theCommandGovernsOnlyOnceTheSceneHasAppeared() {
+        let config = ScenePlayerConfig(mode: .reader)
+        XCTAssertTrue(MeeshyScenePlayer.hostIsPaused(config: config, hasAppeared: false, isPlaying: true))
+        XCTAssertFalse(MeeshyScenePlayer.hostIsPaused(config: config, hasAppeared: true, isPlaying: true))
+        XCTAssertTrue(MeeshyScenePlayer.hostIsPaused(config: config, hasAppeared: true, isPlaying: false))
+    }
+
+    func test_onlyTheCardReArmsItself_whenTheSceneCompletes() {
+        XCTAssertNotNil(Self.player(document: Self.textDocument(), mode: .card).host.onCompletion,
+                        "loops : la carte se relance elle-même")
+        XCTAssertNil(Self.player(document: Self.textDocument(), mode: .reader).host.onCompletion)
+        XCTAssertNil(Self.player(document: Self.textDocument(), mode: .preview).host.onCompletion)
+    }
+
+    func test_eachLoopPass_servesANewIdentity_soTheHostReplaysFromZero() {
+        XCTAssertEqual(MeeshyScenePlayer.hostIdentity(sceneId: "s1", loopPass: 0), "s1")
+        XCTAssertEqual(MeeshyScenePlayer.hostIdentity(sceneId: "s1", loopPass: 2), "s1#2")
+    }
+
+    func test_onlyTheChromeMode_receivesThePositionFeed() {
+        var ticks: [Double] = []
+        let reader = Self.player(document: Self.textDocument(), mode: .reader)
+            .onPlaybackTime { ticks.append($0) }
+        reader.host.onPlaybackTime?(1.5)
+        XCTAssertEqual(ticks, [1.5], "showsChrome : seul le reader arme le fil de position")
+
+        XCTAssertNil(Self.player(document: Self.textDocument(), mode: .card)
+            .onPlaybackTime { _ in }.host.onPlaybackTime)
+        XCTAssertNil(Self.player(document: Self.textDocument(), mode: .preview)
+            .onPlaybackTime { _ in }.host.onPlaybackTime)
     }
 
     func test_cardMode_mountsTheHostMuted_readerKeepsItsSound() {
@@ -109,6 +145,53 @@ final class ScenePlayerModeTests: XCTestCase {
 
     func test_carrierMediaIdentity_isNil_withoutAPorter() {
         XCTAssertNil(MeeshyScenePlayer.carrierMediaIdentity(in: Self.textDocument(), sceneIndex: 0))
+    }
+
+    func test_everyReadingMode_handsTheHostACarrierPlayerProvider() {
+        for mode: ScenePlayerMode in [.reader, .preview, .card] {
+            XCTAssertNotNil(Self.player(document: Self.carrierDocument(), mode: mode).host.playerProvider,
+                            "\(mode) : le chemin lecture transmet son fournisseur à l'hôte")
+        }
+    }
+
+    func test_theProviderServesTheSharedPlayerOfTheCarrier_andDeclinesTheRest() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("scene-player-\(UUID().uuidString).mp4")
+        try Data([0x00, 0x00, 0x00, 0x18]).write(to: url)
+        let shared = AVPlayer(playerItem: AVPlayerItem(url: url))
+
+        let manager = SharedAVPlayerManager.shared
+        let previousPlayer = manager.player
+        let previousAttachment = manager.attachmentId
+        defer {
+            manager.player = previousPlayer
+            manager.attachmentId = previousAttachment
+        }
+        manager.player = shared
+        manager.attachmentId = "64b0000000000000000000aa"
+
+        let provider = try XCTUnwrap(
+            Self.player(document: Self.carrierDocument(), mode: .reader).host.playerProvider)
+        XCTAssertTrue(provider.player(for: "64b0000000000000000000aa") === shared,
+                      "O16 : le média porteur joue le player du gestionnaire partagé")
+        XCTAssertNil(provider.player(for: "64b0000000000000000000bb"),
+                     "Un média qui n'est pas le porteur de la scène ne prend pas le player partagé")
+    }
+
+    func test_theProviderDeclines_whenTheSharedManagerHoldsAnotherMedia() throws {
+        let manager = SharedAVPlayerManager.shared
+        let previousPlayer = manager.player
+        let previousAttachment = manager.attachmentId
+        defer {
+            manager.player = previousPlayer
+            manager.attachmentId = previousAttachment
+        }
+        manager.player = nil
+        manager.attachmentId = "un-autre-media"
+
+        let provider = try XCTUnwrap(
+            Self.player(document: Self.carrierDocument(), mode: .reader).host.playerProvider)
+        XCTAssertNil(provider.player(for: "64b0000000000000000000aa"))
     }
 
     // MARK: - Fixtures
@@ -182,10 +265,50 @@ final class ScenePlayerSourceGuardTests: XCTestCase {
                       + "player privé : \(offenders)")
     }
 
+    /// Le SIGNAL, pas l'enveloppe : le chemin lecture doit RÉCLAMER le player du
+    /// média porteur au gestionnaire partagé et le transmettre à l'hôte.
+    func test_theReadingPathClaimsTheSharedCarrierPlayer() throws {
+        let code = try Self.strippedSources()
+        XCTAssertTrue(code.contains("SharedAVPlayerManager"),
+                      "O16 : le chemin lecture s'adosse au gestionnaire partagé.")
+        XCTAssertTrue(code.contains("carrierMediaIdentity"),
+                      "O16 : la clé de continuité est l'identité du média porteur.")
+        XCTAssertTrue(code.contains("playerProvider:"),
+                      "O16 : le fournisseur descend jusqu'à l'hôte canvas.")
+    }
+
+    /// Les deux couches qui ouvraient des players PRIVÉS ne le font plus qu'en
+    /// REPLI du fournisseur — chaque construction reste précédée du `??`.
+    func test_eachCanvasLayerPrefersTheProvidedPlayer_overAPrivateOne() throws {
+        for (name, source) in try Self.strippedLayerSources() {
+            XCTAssertTrue(source.contains("playerProvider"),
+                          "\(name) doit accepter le fournisseur du chemin lecture.")
+            let constructions = source
+                .split(separator: "\n", omittingEmptySubsequences: false)
+                .map(String.init)
+                .filter { $0.contains("AVPlayer(playerItem:") }
+            XCTAssertFalse(constructions.isEmpty,
+                           "\(name) : sans construction privée à encadrer, la garde serait vide.")
+            for line in constructions {
+                XCTAssertTrue(line.contains("??"),
+                              "\(name) : un player privé n'est légitime qu'en repli : \(line)")
+            }
+        }
+    }
+
     func test_noFirstTranslationFallback_inTheScenePlayer() throws {
         let offenders = try Self.strippedLines().filter { $0.contains("translations.first") }
         XCTAssertTrue(offenders.isEmpty,
                       "C6 : la résolution suit l'ordre du Prisme du lecteur : \(offenders)")
+    }
+
+    /// Le pendant NÉGATIF : le canvas de COMPOSITION ne demande de player à
+    /// personne — ses players privés suivent une timeline en cours d'édition.
+    func test_theCompositionCanvasNeverProvidesAPlayer() throws {
+        let source = try Self.strippedSource(
+            "Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift")
+        XCTAssertFalse(source.contains("playerProvider"),
+                       "Le canvas de composition garde ses players privés.")
     }
 
     func test_guardDetectsAGenericViewFactory() {
@@ -211,13 +334,16 @@ final class ScenePlayerSourceGuardTests: XCTestCase {
 
     /// Le fichier vit dans `Tests/MeeshyUITests/Story/` : quatre remontées
     /// avant de redescendre dans `Sources`.
+    private static func packageRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
     private static func strippedSources() throws -> String {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshyUI/Story/ScenePlayer")
+        let root = packageRoot().appendingPathComponent("Sources/MeeshyUI/Story/ScenePlayer")
         let files = try FileManager.default
             .contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "swift" }
@@ -225,6 +351,18 @@ final class ScenePlayerSourceGuardTests: XCTestCase {
         return try files
             .map { try strippingLineComments(String(contentsOf: $0, encoding: .utf8)) }
             .joined(separator: "\n")
+    }
+
+    /// Les deux couches du canvas qui portent un `AVPlayer`.
+    private static func strippedLayerSources() throws -> [(String, String)] {
+        try ["StoryBackgroundLayer", "StoryMediaLayer"].map { name in
+            (name, try strippedSource("Sources/MeeshyUI/Story/Canvas/Layers/\(name).swift"))
+        }
+    }
+
+    private static func strippedSource(_ relativePath: String) throws -> String {
+        let url = packageRoot().appendingPathComponent(relativePath)
+        return strippingLineComments(try String(contentsOf: url, encoding: .utf8))
     }
 
     private static func strippingLineComments(_ source: String) -> String {

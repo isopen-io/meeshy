@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AVFoundation
 import MeeshySDK
 
 /// Runtime parameters for `StoryCanvasUIView` mode `.play` reader playback.
@@ -21,19 +22,25 @@ public struct StoryReaderContext: Sendable {
     /// muet. Consommé en priorité par `reconfigureAudioForPlayback`. Directive
     /// user 2026-07-14 : « la preview doit jouer le son en arrière-plan ».
     public let localAudioURLResolver: (@Sendable (String) -> URL?)?
+    /// Fournisseur du player du média PORTEUR (O16). Renseigné par les surfaces
+    /// de LECTURE, `nil` sur le canvas de COMPOSITION — qui garde ses players
+    /// privés, seuls capables de suivre une timeline en cours d'édition.
+    public let playerProvider: (any StoryCarrierPlayerProviding)?
 
     public init(preferredLanguages: [String] = [],
                 mute: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 postMediaURLResolver: (@Sendable (String) -> URL?)? = nil,
                 imageCache: ImageCacheReader? = nil,
-                localAudioURLResolver: (@Sendable (String) -> URL?)? = nil) {
+                localAudioURLResolver: (@Sendable (String) -> URL?)? = nil,
+                playerProvider: (any StoryCarrierPlayerProviding)? = nil) {
         self.preferredLanguages = preferredLanguages
         self.mute = mute
         self.onCompletion = onCompletion
         self.postMediaURLResolver = postMediaURLResolver
         self.imageCache = imageCache
         self.localAudioURLResolver = localAudioURLResolver
+        self.playerProvider = playerProvider
     }
 
     public static let empty = StoryReaderContext()
@@ -48,7 +55,8 @@ public struct StoryReaderContext: Sendable {
                            onCompletion: onCompletion,
                            postMediaURLResolver: postMediaURLResolver,
                            imageCache: imageCache,
-                           localAudioURLResolver: localAudioURLResolver)
+                           localAudioURLResolver: localAudioURLResolver,
+                           playerProvider: playerProvider)
     }
 }
 
@@ -56,4 +64,15 @@ public struct StoryReaderContext: Sendable {
 /// Conformed by `CacheCoordinator.shared.images` (DiskCacheStore).
 public protocol ImageCacheReader: Sendable {
     func cachedImage(for key: String) async -> UIImage?
+}
+
+/// Fournisseur du player d'un média, interrogé par les couches du canvas AVANT
+/// d'en ouvrir un privé (O16).
+///
+/// Le chemin de LECTURE ne fabrique pas le temps de son média porteur : un
+/// player privé perdrait la continuité de lecture, la télémétrie `WatchSample`
+/// et l'arbitrage `PlaybackCoordinator`. `nil` en retour = personne ne porte ce
+/// média, la couche ouvre alors le sien.
+public protocol StoryCarrierPlayerProviding: Sendable {
+    @MainActor func player(for mediaIdentity: String) -> AVPlayer?
 }

@@ -102,6 +102,7 @@ extension StoryCanvasUIView {
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
             imageCache: readerContext.imageCache,
+            playerProvider: readerContext.playerProvider,
             letterboxColor: letterboxColor,
             // Slide-level thumbHash flows through so `.solidColor` and
             // `.gradient` cases can stamp the preview ON TOP of the flat tint
@@ -158,6 +159,7 @@ extension StoryCanvasUIView {
                                             languages: readerContext.preferredLanguages,
                                             resolver: readerContext.postMediaURLResolver,
                                             imageCache: readerContext.imageCache,
+                                            playerProvider: readerContext.playerProvider,
                                             cache: cacheForRender,
                                             backdropProvider: { [weak backdropCapture] frame in
                                                 backdropCapture?.cropRegion(frame)

@@ -24,6 +24,10 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// `lastPlaybackTime` avancer dans le vide → saut visible au resume.
     /// Drivé depuis `shouldPauseTimer` du viewer.
     public internal(set) var isPaused: Bool
+    /// Fournisseur du player du média porteur (O16), transmis au canvas dans
+    /// `StoryReaderContext`. Les surfaces de LECTURE le renseignent ; le canvas
+    /// de COMPOSITION ne le pose jamais et garde ses players privés.
+    public internal(set) var playerProvider: (any StoryCarrierPlayerProviding)?
     /// `true` quand cette représentable est utilisée comme calque sortant
     /// (`outgoingStory` dans `StoryCardView`) pendant un cross-fade. Force le
     /// canvas à monter en `.edit` mode dès `makeUIView` — ses AVPlayer bg /
@@ -87,6 +91,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedImages: [String: UIImage] = [:],
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
+                playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                 mute: Bool = false,
                 isPaused: Bool = false,
                 isOutgoing: Bool = false,
@@ -103,6 +108,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             ? (preferredLanguage.map { [$0] } ?? [])
             : effective
         self.preferredLanguages = chain
+        self.playerProvider = playerProvider
         self.mute = mute
         self.isPaused = isPaused
         self.isOutgoing = isOutgoing
@@ -194,7 +200,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             onCompletion: completion,
             postMediaURLResolver: resolver,
             imageCache: imageCache,
-            localAudioURLResolver: localAudioResolver
+            localAudioURLResolver: localAudioResolver,
+            playerProvider: playerProvider
         ))
         return view
     }

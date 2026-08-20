@@ -143,6 +143,9 @@ public final class StoryBackgroundLayer: CALayer {
     private static let timelineSeekDriftThreshold: Double = 0.30
 
     nonisolated(unsafe) var contentLayer: CALayer?
+    /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
+    /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
+    private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
     nonisolated(unsafe) var avPlayer: AVPlayer?
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
@@ -341,6 +344,7 @@ extension StoryBackgroundLayer {
                           geometry: CanvasGeometry,
                           resolver: ((String) -> URL?)?,
                           imageCache: ImageCacheReader?,
+                          playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                           letterboxColor: UIColor? = nil,
                           slidePreviewThumbHash: String? = nil,
                           filter: StoryFilter? = nil,
@@ -358,6 +362,7 @@ extension StoryBackgroundLayer {
         // image / video, même type pour color/gradient), on garde le
         // `contentLayer` existant et on rafraîchit juste frame + transform.
         // Le bitmap déjà affiché reste à l'écran sans interruption.
+        self.playerProvider = playerProvider
         let previousContentIdentity = Self.contentIdentity(for: self.kind)
         let nextContentIdentity = Self.contentIdentity(for: kind)
 
@@ -800,7 +805,7 @@ extension StoryBackgroundLayer {
             self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
             self.avPlayer = queuePlayer
         } else {
-            self.avPlayer = AVPlayer(playerItem: item)
+            self.avPlayer = providedCarrierPlayer() ?? AVPlayer(playerItem: item)
         }
         // Le paramètre `mute` reste pris en compte pour compat avec les call
         // sites existants (renderer), mais on respecte aussi l'état dynamique
@@ -900,6 +905,25 @@ extension StoryBackgroundLayer {
         }
 
         onPlayerAttached?()
+    }
+
+    /// Le player que le chemin de LECTURE porte déjà pour ce média de fond, ou
+    /// `nil` — auquel cas la couche ouvre le sien (composition, prefetch).
+    @MainActor
+    func providedCarrierPlayer() -> AVPlayer? {
+        guard let identity = Self.mediaIdentity(for: kind),
+              let provided = playerProvider?.player(for: identity),
+              provided.currentItem != nil else { return nil }
+        return provided
+    }
+
+    /// Identité du média porté par ce fond — la clé du fournisseur (O16).
+    nonisolated static func mediaIdentity(for kind: Kind) -> String? {
+        switch kind {
+        case .image(let postMediaId, _):      return postMediaId
+        case .video(let postMediaId, _, _, _): return postMediaId
+        case .solidColor, .gradient:          return nil
+        }
     }
 
     /// Cale la vidéo de fond sur le playhead unifié puis lance la lecture.
