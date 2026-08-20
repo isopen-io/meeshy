@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -107,7 +108,7 @@ import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.currentUserRole
 import me.meeshy.sdk.model.isMeaningful
 import me.meeshy.sdk.theme.DynamicColorGenerator
-import me.meeshy.sdk.theme.accentHex
+import me.meeshy.sdk.theme.accentColorPalette
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.component.MeeshyAvatar
@@ -588,6 +589,20 @@ private fun ConversationRowContent(
             labels = previewLabels,
         ),
     )
+    // Deterministic per-conversation palette — computed once so the avatar's primary fill
+    // and the row's heat-gradient tint (secondary → primary, parity iOS `heatBackground`)
+    // never re-derive it. Pre-parsed hex → Color, so the row body reads plain Color values.
+    val palette = remember(conversation) { conversation.accentColorPalette() }
+    val primaryAccent = hexColor(palette.primary)
+    val secondaryAccent = hexColor(palette.secondary)
+    val heat = ConversationActivityHeat.of(conversation, System.currentTimeMillis())
+    val gradient = ConversationActivityHeat.gradient(heat, isDark = MeeshyTheme.isDark)
+    val heatBrush = Brush.linearGradient(
+        colors = listOf(
+            primaryAccent.copy(alpha = gradient.topOpacity),
+            secondaryAccent.copy(alpha = gradient.bottomOpacity),
+        ),
+    )
     Box {
         MeeshyGlassSurface(
             shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -606,12 +621,13 @@ private fun ConversationRowContent(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .background(heatBrush)
                     .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
             MeeshyAvatar(
                 name = title,
-                containerColor = hexColor(conversation.accentHex()),
+                containerColor = primaryAccent,
                 presence = presence,
             )
             Column(
@@ -665,7 +681,7 @@ private fun ConversationRowContent(
                     text = rowPreview.text,
                     style = MaterialTheme.typography.bodySmall,
                     color = if (rowPreview.isAccent) {
-                        hexColor(conversation.accentHex())
+                        primaryAccent
                     } else {
                         MeeshyTheme.tokens.textSecondary
                     },
@@ -684,7 +700,7 @@ private fun ConversationRowContent(
                         color = if (conversation.unreadCount > 0) {
                             MeeshyTheme.tokens.error
                         } else {
-                            hexColor(conversation.accentHex())
+                            primaryAccent
                         },
                         maxLines = 1,
                     )

@@ -24,6 +24,22 @@ class ConversationAccentTest {
     }
 
     @Test
+    fun `accentColorPalette exposes the primary that accentHex returns plus a distinct secondary`() {
+        val conversation = ApiConversation(id = "c1", title = "Team", type = "group")
+        val palette = conversation.accentColorPalette()
+
+        assertThat(palette.primary).isEqualTo(conversation.accentHex())
+        assertThat(palette.secondary).isNotEqualTo(palette.primary)
+    }
+
+    @Test
+    fun `accentColorPalette is deterministic for the same conversation`() {
+        val conversation = ApiConversation(id = "c1", title = "Team", type = "group")
+
+        assertThat(conversation.accentColorPalette()).isEqualTo(conversation.accentColorPalette())
+    }
+
+    @Test
     fun `displayTitle prefers the title then the custom name`() {
         val titled = ApiConversation(id = "c1", title = "Team")
         val custom = ApiConversation(
