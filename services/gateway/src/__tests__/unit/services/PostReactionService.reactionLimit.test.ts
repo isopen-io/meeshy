@@ -115,3 +115,61 @@ describe('PostReactionService.addReaction — plafond de 5 réactions par person
     });
   });
 });
+
+/**
+ * Task 4 (2026-08-20) — stories et statuts. `Post` est le modèle de contenu
+ * social UNIFIÉ (schema.prisma : « Contenu social unifié — posts permanents,
+ * stories éphémères, status/moods »), distingué seulement par `Post.type`
+ * (`POST | REEL | STORY | STATUS`). Une réaction à une story ou à un statut
+ * ne s'enregistre PAS dans un cinquième modèle : c'est la MÊME ligne
+ * `PostReaction`, posée par le MÊME `PostReactionService.addReaction`,
+ * emprunté indifféremment par le socket (`PostReactionHandler.handleReactionAdd`,
+ * `services/gateway/src/socketio/handlers/PostReactionHandler.ts:192`) et par
+ * le REST (`PostService.likePost` → `postReactionService.addReaction`,
+ * `services/gateway/src/services/PostService.ts:1377`, lui-même appelé par
+ * `POST /posts/:postId/like` — `services/gateway/src/routes/posts/interactions.ts:93`,
+ * qui ne branche sur `post.type` (`STORY`/`STATUS`) QUE pour choisir
+ * l'événement de broadcast, jamais pour la persistance).
+ *
+ * Preuve, pas supposition : le `select` de `addReaction` sur `post.findUnique`
+ * (`PostReactionService.ts:101-104`) ne demande que `{ id, deletedAt }` —
+ * `type` n'est même pas lu. Le plafond posé Task 3 (`PostReactionService.ts`)
+ * s'applique donc déjà, sans aucun changement de production, à toute réaction
+ * sur un post de type STORY ou STATUS. Ces deux tests le VÉRIFIENT par
+ * exécution plutôt que de le laisser à l'état de déduction — ils gardent
+ * aussi contre une régression future qui ajouterait un branchement sur
+ * `post.type` court-circuitant le plafond pour ces deux types.
+ */
+describe('PostReactionService.addReaction — le plafond de 5 réactions s\'applique identiquement aux post-types STORY et STATUS', () => {
+  it(`la ${MAX_REACTIONS_PER_OBJECT + 1}e réaction (nouvel emoji) est refusée sur une STORY — même service, même plafond, aucun code dédié`, async () => {
+    const prisma = makePrisma(MAX_REACTIONS_PER_OBJECT);
+    prisma.post.findUnique.mockResolvedValue({ id: POST_ID, type: 'STORY', deletedAt: null });
+    const service = new PostReactionService(prisma as any);
+
+    await expect(
+      service.addReaction({
+        postId: POST_ID,
+        userId: USER_ID,
+        emoji: '🎉'
+      })
+    ).rejects.toThrow(REACTION_LIMIT_REACHED_MESSAGE);
+
+    expect(prisma.postReaction.create).not.toHaveBeenCalled();
+  });
+
+  it(`la ${MAX_REACTIONS_PER_OBJECT + 1}e réaction (nouvel emoji) est refusée sur un STATUS — même service, même plafond, aucun code dédié`, async () => {
+    const prisma = makePrisma(MAX_REACTIONS_PER_OBJECT);
+    prisma.post.findUnique.mockResolvedValue({ id: POST_ID, type: 'STATUS', deletedAt: null });
+    const service = new PostReactionService(prisma as any);
+
+    await expect(
+      service.addReaction({
+        postId: POST_ID,
+        userId: USER_ID,
+        emoji: '🎉'
+      })
+    ).rejects.toThrow(REACTION_LIMIT_REACHED_MESSAGE);
+
+    expect(prisma.postReaction.create).not.toHaveBeenCalled();
+  });
+});
