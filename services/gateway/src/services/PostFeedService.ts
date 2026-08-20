@@ -2,7 +2,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude, postMentionInclude, storyPostInclude, trayStorySelect, NOT_DELETED } from './posts/postIncludes';
-import { withMentions } from './posts/postReferences';
+import { withMentions, type WireReader } from './posts/postReferences';
 import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
 import {
@@ -102,7 +102,7 @@ export class PostFeedService {
    * Phase 1: Fetch candidates from DB (3x limit)
    * Phase 2: Score & rank in-app
    */
-  async getFeed(userId: string, cursor?: string, limit: number = 20) {
+  async getFeed(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     // Chronological window + 1 probe row to detect `hasMore`. We deliberately
     // do NOT over-fetch then drop: the cursor advances by `createdAt`, so any
     // candidate we fetch-but-drop would be silently skipped (or re-served as a
@@ -240,7 +240,7 @@ export class PostFeedService {
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
         isBookmarkedByMe: bookmarkedIds.has(s.post.id),
         isRepostedByMe: repostedIds.has(s.post.id),
-      }))),
+      }), reader)),
       nextCursor,
       hasMore,
     };
@@ -248,7 +248,7 @@ export class PostFeedService {
 
   async getStories(
     userId: string,
-    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number; archiveOfAuthor?: boolean }
+    options?: { updatedSince?: Date; projection?: 'tray'; cursor?: string; limit?: number; archiveOfAuthor?: boolean; reader?: WireReader }
   ) {
     const now = new Date();
     // G1(c) pagination keyset (createdAt, id) — même patron que getStatuses /
@@ -280,7 +280,7 @@ export class PostFeedService {
           ],
         });
       }
-      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now);
+      return this.fetchAndEnrichStories(archiveWhere, userId, limit, options?.projection === 'tray', () => Promise.resolve([]), now, options?.reader);
     }
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
       this.getFriendIds(userId),
@@ -392,7 +392,7 @@ export class PostFeedService {
           .then((rows) => rows.map((r) => r.id))
       : () => Promise.resolve([]);
 
-    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now);
+    return this.fetchAndEnrichStories(where, userId, limit, options?.projection === 'tray', deletedIdsFactory, now, options?.reader);
   }
 
   /**
@@ -410,6 +410,7 @@ export class PostFeedService {
     isTrayProjection: boolean,
     deletedIdsFactory: () => Promise<string[]>,
     now: Date,
+    reader?: WireReader,
   ) {
     // G1(b) projection tray : select léger (anneaux + miniature + vu) au lieu
     // du plein corps — opt-in, le défaut reste l'include canonique complet.
@@ -493,7 +494,7 @@ export class PostFeedService {
         isViewedByMe: viewedSet.has(s.id),
         currentUserReactions: userReactionsMap.get(s.id) ?? [],
         referenceAccess,
-      }));
+      }), reader);
     });
 
     const fetchedDeletedIds = await deletedIdsPromise;
@@ -514,7 +515,7 @@ export class PostFeedService {
     return { items, nextCursor, hasMore, deletedIds, deletedIdsTruncated };
   }
 
-  async getStatuses(userId: string, cursor?: string, limit: number = 20) {
+  async getStatuses(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
     const [friendIds, dmContactIds, communityCoMemberIds] = await Promise.all([
@@ -555,7 +556,7 @@ export class PostFeedService {
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(p)));
+      .map((p) => withMentions(hoistLocationDeep(p), reader));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -563,7 +564,7 @@ export class PostFeedService {
     return { items, nextCursor, hasMore };
   }
 
-  async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20) {
+  async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
@@ -597,7 +598,7 @@ export class PostFeedService {
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(p)));
+      .map((p) => withMentions(hoistLocationDeep(p), reader));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
@@ -623,7 +624,7 @@ export class PostFeedService {
    */
   async getReels(
     userId: string,
-    opts: { seedReelId?: string; cursor?: string; limit?: number } = {}
+    opts: { seedReelId?: string; cursor?: string; limit?: number; reader?: WireReader } = {}
   ) {
     const { seedReelId, cursor, limit = 20 } = opts;
     // Chronological window + 1 probe row to detect `hasMore`, mirroring getFeed.
@@ -722,14 +723,14 @@ export class PostFeedService {
       .sort((a, b) => b.score - a.score);
 
     return {
-      items: await this.enrichReelsForViewer(scored.map((s) => s.post), userId),
+      items: await this.enrichReelsForViewer(scored.map((s) => s.post), userId, opts.reader),
       nextCursor,
       hasMore,
     };
   }
 
   /** Enrichit des réels avec l'état viewer (réactions + like + favori). */
-  private async enrichReelsForViewer(items: any[], viewerUserId: string) {
+  private async enrichReelsForViewer(items: any[], viewerUserId: string, reader?: WireReader) {
     if (items.length === 0) return [];
     const postIds = items.map((p) => p.id);
     // Aligné sur `getFeed` : on récupère AUSSI les favoris du viewer pour exposer
@@ -747,7 +748,7 @@ export class PostFeedService {
       ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
       currentUserReactions: userReactionsMap.get(p.id) ?? [],
       isBookmarkedByMe: bookmarkedIds.has(p.id),
-    })));
+    }), reader));
   }
 
   /** Langues que l'utilisateur lit (Prisme Linguistique). Best-effort. */
@@ -828,7 +829,7 @@ export class PostFeedService {
     }
   }
 
-  async getUserPosts(targetUserId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
+  async getUserPosts(targetUserId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20, reader?: WireReader) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const where: any = {
@@ -885,7 +886,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: [] as string[] }))),
+        items: items.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: [] as string[] }), reader)),
         nextCursor,
         hasMore,
       };
@@ -897,13 +898,13 @@ export class PostFeedService {
       items: items.map((p) => withMentions(hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, userReactionsMap.get(p.id) ?? []),
         currentUserReactions: userReactionsMap.get(p.id) ?? [],
-      }))),
+      }), reader)),
       nextCursor,
       hasMore,
     };
   }
 
-  async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
+  async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20, reader?: WireReader) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     // ACL : seuls les membres actifs voient les posts COMMUNITY ; un non-membre
@@ -941,7 +942,7 @@ export class PostFeedService {
 
     if (!viewerUserId || items.length === 0) {
       return {
-        items: items.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: [] as string[] }))),
+        items: items.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: [] as string[] }), reader)),
         nextCursor,
         hasMore,
       };
@@ -953,13 +954,13 @@ export class PostFeedService {
       items: items.map((p) => withMentions(hoistLocationDeep({
         ...this.enrichWithLikeStatus(p, communityReactionsMap.get(p.id) ?? []),
         currentUserReactions: communityReactionsMap.get(p.id) ?? [],
-      }))),
+      }), reader)),
       nextCursor,
       hasMore,
     };
   }
 
-  async getBookmarks(userId: string, cursor?: string, limit: number = 20) {
+  async getBookmarks(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const where: any = { userId };
@@ -992,7 +993,7 @@ export class PostFeedService {
     const bookmarkReactionsMap = await this.resolveUserReactionsMap(userId, posts);
 
     return {
-      items: posts.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] }))),
+      items: posts.map((p) => withMentions(hoistLocationDeep({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] }), reader)),
       nextCursor,
       hasMore,
     };

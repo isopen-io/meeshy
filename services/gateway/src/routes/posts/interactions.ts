@@ -17,6 +17,7 @@ import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
+import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 
 /**
  * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
@@ -95,11 +96,11 @@ export function registerInteractionRoutes(
           // la relation brute `postMentions`, `getPostById` sa forme aplatie et
           // projetée. Aplatir les deux ici, plutôt que d'assertion en assertion,
           // c'est la seule façon que le rejeu ne se distingue pas de l'écriture.
-          return withMentions(res as typeof res & { id: string });
+          return withMentions(res as typeof res & { id: string }, wireReaderFromRequest(request as UnifiedAuthRequest));
         },
         onDuplicate: async (_resultId) => {
           const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
-          return res ? withMentions(res as typeof res & { id: string }) : null;
+          return res ? withMentions(res as typeof res & { id: string }, wireReaderFromRequest(request as UnifiedAuthRequest)) : null;
         },
       }).catch((err) => {
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
@@ -224,11 +225,11 @@ export function registerInteractionRoutes(
         op: async () => {
           const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
           if (!res) throw new Error('POST_NOT_FOUND');
-          return { ...res, post: withMentions(res.post) };
+          return { ...res, post: withMentions(res.post, wireReaderFromRequest(request as UnifiedAuthRequest)) };
         },
         onDuplicate: async (_resultId) => {
           const res = await postService.getPostById(targetPostId, authContext.registeredUser.id);
-          return res ? { id: res.id, post: withMentions(res), removedEmoji: null } : null;
+          return res ? { id: res.id, post: withMentions(res, wireReaderFromRequest(request as UnifiedAuthRequest)), removedEmoji: null } : null;
         },
       }).catch((err) => {
         if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
@@ -900,14 +901,16 @@ export function registerInteractionRoutes(
       }
 
       // Une republication garde ses lignes `PostMention` : servie sous le nom
-      // de la RELATION, l'app qui la reçoit n'y lit aucune référence. Aplatie
-      // une seule fois, pour la réponse ET pour l'événement — un client qui
-      // reçoit les deux ne doit pas en voir deux formes.
-      const payload = withMentions(republished);
+      // de la RELATION, l'app qui la reçoit n'y lit aucune référence. Même
+      // aplatissement des mentions sur les deux charges ; seul `storyEffects`
+      // diverge — négocié pour la réponse (O17), tel quel sur le broadcast
+      // (F3 : une seule charge pour une audience hétérogène).
+      const payload = withMentions(republished, wireReaderFromRequest(request as UnifiedAuthRequest));
+      const broadcastPayload = withMentions(republished, WIRE_BROADCAST);
 
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
-        socialEvents.broadcastStoryCreated(payload as unknown as Post, authContext.registeredUser.id)
+        socialEvents.broadcastStoryCreated(broadcastPayload as unknown as Post, authContext.registeredUser.id)
           .catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/republish]: broadcast story created failed'));
       }
 
@@ -955,14 +958,16 @@ export function registerInteractionRoutes(
       // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
       // y compris sur un repost qui n'en porte aucune — une clé absente et une
       // liste vide ne se décodent pas pareil.
-      const payload = withMentions(repost);
+      const payload = withMentions(repost, wireReaderFromRequest(request as UnifiedAuthRequest));
+      const broadcastPayload = withMentions(repost, WIRE_BROADCAST);
 
-      // Broadcast repost via Socket.IO
+      // Broadcast repost via Socket.IO — F3 : blob tel quel pour l'audience
+      // hétérogène, chaque client négocie sa forme au premier fetch REST.
       const socialEvents = fastify.socialEvents;
       if (socialEvents) {
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
-          repost: payload as unknown as Post,
+          repost: broadcastPayload as unknown as Post,
         }, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: broadcast post reposted failed'));
       }
 

@@ -5,6 +5,7 @@ import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, ReelFeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../utils/response';
 import { getCacheStore } from '../../services/CacheStore';
+import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 
 export function registerFeedRoutes(
   fastify: FastifyInstance,
@@ -27,7 +28,7 @@ export function registerFeedRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await feedService.getFeed(authContext.registeredUser.id, cursor, limit);
+      const result = await feedService.getFeed(authContext.registeredUser.id, cursor, limit, wireReaderFromRequest(request as UnifiedAuthRequest));
 
       reply.header('Cache-Control', 'private, no-cache');
 
@@ -74,6 +75,7 @@ export function registerFeedRoutes(
 
       const result = await feedService.getStories(authContext.registeredUser.id, {
         updatedSince, projection, cursor, limit,
+        reader: wireReaderFromRequest(request as UnifiedAuthRequest),
       });
 
       reply.header('Cache-Control', 'private, no-cache');
@@ -124,6 +126,7 @@ export function registerFeedRoutes(
 
       const result = await feedService.getStories(authContext.registeredUser.id, {
         cursor, limit, archiveOfAuthor: true,
+        reader: wireReaderFromRequest(request as UnifiedAuthRequest),
       });
 
       reply.header('Cache-Control', 'private, no-cache');
@@ -157,6 +160,7 @@ export function registerFeedRoutes(
         seedReelId: seed,
         cursor,
         limit,
+        reader: wireReaderFromRequest(request as UnifiedAuthRequest),
       });
 
       reply.header('Cache-Control', 'private, no-cache');
@@ -183,7 +187,7 @@ export function registerFeedRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await feedService.getStatuses(authContext.registeredUser.id, cursor, limit);
+      const result = await feedService.getStatuses(authContext.registeredUser.id, cursor, limit, wireReaderFromRequest(request as UnifiedAuthRequest));
 
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
@@ -207,7 +211,7 @@ export function registerFeedRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await feedService.getDiscoverStatuses(authContext.registeredUser.id, cursor, limit);
+      const result = await feedService.getDiscoverStatuses(authContext.registeredUser.id, cursor, limit, wireReaderFromRequest(request as UnifiedAuthRequest));
 
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
@@ -230,7 +234,7 @@ export function registerFeedRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await feedService.getUserPosts(userId, viewerUserId, cursor, limit);
+      const result = await feedService.getUserPosts(userId, viewerUserId, cursor, limit, wireReaderFromRequest(request as UnifiedAuthRequest));
 
       reply.header('Cache-Control', 'private, no-cache');
 
@@ -255,7 +259,7 @@ export function registerFeedRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await feedService.getCommunityFeed(communityId, viewerUserId, cursor, limit);
+      const result = await feedService.getCommunityFeed(communityId, viewerUserId, cursor, limit, wireReaderFromRequest(request as UnifiedAuthRequest));
 
       reply.header('Cache-Control', 'private, no-cache');
 
@@ -281,7 +285,7 @@ export function registerFeedRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await feedService.getBookmarks(authContext.registeredUser.id, cursor, limit);
+      const result = await feedService.getBookmarks(authContext.registeredUser.id, cursor, limit, wireReaderFromRequest(request as UnifiedAuthRequest));
 
       reply.header('Cache-Control', 'private, no-cache');
 

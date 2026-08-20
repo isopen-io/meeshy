@@ -17,6 +17,7 @@ import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHa
 import { getLanguagesWithTranslation } from '../../utils/languages';
 import { postInclude, commentMediaInclude, NOT_DELETED } from './postIncludes';
 import { withMentions } from './postReferences';
+import { WIRE_BROADCAST } from './storyEffectsV3';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
@@ -328,8 +329,11 @@ export class PostAudioService {
     // La clé exposée est `mentions`, ici aussi : un client remplace son
     // exemplaire en cache par ce qu'il décode de cet événement, et la relation
     // servie sous son nom Prisma y effacerait les références du post.
+    // F3 : le broadcast sert UNE charge à une audience hétérogène — le blob
+    // `storyEffects` part tel quel, chaque client négocie sa forme au premier
+    // fetch REST (`X-Canvas-Caps`).
     await this.socialEvents.broadcastPostUpdated(
-      withMentions(post) as unknown as Post,
+      withMentions(post, WIRE_BROADCAST) as unknown as Post,
       post.authorId,
     );
     log.info('post:updated broadcast sent', { postId });

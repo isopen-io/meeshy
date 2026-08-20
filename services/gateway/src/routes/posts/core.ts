@@ -22,6 +22,7 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
+import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 /**
@@ -231,7 +232,8 @@ export function registerCoreRoutes(
           graftReferences(
             hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
             broadcastReferences
-          )
+          ),
+          WIRE_BROADCAST
         ) as unknown as Post;
         if (postType === 'STORY') {
           socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
@@ -275,7 +277,10 @@ export function registerCoreRoutes(
       // qu'il vient de poser, sans quoi il ne pourrait plus en retirer une.
       return sendSuccess(
         reply,
-        withMentions(graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references)),
+        withMentions(
+          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
+          wireReaderFromRequest(request as UnifiedAuthRequest)
+        ),
         { statusCode: 201 }
       );
     } catch (error) {
@@ -305,7 +310,10 @@ export function registerCoreRoutes(
       // post ORIGINAL d'une republication porte, lui, la relation sous son nom
       // de schéma (`repostOfInclude`), et un client ne décode pas
       // `repostOf.postMentions`.
-      return sendSuccess(reply, withMentions(hoistLocation(post as unknown as Record<string, unknown>)));
+      return sendSuccess(reply, withMentions(
+        hoistLocation(post as unknown as Record<string, unknown>),
+        wireReaderFromRequest(request as UnifiedAuthRequest)
+      ));
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -428,7 +436,8 @@ export function registerCoreRoutes(
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences)
+          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences),
+          WIRE_BROADCAST
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {
           // Même prédicat que le reset d'engagement du service — les deux ne
@@ -446,7 +455,10 @@ export function registerCoreRoutes(
       // La réponse va à l'AUTEUR — seul autorisé à éditer — et lui voit tout.
       return sendSuccess(
         reply,
-        withMentions(graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references))
+        withMentions(
+          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
+          wireReaderFromRequest(request as UnifiedAuthRequest)
+        )
       );
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {

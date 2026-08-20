@@ -211,3 +211,124 @@ export function convertStoryEffectsForWire(effects: unknown): unknown {
     return effects;
   }
 }
+
+/**
+ * Le LECTEUR d'une charge utile, tel que la négociation O17 le connaît.
+ *
+ * `canvasCaps` vient de l'en-tête `X-Canvas-Caps` (absent = client legacy) ;
+ * `readerLanguage` est la langue DÉJÀ résolue par le middleware d'auth
+ * (`authContext.userLanguage` — le Prisme s'applique jusqu'à l'invite de mise
+ * à jour). `broadcast` est l'exception temps réel F3 : une seule charge pour
+ * une audience hétérogène, le blob part tel quel — la négociation se fait au
+ * premier fetch REST de chaque client.
+ */
+export type WireReader = {
+  readonly canvasCaps?: number;
+  readonly readerLanguage?: string;
+  readonly broadcast?: boolean;
+};
+
+export const WIRE_BROADCAST: WireReader = { broadcast: true };
+
+export type WireForm = 'as-is' | 'convert' | 'sentinel';
+
+/**
+ * La table O17 (spec §C3 rév. 7), pure :
+ * v1 + sans caps ⇒ tel quel (restitution garantie) ; v1 + caps ≥ 3 ⇒ converti
+ * si `CANVAS_V3_READ` armé, sinon v1 ; v3-natif + caps ≥ 3 ⇒ v3 ; v3-natif +
+ * sans caps ⇒ sentinelle. Le prédicat v3-natif est la MARQUE (`v >= 3`),
+ * jamais la validité du schéma : un blob marqué mais invalide part tel quel
+ * aux clients capables (rendu best-effort) et en sentinelle aux autres.
+ */
+export function resolveWireForm(
+  blob: unknown,
+  caps: number | undefined,
+  readArmed: boolean
+): WireForm {
+  if (blob == null || typeof blob !== 'object') return 'as-is';
+  const mark = (blob as { v?: unknown }).v;
+  const isV3Native = typeof mark === 'number' && mark >= 3;
+  if (caps !== undefined && caps >= 3) {
+    if (isV3Native) return 'as-is';
+    return readArmed ? 'convert' : 'as-is';
+  }
+  return isV3Native ? 'sentinel' : 'as-is';
+}
+
+export function parseCanvasCaps(header: unknown): number | undefined {
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (typeof raw !== 'string' || raw.length === 0) return undefined;
+  const caps = Number(raw);
+  return Number.isFinite(caps) ? caps : undefined;
+}
+
+export function wireReaderFromRequest(request: {
+  readonly headers: { readonly [name: string]: unknown };
+  readonly authContext?: { readonly userLanguage?: string };
+}): WireReader {
+  return {
+    canvasCaps: parseCanvasCaps(request.headers['x-canvas-caps']),
+    readerLanguage: request.authContext?.userLanguage,
+  };
+}
+
+/**
+ * Catalogue serveur de l'invite (repli fr). Local au service : la sentinelle
+ * n'a qu'une phrase, un système i18n complet serait une dette pour rien.
+ */
+const UPGRADE_INVITES: Readonly<Record<string, string>> = {
+  fr: 'Mets à jour Meeshy pour voir ce contenu',
+  en: 'Update Meeshy to see this content',
+  es: 'Actualiza Meeshy para ver este contenido',
+  de: 'Aktualisiere Meeshy, um diesen Inhalt zu sehen',
+  pt: 'Atualiza o Meeshy para ver este conteúdo',
+  it: 'Aggiorna Meeshy per vedere questo contenuto',
+  ar: 'حدِّث ميشي لرؤية هذا المحتوى',
+};
+
+/**
+ * Un blob v1 GRAMMATICALEMENT VALIDE pour les vieux parseurs — fond `"RRGGBB"`
+ * sans préfixe ni `#` (rév. 7). Généré à la lecture, jamais stocké.
+ */
+export function upgradeSentinel(readerLanguage: string | undefined): Record<string, unknown> {
+  const base = (readerLanguage ?? 'fr').toLowerCase().split('-')[0];
+  const text = UPGRADE_INVITES[base] ?? UPGRADE_INVITES['fr'];
+  return {
+    background: '1E1B4B',
+    textObjects: [{
+      id: 'upgrade-invite',
+      text,
+      textStyle: 'classic',
+      x: 0.5,
+      y: 0.45,
+      scale: 1,
+      rotation: 0,
+      opacity: 1,
+      zIndex: 0,
+    }],
+  };
+}
+
+/**
+ * Applique la table O17 à UN post (racine ou `repostOf`). Active dès le merge
+ * pour la sentinelle ; `CANVAS_V3_READ` (lu à chaque appel, défaut OFF) ne
+ * gouverne que la conversion de l'archive v1. Règle 5 : un post à média
+ * porteur ne reçoit pas de sentinelle — `storyEffects` est OMIS, le média se
+ * lit tel quel.
+ */
+export function negotiateWireStoryEffects<T>(post: T, reader?: WireReader): T {
+  if (reader?.broadcast === true) return post;
+  const effects = (post as { storyEffects?: unknown }).storyEffects;
+  if (effects == null) return post;
+  const readArmed = process.env.CANVAS_V3_READ === '1';
+  const form = resolveWireForm(effects, reader?.canvasCaps, readArmed);
+  if (form === 'as-is') return post;
+  if (form === 'convert') {
+    return { ...post, storyEffects: convertStoryEffectsForWire(effects) };
+  }
+  const media = (post as { media?: unknown }).media;
+  if (Array.isArray(media) && media.length > 0) {
+    return { ...post, storyEffects: undefined };
+  }
+  return { ...post, storyEffects: upgradeSentinel(reader?.readerLanguage) };
+}

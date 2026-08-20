@@ -123,12 +123,12 @@ describe('GET /posts/feed — success', () => {
 
   it('calls feedService.getFeed with user id and default limit', async () => {
     await app.inject({ method: 'GET', url: '/posts/feed' });
-    expect(mockGetFeed).toHaveBeenCalledWith(USER_ID, undefined, 20);
+    expect(mockGetFeed).toHaveBeenCalledWith(USER_ID, undefined, 20, { canvasCaps: undefined, readerLanguage: undefined });
   });
 
   it('passes custom limit from query param', async () => {
     await app.inject({ method: 'GET', url: '/posts/feed?limit=10' });
-    expect(mockGetFeed).toHaveBeenCalledWith(USER_ID, undefined, 10);
+    expect(mockGetFeed).toHaveBeenCalledWith(USER_ID, undefined, 10, { canvasCaps: undefined, readerLanguage: undefined });
   });
 
   // Le feed lisait les references en re-parsant le texte de chaque post a
@@ -322,7 +322,7 @@ describe('GET /posts/user/:userId — authenticated viewer', () => {
 
   it('passes viewerUserId to getUserPosts', async () => {
     await app.inject({ method: 'GET', url: `/posts/user/${OTHER_USER_ID}` });
-    expect(mockGetUserPosts).toHaveBeenCalledWith(OTHER_USER_ID, USER_ID, undefined, 20);
+    expect(mockGetUserPosts).toHaveBeenCalledWith(OTHER_USER_ID, USER_ID, undefined, 20, { canvasCaps: undefined, readerLanguage: undefined });
   });
 });
 
@@ -337,7 +337,7 @@ describe('GET /posts/user/:userId — unauthenticated viewer', () => {
   it('returns 200 with null viewerUserId for guests', async () => {
     const res = await app.inject({ method: 'GET', url: `/posts/user/${OTHER_USER_ID}` });
     expect(res.statusCode).toBe(200);
-    expect(mockGetUserPosts).toHaveBeenCalledWith(OTHER_USER_ID, undefined, undefined, 20);
+    expect(mockGetUserPosts).toHaveBeenCalledWith(OTHER_USER_ID, undefined, undefined, 20, { canvasCaps: undefined, readerLanguage: undefined });
   });
 });
 
@@ -373,7 +373,7 @@ describe('GET /posts/community/:communityId — success', () => {
 
   it('passes communityId and viewerUserId to getCommunityFeed', async () => {
     await app.inject({ method: 'GET', url: `/posts/community/${COMMUNITY_ID}` });
-    expect(mockGetCommunityFeed).toHaveBeenCalledWith(COMMUNITY_ID, USER_ID, undefined, 20);
+    expect(mockGetCommunityFeed).toHaveBeenCalledWith(COMMUNITY_ID, USER_ID, undefined, 20, { canvasCaps: undefined, readerLanguage: undefined });
   });
 });
 

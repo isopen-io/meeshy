@@ -5,6 +5,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from '../../utils/response';
 import { postInclude, NOT_DELETED } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
+import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { resolveDensityGridStepDegrees } from '../../services/location/geoDiscoverability';
 
@@ -175,7 +176,7 @@ export function registerNearbyRoutes(
         .map((id) => postsById.get(id))
         .filter((post): post is NonNullable<typeof post> => post !== undefined)
         .map((post) => ({
-          ...withMentions(hoistLocationDeep(post)),
+          ...withMentions(hoistLocationDeep(post), wireReaderFromRequest(request as UnifiedAuthRequest)),
           distanceMeters: distanceById.get(post.id) ?? null,
         }));
 
