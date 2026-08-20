@@ -7,6 +7,8 @@ import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiPostReplyTarget
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
+import me.meeshy.sdk.model.ForwardBadgePolicy
+import me.meeshy.sdk.model.ForwardReference
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
@@ -195,6 +197,22 @@ public object BubbleContentBuilder {
             expiresAtIso = if (isDeleted) null else message.expiresAt?.trim()?.ifBlank { null },
             pinnedAtIso = if (isDeleted) null else message.pinnedAt?.trim()?.ifBlank { null },
             isForwarded = !isDeleted && !message.forwardedFromId.isNullOrBlank(),
+            // Name the SOURCE conversation for a group forward (else null → the
+            // generic "Forwarded" label). Mirrors iOS building a `ForwardReference`
+            // from `forwardedFromConversation` (`title ?? identifier`, `type`), then
+            // running `ForwardBadgePolicy`. A deleted tombstone never names a source.
+            forwardedFromName = if (isDeleted) {
+                null
+            } else {
+                ForwardBadgePolicy.conversationName(
+                    message.forwardedFromConversation?.let { conv ->
+                        ForwardReference(
+                            conversationName = conv.title ?: conv.identifier,
+                            conversationType = conv.type,
+                        )
+                    },
+                )
+            },
             blurReveal = if (isDeleted) null else buildBlurReveal(message.effects),
             // Visual-treatment effects (glow / pulse / rainbow / one-shot appearance)
             // fed to `Modifier.messageEffects` — lifecycle bits stripped, empty when

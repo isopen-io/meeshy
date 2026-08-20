@@ -87,6 +87,13 @@ data class ForwardReference(
     val conversationName: String? = null,
     val attachmentType: String? = null,
     val attachmentThumbnailUrl: String? = null,
+    /**
+     * Type of the SOURCE conversation (`direct`, `group`, `public`, `global`,
+     * `community`, `channel`, `bot`, `broadcast`) — same values as a
+     * conversation's `type`. Optional: cache rows older than the field decode to
+     * `null` with no migration.
+     */
+    val conversationType: String? = null,
 )
 
 /** A shared contact card — port of SharedContact (CoreModels.swift). */

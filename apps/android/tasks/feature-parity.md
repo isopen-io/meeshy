@@ -2132,8 +2132,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       shows no metadata, mirroring the `pinnedAtIso` suppress rule; a blank/whitespace id or a
       conversation-id-only forward is not flagged). `MessageBubble` renders a subtle top-of-bubble
       italic "Transféré/Forwarded" chip with the same accent-coherent forward glyph as the forward
-      action (`Icons.AutoMirrored.Filled.Send`). **Pending:** edit-history viewer (needs the gateway
-      edit-history endpoint surfaced on Android).
+      action (`Icons.AutoMirrored.Filled.Send`). **Forwarded-source name ✅** (slice
+      `chat-forwarded-badge-source-name`, 2026-08-20, +18 tests): the chip now **names the SOURCE
+      conversation** for a group forward — pure `ForwardBadgePolicy.conversationName(ref)` (`:core:model`,
+      twin rule with `apps/ios/.../ForwardBadgePolicy.swift` + `apps/web/lib/forward-badge.ts`) hides the
+      name for `direct`/`bot`, shows it for `group`/`public`/`global`/`community`/`channel`/`broadcast`,
+      keeps the status quo for an unknown type, and treats a blank name as absent. Android `ApiMessage`
+      now decodes the gateway's hoisted `forwardedFromConversation` (`{id,title,identifier,type,avatar}`);
+      `ForwardReference` gains the faithful `conversationType`; `BubbleContentBuilder` folds it to
+      `BubbleContent.forwardedFromName` (`title ?? identifier`, deleted tombstone → null); `MessageBubble`
+      renders `bubble_forwarded_from` ("Transféré de {name}") EN/FR/ES/PT, falling back to the generic
+      chip when unnamed. **Pending:** edit-history viewer (needs the gateway edit-history endpoint
+      surfaced on Android).
 - [◐] Ephemeral (self-destruct) messages with duration picker + countdown badges
       — **countdown badge done** (`chat-ephemeral-countdown` 2026-07-14 : la logique pure
       `EphemeralLifecycle` (`:core:model`) porte EXACTEMENT `BubbleEphemeralLifecycle`
