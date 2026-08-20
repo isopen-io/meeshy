@@ -239,6 +239,16 @@ describe('LentilleFocusCard', () => {
       expect(screen.queryByTestId('lentille-focus-card-type-chip')).not.toBeInTheDocument();
     });
 
+    it('affiche « 199+ » quand le compteur est plafonné par le serveur', () => {
+      render(
+        <LentilleFocusCard
+          {...baseProps}
+          conversation={conv({ type: 'group', memberCount: 199, memberCountCapped: true })}
+        />
+      );
+      expect(screen.getByTestId('lentille-focus-card-member-count')).toHaveTextContent('199+');
+    });
+
     it("omet le compte quand il ne dit rien (memberCount ≤ 1)", () => {
       render(<LentilleFocusCard {...baseProps} conversation={conv({ type: 'broadcast', memberCount: 1 })} />);
       expect(screen.getByTestId('lentille-focus-card-type-chip')).toBeInTheDocument();

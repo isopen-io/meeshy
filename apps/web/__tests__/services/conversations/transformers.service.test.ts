@@ -567,6 +567,19 @@ describe('TransformersService', () => {
       expect(conv.memberCount).toBe(2);
     });
 
+    it('propage memberCountCapped — le drapeau 199+ ne doit pas se perdre dans la recopie manuelle', () => {
+      const raw = makeRawConversation({ memberCount: 199, memberCountCapped: true });
+      const conv = svc.transformConversationData(raw);
+      expect(conv.memberCount).toBe(199);
+      expect(conv.memberCountCapped).toBe(true);
+    });
+
+    it('laisse memberCountCapped absent quand le serveur ne le pose pas', () => {
+      const raw = makeRawConversation({ memberCount: 42 });
+      const conv = svc.transformConversationData(raw);
+      expect(conv.memberCountCapped).toBeUndefined();
+    });
+
     it('transforms lastMessage when present', () => {
       const raw = makeRawConversation({ lastMessage: makeRawMessage() });
       const conv = svc.transformConversationData(raw);

@@ -482,6 +482,9 @@ export class TransformersService {
       isGroup: String(conv.type) === 'group',
       isPrivate: this.mapConversationVisibility(String(conv.type || 'direct')) === 'private',
       memberCount: (conv.memberCount as number) || (conv._count as any)?.participants || participants.length,
+      // Drapeau du cap 199+ (serveur) : recopie obligatoire — cet objet est
+      // construit à la main, tout champ non recopié est perdu pour tout le web.
+      memberCountCapped: conv.memberCountCapped === true ? true : undefined,
       lastMessageAt: conv.lastMessageAt ? new Date(String(conv.lastMessageAt)) : new Date(String(conv.updatedAt)),
       createdAt: new Date(String(conv.createdAt)),
       updatedAt: new Date(String(conv.updatedAt)),

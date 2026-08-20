@@ -130,6 +130,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
           conversationType={conversation.type}
           userConversationRole={currentUserRole}
           memberCount={conversation.memberCount}
+          memberCountCapped={conversation.memberCountCapped}
           onParticipantRemoved={onParticipantRemoved}
           onParticipantAdded={onParticipantAdded}
           onLinkCreated={onLinkCreated}

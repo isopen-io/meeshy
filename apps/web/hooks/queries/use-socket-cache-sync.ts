@@ -1032,13 +1032,25 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // contrat, et il ne converge pas — un événement manqué (hors ligne, trou de
     // reconnexion) laisse une dérive définitive dans un cache dont le
     // `staleTime: Infinity` interdit la relecture spontanée.
-    const applyMemberCount = (conversationId: string, resolve: (current: number) => number) => {
+    const applyMemberCount = (
+      conversationId: string,
+      data: { memberCount?: number; memberCountCapped?: boolean },
+      fallback: (current: number) => number
+    ) => {
       const updater = (convs: Conversation[]) =>
-        convs.map((conv) =>
-          conv.id === conversationId
-            ? { ...conv, memberCount: resolve(conv.memberCount ?? 0) }
-            : conv
-        );
+        convs.map((conv) => {
+          if (conv.id !== conversationId) return conv;
+          if (typeof data.memberCount === 'number') {
+            // L'effectif du serveur arrive avec son drapeau de cap 199+ : les
+            // deux se POSENT ensemble — un drapeau absent dit « exact ».
+            return { ...conv, memberCount: data.memberCount, memberCountCapped: data.memberCountCapped === true };
+          }
+          // Repli delta (serveur antérieur au contrat). Un compteur plafonné à
+          // « 199+ » décrit un effectif AU-DELÀ du seuil : un ±1 ne peut pas le
+          // faire bouger sans mentir — le vrai compte est inconnu du client.
+          if (conv.memberCountCapped) return conv;
+          return { ...conv, memberCount: fallback(conv.memberCount ?? 0) };
+        });
       updateInfiniteConversationCache(queryClient, updater);
       queryClient.invalidateQueries({
         queryKey: queryKeys.conversations.participants(conversationId),
@@ -1050,8 +1062,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // an actual membership gain. The gateway leaves the new member OUT of this
     // fan-out: their own list gets the conversation from `conversation:new`,
     // whose member count already includes them.
-    const handleConversationParticipantJoined = (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number }) => {
-      applyMemberCount(data.conversationId, (current) => data.memberCount ?? current + 1);
+    const handleConversationParticipantJoined = (data: { conversationId: string; userId: string; displayName: string; joinedAt: string; memberCount?: number; memberCountCapped?: boolean }) => {
+      applyMemberCount(data.conversationId, data, (current) => current + 1);
     };
 
     // Le pendant EXACT de `conversation:joined` ci-dessus, et le même piège :
@@ -1098,12 +1110,12 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // `GET /conversations` ne sert plus la laissait cliquable pour de bon :
     // `staleTime: Infinity` ne relit jamais de lui-même, et le seul rattrapage
     // était le tombstone du prochain delta.
-    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => {
+    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number; memberCountCapped?: boolean }) => {
       if (data.userId === useAuthStore.getState().user?.id) {
         dropConversationFromCache(data.conversationId);
         return;
       }
-      applyMemberCount(data.conversationId, (current) => data.memberCount ?? Math.max(0, current - 1));
+      applyMemberCount(data.conversationId, data, (current) => Math.max(0, current - 1));
     };
 
     // Handler for participant-banned — member was banned from the conversation.
@@ -1111,7 +1123,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // ex-member is what keeps them from walking back in through a share link,
     // but it removes no membership, so the count must not move. Absent on
     // servers older than that contract, where a ban always removed one.
-    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number }) => {
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number; memberCountCapped?: boolean }) => {
       // Être banni est la troisième fin d'appartenance, et elle se traite comme
       // les deux autres. Le test d'identité passe AVANT le court-circuit
       // `membershipEnded === false` : celui-ci protège un COMPTEUR, or il n'y a
@@ -1131,7 +1143,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
         });
         return;
       }
-      applyMemberCount(data.conversationId, (current) => data.memberCount ?? Math.max(0, current - 1));
+      applyMemberCount(data.conversationId, data, (current) => Math.max(0, current - 1));
     };
 
     // Handler for participant-unbanned — member was unbanned and is an active
@@ -1144,14 +1156,14 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // `membershipRestored: false` means the unban lifted the ban WITHOUT
     // re-admitting anyone — the person had left on their own before being
     // banned, so there is no ban-time decrement to undo here either.
-    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string; membershipRestored?: boolean; memberCount?: number }) => {
+    const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string; membershipRestored?: boolean; memberCount?: number; memberCountCapped?: boolean }) => {
       if (typeof data.memberCount !== 'number' && data.membershipRestored === false) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.conversations.participants(data.conversationId),
         });
         return;
       }
-      applyMemberCount(data.conversationId, (current) => data.memberCount ?? current + 1);
+      applyMemberCount(data.conversationId, data, (current) => current + 1);
     };
 
     // Handler for conversation:closed — conversation permanently closed by admin

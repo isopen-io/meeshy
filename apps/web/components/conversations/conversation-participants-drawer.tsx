@@ -53,6 +53,7 @@ import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
 import { OnlineIndicator } from '@/components/ui/online-indicator';
 import { getUserStatus, isPresenceActive, PRESENCE_DOT_CLASS } from '@/lib/user-status';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials, isParticipantModerator } from '@/utils/participant-helpers';
+import { formatMemberCount } from '@meeshy/shared/utils/member-visibility';
 
 interface ConversationParticipantsDrawerProps {
   conversationId: string;
@@ -63,6 +64,8 @@ interface ConversationParticipantsDrawerProps {
   userConversationRole?: UserRoleEnum | string;
   /** Nombre total de membres (depuis conversation.memberCount) */
   memberCount?: number;
+  /** Vrai quand memberCount est plafonné à 199 par le serveur — afficher « 199+ » */
+  memberCountCapped?: boolean;
   onParticipantRemoved?: (userId: string) => void;
   onParticipantAdded?: (userId: string) => void;
   onLinkCreated?: (link: string) => void;
@@ -74,6 +77,7 @@ export function ConversationParticipantsDrawer({
   participants,
   currentUser,
   memberCount,
+  memberCountCapped,
   onParticipantRemoved,
   onParticipantAdded,
   onOpenSettings
@@ -134,6 +138,8 @@ export function ConversationParticipantsDrawer({
 
   // Prendre le max : memberCount peut être stale (ex: 5 alors que 200+ chargés)
   const totalMemberCount = Math.max(memberCount ?? 0, activeParticipants.length);
+  // « 199+ » quand le serveur plafonne l'effectif pour ce lecteur.
+  const totalMemberCountLabel = formatMemberCount(totalMemberCount, memberCountCapped);
 
   // Pagination : limiter le nombre de participants affichés
   const [displayLimit, setDisplayLimit] = useState(50);
@@ -548,7 +554,7 @@ export function ConversationParticipantsDrawer({
           className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 relative group transition-colors duration-200"
           title={t('conversationUI.participants')}
           onClick={() => setIsOpen(true)}
-          aria-label={`${t('conversationUI.participants')} (${totalMemberCount})`}
+          aria-label={`${t('conversationUI.participants')} (${totalMemberCountLabel})`}
         >
           <Users className="h-5 w-5 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors" />
           {totalMemberCount > 0 && (
@@ -573,7 +579,7 @@ export function ConversationParticipantsDrawer({
           <SheetHeader className="px-6 py-4 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-b border-white/30 dark:border-gray-700/40">
             <SheetTitle className="text-lg font-bold bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400 bg-clip-text text-transparent flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-              {t('conversationUI.participants')} ({totalMemberCount})
+              {t('conversationUI.participants')} ({totalMemberCountLabel})
             </SheetTitle>
           </SheetHeader>
 

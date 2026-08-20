@@ -57,6 +57,7 @@ import { cn } from '@/lib/utils';
 import type { Conversation, ConversationType } from '@meeshy/shared/types';
 import type { ReadingModePreference } from '@meeshy/shared/types/reading-modes';
 import type { OrchestratorDecision } from '@meeshy/shared/utils/reading-modes';
+import { formatMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { notchText } from './lentille-mode-labels';
 import type { LentilleRowTranslate } from './LentilleRow';
 
@@ -162,7 +163,9 @@ export function LentilleFocusCard({
         >
           <TypeIcon className="h-3 w-3" />
           {conversation.memberCount > 1 && (
-            <span data-testid="lentille-focus-card-member-count">{conversation.memberCount}</span>
+            <span data-testid="lentille-focus-card-member-count">
+              {formatMemberCount(conversation.memberCount, conversation.memberCountCapped)}
+            </span>
           )}
         </span>
       )}

@@ -1020,6 +1020,66 @@ describe('useSocketCacheSync', () => {
       expect((cached.pages[0].conversations[0] as any).memberCount).toBe(9);
     });
 
+    it('pose le drapeau de plafonnement 199+ avec l\'effectif du serveur', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 4 }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString(), memberCount: 199, memberCountCapped: true } as any);
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(199);
+      expect((cached.pages[0].conversations[0] as any).memberCountCapped).toBe(true);
+    });
+
+    it('efface le drapeau quand le serveur repasse un effectif exact', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 199, memberCountCapped: true }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString(), memberCount: 150 });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(150);
+      expect((cached.pages[0].conversations[0] as any).memberCountCapped).toBe(false);
+    });
+
+    it('n\'applique pas le delta de repli sur un compteur plafonné', () => {
+      // Un compteur à « 199+ » décrit un effectif AU-DELÀ du seuil : un ±1
+      // de repli (serveur antérieur au contrat) ne peut pas le faire bouger
+      // sans mentir — le vrai compte est inconnu du client.
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [{ ...mockConversation, memberCount: 199, memberCountCapped: true }], pagination: { total: 1, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantJoinedCallback?.({ conversationId: 'conv-1', userId: 'user-9', displayName: 'Zoe', joinedAt: new Date().toISOString() });
+      });
+
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(199);
+      expect((cached.pages[0].conversations[0] as any).memberCountCapped).toBe(true);
+    });
+
     it('increments memberCount when a member is actually added', () => {
       // Le pendant montant de `participant-left`. Sans lui, l'effectif ne
       // connaissait que des soustractions et dérivait vers le bas — et
