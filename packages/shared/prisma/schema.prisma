@@ -1012,6 +1012,14 @@ model MessageAttachment {
 
   @@index([messageId])
   @@index([uploadedBy])
+  // Comptage de références avant suppression physique : plusieurs lignes
+  // partagent délibérément le MÊME fichier (transfert et diffusion recopient
+  // `filePath`/`thumbnailPath` sans dupliquer les octets). `deleteAttachment`
+  // compte donc les porteurs restants avant chaque `unlink` — sur le chemin
+  // chaud de toute suppression, expiration et maintenance comprises. Sans ces
+  // index, ce comptage balaie la collection entière à chaque suppression.
+  @@index([filePath])
+  @@index([thumbnailPath])
 }
 
 // =====================================================
