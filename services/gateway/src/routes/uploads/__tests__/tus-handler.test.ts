@@ -351,6 +351,70 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     });
   });
 
+  // ── Contournement d'authentification : repli `jwt.decode` non vérifié ────
+  //
+  // AVANT : quand `jwt.verify` échouait (signature invalide, jeton forgé,
+  // jeton expiré), le code retombait sur `jwt.decode`, qui NE VÉRIFIE AUCUNE
+  // SIGNATURE — il suffisait de fabriquer un jeton `{ userId: "<victime>" }`
+  // signé avec n'importe quel secret pour usurper l'identité de n'importe
+  // quel compte enregistré sur cette route de création de pièces jointes.
+  describe('JWT invalide ou expiré — refusé, jamais décodé sans vérification', () => {
+    it('refuse un jeton forgé avec un mauvais secret portant un userId arbitraire (usurpation d\'identité fermée)', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma();
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      // Signé avec un secret QUELCONQUE, différent de `JWT_SECRET` du serveur
+      // — exactement le jeton qu'un attaquant peut fabriquer lui-même.
+      const forgedToken = jwt.sign({ userId: 'victim-user-1' }, 'attacker-controlled-secret');
+
+      await expect(
+        captured.onUploadCreate(
+          { headers: headersFrom({ authorization: `Bearer ${forgedToken}` }) },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuse un jeton expiré (alignement avec middleware/auth.ts : pas de session de confiance disponible sur ce chemin)', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma();
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onUploadCreate(
+          { headers: headersFrom({ authorization: `Bearer ${expiredToken}` }) },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it('accepte toujours un jeton légitimement signé par le serveur (non-régression)', async () => {
+      const prisma = buildFakePrisma();
+      const legitToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+
+      const result = await runFullUpload({
+        prisma,
+        headers: { authorization: `Bearer ${legitToken}` },
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+      });
+
+      expect(result.status_code).toBe(200);
+      const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
+      expect(createCall.data.uploadedBy).toBe('user-registered-1');
+    });
+  });
+
   describe('sans credential — inchangé', () => {
     it('refuse une requête sans Authorization ni X-Session-Token', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);

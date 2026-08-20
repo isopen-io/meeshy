@@ -75,17 +75,27 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       let anonymousShareLinkId: string | null = null;
       if (authHeader) {
         const token = String(authHeader).replace(/^Bearer\s+/i, '');
+        // Une identité ne s'établit jamais par un décodage non vérifié.
+        // AVANT : quand `jwt.verify` échouait (signature invalide, jeton
+        // forgé, jeton expiré), le code retombait sur `jwt.decode` — qui NE
+        // VÉRIFIE AUCUNE SIGNATURE — et faisait confiance au `userId` qu'il
+        // contenait. Il suffisait de fabriquer un jeton `{ userId: "<x>" }`
+        // signé avec n'importe quel secret pour usurper l'identité de
+        // n'importe quel compte enregistré sur cette route de création de
+        // pièces jointes. Contrairement à `middleware/auth.ts` (jeton expiré
+        // rattrapable via une session de confiance vérifiée en base), ce
+        // chemin n'a pas cette mécanique : tout échec de `jwt.verify`, y
+        // compris l'expiration, est donc refusé sans repli.
+        let jwtPayload: { userId?: string; sub?: string };
         try {
-          const payload = jwt.verify(token, process.env.JWT_SECRET!) as any;
-          userId = payload.userId || payload.sub || 'anonymous';
-        } catch {
-          try {
-            const payload = jwt.decode(token) as any;
-            userId = payload?.userId || payload?.sub || 'anonymous';
-          } catch {
-            logger.warn('[TUS] Failed to decode JWT for userId extraction');
-          }
+          jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: string; sub?: string };
+        } catch (err) {
+          logger.warn('[TUS] JWT verification failed — rejecting upload', {
+            reason: err instanceof Error ? err.message : 'unknown',
+          });
+          throw { status_code: 401, body: 'Invalid or expired token\n' };
         }
+        userId = jwtPayload.userId || jwtPayload.sub || 'anonymous';
       } else if (sessionToken) {
         // Round 2 sécurité — AVANT : `userId = String(sessionToken)` traitait
         // le jeton comme une identité de fait, sans jamais vérifier qu'il
