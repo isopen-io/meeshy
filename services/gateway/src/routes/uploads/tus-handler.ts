@@ -10,6 +10,7 @@ import {
   UPLOAD_LIMITS,
 } from '@meeshy/shared/types/attachment';
 import jwt from 'jsonwebtoken';
+import { findTrustedSession } from '../../middleware/auth';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
@@ -40,6 +41,12 @@ function buildPublicUrl(): string {
   return process.env.BACKEND_URL || `http://localhost:${process.env.PORT || '3000'}`;
 }
 
+type UploadCallerIdentity = {
+  readonly userId: string;
+  readonly isAnonymous: boolean;
+  readonly anonymousShareLinkId: string | null;
+};
+
 export async function registerTusRoutes(fastify: FastifyInstance): Promise<void> {
   const prisma = fastify.prisma;
   if (!prisma) {
@@ -50,12 +57,125 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
 
   const metadataManager = new MetadataManager(UPLOAD_PATH);
   const publicUrl = buildPublicUrl();
+  // Référence conservée séparément (plutôt que lue depuis `tusServer` une
+  // fois construit) : `onIncomingRequest`, ci-dessous, doit pouvoir
+  // interroger le magasin AVANT que `new Server({...})` ne rende l'instance
+  // — la référence circulaire n'existe pas encore à ce point de la fermeture.
+  const uploadDataStore = new FileStore({ directory: TUS_TEMP_PATH });
+
+  /**
+   * Résout l'identité de l'appelant à partir de `Authorization`/
+   * `X-Session-Token` — politique UNIQUE, partagée par `onUploadCreate`
+   * (établit l'identité qui sera figée dans les métadonnées) et
+   * `onIncomingRequest` (task-1-fix-round-3, I1 : compare l'appelant au
+   * propriétaire déjà figé, sur GET/HEAD/PATCH/DELETE d'un upload existant).
+   *
+   * Le repli JWT expiré → session de confiance (task-1-fix-round-3, I3)
+   * s'applique aux DEUX call sites à dessein : un téléversement long — le cas
+   * d'usage même de ce protocole resumable — peut voir son JWT expirer
+   * PENDANT une reprise (PATCH), pas seulement à la création. Une identité ne
+   * s'établit jamais par un décodage non vérifié SEUL : seule une expiration
+   * (`jwt.TokenExpiredError` — jsonwebtoken vérifie la signature AVANT
+   * l'expiration, donc ce cas ne passe jamais par une signature invalide)
+   * obtient le repli, et seulement si une session de confiance ACTIVE existe
+   * en base pour ce `userId` précis, reprise TELLE QUELLE de
+   * `middleware/auth.ts` (`findTrustedSession`). Une signature invalide reste
+   * refusée sans recours, qu'une session de confiance existe ou non — la
+   * confiance vient de la session, jamais du JWT.
+   *
+   * Retourne `null` sur tout échec d'authentification — ne lève jamais
+   * elle-même : chaque appelant choisit son propre code HTTP.
+   */
+  async function resolveUploadCallerIdentity(headers: unknown): Promise<UploadCallerIdentity | null> {
+    const h = headers as any;
+    const authHeader = h?.get?.('authorization') ?? h?.authorization;
+    const sessionToken = h?.get?.('x-session-token') ?? h?.['x-session-token'];
+
+    if (authHeader) {
+      const token = String(authHeader).replace(/^Bearer\s+/i, '');
+      let jwtPayload: { userId?: string; sub?: string } | null = null;
+      let trustedFallbackUserId: string | null = null;
+      try {
+        jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: string; sub?: string };
+      } catch (err) {
+        if (err instanceof jwt.TokenExpiredError && sessionToken) {
+          const decoded = jwt.decode(token) as { userId?: string; sub?: string } | null;
+          const candidateUserId = decoded?.userId || decoded?.sub || null;
+          const trustedSession = candidateUserId
+            ? await findTrustedSession(prisma, { userId: candidateUserId, sessionToken: String(sessionToken) })
+            : null;
+
+          if (!trustedSession) {
+            logger.warn('[TUS] Expired JWT with no valid trusted session — rejecting');
+            return null;
+          }
+          trustedFallbackUserId = candidateUserId;
+        } else {
+          logger.warn('[TUS] JWT verification failed — rejecting', {
+            reason: err instanceof Error ? err.message : 'unknown',
+          });
+          return null;
+        }
+      }
+      const userId = trustedFallbackUserId ?? (jwtPayload!.userId || jwtPayload!.sub || null);
+      if (!userId) return null;
+      return { userId, isAnonymous: false, anonymousShareLinkId: null };
+    }
+
+    if (sessionToken) {
+      // Round 2 sécurité — AVANT : `userId = String(sessionToken)` traitait
+      // le jeton comme une identité de fait, sans jamais vérifier qu'il
+      // correspondait à un `Participant` actif ni consulter son lien de
+      // partage. Même résolution que `AuthMiddleware.createAnonymousUserContext`
+      // (`middleware/auth.ts`) — via `resolveAnonymousUploadIdentity`.
+      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken));
+      if (!identity) return null;
+      return { userId: identity.participantId, isAnonymous: true, anonymousShareLinkId: identity.shareLinkId };
+    }
+
+    return null;
+  }
 
   const tusServer = new Server({
     path: '/api/v1/uploads',
-    datastore: new FileStore({ directory: TUS_TEMP_PATH }),
+    datastore: uploadDataStore,
     maxSize: getMaxFileSize(),
     respectForwardedHeaders: true,
+    async onIncomingRequest(req, uploadId) {
+      // task-1-fix-round-3, I1 — AVANT : ce serveur était construit SANS
+      // `onIncomingRequest`. `onUploadCreate` n'est invoqué QUE par le
+      // gestionnaire POST ; GET/HEAD/PATCH/DELETE n'appellent QUE ce point
+      // d'accroche — jamais configuré, donc jamais vérifié. En connaissant
+      // seulement l'identifiant d'upload (128 bits aléatoires), un tiers
+      // pouvait poursuivre (PATCH), inspecter (HEAD) ou terminer (DELETE) le
+      // téléversement D'AUTRUI. Ne ROUVRE PAS le contournement d'autorisation
+      // fermé au round 2 : l'identité reste figée à la création — cette
+      // garde compare seulement l'appelant au propriétaire déjà établi,
+      // elle n'en établit jamais un nouveau.
+      let existingUpload: Awaited<ReturnType<typeof uploadDataStore.getUpload>>;
+      try {
+        existingUpload = await uploadDataStore.getUpload(uploadId);
+      } catch {
+        // Pas encore créé (POST — `uploadId` est un id FRAÎCHEMENT généré à
+        // cet instant, rien à comparer ; `onUploadCreate` gère déjà sa propre
+        // authentification) ou déjà disparu/expiré : dans les deux cas, le
+        // gestionnaire réel de `@tus/server` fait le même appel juste après
+        // et rend lui-même le 404/410 approprié. Rien à protéger ici.
+        return;
+      }
+
+      const ownerUserId = existingUpload.metadata?.userId;
+      if (!ownerUserId) return; // upload sans métadonnée d'identité — rien à comparer
+
+      const identity = await resolveUploadCallerIdentity(req.headers);
+      if (!identity) {
+        throw { status_code: 401, body: 'Authentication required\n' };
+      }
+      if (identity.userId !== ownerUserId) {
+        logger.warn('[TUS] Upload access denied — caller does not own this upload', { uploadId });
+        throw { status_code: 403, body: 'You do not own this upload\n' };
+      }
+    },
     async onUploadCreate(req, upload) {
       const headers = req.headers as any;
       const authHeader = headers?.get?.('authorization') ?? headers?.authorization;
@@ -65,54 +185,15 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         throw { status_code: 401, body: 'Authentication required\n' };
       }
 
-      // Extract userId from JWT or sessionToken
-      let userId = 'anonymous';
-      let isAnonymous = false;
-      // Lien de partage du participant anonyme résolu ci-dessous — seule
-      // source qui permette, à `onUploadFinish`, de consulter
-      // `allowAnonymousFiles`/`allowAnonymousImages` (task-1-fix-round-2,
-      // Critical 1 : ce chemin ne les consultait auparavant JAMAIS).
-      let anonymousShareLinkId: string | null = null;
-      if (authHeader) {
-        const token = String(authHeader).replace(/^Bearer\s+/i, '');
-        // Une identité ne s'établit jamais par un décodage non vérifié.
-        // AVANT : quand `jwt.verify` échouait (signature invalide, jeton
-        // forgé, jeton expiré), le code retombait sur `jwt.decode` — qui NE
-        // VÉRIFIE AUCUNE SIGNATURE — et faisait confiance au `userId` qu'il
-        // contenait. Il suffisait de fabriquer un jeton `{ userId: "<x>" }`
-        // signé avec n'importe quel secret pour usurper l'identité de
-        // n'importe quel compte enregistré sur cette route de création de
-        // pièces jointes. Contrairement à `middleware/auth.ts` (jeton expiré
-        // rattrapable via une session de confiance vérifiée en base), ce
-        // chemin n'a pas cette mécanique : tout échec de `jwt.verify`, y
-        // compris l'expiration, est donc refusé sans repli.
-        let jwtPayload: { userId?: string; sub?: string };
-        try {
-          jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: string; sub?: string };
-        } catch (err) {
-          logger.warn('[TUS] JWT verification failed — rejecting upload', {
-            reason: err instanceof Error ? err.message : 'unknown',
-          });
-          throw { status_code: 401, body: 'Invalid or expired token\n' };
-        }
-        userId = jwtPayload.userId || jwtPayload.sub || 'anonymous';
-      } else if (sessionToken) {
-        // Round 2 sécurité — AVANT : `userId = String(sessionToken)` traitait
-        // le jeton comme une identité de fait, sans jamais vérifier qu'il
-        // correspondait à un `Participant` actif ni consulter son lien de
-        // partage. Un jeton forgé/expiré/révoqué passait tel quel, et même
-        // un jeton valide ne donnait accès à AUCUNE autorisation : le chemin
-        // entier était donc aveugle à `allowAnonymousFiles`/`allowAnonymousImages`.
-        // Même résolution que `AuthMiddleware.createAnonymousUserContext`
-        // (`middleware/auth.ts`) — via `resolveAnonymousUploadIdentity`.
-        const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken));
-        if (!identity) {
-          throw { status_code: 401, body: 'Invalid session token\n' };
-        }
-        userId = identity.participantId;
-        isAnonymous = true;
-        anonymousShareLinkId = identity.shareLinkId;
+      const identity = await resolveUploadCallerIdentity(headers);
+      if (!identity) {
+        throw {
+          status_code: 401,
+          body: authHeader ? 'Invalid or expired token\n' : 'Invalid session token\n',
+        };
       }
+
+      const { userId, isAnonymous, anonymousShareLinkId } = identity;
 
       // PHASE 3 (2026-08-02) — un upload destiné à PostMedia sans uploadeur
       // identifiable est REFUSÉ avant le premier octet. Le laisser passer

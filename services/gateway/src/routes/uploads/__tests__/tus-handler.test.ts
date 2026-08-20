@@ -33,6 +33,7 @@ import jwt from 'jsonwebtoken';
 import { hashSessionToken } from '../../../utils/session-token';
 
 type CapturedTusOptions = {
+  onIncomingRequest: (req: any, uploadId: string) => Promise<void>;
   onUploadCreate: (req: any, upload: any) => Promise<{ metadata?: Record<string, string> }>;
   onUploadFinish: (req: any, upload: any) => Promise<{ status_code?: number; headers?: any; body?: string }>;
 };
@@ -50,9 +51,31 @@ jest.mock('@tus/server', () => ({
   },
 }));
 
+/**
+ * Registre en mémoire des uploads « existants » côté magasin — nécessaire
+ * pour tester `onIncomingRequest` (task-1-fix-round-3, I1) : ce hook
+ * interroge `uploadDataStore.getUpload(uploadId)` pour retrouver le
+ * propriétaire déjà figé dans les métadonnées. `getUpload` sur le VRAI
+ * `FileStore` lève quand l'id est inconnu (`ERRORS.FILE_NOT_FOUND`) — reproduit
+ * ici par un rejet, pour que le hook prenne le même chemin « rien à protéger »
+ * qu'en production sur un upload pas encore créé (POST).
+ */
+const mockFileStoreRecords = new Map<string, { metadata?: Record<string, string> }>();
+
 jest.mock('@tus/file-store', () => ({
   FileStore: class MockFileStore {
     constructor(_opts: any) {}
+    async create(file: any) {
+      mockFileStoreRecords.set(file.id, { metadata: file.metadata });
+      return file;
+    }
+    async getUpload(id: string) {
+      const record = mockFileStoreRecords.get(id);
+      if (!record) {
+        throw { status_code: 404, body: 'Not found\n' };
+      }
+      return { id, metadata: record.metadata, offset: 0, size: undefined, storage: undefined };
+    }
   },
 }));
 
@@ -100,6 +123,7 @@ function buildFakePrisma(overrides: {
   participant?: unknown;
   shareLink?: unknown;
   createAttachment?: jest.Mock<any>;
+  trustedSession?: unknown;
 } = {}) {
   return {
     participant: {
@@ -114,11 +138,20 @@ function buildFakePrisma(overrides: {
     postMedia: {
       create: jest.fn<any>().mockResolvedValue({ id: 'created-post-media' }),
     },
+    userSession: {
+      findFirst: jest.fn<any>().mockResolvedValue(overrides.trustedSession ?? null),
+      update: jest.fn<any>().mockReturnValue({ catch: jest.fn() }),
+    },
   };
 }
 
 function headersFrom(map: Record<string, string>) {
   return { get: (key: string) => map[key.toLowerCase()] };
+}
+
+/** Seed direct du magasin factice — un upload « déjà créé », comme après un POST réussi. */
+function seedExistingUpload(uploadId: string, metadata: Record<string, string>) {
+  mockFileStoreRecords.set(uploadId, { metadata });
 }
 
 async function importFreshTusHandler(uploadPath: string) {
@@ -132,6 +165,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
 
   beforeEach(async () => {
     captured = null;
+    mockFileStoreRecords.clear();
     mockExtractMetadata.mockClear();
     mockExtractMetadata.mockResolvedValue({});
     uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'tus-handler-test-'));
@@ -379,7 +413,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
 
-    it('refuse un jeton expiré (alignement avec middleware/auth.ts : pas de session de confiance disponible sur ce chemin)', async () => {
+    it('refuse un jeton expiré quand aucun X-Session-Token n\'accompagne la requête (pas de repli possible)', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
       const prisma = buildFakePrisma();
       await registerTusRoutes(buildFakeFastify(prisma));
@@ -415,6 +449,102 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     });
   });
 
+  // ── I3 (task-1-fix-round-3) : le repli par session de confiance était ────
+  // INATTEIGNABLE sur ce chemin — `if (authHeader) {…} else if (sessionToken)
+  // {…}` étant EXCLUSIF, un `Authorization` expiré empêchait TOUJOURS de
+  // regarder `X-Session-Token`, alors que le client web envoie les deux
+  // délibérément (`createAuthHeaders`). Ces tests prouvent que le repli est
+  // désormais possible — avec EXACTEMENT la politique de `middleware/auth.ts`
+  // (`findTrustedSession`) — sans jamais rouvrir la fermeture du round 2
+  // (signature invalide toujours refusée, même avec une session de confiance
+  // en base).
+  describe('JWT expiré + X-Session-Token — repli par session de confiance (task-1-fix-round-3, I3)', () => {
+    const TRUSTED_RAW_SESSION_TOKEN = 'trusted-device-session-token';
+
+    it('accepte un jeton expiré quand une session de confiance valide existe pour le même utilisateur (cas légitime)', async () => {
+      const prisma = buildFakePrisma({
+        trustedSession: { id: 'session-1' },
+      });
+      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      const result = await runFullUpload({
+        prisma,
+        headers: {
+          authorization: `Bearer ${expiredToken}`,
+          'x-session-token': TRUSTED_RAW_SESSION_TOKEN,
+        },
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+      });
+
+      expect(result.status_code).toBe(200);
+      const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
+      expect(createCall.data.uploadedBy).toBe('user-registered-1');
+      expect(createCall.data.isAnonymous).toBe(false);
+      expect(prisma.userSession.findFirst).toHaveBeenCalledWith({
+        where: {
+          sessionToken: hashSessionToken(TRUSTED_RAW_SESSION_TOKEN),
+          userId: 'user-registered-1',
+          isValid: true,
+          isTrusted: true,
+          expiresAt: { gt: expect.any(Date) },
+        },
+      });
+    });
+
+    it('refuse un jeton expiré quand le X-Session-Token fourni ne correspond à aucune session de confiance', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({ trustedSession: null });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onUploadCreate(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${expiredToken}`,
+              'x-session-token': 'untrusted-or-unknown-session-token',
+            }),
+          },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it('refuse un jeton FORGÉ (signature invalide) même quand une session de confiance valide existe — le repli ne couvre QUE l\'expiration', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      // La session de confiance existerait bel et bien pour cet utilisateur —
+      // la garde doit refuser AVANT même d'interroger cette table, puisque le
+      // jeton n'a jamais eu de signature valide (donc jamais un simple
+      // `TokenExpiredError`).
+      const prisma = buildFakePrisma({ trustedSession: { id: 'session-1' } });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      const forgedToken = jwt.sign({ userId: 'victim-user-1' }, 'attacker-controlled-secret');
+
+      await expect(
+        captured.onUploadCreate(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${forgedToken}`,
+              'x-session-token': TRUSTED_RAW_SESSION_TOKEN,
+            }),
+          },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.userSession.findFirst).not.toHaveBeenCalled();
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('sans credential — inchangé', () => {
     it('refuse une requête sans Authorization ni X-Session-Token', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
@@ -424,6 +554,159 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await expect(
         captured.onUploadCreate({ headers: headersFrom({}) }, { metadata: {}, size: 0 })
       ).rejects.toMatchObject({ status_code: 401 });
+    });
+  });
+
+  // ── I1 (task-1-fix-round-3) : reprendre/inspecter/supprimer un upload ne
+  // demandait aucun justificatif — `onIncomingRequest` (seul point d'accroche
+  // appelé par GET/HEAD/PATCH/DELETE, jamais `onUploadCreate`) n'était pas
+  // configuré. En connaissant seulement l'`uploadId` (128 bits aléatoires),
+  // un tiers pouvait poursuivre/inspecter/terminer le téléversement d'autrui.
+  describe('onIncomingRequest — justificatif exigé pour GET/HEAD/PATCH/DELETE (task-1-fix-round-3, I1)', () => {
+    it('laisse passer un uploadId inconnu (upload pas encore créé — cas du POST)', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      await registerTusRoutes(buildFakeFastify(buildFakePrisma()));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+
+      await expect(
+        captured.onIncomingRequest({ headers: headersFrom({}) }, 'never-created-upload-id')
+      ).resolves.toBeUndefined();
+    });
+
+    it('laisse passer un upload existant sans métadonnée userId (legacy, rien à comparer)', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      await registerTusRoutes(buildFakeFastify(buildFakePrisma()));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('legacy-upload', { filename: 'x.pdf' });
+
+      await expect(
+        captured.onIncomingRequest({ headers: headersFrom({}) }, 'legacy-upload')
+      ).resolves.toBeUndefined();
+    });
+
+    it('refuse un PATCH/HEAD/DELETE sans aucun credential sur un upload existant', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      await registerTusRoutes(buildFakeFastify(buildFakePrisma()));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+
+      await expect(
+        captured.onIncomingRequest({ headers: headersFrom({}) }, 'owned-upload')
+      ).rejects.toMatchObject({ status_code: 401 });
+    });
+
+    it("refuse quand l'appelant authentifié n'est PAS le propriétaire (contournement fermé)", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma();
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+
+      const attackerToken = jwt.sign({ userId: 'attacker-2' }, JWT_SECRET);
+
+      await expect(
+        captured.onIncomingRequest(
+          { headers: headersFrom({ authorization: `Bearer ${attackerToken}` }) },
+          'owned-upload'
+        )
+      ).rejects.toMatchObject({ status_code: 403 });
+    });
+
+    it('autorise le PROPRIÉTAIRE (utilisateur enregistré) à poursuivre/inspecter/supprimer son propre upload', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma();
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+
+      const ownerToken = jwt.sign({ userId: 'owner-1' }, JWT_SECRET);
+
+      await expect(
+        captured.onIncomingRequest(
+          { headers: headersFrom({ authorization: `Bearer ${ownerToken}` }) },
+          'owned-upload'
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    it('autorise le PROPRIÉTAIRE anonyme (participantId) via son X-Session-Token', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({
+        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sl-1' } },
+      });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload-anon', { userId: 'participant-1', isAnonymous: 'true' });
+
+      await expect(
+        captured.onIncomingRequest(
+          { headers: headersFrom({ 'x-session-token': 'anon-owner-session-token' }) },
+          'owned-upload-anon'
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    it("refuse un AUTRE participant anonyme que le propriétaire", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({
+        participant: { id: 'participant-intruder', anonymousSession: { shareLinkId: 'sl-1' } },
+      });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload-anon', { userId: 'participant-1', isAnonymous: 'true' });
+
+      await expect(
+        captured.onIncomingRequest(
+          { headers: headersFrom({ 'x-session-token': 'intruder-session-token' }) },
+          'owned-upload-anon'
+        )
+      ).rejects.toMatchObject({ status_code: 403 });
+    });
+
+    it('autorise le propriétaire dont le JWT a expiré PENDANT une reprise, via sa session de confiance (parité I3)', async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({ trustedSession: { id: 'session-1' } });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+
+      const expiredOwnerToken = jwt.sign({ userId: 'owner-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onIncomingRequest(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${expiredOwnerToken}`,
+              'x-session-token': 'trusted-device-session-token',
+            }),
+          },
+          'owned-upload'
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    it("refuse un jeton FORGÉ même avec une session de confiance valide en base (le repli ne couvre que l'expiration, parité I3)", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({ trustedSession: { id: 'session-1' } });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+
+      const forgedToken = jwt.sign({ userId: 'owner-1' }, 'attacker-controlled-secret');
+
+      await expect(
+        captured.onIncomingRequest(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${forgedToken}`,
+              'x-session-token': 'trusted-device-session-token',
+            }),
+          },
+          'owned-upload'
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.userSession.findFirst).not.toHaveBeenCalled();
     });
   });
 });

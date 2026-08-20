@@ -84,6 +84,45 @@ export type UnifiedAuthRequest = FastifyRequest & {
   authContext: UnifiedAuthContext;
 }
 
+// ===== REPLI PAR SESSION DE CONFIANCE =====
+
+/**
+ * Politique UNIQUE de repli d'un JWT expiré vers une session de confiance —
+ * extraite pour que tout chemin d'upload/route qui n'appelle pas
+ * `createAuthContext` directement (task-1-fix-round-3, I3 :
+ * `routes/uploads/tus-handler.ts`) puisse reprendre EXACTEMENT cette
+ * politique plutôt que d'en réinventer une divergente.
+ *
+ * AVANT (round 3) : `tus-handler.ts` testait `if (authHeader) {…} else if
+ * (sessionToken) {…}` — EXCLUSIF. Un `Authorization` présent, même expiré,
+ * empêchait TOUJOURS de regarder `X-Session-Token`, alors que le client web
+ * envoie délibérément les deux en-têtes (`createAuthHeaders`,
+ * `apps/web/lib/token-utils.ts`) précisément pour permettre ce repli.
+ *
+ * Ne vérifie qu'une chose : une session de confiance ACTIVE, liée au MÊME
+ * `userId`, existe en base pour ce jeton de session. Ne devient jamais un
+ * mécanisme d'authentification à lui seul — l'appelant doit déjà savoir QUEL
+ * `userId` chercher, et ne doit le faire qu'après avoir constaté une
+ * expiration (`jwt.TokenExpiredError`), jamais après une signature invalide :
+ * un jeton forgé reste refusé sans recours, qu'une session de confiance
+ * existe ou non — la confiance vient de la session, jamais du JWT.
+ */
+export async function findTrustedSession(
+  prisma: Pick<PrismaClient, 'userSession'>,
+  params: { userId: string; sessionToken: string }
+): Promise<{ id: string } | null> {
+  const hashedSessionToken = hashSessionToken(params.sessionToken);
+  return prisma.userSession.findFirst({
+    where: {
+      sessionToken: hashedSessionToken,
+      userId: params.userId,
+      isValid: true,
+      isTrusted: true,
+      expiresAt: { gt: new Date() },
+    },
+  });
+}
+
 // ===== SERVICE =====
 
 export class AuthMiddleware {
@@ -147,15 +186,9 @@ export class AuthMiddleware {
       const jwtUserId = jwtPayload.userId as string;
 
       if (jwtExpired && sessionToken) {
-        const hashedSessionToken = hashSessionToken(sessionToken);
-        const trustedSession = await this.prisma.userSession.findFirst({
-          where: {
-            sessionToken: hashedSessionToken,
-            userId: jwtUserId,
-            isValid: true,
-            isTrusted: true,
-            expiresAt: { gt: new Date() }
-          }
+        const trustedSession = await findTrustedSession(this.prisma, {
+          userId: jwtUserId,
+          sessionToken,
         });
 
         if (!trustedSession) {
