@@ -148,6 +148,18 @@ export function sendConflict(
 }
 
 /**
+ * Send a 426 Upgrade Required error — le client parle un format du passé.
+ * Les détails (`minVersion`, `storeUrl`) sont étalés À LA RACINE par sendError.
+ */
+export function sendUpgradeRequired(
+  reply: FastifyReply,
+  error: string,
+  options?: { message?: string; details?: Record<string, unknown> }
+): void {
+  sendError(reply, 426, error, { code: 'UPGRADE_REQUIRED', ...options });
+}
+
+/**
  * Send a 500 Internal Server Error
  */
 export function sendInternalError(

@@ -6,7 +6,9 @@ import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired } from '../../utils/response';
+import { getAppVersionFloor, getAppStoreUrl } from '../../utils/appVersion';
+import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
 import type { ResolvedPostMentions } from '../../services/posts/postMentions';
@@ -22,7 +24,7 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
-import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3 } from '../../services/posts/storyEffectsV3';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
 /**
@@ -50,6 +52,46 @@ function hoistTrackingLinks<T extends Record<string, unknown>>(post: T): T {
  * `comments`). No-op si rien ne porte de lieu.
  */
 const hoistLocation = hoistLocationDeep;
+
+/**
+ * Écriture stricte de `storyEffects` (spec §C3, O15) — DERRIÈRE
+ * `CANVAS_V3_WRITE_STRICT` (env, défaut OFF : le merge du lot A est inerte à
+ * l'écriture, l'armement est un acte de déploiement postérieur aux trois
+ * écrivains v3). Drapeau armé, deux refus DISTINCTS :
+ * - blob SANS `v:3` (client du passé) ⇒ 426 UPGRADE_REQUIRED, `minVersion` et
+ *   `storeUrl` à la racine — `storeUrl` résolu par `X-App-Platform`
+ *   (`android` ⇒ Play Store, sinon App Store) ;
+ * - blob AVEC `v:3` invalide (client neuf cassé — l'inviter à se mettre à
+ *   jour serait un mensonge) ⇒ 400 CANVAS_INVALID + `issues`.
+ * Rend `true` si une réponse d'erreur est partie (l'appelant sort).
+ */
+function rejectNonV3StoryEffects(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  storyEffects: unknown
+): boolean {
+  if (process.env.CANVAS_V3_WRITE_STRICT !== '1') return false;
+  if (storyEffects == null) return false;
+  if (!isCanvasV3(storyEffects)) {
+    const platformHeader = request.headers['x-app-platform'];
+    sendUpgradeRequired(reply, 'Story format outdated - update the app', {
+      details: {
+        minVersion: getAppVersionFloor(),
+        storeUrl: getAppStoreUrl(typeof platformHeader === 'string' ? platformHeader : undefined),
+      },
+    });
+    return true;
+  }
+  const parsedCanvas = CanvasV3Schema.safeParse(storyEffects);
+  if (!parsedCanvas.success) {
+    sendBadRequest(reply, 'Invalid canvas', {
+      code: 'CANVAS_INVALID',
+      details: { issues: parsedCanvas.error.issues.slice(0, 5) },
+    });
+    return true;
+  }
+  return false;
+}
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -101,6 +143,10 @@ export function registerCoreRoutes(
       const parsed = CreatePostSchema.safeParse(request.body);
       if (!parsed.success) {
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {
+        return;
       }
 
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
@@ -336,6 +382,10 @@ export function registerCoreRoutes(
       const parsed = UpdatePostSchema.safeParse(request.body);
       if (!parsed.success) {
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {
+        return;
       }
 
       // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
