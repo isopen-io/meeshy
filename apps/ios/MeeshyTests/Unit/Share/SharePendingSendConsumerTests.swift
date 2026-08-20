@@ -27,6 +27,9 @@ final class SharePendingSendConsumerTests: XCTestCase {
         return url
     }
 
+    /// Encore utilisé par les tests de dégradation ci-dessous (échec
+    /// d'enfilement / payload corrompu / fichier non-JSON) — le chemin
+    /// nominal a migré vers `writeShare`, qui exerce la vraie forme v:1.
     private func validPayload(
         clientMessageId: String = "cid_00000000-0000-4000-8000-000000000000",
         conversationId: String = "conv42",
@@ -42,55 +45,302 @@ final class SharePendingSendConsumerTests: XCTestCase {
         ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).sorted()
     }
 
-    // MARK: - Chemin nominal
-
-    func test_consumeAll_withValidPayload_enqueuesAndDeletesFile() async throws {
-        let dir = try makeDirectory()
-        try write(validPayload(), named: "a.json", in: dir)
-        let queue = FakeOfflineMessageQueue()
-        let sut = SharePendingSendConsumer(queue: queue)
-
-        await sut.consumeAll(in: dir)
-
-        let items = await queue.enqueuedItems
-        XCTAssertEqual(items.count, 1)
-        XCTAssertEqual(items.first?.conversationId, "conv42")
-        XCTAssertEqual(items.first?.content, "bonjour")
-        XCTAssertTrue(files(in: dir).isEmpty, "le fichier doit être supprimé après enfilement")
+    private func makeMediaRoot() throws -> URL {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-media-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
     }
 
-    /// Le `clientMessageId` forgé par l'extension traverse tel quel : c'est
-    /// ce qui empêche un doublon si le POST initial avait en fait abouti et
-    /// que seule la réponse s'est perdue. Round 1 de revue : ce n'est plus
-    /// une dérivation par index (`_t0`, `_t1`, …) — l'ancien suffixe était
-    /// rejeté par le motif serveur. Un payload legacy (une seule
-    /// `conversationId`, pas de `targets`) est promu par `decodeRelay` en
-    /// fiche à UNE cible qui RÉUTILISE l'identifiant top-level tel quel.
-    func test_consumeAll_preservesClientMessageIdForServerSideDedup() async throws {
+    /// Écrit une fiche v:1 et, si elle décrit des médias, les octets
+    /// correspondants sous `<mediaRoot>/<shareId>/`. Chaque cible reçoit son
+    /// PROPRE `clientMessageId` — comme le fait réellement `SharePendingShare
+    /// .make()` côté extension — jamais dérivé par le consommateur : le motif
+    /// `<shareId>_t<index>` est un choix de FIXTURE lisible, pas une
+    /// dérivation en production (voir la doc de `PendingTarget.clientMessageId`).
+    @discardableResult
+    private func writeShare(
+        shareId: String = "cid_abc",
+        content: String? = "bonjour",
+        media: [SharePendingSendConsumer.PendingMedia] = [],
+        uploadedAttachmentIds: [String]? = nil,
+        conversationIds: [String] = ["conv1", "conv2", "conv3"],
+        states: [SharePendingSendConsumer.PendingTargetState]? = nil,
+        createdAt: Date = Date(timeIntervalSince1970: 1_785_000_000),
+        in directory: URL,
+        mediaRoot: URL? = nil
+    ) throws -> SharePendingSendConsumer.PendingShare {
+        let targets = conversationIds.enumerated().map { index, id in
+            SharePendingSendConsumer.PendingTarget(
+                conversationId: id,
+                clientMessageId: "\(shareId)_t\(index)",
+                state: states?[index] ?? .pending,
+                serverMessageId: nil)
+        }
+        let share = SharePendingSendConsumer.PendingShare(
+            v: 1, clientMessageId: shareId, createdAt: createdAt, content: content,
+            media: media, uploadedAttachmentIds: uploadedAttachmentIds,
+            targets: targets, originTargetIndex: media.isEmpty ? nil : 0)
+        try SharePendingSendConsumer.commit(share, in: directory)
+
+        if let mediaRoot, !media.isEmpty {
+            let shareDir = mediaRoot.appendingPathComponent(shareId, isDirectory: true)
+            try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+            for descriptor in media {
+                try Data(repeating: 9, count: descriptor.bytes)
+                    .write(to: mediaRoot.appendingPathComponent(descriptor.relPath))
+            }
+        }
+        return share
+    }
+
+    private let photo = SharePendingSendConsumer.PendingMedia(
+        relPath: "cid_abc/0.jpg", ext: "jpg", mime: "image/jpeg", bytes: 32)
+
+    // MARK: - Chemin nominal : une fiche, N cibles
+
+    func test_consumeAll_enqueuesOneRowPerTarget() async throws {
         let dir = try makeDirectory()
-        let cmid = "cid_11111111-1111-4111-8111-111111111111"
-        try write(validPayload(clientMessageId: cmid), named: "a.json", in: dir)
+        try writeShare(in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv1", "conv2", "conv3"])
+    }
+
+    /// Les identifiants sont PROPRES à chaque cible, écrits une seule fois par
+    /// l'extension et jamais recalculés — le consommateur se contente de les
+    /// LIRE depuis la fiche. Un identifiant unique pour trois cibles écrirait
+    /// les mêmes chemins de fichiers pendants, et le dispatcher supprimerait
+    /// les octets après le premier envoi.
+    func test_consumeAll_readsEachTargetsOwnPersistedClientMessageId() async throws {
+        let dir = try makeDirectory()
+        try writeShare(in: dir)
         let queue = FakeOfflineMessageQueue()
 
         await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
 
         let ids = await queue.enqueuedClientMessageIds
-        XCTAssertEqual(ids, [cmid])
+        XCTAssertEqual(ids, ["cid_abc_t0", "cid_abc_t1", "cid_abc_t2"])
     }
 
-    func test_consumeAll_withSeveralPayloads_consumesAll() async throws {
+    func test_consumeAll_preservesTheShareCreationDate() async throws {
         let dir = try makeDirectory()
-        try write(validPayload(clientMessageId: "cid_11111111-1111-4111-8111-111111111111",
-                               content: "un"), named: "a.json", in: dir)
-        try write(validPayload(clientMessageId: "cid_22222222-2222-4222-8222-222222222222",
-                               content: "deux"), named: "b.json", in: dir)
+        try writeShare(in: dir, mediaRoot: nil)
         let queue = FakeOfflineMessageQueue()
 
         await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
 
-        let contents = await queue.enqueuedContents
-        XCTAssertEqual(Set(contents), ["un", "deux"])
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(try XCTUnwrap(items.first?.createdAt.timeIntervalSince1970),
+                       1_785_000_000, accuracy: 1)
+    }
+
+    func test_consumeAll_whenEveryTargetIsEnqueued_deletesTheFiche() async throws {
+        let dir = try makeDirectory()
+        try writeShare(in: dir)
+
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue()).consumeAll(in: dir)
+
         XCTAssertTrue(files(in: dir).isEmpty)
+    }
+
+    // MARK: - INVARIANT PRODUIT : copier, jamais transférer
+
+    /// Décision user : « il ne faut pas que les autres aient l'indicateur
+    /// transfert ». La deuxième cible et les suivantes réclament une COPIE des
+    /// pièces jointes de la première — jamais un transfert, qui ferait
+    /// afficher « Transféré depuis <conversation source> ».
+    func test_consumeAll_followingTargets_copyFromTheOrigin() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"],
+                       "seules les cibles SUIVANTES passent par enqueue simple")
+        XCTAssertEqual(
+            items.map(\.copyAttachmentsFromClientMessageId),
+            ["cid_abc_t0", "cid_abc_t0"],
+            "chacune copie les pièces jointes du message porté par la PREMIÈRE cible"
+        )
+    }
+
+    func test_consumeAll_followingTargets_neverCarryForwardMetadata() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.forwardedFromId), [nil, nil],
+                       "aucun destinataire ne doit voir « Transféré depuis … »")
+        XCTAssertEqual(items.map(\.forwardedFromConversationId), [nil, nil])
+        XCTAssertEqual(
+            items.map { $0.attachmentIds }, [nil, nil],
+            "réutiliser les attachmentIds de l'origine les DÉPLACERAIT — le premier "
+            + "destinataire perdrait ses pièces jointes (associateAttachmentsToMessage "
+            + "est un updateMany)"
+        )
+    }
+
+    /// La PREMIÈRE cible porte les octets : elle seule passe par
+    /// `enqueueMedia`, et sans laisser le SDK balayer les sources.
+    func test_consumeAll_originTarget_enqueuesTheBytes_withoutSweepingTheSharedFolder() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let calls = await queue.enqueuedMediaCalls
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertEqual(calls.first?.conversationId, "conv1")
+        XCTAssertEqual(calls.first?.clientMessageId, "cid_abc_t0")
+        XCTAssertEqual(calls.first?.kinds, ["image"])
+        XCTAssertEqual(calls.first?.deletesSourceFiles, false,
+                       "le dossier média est PARTAGÉ : seul le dernier consommateur le rend")
+        XCTAssertEqual(try XCTUnwrap(calls.first?.createdAt?.timeIntervalSince1970),
+                       1_785_000_000, accuracy: 1)
+    }
+
+    /// Le dernier consommateur — et lui seul — rend les octets.
+    func test_consumeAll_afterTheLastTarget_removesTheSharedMediaFolder() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+            .consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: mediaRoot.appendingPathComponent("cid_abc").path))
+    }
+
+    /// Un partage déjà téléversé par l'extension (lot B-2) ne re-téléverse
+    /// RIEN : sans ce champ, une interruption après l'upload renverrait
+    /// plusieurs gigaoctets.
+    func test_consumeAll_withUploadedAttachmentIds_neverReUploads() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], uploadedAttachmentIds: ["att1"],
+                       in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let mediaCalls = await queue.enqueuedMediaCalls
+        XCTAssertTrue(mediaCalls.isEmpty, "les octets sont déjà chez le serveur")
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.first?.attachmentIds, ["att1"])
+        XCTAssertEqual(items.dropFirst().map(\.copyAttachmentsFromClientMessageId),
+                       ["cid_abc_t0", "cid_abc_t0"])
+    }
+
+    // MARK: - Interruptions
+
+    /// Une cible déjà servie ne doit JAMAIS être réenfilée : le
+    /// `clientMessageId` dédoublonne côté serveur, mais un rejeu inutile
+    /// re-téléverserait les octets de l'origine.
+    func test_consumeAll_skipsTargetsAlreadyServed() async throws {
+        let dir = try makeDirectory()
+        try writeShare(states: [.sent, .pending, .pending], in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"])
+    }
+
+    /// L'échec d'UNE cible ne perd pas les autres, et la fiche survit avec les
+    /// cibles servies MARQUÉES : la reprise suivante ne rejoue que ce qui reste.
+    func test_consumeAll_whenOneTargetFails_keepsTheFicheWithProgress() async throws {
+        let dir = try makeDirectory()
+        try writeShare(in: dir)
+        let queue = FakeOfflineMessageQueue()
+        await queue.setThrowFromCallIndex(1)
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let reread = try XCTUnwrap(SharePendingSendConsumer.decodeRelay(
+            try Data(contentsOf: dir.appendingPathComponent("cid_abc.json"))))
+        XCTAssertEqual(reread.targets.map(\.state), [.sent, .pending, .pending],
+                       "la progression est PERSISTÉE : sans elle, la reprise réenfilerait conv1")
+    }
+
+    func test_consumeAll_afterAPartialFailure_resumesWhereItStopped() async throws {
+        let dir = try makeDirectory()
+        try writeShare(in: dir)
+        let failing = FakeOfflineMessageQueue()
+        await failing.setThrowFromCallIndex(1)
+        await SharePendingSendConsumer(queue: failing).consumeAll(in: dir)
+
+        let recovering = FakeOfflineMessageQueue()
+        await SharePendingSendConsumer(queue: recovering).consumeAll(in: dir)
+
+        let items = await recovering.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"],
+                       "conv1 était déjà servie — la rejouer créerait un doublon d'upload")
+        XCTAssertTrue(files(in: dir).isEmpty)
+    }
+
+    /// Interruption APRÈS la copie mais AVANT tout enfilage : la fiche décrit
+    /// des octets présents, tout est encore à faire.
+    func test_consumeAll_afterCopyOnly_enqueuesEverything() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let mediaCalls = await queue.enqueuedMediaCalls
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(mediaCalls.count + items.count, 3)
+    }
+
+    /// Interruption APRÈS la première cible : les suivantes ne sont pas
+    /// perdues. Le `clientMessageId` ne dédoublonne que sur
+    /// `(conversationId, clientMessageId)` — il ne rattrape PAS une cible
+    /// jamais servie.
+    func test_consumeAll_afterTheFirstTarget_stillServesTheOthers() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], states: [.sent, .pending, .pending],
+                       in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let mediaCalls = await queue.enqueuedMediaCalls
+        XCTAssertTrue(mediaCalls.isEmpty, "l'origine était déjà servie")
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"])
+        XCTAssertEqual(items.map(\.copyAttachmentsFromClientMessageId),
+                       ["cid_abc_t0", "cid_abc_t0"])
+    }
+
+    /// Les octets restent tant qu'une cible reste à servir.
+    func test_consumeAll_withAFailedTarget_keepsTheSharedMediaFolder() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+        await queue.setThrowFromCallIndex(0)
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: mediaRoot.appendingPathComponent("cid_abc/0.jpg").path))
     }
 
     // MARK: - Invariant de suppression
@@ -333,5 +583,11 @@ final class SharePendingSendConsumerTests: XCTestCase {
 private extension FakeOfflineMessageQueue {
     func setShouldThrow(_ value: Bool) {
         shouldThrow = value
+    }
+
+    /// Échoue à partir du N-ième appel : c'est ce qui simule une interruption
+    /// EN COURS de fan-out, là où `shouldThrow` échoue dès le premier.
+    func setThrowFromCallIndex(_ index: Int) {
+        throwFromCallIndex = index
     }
 }

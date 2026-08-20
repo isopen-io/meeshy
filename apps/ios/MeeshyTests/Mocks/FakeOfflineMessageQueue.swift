@@ -38,6 +38,19 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         userInfo: [NSLocalizedDescriptionKey: "synthetic enqueue failure"]
     )
 
+    /// Fait échouer `enqueue`/`enqueueMedia` à partir du N-ième appel
+    /// (0-indexé) confondu — utile pour simuler une interruption EN COURS
+    /// d'un fan-out multi-cibles, là où `shouldThrow` échoue dès le premier
+    /// appel et pour toujours.
+    var throwFromCallIndex: Int?
+    private var totalCalls = 0
+
+    private func shouldFailNow() -> Bool {
+        defer { totalCalls += 1 }
+        if let throwFromCallIndex, totalCalls >= throwFromCallIndex { return true }
+        return shouldThrow
+    }
+
     /// Optional artificial latency before the `enqueue` call returns.
     /// Used to exercise the `isSending` debounce window — a second
     /// tap arriving during this delay must exit early.
@@ -47,7 +60,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         if let delay {
             try? await Task.sleep(for: delay)
         }
-        if shouldThrow {
+        if shouldFailNow() {
             throw errorToThrow
         }
         enqueueCount += 1
@@ -93,7 +106,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         createdAt: Date?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         if let delay { try? await Task.sleep(for: delay) }
-        if shouldThrow { throw errorToThrow }
+        if shouldFailNow() { throw errorToThrow }
         enqueuedMediaCalls.append(EnqueuedMedia(
             sourceMediaURLs: sourceMediaURLs, kinds: kinds,
             conversationId: conversationId, content: content,
