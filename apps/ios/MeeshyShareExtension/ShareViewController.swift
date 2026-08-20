@@ -64,6 +64,10 @@ class ShareViewController: UIViewController {
                     session: session
                 )
             },
+            onCancel: { [weak self] in
+                self?.discardStagedMedia()
+                self?.complete()
+            },
             onFinish: { [weak self] in self?.complete() }
         )
 
@@ -85,6 +89,19 @@ class ShareViewController: UIViewController {
 
     private func complete() {
         extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+    }
+
+    /// Round 1 de revue (fuite Important) : annuler APRÈS la copie mais AVANT
+    /// `onSend` laissait jusqu'à 500 Mio orphelins — la fiche qui les décrit
+    /// n'existe qu'après un envoi lancé (`installInterface`'s `onSend`), donc
+    /// personne ne pouvait plus retrouver ces fichiers pour les effacer.
+    /// Appelé UNIQUEMENT par le bouton Annuler, jamais par la fin d'un envoi
+    /// (`onFinish`) : une fois `send()` lancé, `ShareSender.send` a déjà écrit
+    /// la fiche qui décrit ces mêmes fichiers, donc ils ne sont plus orphelins
+    /// — même différés, ils restent retrouvables.
+    private func discardStagedMedia() {
+        guard let mediaRoot = ShareMediaStaging.mediaRootURL() else { return }
+        ShareMediaStaging.discard(shareId: shareId, in: mediaRoot)
     }
 
     // MARK: - Extraction
@@ -201,11 +218,16 @@ class ShareViewController: UIViewController {
     /// de façon synchrone : l'URL fournie est SUPPRIMÉE au retour de cette
     /// closure. La copier plus tard, ou l'ouvrir en asynchrone, ne trouverait
     /// plus rien.
+    /// Round 1 de revue (fuite Important) : `prepareMediaRoot` crée
+    /// `share_pending_media/<shareId>/` sur disque. L'appeler avant de savoir
+    /// s'il y a le moindre fichier à copier — comme c'était le cas ici —
+    /// crée ce dossier pour TOUT partage, y compris un partage de texte pur,
+    /// et rien ne l'efface jamais. Il ne doit donc être appelé qu'une fois
+    /// tous les gardes d'absence/plafond franchis, jamais avant.
     private func extractAttachments(
         completion: @escaping ([ShareStagedMedia], ShareMediaStagingError?) -> Void
     ) {
-        guard let items = extensionContext?.inputItems as? [NSExtensionItem],
-              let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else {
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem] else {
             completion([], nil)
             return
         }
@@ -224,6 +246,11 @@ class ShareViewController: UIViewController {
 
         guard ShareLimits.fitsFileCount(fileProviders.count) else {
             completion([], .fileCountExceeded(count: fileProviders.count, limit: ShareLimits.maxFiles))
+            return
+        }
+
+        guard let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else {
+            completion([], nil)
             return
         }
 
@@ -285,6 +312,10 @@ struct ShareContentView: View {
     let stagingFailure: ShareMediaStagingError?
     let state: ShareScreenState
     let onSend: (ShareSession, [String], String?, [ShareStagedMedia]) async -> SharePendingShare
+    /// Distinct de `onFinish` : appelé UNIQUEMENT par le bouton Annuler, pour
+    /// que l'appelant sache qu'aucun envoi n'a été tenté et puisse effacer
+    /// les fichiers déjà copiés (round 1 de revue, fuite Important).
+    let onCancel: () -> Void
     let onFinish: () -> Void
 
     @State private var model = ForwardPickerModel()
@@ -294,6 +325,13 @@ struct ShareContentView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                // Round 1 de revue (écart au brief) : `contentPreview` doit
+                // rester un `if` AUTONOME, pas chaîné dans ce `else if`. Un
+                // partage portant à la fois du texte et des fichiers (page
+                // Safari + son image, sélection Photos + un lien) envoie bien
+                // les deux (`send()` transmet `content` ET `media`) — masquer
+                // l'aperçu texte dès qu'un média est présent empêchait
+                // l'utilisateur de vérifier ce qu'il s'apprêtait à envoyer.
                 if stagingFailure != nil {
                     message(
                         systemImage: "exclamationmark.icloud",
@@ -306,7 +344,9 @@ struct ShareContentView: View {
                 } else if !media.isEmpty {
                     mediaPreview(media)
                     Divider()
-                } else if let content {
+                }
+
+                if let content {
                     contentPreview(content)
                     Divider()
                 }
@@ -446,7 +486,7 @@ struct ShareContentView: View {
 
             HStack(spacing: 16) {
                 Button {
-                    onFinish()
+                    onCancel()
                 } label: {
                     Text(String(localized: "share.cancel", defaultValue: "Cancel"))
                         .frame(maxWidth: .infinity)
@@ -455,6 +495,7 @@ struct ShareContentView: View {
                 .background(Color.secondary.opacity(0.2))
                 .foregroundStyle(.primary)
                 .cornerRadius(12)
+                .disabled(isSending)
 
                 if case .ready = state {
                     Button {
