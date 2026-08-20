@@ -401,6 +401,103 @@ describe('POST /attachments/upload — anonymous, non-image file upload blocked'
   });
 });
 
+describe('POST /attachments/upload — anonymous voice message allowed even when files and images are blocked', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockUploadMultiple.mockResolvedValue([{ id: 'att-anon-voice' }]);
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: false, allowAnonymousImages: false }),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('accepte un message vocal anonyme même quand les fichiers sont interdits', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload: multipartFile('voice.webm', 'audio/webm'),
+    });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('POST /attachments/upload — anonymous voice message allowed regardless of audio subtype', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockUploadMultiple.mockResolvedValue([{ id: 'att-anon-voice' }]);
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: false, allowAnonymousImages: false }),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it.each(['audio/mp4', 'audio/mpeg', 'audio/wav'])(
+    'accepte un enregistrement audio anonyme quel que soit le sous-type (%s)',
+    async (mimeType) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/attachments/upload',
+        headers: { 'content-type': CT },
+        payload: multipartFile('voice.audio', mimeType),
+      });
+      expect(res.statusCode).toBe(200);
+    },
+  );
+});
+
+describe('POST /attachments/upload — anonymous document still blocked when files are forbidden', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: false, allowAnonymousImages: true }),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('refuse toujours un document anonyme quand les fichiers sont interdits', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload: multipartFile('document.pdf', 'application/pdf'),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('POST /attachments/upload — anonymous image still blocked when images are forbidden', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: true, allowAnonymousImages: false }),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('refuse toujours une image anonyme quand les images sont interdites', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload',
+      headers: { 'content-type': CT },
+      payload: multipartFile('photo.png', 'image/png'),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 describe('POST /attachments/upload — anonymous without participantId', () => {
   let app: FastifyInstance;
   beforeAll(async () => {

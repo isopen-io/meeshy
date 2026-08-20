@@ -141,6 +141,14 @@ export async function registerUploadRoutes(
 
           for (const file of files) {
             const isImage = file.mimeType.startsWith('image/');
+            const isAudio = file.mimeType.startsWith('audio/');
+
+            // Décision produit : la voix suit le droit d'écrire dans la conversation, pas
+            // le droit d'envoyer des fichiers — un message vocal n'est jamais soumis à
+            // `allowAnonymousFiles` ni à `allowAnonymousImages`.
+            if (isAudio) {
+              continue;
+            }
 
             if (isImage && !shareLink.allowAnonymousImages) {
               return sendForbidden(reply, 'Images are not allowed for anonymous users on this conversation');
