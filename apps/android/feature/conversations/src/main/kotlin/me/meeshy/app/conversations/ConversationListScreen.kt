@@ -38,6 +38,8 @@ import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.ManageSearch
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.MarkChatUnread
@@ -71,6 +73,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -133,6 +136,14 @@ fun ConversationListScreen(
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // A tap resolves to navigation only through the ViewModel's one-shot gate: an
+    // unlocked row emits immediately; a locked row emits after its PIN sheet accepts
+    // the code. Collecting the event (not reading state) keeps a config-change replay
+    // from re-navigating.
+    LaunchedEffect(viewModel) {
+        viewModel.openConversation.collect { onConversationClick(it) }
+    }
 
     MeeshyBackground {
     Scaffold(
@@ -213,7 +224,7 @@ fun ConversationListScreen(
                                 draft = state.draftFor(conversation.id),
                                 categories = state.categories,
                                 previewMessages = state.previewFor(conversation.id),
-                                onClick = { onConversationClick(conversation.id) },
+                                onClick = { viewModel.onConversationTap(conversation.id) },
                                 onTogglePin = { viewModel.togglePin(conversation.id) },
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleMentionsOnly = { viewModel.toggleMentionsOnly(conversation.id) },
@@ -230,6 +241,8 @@ fun ConversationListScreen(
                                 onAssignCategory = { viewModel.reassignCategory(conversation.id, it) },
                                 onCreateCategory = { viewModel.createCategoryAndAssign(conversation.id, it) },
                                 onLoadPreview = { viewModel.loadPreviewMessages(conversation.id) },
+                                isLocked = state.isLocked(conversation.id),
+                                onLockToggle = { viewModel.onLockToggle(conversation.id) },
                             )
                         }
                         // Sections (parity iOS): Épingles first, then Mes conversations.
@@ -265,6 +278,17 @@ fun ConversationListScreen(
                 }
             }
         }
+    }
+    state.lockPrompt?.let { prompt ->
+        val name = state.conversations.firstOrNull { it.id == prompt.conversationId }
+            ?.displayTitle(state.currentUserId).orEmpty()
+        ConversationLockPinSheet(
+            prompt = prompt,
+            conversationName = name,
+            onDigit = viewModel::onLockDigit,
+            onDelete = viewModel::onLockDelete,
+            onDismiss = viewModel::dismissLockPrompt,
+        )
     }
     }
 }
@@ -399,6 +423,8 @@ private fun ConversationRow(
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
     onLoadPreview: () -> Unit,
+    isLocked: Boolean,
+    onLockToggle: () -> Unit,
 ) {
     val prefs = conversation.resolvedPreferences
     val isPinned = prefs?.isPinned == true
@@ -462,6 +488,8 @@ private fun ConversationRow(
             onAssignCategory = onAssignCategory,
             onCreateCategory = onCreateCategory,
             onLoadPreview = onLoadPreview,
+            isLocked = isLocked,
+            onLockToggle = onLockToggle,
         )
     }
 }
@@ -522,6 +550,8 @@ private fun ConversationRowContent(
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
     onLoadPreview: () -> Unit,
+    isLocked: Boolean,
+    onLockToggle: () -> Unit,
 ) {
     val title = conversation.displayTitle(currentUserId)
     val isCreator = conversation.currentUserRole(currentUserId) == MemberRole.CREATOR
@@ -593,6 +623,16 @@ private fun ConversationRowContent(
                         Icon(
                             imageVector = Icons.Filled.NotificationsOff,
                             contentDescription = stringResource(R.string.conversations_badge_muted),
+                            tint = MeeshyTheme.tokens.textSecondary,
+                            modifier = Modifier
+                                .size(14.dp)
+                                .padding(start = MeeshySpacing.xs),
+                        )
+                    }
+                    if (isLocked) {
+                        Icon(
+                            imageVector = Icons.Filled.Lock,
+                            contentDescription = stringResource(R.string.conversations_badge_locked),
                             tint = MeeshyTheme.tokens.textSecondary,
                             modifier = Modifier
                                 .size(14.dp)
@@ -676,6 +716,8 @@ private fun ConversationRowContent(
             onDiscardDraft = onDiscardDraft,
             onAssignCategory = onAssignCategory,
             onCreateCategory = onCreateCategory,
+            isLocked = isLocked,
+            onLockToggle = onLockToggle,
         )
     }
 }
@@ -721,6 +763,8 @@ private fun ConversationContextMenu(
     onDiscardDraft: () -> Unit,
     onAssignCategory: (String) -> Unit,
     onCreateCategory: (String) -> Unit,
+    isLocked: Boolean,
+    onLockToggle: () -> Unit,
 ) {
     var showLeaveConfirm by remember(expanded) { mutableStateOf(false) }
     var showDeleteForMeConfirm by remember(expanded) { mutableStateOf(false) }
@@ -821,6 +865,27 @@ private fun ConversationContextMenu(
             },
             leadingIcon = { Icon(Icons.Filled.Archive, contentDescription = null) },
             onClick = { onToggleArchive(); onDismiss() },
+        )
+        // Lock / unlock (parity iOS `ConversationLockSheet`): opens the PIN sheet
+        // in the ViewModel-resolved mode (unlock a locked row, prompt for a code
+        // on an unlocked one, or run first-time master-PIN setup then chain into
+        // the code). The row's lock glyph re-derives from the store's live flow.
+        DropdownMenuItem(
+            text = {
+                Text(
+                    stringResource(
+                        if (isLocked) R.string.conversations_action_unlock
+                        else R.string.conversations_action_lock,
+                    ),
+                )
+            },
+            leadingIcon = {
+                Icon(
+                    if (isLocked) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                    contentDescription = null,
+                )
+            },
+            onClick = { onLockToggle(); onDismiss() },
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.conversations_action_rename)) },

@@ -731,3 +731,116 @@ Append-only log of gotchas and decisions that save time next run.
   thread changes, since `List<String>` compares structurally. **Generalises: before keying an effect
   on a piece of UI state, ask what else mutates that object. Anything driven by an optimistic update
   is a fresh instance on every user tap.**
+
+## Slice `conversation-lock-menu` (2026-08-19)
+- **This container COULD reach `dl.google.com` — the full local Android gate ran here.** The
+  ROUTINE §CI reality warns containerised runs usually have `dl.google.com` denied; this one did
+  not (`curl` → 200), so `sdkmanager` bootstrapped and `assembleDebug` + `testDebugUnitTest` both
+  ran green locally before the PR. When the egress allows it, run the real gate — don't assume the
+  documented block applies to every container.
+- **`compileSdk = 37` does NOT map to a `platforms;android-37` package.** Since the minor SDK
+  releases (37.0, 37.1, …) an API level is no longer published under a bare `android-N` name — the
+  bare install fails with *Failed to find package 'platforms;android-37'*, exactly as `android.yml`'s
+  provisioning step documents. Two extra gotchas the CI YAML hides: (1) the ROUTINE's pinned
+  cmdline-tools `11076708` only understands SDK XML v3 and cannot even *see* the 37.x packages
+  (*"SDK XML version 4 was encountered"*) — fetch a newer bundle (`commandlinetools-linux-13114758`)
+  first; (2) the platform lives on the preview channel, so `sdkmanager --channel=3 --install
+  "platforms;android-37.0"` is what actually lands it. AGP 8.13 then resolves `compileSdk 37` to the
+  `android-37.0` dir. `build-tools;35.0.0`/`platforms;android-35` from the ROUTINE recipe are stale
+  for this repo.
+- **Transient `429 Too Many Requests` from `repo.maven.apache.org` under Gradle's parallel
+  download burst.** A single-file `curl` of the same artifact returned 200 immediately (the proxy
+  rate-limits bursts, not the artifact). Re-running with `--max-workers=2` after warming the cache
+  cleared it. Not a broken repo — just back off the parallelism and retry.
+- **Extracting a view-embedded state machine into a pure reducer is the highest-leverage parity
+  move.** iOS's `ConversationLockSheet.handleComplete` is a 7-mode × 3-step PIN machine living
+  *inside* the SwiftUI view — untestable, and it carries a real bug (its blanket `step = 1` reset
+  mislabels the master-PIN setup flow). Porting it as `LockPinReducer` (pure, oracle-injected)
+  bought 20 branch-covering unit tests, a cleaner reset (rewind to the mode's real entry step), and
+  a dead-end fix (no-master-PIN → chain setup→lock instead of iOS's "go to Settings" alert). The
+  Composable is left a dumb dots+keypad renderer. TDD-COVERAGE's "push decisions out of the
+  Composable" is not just style here — it's what makes the SOTA-over-iOS improvements provable.
+
+## Slice `conversation-lock-open-gate` (2026-08-20)
+- **A cosmetic lock badge is a real bug, not a cosmetic one.** The `conversation-lock-menu` slice
+  shipped the 🔒 badge and the lock/unlock PIN flow but left the row's tap calling
+  `onConversationClick(id)` **directly** — so a "locked" conversation opened straight through. The
+  lock protected nothing on tap. When a prior slice defers "content-hiding" as a follow-up, check
+  whether the *entry point* is also ungated; a lock that doesn't gate opening is worse than no lock
+  (it implies protection that isn't there). The open-gate is the sub-gap that makes the badge mean
+  something.
+- **Extending a shipped pure reducer is the cheapest possible parity move.** Adding
+  `LockPinMode.OPEN_CONVERSATION` was: one enum arm, one `pinLength`/`copy` arm each (both already
+  `when`-exhaustive so the compiler *forced* me to handle the new arm — no silent fallthrough), one
+  `complete*` branch mirroring `completeUnlock`, and one new effect. 5 reducer tests covered every
+  branch. The Kotlin `when`-exhaustiveness on the sealed/enum types is the safety net: adding a mode
+  produced compile errors at exactly the 4 sites that needed a decision, no more.
+- **Name the effect for the outcome, not the mechanism — it buys a provable distinction.** `OPEN`
+  and `UNLOCK` both verify a 4-digit code against the same oracle; the ONLY difference is `OPEN`
+  keeps the lock. Emitting a distinct `LockPinEffect.OpenConversation` (not reusing `RemoveLock`)
+  let the reducer test assert `effects.doesNotContain(RemoveLock)` — the "reveal once, stays locked"
+  contract is now a red-if-broken test, not a comment. Reusing `RemoveLock` with a flag would have
+  made that untestable.
+- **One-shot navigation = `Channel(BUFFERED).receiveAsFlow()`, never a `StateFlow`.** Navigation is
+  an event: a `StateFlow<String?>` would re-fire on every re-collection (config change, process
+  restart) and re-navigate. The `Channel` idiom already lived in this file (`refreshRequests`), so
+  no new dependency. Testing it: `launch { vm.openConversation.collect { list += it } }` +
+  `advanceUntilIdle()` before and after the action, then `job.cancel()`. `BUFFERED` means a
+  `trySend` before the collector attaches is still delivered, so the test isn't order-fragile.
+- **Read from the store, not the mirrored UI state, for a tap-time lock decision.** `onConversationTap`
+  reads `lockStore.isLocked(id)` (synchronous, authoritative) rather than
+  `_state.value.isLocked(id)` (a mirror collected off the store's flow, one dispatch behind). A tap
+  landing in the same frame as a just-applied unlock must see the truth, not the lagging mirror —
+  same discipline `onLockToggle` already followed.
+
+## Slice `composer-live-sentiment` (2026-08-20)
+- **iOS has TWO sentiment scorers; only one is portable — check which surface you're porting.**
+  `MessageDetailSentimentTab` (the message-detail sheet) scores with Apple's `NLTagger` (on-device
+  **ML**) — no Android equivalent produces the same numbers, so a faithful parity port is
+  impossible; it is out of scope. The composer's `SmartContextZone` scores with
+  `TextAnalyzer.computeSentiment`, a **dictionary** (FR/EN/ES/DE weighted words) — fully portable and
+  JVM-testable. A slice-picking agent conflated the two ("add a sentiment tab to the message
+  detail"); reading BOTH iOS sources before committing caught it. When a feature exists in two
+  places, confirm the one you're mirroring uses portable logic, not a platform ML API.
+- **The proxy rate-limits Gradle's PARALLEL first-fetch, not the artifacts.** A cold module graph
+  (`assembleDebug` pulling guava/gson/kotlin-stdlib-jdk8/serialization-plugin poms for the first
+  time) draws a burst of `429 Too Many Requests` from `repo.maven.apache.org`; a single `curl` of the
+  exact same URL returns 200 immediately. Fix: a 429-aware retry loop at `--max-workers=2` — each
+  attempt caches more until it goes green. Don't read the first 429 as a broken build.
+- **`pkill -f 'gradlew'` self-terminates your retry script.** `pkill -f` matches the full command
+  line, and a bash `-c` loop that runs `./gradlew …` HAS "gradlew" in its own command line, so it
+  kills itself (exit 144, no output). Never prefix a gradle loop with `pkill -f gradlew`.
+- **A pure computed getter on the UiState is the cheapest possible composer wiring.**
+  `ChatUiState.composerSentiment` derives the mood glyph straight from the existing `draft` field
+  (same idiom as `composerAffordances`) — null on blank, `SentimentLevel.from(score(draft))`
+  otherwise — so no `onDraftChange` edit, no new state field, no plumbing. The getter is testable via
+  the public API both directly and through `vm.onDraftChange(...) → state.composerSentiment`.
+- **A computed getter references symbols in ITS OWN file — import them there, not only in the
+  consumers.** `ChatUiState.composerSentiment` lives in `ChatViewModel.kt` and calls
+  `SentimentLevel`/`SentimentAnalyzer`; I added the imports to the two *consumer* files
+  (`ChatScreen.kt`, `ChatViewModelTest.kt`) but forgot `ChatViewModel.kt` itself → `Unresolved
+  reference` on both CI and the local gate. The local serial gate reproduced it exactly (both agreed
+  it was a compile break, "not a test assertion"), which is the whole point of running the gate
+  before trusting a push. Lesson: after adding a cross-module symbol, grep every file that names it
+  for a matching import, the declaring file included.
+
+## Slice `composer-language-pill` (2026-08-20)
+- **The container now builds against `android-37`, not `android-35`.** ROUTINE §Environment recipe still
+  installs `platforms;android-35`; the first gate run died with `Failed to find target with hash string
+  'android-37' in: /root/android-sdk`. Fix: `sdkmanager "platforms;android-37"`. (Left ROUTINE as-is this
+  slice — it's a doc drift to fix when the recipe is next touched; flagged here so the next run installs 37
+  directly and doesn't lose a 2-minute gate cycle to it.)
+- **A "detect or fall back to X" helper can't tell "I detected X" from "I gave up and returned X".**
+  `ComposeLanguageDetector.detect(text, fallback)` returns the fallback verbatim on a weak signal — so if a
+  stateful pill stores that result as its "detected language", it pins to whatever fallback happened to be
+  live at that keystroke and never re-floats. Fix in `ComposerLanguageState`: pass a `NO_DETECTION` sentinel
+  (`""`, a value the detector never returns) as the fallback, treat a `""` return as "no detection"
+  (`detected` stays null), and apply the *real* fallback only in `display(fallback)` at READ time. This both
+  matches iOS (`language` stays nil until a confident hit) and kills any seed-timing race — the pill's
+  fallback is resolved when read, never frozen at detect.
+- **When a live composer signal becomes authoritative for a persisted field, capture it BEFORE the clear.**
+  The pill now stamps `originalLanguage`, but `send()`/`sendFileAttachment()` reset `composerLanguage` in the
+  same `_state.update` that clears the draft. Read `composerLanguage.display(resolveUserLanguage(user))` into
+  a local *before* that update (like `text`/`replyToId`/`effects` already are), else the async
+  `sendOptimistic` reads the already-reset state and stamps the seed. Two pre-existing send-language tests
+  (detected→es, undetectable→user-lang) are the guard that `display` preserves the old behaviour.

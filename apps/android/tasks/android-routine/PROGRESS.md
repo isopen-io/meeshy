@@ -2,6 +2,197 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Composer language pill + picker shipped** (slice `composer-language-pill`,
+> feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the
+> **language-detection half** left open by `composer-live-sentiment`; the composite line is now `[x]`).
+> **Step 0**: no open `claude/apps/android/*` PR to merge first (the full open-PR list was 11 — gateway/web
+> `$`-escaping fixes, iOS transfer/Jules, five Dependabot; none on an android-routine branch). Branched off
+> `origin/main` (`7d23ec0f`) clean, branch created as the literal first action before any edit. This
+> container **reaches `dl.google.com`** (curl → 200), so the SDK bootstrapped and the **full local gate ran
+> here** — note the platform is now **`android-37`** (not `android-35` as ROUTINE §Env still says); the first
+> gate run died with `Failed to find target with hash string 'android-37'` until `sdkmanager "platforms;android-37"`.
+>
+> **The gap, re-proved by reading source**: a grep showed `ComposeLanguageDetector` (the pure web-heuristic
+> port) was already wired ONLY at send-time to stamp `originalLanguage` — there was no live composer language
+> pill, no picker override, and no ≥10-word detection lock. iOS drives all three from `TextAnalyzer`
+> (`wordCountThreshold`=10, `isLanguageLocked`, `languageOverride`) + `ComposerLanguageResolver.resolve`.
+>
+> **Pure core (`:core:model`)**: new `ComposerLanguageState(detected, manualOverride, isLocked)`.
+> `onDraftChanged(draft)` re-detects each keystroke while unlocked & unoverridden, locks once the draft
+> reaches `WORD_LOCK_THRESHOLD`=10 words, and a blank draft releases the lock unless a manual pick holds.
+> `display(fallback)` = `manualOverride ?? detected ?? fallback` (iOS `displayLanguage`). `withManualPick`
+> overrides + freezes. **Design win over a naive port**: a `NO_DETECTION` sentinel (`""`, a value the
+> detector never returns) is passed as the detector fallback so a weak/undetectable draft yields `detected =
+> null` instead of pinning the pill to a stale guess — the pill then follows the LIVE fallback at read time.
+> This also removes any seed-timing fragility: `display` applies the fallback at read, not at detect.
+>
+> **Wiring (`:feature:chat`)**: `ChatUiState.composerLanguage` + `composerLanguageSeed` (the viewer's
+> `resolveUserLanguage`, seeded from the conversation-load collector) + `composerLanguageCode` getter.
+> `onDraftChange` folds `onDraftChanged`; new `onComposerLanguagePicked(code)`. The pill is now
+> **authoritative for the stamped `originalLanguage`** on the text AND file send paths — captured before the
+> clear via `composerLanguage.display(resolveUserLanguage(user))`, so a manual pick wins over detection —
+> replacing the previous per-send `ComposeLanguageDetector.detect(text, …)` (the clipboard/pasted-content
+> path keeps its own detection, a distinct signal). Reset to seed on send. `ChatScreen` renders a leading
+> `ComposerLanguagePill` (flag glyph + `DropdownMenu` over `LanguageData.commonLanguageCodes`, checkmark on
+> the current pick) — thin, coverage-exempt Compose glue. Strings ×1 (`chat_composer_language`) EN/FR/ES/PT.
+>
+> **Tests**: +18 `ComposerLanguageStateTest` (display precedence; detection surfaces/flips while unlocked;
+> undetectable draft never pins & never locks; word-threshold lock freezes further detection; manual
+> override suppresses detection; empty releases the lock but keeps a manual pick; released lock re-detects;
+> `withManualPick` locks; determinism) + 5 `ChatViewModelTest` (pill follows detection; pill seeds from the
+> user's resolved language; a pick overrides live detection; a pick stamps the outgoing message over
+> detection; send resets to the seed). Reducer branch coverage total; the pill/`DropdownMenu` are exempt
+> Compose glue per TDD-COVERAGE. The two pre-existing send-language tests (detected → es, undetectable → user
+> lang) stay green — `display` preserves both behaviours exactly.
+>
+> **Verified**: `:core:model` + `:feature:chat` suites green individually; full `assembleDebug` +
+> `testDebugUnitTest` across all modules green locally before the PR (single container, `dl.google.com`
+> reachable). Reviewer PASS.
+
+> On 2026-08-20 **Composer live sentiment shipped** (slice `composer-live-sentiment`,
+> feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the
+> **live-sentiment** half). **Step 0**: no open `claude/apps/android/*` PR to merge first (checked
+> the remote heads + `list_pull_requests --head isopen-io:claude/apps/android` → `[]`; the previous
+> slice `conversation-lock-open-gate` is merged as #3221). Branched off `origin/main` (`3ccd8a72`)
+> clean, branch created as the literal first action before any edit. This container **reaches
+> `dl.google.com`** (curl → 200), so the SDK bootstrapped and the **full local gate ran here**
+> (assembleDebug + testDebugUnitTest) — not only on CI.
+>
+> **The gap, re-proved by reading source**: a zero-hit grep for `Sentiment` across `apps/android`
+> confirmed the composer had no sentiment surface. iOS ships TWO distinct sentiment scorers — the
+> **agent's #2 candidate conflated them**: (1) the message-detail sheet's `MessageDetailSentimentTab`
+> uses Apple's `NLTagger` (on-device **ML**), which has **no portable Android equivalent** (a
+> faithful port is impossible — the scores would differ), so it is deliberately **out of scope**;
+> (2) the composer's `SmartContextZone` uses `TextAnalyzer.computeSentiment`, a **dictionary**
+> (FR/EN/ES/DE weighted words) scorer that IS portable. This slice ports (2).
+>
+> **Pure core (`:core:model`)**: `SentimentAnalyzer.score(text)` — lowercase, tokenize on whitespace
+> with leading/trailing punctuation trimmed (Unicode punctuation categories), sum the dictionary
+> hits (positive dict consulted first), normalize `sum / wordCount * 2`, clamp to `[-1, 1]` — a
+> faithful port of iOS `computeSentiment`. `SentimentLevel` (7 buckets + glyphs + `from(score)` with
+> iOS's exact thresholds: neutral band `[-0.1, 0.1]` inclusive, `-0.6`→NEGATIVE, `0.3`→POSITIVE,
+> `0.6`→VERY_POSITIVE).
+>
+> **Wiring**: `ChatUiState.composerSentiment` — a pure computed getter (same idiom as the existing
+> `composerAffordances`) that returns `null` on a blank draft (no glyph shown) else
+> `SentimentLevel.from(SentimentAnalyzer.score(draft))`. `ChatScreen`'s composer renders it as the
+> input field's `trailingIcon` (the mood emoji), with a localized "Message tone" content
+> description. No new plumbing — it rides the existing `draft` state, so every keystroke re-derives it
+> exactly like the mention state already does.
+>
+> **Tests**: +20 `SentimentTest` (`from` boundary buckets incl. both neutral edges, the 7 glyphs,
+> `score` empty/blank/punctuation-only → 0, single-word clamp both signs, word-count normalization,
+> mixed sum, case-insensitivity, punctuation trimming, non-English dictionaries, end-to-end
+> text→level, determinism) + 5 `ChatViewModelTest` (null on blank; positive/negative/neutral typing
+> map to the right level; clears when the draft empties). Reducer/scorer branch coverage effectively
+> total; the Compose `trailingIcon` is exempt glue per TDD-COVERAGE. Strings ×1 (`chat_composer_sentiment`)
+> across EN/FR/ES/PT.
+>
+> **Env**: the outbound proxy rate-limits Gradle's **parallel** first-fetch of uncached artifacts
+> (`429 Too Many Requests` on `repo.maven.apache.org`); a direct `curl` of the same artifact returns
+> 200. Ran the gate under a 429-aware retry loop (`--max-workers=2`); each attempt warms more of the
+> cache until it goes green (NOTES). **Gotcha logged**: `pkill -f 'gradlew'` self-terminates the
+> retry script (its own command line contains "gradlew").
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` green across all modules locally (single-thread
+> to dodge the proxy 429 burst; one `:app` Robolectric run needed its `android-all-instrumented` jar
+> re-fetched after a warm — a proxy-throttle transient, not a test failure). **CI incident, my own
+> fault, caught by the gate**: the FIRST push (`0d227f3a`) failed the Android check with `Unresolved
+> reference 'SentimentLevel'` — I'd added the import to the two consumer files (`ChatScreen`, the
+> test) but not to `ChatViewModel.kt`, where the `composerSentiment` getter is declared. Both CI and
+> the local serial gate reproduced it identically. Fixed in `c4a5f8e5` (two imports), re-verified
+> green locally, re-pushed. Lesson logged in NOTES.
+
+> On 2026-08-20 **Conversation lock open-gate shipped** (slice `conversation-lock-open-gate`,
+> feature-parity's Conversations lock composite — the "open-gate on tap" sub-gap left open by
+> `conversation-lock-menu`). **Step 0**: checked the full open-PR list (8 open, none on a
+> `claude/apps/android/*` branch — #3220/#3218 gateway, #3217 iOS, five Dependabot), so no
+> prior-iteration PR to merge first. Branched off `origin/main` (`1eeff7c7`) clean, branch created
+> as the literal first action before any edit. `dl.google.com` reachable here (curl → 200), so the
+> **full local gate ran locally**, not only on CI.
+>
+> **The gap, re-proved by reading source**: `ConversationListScreen`'s row `onClick` called
+> `onConversationClick(conversation.id)` **directly** — a locked conversation opened straight
+> through, its 🔒 badge purely cosmetic on tap. iOS gates this: `ConversationListView` row tap does
+> `if isLocked { lockSheetMode = .openConversation } else { onSelect }`, and
+> `ConversationLockSheet.Mode.openConversation` verifies the 4-digit code then calls `onSuccess()`
+> **without removing the lock** (distinct from `.unlockConversation`, which removes it).
+>
+> **SOTA over iOS by extraction + honest effect naming**: the decision is lifted out of the view
+> into the already-pure `LockPinReducer`. New `LockPinMode.OPEN_CONVERSATION` mirrors
+> `completeUnlock` but emits a brand-new **`LockPinEffect.OpenConversation(id)`** — deliberately
+> distinct from `RemoveLock` — so "reveal once, stays locked" is provable in a unit test (the
+> reducer test asserts `doesNotContain(RemoveLock)`). New `LockPinCopy.OPEN` gives the sheet its own
+> honest header ("Locked conversation" / "Enter the code … to open it"), not the misleading
+> "Unlock" copy, since the lock is not being removed.
+>
+> **Wiring**: `ConversationListViewModel.onConversationTap(id)` consults the authoritative
+> `lockStore.isLocked(id)` (same synchronous read `onLockToggle` uses, not the mirrored state set —
+> so a tap can't race a just-applied lock) → locked opens the `OPEN_CONVERSATION` sheet, unlocked
+> emits on a new one-shot **`openConversation: Flow<String>`** (a `Channel(BUFFERED).receiveAsFlow()`,
+> the same idiom as this file's existing `refreshRequests`; an event, not state, so a config-change
+> replay never re-navigates). `applyLockResult` routes the `OpenConversation` effect to the same
+> channel. `ConversationListScreen` collects it in a `LaunchedEffect(viewModel)` → `onConversationClick`,
+> and the row `onClick` now calls `onConversationTap` — the gate is the **single** navigation entry
+> point (grep confirms one `onConversationClick(` call site left, inside the collector).
+>
+> **Tests**: +5 `LockPinReducerTest` (open length=4, copy=OPEN, correct-code→OpenConversation+Completed
+> AND not RemoveLock, wrong-code→CODE_INCORRECT+no effects, null-id inert) + 4
+> `ConversationLockFlowViewModelTest` (unlocked tap navigates straight, locked tap opens the gate and
+> does NOT navigate, correct open code navigates + keeps the lock, wrong open code keeps the gate + no
+> nav) — all against the real `InMemoryConversationLockStore`, nav events collected off the real
+> `openConversation` flow, never a mock. Reducer branch coverage total; the sheet/`LaunchedEffect`
+> are exempt Compose glue per TDD-COVERAGE. Strings ×2 (title+subtitle) across EN/FR/ES/PT.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` green (the 2 new suites), then full
+> `assembleDebug` + `testDebugUnitTest` across all modules green locally before push.
+
+> On 2026-08-19 **Conversation lock/unlock shipped** (slice `conversation-lock-menu`,
+> feature-parity's Conversations "Pinned/muted/archived… locked pending" composite line — the
+> locked sub-gap). No open `claude/apps/android/*` PR to merge first (checked the full open-PR list:
+> 7 open, none on an android-routine branch). `df -h` not a concern; branched off `origin/main`
+> (`a53205df`) clean. **Full local gate ran here** — this container reaches `dl.google.com` (see
+> NOTES), so `assembleDebug` + `testDebugUnitTest` both went green locally before the PR, not only
+> on CI.
+>
+> **The gap, re-proved by reading source, not an agent's paraphrase**: `ConversationLockStore` +
+> `EncryptedConversationLockStore` (master 6-digit PIN + per-conversation 4-digit PIN, SHA-256
+> hashed, DI-wired) already existed, and `ConversationListViewModel` already *collected*
+> `lockedConversationIdsFlow` into state — but nothing rendered it and nothing could lock/unlock: the
+> state field's own doc comment named the PIN flow a "deliberately deferred follow-up". This slice
+> is that follow-up.
+>
+> **SOTA over iOS by extraction**: iOS's `ConversationLockSheet.handleComplete` embeds a 7-mode ×
+> 3-step PIN state machine *inside* the SwiftUI view (untestable). Android lifts the menu-reachable
+> subset into a pure **`LockPinReducer`** (oracle-injected, effect-emitting) per TDD-COVERAGE's
+> "push decisions out of the Composable" directive. Two concrete improvements this makes provable:
+> (1) a confirm mismatch rewinds to the mode's *real* entry step (0 for setup, 1 for a code) instead
+> of iOS's blanket `step = 1`, which mislabels the setup flow's header; (2) locking with no master
+> PIN yet **chains** first-time setup straight into the 4-digit code (`pendingLockConversationId`),
+> where iOS dead-ends on a "configure a master PIN in Settings" alert Android has no Settings screen
+> to honour.
+>
+> **Wiring**: `ConversationListViewModel.onLockToggle/onLockDigit/onLockDelete/dismissLockPrompt`
+> drive a `lockPrompt: LockPinState?` on the UiState; effects apply to the real `ConversationLockStore`
+> (setMasterPin/setLock/removeLock), whose flow re-derives the row's 🔒 badge. New context-menu
+> Lock/Unlock row (label+icon flip on `isLocked`); new `ConversationLockPinSheet` (ModalBottomSheet
+> hero-lock + dots + 10-key pad, indigo accent, `LockOpen` glyph on the unlock flow). Strings ×22
+> across EN/FR/ES/PT.
+>
+> **Tests**: +21 `LockPinReducerTest` (every mode/step, buffer-full & empty-delete inert arms,
+> wrong-master/wrong-code/mismatch failure arms, null-id defensive arms, copy/pinLength/currentPin
+> derivation) + 9 `ConversationLockFlowViewModelTest` (mode selection per store state, the
+> setup→lock chain, unlock, wrong-PIN keeps-open, dismiss drops the pending chain, digit/delete inert
+> with no sheet) — all against the real `InMemoryConversationLockStore`, never a canned mock.
+> Reducer branch coverage is effectively total; the Composable sheet is exempt glue per TDD-COVERAGE.
+>
+> **Verified**: `./gradlew assembleDebug` (exit 0, all modules) then `./gradlew testDebugUnitTest`
+> (BUILD SUCCESSFUL, all modules) green locally. Env gotchas (compileSdk 37 → `android-37.0` on
+> `--channel=3`, newer cmdline-tools required, Maven 429 burst) written up in NOTES.
+>
+> `tasks/lane-cursor.md` → re-read fresh at merge time → advances to `lane=ANDROID
+> android_streak=5 last_run=conversation-lock-menu`.
+
 > On 2026-08-17 **Chat scroll-to-bottom offline indicator shipped** (slice
 > `chat-scroll-offline-indicator`, feature-parity's scroll-control composite line, "offline
 > indicator" sub-gap). `gh pr list --state open --search "apps/android OR apps/ios"` showed two

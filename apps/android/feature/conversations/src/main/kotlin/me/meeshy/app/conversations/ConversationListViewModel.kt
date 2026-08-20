@@ -6,9 +6,11 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
@@ -86,11 +88,22 @@ data class ConversationListUiState(
      * port of iOS `ConversationListView` observing `ConversationLockManager` directly so a
      * lock/unlock re-evaluates every row (see `ConversationListView+Rows.swift`'s
      * `ConversationRowItem.==`, which compares swipe-action icons for exactly this reason).
-     * Data plumbing only: UI wiring (hiding content, swapping the swipe action, the PIN entry
-     * flow) is a deliberately deferred follow-up — see NOTES.md/PROGRESS.md for this slice.
+     * Data plumbing only: content-hiding + the swipe-action swap remain deferred, but the
+     * lock/unlock PIN flow is now live — see [lockPrompt].
      */
     val lockedConversationIds: Set<String> = emptySet(),
+    /**
+     * The active conversation-lock PIN sheet, or `null` when none is shown. Driven by the
+     * pure [LockPinReducer] (parity iOS `ConversationLockSheet`, whose logic Android lifts
+     * out of the view into a covered reducer). The sheet renders [LockPinState] and forwards
+     * digit/delete intents; a completed flow clears this back to `null` (or chains into the
+     * lock code entry after a first-time master-PIN setup).
+     */
+    val lockPrompt: LockPinState? = null,
 ) {
+    /** True when [conversationId] currently carries a PIN lock — drives the row's lock glyph. */
+    fun isLocked(conversationId: String): Boolean = lockedConversationIds.contains(conversationId)
+
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
     /** The persisted draft for [conversationId], if the composer holds one — drives the row's "Draft: …" preview. */
@@ -135,8 +148,33 @@ class ConversationListViewModel @Inject constructor(
     private val _state = MutableStateFlow(ConversationListUiState())
     val state: StateFlow<ConversationListUiState> = _state.asStateFlow()
 
+    /**
+     * One-shot "navigate into this conversation" requests. Emitted when a tap resolves
+     * to an open — immediately for an unlocked row, or after the [LockPinMode.OPEN_CONVERSATION]
+     * gate accepts the code (parity iOS `ConversationListView`'s `onSelect`). A [Channel]
+     * (not a `StateFlow`) because navigation is an event, not state: re-collecting after a
+     * config change must not re-navigate. Mirrors this file's existing [refreshRequests] idiom.
+     */
+    private val openConversationRequests = Channel<String>(Channel.BUFFERED)
+    val openConversation: Flow<String> = openConversationRequests.receiveAsFlow()
+
     /** Authoritative, unfiltered cache list; [ConversationListUiState.conversations] is the filtered view. */
     private var rawConversations: List<ApiConversation> = emptyList()
+
+    /** Read-only PIN checks for [lockPinReducer], backed by the encrypted lock store. */
+    private val lockPinReducer = LockPinReducer(object : LockPinOracle {
+        override fun verifyMasterPin(pin: String): Boolean = lockStore.verifyMasterPin(pin)
+        override fun verifyLock(conversationId: String, pin: String): Boolean =
+            lockStore.verifyLock(conversationId, pin)
+    })
+
+    /**
+     * Set only while a first-time master-PIN [LockPinMode.SETUP_MASTER_PIN] sheet is open on
+     * behalf of a lock the user asked for: once the master PIN is committed the flow chains
+     * straight into the 4-digit code entry for this id (skipping a redundant master re-verify),
+     * so tapping "Lock" once is enough even with no master PIN configured yet.
+     */
+    private var pendingLockConversationId: String? = null
 
     /**
      * The live category corpus (parity iOS `UserCategoryStore.categoriesById`). Cache-first
@@ -394,6 +432,83 @@ class ConversationListViewModel @Inject constructor(
     /** Replaces a conversation's full tag set (context-menu "Tags" dialog, parity iOS `setTags`). */
     fun setTags(id: String, tags: List<String>) {
         runPrefMutation { repository.setTagsOptimistic(id, tags) }
+    }
+
+    /**
+     * Handles a tap on a conversation row (parity iOS `ConversationListView`'s row tap gate).
+     * An unlocked row navigates straight through; a locked row opens the
+     * [LockPinMode.OPEN_CONVERSATION] gate instead, so its content stays hidden until the
+     * code is entered. The lock store is the authority (same synchronous read [onLockToggle]
+     * uses), not the mirrored [ConversationListUiState.lockedConversationIds], so a tap can
+     * never race a just-applied lock/unlock.
+     */
+    fun onConversationTap(id: String) {
+        if (lockStore.isLocked(id)) {
+            _state.update { it.copy(lockPrompt = LockPinState(LockPinMode.OPEN_CONVERSATION, id)) }
+        } else {
+            openConversationRequests.trySend(id)
+        }
+    }
+
+    /**
+     * Opens the lock PIN sheet for [id] in the right mode (context-menu "Lock"/"Unlock",
+     * parity iOS `ConversationListView+Overlays`'s lock decision): a locked row prompts to
+     * unlock; an unlocked row with a master PIN already set prompts for its code; an unlocked
+     * row with no master PIN yet routes through first-time master-PIN setup, then chains into
+     * the code entry ([pendingLockConversationId]) — where iOS instead dead-ends on a
+     * "configure a master PIN in Settings" alert.
+     */
+    fun onLockToggle(id: String) {
+        val prompt = when {
+            lockStore.isLocked(id) -> LockPinState(LockPinMode.UNLOCK_CONVERSATION, id)
+            lockStore.hasMasterPin() -> LockPinState(LockPinMode.LOCK_CONVERSATION, id)
+            else -> {
+                pendingLockConversationId = id
+                LockPinState(LockPinMode.SETUP_MASTER_PIN, id)
+            }
+        }
+        if (prompt.mode != LockPinMode.SETUP_MASTER_PIN) pendingLockConversationId = null
+        _state.update { it.copy(lockPrompt = prompt) }
+    }
+
+    /** Feeds a digit tap into the open lock sheet; no-op when none is shown. */
+    fun onLockDigit(digit: Int) {
+        val current = _state.value.lockPrompt ?: return
+        applyLockResult(lockPinReducer.onDigit(current, digit))
+    }
+
+    /** Deletes the last entered digit of the open lock sheet; no-op when none is shown. */
+    fun onLockDelete() {
+        val current = _state.value.lockPrompt ?: return
+        _state.update { it.copy(lockPrompt = lockPinReducer.onDelete(current)) }
+    }
+
+    /** Dismisses the lock sheet without completing the flow (drops any pending chained lock). */
+    fun dismissLockPrompt() {
+        pendingLockConversationId = null
+        _state.update { it.copy(lockPrompt = null) }
+    }
+
+    private fun applyLockResult(result: LockPinResult) {
+        var nextPrompt: LockPinState? = result.state
+        result.effects.forEach { effect ->
+            when (effect) {
+                is LockPinEffect.CommitMasterPin -> lockStore.setMasterPin(effect.pin)
+                is LockPinEffect.CommitLock -> lockStore.setLock(effect.conversationId, effect.pin)
+                is LockPinEffect.RemoveLock -> lockStore.removeLock(effect.conversationId)
+                is LockPinEffect.OpenConversation -> openConversationRequests.trySend(effect.conversationId)
+                LockPinEffect.Completed -> {
+                    val pending = pendingLockConversationId
+                    pendingLockConversationId = null
+                    nextPrompt = if (result.state.mode == LockPinMode.SETUP_MASTER_PIN && pending != null) {
+                        LockPinState(LockPinMode.LOCK_CONVERSATION, pending, step = 1)
+                    } else {
+                        null
+                    }
+                }
+            }
+        }
+        _state.update { it.copy(lockPrompt = nextPrompt) }
     }
 
     /**

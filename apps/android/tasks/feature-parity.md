@@ -1518,7 +1518,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       recherche dans l'app bar ; 22 tests verts (11 modèle + 11 VM)
 - [ ] Communities carousel + category filter chips
 - [~] Pinned / muted / archived states done (optimistic toggle + row indicators
-      📌/🔕 + filter integration) ; locked / favorited (emoji) pending
+      📌/🔕 + filter integration) ; favorited (emoji) done ; **locked done** (slice
+      `conversation-lock-menu`, 2026-08-19): context-menu Lock/Unlock opens a PIN sheet
+      whose logic lives in the pure `LockPinReducer` (parity iOS `ConversationLockSheet`,
+      but extracted from the view per TDD-COVERAGE) — first-time master-PIN setup chains
+      straight into the 4-digit code (iOS dead-ends on a "set a PIN in Settings" alert),
+      wrong PIN keeps its own step, row shows a 🔒 badge from the live
+      `ConversationLockStore` flow. **Open-gate on tap done** (slice
+      `conversation-lock-open-gate`, 2026-08-20): tapping a locked row no longer navigates
+      straight through — it opens a `LockPinMode.OPEN_CONVERSATION` sheet that verifies the
+      4-digit code then navigates via a one-shot `openConversation` event, leaving the lock
+      in place (parity iOS `ConversationLockSheet.Mode.openConversation`; a new
+      `LockPinEffect.OpenConversation` distinct from `RemoveLock`). Remaining lock sub-gaps
+      (Settings master-PIN change/remove/unlock-all, swipe-to-lock) tracked below.
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
@@ -2502,7 +2514,31 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       exactly the boundary test). **Pending:** sending the captured content as a real clipboard_content
       attachment (gated on the not-yet-built attachment send pipeline).
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
-- [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
+- [x] Live sentiment + language detection ("smart context zone") with language pill/picker override —
+      **live sentiment done** (slice `composer-live-sentiment`, 2026-08-20): the composer shows a live
+      mood emoji derived from the draft as you type. Pure `:core:model` `SentimentAnalyzer.score(text)`
+      (faithful port of iOS `TextAnalyzer.computeSentiment` — the dictionary FR/EN/ES/DE scorer, NOT the
+      message-detail sheet's `NLTagger` ML scorer, which has no portable Android equivalent) +
+      `SentimentLevel.from(score)` (7 buckets, iOS thresholds, glyphs). `ChatUiState.composerSentiment`
+      derives it (null on a blank draft; `NEUTRAL` for wordless-sentiment text) and the composer renders
+      it as the input field's trailing glyph. +20 core tests (`SentimentTest`) +5 VM tests
+      (`ChatViewModelTest`).
+      **Language pill/picker + ≥10-word lock done** (slice `composer-language-pill`, 2026-08-20): the
+      composer's leading pill shows the flag of the live source language and opens a picker to override
+      it. Pure `:core:model` `ComposerLanguageState` (detected + manualOverride + isLocked) drives it —
+      `onDraftChanged` re-detects each keystroke via the already-shipped `ComposeLanguageDetector` (port
+      of iOS `TextAnalyzer`'s language tracking + `ComposerLanguageResolver`), locks at
+      `WORD_LOCK_THRESHOLD`=10 words, and releases the lock when the composer empties (unless a manual
+      pick holds). `display(fallback)` resolves `override ?? detected ?? fallback` (iOS `displayLanguage`).
+      A `NO_DETECTION` sentinel ("" — a code the detector never returns) keeps an undetectable draft from
+      pinning the pill to a stale fallback: `detected` stays null and the pill follows the live fallback.
+      Wired into `ChatViewModel` (`onDraftChange` folds the state; `onComposerLanguagePicked` overrides;
+      `composerLanguageSeed` = the viewer's `resolveUserLanguage`), and the pill is now **authoritative
+      for the stamped `originalLanguage`** on both the text and file send paths (a manual pick wins over
+      detection), replacing the previous per-send re-detection. Reset to seed on send. +18 core tests
+      (`ComposerLanguageStateTest`) +5 VM tests (`ChatViewModelTest`). Note: iOS's `NLLanguageRecognizer`
+      86%-confidence gate has no portable Android analog; the heuristic detector's own weak-signal→fallback
+      contract is the confidence proxy.
 - [✅] @-mention autocomplete (debounced API + local merge) — **local roster + remote merge done**
       (remote merge `chat-mention-remote-merge` 2026-07-16): the local roster's `ChatMention` SSOT gained the two
       remaining pure pieces from iOS `MentionComposerController` — `shouldQueryRemote` (only fire once the trimmed
