@@ -50,7 +50,17 @@ nonisolated enum DeclarationBodyScanner {
     /// Remplace le contenu des commentaires de ligne, des commentaires de bloc
     /// et des chaînes littérales par des espaces, en conservant la longueur —
     /// les index restent donc valides sur la source d'origine.
-    private static func mask(_ source: String) -> String {
+    ///
+    /// Rendu non-`private` au round 4 de la revue Task 6 : c'est le SEUL
+    /// masqueur de commentaires+chaînes correct du dépôt (état `inString`
+    /// avec gestion des échappements). `ShareSourceCommentStripping`
+    /// (`MeeshyTests/Unit/Share/ShareSourceCommentStripping.swift`)
+    /// délègue désormais ici plutôt que de réimplémenter sa propre version —
+    /// celle-ci ne reconnaissait que `//`/`/* */` et prenait à tort le `//`
+    /// d'un littéral `"https://…"` pour un commentaire de ligne, effaçant
+    /// tout le reste de la ligne (constaté sur du code réel de production :
+    /// `ShareSession.swift`, `ShareViewController.swift`).
+    static func mask(_ source: String) -> String {
         var out = ""
         out.reserveCapacity(source.count)
 
