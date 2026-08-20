@@ -67,6 +67,19 @@ final class SharePendingSendConsumer {
 
         var isFullyServed: Bool { targets.allSatisfy { $0.state == .sent } }
         var fileName: String { "\(clientMessageId).json" }
+
+        /// Une fiche sans cible ne désigne personne à servir ; une origine qui
+        /// ne pointe vers aucune cible ferait indexer `targets[origin]` hors
+        /// bornes dans `consume`. Les deux sont structurellement inexploitables
+        /// — au même titre qu'une version inconnue — donc rejetées au même
+        /// endroit : `decodeRelay`, la frontière du format. La boucle de
+        /// reprise n'a ainsi jamais à se défendre contre une fiche qu'elle ne
+        /// peut pas recevoir.
+        var hasAddressableTargets: Bool {
+            guard !targets.isEmpty else { return false }
+            guard let originTargetIndex else { return true }
+            return targets.indices.contains(originTargetIndex)
+        }
     }
 
     /// Le relais de l'ANCIEN format, encore possible sur le disque d'un
@@ -112,7 +125,8 @@ final class SharePendingSendConsumer {
     /// serveur.
     nonisolated static func decodeRelay(_ data: Data) -> PendingShare? {
         if let share = try? decoder().decode(PendingShare.self, from: data) {
-            return share.v == currentVersion ? share : nil
+            guard share.v == currentVersion, share.hasAddressableTargets else { return nil }
+            return share
         }
         guard let legacy = try? decoder().decode(LegacyPendingSend.self, from: data) else {
             return nil

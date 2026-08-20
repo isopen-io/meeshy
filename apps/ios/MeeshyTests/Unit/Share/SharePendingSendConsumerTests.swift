@@ -147,6 +147,33 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertTrue(files(in: dir).isEmpty)
     }
 
+    // MARK: - Plusieurs fiches relais en un seul appel (revue round 1, Important 2)
+
+    /// `consumeAll` liste TOUS les relais `.json` du dossier et les traite dans
+    /// la même boucle (`for url in relays`) : une interruption peut laisser
+    /// plusieurs fiches indépendantes sur disque (deux partages différés dans
+    /// la même session hors-ligne), et un seul appel doit purger les deux.
+    /// Vérifie l'IDENTITÉ de chaque cible enfilée (conversation ET contenu
+    /// appariés), pas seulement un total : un total de deux enfilages
+    /// passerait aussi si une seule fiche était traitée deux fois, ou si le
+    /// contenu de l'une avait fui vers la cible de l'autre.
+    func test_consumeAll_withSeveralPendingFiches_consumesEachOfThemInOneCall() async throws {
+        let dir = try makeDirectory()
+        try writeShare(shareId: "cid_un", content: "un", conversationIds: ["convUn"], in: dir)
+        try writeShare(shareId: "cid_deux", content: "deux", conversationIds: ["convDeux"], in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(
+            Set(items.map { "\($0.conversationId):\($0.content)" }),
+            ["convUn:un", "convDeux:deux"],
+            "les deux fiches doivent être servies DANS LE MÊME APPEL, chacune vers sa propre cible"
+        )
+        XCTAssertTrue(files(in: dir).isEmpty, "les deux fiches entièrement servies sont supprimées")
+    }
+
     // MARK: - INVARIANT PRODUIT : copier, jamais transférer
 
     /// Décision user : « il ne faut pas que les autres aient l'indicateur
@@ -293,21 +320,6 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertTrue(files(in: dir).isEmpty)
     }
 
-    /// Interruption APRÈS la copie mais AVANT tout enfilage : la fiche décrit
-    /// des octets présents, tout est encore à faire.
-    func test_consumeAll_afterCopyOnly_enqueuesEverything() async throws {
-        let dir = try makeDirectory()
-        let mediaRoot = try makeMediaRoot()
-        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
-        let queue = FakeOfflineMessageQueue()
-
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
-
-        let mediaCalls = await queue.enqueuedMediaCalls
-        let items = await queue.enqueuedItems
-        XCTAssertEqual(mediaCalls.count + items.count, 3)
-    }
-
     /// Interruption APRÈS la première cible : les suivantes ne sont pas
     /// perdues. Le `clientMessageId` ne dédoublonne que sur
     /// `(conversationId, clientMessageId)` — il ne rattrape PAS une cible
@@ -419,6 +431,97 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0)
+    }
+
+    // MARK: - Fiche inexploitable : écartée à la frontière, jamais indexée (revue round 1, Important 1)
+    //
+    // `consumeAll` est appelé au lancement (`MeeshyApp.swift`) ET au retour
+    // d'arrière-plan (`BackgroundTransitionCoordinator.swift`) sans jamais
+    // écarter le fichier fautif avant l'indexation : une fiche sans cible, ou
+    // dont l'origine ne désigne aucune cible, y faisait planter l'app à
+    // CHAQUE lancement. `decodeRelay` est déjà le gardien de la validité du
+    // format (version inconnue, JSON illisible) ; le rejet vit ICI, à la
+    // frontière, pour que la boucle de reprise n'ait jamais à se défendre
+    // contre une fiche qu'elle ne peut structurellement pas recevoir.
+
+    func test_decodeRelay_withNoTargets_isRefused() {
+        let payload = Data("""
+        {"v":1,"clientMessageId":"cid_no_targets","createdAt":"2026-07-29T10:00:00Z",\
+        "content":"bonjour","media":[],"uploadedAttachmentIds":null,"originTargetIndex":null,\
+        "targets":[]}
+        """.utf8)
+
+        XCTAssertNil(
+            SharePendingSendConsumer.decodeRelay(payload),
+            "une fiche sans cible ne désigne personne à servir : elle n'est pas exploitable"
+        )
+    }
+
+    /// `originTargetIndex` hors bornes (5 pour 3 cibles) : `order` commencerait
+    /// par un index absent de `targets`.
+    func test_decodeRelay_withOriginIndexOutOfBounds_isRefused() {
+        let payload = Data("""
+        {"v":1,"clientMessageId":"cid_bad_origin","createdAt":"2026-07-29T10:00:00Z",\
+        "content":"bonjour","media":[],"uploadedAttachmentIds":null,"originTargetIndex":5,\
+        "targets":[\
+        {"conversationId":"conv1","clientMessageId":"cid_10000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null},\
+        {"conversationId":"conv2","clientMessageId":"cid_20000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null},\
+        {"conversationId":"conv3","clientMessageId":"cid_30000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null}]}
+        """.utf8)
+
+        XCTAssertNil(
+            SharePendingSendConsumer.decodeRelay(payload),
+            "l'origine ne désigne aucune cible réelle : la fiche n'est pas exploitable"
+        )
+    }
+
+    /// Intégration bout-en-bout : AVANT le correctif, ce test fait PLANTER le
+    /// process de test (`targets[0]` hors bornes sur un tableau vide) au lieu
+    /// de simplement rougir — c'est précisément ce qui rendait l'app
+    /// inutilisable dès le premier lancement suivant l'écriture d'une telle
+    /// fiche.
+    func test_consumeAll_withNoTargets_dropsFileWithoutEnqueuingOrCrashing() async throws {
+        let dir = try makeDirectory()
+        try write("""
+        {"v":1,"clientMessageId":"cid_no_targets","createdAt":"2026-07-29T10:00:00Z",\
+        "content":"bonjour","media":[],"uploadedAttachmentIds":null,"originTargetIndex":null,\
+        "targets":[]}
+        """, named: "cid_no_targets.json", in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let count = await queue.enqueueCount
+        XCTAssertEqual(count, 0, "aucune cible à servir : rien ne doit être enfilé")
+        XCTAssertTrue(files(in: dir).isEmpty, "la fiche inexploitable doit disparaître, pas rester")
+    }
+
+    /// Même intégration pour une origine hors bornes (5 pour 3 cibles) —
+    /// AVANT le correctif, `order = [5, 0, 1, 2]` fait planter le process sur
+    /// `current.targets[5]`.
+    func test_consumeAll_withOriginIndexOutOfBounds_dropsFileWithoutEnqueuingOrCrashing() async throws {
+        let dir = try makeDirectory()
+        try write("""
+        {"v":1,"clientMessageId":"cid_bad_origin","createdAt":"2026-07-29T10:00:00Z",\
+        "content":"bonjour","media":[],"uploadedAttachmentIds":null,"originTargetIndex":5,\
+        "targets":[\
+        {"conversationId":"conv1","clientMessageId":"cid_10000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null},\
+        {"conversationId":"conv2","clientMessageId":"cid_20000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null},\
+        {"conversationId":"conv3","clientMessageId":"cid_30000000-0000-4000-8000-000000000000",\
+        "state":"pending","serverMessageId":null}]}
+        """, named: "cid_bad_origin.json", in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+
+        let count = await queue.enqueueCount
+        XCTAssertEqual(count, 0, "l'origine ne désigne aucune cible : rien ne doit être enfilé")
+        XCTAssertTrue(files(in: dir).isEmpty, "la fiche inexploitable doit disparaître, pas rester")
     }
 
     // MARK: - Filtre par cible (revue Task 4, constat Important 2)
