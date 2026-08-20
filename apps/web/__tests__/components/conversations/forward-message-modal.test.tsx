@@ -491,7 +491,9 @@ describe('ForwardMessageModal', () => {
   // `public`/`global` dont l'appelant n'est pas membre (elle sert aussi la
   // recherche globale). Les offrir comme cible produit « Permissions
   // insuffisantes pour envoyer des messages » : une cible qui ne peut jamais
-  // fonctionner. Jumeau iOS : ForwardPickerViewModelTests
+  // fonctionner. Depuis la décision du user (2026-08-19) la route n'émet AUCUN
+  // participant pour un non-membre et déclare `isMember` — le seul signal.
+  // Jumeau iOS : ForwardPickerViewModelTests
   // .test_search_dropsPublicRoomWhereUserIsNotAMember
   it("n'offre pas un salon public dont l'utilisateur n'est pas membre", async () => {
     jest.spyOn(conversationsService, 'searchConversations').mockResolvedValue([
@@ -500,15 +502,15 @@ describe('ForwardMessageModal', () => {
         title: 'Photographie',
         type: 'public',
         isActive: true,
-        participants: [
-          { id: 'p-x', userId: 'user-77', user: { id: 'user-77', displayName: 'Autre', username: 'autre' } },
-        ],
+        isMember: false,
+        participants: [],
       },
       {
         id: 'conv-public-joined',
         title: 'Photo perso',
         type: 'public',
         isActive: true,
+        isMember: true,
         participants: [
           { id: 'p-x', userId: 'user-77', user: { id: 'user-77', displayName: 'Autre', username: 'autre' } },
           { id: 'p-me', userId: 'user-1', user: { id: 'user-1', displayName: 'Moi', username: 'moi' } },
@@ -523,6 +525,68 @@ describe('ForwardMessageModal', () => {
       expect(screen.getByTestId('forward-row-conv-public-joined')).toBeInTheDocument(),
     );
     expect(screen.queryByTestId('forward-row-conv-public-foreign')).toBeNull();
+  });
+
+  // LE faux négatif que le drapeau serveur supprime : `participants` est
+  // tronqué à cinq par la route, donc dans un salon public de cinquante
+  // personnes un membre légitime n'y figure pas — son PROPRE salon
+  // disparaissait de sa recherche, en silence. Jumeau iOS :
+  // .test_search_keepsPublicRoomFlaggedMember_evenWhenAbsentFromTheTruncatedParticipants
+  it('offre un salon dont on est membre même quand on est absent des cinq participants émis', async () => {
+    jest.spyOn(conversationsService, 'searchConversations').mockResolvedValue([
+      {
+        id: 'conv-public-big',
+        title: 'Photo club',
+        type: 'public',
+        isActive: true,
+        isMember: true,
+        participants: ['u1', 'u2', 'u3', 'u4', 'u5'].map((uid) => ({
+          id: `p-${uid}`,
+          userId: uid,
+          user: { id: uid, displayName: uid, username: uid },
+        })),
+      },
+    ] as never);
+    renderModal();
+
+    await userEvent.type(screen.getByRole('textbox'), 'photo');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('forward-row-conv-public-big')).toBeInTheDocument(),
+    );
+  });
+
+  // Repli rétro-compatible : face à un gateway qui ne porte pas encore le
+  // drapeau, le web garde EXACTEMENT son comportement d'avant.
+  it("sans drapeau serveur, retombe sur l'appartenance lue dans les participants", async () => {
+    jest.spyOn(conversationsService, 'searchConversations').mockResolvedValue([
+      {
+        id: 'conv-legacy-foreign',
+        title: 'Photographie',
+        type: 'public',
+        isActive: true,
+        participants: [
+          { id: 'p-x', userId: 'user-77', user: { id: 'user-77', displayName: 'Autre', username: 'autre' } },
+        ],
+      },
+      {
+        id: 'conv-legacy-joined',
+        title: 'Photo perso',
+        type: 'public',
+        isActive: true,
+        participants: [
+          { id: 'p-me', userId: 'user-1', user: { id: 'user-1', displayName: 'Moi', username: 'moi' } },
+        ],
+      },
+    ] as never);
+    renderModal();
+
+    await userEvent.type(screen.getByRole('textbox'), 'photo');
+
+    await waitFor(() =>
+      expect(screen.getByTestId('forward-row-conv-legacy-joined')).toBeInTheDocument(),
+    );
+    expect(screen.queryByTestId('forward-row-conv-legacy-foreign')).toBeNull();
   });
 
   it("rejette une réponse de recherche devenue périmée quand la requête redescend sous 2 caractères", async () => {

@@ -3,7 +3,11 @@
  * (apps/ios/MeeshyTests/Unit/Components/ForwardTargetMergeTests.swift).
  */
 
-import { mergeForwardTargets, type ForwardTarget } from '@/lib/forward-target-merge';
+import {
+  isReachableForwardConversation,
+  mergeForwardTargets,
+  type ForwardTarget,
+} from '@/lib/forward-target-merge';
 
 function conv(id: string, opts: { userId?: string; title?: string } = {}): ForwardTarget {
   return {
@@ -43,5 +47,21 @@ describe('mergeForwardTargets', () => {
   it("un groupe n'absorbe personne", () => {
     const out = mergeForwardTargets([conv('g1')], [contact('u1')]);
     expect(out.map((t) => t.id)).toEqual(['conv:g1', 'user:u1']);
+  });
+});
+
+/**
+ * Miroir de `ForwardTargetMergeTests` iOS, section « Appartenance ».
+ */
+describe('isReachableForwardConversation', () => {
+  it('le drapeau serveur prime sur le tableau participants (tronqué à cinq, vide pour un non-membre)', () => {
+    expect(isReachableForwardConversation('public', ['u1', 'u2'], 'me', true)).toBe(true);
+    expect(isReachableForwardConversation('public', ['me'], 'me', false)).toBe(false);
+  });
+
+  it("sans drapeau (gateway antérieur), l'heuristique historique reste la règle", () => {
+    expect(isReachableForwardConversation('public', ['u1', 'me'], 'me', undefined)).toBe(true);
+    expect(isReachableForwardConversation('public', ['u1', 'u2'], 'me', undefined)).toBe(false);
+    expect(isReachableForwardConversation('group', [], 'me', undefined)).toBe(true);
   });
 });

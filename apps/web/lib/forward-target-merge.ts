@@ -56,15 +56,19 @@ const OPEN_CONVERSATION_TYPES = new Set(['public', 'global']);
  * produit « Permissions insuffisantes pour envoyer des messages » : une cible
  * qui ne peut jamais fonctionner.
  *
- * Deux branches, parce que la clause `WHERE` de la route en a deux :
+ * `isMember` est le drapeau SERVEUR (`search.ts`, décision du user 2026-08-19)
+ * et la seule autorité quand il est présent : depuis cette décision la route
+ * n'émet plus AUCUN participant pour un non-membre, et le tableau qu'elle émet
+ * pour un membre reste tronqué à cinq — il ne peut donc ni prouver ni infirmer
+ * l'appartenance à lui seul. C'est ce qui faisait disparaître de sa propre
+ * recherche le salon public de plus de cinq personnes dont l'utilisateur EST
+ * membre.
+ *
+ * `isMember` absent = gateway antérieur : on retombe sur l'heuristique
+ * historique plutôt que de tout écarter.
  * - tout type AUTRE que `public`/`global` n'a pu être trouvé que par
  *   `participants some { userId }` — appartenance garantie par construction ;
  * - pour `public`/`global`, seul le tableau `participants` du corps le dit.
- *
- * LIMITE CONNUE : ce tableau est tronqué à 5 par le `include` de la route. Un
- * salon public de plus de 5 membres dont on EST membre peut donc être écarté à
- * tort ; le seul correctif exact est serveur (émettre la ligne de participant
- * de l'appelant, ou un drapeau d'appartenance).
  *
  * RÈGLE JUMELLE : `ForwardTargetMerge.isReachableConversation`
  * (`apps/ios/Meeshy/Features/Main/Components/ForwardTargetMerge.swift`).
@@ -73,7 +77,9 @@ export function isReachableForwardConversation(
   type: string | null | undefined,
   participantUserIds: readonly string[],
   currentUserId: string | null | undefined,
+  isMember?: boolean | null,
 ): boolean {
+  if (typeof isMember === 'boolean') return isMember;
   if (!OPEN_CONVERSATION_TYPES.has((type ?? '').toLowerCase())) return true;
   if (!currentUserId) return false;
   return participantUserIds.includes(currentUserId);

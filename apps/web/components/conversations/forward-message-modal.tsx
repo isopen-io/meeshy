@@ -252,12 +252,15 @@ export function ForwardMessageModal({
           ? conversationsOutcome.value
               .filter((conv) => conv.id !== sourceConversationId)
               // Filtre d'appartenance (spec S.1) : la recherche serveur rend
-              // aussi les salons publics dont on n'est PAS membre.
+              // aussi les salons publics dont on n'est PAS membre. `isMember`
+              // est le signal officiel ; le repli sur `participants` ne sert
+              // qu'à un gateway antérieur qui ne le porte pas.
               .filter((conv) =>
                 isReachableForwardConversation(
                   conv.type,
                   (conv.participants ?? []).map((p) => p.userId ?? p.user?.id ?? '').filter(Boolean),
                   currentUserId,
+                  conv.isMember,
                 ),
               )
               .map((conv) => conversationToTarget(conv, currentUserId))

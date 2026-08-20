@@ -336,6 +336,21 @@ export interface Conversation {
   // ===== PARTICIPANTS (unified) =====
   readonly participants: readonly Participant[];
 
+  /**
+   * Le LECTEUR est-il un participant actif de cette conversation ? Calculé
+   * serveur, seule autorité sur la question : `GET /conversations/search` rend
+   * aussi les salons `public`/`global` dont il n'est pas membre, et n'y émet
+   * plus AUCUN participant (décision du user, 2026-08-19). `participants`
+   * restant tronqué à cinq pour un membre, il ne peut de toute façon pas
+   * trancher.
+   *
+   * ABSENT = le serveur ne l'a pas dit (route qui ne le calcule pas, ou
+   * gateway antérieur) — le lecteur retombe alors sur son comportement
+   * d'avant, jamais sur « pas membre ». Jumeau iOS : `APIConversation.isMember`
+   * (`packages/MeeshySDK/.../ConversationModels.swift`).
+   */
+  readonly isMember?: boolean;
+
   // ===== USER PREFERENCES =====
   readonly userPreferences?: unknown;
 

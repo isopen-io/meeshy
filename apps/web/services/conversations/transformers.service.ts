@@ -489,6 +489,13 @@ export class TransformersService {
       // Unified participants
       participants: participants as any,
 
+      // Appartenance déclarée par le serveur (`GET /conversations/search`).
+      // Même piège que le Prisme et le pont ci-dessous : cet objet est
+      // construit à la main, donc tout ce qui n'est pas recopié ici est perdu
+      // pour TOUT le web. ABSENT sur un gateway antérieur — jamais `false`,
+      // qui ordonnerait d'écarter le salon sur la foi d'un silence.
+      isMember: typeof conv.isMember === 'boolean' ? conv.isMember : undefined,
+
       // Last message transformé
       lastMessage: conv.lastMessage ? this.transformMessageData(conv.lastMessage) : undefined,
 
