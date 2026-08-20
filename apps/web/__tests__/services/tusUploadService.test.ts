@@ -856,7 +856,8 @@ describe('TusUploadService', () => {
       await Promise.resolve();
       await Promise.resolve();
 
-      expect(createAuthHeaders).toHaveBeenCalledTimes(2);
+      expect(createAuthHeaders).toHaveBeenNthCalledWith(1, 'stale-token');
+      expect(createAuthHeaders).toHaveBeenNthCalledWith(2, undefined);
       expect(mockUploadInstance.options.headers).toEqual({ Authorization: 'Bearer fresh-token' });
 
       mockUploadInstance.lastResponse = {
