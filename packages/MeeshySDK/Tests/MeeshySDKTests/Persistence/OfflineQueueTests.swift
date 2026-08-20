@@ -118,6 +118,58 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertNil(decoded.copyAttachmentsFromClientMessageId)
     }
 
+    /// Défaut bloquant (revue transversale) : une origine servie par
+    /// l'extension de partage n'a JAMAIS de ligne locale
+    /// (`PendingIdRecord`), donc `resolveServerId(for: originClientMessageId)`
+    /// résout `nil` pour TOUJOURS dans ce cas — la copie ne peut jamais
+    /// partir. La fiche de reprise porte déjà l'identifiant serveur
+    /// (`PendingTarget.serverMessageId`) ; ce champ le transporte jusqu'au
+    /// dispatcher pour qu'il l'utilise DIRECTEMENT, sans passer par une
+    /// traduction GRDB qui ne peut pas aboutir.
+    func test_item_carriesCopyAttachmentsFromServerMessageId() throws {
+        let item = OfflineQueueItem(
+            conversationId: "conv-2", content: "bonjour",
+            clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromClientMessageId: "cid_abc_t0",
+            copyAttachmentsFromServerMessageId: "srv_abc_t0")
+
+        XCTAssertEqual(item.copyAttachmentsFromServerMessageId, "srv_abc_t0")
+    }
+
+    func test_item_roundTripsCopyAttachmentsFromServerMessageId() throws {
+        let item = OfflineQueueItem(
+            conversationId: "conv-2", content: "bonjour",
+            clientMessageId: "cid_abc_t1",
+            copyAttachmentsFromClientMessageId: "cid_abc_t0",
+            copyAttachmentsFromServerMessageId: "srv_abc_t0")
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(
+            OfflineQueueItem.self, from: try encoder.encode(item))
+        XCTAssertEqual(decoded.copyAttachmentsFromServerMessageId, "srv_abc_t0")
+    }
+
+    /// Même convention `decodeIfPresent` que `copyAttachmentsFromClientMessageId` :
+    /// une ligne déjà sur le disque avant l'ajout de ce champ doit continuer
+    /// à décoder sans migration.
+    func test_item_decodesLegacyRowsWithoutCopyAttachmentsFromServerMessageId() throws {
+        let legacy = Data("""
+        {"id":"o1","clientMessageId":"cid_x","conversationId":"c1","content":"hi",\
+        "copyAttachmentsFromClientMessageId":"cid_origin",\
+        "createdAt":"2026-08-19T10:00:00Z"}
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let decoded = try decoder.decode(OfflineQueueItem.self, from: legacy)
+
+        XCTAssertNil(decoded.copyAttachmentsFromServerMessageId)
+    }
+
     // MARK: - OfflineQueueItem Codable
 
     func test_item_codableRoundtrip() throws {

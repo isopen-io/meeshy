@@ -409,6 +409,23 @@ final class SharePendingSendConsumer {
     /// (`SharePendingShare.make()`) et persistés. Une ancienne dérivation par
     /// index produisait un identifiant suffixé rejeté par le motif serveur
     /// (voir la doc de `PendingTarget.clientMessageId`).
+    ///
+    /// **Pont origine-déjà-servie (défaut bloquant corrigé) :** quand
+    /// l'origine a été envoyée par l'EXTENSION (celle-ci poste en REST sans
+    /// jamais écrire de ligne locale), `OutboxDispatcher.resolveServerId`
+    /// n'a AUCUN `PendingIdRecord` à lire pour `originClientMessageId` — ce
+    /// registre n'est alimenté QUE par `applyEvent(.serverAck)`, appelé
+    /// uniquement quand l'app elle-même a envoyé le message. Une traduction
+    /// cid → id serveur demandée dans ce cas ne peut donc JAMAIS aboutir : la
+    /// ligne se reporte jusqu'à épuiser son budget, et les cibles 2..N ne
+    /// partent jamais. La fiche porte pourtant déjà la réponse —
+    /// `target.serverMessageId`, écrit par l'extension au moment où elle sert
+    /// la cible (`ShareSender.send`) — donc quand il est présent, on le
+    /// transmet DIRECTEMENT via `copyAttachmentsFromServerMessageId`, sans
+    /// demander cette traduction impossible. Quand l'origine est partie par
+    /// l'app, `target.serverMessageId` reste `nil` (l'app ne l'y écrit
+    /// jamais) et le chemin existant — résolution via `PendingIdRecord` —
+    /// reste intact.
     private func enqueue(
         _ share: PendingShare,
         targetIndex: Int,
@@ -418,7 +435,8 @@ final class SharePendingSendConsumer {
     ) async throws {
         let target = share.targets[targetIndex]
         let clientMessageId = target.clientMessageId
-        let originClientMessageId = share.targets[origin].clientMessageId
+        let originTarget = share.targets[origin]
+        let originClientMessageId = originTarget.clientMessageId
 
         let isOrigin = targetIndex == origin
         let hasUploadedIds = !(share.uploadedAttachmentIds ?? []).isEmpty
@@ -444,6 +462,7 @@ final class SharePendingSendConsumer {
             return
         }
 
+        let needsCopy = !isOrigin && !share.media.isEmpty
         try await queue.enqueue(OfflineQueueItem(
             id: UUID().uuidString,
             clientMessageId: clientMessageId,
@@ -455,8 +474,8 @@ final class SharePendingSendConsumer {
             forwardedFromConversationId: nil,
             attachmentIds: isOrigin ? share.uploadedAttachmentIds : nil,
             localAudioPath: nil,
-            copyAttachmentsFromClientMessageId:
-                (isOrigin || share.media.isEmpty) ? nil : originClientMessageId,
+            copyAttachmentsFromClientMessageId: needsCopy ? originClientMessageId : nil,
+            copyAttachmentsFromServerMessageId: needsCopy ? originTarget.serverMessageId : nil,
             createdAt: createdAt
         ))
     }

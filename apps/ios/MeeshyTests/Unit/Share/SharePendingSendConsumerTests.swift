@@ -79,6 +79,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         uploadedAttachmentIds: [String]? = nil,
         conversationIds: [String] = ["conv1", "conv2", "conv3"],
         states: [SharePendingSendConsumer.PendingTargetState]? = nil,
+        serverMessageIds: [String?]? = nil,
         createdAt: Date = Date(timeIntervalSince1970: 1_785_000_000),
         in directory: URL,
         mediaRoot: URL? = nil
@@ -88,7 +89,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
                 conversationId: id,
                 clientMessageId: "\(shareId)_t\(index)",
                 state: states?[index] ?? .pending,
-                serverMessageId: nil)
+                serverMessageId: serverMessageIds?[index] ?? nil)
         }
         let share = SharePendingSendConsumer.PendingShare(
             v: 1, clientMessageId: shareId, createdAt: createdAt, content: content,
@@ -421,6 +422,52 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"])
         XCTAssertEqual(items.map(\.copyAttachmentsFromClientMessageId),
                        ["cid_abc_t0", "cid_abc_t0"])
+    }
+
+    /// Défaut bloquant (revue transversale) : quand l'origine a été servie
+    /// par l'EXTENSION de partage — celle-ci poste en REST sans jamais
+    /// écrire de ligne locale (`ShareSender.send`) — `PendingIdRecord` ne
+    /// contient AUCUNE entrée pour son `clientMessageId` : ce registre n'est
+    /// alimenté que par `applyEvent(.serverAck)`, appelé uniquement quand
+    /// l'app elle-même envoie le message via l'`OfflineQueue`.
+    /// `OutboxDispatcher.resolveServerId(for: originClientMessageId)` résout
+    /// donc `nil` pour TOUJOURS dans ce cas précis, et la copie ne peut
+    /// jamais partir : elle se reporte jusqu'à épuiser son budget de
+    /// tentatives (~30s), silencieusement, alors que l'écran affiche
+    /// « sera envoyé à la reconnexion ».
+    ///
+    /// La fiche porte pourtant déjà la réponse : `target.serverMessageId`,
+    /// écrit par l'extension au moment où elle sert la cible. La reprise
+    /// doit l'utiliser DIRECTEMENT plutôt que de redemander une traduction
+    /// cid → id serveur qui ne peut pas aboutir.
+    ///
+    /// Round 1 de revue avait déjà exercé une fiche portant
+    /// `serverMessageId` sur une cible `.sent`
+    /// (`test_consumeAll_withMultiTargetShare_reenqueuesOnlyTargetsNotYetSent`)
+    /// mais avec `media: []` : sans média, `originTargetIndex` est `nil` et
+    /// AUCUNE cible ne réclame de copie (`needsCopy` exige `!share.media
+    /// .isEmpty`) — ce scénario précis n'était donc jamais exercé.
+    func test_consumeAll_whenOriginAlreadyServedByExtension_copiesUseItsKnownServerIdDirectly() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(
+            media: [photo], states: [.sent, .pending, .pending],
+            serverMessageIds: ["srv_origin", nil, nil],
+            in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"])
+        XCTAssertEqual(
+            items.map(\.copyAttachmentsFromServerMessageId),
+            ["srv_origin", "srv_origin"],
+            "l'identifiant serveur déjà connu sur la fiche doit être transmis TEL QUEL — "
+            + "demander sa résolution via PendingIdRecord échouerait indéfiniment, l'extension "
+            + "n'ayant jamais écrit de ligne locale pour l'origine"
+        )
     }
 
     /// Les octets restent tant qu'une cible reste à servir.

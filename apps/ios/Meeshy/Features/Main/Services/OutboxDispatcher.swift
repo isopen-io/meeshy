@@ -686,10 +686,27 @@ struct OutboxDispatcher: OutboxDispatching {
     /// précédent) épuisait le budget de tentatives en ~30s — exactement le
     /// délai qu'un upload photo/vidéo sur réseau médiocre dépasse en usage
     /// nominal.
+    ///
+    /// **`item.copyAttachmentsFromServerMessageId` court-circuite la
+    /// résolution GRDB quand il est déjà connu** (défaut bloquant corrigé) :
+    /// une origine servie par l'extension de partage n'a JAMAIS de ligne
+    /// locale (l'extension poste en REST sans dépendance SDK), donc
+    /// `resolveServerId(for: originClientMessageId)` résout `nil` pour
+    /// TOUJOURS dans ce cas — la ligne se reporterait indéfiniment jusqu'à
+    /// épuiser son budget. `SharePendingSendConsumer` lit alors l'identifiant
+    /// serveur déjà écrit sur la fiche (`PendingTarget.serverMessageId`) et
+    /// le transmet ici tel quel. Une origine partie par l'app (chemin
+    /// existant, non régressé) ne pose jamais ce champ : la résolution
+    /// GRDB ci-dessous s'applique alors normalement.
     private func resolveCopyAttachmentsFromMessageId(for item: OfflineQueueItem) async throws -> String? {
         guard let originClientMessageId = item.copyAttachmentsFromClientMessageId else { return nil }
-        let resolvedServerId = try? await DependencyContainer.shared.messagePersistence
-            .resolveServerId(for: originClientMessageId)
+        let resolvedServerId: String?
+        if let known = item.copyAttachmentsFromServerMessageId, !known.isEmpty {
+            resolvedServerId = known
+        } else {
+            resolvedServerId = try? await DependencyContainer.shared.messagePersistence
+                .resolveServerId(for: originClientMessageId)
+        }
         let fanout = ShareFanoutOriginResolver.resolve(
             copyAttachmentsFromClientMessageId: originClientMessageId,
             resolvedServerId: resolvedServerId

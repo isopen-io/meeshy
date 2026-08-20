@@ -69,6 +69,20 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// sur le disque des utilisateurs continuent à décoder sans migration
     /// (même convention que `attachmentKinds` / `localAudioPaths`).
     public let copyAttachmentsFromClientMessageId: String?
+    /// Fan-out de partage — l'identifiant SERVEUR de la cible d'origine,
+    /// quand il est DÉJÀ connu au moment de l'enfilage. Cas unique :
+    /// `SharePendingSendConsumer` reprend une fiche dont l'origine a été
+    /// servie par l'EXTENSION de partage, qui poste directement en REST sans
+    /// jamais écrire de ligne locale — `PendingIdRecord` (alimenté par
+    /// `applyEvent(.serverAck)` sur un envoi APP) ne peut donc jamais
+    /// résoudre `copyAttachmentsFromClientMessageId` pour ce cas précis. La
+    /// fiche de reprise porte déjà `serverMessageId` par cible ; ce champ le
+    /// transporte jusqu'au dispatcher pour l'utiliser DIRECTEMENT, sans
+    /// passer par une traduction GRDB qui ne peut pas aboutir. `nil` pour
+    /// tout message ordinaire, pour une origine partie par l'app (résolution
+    /// via `PendingIdRecord`, chemin inchangé), et pour les lignes écrites
+    /// avant ce champ — même convention `decodeIfPresent`.
+    public let copyAttachmentsFromServerMessageId: String?
     public let createdAt: Date
 
     public init(
@@ -85,7 +99,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
         location: SharedPlace? = nil,
-        copyAttachmentsFromClientMessageId: String? = nil
+        copyAttachmentsFromClientMessageId: String? = nil,
+        copyAttachmentsFromServerMessageId: String? = nil
     ) {
         self.id = UUID().uuidString
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -102,6 +117,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localMediaPaths = localMediaPaths
         self.location = location
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
+        self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.createdAt = Date()
     }
 
@@ -123,6 +139,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localMediaPaths: [String]? = nil,
         location: SharedPlace? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
+        copyAttachmentsFromServerMessageId: String? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -140,6 +157,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localMediaPaths = localMediaPaths
         self.location = location
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
+        self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.createdAt = createdAt
     }
 
@@ -159,6 +177,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case localMediaPaths
         case location
         case copyAttachmentsFromClientMessageId
+        case copyAttachmentsFromServerMessageId
         case createdAt
     }
 
@@ -180,6 +199,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
         self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
+        self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
     }
 
@@ -200,6 +220,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)
+        try c.encodeIfPresent(copyAttachmentsFromServerMessageId, forKey: .copyAttachmentsFromServerMessageId)
         try c.encode(createdAt, forKey: .createdAt)
     }
 }
