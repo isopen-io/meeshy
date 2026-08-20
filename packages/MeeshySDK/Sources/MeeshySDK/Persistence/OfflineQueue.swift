@@ -556,6 +556,35 @@ public protocol OfflineMessageQueueing: Sendable {
     /// `.failed` short-circuit exists specifically to avoid. No-op (not an
     /// error) when there is nothing pending to cancel.
     func cancelPendingSend(clientMessageId: String) async
+    /// Enfilage durable d'un message média (photo/vidéo/document) hors ligne,
+    /// ou repris d'un partage. Sur le PROTOCOLE, et non seulement sur
+    /// l'implémentation : `SharePendingSendConsumer` appelle à travers ce
+    /// protocole et ne pourrait ni l'appeler ni le bouchonner en test s'il
+    /// restait muet.
+    ///
+    /// TOUS les paramètres sont dans l'exigence — un paramètre présent sur la
+    /// seule implémentation concrète est JETÉ avant le mock, et un test vert
+    /// prouve alors l'inverse de ce qu'il croit (précédent vécu : `location`
+    /// sur `enqueuePostMedia`).
+    ///
+    /// `deletesSourceFiles: false` pour un dossier média PARTAGÉ entre
+    /// plusieurs cibles ; `createdAt` non nil pour préserver l'horodatage d'un
+    /// partage repris.
+    @discardableResult
+    func enqueueMedia(
+        sourceMediaURLs: [URL],
+        kinds: [String],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String?,
+        replyToId: String?,
+        forwardedFromId: String?,
+        forwardedFromConversationId: String?,
+        copyAttachmentsFromClientMessageId: String?,
+        deletesSourceFiles: Bool,
+        createdAt: Date?
+    ) async throws -> OfflineQueue.EnqueueMediaResult
 }
 
 extension OfflineQueue: OfflineMessageQueueing {}
@@ -1646,7 +1675,10 @@ public actor OfflineQueue {
         originalLanguage: String? = nil,
         replyToId: String? = nil,
         forwardedFromId: String? = nil,
-        forwardedFromConversationId: String? = nil
+        forwardedFromConversationId: String? = nil,
+        copyAttachmentsFromClientMessageId: String? = nil,
+        deletesSourceFiles: Bool = true,
+        createdAt: Date? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1655,7 +1687,10 @@ public actor OfflineQueue {
                 for: clientMessageId, index: index, ext: sourceMediaURLs[index].pathExtension)
         }
         let outboxId = "ofq_\(UUID().uuidString)"
-        let now = Date()
+        // Un partage repris trois jours après sa création ne doit pas être
+        // antidaté au jour de la reprise — le relais texte préserve déjà
+        // l'horodatage d'origine (`SharePendingSendConsumer`).
+        let now = createdAt ?? Date()
 
         let item = OfflineQueueItem(
             id: UUID().uuidString,
@@ -1671,6 +1706,7 @@ public actor OfflineQueue {
             localAudioPath: nil,
             localAudioPaths: nil,
             localMediaPaths: relativePaths,
+            copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
             createdAt: now
         )
 
@@ -1734,9 +1770,14 @@ public actor OfflineQueue {
             throw EnqueueMediaError.mediaCopyFailed(underlying: copyError)
         }
 
-        // Phase C — best-effort cleanup of the original tmp sources.
-        for source in sourceMediaURLs {
-            FileManager.default.removeItemLogging(at: source, context: "enqueueMedia tmp source cleanup")
+        // Phase C — nettoyage des sources temporaires. DÉSACTIVÉ quand les
+        // octets sont PARTAGÉS entre plusieurs cibles : les supprimer après la
+        // première laisserait les suivantes sans rien à téléverser. Le dernier
+        // consommateur les rend lui-même.
+        if deletesSourceFiles {
+            for source in sourceMediaURLs {
+                FileManager.default.removeItemLogging(at: source, context: "enqueueMedia tmp source cleanup")
+            }
         }
 
         if items.count >= Self.maxQueueSize {

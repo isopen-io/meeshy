@@ -353,6 +353,111 @@ final class OfflineQueueTests: XCTestCase {
             [AttachmentKind.image.rawValue, AttachmentKind.video.rawValue])
     }
 
+    // MARK: - enqueueMedia : reprise d'un partage (createdAt, sources, fan-out)
+
+    /// Un partage repris trois jours plus tard ne doit pas être antidaté au
+    /// jour de la reprise : le relais texte préserve déjà l'horodatage
+    /// d'origine, le chemin média doit faire pareil.
+    func test_enqueueMedia_withAnExplicitCreatedAt_preservesIt() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let shared = Date(timeIntervalSince1970: 1_785_000_000)
+
+        _ = try await queue.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil, clientMessageId: cid,
+            createdAt: shared
+        )
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.createdAt.timeIntervalSince1970,
+                       shared.timeIntervalSince1970, accuracy: 1)
+    }
+
+    func test_enqueueMedia_withoutACreatedAt_stampsNow() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let before = Date()
+
+        _ = try await queue.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil, clientMessageId: cid
+        )
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertGreaterThanOrEqual(item.createdAt, before.addingTimeInterval(-1))
+    }
+
+    /// LE piège du fan-out : les fichiers sont PARTAGÉS entre les cibles. Les
+    /// supprimer après la première laisserait les suivantes sans octets.
+    func test_enqueueMedia_withDeletesSourceFilesFalse_keepsTheSources() async throws {
+        let source = try makeTempMediaFile(ext: "jpg")
+
+        _ = try await queue.enqueueMedia(
+            sourceMediaURLs: [source],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil,
+            clientMessageId: "cid_\(UUID().uuidString.lowercased())",
+            deletesSourceFiles: false
+        )
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: source.path),
+            "un dossier média partagé n'est supprimé que par le DERNIER consommateur"
+        )
+    }
+
+    func test_enqueueMedia_byDefault_stillSweepsTheSources() async throws {
+        let source = try makeTempMediaFile(ext: "jpg")
+
+        _ = try await queue.enqueueMedia(
+            sourceMediaURLs: [source],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil,
+            clientMessageId: "cid_\(UUID().uuidString.lowercased())"
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: source.path),
+                       "le comportement historique du composer in-app est préservé")
+    }
+
+    func test_enqueueMedia_carriesTheFanoutOrigin() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+
+        _ = try await queue.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil, clientMessageId: cid,
+            copyAttachmentsFromClientMessageId: "cid_origin_t0"
+        )
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.copyAttachmentsFromClientMessageId, "cid_origin_t0")
+    }
+
+    /// L'exigence de PROTOCOLE, pas seulement l'implémentation concrète : le
+    /// consommateur de partage appelle à travers `OfflineMessageQueueing` et ne
+    /// peut ni l'appeler ni le bouchonner si le protocole reste muet.
+    func test_enqueueMedia_isReachableThroughTheProtocol() async throws {
+        let queueing: OfflineMessageQueueing = OfflineQueue.shared
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+
+        let result = try await queueing.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil, clientMessageId: cid,
+            originalLanguage: nil, replyToId: nil, forwardedFromId: nil,
+            forwardedFromConversationId: nil,
+            copyAttachmentsFromClientMessageId: nil,
+            deletesSourceFiles: false, createdAt: nil
+        )
+
+        XCTAssertEqual(result.localMediaPaths.count, 1)
+    }
+
     /// A terminated media row must have its relocated `pending-media/` file
     /// swept (no leak), exactly like audio.
     func test_cleanupLocalFiles_sweepsLocalMediaPaths() async throws {

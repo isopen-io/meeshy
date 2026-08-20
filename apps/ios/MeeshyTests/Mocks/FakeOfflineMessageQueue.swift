@@ -16,6 +16,18 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
     private(set) var enqueuedDeletes: [OfflineDeletePayload] = []
     private(set) var retriedClientMessageIds: [String] = []
     private(set) var cancelledPendingSendClientMessageIds: [String] = []
+    private(set) var enqueuedMediaCalls: [EnqueuedMedia] = []
+
+    struct EnqueuedMedia: Equatable {
+        let sourceMediaURLs: [URL]
+        let kinds: [String]
+        let conversationId: String
+        let content: String?
+        let clientMessageId: String
+        let copyAttachmentsFromClientMessageId: String?
+        let deletesSourceFiles: Bool
+        let createdAt: Date?
+    }
 
     // MARK: - Stubbing
 
@@ -63,6 +75,42 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
     func cancelPendingSend(clientMessageId cmid: String) async {
         if let delay { try? await Task.sleep(for: delay) }
         cancelledPendingSendClientMessageIds.append(cmid)
+    }
+
+    @discardableResult
+    func enqueueMedia(
+        sourceMediaURLs: [URL],
+        kinds: [String],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String?,
+        replyToId: String?,
+        forwardedFromId: String?,
+        forwardedFromConversationId: String?,
+        copyAttachmentsFromClientMessageId: String?,
+        deletesSourceFiles: Bool,
+        createdAt: Date?
+    ) async throws -> OfflineQueue.EnqueueMediaResult {
+        if let delay { try? await Task.sleep(for: delay) }
+        if shouldThrow { throw errorToThrow }
+        enqueuedMediaCalls.append(EnqueuedMedia(
+            sourceMediaURLs: sourceMediaURLs, kinds: kinds,
+            conversationId: conversationId, content: content,
+            clientMessageId: clientMessageId,
+            copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
+            deletesSourceFiles: deletesSourceFiles, createdAt: createdAt))
+        return OfflineQueue.EnqueueMediaResult(
+            outboxId: "ofq_fake_\(clientMessageId)",
+            localMediaPaths: sourceMediaURLs.indices.map {
+                "pending-media/\(clientMessageId)/\($0).\(sourceMediaURLs[$0].pathExtension)"
+            })
+    }
+
+    // MARK: - Lectures pratiques
+
+    var enqueuedMediaConversationIds: [String] {
+        enqueuedMediaCalls.map(\.conversationId)
     }
 
     // MARK: - Read-only views (convenience for tests)
