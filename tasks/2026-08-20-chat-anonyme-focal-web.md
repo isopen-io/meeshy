@@ -32,4 +32,19 @@
 - [x] Locales (en/fr/es/pt) : clés `chat.thread.*`
 - [x] Gates locaux : jest web complet vert (717/718 suites — seul rouge : flake
       fuseau pré-existant LentilleRow.live-time, vert en UTC/CI)
-- [ ] Déploiement : push main → CI → vérif prod sur le lien mshy_ (Chrome)
+- [x] Déploiement : push main (42d81e54f) → Docker CI vert → recréation
+      meeshy-frontend (rollback tag isopen/meeshy-web:rollback-20260820) →
+      vérif prod e2e Playwright sur le lien mshy_6a869d…
+
+## Revue (2026-08-20, vérifié en production sur meeshy.me)
+- Visiteur : aperçu avec header accent + Lentille + « Rejoindre pour répondre » figé.
+- Jonction anonyme (FocalCheck) : formulaire 3 champs, arrivée directe dans le fil.
+- Fil participant : StreamThreadHeader « 19 participants · En direct », composer figé
+  (884/900 desktop, 828/844 mobile), 11 rangées focales — première (ancienne, haut)
+  à 0.18, dernière (récente, bas) à 1.0, carte focale élue présente : la perspective
+  est enfin à l'endroit.
+- Envoi : « Test de la nouvelle vue /chat — tout fonctionne ✅ » atterrit en dernière
+  rangée, en bas, net.
+- Lentille : Focal / Script / Bulles basculés en live, choix collant.
+- Les 403 console pré-jonction sont le chemin nominal d'un lien allowViewHistory=false
+  (repli métadonnées publiques du service), pas un défaut.
