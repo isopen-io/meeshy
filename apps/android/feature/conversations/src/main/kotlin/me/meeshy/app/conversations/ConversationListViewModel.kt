@@ -6,9 +6,11 @@ import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
@@ -145,6 +147,16 @@ class ConversationListViewModel @Inject constructor(
 
     private val _state = MutableStateFlow(ConversationListUiState())
     val state: StateFlow<ConversationListUiState> = _state.asStateFlow()
+
+    /**
+     * One-shot "navigate into this conversation" requests. Emitted when a tap resolves
+     * to an open — immediately for an unlocked row, or after the [LockPinMode.OPEN_CONVERSATION]
+     * gate accepts the code (parity iOS `ConversationListView`'s `onSelect`). A [Channel]
+     * (not a `StateFlow`) because navigation is an event, not state: re-collecting after a
+     * config change must not re-navigate. Mirrors this file's existing [refreshRequests] idiom.
+     */
+    private val openConversationRequests = Channel<String>(Channel.BUFFERED)
+    val openConversation: Flow<String> = openConversationRequests.receiveAsFlow()
 
     /** Authoritative, unfiltered cache list; [ConversationListUiState.conversations] is the filtered view. */
     private var rawConversations: List<ApiConversation> = emptyList()
@@ -423,6 +435,22 @@ class ConversationListViewModel @Inject constructor(
     }
 
     /**
+     * Handles a tap on a conversation row (parity iOS `ConversationListView`'s row tap gate).
+     * An unlocked row navigates straight through; a locked row opens the
+     * [LockPinMode.OPEN_CONVERSATION] gate instead, so its content stays hidden until the
+     * code is entered. The lock store is the authority (same synchronous read [onLockToggle]
+     * uses), not the mirrored [ConversationListUiState.lockedConversationIds], so a tap can
+     * never race a just-applied lock/unlock.
+     */
+    fun onConversationTap(id: String) {
+        if (lockStore.isLocked(id)) {
+            _state.update { it.copy(lockPrompt = LockPinState(LockPinMode.OPEN_CONVERSATION, id)) }
+        } else {
+            openConversationRequests.trySend(id)
+        }
+    }
+
+    /**
      * Opens the lock PIN sheet for [id] in the right mode (context-menu "Lock"/"Unlock",
      * parity iOS `ConversationListView+Overlays`'s lock decision): a locked row prompts to
      * unlock; an unlocked row with a master PIN already set prompts for its code; an unlocked
@@ -468,6 +496,7 @@ class ConversationListViewModel @Inject constructor(
                 is LockPinEffect.CommitMasterPin -> lockStore.setMasterPin(effect.pin)
                 is LockPinEffect.CommitLock -> lockStore.setLock(effect.conversationId, effect.pin)
                 is LockPinEffect.RemoveLock -> lockStore.removeLock(effect.conversationId)
+                is LockPinEffect.OpenConversation -> openConversationRequests.trySend(effect.conversationId)
                 LockPinEffect.Completed -> {
                     val pending = pendingLockConversationId
                     pendingLockConversationId = null

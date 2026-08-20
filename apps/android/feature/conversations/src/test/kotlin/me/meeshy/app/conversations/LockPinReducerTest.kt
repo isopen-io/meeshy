@@ -233,4 +233,44 @@ class LockPinReducerTest {
             .type(LockPinState(LockPinMode.UNLOCK_CONVERSATION, conversationId = null), "4321")
         assertThat(done.effects).isEmpty()
     }
+
+    // MARK: - Open (locked-tap gate) flow
+
+    @Test
+    fun open_conversation_length_is_four() {
+        assertThat(LockPinState(LockPinMode.OPEN_CONVERSATION, "c1").pinLength).isEqualTo(4)
+    }
+
+    @Test
+    fun open_conversation_copy_is_open() {
+        assertThat(LockPinState(LockPinMode.OPEN_CONVERSATION, "c1").copy).isEqualTo(LockPinCopy.OPEN)
+    }
+
+    @Test
+    fun the_correct_code_opens_the_conversation_and_leaves_the_lock_in_place() {
+        val done = reducer(locks = mapOf("c1" to "4321"))
+            .type(LockPinState(LockPinMode.OPEN_CONVERSATION, "c1"), "4321")
+        // Unlike UNLOCK, opening must NOT remove the lock — it stays locked for next time.
+        assertThat(done.effects).containsExactly(
+            LockPinEffect.OpenConversation("c1"),
+            LockPinEffect.Completed,
+        ).inOrder()
+        assertThat(done.effects).doesNotContain(LockPinEffect.RemoveLock("c1"))
+    }
+
+    @Test
+    fun a_wrong_open_code_flags_it_and_keeps_the_sheet_open() {
+        val wrong = reducer(locks = mapOf("c1" to "4321"))
+            .type(LockPinState(LockPinMode.OPEN_CONVERSATION, "c1"), "0000")
+        assertThat(wrong.state.pin).isEmpty()
+        assertThat(wrong.state.error).isEqualTo(LockPinError.CODE_INCORRECT)
+        assertThat(wrong.effects).isEmpty()
+    }
+
+    @Test
+    fun an_open_with_no_conversation_id_cannot_open() {
+        val done = reducer(locks = mapOf("c1" to "4321"))
+            .type(LockPinState(LockPinMode.OPEN_CONVERSATION, conversationId = null), "4321")
+        assertThat(done.effects).isEmpty()
+    }
 }

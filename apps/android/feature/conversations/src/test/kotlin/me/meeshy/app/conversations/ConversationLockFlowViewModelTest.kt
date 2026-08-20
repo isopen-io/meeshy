@@ -9,7 +9,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -224,5 +226,81 @@ class ConversationLockFlowViewModelTest {
         vm.onLockDelete()
 
         assertThat(vm.state.value.lockPrompt?.pin).isEqualTo("1")
+    }
+
+    // MARK: - Tap gate (open a locked conversation)
+
+    /** Collects every id the VM asks the screen to navigate to during [block]. */
+    private fun TestScope.recordOpened(vm: ConversationListViewModel, block: () -> Unit): List<String> {
+        val opened = mutableListOf<String>()
+        val job = launch { vm.openConversation.collect { opened += it } }
+        advanceUntilIdle()
+        block()
+        advanceUntilIdle()
+        job.cancel()
+        return opened
+    }
+
+    @Test
+    fun tapping_an_unlocked_conversation_navigates_straight_through() = runTest(dispatcher) {
+        val vm = viewModel(InMemoryConversationLockStore())
+        advanceUntilIdle()
+
+        val opened = recordOpened(vm) { vm.onConversationTap("c1") }
+
+        assertThat(opened).containsExactly("c1")
+        assertThat(vm.state.value.lockPrompt).isNull()
+    }
+
+    @Test
+    fun tapping_a_locked_conversation_opens_the_gate_sheet_and_does_not_navigate() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        val opened = recordOpened(vm) { vm.onConversationTap("c1") }
+
+        assertThat(opened).isEmpty()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.OPEN_CONVERSATION)
+        assertThat(vm.state.value.lockPrompt?.conversationId).isEqualTo("c1")
+    }
+
+    @Test
+    fun the_correct_open_code_navigates_and_keeps_the_conversation_locked() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onConversationTap("c1")
+        val opened = recordOpened(vm) { vm.enter("4321") }
+
+        assertThat(opened).containsExactly("c1")
+        assertThat(vm.state.value.lockPrompt).isNull()
+        assertThat(store.isLocked("c1")).isTrue()
+        assertThat(vm.state.value.isLocked("c1")).isTrue()
+    }
+
+    @Test
+    fun a_wrong_open_code_keeps_the_gate_open_and_does_not_navigate() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onConversationTap("c1")
+        val opened = recordOpened(vm) { vm.enter("0000") }
+
+        assertThat(opened).isEmpty()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.OPEN_CONVERSATION)
+        assertThat(vm.state.value.lockPrompt?.error).isEqualTo(LockPinError.CODE_INCORRECT)
+        assertThat(store.isLocked("c1")).isTrue()
     }
 }

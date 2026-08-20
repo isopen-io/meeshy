@@ -1524,8 +1524,13 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       but extracted from the view per TDD-COVERAGE) — first-time master-PIN setup chains
       straight into the 4-digit code (iOS dead-ends on a "set a PIN in Settings" alert),
       wrong PIN keeps its own step, row shows a 🔒 badge from the live
-      `ConversationLockStore` flow. Remaining lock sub-gaps (open-gate on tap, Settings
-      master-PIN change/remove/unlock-all, swipe-to-lock) tracked below.
+      `ConversationLockStore` flow. **Open-gate on tap done** (slice
+      `conversation-lock-open-gate`, 2026-08-20): tapping a locked row no longer navigates
+      straight through — it opens a `LockPinMode.OPEN_CONVERSATION` sheet that verifies the
+      4-digit code then navigates via a one-shot `openConversation` event, leaving the lock
+      in place (parity iOS `ConversationLockSheet.Mode.openConversation`; a new
+      `LockPinEffect.OpenConversation` distinct from `RemoveLock`). Remaining lock sub-gaps
+      (Settings master-PIN change/remove/unlock-all, swipe-to-lock) tracked below.
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
