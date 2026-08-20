@@ -32,7 +32,7 @@ jest.mock('../../../services/attachments', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import multipart from '@fastify/multipart';
-import { registerUploadRoutes } from '../../../routes/attachments/upload';
+import { registerUploadRoutes, MAX_TEXT_ATTACHMENT_LENGTH } from '../../../routes/attachments/upload';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -157,7 +157,11 @@ async function buildApp({
   participantId?: string | null;
   prisma?: any;
 } = {}): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  // `bodyLimit` aligné sur `server.ts` (50MB) — sans lui, le `bodyLimit` PAR
+  // DÉFAUT de Fastify (1MB) rejetterait déjà les payloads de test du plafond
+  // `MAX_TEXT_ATTACHMENT_LENGTH` (10MB) avant même d'atteindre la validation
+  // de schéma (`maxLength`) que ces tests vérifient.
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } }, bodyLimit: 50 * 1024 * 1024 });
 
   const authOptional = async (req: any) => {
     if (!authenticated && !isAnonymous) return;
@@ -763,5 +767,136 @@ describe('POST /attachments/upload-text — service error', () => {
       payload: { content: 'test' },
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ── task-1-fix-round-3, I2 : ce point d'entrée était sans garde d'autorisation
+// anonyme, jusqu'à ~50 Mo (bodyLimit global), sans rien forger — le
+// contournement le plus simple des trois vus sur ce chantier.
+
+describe('POST /attachments/upload-text — anonymous, blocked when files are forbidden (task-1-fix-round-3, I2)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    // Baseline propre : si la garde d'autorisation manque, cette valeur
+    // résolue produirait un 200 (pas un 500 hérité d'un test précédent) —
+    // pour que le ROUGE prouve bien l'ABSENCE de garde, pas un état de mock
+    // fuité entre describe blocks.
+    mockCreateTextAttachment.mockResolvedValue({ id: 'should-not-be-created' });
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: false, allowAnonymousImages: true }),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 when anonymous file upload is not allowed', async () => {
+    mockCreateTextAttachment.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content: 'a wall of unauthorized text' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /attachments/upload-text — anonymous, share link not found (task-1-fix-round-3, I2)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockCreateTextAttachment.mockResolvedValue({ id: 'should-not-be-created' });
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma(null),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 403 when share link does not exist', async () => {
+    mockCreateTextAttachment.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content: 'text' },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /attachments/upload-text — anonymous, allowed when files are permitted (task-1-fix-round-3, I2)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockCreateTextAttachment.mockResolvedValue({ id: 'att-anon-text' });
+    app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: true, allowAnonymousImages: false }),
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('returns 200 when anonymous file upload is allowed', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content: 'authorized text' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockCreateTextAttachment).toHaveBeenCalledWith('authorized text', 'anon-session', true, undefined);
+  });
+});
+
+describe('POST /attachments/upload-text — anonymous without participantId (task-1-fix-round-3, I2)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockCreateTextAttachment.mockResolvedValue({ id: 'att-anon-text-2' });
+    app = await buildApp({ authenticated: false, isAnonymous: true, participantId: null });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('skips the permission check and returns 200 when participantId is null', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content: 'text' },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('POST /attachments/upload-text — content size cap (task-1-fix-round-3, I2)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockCreateTextAttachment.mockResolvedValue({ id: 'att-text-size' });
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('rejects a content string longer than MAX_TEXT_ATTACHMENT_LENGTH before it reaches the service', async () => {
+    mockCreateTextAttachment.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content: 'a'.repeat(MAX_TEXT_ATTACHMENT_LENGTH + 1) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
+  });
+
+  it('accepts a content string exactly at MAX_TEXT_ATTACHMENT_LENGTH', async () => {
+    mockCreateTextAttachment.mockClear();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content: 'a'.repeat(MAX_TEXT_ATTACHMENT_LENGTH) },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockCreateTextAttachment).toHaveBeenCalledTimes(1);
   });
 });

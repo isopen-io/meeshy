@@ -23,6 +23,18 @@ import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
 
+/**
+ * Plafond du champ `content` de `POST /attachments/upload-text` (task-1-fix-
+ * round-3, I2). AVANT : aucune limite dans le schéma Fastify — seule la
+ * limite GLOBALE du serveur s'appliquait (`bodyLimit: 50MB`, `server.ts`),
+ * donc un invité anonyme pouvait persister jusqu'à ~50 Mo de texte en un
+ * seul appel REST documenté, sans rien forger. 10 Mo (~10 millions de
+ * caractères) reste très généreux pour tout usage BubbleStream légitime
+ * (plusieurs romans en texte brut) tout en abaissant nettement le plafond
+ * réel, indépendamment de `bodyLimit`.
+ */
+export const MAX_TEXT_ATTACHMENT_LENGTH = 10 * 1024 * 1024;
+
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
   authOptional: any,
@@ -192,7 +204,8 @@ export async function registerUploadRoutes(
           properties: {
             content: {
               type: 'string',
-              description: 'Text content to save as a file'
+              description: 'Text content to save as a file',
+              maxLength: MAX_TEXT_ATTACHMENT_LENGTH,
             },
             messageId: {
               type: 'string',
@@ -218,6 +231,10 @@ export async function registerUploadRoutes(
             description: 'Authentication required',
             ...errorResponseSchema
           },
+          403: {
+            description: 'Forbidden - anonymous users without file upload permission',
+            ...errorResponseSchema
+          },
           500: {
             description: 'Internal server error',
             ...errorResponseSchema
@@ -236,6 +253,36 @@ export async function registerUploadRoutes(
 
         const userId = authContext.userId;
         const isAnonymous = authContext.isAnonymous;
+
+        // task-1-fix-round-3, I2 — AVANT : ce point d'entrée ne vérifiait QUE
+        // `isAuthenticated`, jamais `allowAnonymousFiles`. Un invité anonyme
+        // sur un lien « pas de fichiers » persistait donc jusqu'à ~50 Mo de
+        // texte (limite globale du serveur, `bodyLimit`) en un seul appel
+        // REST documenté — le contournement le plus simple des trois vus sur
+        // ce chantier, sans rien forger.
+        //
+        // Décision produit : contrairement à un message VOCAL (round 1 —
+        // exempté de `allowAnonymousFiles`/`allowAnonymousImages` car borné
+        // par la durée d'enregistrement et vérifié par signature, donc jamais
+        // réutilisable pour du stockage en vrac), un texte déposé ici n'a
+        // AUCUNE borne naturelle de taille ni de forme : c'est un fichier
+        // `.txt` arbitraire, exactement ce que `allowAnonymousFiles: false`
+        // existe pour empêcher. Il suit donc le droit de FICHIER, pas le
+        // droit d'écrire un message — même garde que `POST /attachments/upload`.
+        if (isAnonymous && authContext.participantId) {
+          const shareLink = await prisma.conversationShareLink.findUnique({
+            where: { id: authContext.anonymousUser?.shareLinkId },
+            select: { allowAnonymousFiles: true },
+          });
+
+          if (!shareLink) {
+            return sendForbidden(reply, 'Share link not found');
+          }
+
+          if (!shareLink.allowAnonymousFiles) {
+            return sendForbidden(reply, 'File uploads are not allowed for anonymous users on this conversation');
+          }
+        }
 
         const result = await attachmentService.createTextAttachment(
           content,
