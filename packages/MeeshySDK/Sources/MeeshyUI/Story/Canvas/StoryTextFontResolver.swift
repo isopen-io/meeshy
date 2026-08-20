@@ -32,9 +32,13 @@ public enum StoryTextFontResolver {
             return UIFont(descriptor: descriptor, size: size)
         case .typewriter:
             return UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
-        case .handwriting, .calligraphy, .cartoon, .futuristic, .fantasy, .curve, .tag:
+        case .handwriting, .calligraphy, .cartoon, .futuristic, .fantasy, .curve, .tag,
+             .italic, .retro, .elegant, .poster, .bubble, .note, .brush:
             // Styles à famille nommée (SnellRoundhand, Zapfino, ChalkboardSE,
-            // Futura, Papyrus, Savoye LET, MarkerFelt) — toutes embarquées iOS.
+            // Futura, Papyrus, Savoye LET, MarkerFelt — puis, extension 18 :
+            // Georgia-Italic, American Typewriter, Didot, Avenir Next Condensed,
+            // Arial Rounded, Noteworthy, Bradley Hand) — toutes embarquées iOS,
+            // disponibilité verrouillée par test (`everyNamedStyleFont…`).
             // Fallback : system serif au poids dérivé du style si la police
             // manque sur le device (ne devrait pas arriver, gardé par sûreté).
             if let name = text.parsedTextStyle.fontName,

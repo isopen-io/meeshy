@@ -15,7 +15,8 @@ public func storyFont(for style: StoryTextStyle, size: CGFloat) -> Font {
         return .system(size: size, weight: .semibold, design: .rounded)
     case .typewriter:
         return .system(size: size, weight: .regular, design: .monospaced)
-    case .handwriting, .calligraphy, .cartoon, .futuristic, .fantasy, .curve, .tag:
+    case .handwriting, .calligraphy, .cartoon, .futuristic, .fantasy, .curve, .tag,
+         .italic, .retro, .elegant, .poster, .bubble, .note, .brush:
         if let name = style.fontName {
             return .custom(name, size: size)
         }

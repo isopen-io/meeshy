@@ -39,6 +39,52 @@ struct StoryTextStyleAndFrameShapeTests {
         #expect(text.parsedTextStyle == .bold)
     }
 
+    // MARK: - Extension a 18 styles (2026-08-20)
+
+    /// La famille compte DIX-HUIT styles. Le compte est verrouille parce que
+    /// trois surfaces en dependent mecaniquement (pickers `allCases`, cycle
+    /// d'attributs, chips d'apercu) : un style ajoute sans passer par l'enum
+    /// n'existerait nulle part, un style retire casserait des blobs publies.
+    @Test func theFamilyCountsEighteenStyles() {
+        #expect(StoryTextStyle.allCases.count == 18)
+    }
+
+    @Test func extendedTextStyles_parseFromRawValue() {
+        var text = StoryTextObject(id: "t3", text: "X")
+        let expected: [(String, StoryTextStyle)] = [
+            ("italic", .italic), ("retro", .retro), ("elegant", .elegant),
+            ("poster", .poster), ("bubble", .bubble), ("note", .note),
+            ("brush", .brush),
+        ]
+        for (raw, style) in expected {
+            text.textStyle = raw
+            #expect(text.parsedTextStyle == style, "\(raw) doit parser en .\(style)")
+        }
+    }
+
+    /// « italic » et « retro » sont le vocabulaire HISTORIQUE du lecteur
+    /// (`fontForStyle`, chemin texte simple) : des stories publiees les portent
+    /// deja, mais l'enum ne les connaissait pas — sur le canvas ils retombaient
+    /// en .bold. Les ajouter reunit les deux vocabulaires : ce que le lecteur
+    /// sait rendre, le composer sait desormais le produire, et inversement.
+    @Test func legacyReaderVocabulary_isNowPartOfTheFamily() {
+        var text = StoryTextObject(id: "t4", text: "X")
+        text.textStyle = "italic"
+        #expect(text.parsedTextStyle == .italic)
+        text.textStyle = "retro"
+        #expect(text.parsedTextStyle == .retro)
+    }
+
+    @Test func extendedTextStyles_allHaveANamedFontAndAName() {
+        let extended: [StoryTextStyle] = [
+            .italic, .retro, .elegant, .poster, .bubble, .note, .brush
+        ]
+        for style in extended {
+            #expect(style.fontName != nil, "\(style) doit mapper vers une police nommee")
+            #expect(!style.displayName.isEmpty)
+        }
+    }
+
     @Test func newTextStyle_roundTripsThroughCodable() throws {
         let text = StoryTextObject(id: "t3", text: "Graffiti", textStyle: "tag")
         let data = try JSONEncoder().encode(text)
