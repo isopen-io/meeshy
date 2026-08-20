@@ -118,6 +118,48 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
       .filter(o => o.kind === 'text').length).toBe(1);
   });
 
+  it('v1 mediaObjects become the media CARRIER: kind media, plane content, volume/muted kept, root filter lands on it (§C2, F10, U21)', () => {
+    const webBlob: Record<string, unknown> = {
+      backgroundColor: '#000000',
+      textStyle: 'bold',
+      mediaObjects: [{
+        id: 'sobj_carrier',
+        postMediaId: '64b0000000000000000000bb',
+        mediaType: 'video',
+        x: 0.5,
+        y: 0.5,
+        isBackground: true,
+        volume: 0,
+        duration: 7.2,
+      }],
+      filter: 'sepia',
+      filterIntensity: 0.5,
+    };
+    const out = convertV1ToV3(webBlob);
+    expect(CanvasV3Schema.safeParse(out).success).toBe(true);
+    const carrier = out.scenes[0].objects.find(o => o.kind === 'media' && o.plane === 'content');
+    expect(carrier?.payload.postMediaId).toBe('64b0000000000000000000bb');
+    expect(carrier?.payload.mediaType).toBe('video');
+    expect(carrier?.payload.volume).toBe(0);
+    expect(carrier?.payload.muted).toBe(true);
+    expect(carrier?.payload.filter).toBe('sepia');
+    expect(carrier?.payload.filterIntensity).toBe(0.5);
+  });
+
+  it('the media carrier is EXCLUDED from the U20 letterbox remap — it IS the carrier', () => {
+    const blob: Record<string, unknown> = {
+      canvasAspectRatio: 16 / 9,
+      mediaObjects: [{ id: 'sobj_carrier', postMediaId: '64b0000000000000000000bb', mediaType: 'video', x: 0.5, y: 0.5, volume: 0.7 }],
+      textObjects: [{ id: 'txt1', text: 'Sur le média', x: 0.5, y: 0.2 }],
+    };
+    const out = convertV1ToV3(blob);
+    const carrier = out.scenes[0].objects.find(o => o.kind === 'media');
+    const text = out.scenes[0].objects.find(o => o.kind === 'text');
+    expect((carrier?.anchor as { y: number }).y).toBe(0.5);
+    expect(carrier?.payload.muted).toBe(false);
+    expect((text?.anchor as { y: number }).y).toBeCloseTo(0.3418 + 0.2 * 0.3164, 2);
+  });
+
   it('wire helper: v3 passes through UNTOUCHED, v1 converts, nullish passes', () => {
     const v3doc = { v: 3, scenes: [{ id: 's1', objects: [] }] };
     expect(convertStoryEffectsForWire(v3doc)).toBe(v3doc);

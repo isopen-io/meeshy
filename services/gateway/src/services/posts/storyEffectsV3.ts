@@ -97,6 +97,26 @@ export function convertV1ToV3(
     }
   }
 
+  for (const m of asArray(blob.mediaObjects)) {
+    const o = baseObject(m, 'media', 'content', z++);
+    const volume = typeof m.volume === 'number' ? m.volume : undefined;
+    const muted =
+      typeof m.isMuted === 'boolean' ? m.isMuted
+      : typeof m.muted === 'boolean' ? m.muted
+      : volume !== undefined ? volume <= 0 : undefined;
+    o.payload = {
+      postMediaId: m.postMediaId ?? null,
+      ...(str(m.mediaURL) ? { mediaURL: m.mediaURL } : {}),
+      ...(str(m.mediaType) ? { mediaType: m.mediaType } : {}),
+      ...(volume !== undefined ? { volume } : {}),
+      ...(muted !== undefined ? { muted } : {}),
+      ...(typeof m.loop === 'boolean' ? { loop: m.loop } : {}),
+      ...(typeof m.isBackground === 'boolean' ? { isBackground: m.isBackground } : {}),
+      ...(typeof m.duration === 'number' ? { duration: m.duration } : {}),
+    };
+    objects.push(o);
+  }
+
   for (const st of asArray(blob.stickerObjects)) {
     const o = baseObject(st, 'sticker', 'fg', z++);
     o.payload = {
@@ -143,7 +163,11 @@ export function convertV1ToV3(
 
   const carrierAspect = blob.canvasAspectRatio;
   const remapped = typeof carrierAspect === 'number'
-    ? objects.map(o => (o.plane === 'bg' ? o : { ...o, anchor: remapFreeAnchor(o.anchor, carrierAspect) }))
+    ? objects.map(o =>
+        o.plane === 'bg' || o.kind === 'media'
+          ? o
+          : { ...o, anchor: remapFreeAnchor(o.anchor, carrierAspect) }
+      )
     : objects;
 
   const scene: CanvasV3['scenes'][number] = { id: 's1', objects: remapped };
