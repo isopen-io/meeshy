@@ -2,6 +2,68 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation-row typing preview shipped** (slice `conversation-row-typing-indicator`,
+> feature-parity's Conversations "rich last-message preview" `[~]` — the `typing` sub-gap that line
+> itself listed as pending). **Step 0 — an open android-routine PR WAS found and merged first**: my
+> initial `list_pull_requests --head isopen-io:claude/apps/android` returned `[]` (the head filter is
+> too specific to match a `claude/apps/android/<slice>` branch — a lesson logged in NOTES), but reading
+> the Actions list surfaced **PR #3228** (`chat-forwarded-badge-source-name`, a parallel session's
+> slice) open, green (Android #176 ✅), `mergeable_state: clean`. Per the Step-0 mandate I **squash-merged
+> #3228** (main `0a8a1624 → 680fd2b6`) before finishing my own slice — it also carried the fix for the
+> stale share-link tests (below), so main's Android CI is green again.
+>
+> **A pre-existing main breakage, found and attributed by reading source**: the full local gate first
+> showed 8 failures — 5 mine (a test-harness bug, below) and **4 stale share-link tests** in
+> `:feature:conversations` (`CreateShareLinkViewModelTest`, `MyShareLinksViewModelTest`,
+> `ShareLinkDetailViewModelTest`) asserting `…/join/…` while production now yields `…/chat/…`. Root cause:
+> main commit `0a8a1624` switched `CreatedShareLinkPresentation`/`MyShareLinkPresentation` to `/chat/` and
+> updated the `:core:model` presentation tests but **missed these 3 ViewModel test files** — main was red
+> on Android CI as of that commit. **Not fixed inside my slice**: PR #3228 (merged above) already contained
+> the identical `/join → /chat` correction, so I restored those 3 files from the merged main and kept my
+> slice diff **typing-only** — no redundant re-touch, no double-fix conflict.
+>
+> **The gap, re-proved by reading source (Explore scout + independent verify)**: a repo-wide grep for
+> `[Tt]yping` under `feature/conversations/` returned nothing — the row preview was `draftLine ?:
+> lastMessagePreview(...)` only, with **no typing tier**, even though `MessageSocketManager` already
+> exposes `typingStarted`/`typingStopped: SharedFlow<TypingEvent>` and `ConversationListViewModel` already
+> injects it (collecting six of its flows, not the two typing ones). iOS's `ConversationListViewModel.typers`
+> + `ThemedConversationRow` (`if typingUsername != nil { … } else if draft … else lastMessage`) drives a
+> **typing → draft → last-message** priority.
+>
+> **Pure core (`:feature:conversations`)**: `ConversationTypingRoster` — a multi-conversation SSOT
+> (`conversationId → userId → ConversationTyper`), the list-analog of `:feature:chat`'s single-conversation
+> `TypingParticipants`. `started` (self-excluded, name fallback `displayName → username → userId`, returns
+> the same map instance on an inert self/blank start), `stopped` (removes exactly that user — a group row
+> stays lit while any other peer types; drops the conversation key on the last stop; inert for an absent
+> user), `typingDisplayName` (deterministic `minWith(displayName, userId)` so a re-render never flickers).
+> New `ConversationRowPreview` decides the tier: `typingPreview(name, format)` + `conversationRowPreview(
+> typing, draft, last) → RowPreview(text, isAccent)` (typing & draft accent-tinted, last-message secondary).
+>
+> **Wiring**: `ConversationListUiState.typers` + `typingDisplayNameFor(id)`; new `observeTyping()` collects
+> both socket flows through the roster, self = the resolved `currentUserId`. **SOTA over iOS parity, kept
+> honest**: a per-`(conv,user)` **15 s safety-timeout** job (`armTypingCleanup`) mirrors iOS's
+> `scheduleTypingCleanup` — a `typing:start` re-arms it, a real `typing:stop` cancels it — so a lost stop
+> frame can't leave a row stuck "… is typing" forever. `ConversationListScreen`'s row threads
+> `typingDisplayName` and renders `rowPreview.text`/`.isAccent` (thin, coverage-exempt Compose glue).
+> Strings ×1 (`conversations_preview_typing`) EN/FR/ES/PT.
+>
+> **Tests**: +14 `ConversationTypingRosterTest` (record; displayName>username>userId fallback; self &
+> blank-id inert-same-instance; repeated start refreshes in place; two typers both remain + deterministic
+> pick; tie-break by userId; per-user stop keeps the row lit; last-stop drops the key; inert stop for
+> unknown conv / absent user / empty state; no cross-conversation leak; null when nobody types) +6
+> `ConversationRowPreviewTest` (format; null/blank/whitespace name → null; trim; the 3-way priority incl.
+> accent flags) +5 `ConversationListViewModelTest` (start surfaces the typer & doesn't leak to c2; self
+> never shown; stop clears exactly that user leaving the rest; **15 s timeout force-clears**; a fresh start
+> **re-arms** the timeout so an active typer isn't dropped early). Roster/reducer branch coverage total;
+> the row/`observeTyping` glue is exempt per TDD-COVERAGE. **Test-harness lesson (RED→GREEN)**: my first 4
+> VM tests used `advanceUntilIdle()` after the emit, which fast-forwards virtual time **through the 15 s
+> safety timer**, clearing the typer under test — switched to `runCurrent()` (immediate work, no time
+> advance) + explicit `advanceTimeBy` for the timeout tests. Lesson logged in NOTES.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` green (all 3 new suites), then full
+> `assembleDebug` + `testDebugUnitTest` across all modules green locally (this container reaches
+> `dl.google.com`; SDK bootstrapped as `platforms;android-37.0` on `--channel=3` then aliased to the
+> `android-37` hash AGP 8.13 wants — env note in NOTES). Reviewer PASS.
 > On 2026-08-20 **Forwarded badge names its source conversation shipped** (slice
 > `chat-forwarded-badge-source-name`, feature-parity's Chat "Edited / pinned / forwarded indicators"
 > composite — the forwarded-source-name residual left open after `chat-forwarded-indicator`). **Step 0**:

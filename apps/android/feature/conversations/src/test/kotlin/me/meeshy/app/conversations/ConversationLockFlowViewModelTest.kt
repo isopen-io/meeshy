@@ -67,6 +67,8 @@ class ConversationLockFlowViewModelTest {
             every { participantLeft } returns MutableSharedFlow()
             every { userStatus } returns MutableSharedFlow()
             every { presenceSnapshot } returns MutableSharedFlow()
+            every { typingStarted } returns MutableSharedFlow()
+            every { typingStopped } returns MutableSharedFlow()
         },
         workManager = workManager,
         draftStore = InMemoryConversationDraftStore(),

@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## Slice `conversation-row-typing-indicator` (2026-08-20)
+- **`advanceUntilIdle()` fast-forwards virtual time through ANY pending `delay(...)`, so it silently
+  fires a safety-timeout you were trying to test AROUND, not just the immediate work.** Four VM tests
+  that emitted a `typing:start` then asserted the typer was surfaced failed with `expected: Alice / but
+  was: null` — because `armTypingCleanup` schedules a `delay(15_000)` clear, and `advanceUntilIdle()`
+  runs the scheduler until *empty*, executing that 15 s job immediately and clearing the typer before the
+  assertion. Fix: use **`runCurrent()`** (drains only tasks scheduled at the current virtual time — no
+  time advance) to observe a state that a later timer will undo, and reach for `advanceTimeBy(n)` only in
+  the tests that specifically exercise the timeout. Rule of thumb: if the code under test arms a delayed
+  job, `advanceUntilIdle()` after the triggering emit will run that job — prefer `runCurrent()`.
+- **`list_pull_requests --head isopen-io:claude/apps/android` returns `[]` even when a
+  `claude/apps/android/<slice>` PR is open — the head filter is matched as a full `owner:ref`, not a ref
+  prefix.** My Step-0 check missed the open PR #3228 this way; I only found it by scanning the Actions run
+  list (`actions_list method=list_workflow_runs branch=main`), whose `head_branch` fields revealed the
+  live `claude/apps/android/*` branch. For a reliable Step-0 open-PR sweep, list open PRs WITHOUT a head
+  filter (or search `head:claude/apps/android`), or read recent Actions runs and look at `head_branch`.
+- **A fresh main can be red on Android CI from a cross-cutting commit that updated production + SOME test
+  mirrors but not all.** `0a8a1624` switched share-link `joinUrl` to `/chat/` and fixed the `:core:model`
+  presentation tests but left 3 `:feature:conversations` ViewModel tests asserting `/join/`. The local
+  full gate is what surfaced it (4 failures unrelated to my diff). Attribute via `git log --oneline -- <file>`
+  on the production string producer, then check whether a sibling open PR already carries the fix (here
+  #3228 did) before touching it yourself — don't double-fix.
+
 ## Slice `outbox-message-lane-discovery` (2026-08-11)
 - **A Room DAO method named `deliverableForLane(lane: String)` binding an EXACT-match `WHERE
   lane = :lane` can be called with a value that was never meant to be a real lane — and the

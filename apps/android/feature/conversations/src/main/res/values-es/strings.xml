@@ -22,6 +22,7 @@
     <string name="conversations_preview_location">📍 Ubicación</string>
     <string name="conversations_preview_you">Tú</string>
     <string name="conversations_preview_draft_prefix">Borrador: </string>
+    <string name="conversations_preview_typing">%1$s está escribiendo…</string>
     <string name="conversations_preview_sender_format">%1$s: %2$s</string>
     <string name="conversations_preview_loading">Cargando…</string>
     <string name="conversations_search">Buscar</string>

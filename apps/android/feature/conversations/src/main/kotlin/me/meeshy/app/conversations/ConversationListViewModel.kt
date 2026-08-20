@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -100,9 +102,23 @@ data class ConversationListUiState(
      * lock code entry after a first-time master-PIN setup).
      */
     val lockPrompt: LockPinState? = null,
+    /**
+     * Live "who is typing where", keyed `conversationId → (userId → ConversationTyper)` —
+     * port of iOS `ConversationListViewModel.typers`. Fed by `typing:start`/`typing:stop`
+     * socket frames (self-excluded) and drained by a 15s safety timeout per typer. A row
+     * surfaces the deterministic [typingDisplayNameFor] name as its top-priority preview line.
+     */
+    val typers: Map<String, Map<String, ConversationTyper>> = emptyMap(),
 ) {
     /** True when [conversationId] currently carries a PIN lock — drives the row's lock glyph. */
     fun isLocked(conversationId: String): Boolean = lockedConversationIds.contains(conversationId)
+
+    /**
+     * The single surfaced typer's display name for [conversationId] (deterministic), or `null`
+     * when nobody there is composing — drives the row's "… is typing" preview line.
+     */
+    fun typingDisplayNameFor(conversationId: String): String? =
+        ConversationTypingRoster.typingDisplayName(typers, conversationId)
 
     val banner: ConnectionBanner get() = bannerFor(connection, isSyncing)
 
@@ -321,6 +337,7 @@ class ConversationListViewModel @Inject constructor(
         }
 
         observePresence()
+        observeTyping()
     }
 
     /**
@@ -345,6 +362,57 @@ class ConversationListViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Per-`(conversationId, userId)` safety-timeout jobs that clear a stuck typer. iOS arms a
+     * 15s `Timer` on every `typing:start` because a `typing:stop` can be lost (peer backgrounded,
+     * socket dropped mid-compose); without it a row would show "… is typing" forever. Each new
+     * start re-arms (cancels + reschedules) the peer's own timer; a real stop cancels it.
+     */
+    private val typingCleanupJobs = mutableMapOf<String, Job>()
+
+    /**
+     * Overlays live `typing:start`/`typing:stop` frames into
+     * [ConversationListUiState.typers] via the pure [ConversationTypingRoster]. Started eagerly
+     * (like [observePresence]): [MessageSocketManager]'s typing flows are hot `SharedFlow`s with
+     * no replay, so a late subscriber misses events. The local user is self-excluded so the reader
+     * never sees themselves "typing" in a row they are composing in.
+     */
+    private fun observeTyping() {
+        viewModelScope.launch {
+            messageSocketManager.typingStarted.collect { event ->
+                val before = _state.value.typers
+                val after = ConversationTypingRoster.started(before, event, _state.value.currentUserId)
+                if (after === before) return@collect
+                _state.update { it.copy(typers = after) }
+                armTypingCleanup(event.conversationId, event.userId)
+            }
+        }
+        viewModelScope.launch {
+            messageSocketManager.typingStopped.collect { event ->
+                cancelTypingCleanup(event.conversationId, event.userId)
+                _state.update {
+                    it.copy(typers = ConversationTypingRoster.stopped(it.typers, event.conversationId, event.userId))
+                }
+            }
+        }
+    }
+
+    private fun armTypingCleanup(conversationId: String, userId: String) {
+        val key = "$conversationId $userId"
+        typingCleanupJobs.remove(key)?.cancel()
+        typingCleanupJobs[key] = viewModelScope.launch {
+            delay(TYPING_SAFETY_TIMEOUT_MS)
+            _state.update {
+                it.copy(typers = ConversationTypingRoster.stopped(it.typers, conversationId, userId))
+            }
+            typingCleanupJobs.remove(key)
+        }
+    }
+
+    private fun cancelTypingCleanup(conversationId: String, userId: String) {
+        typingCleanupJobs.remove("$conversationId $userId")?.cancel()
     }
 
     /** Pushes the live catalogue's display-ordered snapshot onto the section source. */
@@ -719,6 +787,11 @@ class ConversationListViewModel @Inject constructor(
                 _state.update { it.copy(isUserRefreshing = false, isSyncing = false) }
             }
         }
+    }
+
+    private companion object {
+        /** iOS parity: a typer with no `typing:stop` is force-cleared after 15 seconds. */
+        const val TYPING_SAFETY_TIMEOUT_MS = 15_000L
     }
 }
 

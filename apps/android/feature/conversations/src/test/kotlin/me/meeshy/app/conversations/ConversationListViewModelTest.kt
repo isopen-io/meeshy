@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -46,6 +48,7 @@ import me.meeshy.sdk.model.ParticipantLeftEvent
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.StarredMessage
 import me.meeshy.sdk.model.StarredMessages
+import me.meeshy.sdk.model.TypingEvent
 import me.meeshy.sdk.model.UserStatusEvent
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -85,6 +88,8 @@ class ConversationListViewModelTest {
         unreadUpdated: MutableSharedFlow<UnreadUpdateEvent> = MutableSharedFlow(),
         messageReceived: MutableSharedFlow<ApiMessage> = MutableSharedFlow(),
         conversationUpdated: MutableSharedFlow<ConversationUpdatedSocketEvent> = MutableSharedFlow(),
+        typingStarted: MutableSharedFlow<TypingEvent> = MutableSharedFlow(),
+        typingStopped: MutableSharedFlow<TypingEvent> = MutableSharedFlow(),
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { this@mockk.unreadUpdated } returns unreadUpdated
@@ -95,6 +100,8 @@ class ConversationListViewModelTest {
             every { this@mockk.participantLeft } returns participantLeft
             every { this@mockk.userStatus } returns userStatus
             every { this@mockk.presenceSnapshot } returns presenceSnapshot
+            every { this@mockk.typingStarted } returns typingStarted
+            every { this@mockk.typingStopped } returns typingStopped
         }
 
     private fun connectionSocket(
@@ -1292,5 +1299,117 @@ class ConversationListViewModelTest {
             // background failure stays silent (no user-facing error banner).
             assertThat(stars.starred.value.items).isEmpty()
             assertThat(vm.state.value.errorMessage).isNull()
+        }
+
+    @Test
+    fun `a typing_start frame surfaces the typer on the matching row`() =
+        runTest(dispatcher) {
+            val started = MutableSharedFlow<TypingEvent>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            val vm = viewModel(
+                repo,
+                socket = socketManager(typingStarted = started),
+                session = session("me"),
+            )
+            advanceUntilIdle()
+
+            started.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alice"))
+            // runCurrent (not advanceUntilIdle) so the 15s safety timer does not fire.
+            runCurrent()
+
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isEqualTo("Alice")
+            assertThat(vm.state.value.typingDisplayNameFor("c2")).isNull()
+        }
+
+    @Test
+    fun `the reader never sees themselves typing in a row`() =
+        runTest(dispatcher) {
+            val started = MutableSharedFlow<TypingEvent>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            val vm = viewModel(
+                repo,
+                socket = socketManager(typingStarted = started),
+                session = session("me"),
+            )
+            advanceUntilIdle()
+
+            started.emit(TypingEvent(conversationId = "c1", userId = "me", displayName = "Me"))
+            runCurrent()
+
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isNull()
+        }
+
+    @Test
+    fun `a typing_stop frame clears exactly that typer`() =
+        runTest(dispatcher) {
+            val started = MutableSharedFlow<TypingEvent>()
+            val stopped = MutableSharedFlow<TypingEvent>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            val vm = viewModel(
+                repo,
+                socket = socketManager(typingStarted = started, typingStopped = stopped),
+                session = session("me"),
+            )
+            advanceUntilIdle()
+
+            started.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alice"))
+            started.emit(TypingEvent(conversationId = "c1", userId = "u2", displayName = "Bob"))
+            runCurrent()
+            stopped.emit(TypingEvent(conversationId = "c1", userId = "u1"))
+            runCurrent()
+
+            // Bob is still composing, so the row stays lit with his name.
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isEqualTo("Bob")
+        }
+
+    @Test
+    fun `a stuck typer is force-cleared after the 15s safety timeout`() =
+        runTest(dispatcher) {
+            val started = MutableSharedFlow<TypingEvent>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            val vm = viewModel(
+                repo,
+                socket = socketManager(typingStarted = started),
+                session = session("me"),
+            )
+            advanceUntilIdle()
+
+            started.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alice"))
+            runCurrent()
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isEqualTo("Alice")
+
+            advanceTimeBy(15_001)
+            runCurrent()
+
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isNull()
+        }
+
+    @Test
+    fun `a fresh typing_start re-arms the safety timeout so an active typer is not dropped early`() =
+        runTest(dispatcher) {
+            val started = MutableSharedFlow<TypingEvent>()
+            val repo = repositoryReturning(flowOf(CacheResult.Empty))
+            val vm = viewModel(
+                repo,
+                socket = socketManager(typingStarted = started),
+                session = session("me"),
+            )
+            advanceUntilIdle()
+
+            started.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alice"))
+            runCurrent()
+            // 10s in, still typing → a second start re-arms the 15s window.
+            advanceTimeBy(10_000)
+            started.emit(TypingEvent(conversationId = "c1", userId = "u1", displayName = "Alice"))
+            runCurrent()
+            // 10s more: 20s since the first start, but only 10s since the re-arm → still lit.
+            advanceTimeBy(10_000)
+            runCurrent()
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isEqualTo("Alice")
+
+            // 6s more crosses the re-armed 15s deadline → cleared.
+            advanceTimeBy(6_000)
+            runCurrent()
+            assertThat(vm.state.value.typingDisplayNameFor("c1")).isNull()
         }
 }

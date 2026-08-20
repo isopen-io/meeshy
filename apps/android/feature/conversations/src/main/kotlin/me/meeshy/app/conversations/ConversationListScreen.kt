@@ -222,6 +222,7 @@ fun ConversationListScreen(
                                 currentUserPrefs = state.currentUser,
                                 presence = state.presenceStateFor(conversation, System.currentTimeMillis()),
                                 draft = state.draftFor(conversation.id),
+                                typingDisplayName = state.typingDisplayNameFor(conversation.id),
                                 categories = state.categories,
                                 previewMessages = state.previewFor(conversation.id),
                                 onClick = { viewModel.onConversationTap(conversation.id) },
@@ -404,6 +405,7 @@ private fun ConversationRow(
     currentUserPrefs: MeeshyUser?,
     presence: PresenceState?,
     draft: ConversationDraft?,
+    typingDisplayName: String?,
     categories: List<CategoryOption>,
     previewMessages: List<LocalMessage>?,
     onClick: () -> Unit,
@@ -461,6 +463,7 @@ private fun ConversationRow(
             currentUserPrefs = currentUserPrefs,
             presence = presence,
             draft = draft,
+            typingDisplayName = typingDisplayName,
             isPinned = isPinned,
             isMuted = isMuted,
             mentionsOnly = mentionsOnly,
@@ -523,6 +526,7 @@ private fun ConversationRowContent(
     currentUserPrefs: MeeshyUser?,
     presence: PresenceState?,
     draft: ConversationDraft?,
+    typingDisplayName: String?,
     isPinned: Boolean,
     isMuted: Boolean,
     mentionsOnly: Boolean,
@@ -568,6 +572,20 @@ private fun ConversationRowContent(
         draftPrefix = stringResource(R.string.conversations_preview_draft_prefix),
     )
     val draftLine = draftPreview(draft, previewLabels)
+    val typingLine = typingPreview(
+        typingDisplayName,
+        stringResource(R.string.conversations_preview_typing),
+    )
+    val rowPreview = conversationRowPreview(
+        typingLine = typingLine,
+        draftLine = draftLine,
+        lastMessage = lastMessagePreview(
+            message = conversation.lastMessage,
+            currentUserId = currentUserId,
+            showSender = conversation.type != "direct",
+            labels = previewLabels,
+        ),
+    )
     Box {
         MeeshyGlassSurface(
             shape = RoundedCornerShape(MeeshyRadius.xl),
@@ -641,14 +659,9 @@ private fun ConversationRowContent(
                     }
                 }
                 Text(
-                    text = draftLine ?: lastMessagePreview(
-                        message = conversation.lastMessage,
-                        currentUserId = currentUserId,
-                        showSender = conversation.type != "direct",
-                        labels = previewLabels,
-                    ),
+                    text = rowPreview.text,
                     style = MaterialTheme.typography.bodySmall,
-                    color = if (draftLine != null) {
+                    color = if (rowPreview.isAccent) {
                         hexColor(conversation.accentHex())
                     } else {
                         MeeshyTheme.tokens.textSecondary
