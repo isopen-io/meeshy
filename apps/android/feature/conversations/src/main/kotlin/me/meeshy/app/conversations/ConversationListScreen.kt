@@ -51,6 +51,10 @@ import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
@@ -89,6 +93,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -573,6 +578,9 @@ private fun ConversationRowContent(
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
         draftPrefix = stringResource(R.string.conversations_preview_draft_prefix),
+        expired = stringResource(R.string.conversations_preview_expired),
+        hidden = stringResource(R.string.conversations_preview_hidden),
+        viewOnce = stringResource(R.string.conversations_preview_view_once),
     )
     val draftLine = draftPreview(draft, previewLabels)
     val typingLine = typingPreview(
@@ -582,11 +590,12 @@ private fun ConversationRowContent(
     val rowPreview = conversationRowPreview(
         typingLine = typingLine,
         draftLine = draftLine,
-        lastMessage = lastMessagePreview(
+        summary = messageSummaryLine(
             message = conversation.lastMessage,
             currentUserId = currentUserId,
             showSender = conversation.type != "direct",
             labels = previewLabels,
+            nowMillis = System.currentTimeMillis(),
         ),
     )
     // Deterministic per-conversation palette — computed once so the avatar's primary fill
@@ -677,16 +686,9 @@ private fun ConversationRowContent(
                         )
                     }
                 }
-                Text(
-                    text = rowPreview.text,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (rowPreview.isAccent) {
-                        primaryAccent
-                    } else {
-                        MeeshyTheme.tokens.textSecondary
-                    },
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                ConversationRowPreviewLine(
+                    preview = rowPreview,
+                    primaryAccent = primaryAccent,
                 )
             }
             Column(
@@ -762,6 +764,90 @@ private fun ConversationRowContent(
  * chip's colour is the deterministic [DynamicColorGenerator.colorForName] so the same
  * tag name reads the same colour everywhere.
  */
+/**
+ * Kind-aware preview line — the Compose surface for [RowPreview.kind]. Standard
+ * typing/draft/last-message text renders as before (accent when live-activity,
+ * secondary otherwise). Expired/hidden/view-once messages render italic with a
+ * kind icon and a muted or accent tint that mirrors iOS
+ * `ThemedConversationRow.lastMessagePreviewView`. Ephemeral-active shows the same
+ * body text with a leading timer badge so a still-readable ephemeral is obvious.
+ *
+ * Compose glue — the kind classification (pure) is covered by [MessageSummaryKindTest]
+ * / [MessageSummaryLineTest] / [ConversationRowPreviewKindTest]; the visual mapping
+ * here is testable-exempt Compose per `TDD-COVERAGE.md`.
+ */
+@Composable
+private fun ConversationRowPreviewLine(
+    preview: RowPreview,
+    primaryAccent: Color,
+) {
+    val bodySmall = MaterialTheme.typography.bodySmall
+    val textSecondary = MeeshyTheme.tokens.textSecondary
+    val textMuted = MeeshyTheme.tokens.textSecondary.copy(alpha = 0.65f)
+    val standardColor = if (preview.isAccent) primaryAccent else textSecondary
+
+    val (icon, contentDescriptionRes, tint, italic) = when (preview.kind) {
+        MessageSummaryKind.EXPIRED -> RowPreviewKindStyle(
+            icon = Icons.Filled.HourglassEmpty,
+            contentDescriptionRes = R.string.conversations_preview_expired_content_description,
+            tint = textMuted,
+            italic = true,
+        )
+        MessageSummaryKind.HIDDEN -> RowPreviewKindStyle(
+            icon = Icons.Filled.VisibilityOff,
+            contentDescriptionRes = R.string.conversations_preview_hidden_content_description,
+            tint = textSecondary,
+            italic = true,
+        )
+        MessageSummaryKind.VIEW_ONCE -> RowPreviewKindStyle(
+            icon = Icons.Filled.LocalFireDepartment,
+            contentDescriptionRes = R.string.conversations_preview_view_once_content_description,
+            tint = primaryAccent,
+            italic = true,
+        )
+        MessageSummaryKind.EPHEMERAL_ACTIVE -> RowPreviewKindStyle(
+            icon = Icons.Filled.Timer,
+            contentDescriptionRes = R.string.conversations_preview_ephemeral_content_description,
+            tint = standardColor,
+            italic = false,
+        )
+        MessageSummaryKind.STANDARD -> RowPreviewKindStyle(
+            icon = null,
+            contentDescriptionRes = null,
+            tint = standardColor,
+            italic = false,
+        )
+    }
+
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescriptionRes?.let { stringResource(it) },
+                tint = tint,
+                modifier = Modifier
+                    .size(14.dp)
+                    .padding(end = MeeshySpacing.xs),
+            )
+        }
+        Text(
+            text = preview.text,
+            style = bodySmall,
+            color = tint,
+            fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private data class RowPreviewKindStyle(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector?,
+    val contentDescriptionRes: Int?,
+    val tint: Color,
+    val italic: Boolean,
+)
+
 @Composable
 private fun ConversationTagsRow(tags: List<String>) {
     if (tags.isEmpty()) return

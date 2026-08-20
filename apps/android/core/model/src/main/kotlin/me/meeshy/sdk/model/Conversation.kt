@@ -61,6 +61,18 @@ data class ApiParticipant(
     val joinedAt: String? = null,
 )
 
+/**
+ * Wire-preview of a conversation's last message.
+ *
+ * The three "kind" fields — [isBlurred], [isViewOnce] and [expiresAt] — mirror the
+ * iOS `MeeshyConversation.lastMessage*` triplet (source of truth:
+ * `packages/MeeshySDK/Sources/MeeshySDK/Models/CoreModels.swift`). The gateway
+ * already spreads them onto the `lastMessage` payload (see
+ * `services/gateway/src/routes/conversations/core.ts`), so this widening is purely
+ * additive on the wire. They feed the pure classifier
+ * `MessageSummaryKind.of(...)` which drives the row's kind-aware preview
+ * (expired / hidden / view-once / ephemeral-active / standard).
+ */
 @Serializable
 data class ApiConversationLastMessage(
     val id: String? = null,
@@ -70,6 +82,9 @@ data class ApiConversationLastMessage(
     val messageType: String? = null,
     val originalLanguage: String? = null,
     val createdAt: String? = null,
+    val isBlurred: Boolean = false,
+    val isViewOnce: Boolean = false,
+    val expiresAt: String? = null,
 )
 
 /** User-scoped conversation preferences. */
