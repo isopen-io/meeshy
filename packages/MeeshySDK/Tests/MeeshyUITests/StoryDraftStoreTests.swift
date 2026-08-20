@@ -377,6 +377,59 @@ final class StoryDraftStoreTests: XCTestCase {
         XCTAssertEqual(persisted, v3JSON, "Un brouillon déjà v3 ne doit jamais être réécrit")
     }
 
+    // MARK: - Brouillon jamais lossy (Task B8d, addendum arbitrage 5)
+
+    /// La ligne EST le blob v1 RICHE (fixture `v1-legacy-rich.json` de B8a),
+    /// augmentée d'un `canvasAspectRatio` — le seul champ que cette fixture
+    /// partagée ne porte pas : elle documente le contrat WIRE, or
+    /// `canvasAspectRatio` s'absorbe délibérément dans le remap des ancres au
+    /// fil (addendum, arbitrage 5) et n'a donc aucun logement dans `CanvasV3`.
+    ///
+    /// Deux lectures : la première décode le v1 brut et déclenche la
+    /// migration one-shot (persiste du v3) ; la seconde relit ce v3 déjà
+    /// persisté — c'est SEULEMENT là que la perte se manifestait (constats
+    /// 4 et 6 de la revue), puisque le premier `load()` décode encore le blob
+    /// d'origine.
+    func test_load_thenReload_v1RichBlob_losesNoRuntimeField() throws {
+        try seedRawSlide(id: "s1", effectsJSON: richFixtureJSON(canvasAspectRatio: 1.5))
+
+        _ = store.load(draftId: draftId)
+        let reloaded = try XCTUnwrap(store.load(draftId: draftId))
+        let effects = try XCTUnwrap(reloaded.slides.first).effects
+
+        XCTAssertEqual(effects.drawingData, Data(base64Encoded: "AQIDBA=="),
+                       "Le dessin legacy (PKDrawing) doit survivre au round-trip v3")
+        XCTAssertEqual(effects.drawingStrokes?.first?.id, "stroke-1")
+        XCTAssertEqual(effects.drawingStrokes?.first?.colorHex, "FF3B30")
+        XCTAssertEqual(effects.drawingStrokes?.first?.points.count, 2)
+
+        let media = try XCTUnwrap(effects.mediaObjects?.first)
+        XCTAssertEqual(media.aspectRatio, 1.7777, accuracy: 0.0001,
+                       "L'aspectRatio du média doit survivre au round-trip v3")
+
+        let audio = try XCTUnwrap(effects.audioPlayerObjects?.first)
+        XCTAssertEqual(audio.soundId, "64b0000000000000000000dd")
+        XCTAssertEqual(audio.soundAuthorUsername, "sam")
+        XCTAssertEqual(audio.name, "Pluie en forêt")
+        XCTAssertEqual(audio.volume, 0.35, accuracy: 0.0001)
+        // waveformSamples : ligne héritée de B8b, TRANCHÉE par B8f (addendum,
+        // bloc B8f) — ni le golden partagé ni `storyEffectsV3.ts` ne le
+        // logent encore côté v3, la reconstruction retombe donc à son défaut
+        // d'init. Hors périmètre de B8d (fichiers : StoryDraftStore.swift
+        // seul).
+        XCTAssertEqual(audio.waveformSamples, [])
+
+        XCTAssertEqual(effects.backgroundAudioVariants?.count, 2)
+        XCTAssertEqual(effects.backgroundAudioVariants?.first?.language, "fr")
+        XCTAssertEqual(effects.backgroundAudioVariants?.first?.postMediaId, "64b0000000000000000000e1")
+
+        XCTAssertEqual(effects.thumbHash, "1QcSHQRnh493V4dIh4eXh0h4kJUI",
+                       "L'empreinte de vignette doit survivre au round-trip v3")
+
+        XCTAssertEqual(effects.canvasAspectRatio ?? -1, 1.5, accuracy: 0.0001,
+                       "Un composer 16:9 ne doit pas rouvrir en portrait au second chargement")
+    }
+
     // MARK: - Helpers
 
     private enum FixtureError: Error, CustomStringConvertible {
@@ -402,6 +455,18 @@ final class StoryDraftStoreTests: XCTestCase {
             throw FixtureError.missing(url.path)
         }
         return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// Fixture `v1-legacy-rich.json` (B8a) augmentée d'un `canvasAspectRatio` —
+    /// le seul champ qu'elle ne porte pas, `canvasAspectRatio` étant hors du
+    /// contrat WIRE que cette fixture partagée documente (addendum, arbitrage 5).
+    private func richFixtureJSON(canvasAspectRatio: Double) throws -> String {
+        let raw = try fixtureJSON("v1-legacy-rich")
+        var root = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any])
+        root["canvasAspectRatio"] = canvasAspectRatio
+        let data = try JSONSerialization.data(withJSONObject: root)
+        return try XCTUnwrap(String(data: data, encoding: .utf8))
     }
 
     /// Insère une ligne de slide brute, en contournant `store.save()` — celui-ci

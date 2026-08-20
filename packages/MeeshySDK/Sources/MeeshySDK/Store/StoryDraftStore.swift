@@ -434,6 +434,24 @@ public final class StoryDraftStore: @unchecked Sendable {
                         arguments: [draftId]
                     )
                 }
+                // Ratio de canvas de la composition — même précédent que le
+                // thumbHash ci-dessus. Le remap v3 CONSOMME `canvasAspectRatio`
+                // pour repositionner les ancres (le porteur garde son ratio
+                // intrinsèque, la scène letterboxe) mais ne le LOGE nulle part :
+                // légitime pour le fil, pas pour le brouillon local — sans
+                // cette clé, un composer 16:9 rouvrirait en portrait dès le
+                // premier autosave. Absent = effacé, comme les autres méta.
+                if let canvasAspectRatio = slides.first?.effects.canvasAspectRatio {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'canvasAspectRatio', ?)",
+                        arguments: [draftId, String(canvasAspectRatio)]
+                    )
+                } else {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'canvasAspectRatio'",
+                        arguments: [draftId]
+                    )
+                }
                 // `created_at` n'est posé qu'à la première écriture : le
                 // `COALESCE` sur la ligne existante évite de rajeunir un
                 // brouillon à chaque autosave.
@@ -777,7 +795,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 }
                 return (slide, migratedJSON)
             }
-            let slides = decoded.map(\.slide)
+            var slides = decoded.map(\.slide)
 
             // Migration one-shot : la persistance passe v3 au chargement — un
             // brouillon déjà v3 n'est jamais réécrit (isAlreadyV3 ci-dessus).
@@ -792,6 +810,18 @@ public final class StoryDraftStore: @unchecked Sendable {
                             sql: "UPDATE story_draft_slide SET effects_json = ? WHERE draft_id = ? AND id = ?",
                             arguments: [migration.json, draftId, migration.id])
                     }
+                    // Le remap v3 absorbe `canvasAspectRatio` sans le loger nulle
+                    // part (cf. `save()` ci-dessus) : capturé ICI, au moment même
+                    // où la migration one-shot s'apprête à écraser la seule copie
+                    // qui le porte encore — sans ça, rien ne le restituerait avant
+                    // le prochain `save()`, potentiellement jamais pour un
+                    // brouillon simplement rouvert puis refermé sans édition.
+                    if let first = decoded.first, first.migratedJSON != nil,
+                       let ratio = first.slide.effects.canvasAspectRatio {
+                        try db.execute(
+                            sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'canvasAspectRatio', ?)",
+                            arguments: [draftId, String(ratio)])
+                    }
                 }
             }
 
@@ -802,15 +832,26 @@ public final class StoryDraftStore: @unchecked Sendable {
                 let editingPostId = try Self.metaValue(db, draftId: draftId, key: "editingPostId")
                 let pendingPublishAt = try Self.metaValue(db, draftId: draftId, key: "pendingPublishAt")
                 let lastPublishError = try Self.metaValue(db, draftId: draftId, key: "lastPublishError")
+                let canvasAspectRatio = try Self.metaValue(db, draftId: draftId, key: "canvasAspectRatio")
                 return (visibility: visibility, idsJSON: idsJSON,
                         originalLanguage: originalLanguage, editingPostId: editingPostId,
-                        pendingPublishAt: pendingPublishAt, lastPublishError: lastPublishError)
+                        pendingPublishAt: pendingPublishAt, lastPublishError: lastPublishError,
+                        canvasAspectRatio: canvasAspectRatio)
             }
             let visibilityUserIds = meta.idsJSON
                 .flatMap { $0.data(using: .utf8) }
                 .flatMap { JSONDecoder().decodeOrLog([String].self, from: $0,
                                                      field: "story draft visibilityUserIds",
                                                      id: draftId, logger: Logger.cache) } ?? []
+
+            // Restitution du ratio de canvas : le canvas v3 ne le loge pas
+            // (cf. écriture ci-dessus), la première slide décodée depuis un
+            // document déjà v3 revient donc toujours à `nil` sans ce recours à
+            // la méta — un composer 16:9 rouvrirait en portrait.
+            if let raw = meta.canvasAspectRatio, let ratio = Double(raw),
+               slides.indices.contains(0), slides[0].effects.canvasAspectRatio == nil {
+                slides[0].effects.canvasAspectRatio = ratio
+            }
 
             return (slides: slides,
                     visibility: meta.visibility,
