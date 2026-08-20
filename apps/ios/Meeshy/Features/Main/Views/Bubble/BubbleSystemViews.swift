@@ -84,43 +84,48 @@ struct BubbleBurnedView: View, Equatable {
     }
 }
 
-/// Centered system notice rendered in place of a chat bubble — used for
-/// call-summary messages ("Appel vidéo · 04:32", "Appel audio manqué",
-/// "Appel refusé") posted by the gateway when a call ends. Unlike
-/// `BubbleDeletedView`/`BubbleBurnedView` (which still align with the sender
-/// side), a system notice is always centered with no avatar, matching the
-/// iMessage/WhatsApp call-log treatment.
+/// Centered system notice rendered in place of a chat bubble — the FALLBACK
+/// for any system message whose `metadata` did not decode into a richer
+/// notice (legacy call summaries, legacy join notices, future event kinds).
+/// Unlike `BubbleDeletedView`/`BubbleBurnedView` (which still align with the
+/// sender side), a system notice is a milestone of the thread: centered, no
+/// avatar, thread time engraved FIRST — same semantics as the date stickers
+/// and `BubbleJoinNoticeView`. No leading glyph: the producer is unknown by
+/// construction (a phone glyph here once mislabelled join notices as calls).
 ///
-/// Stateless: depends only on `text` + `isDark`. The leading phone glyph
-/// reflects that calls are today's sole producer of system messages; the
-/// content string itself carries the localized label from the gateway.
+/// Stateless: depends only on `text` + `isDark` + `timeString`; the content
+/// string itself carries the localized label from the gateway.
 struct BubbleSystemNoticeView: View, Equatable {
     let text: String
     let isDark: Bool
+    var timeString: String? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             Spacer(minLength: 24)
 
-            HStack(spacing: 6) {
-                Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(ThemeManager.shared.textMuted)
+            VStack(spacing: 3) {
+                if let timeString, !timeString.isEmpty {
+                    Text(timeString)
+                        .font(MeeshyFont.relative(9.5, weight: .semibold))
+                        .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                        .accessibilityIdentifier("bubble-system-notice-time")
+                }
                 Text(text)
                     .font(MeeshyFont.relative(12.5, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
                     .multilineTextAlignment(.center)
-            }
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, 7)
-            .background(
-                Capsule()
-                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                    .overlay(
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, 7)
+                    .background(
                         Capsule()
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                            .overlay(
+                                Capsule()
+                                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            )
                     )
-            )
+            }
             .accessibilityElement(children: .combine)
             .accessibilityLabel(text)
 

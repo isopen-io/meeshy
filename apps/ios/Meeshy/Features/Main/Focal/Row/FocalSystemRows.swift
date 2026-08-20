@@ -65,15 +65,27 @@ struct FocalBurnedRow: View, Equatable {
 struct FocalSystemNoticeRow: View, Equatable {
     let text: String
     let isDark: Bool
+    /// Heure du fil (« 08:26 ») — gravée EN PREMIER, centrée, même sémantique
+    /// que les stickers de date et `BubbleJoinNoticeView` : un message système
+    /// est un jalon du fil, pas une parole.
+    var timeString: String? = nil
 
     var body: some View {
-        Text(text)
-            .font(MeeshyFont.relative(12.5, weight: .medium))
-            .foregroundColor(ThemeManager.shared.textMuted)
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(text)
+        VStack(spacing: 3) {
+            if let timeString, !timeString.isEmpty {
+                Text(timeString)
+                    .font(MeeshyFont.relative(9.5, weight: .semibold))
+                    .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                    .accessibilityIdentifier("focal-system-notice-time")
+            }
+            Text(text)
+                .font(MeeshyFont.relative(12.5, weight: .medium))
+                .foregroundColor(ThemeManager.shared.textMuted)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(text)
     }
 }
 
@@ -131,7 +143,7 @@ enum FocalSystemRows {
                 // de lecture disent la même chose.
                 BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, timeString: content.meta.timeString)
             } else if let text = content.text?.raw, !text.isEmpty {
-                FocalSystemNoticeRow(text: text, isDark: isDark)
+                FocalSystemNoticeRow(text: text, isDark: isDark, timeString: content.meta.timeString)
             } else {
                 EmptyView()
             }
