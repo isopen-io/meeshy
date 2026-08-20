@@ -60,6 +60,114 @@
 > `now` (no wire field). iOS source `BubbleDeliveryCheck.swift` (`SendingClockGlyph.shouldRevealImmediately`,
 > `revealDelay = 0.2`) has a ready Swift test twin to mirror. Or continue the composer line by landing a real
 > photo-specific `PickVisualMedia` launcher so Photo and File become genuinely distinct pickers.
+> On 2026-08-20 **Conversation-row message-summary-kind shipped** (slice
+> `conversation-row-message-summary-kind`, feature-parity's Conversations "rich last-message
+> preview" `[~]` — the `ephemeral / expired / hidden / view-once` sub-gap that same line listed
+> as pending alongside the just-shipped `activity-heat`, `tags`, `typing`). **Step 0**: no open
+> `claude/apps/android/*` PR to merge first — the six open PRs at this instant are the
+> `claude/intelligent-noether-kana7q` iOS-only forward-picker fix (#3236) and five Dependabot
+> (`actions/cache`, `framer-motion`, root build-tools group, `setup-android` — the CI-infra
+> Android bump, not an android-routine slice — and `gradle/actions`). None on an
+> android-routine slice branch. Branched off `origin/main` (`65af14d5`) as the literal first
+> action. This container **reaches `dl.google.com`** (curl → 200 slowly), so the full local
+> gate ran here.
+>
+> **A first stale trip found by reading source, not the note**: `PROGRESS.md`'s "Next" line —
+> written before the activity-heat slice merged — recommended pursuing the *message-body kinds*
+> (ephemeral/expired/hidden/view-once) but warned that "the honest first move there is to
+> widen the wire DTO" because "the current `ApiConversationLastMessage` doesn't carry
+> `expiresAt`, `deletedAt`, `viewOnce`". Grep across `services/gateway/src/routes/conversations/
+> core.ts:971-1010` proved this half-true: the gateway ALREADY spreads the full `msg` object
+> onto `lastMessage` via `...msgRest` after stripping only `translations` and `originalLanguage`,
+> so `isBlurred`, `isViewOnce`, `expiresAt` all reach the wire today — the Kotlin DTO simply
+> doesn't declare them. The widening is 3 defaulted fields, not a wire contract change.
+> Lesson: verify the wire before designing a widening slice — a hint that a field "isn't on
+> the wire" may just mean the client can't see it.
+>
+> **The gap, re-proved by reading source**: iOS `MeeshyConversation.lastMessageSummaryKind()`
+> (`packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageSummaryKind.swift`) classifies the
+> preview into 5 kinds and `ThemedConversationRow.lastMessagePreviewView`
+> (`apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift:540-610`) renders each
+> with a kind-specific icon + italic tint: `expired` → `timer.badge.xmark` textMuted italic,
+> `hidden` → `eye.slash` sender-prefixed textSecondary italic, `viewOnce` → `flame` accent
+> italic, `ephemeralActive` → standard content + timer badge, `standard` → plain body. Android
+> rendered every message with the same non-italic secondary text — expired ephemeral,
+> moderated hidden, and view-once messages all indistinguishable from a plain "Salut !".
+>
+> **Pure core (`:feature:conversations`)**: `MessageSummaryKind` — framework-free enum
+> `{ STANDARD, HIDDEN, VIEW_ONCE, EPHEMERAL_ACTIVE, EXPIRED }` + companion `of(message,
+> nowMillis) : MessageSummaryKind` that mirrors iOS's priority order EXACTLY: (1) `expiresAt <=
+> now` → EXPIRED (inclusive boundary — iOS's `<=` guard, one less way a row flashes old
+> content); (2) `isBlurred` → HIDDEN (moderation outranks a live ephemeral so blurred content
+> can never leak); (3) `isViewOnce` → VIEW_ONCE; (4) future `expiresAt` → EPHEMERAL_ACTIVE;
+> (5) otherwise → STANDARD. Also `SummaryLine(text, kind)` (row's composed preview line) +
+> `messageSummaryLine(message, currentUserId, showSender, labels, nowMillis)` that composes
+> the kind-appropriate label with the same sender-prefix rule as `lastMessagePreview` for
+> HIDDEN/VIEW_ONCE; EXPIRED drops the sender (parity iOS `.expired` arm which renders the
+> label alone).
+>
+> **Sibling SSOT** (`:core:model`): `ApiConversationLastMessage` widened with three defaulted
+> fields — `isBlurred: Boolean = false`, `isViewOnce: Boolean = false`, `expiresAt: String? =
+> null`. Purely additive wire widening: the gateway already spreads these onto the payload,
+> so an older backend/no-flags message keeps decoding to the same defaults it did before.
+> Kdoc references the gateway serializer path + iOS SSOT.
+>
+> **Wiring (Compose glue, coverage-exempt)**: `RowPreview` gains a defaulted `kind:
+> MessageSummaryKind = STANDARD`, `conversationRowPreview` gets a second overload that takes
+> `SummaryLine` and preserves its kind (typing/draft still supersede and stay STANDARD — their
+> styling is the accent flag, not the kind). New private composable
+> `ConversationRowPreviewLine(preview, primaryAccent)` picks (icon, tint, italic) per kind
+> from a small `RowPreviewKindStyle` data class — HourglassEmpty/textMuted/italic for EXPIRED,
+> VisibilityOff/textSecondary/italic for HIDDEN, LocalFireDepartment/accent/italic for
+> VIEW_ONCE, Timer/standardColor for EPHEMERAL_ACTIVE, no-icon standard otherwise. Icons at
+> 14dp with `MeeshySpacing.xs` gap — same footprint as the pinned/muted/locked title icons.
+> Row's `lastMessage` call site swaps `lastMessagePreview` → `messageSummaryLine` with a
+> `System.currentTimeMillis()` clock.
+>
+> **Localization**: 7 new strings per locale × 4 locales (en/fr/es/pt) — 3 body labels
+> (`_expired`/`_hidden`/`_view_once`, ported from iOS `Localizable.xcstrings` at
+> `message.expired`, `conversation.summary.hidden`, `conversation.summary.view_once`) + 4
+> accessibility content descriptions (ephemeral/expired/hidden/view-once). A partial locale
+> that ships without them transparently falls through to the standard body path via the
+> defaulted `LastMessagePreviewLabels(expired="", hidden="", viewOnce="")` — a blank label
+> must never leave the row visually empty.
+>
+> **Tests**: +14 `MessageSummaryKindTest` — null-message → STANDARD; plain-text → STANDARD;
+> future expiresAt → EPHEMERAL; strictly-past expiresAt → EXPIRED; equal-to-now expiresAt →
+> EXPIRED (inclusive boundary); blurred → HIDDEN; view-once → VIEW_ONCE; expired outranks
+> blurred; expired outranks view-once; blurred outranks view-once; blurred outranks live
+> ephemeral; view-once outranks live ephemeral; malformed/blank expiresAt does NOT classify
+> as ephemeral; defaults on the DTO are non-ephemeral non-blurred non-view-once. **+12
+> `MessageSummaryLineTest`** — standard body direct / group sender prefix; null message →
+> "Aucun message"; expired label drops sender; hidden label sender-prefixed in group and
+> label-alone in direct; view-once sender-prefixed and "Vous" for me; ephemeral-active
+> reuses standard body direct + group; inclusive expired boundary at now; blank
+> expired/hidden labels fall through to standard body (partial-locale safety). **+5
+> `ConversationRowPreviewKindTest`** — summary kind propagates on the last-message path,
+> typing supersedes summary (kind→STANDARD), draft supersedes summary (kind→STANDARD),
+> standard summary in secondary colour, ephemeral summary preserves its kind for styling.
+> Every branch of `of()`, `messageSummaryLine`, and the kind-aware overload of
+> `conversationRowPreview` exercised. Compose glue in `ConversationRowPreviewLine` is thin
+> visual mapping, exempt per TDD-COVERAGE.
+>
+> **RED-proof (mutation × 2)**: (a) swapping `expiresAt <= nowMillis` for `expiresAt <
+> nowMillis` fails **exactly** 2 tests (the two inclusive-boundary tests — 28 run, 2 failed,
+> no collateral). (b) reversing HIDDEN/VIEW_ONCE below EPHEMERAL_ACTIVE fails **exactly** 2
+> tests (`blurred outranks a live ephemeral`, `view-once outranks a live ephemeral` — 28 run,
+> 2 failed, no collateral). Restored after each.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` across all modules green locally
+> (973 actionable tasks). SDK bootstrapped as `platforms;android-37.0` via cmdline-tools
+> `11076708`, aliased `android-37 → android-37.0`; Gradle 8.13 fetched auto by the wrapper.
+> Reviewer PASS.
+>
+> **Next**: the last two Conversations row-preview sub-gaps at `feature-parity.md:1594` are
+> avatar affordances — `presence` (already wired via `state.presenceStateFor`, so the note is
+> stale — grep-verify before spending a slice on it), `story-ring` (clean single slice:
+> `MeeshyAvatar` already accepts `storyRing: StoryRingState` and `StoryTray` exposes per-user
+> unread-story state; the missing wire is a lookup key exposed on the row's state), and
+> `mood` (needs new SDK model — the wire field lives on User in iOS but no Kotlin type mirror
+> yet). Pick story-ring next: it's the shortest path from the pieces already in place.
 
 > On 2026-08-20 **Conversation-row activity-heat gradient shipped** (slice
 > `conversation-row-activity-heat`, feature-parity's Conversations "rich last-message preview"

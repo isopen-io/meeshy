@@ -54,6 +54,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
     attachmentReaction: {
       findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
       findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+      count: (jest.fn() as jest.Mock<any>).mockResolvedValue(0),
       deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
       upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
     },
@@ -142,6 +143,7 @@ describe('addAttachmentReaction', () => {
           Promise.resolve(where.attachment_participant_reaction.emoji === '👍' ? { emoji: '👍' } : null)
         ),
         findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+        count: (jest.fn() as jest.Mock<any>).mockResolvedValue(1),
         deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
         upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
       },

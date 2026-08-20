@@ -6,7 +6,8 @@ import { retractReactionNotifications } from '../../services/notifications/retra
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
 import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict } from '../../utils/response';
+import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -607,6 +608,13 @@ export function registerCommentRoutes(
 
       return sendSuccess(reply, { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
+      // Plafond des cinq réactions par personne et par objet
+      // (`packages/shared/utils/reaction-limit.ts`) : `PostCommentService.likeComment`
+      // lève un `ConflictError` dédié — un refus légitime, pas une panne. Sans
+      // cette branche il retombait sur le `sendInternalError` du bas.
+      if (error instanceof ConflictError) {
+        return sendConflict(reply, error.message, { code: error.code });
+      }
       fastify.log.error(`[POST comments/:commentId/like] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }

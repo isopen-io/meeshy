@@ -8,6 +8,8 @@
 import { PrismaClient, CommentReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import type { CommentReactionAggregation } from '@meeshy/shared/types/post';
+import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../errors/custom-errors';
 
 export interface CommentReactionData {
   readonly id: string;
@@ -108,9 +110,10 @@ export class CommentReactionService {
       throw new Error('Comment has been deleted');
     }
 
-    // Multi-réactions (2026-08-18) : plus aucun cap applicatif — la clé
-    // unique DB (commentId, userId, emoji) accepte tout emoji distinct par
-    // utilisateur, à parité avec messages, pièces jointes et posts.
+    // Multi-réactions (2026-08-18) : la clé unique DB (commentId, userId,
+    // emoji) accepte tout emoji distinct par utilisateur, à parité avec
+    // messages, pièces jointes et posts — mais le CODE plafonne ce nombre à
+    // cinq (bloc ci-dessous, 2026-08-20) : la base elle-même n'impose rien.
     const existingReaction = await this.prisma.commentReaction.findFirst({
       where: {
         commentId,
@@ -121,6 +124,24 @@ export class CommentReactionService {
 
     if (existingReaction) {
       return { ...this.mapReactionToData(existingReaction), unchanged: true };
+    }
+
+    // Plafond des cinq réactions (2026-08-20) : règle déclarée UNE SEULE
+    // FOIS dans `packages/shared/utils/reaction-limit.ts`. Comptage effectué
+    // uniquement ici, APRÈS avoir établi (bloc ci-dessus) qu'il s'agit d'une
+    // création réelle — un `findFirst` qui aurait trouvé l'emoji déjà posé ne
+    // consomme aucune place et ne doit jamais être bloqué par ce plafond.
+    // Second chemin de création des réactions de commentaire : voir
+    // `PostCommentService.likeComment` (fallback REST), qui applique la MÊME
+    // règle — sinon l'un contournerait silencieusement le plafond de l'autre.
+    const existingReactionCount = await this.prisma.commentReaction.count({
+      where: { commentId, userId }
+    });
+    if (!isReactionAllowed(existingReactionCount)) {
+      // `ConflictError` : la route REST (`routes/posts/comments.ts`) et le
+      // socket (`CommentReactionHandler`) doivent tous deux pouvoir distinguer
+      // ce refus légitime d'une panne.
+      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
     }
 
     try {
