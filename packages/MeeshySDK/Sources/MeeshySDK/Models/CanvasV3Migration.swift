@@ -147,6 +147,16 @@ private extension StoryKeyframe {
     }
 }
 
+private extension StoryEffects {
+    /// Miroir du `z++` du convertisseur gateway : le rang d'un objet dont le
+    /// blob v1 ne déclarait AUCUN `zIndex` est son rang d'insertion, jamais le
+    /// 0 que le décodeur a posé.
+    func wireZ(_ id: String, _ declared: Int?, _ fallback: Int) -> Int {
+        guard let declared, wireMissingZIndex?.contains(id) != true else { return fallback }
+        return declared
+    }
+}
+
 // MARK: - Publication / migration : v1 runtime → v3
 
 public extension CanvasV3 {
@@ -168,11 +178,12 @@ public extension CanvasV3 {
         }
 
         for text in effects.textObjects {
+            let fallback = slot
             slot += 1
             objects.append(ObjectV3(id: text.id, kind: .text,
                                     anchor: wireAnchor(effects.wireBandEdge, text.id, x: text.x, y: text.y),
                                     plane: .fg,
-                                    z: text.zIndex,
+                                    z: effects.wireZ(text.id, text.zIndex, fallback),
                                     transform: TransformV3(scale: text.scale, rotation: text.rotation, opacity: 1),
                                     timing: timingV3(start: text.startTime,
                                                      end: effects.wireTimingEnd?[text.id],
@@ -182,11 +193,12 @@ public extension CanvasV3 {
         }
 
         for media in effects.mediaObjects ?? [] {
+            let fallback = slot
             slot += 1
             objects.append(ObjectV3(id: media.id, kind: .media,
                                     anchor: wireAnchor(effects.wireBandEdge, media.id, x: media.x, y: media.y),
                                     plane: .content,
-                                    z: media.zIndex,
+                                    z: effects.wireZ(media.id, media.zIndex, fallback),
                                     transform: TransformV3(scale: media.scale, rotation: media.rotation, opacity: 1),
                                     timing: timingV3(start: media.startTime,
                                                      end: effects.wireTimingEnd?[media.id],
@@ -196,11 +208,12 @@ public extension CanvasV3 {
         }
 
         for sticker in effects.stickerObjects ?? [] {
+            let fallback = slot
             slot += 1
             objects.append(ObjectV3(id: sticker.id, kind: .sticker,
                                     anchor: wireAnchor(effects.wireBandEdge, sticker.id, x: sticker.x, y: sticker.y),
                                     plane: .fg,
-                                    z: sticker.zIndex,
+                                    z: effects.wireZ(sticker.id, sticker.zIndex, fallback),
                                     transform: TransformV3(scale: sticker.scale, rotation: sticker.rotation, opacity: 1),
                                     timing: timingV3(start: sticker.startTime,
                                                      end: effects.wireTimingEnd?[sticker.id],
@@ -234,6 +247,7 @@ public extension CanvasV3 {
         }
 
         for location in effects.locationObjects {
+            let fallback = slot
             slot += 1
             var payload: [String: CanvasJSONValue] = [
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
@@ -243,7 +257,7 @@ public extension CanvasV3 {
                                     anchor: wireAnchor(effects.wireBandEdge, location.id,
                                                        x: location.x, y: location.y),
                                     plane: .fg,
-                                    z: location.zIndex,
+                                    z: effects.wireZ(location.id, location.zIndex, fallback),
                                     transform: TransformV3(scale: location.scale, rotation: location.rotation, opacity: 1),
                                     timing: timingV3(start: nil,
                                                      end: effects.wireTimingEnd?[location.id],
@@ -258,7 +272,7 @@ public extension CanvasV3 {
                                     anchor: wireAnchor(effects.wireBandEdge, audio.id,
                                                        x: Double(audio.x), y: Double(audio.y)),
                                     plane: .content,
-                                    z: audio.zIndex ?? fallback,
+                                    z: effects.wireZ(audio.id, audio.zIndex, fallback),
                                     transform: TransformV3(),
                                     timing: timingV3(start: audio.startTime.map(exactDouble),
                                                      end: effects.wireTimingEnd?[audio.id],
@@ -465,6 +479,7 @@ private extension ObjectV3 {
 public extension StoryEffects {
     init(rendering document: CanvasV3, sceneIndex: Int) {
         self.init()
+        restoreSound(document.sound)
         guard document.scenes.indices.contains(sceneIndex) else { return }
         let scene = document.scenes[sceneIndex]
 
@@ -534,20 +549,24 @@ public extension StoryEffects {
         clipTransitions = scene.clipTransitions.map {
             $0.compactMap { decodeWire(StoryClipTransition.self, from: $0) }
         }
+    }
 
-        if let sound = document.sound {
-            if case .library(let soundId) = sound.source { backgroundAudioId = soundId }
-            backgroundAudioVolume = Float(sound.volume)
-            backgroundAudioStart = sound.bounds?.start
-            backgroundAudioEnd = sound.bounds?.end
-            voiceTranscriptions = sound.transcriptions.map {
-                $0.map { StoryVoiceTranscription(language: $0.language, content: $0.content) }
-            }
-            backgroundAudioVariants = sound.variants.map {
-                $0.map { StoryAudioVariant(postMediaId: $0.postMediaId,
-                                           language: $0.language,
-                                           isAutoGenerated: $0.isAutoGenerated) }
-            }
+    /// Le son vit au DOCUMENT, pas dans la scène : depuis O3 une publication
+    /// purement sonore n'émet AUCUN cadre — la restitution doit donc précéder
+    /// la garde de scène, sans quoi elle est sautée et le son disparaît.
+    private mutating func restoreSound(_ sound: BackgroundSoundV3?) {
+        guard let sound else { return }
+        if case .library(let soundId) = sound.source { backgroundAudioId = soundId }
+        backgroundAudioVolume = Float(sound.volume)
+        backgroundAudioStart = sound.bounds?.start
+        backgroundAudioEnd = sound.bounds?.end
+        voiceTranscriptions = sound.transcriptions.map {
+            $0.map { StoryVoiceTranscription(language: $0.language, content: $0.content) }
+        }
+        backgroundAudioVariants = sound.variants.map {
+            $0.map { StoryAudioVariant(postMediaId: $0.postMediaId,
+                                       language: $0.language,
+                                       isAutoGenerated: $0.isAutoGenerated) }
         }
     }
 

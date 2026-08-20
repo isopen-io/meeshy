@@ -1637,9 +1637,16 @@ public struct StoryEffects: Codable, Sendable {
     /// - `wireTimingEnd` : borne de fin, absente des familles v1.
     /// - `wireAnchorPoint` : pivot NOMMÉ tel que le v1/le document le porte —
     ///   sans lui, le pont devrait fabriquer la clé par heuristique.
+    /// - `wireMissingZIndex` : ids dont le blob v1 ne portait AUCUN `zIndex`.
+    ///   Les familles le décodent à 0, donc l'absence y est indiscernable d'un
+    ///   0 posé par l'auteur ; sans mémo le pont ne pourrait pas offrir le
+    ///   compteur d'insertion du convertisseur gateway (`z++`) sans écraser un
+    ///   rang légitime. Vide par défaut : un runtime COMPOSÉ (jamais décodé)
+    ///   porte ses propres rangs et les garde.
     var wireBandEdge: [String: ObjectAnchor.Edge]?
     var wireTimingEnd: [String: Double]?
     var wireAnchorPoint: [String: String]?
+    var wireMissingZIndex: Set<String>?
 
     // Objets canvas composites
     public var textObjects: [StoryTextObject]
@@ -1814,6 +1821,26 @@ public struct StoryEffects: Codable, Sendable {
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
         canvasAspectRatio = try c.decodeIfPresent(Double.self, forKey: .canvasAspectRatio)
         wireAnchorPoint = Self.stickerAnchorPoints(c)
+        wireMissingZIndex = Self.idsWithoutZIndex(c)
+    }
+
+    /// Les familles v1 décodent `zIndex` à 0 quand la clé manque : seule une
+    /// lecture BRUTE distingue « rang absent » de « rang 0 ».
+    private static func idsWithoutZIndex(
+        _ c: KeyedDecodingContainer<CodingKeys>
+    ) -> Set<String>? {
+        let families: [CodingKeys] = [.textObjects, .mediaObjects, .stickerObjects,
+                                      .locationObjects, .audioPlayerObjects]
+        let ids = families.flatMap { key -> [String] in
+            guard let raw = try? c.decodeIfPresent([[String: CanvasJSONValue]].self,
+                                                   forKey: key) else { return [] }
+            return raw.compactMap { object -> String? in
+                guard case .string(let id)? = object["id"] else { return nil }
+                if case .number? = object["zIndex"] { return nil }
+                return id
+            }
+        }
+        return ids.isEmpty ? nil : Set(ids)
     }
 
     /// Le pivot NOMMÉ d'un sticker v1 (`anchorPoint`) n'a pas de propriété
