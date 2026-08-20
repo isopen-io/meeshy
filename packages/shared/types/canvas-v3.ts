@@ -23,6 +23,15 @@ const TimingSchema = z.object({
   end: z.number().min(0).optional(),
   rate: z.number().min(0.25).max(4).optional(),
   keyframes: z.array(KeyframeSchema).max(60).optional(),
+}).refine((t) => t.start === undefined || t.end === undefined || t.end >= t.start, {
+  // Invariant temporel : un objet ne peut sortir de la timeline AVANT d'y
+  // entrer. Ne se vérifie QUE lorsque les deux bornes sont posées — une timing
+  // partielle (`{ start }` seul, `{ keyframes }` seul, cf. golden v1→v3) reste
+  // valide. Même registre de garantie que `transcriptionSegmentSchema`
+  // (`endMs >= startMs`, itération 234) : la borne haute >= la borne basse, la
+  // durée nulle (`end === start`) acceptée.
+  path: ['end'],
+  message: 'TIMING_END_BEFORE_START',
 });
 
 const ObjectV3Schema = z.object({
@@ -56,7 +65,12 @@ const BackgroundSoundSchema = z.object({
     z.object({ t: z.literal('library'), soundId: z.string().min(1) }),
   ]),
   volume: z.number().min(0).max(1).default(1),
-  bounds: z.object({ start: z.number().min(0), end: z.number().min(0) }).optional(),
+  bounds: z.object({ start: z.number().min(0), end: z.number().min(0) })
+    // Mêmes bornes temporelles que TimingSchema : la fin du segment d'audio ne
+    // peut précéder son début. Les deux bornes étant requises ici, le refine
+    // est inconditionnel. Durée nulle (`end === start`) acceptée.
+    .refine((b) => b.end >= b.start, { path: ['end'], message: 'BOUNDS_END_BEFORE_START' })
+    .optional(),
   // Sous-titres voix par langue (karaoké = Prisme audio) — logement du
   // `voiceTranscriptions` racine v1 (spec §C1 rév. 4, revue totale C7).
   transcriptions: z.array(z.object({
