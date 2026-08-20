@@ -7,7 +7,7 @@ import { storyContentEditRequested } from '../../services/posts/storyEditPolicy'
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired } from '../../utils/response';
-import { getAppVersionFloor, getAppStoreUrl } from '../../utils/appVersion';
+import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { MentionService } from '../../services/MentionService';
 import { resolvePostMentions, reconcilePostMentions } from '../../services/posts/postMentions';
@@ -65,6 +65,34 @@ const hoistLocation = hoistLocationDeep;
  *   jour serait un mensonge) ⇒ 400 CANVAS_INVALID + `issues`.
  * Rend `true` si une réponse d'erreur est partie (l'appelant sort).
  */
+/**
+ * Plancher `X-App-Version` (spec §C3, O2) — la porte d'en-tête ne juge que
+ * les requêtes qui EN PORTENT UN : l'ABSENCE passe TOUJOURS (le web est
+ * exempt — R6 — et les vieux binaires sont attrapés par le FORMAT, la garde
+ * d'à côté, jamais par un en-tête qu'ils n'envoient pas). Portée : les
+ * créations à scène (`storyEffects` présent OU `type === 'STORY'`). Plancher
+ * vide (défaut) = porte désarmée — elle sert les ruptures FUTURES.
+ * Rend `true` si le 426 est parti (l'appelant sort).
+ */
+function rejectBelowAppVersionFloor(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  data: { storyEffects?: unknown; type?: string }
+): boolean {
+  if (data.storyEffects == null && data.type !== 'STORY') return false;
+  const versionHeader = request.headers['x-app-version'];
+  const version = typeof versionHeader === 'string' ? versionHeader : undefined;
+  if (!isBelowFloor(version, getAppVersionFloor())) return false;
+  const platformHeader = request.headers['x-app-platform'];
+  sendUpgradeRequired(reply, 'App version outdated - update the app', {
+    details: {
+      minVersion: getAppVersionFloor(),
+      storeUrl: getAppStoreUrl(typeof platformHeader === 'string' ? platformHeader : undefined),
+    },
+  });
+  return true;
+}
+
 function rejectNonV3StoryEffects(
   request: FastifyRequest,
   reply: FastifyReply,
@@ -143,6 +171,10 @@ export function registerCoreRoutes(
       const parsed = CreatePostSchema.safeParse(request.body);
       if (!parsed.success) {
         return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      if (rejectBelowAppVersionFloor(request, reply, parsed.data)) {
+        return;
       }
 
       if (rejectNonV3StoryEffects(request, reply, parsed.data.storyEffects)) {

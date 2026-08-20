@@ -84,6 +84,7 @@ import { magicLinkRoutes } from './routes/magic-link';
 import userDeletionsRoutes from './routes/user-deletions';
 import { pushTokenRoutes } from './routes/push-tokens';
 import { postRoutes } from './routes/posts';
+import { appRoutes } from './routes/app';
 
 // API versioning
 const API_VERSION = 'v1';
@@ -354,6 +355,10 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
       await postRoutes(instance);
     }, { prefix: API_PREFIX });
     logger.info('✓ Post/Feed routes registered');
+
+    // Register app bootstrap routes (GET /app/min-version — porte de version cliente)
+    await server.register(appRoutes, { prefix: API_PREFIX });
+    logger.info('✓ App bootstrap routes registered');
 
     logger.info('✓ REST API routes configured successfully');
 }

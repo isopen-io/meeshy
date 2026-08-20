@@ -18,3 +18,10 @@ export function compareAppVersions(a: string, b: string): number {
   }
   return 0;
 }
+
+export function isBelowFloor(header: string | undefined, floor: string): boolean {
+  if (!floor) return false;      // porte désarmée par défaut
+  if (!header) return false;     // ABSENCE = web ou binaire d'avant l'en-tête :
+                                 // le FORMAT (A5) juge, jamais l'en-tête absent (R6)
+  return compareAppVersions(header, floor) < 0;
+}
