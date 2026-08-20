@@ -815,3 +815,11 @@ Append-only log of gotchas and decisions that save time next run.
   (same idiom as `composerAffordances`) — null on blank, `SentimentLevel.from(score(draft))`
   otherwise — so no `onDraftChange` edit, no new state field, no plumbing. The getter is testable via
   the public API both directly and through `vm.onDraftChange(...) → state.composerSentiment`.
+- **A computed getter references symbols in ITS OWN file — import them there, not only in the
+  consumers.** `ChatUiState.composerSentiment` lives in `ChatViewModel.kt` and calls
+  `SentimentLevel`/`SentimentAnalyzer`; I added the imports to the two *consumer* files
+  (`ChatScreen.kt`, `ChatViewModelTest.kt`) but forgot `ChatViewModel.kt` itself → `Unresolved
+  reference` on both CI and the local gate. The local serial gate reproduced it exactly (both agreed
+  it was a compile break, "not a test assertion"), which is the whole point of running the gate
+  before trusting a push. Lesson: after adding a cross-module symbol, grep every file that names it
+  for a matching import, the declaring file included.

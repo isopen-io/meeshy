@@ -40,6 +40,8 @@ import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.SentimentAnalyzer
+import me.meeshy.sdk.model.SentimentLevel
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
