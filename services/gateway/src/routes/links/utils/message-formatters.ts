@@ -91,6 +91,11 @@ export function formatLinkMessageWithDetails(message: any) {
     replyToId: message.replyToId,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt,
+    // Messages système : leur sens vit dans `metadata` (rendu localisé côté
+    // client), jamais dans le texte. Clés ABSENTES sur un message ordinaire.
+    ...(message.messageSource ? { messageSource: message.messageSource } : {}),
+    ...(message.senderId ? { senderId: message.senderId } : {}),
+    ...(message.metadata ? { metadata: message.metadata } : {}),
     sender: extractSenderInfo(message.sender),
     attachments: message.attachments || [],
     replyTo: message.replyTo ? formatReplyToMessage(message.replyTo) : null,

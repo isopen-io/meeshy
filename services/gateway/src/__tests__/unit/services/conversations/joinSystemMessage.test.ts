@@ -95,6 +95,31 @@ describe('postJoinSystemMessage', () => {
     });
   });
 
+  it('porte le pseudo, le nom donné et les règles du lien quand la porte les fournit', async () => {
+    await postJoinSystemMessage(h as never, {
+      ...anonymousJoin,
+      username: 'ano_bob_sm123',
+      givenName: 'Bob Martin',
+      linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+    });
+
+    const { data } = h.prisma.message.create.mock.calls[0][0] as any;
+    expect(data.metadata).toMatchObject({
+      username: 'ano_bob_sm123',
+      givenName: 'Bob Martin',
+      linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+    });
+  });
+
+  it('n’émet AUCUNE clé enrichie quand la porte ne les fournit pas — un membre ajouté n’a pas de lien', async () => {
+    await postJoinSystemMessage(h as never, registeredJoin);
+
+    const { data } = h.prisma.message.create.mock.calls[0][0] as any;
+    expect('username' in data.metadata).toBe(false);
+    expect('givenName' in data.metadata).toBe(false);
+    expect('linkRules' in data.metadata).toBe(false);
+  });
+
   it('dit explicitement que l’arrivant n’a PAS de compte', async () => {
     await postJoinSystemMessage(h as never, anonymousJoin);
 

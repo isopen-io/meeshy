@@ -353,6 +353,19 @@ export const messageSchema = {
     isEdited: { type: 'boolean', description: 'Whether the message was edited' },
     editedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Edition timestamp' },
     replyToId: { type: 'string', nullable: true, description: 'Quoted message identifier' },
+    // Le SENS des messages système (avis d'arrivée, résumé d'appel) vit dans
+    // `metadata` + `messageSource` — sans eux, le visiteur anonyme ne peut pas
+    // les rendre dans SA langue et retombe sur le repli français stocké.
+    // `additionalProperties: true` est OBLIGATOIRE (même piège que
+    // api-schemas.ts) et AUCUN `default` (cf. commentaire d'en-tête).
+    messageSource: { type: 'string', nullable: true, description: 'Message source (user, system)' },
+    senderId: { type: 'string', nullable: true, description: 'Participant id of the author' },
+    metadata: {
+      type: 'object',
+      nullable: true,
+      additionalProperties: true,
+      description: 'System-message payload (join notice, call summary) rendered client-side'
+    },
     sender: { ...messageSenderSchema, nullable: true },
     replyTo: replyToMessageSchema,
     attachments: {

@@ -218,6 +218,61 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
   // le formateur est plus maigre. Élargir le schéma ne doit rien matérialiser
   // sur cette route : une propriété portant un `default` serait émise même
   // absente de l'objet.
+  describe("avis d'arrivée — le SENS doit atteindre le visiteur anonyme", () => {
+    // La population même que l'avis concerne (les invités d'un lien) chargeait
+    // le fil par cette route et recevait le message SANS `metadata` ni
+    // `messageSource` : impossible de le reconnaître comme avis, donc repli sur
+    // le texte français stocké — jamais la langue du lecteur.
+    it('sert `metadata`, `messageSource` et `senderId` du message système', async () => {
+      const joinNotice = {
+        ...makeRawMessage(anonymousParticipant),
+        id: 'sys1',
+        messageType: 'system',
+        messageSource: 'system',
+        senderId: 'p_anon_1',
+        content: 'ano_camille a rejoint la conversation — visiteur sans compte',
+        metadata: {
+          kind: 'member-joined',
+          participantId: 'p_anon_1',
+          displayName: 'ano_camille',
+          isAnonymous: true,
+          viaShareLink: true,
+          username: 'ano_camille',
+          givenName: 'Camille',
+          linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+        },
+        attachments: [],
+        reactions: [],
+        replyTo: null,
+        replyToId: null,
+      };
+
+      const [served] = await serveMessages([formatLinkMessageWithDetails(joinNotice)]);
+
+      expect(served.messageSource).toBe('system');
+      expect(served.senderId).toBe('p_anon_1');
+      expect(served.metadata).toEqual({
+        kind: 'member-joined',
+        participantId: 'p_anon_1',
+        displayName: 'ano_camille',
+        isAnonymous: true,
+        viaShareLink: true,
+        username: 'ano_camille',
+        givenName: 'Camille',
+        linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+      });
+    });
+
+    it("n'invente ni `metadata` ni `messageSource` sur un message ordinaire", async () => {
+      const [served] = await serveMessages([
+        formatLinkMessageWithDetails(makeRawMessage(anonymousParticipant)),
+      ]);
+
+      expect('metadata' in served).toBe(false);
+      expect('messageSource' in served).toBe(false);
+    });
+  });
+
   describe('la route jumelle, plus maigre, ne gagne aucun champ fantôme', () => {
     it("n'invente ni pièce jointe, ni réaction, ni citation", async () => {
       const lightMessage = {

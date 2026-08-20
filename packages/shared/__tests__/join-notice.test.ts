@@ -25,6 +25,37 @@ describe('parseJoinNotice', () => {
     expect(parseJoinNotice(valid)).toEqual(valid);
   });
 
+  // Le pseudo (`ano_…`), le nom donné au formulaire et les règles du lien
+  // enrichissent la carte d'arrivée — chacun optionnel, chacun validé : un
+  // avis antérieur à ces champs reste reconnu à l'identique.
+  it('porte le pseudo, le nom donné et les règles du lien quand ils sont là', () => {
+    const enriched = {
+      ...valid,
+      username: 'ano_Jc_n045',
+      givenName: 'Jc Nm',
+      linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+    };
+    expect(parseJoinNotice(enriched)).toEqual(enriched);
+  });
+
+  it('omet un pseudo ou un nom donné vide ou non-string', () => {
+    expect(parseJoinNotice({ ...valid, username: '', givenName: 42 })).toEqual(valid);
+    expect(parseJoinNotice({ ...valid, username: null, givenName: '' })).toEqual(valid);
+  });
+
+  it('omet des règles de lien malformées plutôt que d’affirmer un droit', () => {
+    expect(parseJoinNotice({ ...valid, linkRules: 'yes' })).toEqual(valid);
+    expect(parseJoinNotice({ ...valid, linkRules: null })).toEqual(valid);
+    const molles = parseJoinNotice({
+      ...valid,
+      linkRules: { canSendMessages: 'true', canSendFiles: 1, canSendImages: undefined },
+    });
+    expect(molles).toEqual({
+      ...valid,
+      linkRules: { canSendMessages: false, canSendFiles: false, canSendImages: false },
+    });
+  });
+
   it('rend `null` pour une autre famille de message système', () => {
     expect(parseJoinNotice({ kind: 'call', callType: 'audio' })).toBeNull();
     expect(parseJoinNotice({ kind: 'call-live' })).toBeNull();

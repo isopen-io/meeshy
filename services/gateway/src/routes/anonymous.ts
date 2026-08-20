@@ -456,7 +456,16 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           participantId: anonymousParticipant.id,
           displayName: username,
           isAnonymous: true,
-          viaShareLink: true
+          viaShareLink: true,
+          // La carte d'arrivée sépare l'identité stable (pseudo `ano_…`) du
+          // nom humain donné au formulaire, et dit ce que le lien autorise.
+          username,
+          givenName: [firstName, lastName].filter(Boolean).join(' ') || undefined,
+          linkRules: {
+            canSendMessages: shareLink.allowAnonymousMessages,
+            canSendFiles: shareLink.allowAnonymousFiles,
+            canSendImages: shareLink.allowAnonymousImages
+          }
         }
       );
 

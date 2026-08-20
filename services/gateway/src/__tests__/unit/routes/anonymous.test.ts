@@ -85,6 +85,9 @@ async function buildApp(): Promise<FastifyInstance> {
       count: jest.fn().mockResolvedValue(0),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    message: {
+      create: jest.fn().mockImplementation(async ({ data }: any) => ({ id: 'sys-1', ...data })),
+    },
   });
   await anonymousRoutes(app);
   await app.ready();
@@ -138,6 +141,28 @@ describe('POST /anonymous/join/:linkId', () => {
     (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, requireAccount: true });
     const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
     expect(res.statusCode).toBe(403);
+  });
+
+  it('annonce l’arrivée avec le pseudo, le nom donné et les règles du lien dans le metadata', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/anonymous/join/' + LINK_ID,
+      payload: { firstName: 'Bob', lastName: 'Smith', username: 'bob', language: 'fr' },
+    });
+    expect(res.statusCode).toBe(201);
+
+    const createCalls = (app as any).prisma.message.create.mock.calls;
+    const systemCall = createCalls.find((c: any) => c[0]?.data?.messageType === 'system');
+    expect(systemCall).toBeDefined();
+    const metadata = systemCall[0].data.metadata;
+    expect(metadata).toMatchObject({
+      kind: 'member-joined',
+      isAnonymous: true,
+      viaShareLink: true,
+      username: 'ano_bob',
+      givenName: 'Bob Smith',
+      linkRules: { canSendMessages: true, canSendFiles: false, canSendImages: false },
+    });
   });
 
   it('returns 400 when email required but missing', async () => {

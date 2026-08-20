@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { LIVE_MESSAGE_MARK } from '../messaging/liveMessage';
-import { JOIN_NOTICE_KIND, type JoinNoticeMetadata } from '@meeshy/shared/utils/join-notice';
+import { JOIN_NOTICE_KIND, type JoinNoticeMetadata, type JoinNoticeLinkRules } from '@meeshy/shared/utils/join-notice';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'JoinSystemMessage' });
@@ -21,6 +21,12 @@ export type JoinSystemMessageInput = {
   readonly displayName: string;
   readonly isAnonymous: boolean;
   readonly viaShareLink: boolean;
+  /** Pseudo stable (`ano_…` pour un visiteur sans compte). */
+  readonly username?: string;
+  /** Nom humain donné au formulaire d'entrée (prénom/nom), s'il existe. */
+  readonly givenName?: string;
+  /** Règles du lien emprunté — seules les portes `viaShareLink` les fournissent. */
+  readonly linkRules?: JoinNoticeLinkRules;
 };
 
 export type JoinSystemMessageDeps = {
@@ -59,6 +65,11 @@ export async function postJoinSystemMessage(
     displayName: input.displayName,
     isAnonymous: input.isAnonymous,
     viaShareLink: input.viaShareLink,
+    // Clés ABSENTES (jamais null) quand la porte ne les fournit pas : un
+    // membre ajouté n'a pas de lien, un inscrit n'a pas de pseudo `ano_`.
+    ...(input.username ? { username: input.username } : {}),
+    ...(input.givenName ? { givenName: input.givenName } : {}),
+    ...(input.linkRules ? { linkRules: input.linkRules } : {}),
   };
 
   let message: unknown;
