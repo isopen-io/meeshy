@@ -94,18 +94,25 @@ export const translationTypeSchema = z.enum(['audio', 'video', 'text', 'document
 // TranscriptionSegment — used inside transcription + translation payloads
 // ============================================================================
 
-export const transcriptionSegmentSchema = z.object({
-  text: z.string(),
-  startMs: z.number().nonnegative(),
-  endMs: z.number().nonnegative(),
-  speakerId: z.string().optional(),
-  voiceSimilarityScore: z.number().min(0).max(1).optional(),
-  confidence: confidenceScoreSchema.optional(),
-  language: languageCodeSchema.optional(),
-  isFinal: z.boolean().optional(),
-  translatedText: z.string().optional(),
-  translatedLanguage: languageCodeSchema.optional(),
-});
+export const transcriptionSegmentSchema = z
+  .object({
+    text: z.string(),
+    startMs: z.number().nonnegative(),
+    endMs: z.number().nonnegative(),
+    speakerId: z.string().optional(),
+    voiceSimilarityScore: z.number().min(0).max(1).optional(),
+    confidence: confidenceScoreSchema.optional(),
+    language: languageCodeSchema.optional(),
+    isFinal: z.boolean().optional(),
+    translatedText: z.string().optional(),
+    translatedLanguage: languageCodeSchema.optional(),
+  })
+  // A time segment cannot end before it begins. Equal bounds (a zero-duration
+  // segment) stay valid — same numeric-sanity class as the `nonnegative` bounds.
+  .refine((segment) => segment.endMs >= segment.startMs, {
+    message: 'endMs must be greater than or equal to startMs',
+    path: ['endMs'],
+  });
 
 // ============================================================================
 // AttachmentTranscription — single flat schema with optional discriminator

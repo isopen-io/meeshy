@@ -164,6 +164,18 @@ describe('attachment-validators — Zod schemas at the JSON boundary', () => {
         }).success,
       ).toBe(false);
     });
+
+    it('rejects a segment whose endMs precedes its startMs', () => {
+      expect(
+        transcriptionSegmentSchema.safeParse({ text: 'x', startMs: 100, endMs: 50 }).success,
+      ).toBe(false);
+    });
+
+    it('accepts a zero-duration segment (endMs === startMs)', () => {
+      expect(
+        transcriptionSegmentSchema.safeParse({ text: 'x', startMs: 100, endMs: 100 }).success,
+      ).toBe(true);
+    });
   });
 
   describe('attachmentTranslationSchema', () => {
