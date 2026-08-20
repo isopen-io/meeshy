@@ -28,10 +28,13 @@ describe('reading mode — le verdict des modes', () => {
     expect(READING_MODES).toEqual(['focal', 'script', 'bubble']);
   });
 
-  // Vol. 3 : « Focal — Garder. Mode par défaut, successeur direct du fil. »
-  it('opens on Focal by default', () => {
-    expect(DEFAULT_READING_MODE).toBe('focal');
-    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
+  // Décision produit 2026-08-20 : « Il faut que le mode bulle soit le mode
+  // par défaut ! » — aligne le chemin drapeau éteint (celui que les
+  // utilisateurs voient réellement) sur le défaut déjà en vigueur drapeau
+  // allumé depuis le 2026-08-17/18.
+  it('opens on Bubble by default', () => {
+    expect(DEFAULT_READING_MODE).toBe('bubble');
+    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('bubble');
   });
 
   it('rejects anything outside the retained lenses', () => {
@@ -46,12 +49,17 @@ describe('reading mode — le choix est collant, par conversation', () => {
     useReadingModeStore.getState().setMode(CONVERSATION_A, 'script');
 
     expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('script');
-    expect(useReadingModeStore.getState().getMode(CONVERSATION_B)).toBe('focal');
+    expect(useReadingModeStore.getState().getMode(CONVERSATION_B)).toBe('bubble');
   });
 
   // Le bouton `Aa` du volume 4 : une bascule densité, réversible d'un geste.
+  // Départ EXPLICITE en Focal — le défaut ambiant est désormais Bulles
+  // (2026-08-20), et `nextDensity('bubble')` rentre par Focal (cf. le témoin
+  // dédié juste en dessous), pas par Script : fixer le point de départ rend
+  // ce témoin indépendant de ce que vaut le défaut.
   it('toggles between Focal and Script density without touching other lenses', () => {
-    const { toggleDensity } = useReadingModeStore.getState();
+    const { setMode, toggleDensity } = useReadingModeStore.getState();
+    setMode(CONVERSATION_A, 'focal');
 
     toggleDensity(CONVERSATION_A);
     expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('script');

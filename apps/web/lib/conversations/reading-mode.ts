@@ -5,12 +5,21 @@
  * Dix propositions, trois survivantes, une en sursis. Côté lecture d'un fil il
  * reste DEUX crans de zoom sémantique :
  *
- * - `focal`  — mode par défaut. Rangées plates, perspective au défilement, une
- *              seule carte : le message au point.
+ * - `focal`  — rangées plates, perspective au défilement, une seule carte :
+ *              le message au point.
  * - `script` — la MÊME rangée plate, densité uniforme, sans perspective. C'est
  *              une typographie, pas un mode : le bouton `Aa` du volume 4.
- * - `bubble` — la vue à bulles historique. Ce n'est pas un mode non plus :
- *              c'est l'ancien rendu, gardé à un tap le temps de la transition.
+ * - `bubble` — la vue à bulles. **Mode par défaut** — décision produit
+ *              2026-08-20 (`docs/superpowers/plans/2026-08-20-composer-droits-et-bulle-par-defaut.md`,
+ *              tâche 5) : « Il faut que le mode bulle soit le mode par
+ *              défaut ! ». Elle aligne le chemin drapeau de la Lentille
+ *              ÉTEINT (`useReadingModesFlag`) — celui que voient réellement
+ *              les utilisateurs aujourd'hui — sur la décision déjà prise,
+ *              drapeau allumé, le 2026-08-17/18 (`PROVISIONAL_DEFAULT_RENDER`,
+ *              `hooks/lentille/use-thread-reading-mode.ts`). `focal` et
+ *              `script` restent les deux densités du fil plat, choisissables
+ *              à tout moment via `Aa` ou le sélecteur — un choix explicite
+ *              garde tout son pouvoir.
  *
  * `resume` (Résumé Vivant), `riviere` et `scene` n'entrent PAS ici : le Résumé
  * attend l'API observer `assist:*` côté gateway, la Rivière doit gagner son
@@ -29,7 +38,7 @@ export const READING_MODES = ['focal', 'script', 'bubble'] as const;
 
 export type ReadingMode = (typeof READING_MODES)[number];
 
-export const DEFAULT_READING_MODE: ReadingMode = 'focal';
+export const DEFAULT_READING_MODE: ReadingMode = 'bubble';
 
 /** Les deux densités de la rangée plate — ce que bascule le bouton `Aa`. */
 export const FLAT_READING_MODES: readonly ReadingMode[] = ['focal', 'script'];
@@ -88,16 +97,22 @@ export function preferenceFromReadingMode(mode: ReadingMode): ReadingModePrefere
  * NON bijective, et il faut le dire plutôt que le cacher : le vocabulaire de
  * préférence est plus riche que ce rendu-là.
  *
- * - `auto` ⇒ `focal`. C'est le DÉFAUT du chemin drapeau-éteint, identique au
- *   `DEFAULT_READING_MODE` d'avant la façade — la promesse « drapeau OFF,
- *   rendu bit-à-bit identique » passe précisément par cette ligne. C'est
- *   aussi pourquoi « Bulles » n'a PAS pu être rabattu sur `auto` : une valeur
- *   ne peut pas signifier à la fois « focal par défaut » et « bulles ».
- * - `resume` / `riviere` ⇒ `focal`. Ni le Résumé Vivant ni la Rivière ne sont
- *   montés dans ce rendu ; les rabattre sur `focal` REPRODUIT exactement ce
- *   que la loi ferait d'eux (`clampToCapabilities`, repli `'focal'`) plutôt
- *   que d'inventer un troisième comportement. Le fil sous drapeau ON, lui,
- *   passe par la loi elle-même et porte la RAISON du rabat.
+ * - `auto` ⇒ `DEFAULT_READING_MODE` (`bubble` depuis la décision du
+ *   2026-08-20). C'est le DÉFAUT du chemin drapeau-éteint : la promesse
+ *   « drapeau OFF, rendu bit-à-bit identique au drapeau ON sans choix »
+ *   passe précisément par cette ligne, qui suit désormais le même défaut que
+ *   `PROVISIONAL_DEFAULT_RENDER` (`use-thread-reading-mode.ts`).
+ * - `resume` / `riviere` ⇒ `focal`, TOUJOURS — indépendant de
+ *   `DEFAULT_READING_MODE`, à dessein. Ni le Résumé Vivant ni la Rivière ne
+ *   sont montés dans ce rendu ; les rabattre sur `focal` REPRODUIT exactement
+ *   ce que la loi ferait d'eux (`clampToCapabilities`,
+ *   `packages/shared/utils/reading-modes.ts`, repli `'focal'`, non touché
+ *   par la décision ci-dessus) plutôt que d'inventer un troisième
+ *   comportement. Faire suivre `auto` et ces deux préférences sur la MÊME
+ *   variable ferait glisser silencieusement `resume`/`riviere` vers `bubble`
+ *   dès que le défaut change — exactement ce que cette dissociation empêche.
+ *   Le fil sous drapeau ON, lui, passe par la loi elle-même et porte la
+ *   RAISON du rabat.
  */
 export function readingModeFromPreference(preference: ReadingModePreference): ReadingMode {
   switch (preference) {
@@ -108,8 +123,9 @@ export function readingModeFromPreference(preference: ReadingModePreference): Re
     case 'bulles':
       return 'bubble';
     case 'auto':
+      return DEFAULT_READING_MODE;
     case 'resume':
     case 'riviere':
-      return DEFAULT_READING_MODE;
+      return 'focal';
   }
 }

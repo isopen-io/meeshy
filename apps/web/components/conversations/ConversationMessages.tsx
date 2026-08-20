@@ -79,7 +79,7 @@ interface ConversationMessagesProps {
   scrollDirection?: 'up' | 'down'; // Direction du scroll pour charger plus: 'up' = haut (défaut), 'down' = bas
   scrollButtonDirection?: 'up' | 'down'; // Direction du bouton scroll: 'up' = ArrowUp (BubbleStream), 'down' = ArrowDown (Conversations)
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>; // Ref externe du conteneur de scroll (pour BubbleStream)
-  /** Lentille de lecture — `focal` par défaut (verdict vol. 3). */
+  /** Lentille de lecture — `DEFAULT_READING_MODE` par défaut (`bubble` depuis le 2026-08-20). */
   readingMode?: ReadingMode;
   /**
    * Position horizontale du bouton flottant. Par défaut elle est déduite de

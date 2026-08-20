@@ -84,12 +84,17 @@ describe('useThreadActiveReadingMode — Q142-c, ce que LensSwitcher marque acti
     expect(result.current).toBe('bubble');
   });
 
-  it('drapeau ÉTEINT : sans préférence ⇒ « focal », bit-à-bit comme avant (le défaut provisoire ne s’applique QUE drapeau ON)', () => {
+  // MIS À JOUR EXPRÈS — décision produit 2026-08-20 : le chemin drapeau
+  // ÉTEINT (celui que les utilisateurs voient réellement) suit désormais
+  // `DEFAULT_READING_MODE`, qui vaut `bubble` (`lib/conversations/reading-mode.ts`).
+  // Ce témoin affirmait l'ancien défaut (`focal`) ; drapeau ON et drapeau OFF
+  // convergent maintenant sur le même défaut « Bulles » sans préférence.
+  it('drapeau ÉTEINT : sans préférence ⇒ « bubble », le nouveau défaut (2026-08-20)', () => {
     mockReadingModesFlagActive = false;
 
     const { result } = renderHook(() => useThreadActiveReadingMode(CONVERSATION_ID));
 
-    expect(result.current).toBe('focal');
+    expect(result.current).toBe('bubble');
   });
 
   it('drapeau ÉTEINT, préférence explicite `script` ⇒ « script », traduction bit-à-bit inchangée', async () => {

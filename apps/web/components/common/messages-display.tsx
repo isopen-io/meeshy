@@ -54,7 +54,7 @@ interface MessagesDisplayProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingMore?: boolean;
-  /** Lentille de lecture — `focal` par défaut (verdict vol. 3). */
+  /** Lentille de lecture — `DEFAULT_READING_MODE` par défaut (`bubble` depuis le 2026-08-20). */
   readingMode?: ReadingMode;
 }
 

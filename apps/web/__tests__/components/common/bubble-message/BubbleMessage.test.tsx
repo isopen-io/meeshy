@@ -64,10 +64,13 @@ jest.mock('@/components/common/bubble-message/BubbleMessageNormalView', () => ({
   ),
 }));
 
-// La rangée plate du mode Focal est la vue « normale » par DÉFAUT depuis le
-// verdict des modes (vol. 3) : `BubbleMessageNormalView` ne sert plus que la
-// lentille « Bulles ». Les deux exposent les mêmes affordances, donc le même
-// contrat de test — c'est la machine à vues qui est éprouvée ici.
+// MIS À JOUR (2026-08-20) — la vue à bulles (`BubbleMessageNormalView`) est
+// redevenue la vue « normale » par DÉFAUT (`DEFAULT_READING_MODE`,
+// `lib/conversations/reading-mode.ts` : décision produit 2026-08-20, « Il
+// faut que le mode bulle soit le mode par défaut ! »). La rangée plate du
+// mode Focal (`FocalRow`) ne sert plus que les lentilles Focal/Script
+// choisies explicitement. Les deux exposent les mêmes affordances, donc le
+// même contrat de test — c'est la machine à vues qui est éprouvée ici.
 jest.mock('@/components/common/bubble-message/FocalRow', () => ({
   FocalRow: ({ message, onEnterReactionMode, onEnterLanguageMode, onEnterEditMode, onEnterDeleteMode, onEnterReportMode }: any) => (
     <div data-testid="normal-view" data-lens="flat">
@@ -190,10 +193,10 @@ describe('BubbleMessage', () => {
   });
 
   describe('Rendu initial', () => {
-    it('devrait afficher la vue normale par defaut', () => {
+    it('devrait afficher la vue normale par defaut (lentille bulle, decision 2026-08-20)', () => {
       renderBubbleMessage();
 
-      expect(screen.getByTestId('normal-view')).toHaveAttribute('data-lens', 'flat');
+      expect(screen.getByTestId('normal-view')).toHaveAttribute('data-lens', 'bubble');
       expect(screen.queryByTestId('reaction-view')).not.toBeInTheDocument();
       expect(screen.queryByTestId('language-view')).not.toBeInTheDocument();
     });

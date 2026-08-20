@@ -143,7 +143,8 @@ describe('façade — un seul magasin autoritatif', () => {
 
   it('`useReadingMode` se ré-abonne au magasin autoritatif (un changement du menu re-rend le fil)', async () => {
     const { result } = renderHook(() => useReadingMode(CONVERSATION_A));
-    expect(result.current).toBe('focal');
+    // Décision produit 2026-08-20 : sans préférence, le défaut est Bulles.
+    expect(result.current).toBe('bubble');
 
     await act(async () => {
       await useReadingModePreferenceStore
@@ -160,8 +161,11 @@ describe('façade — un seul magasin autoritatif', () => {
 // ---------------------------------------------------------------------------
 
 describe('façade — le contrat public de `reading-mode-store` ne bouge pas', () => {
-  it('défaut `focal` tant que rien n’est mémorisé (préférence `auto`)', () => {
-    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
+  // Décision produit 2026-08-20 : « Il faut que le mode bulle soit le mode
+  // par défaut ! » — le défaut ambiant (préférence `auto`) est désormais
+  // Bulles, plus Focal.
+  it('défaut `bubble` tant que rien n’est mémorisé (préférence `auto`)', () => {
+    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('bubble');
   });
 
   it('le choix reste COLLANT et isolé par conversation', () => {
@@ -170,10 +174,18 @@ describe('façade — le contrat public de `reading-mode-store` ne bouge pas', (
     });
 
     expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('script');
-    expect(useReadingModeStore.getState().getMode(CONVERSATION_B)).toBe('focal');
+    expect(useReadingModeStore.getState().getMode(CONVERSATION_B)).toBe('bubble');
   });
 
+  // Départ EXPLICITE en Focal (voir `stores/__tests__/reading-mode-store.test.ts`
+  // pour le même ajustement) : le défaut ambiant est désormais Bulles, et
+  // `nextDensity('bubble')` rentre par Focal — fixer le point de départ rend
+  // ce témoin indépendant de ce que vaut le défaut.
   it('`Aa` bascule Focal ↔ Script', () => {
+    act(() => {
+      useReadingModeStore.getState().setMode(CONVERSATION_A, 'focal');
+    });
+
     act(() => {
       useReadingModeStore.getState().toggleDensity(CONVERSATION_A);
     });
@@ -217,8 +229,11 @@ describe('traduction préférence ⇄ lentille du rendu historique', () => {
     expect(preferenceFromReadingMode('bubble')).toBe('bulles');
   });
 
-  it('`auto` (rien de choisi) rend `focal` — le défaut du chemin OFF, inchangé', () => {
-    expect(readingModeFromPreference('auto')).toBe('focal');
+  // MIS À JOUR EXPRÈS — décision produit 2026-08-20 : le défaut du chemin
+  // OFF passe de `focal` à `bubble` (`DEFAULT_READING_MODE`,
+  // `lib/conversations/reading-mode.ts`).
+  it('`auto` (rien de choisi) rend `bubble` — le nouveau défaut du chemin OFF (2026-08-20)', () => {
+    expect(readingModeFromPreference('auto')).toBe('bubble');
   });
 
   it("les préférences que `MessagesDisplay` ne sait pas rendre retombent sur `focal`, jamais sur `bubble`", () => {

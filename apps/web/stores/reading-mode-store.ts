@@ -33,10 +33,13 @@
  * c'est la définition de "un seul magasin" ») sont l'exact pendant des nôtres.
  *
  * CE QUI NE CHANGE PAS, ET C'EST LA CONTRAINTE DURE : drapeau éteint, le rendu
- * reste bit-à-bit identique. Le défaut (rien de mémorisé) reste `focal`, les
- * trois lentilles du sélecteur historique font toujours leur aller-retour —
- * `bubble` compris, ce qui a exigé l'AMENDEMENT S1 (`bulles` au vocabulaire de
- * préférence, cf. `packages/shared/types/reading-modes.ts`) — et la
+ * reste bit-à-bit identique — au défaut PRÈS. Le défaut (rien de mémorisé)
+ * est `bubble` depuis la décision produit 2026-08-20 (« Il faut que le mode
+ * bulle soit le mode par défaut ! », `DEFAULT_READING_MODE`,
+ * `lib/conversations/reading-mode.ts` — avant cette date il valait `focal`).
+ * Les trois lentilles du sélecteur historique font toujours leur aller-retour
+ * — `bubble` compris, ce qui a exigé l'AMENDEMENT S1 (`bulles` au vocabulaire
+ * de préférence, cf. `packages/shared/types/reading-modes.ts`) — et la
  * stickiness d'une session à l'autre, que `zustand/persist` offrait
  * gratuitement, est remboursée par `hydrateReadingModePreferencesFromStorage`
  * dans le magasin autoritatif.
