@@ -37,8 +37,9 @@ interface StreamComposerProps {
   // i18n
   placeholder: string;
 
-  // Permission hints for anonymous users
-  permissionHints?: string[];
+  /** Autorisations d'envoi de la personne dans CETTE conversation. Absentes =
+   *  tout est permis (conversations ordinaires). */
+  attachmentPermissions?: { canSendImages: boolean; canSendFiles: boolean };
 
   /**
    * Rembourrage bas au-delà de la barre système (encoche iOS, barre de
@@ -67,6 +68,7 @@ export const StreamComposer = memo(forwardRef<unknown, StreamComposerProps>(
       token,
       userRole,
       placeholder,
+      attachmentPermissions,
       withSafeArea = false,
     } = props;
 
@@ -92,6 +94,7 @@ export const StreamComposer = memo(forwardRef<unknown, StreamComposerProps>(
             token={token}
             userRole={userRole}
             conversationId={conversationId}
+            attachmentPermissions={attachmentPermissions}
           />
         </div>
       </div>

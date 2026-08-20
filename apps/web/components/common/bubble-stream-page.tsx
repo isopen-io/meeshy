@@ -78,7 +78,7 @@ export function BubbleStreamPage({
   isAnonymousMode = false,
   linkId,
   initialParticipants,
-  anonymousPermissionHints,
+  attachmentPermissions,
   variant = 'stream',
   conversationTitle,
   conversationType,
@@ -221,9 +221,6 @@ export function BubbleStreamPage({
     user.regionalLanguage,
     user.customDestinationLanguage
   ]);
-
-  // Permission hints for anonymous users (passed from parent via props)
-  const permissionHints = anonymousPermissionHints;
 
   // Hook UI (NOUVEAU - extrait)
   const {
@@ -722,7 +719,7 @@ export function BubbleStreamPage({
               token={typeof window !== 'undefined' ? getAuthToken()?.value : undefined}
               userRole={user?.role}
               conversationId={normalizedConversationId || conversationId}
-              permissionHints={permissionHints}
+              attachmentPermissions={attachmentPermissions}
               withSafeArea={isThread}
             />
           </section>

@@ -107,10 +107,3 @@ export function mapParticipantsFromLinkData(
 
   return participants;
 }
-
-export function getAnonymousPermissionHints(link: LinkConversationData['link']): string[] {
-  const hints: string[] = [];
-  if (!link.allowAnonymousFiles) hints.push('Fichiers non autorisés');
-  if (!link.allowAnonymousImages) hints.push('Images non autorisées');
-  return hints;
-}

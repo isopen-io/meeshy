@@ -14,7 +14,6 @@ import {
   mapMemberToUser,
   mapAnonymousParticipantToUser,
   mapParticipantsFromLinkData,
-  getAnonymousPermissionHints,
   DEFAULT_FRONTEND_PERMISSIONS,
 } from '@/utils/participant-mapper';
 import type { LinkConversationData } from '@/services/link-conversation.service';
@@ -251,34 +250,6 @@ describe('participant-mapper', () => {
       };
       const result = mapParticipantsFromLinkData(emptyData, false);
       expect(result).toEqual([]);
-    });
-  });
-
-  describe('getAnonymousPermissionHints', () => {
-    it('returns hints for restricted permissions', () => {
-      const hints = getAnonymousPermissionHints(baseLinkData.link);
-      expect(hints).toContain('Fichiers non autorisés');
-      expect(hints).not.toContain('Images non autorisées');
-    });
-
-    it('returns empty array when all permissions are granted', () => {
-      const allAllowed = {
-        ...baseLinkData.link,
-        allowAnonymousFiles: true,
-        allowAnonymousImages: true,
-      };
-      const hints = getAnonymousPermissionHints(allAllowed);
-      expect(hints).toEqual([]);
-    });
-
-    it('returns both hints when both are restricted', () => {
-      const allRestricted = {
-        ...baseLinkData.link,
-        allowAnonymousFiles: false,
-        allowAnonymousImages: false,
-      };
-      const hints = getAnonymousPermissionHints(allRestricted);
-      expect(hints).toHaveLength(2);
     });
   });
 });

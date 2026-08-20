@@ -19,7 +19,9 @@ export interface BubbleStreamPageProps {
   isAnonymousMode?: boolean;
   linkId?: string;
   initialParticipants?: User[];
-  anonymousPermissionHints?: string[];
+  /** Autorisations d'envoi de la personne dans CETTE conversation (lien
+   *  partagé). Absentes = tout est permis (conversations ordinaires). */
+  attachmentPermissions?: { canSendImages: boolean; canSendFiles: boolean };
   /**
    * `stream` (défaut) — le feed d'accueil, récent en haut, inchangé.
    * `thread` — la conversation partagée `/chat/:linkId` : géométrie de

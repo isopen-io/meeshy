@@ -39,16 +39,21 @@ jest.mock('@/components/common/bubble-stream-page', () => ({
     conversationId,
     variant,
     conversationTitle,
+    attachmentPermissions,
   }: {
     conversationId?: string;
     variant?: string;
     conversationTitle?: string;
+    attachmentPermissions?: { canSendImages: boolean; canSendFiles: boolean };
   }) => (
     <div
       data-testid="live-shared-view"
       data-conversation-id={conversationId}
       data-variant={variant}
       data-title={conversationTitle}
+      data-attachment-permissions={
+        attachmentPermissions ? JSON.stringify(attachmentPermissions) : undefined
+      }
     />
   ),
 }));
@@ -87,7 +92,6 @@ jest.mock('next/dynamic', () => (loader: () => Promise<unknown>) => {
 jest.mock('@/utils/participant-mapper', () => ({
   mapCurrentUserToUser: (user: unknown) => user,
   mapParticipantsFromLinkData: () => [],
-  getAnonymousPermissionHints: () => ({}),
 }));
 
 const CONVERSATION_ID = '507f1f77bcf86cd799439022';
@@ -173,6 +177,38 @@ describe('SharedConversationExperience — un écran, trois rendus', () => {
     // Le wrapper hauteur-viewport est ce qui FIGE le composer en bas : sans
     // lui, `h-full` s'effondre et toute la page défile.
     expect(view.closest('.h-\\[100dvh\\]')).not.toBeNull();
+  });
+
+  // Un invité anonyme sans droit fichier NI droit image ne doit jamais voir
+  // de trombone ni de bandeau — le composer se charge de la restitution
+  // (couvert par message-composer.test.tsx). Ici, le maillon vérifié est le
+  // passage des deux booléens du lien jusqu'à `BubbleStreamPage`.
+  it('threads the link attachment rights to the live shared view as booleans', async () => {
+    mockGetConversationData.mockResolvedValue(
+      makeLinkData({
+        link: {
+          ...makeLinkData().link,
+          allowAnonymousFiles: false,
+          allowAnonymousImages: false,
+        },
+        currentUser: {
+          id: 'anon-1',
+          username: 'guest',
+          firstName: 'Guest',
+          lastName: 'One',
+          language: 'fr',
+          isMeeshyer: false,
+        },
+      })
+    );
+
+    render(<SharedConversationExperience linkId="mshy_abc_123" />);
+
+    const view = await screen.findByTestId('live-shared-view');
+    expect(view).toHaveAttribute(
+      'data-attachment-permissions',
+      JSON.stringify({ canSendImages: false, canSendFiles: false })
+    );
   });
 
   it('shows a visitor the preview with the join modal on top', async () => {

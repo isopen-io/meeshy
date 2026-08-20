@@ -11,7 +11,6 @@ import { JoinError } from '@/components/join';
 import {
   mapCurrentUserToUser,
   mapParticipantsFromLinkData,
-  getAnonymousPermissionHints,
 } from '@/utils/participant-mapper';
 
 /**
@@ -169,7 +168,10 @@ export function SharedConversationExperience({ linkId }: SharedConversationExper
           isAnonymousMode
           linkId={linkId}
           initialParticipants={mapParticipantsFromLinkData(data, true)}
-          anonymousPermissionHints={getAnonymousPermissionHints(data.link)}
+          attachmentPermissions={{
+            canSendImages: data.link.allowAnonymousImages,
+            canSendFiles: data.link.allowAnonymousFiles,
+          }}
           variant="thread"
           conversationTitle={data.conversation.title || data.link.name}
           conversationType={data.conversation.type}

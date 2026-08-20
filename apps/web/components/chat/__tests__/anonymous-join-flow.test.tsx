@@ -68,7 +68,6 @@ jest.mock('next/dynamic', () => (loader: () => Promise<unknown>) => {
 jest.mock('@/utils/participant-mapper', () => ({
   mapCurrentUserToUser: (user: unknown) => user,
   mapParticipantsFromLinkData: () => [],
-  getAnonymousPermissionHints: () => ({}),
 }));
 
 const LINK_ID = '507f1f77bcf86cd799439099.2608171200_ab12cd34';
