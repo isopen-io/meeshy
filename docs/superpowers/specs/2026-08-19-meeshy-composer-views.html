@@ -193,19 +193,21 @@ footer .mono{font-size:11.5px}
 <a href="#p7">P7 Outils</a><a href="#p8">P8 Timeline</a><a href="#p9">P9 Capture</a>
 <a href="#p10">P10 Socle</a><a href="#p11">P11 Étagère</a><a href="#p12">P12 Viewers</a>
 <a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a><a href="#p16">P16 Écart SOTA</a><a href="#p17">P17 Simplification</a>
+<a href="#p18">P18 Entrées ext.</a><a href="#p19">P19 Continuité</a><a href="#p20">P20 Rupture</a><a href="#p21">P21 Styles</a>
 </div></nav>
 
 <header><div class="wrap">
   <div class="eyebrow">Planches de navigation UI · UX — spécification visuelle</div>
   <h1>MeeshyComposer</h1>
   <p class="sub">Un seul objet pour créer — Story, Post, Réel, Mood — et un seul noyau pour lire.
-  Quatorze planches : chaque vue, son comportement, et pour chaque outil la précision exacte de ce
+  Vingt-et-une planches : chaque vue, son comportement, et pour chaque outil la précision exacte de ce
   qu'il fait selon le format. <b>Toutes les features existantes sont inventoriées et préservées
   avant toute nouveauté.</b></p>
   <div class="meta">
     <span>2026-08-19 · rév. 2026-08-20</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
     <span>statut : SPÉCIFIÉ — arbitrages TOUS tranchés · spec d'exécution 2026-08-20, six lots parallèles</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
+    <span>rév. 2 (2026-08-20) : revue totale 4 axes — 62 constats examinés, 33 réels intégrés · entrées externes (P18) · continuité &amp; PiP (P19) · rupture vécue (P20) · spécimen des 18 styles (P21) · O12–O16</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -220,7 +222,7 @@ footer .mono{font-size:11.5px}
 
 <!-- ================================================================ P1 -->
 <section id="p1"><div class="wrap">
-  <div class="prail"><span class="pnum">P1</span><h2>Doctrine — six lois, aucune exception</h2></div>
+  <div class="prail"><span class="pnum">P1</span><h2>Doctrine — dix lois, aucune exception</h2></div>
   <p class="lede">Tout le reste du document se déduit d'ici. Quand deux planches semblent se
   contredire, c'est la loi qui tranche.</p>
   <div class="grid g3">
@@ -234,9 +236,12 @@ footer .mono{font-size:11.5px}
     <div class="card"><h4>3 · La scène est 9:16, toujours</h4><p>Le contenu porteur garde son ratio ;
       le hors-champ devient deux bandes <b>actives</b>. Un post sans visuel n'a pas de scène du
       tout — un cadre vide est une injonction à le remplir.</p></div>
-    <div class="card"><h4>4 · Rien à l'écran sans raison</h4><p>Un contrôle apparaît si — et
-      seulement si — l'objet courant l'accepte, le profil l'autorise, et l'action a un effet
-      maintenant. Sinon il n'est pas grisé : il n'est pas là.</p></div>
+    <div class="card"><h4>4 · Rien à l'écran sans raison</h4><p>Un contrôle d'OBJET apparaît si —
+      et seulement si — l'objet courant l'accepte, le profil l'autorise, et l'action a un effet
+      maintenant. Sinon il n'est pas grisé : il n'est pas là. Portée précisée (rév. 2) : la loi
+      vaut pour les contrôles d'objet, jamais pour les PORTES DE CRÉATION — l'état AMORCE (P4)
+      garde toujours un domicile visible. Exception nommée : le sélecteur d'audience d'un repost
+      montre les niveaux bornés, verrouillés avec leur raison (P10).</p></div>
     <div class="card"><h4>5 · Le socle ne bouge jamais</h4><p>Audience · aperçu · publier, en bas,
       dans le plateau sombre (noir / indigo profond / violet profond — jeton choisi par
       l'utilisateur dans ses réglages d'interface). La seule erreur irréversible d'une publication
@@ -248,6 +253,18 @@ footer .mono{font-size:11.5px}
       texte : <span class="mono">↻</span> suffit à dire « a republié », <span class="mono">♫〰</span>
       suffit à dire « son de fond », <span class="mono">👁</span> à dire « vues ». Directive
       2026-08-20 — l'air est une feature ; la verbosité se supprime partout, pas au cas par cas.</p></div>
+    <div class="card"><h4>8 · Un seul temps, celui du contenu</h4><p>La position de lecture et
+      l'état de piste SURVIVENT au changement de chrome — carte → détail → plein écran → PiP
+      (P19). Le contenu ne rembobine jamais parce que l'écran a changé. Rév. 2 (O16).</p></div>
+    <div class="card"><h4>9 · La porte ne fixe que l'état initial</h4><p>Les capacités visibles
+      sont f(format COURANT, seed), recalculées à chaque bascule S↔P↔R. Le texte ne migre
+      jamais : objets de scène et <span class="mono">content</span> restent chacun chez soi ; le
+      champ nouvellement montré naît vide. Rév. 2 (U2).</p></div>
+    <div class="card"><h4>10 · L'audience se souvient PAR FORMAT</h4><p>Mémoires S/P/R/M
+      séparées (préservation de <span class="mono">StoryVisibilityPreferenceStore</span> et
+      <span class="mono">lastStatusVisibility</span>) — un post Public ponctuel ne contamine
+      jamais la story intime suivante. Le chip se met en évidence quand l'audience diffère de
+      l'habituelle du format. Rév. 2 (U7).</p></div>
   </div>
 </div></section>
 
@@ -273,13 +290,13 @@ footer .mono{font-size:11.5px}
       <tr><td><b>Fond</b> — couleur/dégradé, <b>déplaçable uniquement via son chip</b>, boucle = fond seul</td><td class="mono">background · règles bg-chip &amp; loop=background</td><td>Objet plan <span class="mono">.background</span>, règles conservées</td></tr>
       <tr><td><b>Son de fond</b> — bibliothèque / fichier / micro, emprunt (crédit soundId), volume, bornes début/fin</td><td class="mono">SoundLibrary, AudioDocumentPicker, VoiceRecorder · backgroundAudio*</td><td>Objet <span class="mono">audio</span> plan fond ; crédit rendu par l'atome partagé</td></tr>
       <tr><td>Audio <b>premier plan</b> — chips lecteurs posés sur la scène</td><td class="mono">audioPlayerObjects (zIndex, timing, keyframes volume)</td><td>Objet <span class="mono">audio</span> plan contenu</td></tr>
-      <tr><td>Sous-titres voix (karaoké) — dégénérés si timestamps=0</td><td class="mono">currentVoiceCaption · 2 renderers</td><td>ScenePlayer, renderer unique</td></tr>
+      <tr><td>Sous-titres voix (karaoké) — dégénérés si timestamps=0</td><td class="mono">currentVoiceCaption · 2 renderers</td><td>ScenePlayer, renderer unique — les transcriptions voyagent en <span class="mono">sound.transcriptions</span> v3 (rév. 2, C7)</td></tr>
       <tr><td><b>Lieu</b> — pastille + métadonnée + précision de découvrabilité</td><td class="mono">locationObjects · storyLocationPicker (app-side)</td><td>Une source, deux rendus (P7 · Lieu) — pastille scalable</td></tr>
       <tr><td><b>Références</b> — @ inline · sélecteur (appui long = mode) · INLINE/PINNED/NOTE/SILENT · badge épinglé (referenceUserId) · tri-état à l'édition</td><td class="mono">ReferenceComposerBar, ReferenceModeMenu, StoryMentionPickerSheet, adoptDeclaredReferences</td><td>Objet <span class="mono">mention</span> (PINNED) + méta (autres modes) — P7</td></tr>
       <tr><td><b>Timeline</b> — pistes, règle graduée dérivée de la largeur des libellés, lanes 52 pt, keyframes x/y/scale/opacity/volume/easing</td><td class="mono">32 vues Timeline/* · StoryKeyframe</td><td>Plan 2D unique (P8)</td></tr>
       <tr><td><b>Transitions</b> — entrée/sortie PAR SLIDE + transitions entre clips (Timeline V2) <span class="tag tEx">recensé 20/08</span></td><td class="mono">opening/closing: StoryTransitionEffect · clipTransitions: [StoryClipTransition]</td><td>Champ de la Scene + jointures du plan 2D — raté par le recensement initial, PAS un manque SOTA</td></tr>
       <tr><td><b>Historique</b> — annuler/refaire global + pile dédiée pendant le dessin <span class="tag tEx">recensé 20/08</span></td><td class="mono">StoryComposerViewModel+History (undoGlobal/redoGlobal)</td><td>Historique du MeeshyDocument, conservé</td></tr>
-      <tr><td><b>Cadre par slide</b> — l'import d'un fond paysage impose un canvas 16:9 <span class="tag tEx">recensé 20/08</span></td><td class="mono">canvasAspectRatio (nil = 9:16)</td><td><b>ABSORBÉ</b> par la scène 9:16 à bandes actives : le porteur garde son ratio, le cadre plus jamais. Lecture v1 : letterbox dans la scène — à couvrir par O2</td></tr>
+      <tr><td><b>Cadre par slide</b> — l'import d'un fond paysage impose un canvas 16:9 <span class="tag tEx">recensé 20/08</span></td><td class="mono">canvasAspectRatio (nil = 9:16)</td><td><b>ABSORBÉ</b> par la scène 9:16 à bandes actives : le porteur garde son ratio, le cadre plus jamais. Lecture v1 : letterbox dans la scène — COUVERT (rév. 2, U20) : le convertisseur REMAPPE les ancres libres dans le rect letterboxé, golden à l'appui (§C2 rév. 4)</td></tr>
       <tr><td>Caméra — flash (off/on/auto)</td><td class="mono">CameraView (flashMode)</td><td>Conservé dans la capture (P9)</td></tr>
       <tr><td><b>Aperçu</b> — canvas né en pause, bouton lecture</td><td class="mono">règle « born paused »</td><td>Aperçu du socle = ScenePlayer en mode preview</td></tr>
       <tr><td><b>Audience</b> — 6 niveaux + EXCEPT/ONLY</td><td class="mono">chip topbar + sheet</td><td>Socle (visible en permanence)</td></tr>
@@ -297,13 +314,14 @@ footer .mono{font-size:11.5px}
     <tbody>
       <tr><td><b>Content</b> texte — envoi durable hors-ligne</td><td class="mono">enqueueDurableTextPost → OutboxDispatcher</td><td>Champ content (icône dédiée P/R) ; même outbox</td></tr>
       <tr><td>Rangée d'options : photo · caméra · emoji · document · lieu · micro</td><td class="mono">FeedView+Attachments:1041-1071</td><td>Amorce + panneaux contextuels</td></tr>
-      <tr><td><b>Bascule Réel</b> — publier la vidéo en réel ou en post plat</td><td class="mono">forcePlainPost (play.rectangle)</td><td>Le champ format du socle (loi 1)</td></tr>
+      <tr><td><b>Bascule Réel</b> — publier la vidéo en réel ou en post plat</td><td class="mono">forcePlainPost (play.rectangle)</td><td>v1 : PRÉSERVÉE telle quelle — la porte feed reste <span class="mono">FeedComposerSheet</span> (rév. 2, C4). Cible : chip format en barre haute, pré-basculé REEL sur vidéo qualifiante (U3) — préconfiguration, jamais question</td></tr>
       <tr><td>Audience — 3 niveaux exposés (Public/Amis/Privé)</td><td class="mono">menu :910-916</td><td>Socle : les 6 niveaux partout <span class="tag tNew">nouveau</span></td></tr>
       <tr><td><b>Références</b> 4 modes (câblées 2026-08-19, y compris son emprunté)</td><td class="mono">ReferenceComposerBar → 5 chemins d'envoi</td><td>P7 · Références</td></tr>
       <tr><td>Audio enregistré · <b>son emprunté</b> (post « utiliser ce son »)</td><td class="mono">publishAudioPost · createBorrowedSoundPost</td><td>Panneau Son, mêmes chemins</td></tr>
       <tr><td>Transcription EMBARQUÉE — le device transcrit et l'envoie avec l'audio</td><td class="mono">CreatePostRequest.mobileTranscription</td><td>Panneau Son — conservée (raté du recensement initial)</td></tr>
       <tr><td>Qualification réel côté serveur (dégradation REEL→POST)</td><td class="mono">PostService.ts:203-225</td><td>Inchangé ; affichée dans le socle</td></tr>
       <tr><td>Hashtags &amp; liens tracés — extraction serveur</td><td class="mono">hashtagService · TrackingLink</td><td>Inchangé (automatique)</td></tr>
+      <tr><td><b>Extension de partage</b> — texte + 1 URL + ≤ 20 fichiers, staging App Group, fiche de reprise, envoi TUS opportuniste — vers CONVERSATIONS uniquement <span class="tag tEx">recensé rév. 2</span></td><td class="mono">MeeshyShareExtension/ (ShareViewController, ShareMediaStaging, SharePendingShare)</td><td>Gagne la destination « Post / Story » (P18, O14, lot G) — la mécanique existante, une destination de plus</td></tr>
     </tbody>
   </table></div>
 
@@ -334,6 +352,8 @@ footer .mono{font-size:11.5px}
       <tr><td>Carte de post : contenu natif Prisme + badge, canvas de story embarqué (repost), embed YouTube, liens tracés, réactions, attribution icône+@handle, favori, impressions</td><td class="mono">FeedPostCard</td><td>Chrome Post = CanvasPlayer dans la carte</td></tr>
       <tr><td>Réels : pager vertical, autoplay/boucle, rail, crédit son marquee « titre · @pseudo · M:SS », « utiliser ce son », embed repost (liens de mentions valides 2026-08-19)</td><td class="mono">ReelsView · AudioChipDisplay.resolve · ReelRepostEmbedCell</td><td>Chrome Réel</td></tr>
       <tr><td>Prisme : résolution systemLanguage → regional → custom → locale appareil → fr ; jamais <span class="mono">translations.first</span></td><td class="mono">resolveUserLanguage · preferredTranslation(for:)</td><td>Loi du noyau, tous formats</td></tr>
+      <tr><td><b>Transport vidéo</b> — plein écran, PiP, AirPlay, vitesse (1,0–2,0×), scrubber prioritaire, ±10 s, boucle <span class="tag tEx">recensé rév. 2</span></td><td class="mono">MeeshyVideoPlayer+Controls.swift:84 · VideoTransportControls (SDK) — carte :424, détail :1957</td><td>PRÉSERVÉ tel quel — formalisé par la loi 8 / O16 (P19)</td></tr>
+      <tr><td><b>Accent déterministe par post</b> — le chrome de carte entier teinté par l'auteur <span class="tag tEx">recensé rév. 2</span></td><td class="mono">FeedPostCard.accentColor = post.authorColor (:93) · surfaceGradient/bordure :498/:501</td><td>CONSERVÉ — le ScenePlayer en carte reçoit cet accent (lot E, C8)</td></tr>
     </tbody>
   </table></div>
 </div></section>
@@ -341,22 +361,26 @@ footer .mono{font-size:11.5px}
 <!-- ================================================================ P3 -->
 <section id="p3"><div class="wrap">
   <div class="prail"><span class="pnum">P3</span><h2>Carte de navigation</h2></div>
-  <p class="lede">Huit portes, un composer, trois viewers. Les flèches pleines sont des
-  navigations ; les pointillés, des retours d'état (brouillon, file, archive).</p>
+  <p class="lede">Dix portes, un composer, trois viewers. Les flèches pleines sont des
+  navigations ; les pointillés, des retours d'état (brouillon, file, archive). Rév. 2 : e3 est
+  HORS v1 (aucun point d'entrée réels n'existe) ; e2 route v1 vers la sheet feed existante (C4) ;
+  e9 et e10 s'ajoutent (O13, U12) — détail en P18.</p>
   <pre class="mermaid">
 flowchart TD
   subgraph E[Portes d'entrée — chacune fixe un profil]
     e1([Tray stories « + »]):::s
     e2([Feed « Partagez quelque chose »]):::p
-    e3([Onglet Réels « + »]):::r
+    e3([Onglet Réels « + » — hors v1]):::r
     e4([Chip humeur]):::m
     e5([Repost / citation])
     e6([Éditer une publication])
     e7([Brouillon de l'Étagère])
-    e8([Partage entrant iOS])
+    e8([Partage entrant iOS — P18])
+    e9([Média reçu en conversation — P18]):::p
+    e10([« + Créer » de l'Étagère])
   end
   C{{MeeshyComposer<br/>plateau · scène 9:16 · socle}}
-  e1 & e2 & e3 & e4 & e5 & e6 & e7 & e8 --> C
+  e1 & e2 & e3 & e4 & e5 & e6 & e7 & e8 & e9 & e10 --> C
   C -->|outil requis| T[Panneau contextuel<br/>Texte · Média · Son · Dessin · Sticker · Lieu · Références · Fond]
   T --> C
   C -->|poignée ⏱| TL[Timeline — plan 2D]
@@ -396,7 +420,7 @@ flowchart TD
         <div class="band"><span class="lbl">bande basse — zone de pose</span></div>
       </div>
       <span class="n" style="right:8px;bottom:104px">3</span>
-      <div class="ctx"><span class="ob on">Aa</span><span class="ob">🖌</span><span class="ob">♫</span><span class="lbl" style="margin-left:auto">← contextuel : vide par défaut</span></div>
+      <div class="ctx"><span class="ob on">Aa</span><span class="ob">☺</span><span class="ob">♫</span><span class="ob">📍</span><span class="lbl" style="margin-left:auto">← contextuel : état AMORCE</span></div>
       <div class="socle">
         <span class="n" style="left:6px;bottom:44px">4</span>
         <span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span>
@@ -405,17 +429,26 @@ flowchart TD
     <figcaption><b>Le composer au repos</b> — profil Story, un média 16:9 posé.</figcaption></figure>
     <ul class="legendlist">
       <li><span class="n">1</span><span><b>Plateau.</b> Fond sombre configurable (noir · indigo
-        profond · violet profond) dans les réglages d'interface. Il porte la scène — il n'est
-        jamais une surface de pose.</span></li>
+        profond · violet profond — jetons SDK, contraste AA testé sur les trois) dans les
+        réglages d'interface. Il porte la scène — il n'est jamais une surface de pose, et
+        <b>il n'existe que quand une scène existe</b> (rév. 2, U18) : un document sans scène
+        suit le thème de l'app. Chrome : matériaux du système (16-25 :
+        <span class="mono">ultraThinMaterial</span> teinté + MeeshyRadius/MeeshyShadow ;
+        26+ : Liquid Glass automatique).</span></li>
       <li><span class="n">2</span><span><b>Scène 9:16, fixe.</b> Le porteur garde son ratio ; les
         bandes hachurées sont des zones d'ancrage de premier ordre (P6). Le fond est un objet du
         plan <span class="mono">.background</span>.</span></li>
-      <li><span class="n">3</span><span><b>Zone contextuelle.</b> Vide par défaut (loi 4). Elle se
-        remplit quand un objet est sélectionné ou qu'un outil est armé, et se vide dès que la
-        sélection tombe. Jamais de contrôle grisé.</span></li>
-      <li><span class="n">4</span><span><b>Socle permanent.</b> Audience (chip, toujours lisible) ·
-        aperçu (l'œil ouvre le ScenePlayer en preview) · Publier (part dans la file offline).
-        Le sélecteur de format vit dans la barre haute — c'est un champ, pas un écran.</span></li>
+      <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3).
+        <b>AMORCE</b> (aucune sélection) : la rangée fixe des kinds que le profil autorise —
+        Aa · sticker · son · lieu (+ content pour P·R) ; la porte de création a toujours un
+        domicile. <b>INSPECTEUR</b> (sélection) : les contrôles de l'objet courant, eux seuls.
+        Jamais de vide-mystère, jamais de contrôle grisé — la loi 4 vaut pour les contrôles
+        d'objet.</span></li>
+      <li><span class="n">4</span><span><b>Socle permanent — trois membres, jamais plus</b>
+        (rév. 2, M13). Audience (chip, toujours lisible) · aperçu (l'œil ouvre le ScenePlayer en
+        preview) · Publier (part dans la file offline). Le sélecteur de format vit dans la barre
+        haute (M8 — la qualification réel est un badge de CE chip) ; la langue de publication vit
+        dans le panneau, surfacée seulement si la détection contredit la langue système.</span></li>
     </ul>
   </div>
   <div class="callout"><b>Règle d'apparition.</b> Un contrôle existe à l'écran si l'objet courant
@@ -430,18 +463,22 @@ flowchart TD
   <div class="prail"><span class="pnum">P5</span><h2>Entrées &amp; profils — l'intention est connue d'avance</h2></div>
   <p class="lede">Le composer ne s'ouvre jamais nu : chaque porte fixe le format initial, les
   capacités montées, l'état d'ouverture et l'audience par défaut. L'utilisateur ne configure
-  rien — tout est préfait, et le format reste changeable après coup.</p>
+  rien — tout est préfait, et le format reste changeable après coup. <b>La porte ne fixe que
+  l'état INITIAL</b> (loi 9) : les capacités sont recalculées au format courant à chaque
+  bascule, et le texte ne migre jamais. « Dernière utilisée » = PAR FORMAT (loi 10).</p>
   <div class="scrollx"><table>
     <thead><tr><th>Porte (origin)</th><th>Format</th><th>État d'ouverture</th><th>Capacités masquées</th><th>Audience</th></tr></thead>
     <tbody>
-      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td>Caméra prête ; amorces : galerie, dernière capture, « Touchez pour écrire », balayage bas = texte</td><td>content long (le texte vit sur la scène)</td><td>dernière utilisée</td></tr>
-      <tr><td><b>Feed « Partagez quelque chose »</b></td><td><span class="chip chP">P</span></td><td>Clavier levé sur content ; rangée photo·caméra·emoji·document·lieu·micro</td><td>slides multiples (→ carrousel), timeline repliée</td><td>dernière utilisée</td></tr>
-      <tr><td><b>Onglet Réels « + »</b></td><td><span class="chip chR">R</span></td><td>Caméra vidéo prête ; qualification réel affichée au socle</td><td>slides (une scène) ; audio premier plan (la vidéo porte le son)</td><td>Public</td></tr>
-      <tr><td><b>Chip humeur</b></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>pas de scène</b></td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
+      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td>Caméra prête ; amorces : galerie, dernière capture, « Touchez pour écrire », balayage bas depuis la SCÈNE = texte (depuis la barre haute = fermer — auto-brouillon, P10)</td><td>content long (le texte vit sur la scène)</td><td>dernière utilisée (format S)</td></tr>
+      <tr><td><b>Feed « Partagez quelque chose »</b> <span class="tag tEx">v1 : sheet existante (C4)</span></td><td><span class="chip chP">P</span></td><td>Clavier levé sur content ; rangée photo·caméra·emoji·document·lieu·micro. v1 : <span class="mono">FeedComposerSheet</span> via <span class="mono">routesToLegacy</span> — le host n'a pas encore la surface « document sans scène » ; cible : vidéo qualifiante ⇒ chip format pré-basculé REEL (U3)</td><td>slides multiples (→ carrousel), timeline repliée</td><td>dernière utilisée (format P)</td></tr>
+      <tr><td><b>Onglet Réels « + »</b> <span class="tag tAb">hors v1</span></td><td><span class="chip chR">R</span></td><td>Profil DÉFINI, porte HORS v1 (aucun point d'entrée réels n'existe au dépôt — §F) : caméra vidéo prête ; qualification réel au badge du chip format</td><td>slides (une scène) ; audio premier plan (la vidéo porte le son)</td><td>Public à la première ouverture, puis mémorisée (loi 10)</td></tr>
+      <tr><td><b>Chip humeur</b> <span class="tag tEx">routé : StatusComposerView (S3)</span></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>pas de scène</b>. v1 ET cible : l'écran existant, inchangé — cette ligne documente le PROFIL, pas un écran neuf (M9)</td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
       <tr><td><b>Repost / citation</b></td><td><span class="chip chP">P</span></td><td>Citation posée, attribution verrouillée, SILENT auto vers l'auteur</td><td>capture caméra ; l'audience est <b>plafonnée</b> par la source</td><td>≤ source</td></tr>
       <tr><td><b>Éditer</b></td><td>celui du contenu</td><td>Scène rechargée ; références relues unitairement avant d'oser remplacer (tri-état)</td><td>changement de format (l'identité du contenu est publiée)</td><td>celle publiée</td></tr>
       <tr><td><b>Brouillon</b></td><td>celui du brouillon</td><td>Reprise exacte, curseur où on l'a laissé</td><td>—</td><td>celle du brouillon</td></tr>
-      <tr><td><b>Partage entrant</b></td><td><span class="chip chP">P</span> (modifiable)</td><td>Le payload partagé est posé (média → scène, URL → content)</td><td>—</td><td>dernière utilisée</td></tr>
+      <tr><td><b>Partage entrant</b> <span class="tag tNew">P18 · O14 · lot G</span></td><td><span class="chip chP">P</span> (modifiable)</td><td>L'extension écrit une FICHE ; l'app la convertit en BROUILLON de l'Étagère + bannière au foreground — JAMAIS de modale au boot. Reprendre le brouillon ouvre le composer, payload posé (média → scène, URL → content)</td><td>—</td><td>dernière utilisée (format P)</td></tr>
+      <tr><td><b>Média reçu en conversation</b> <span class="tag tNew">e9 · O13 · lot G</span></td><td><span class="chip chP">P</span> (modifiable)</td><td>Appui long sur la bulle → « Créer un post » → média matérialisé (cache-first) déjà posé — 2 gestes. Gardes : jamais viewOnce ni location ; AUCUNE référence auto vers l'expéditeur (confidentialité)</td><td>capture caméra (le seed EST le média)</td><td>dernière utilisée (format P)</td></tr>
+      <tr><td><b>« + Créer » de l'Étagère</b> <span class="tag tNew">rév. 2 · U12</span></td><td>dernier format créé (S au 1er lancement)</td><td>v1 : alias de la porte tray (routage <span class="mono">onCreateStory</span> existant) ; cible : préconfiguré comme les autres — jamais un menu de formats</td><td>—</td><td>dernière utilisée du format</td></tr>
     </tbody>
   </table></div>
   <div class="phrow">
@@ -464,7 +501,8 @@ flowchart TD
         <span class="ob">🎥 vidéo prête</span><span class="lbl">bandes actives haut/bas</span></div>
       <div class="ctx"><span class="lbl">qualification réel : ✓ vidéo</span></div>
       <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><span class="chip chR">R</span> <b>Réels</b> — vidéo-first, une seule scène.</figcaption></figure>
+    </div><figcaption><span class="chip chR">R</span> <b>Réels</b> — vidéo-first, une seule scène.
+    <span class="tag tAb">hors v1</span> — profil défini, porte sans point d'entrée produit.</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc" style="flex:0 0 42%;align-items:center;justify-content:center;gap:6px">
         <span class="ob" style="font-size:16px">😊</span><span class="lbl">« Comment tu vas ? »</span></div>
@@ -495,10 +533,11 @@ flowchart TD
     chevaucher la frontière — l'ancre est un point de référence, pas une cage (arbitrage O5).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc" style="flex:0 0 30%;align-items:flex-start;padding:8px"><span class="lbl">content seul — AUCUNE scène<br>(scenes: nil)</span></div>
-      <div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="lbl" style="color:var(--phmut)">le plateau reste vide —<br>pas de cadre à « remplir »</span></div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="lbl" style="color:var(--phmut)">PAS de plateau : sans scène, le composer<br>suit le thème de l'app (rév. 2, U18)</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
     </div><figcaption><b>Document sans scène.</b> Un post texte n'invente pas de canvas ; la scène
-    naît au premier objet visuel et meurt avec le dernier (O3).</figcaption></figure>
+    naît au premier objet visuel et meurt avec le dernier (O3) — et le plateau sombre naît AVEC
+    elle (U18) : avant, le composer est aux couleurs du thème.</figcaption></figure>
   </div>
   <ul class="klist" style="max-width:76ch">
     <li><b>Pourquoi l'ancre et pas des coordonnées :</b> un objet posé « à y = 0,08 » saute dès
@@ -545,12 +584,16 @@ flowchart TD
       <p>Caméra, galerie, dernière capture (jamais de prompt à l'ouverture — la demande d'accès
       part sur le tap, règle existante). Filtres : vintage, N&amp;B, chaud, froid, dramatic, vivid,
       fade, chrome. <span class="tag tNew">nouveau</span> appui long sur la scène = capture (P9).
-      <span class="tag tNew">nouveau</span> <b>Coller une image</b> : objet de scène, ou carte de
-      carrousel si le composer est en Post — selon le contexte, sans question. Lecture du
+      <span class="tag tNew">nouveau</span> <b>Coller une image — LA SURFACE DÉCIDE (O12)</b> :
+      le PasteButton de la SCÈNE produit TOUJOURS un objet média pleine qualité (≤ 2 048 px ;
+      carte de carrousel si le composer est en Post sans scène) — jamais un sticker, jamais de
+      side-effect bibliothèque ; celui du panneau STICKERS produit un sticker (≤ 512 px) +
+      « Mes stickers ». Une seule phrase, partout la même (P13, §6b, fixtures). Lecture du
       presse-papiers UNIQUEMENT via le bouton système (<span class="mono">PasteButton</span>,
       iOS 16+) : <span class="mono">hasImages</span> décide de MONTRER le bouton sans rien lire,
-      et le prompt de confidentialité ne surgit jamais hors geste. Downsample à l'import
-      (≤ 2 048 px, ImageIO) et HDR normalisé en SDR — l'export reste déterministe.</p>
+      et le prompt de confidentialité ne surgit jamais hors geste. HDR normalisé en SDR —
+      l'export reste déterministe. Un <b>document</b> (PDF…) n'entre jamais en scène : il reste
+      une pièce jointe du post sans scène (G8).</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>1 porteur par slide + médias premier plan
           (<span class="mono">fgMediaItem</span>).</p></span>
@@ -614,11 +657,14 @@ flowchart TD
       <div class="panel"><span class="ob on">Mes stickers</span><span class="ob">Grille emoji</span><span class="ob">📋 Coller</span></div>
       <p>La grille emoji existante reste. <span class="tag tNew">nouveau</span> le sticker devient
       un objet à part entière — <span class="mono">payload: emoji | image</span> — avec transform,
-      <b>timing et keyframes</b> (il n'en avait aucun). Les stickers IMAGE arrivent par le
-      COLLAGE : Bitmoji, Memoji, Genmoji et tout clavier tiers copient des images — coller en fait
-      un sticker posé, et l'ajoute à <b>« Mes stickers »</b>, la bibliothèque personnelle. Réception
-      clavier inline (<span class="mono">NSAdaptiveImageGlyph</span>) en bonus dès iOS 18, le
-      collage restant le chemin universel 16→27.</p>
+      <b>timing et keyframes</b> (il n'en avait aucun). Les stickers IMAGE arrivent par le collage
+      <b>DANS CE PANNEAU</b> (O12 — coller sur la scène reste un média pleine qualité) : Bitmoji,
+      Memoji, Genmoji et tout clavier tiers copient des images — coller ici en fait un sticker
+      posé (≤ 512 px), et l'ajoute à <b>« Mes stickers »</b>, la bibliothèque personnelle. La
+      promotion média→sticker est une action EXPLICITE de l'inspecteur (« Garder dans Mes
+      stickers ») — jamais un side-effect. Réception clavier inline
+      (<span class="mono">NSAdaptiveImageGlyph</span>) en bonus dès iOS 18, le collage restant le
+      chemin universel 16→27.</p>
       <p><b>La bibliothèque est LOCALE — feature d'application, pas de plateforme.</b> Aucune
       synchronisation backend, jamais (store disque local, LRU). La distinction qui compte : un
       sticker <i>posé</i> dans un contenu publié voyage comme média du contenu (uploadé comme
@@ -626,7 +672,7 @@ flowchart TD
       elle, ne quitte pas l'appareil.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>Emoji (existant) + image ◆, animables.</p></span>
-        <span class="f"><span class="chip chP">P</span><p>Sur scène ; collé en Post sans scène ⇒ carte de carrousel (c'est une image).</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène — un sticker posé CRÉE la scène (O3, c'est un objet visuel).</p></span>
         <span class="f"><span class="chip chR">R</span><p>Timé sur la vidéo, bandes comprises.</p></span>
         <span class="f"><span class="tag tAb">M —</span><p>L'emoji du mood est le moodEmoji, pas un
           sticker.</p></span>
@@ -635,8 +681,10 @@ flowchart TD
     <div class="card"><h4>Lieu <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Rechercher</span><span class="ob">Carte</span><span class="ob">Découvrabilité</span><span class="ob">Pastille ✓</span></div>
       <p><b>Une source, deux rendus</b> (arbitrage C5 confirmé) : <span class="mono">metadata.place</span>
-      est la vérité ; la pastille est un rendu posé. Retirer la pastille ne perd pas le lieu.
-      Le picker reste fourni par l'app (MapKit + permissions — pureté SDK).
+      est la vérité ; la pastille est un rendu posé. Retirer la pastille ne perd pas le lieu —
+      <b>mais le lieu n'est jamais joint invisible</b> (rév. 2, U10) : dès que la méta existe
+      sans pastille, un chip « 📍 lieu joint » apparaît (panneau + rappel au socle), tap = le
+      retirer. Le picker reste fourni par l'app (MapKit + permissions — pureté SDK).
       <span class="tag tNew">nouveau</span> la pastille est un objet complet : scalable, animable,
       ancrable à une bande — « comme tous les autres objets ».</p>
       <div class="fmt">
@@ -652,7 +700,8 @@ flowchart TD
     <div class="card"><h4>Références <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">@ inline</span><span class="ob">Sélecteur</span><span class="ob">INLINE</span><span class="ob">PINNED</span><span class="ob">NOTE</span><span class="ob">SILENT</span></div>
       <p>Deux portes (existant) : frapper <span class="mono">@</span> dans un texte, ou le chip —
-      tap = INLINE/PINNED par défaut, <b>appui long = menu des modes</b>
+      tap = UN résultat prédictible (rév. 2, M12) : scène présente ⇒ PINNED (badge posé),
+      sinon ⇒ INLINE ; <b>appui long = menu des modes</b>
       (<span class="mono">ReferenceModeMenu</span>). Le badge PINNED se reconnaît à son
       <span class="mono">referenceUserId</span>, jamais à son texte. Édition en tri-état :
       sans liste, les déclarées survivent. Un repost pose une SILENT automatique vers l'auteur.</p>
@@ -707,23 +756,30 @@ flowchart TD
   <div class="tl" role="img" aria-label="Maquette de la timeline en plan : pistes empilées par plan, barres de durée, keyframes et tête de lecture">
     <div class="tl-ruler"><span class="lbl" style="left:0">0 s</span><span class="lbl" style="left:120px">2 s</span><span class="lbl" style="left:240px">4 s</span><span class="lbl" style="left:360px">6 s</span><span class="lbl" style="left:480px">8 s</span></div>
     <div class="tl-plane">foreground — au plus près du spectateur</div>
-    <div class="tl-row"><span class="tl-name">Aa « Bravo ! »</span><div class="tl-lane"><div class="tl-bar" style="left:22%;width:34%;background:var(--cS)">2,0 → 5,4 s<span class="kf" style="left:30%"></span><span class="kf" style="left:80%"></span></div><div class="playhead" style="left:38%"></div></div></div>
-    <div class="tl-row"><span class="tl-name">☺ sticker</span><div class="tl-lane"><div class="tl-bar" style="left:48%;width:22%;background:var(--cM)">4,8 → 7,0 s</div></div></div>
+    <div class="tl-row"><span class="tl-name">Aa « Bravo ! »</span><div class="tl-lane"><div class="tl-bar" style="left:22%;width:34%;background:var(--acc)">2,0 → 5,4 s<span class="kf" style="left:30%"></span><span class="kf" style="left:80%"></span></div><div class="playhead" style="left:38%"></div></div></div>
+    <div class="tl-row"><span class="tl-name">☺ sticker</span><div class="tl-lane"><div class="tl-bar" style="left:48%;width:22%;background:var(--acc)">4,8 → 7,0 s</div></div></div>
     <div class="tl-row"><span class="tl-name">@alice (badge)</span><div class="tl-lane"><div class="tl-ghost">présent tout du long — timing nil</div></div></div>
     <div class="tl-plane">content — le porteur</div>
-    <div class="tl-row"><span class="tl-name">🎥 vidéo (maître)</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:100%;background:var(--cR)">0 → 10 s · verrouillée en Réel</div></div></div>
+    <div class="tl-row"><span class="tl-name">🎥 vidéo (maître)</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:100%;background:#7FA6F2">0 → 10 s · verrouillée en Réel</div></div></div>
     <div class="tl-plane">background — sous tout</div>
-    <div class="tl-row"><span class="tl-name">♫ Nuits d'été</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:82%;background:var(--cP)">bornes début/fin · vol 60 %<span class="kf" style="left:12%"></span></div></div></div>
+    <div class="tl-row"><span class="tl-name">♫ Nuits d'été</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:82%;background:#847CB0">bornes début/fin · vol 60 %<span class="kf" style="left:12%"></span></div></div></div>
   </div>
   <div class="grid g3" style="margin-top:16px">
-    <div class="card"><h4>Piste fantôme</h4><p>Un objet sans timing (le cas majoritaire) n'affiche
-      pas une barre pleine : un cadre pointillé dit « suit la slide ». Le distinguer d'une durée
-      fixée évite de figer par accident (O4/B) — c'est <span class="mono">timing == nil</span>,
-      pas <span class="mono">0 → durée</span>.</p></div>
-    <div class="card"><h4>Gestes</h4><p>Glisser une piste verticalement = z dans son plan (traverser
-      un plan demande un cran net). Étirer un bord = durée. Losanges = keyframes existants —
-      x, y, scale, opacity, volume, easing (<span class="mono">StoryKeyframe</span>, inchangé).
-      Tap la barre = inspecteur de l'objet.</p></div>
+    <div class="card"><h4>Piste fantôme — aller ET retour</h4><p>Un objet sans timing (le cas
+      majoritaire) n'affiche pas une barre pleine : un cadre pointillé dit « suit la slide ». Le
+      distinguer d'une durée fixée évite de figer par accident (O4/B) — c'est
+      <span class="mono">timing == nil</span>, pas <span class="mono">0 → durée</span>. Et la
+      sortie est aussi évidente que l'entrée (rév. 2, U9) : l'inspecteur timing porte l'action
+      <b>« Suivre la slide »</b> (remise à nil), et le bord étiré jusqu'aux butées propose le
+      retour par un snap étiqueté.</p></div>
+    <div class="card"><h4>Gestes — précisés (rév. 2, M11)</h4><p>Le réordonnancement vertical
+      s'ARME par un appui court puis drag (haptique à l'armement — le drag nu fait défiler) ;
+      traverser un plan = cran net DÉFINI (seuil + haptique <span class="mono">.rigid</span>).
+      Étirer un bord = durée — poignées ≥ 44 pt, débordantes sur barre étroite. Losanges =
+      keyframes existants — x, y, scale, opacity, volume, easing
+      (<span class="mono">StoryKeyframe</span>, inchangé). Tap la barre = inspecteur de l'objet.
+      <b>Couleur de barre = le PLAN</b> (fg/content/bg, jetons du système) — jamais le format ni
+      le kind (rév. 2, U15).</p></div>
     <div class="card"><h4>Héritage préservé</h4><p><span class="mono">computedTotalDuration()</span>
       reste l'autorité de durée ; la règle graduée dérive toujours du gabarit des libellés ;
       le compteur audio ne rembobine plus la slide (défaut connu, corrigé par le modèle unique).
@@ -741,22 +797,38 @@ flowchart TD
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
     </div><figcaption><b>1 · Repos.</b> Aucun bouton d'obturateur.</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
-      <div class="sc" style="align-items:center;justify-content:center;border-color:var(--cS)">
-        <span class="ob" style="border-color:var(--cS);color:var(--cS)">● viseur — relâcher = photo</span></div>
+      <div class="sc" style="align-items:center;justify-content:center;border-color:var(--acc)">
+        <span class="ob" style="border-color:var(--acc);color:var(--acc)">● viseur ouvert — relâcher = photo</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>2 · 0,45 s.</b> Même seuil que le hold du reader (0,45 s / slop 24 px) —
-    un seul vocabulaire de geste dans l'app.</figcaption></figure>
+    </div><figcaption><b>2 · 0,45 s.</b> Même seuil que le hold du reader (0,45 s / slop 24 px).
+    v1 : le maintien OUVRE le viseur (<span class="mono">CameraView</span> existant — réversible,
+    glisser hors viseur = annuler) ; la cible est le viseur inline dépeint ici (rév. 2, U4).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
-      <div class="sc" style="align-items:center;justify-content:center;border-color:var(--cR)">
-        <span class="ob" style="border-color:var(--cR);color:var(--cR)">⏺ 00:07 — maintenir = vidéo</span></div>
+      <div class="sc" style="align-items:center;justify-content:center;border-color:#F87171">
+        <span class="ob" style="border-color:#F87171;color:#F87171">⏺ 00:07 — maintenir = vidéo</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
     </div><figcaption><b>3 · Maintien.</b> Relâcher pose le média : porteur si la scène est vide,
-    premier plan sinon.</figcaption></figure>
+    premier plan sinon. L'enregistrement est TOUJOURS rouge sémantique
+    (<span class="mono">MeeshyColors.error</span>) — jamais la couleur d'un format (U15).</figcaption></figure>
   </div>
   <p style="max-width:76ch">Disponible partout où le profil autorise le média
   (<span class="chip chS">S</span> <span class="chip chP">P</span> <span class="chip chR">R</span> ;
-  jamais <span class="chip chM">M</span>). Les amorces existantes — caméra, galerie, dernière
-  capture — ne bougent pas : l'appui long s'ajoute, il ne remplace rien.</p>
+  jamais <span class="chip chM">M</span>) — en Post, seulement UNE FOIS une scène née (rév. 2,
+  M3 : sans scène il n'y a pas de surface où maintenir ; l'acquisition passe par la rangée).
+  Les amorces existantes — caméra, galerie, dernière capture — ne bougent pas : l'appui long
+  s'ajoute, il ne remplace rien.</p>
+  <h3>Le même geste, un sens par contexte — LA table (rév. 2, U4)</h3>
+  <div class="scrollx"><table>
+    <thead><tr><th>Contexte</th><th>Appui long 0,45 s / slop 24 px</th><th>Annulation</th></tr></thead>
+    <tbody>
+      <tr><td><b>Scène du composer</b> (vide ou porteur)</td><td>ouvre le viseur (v1) → capture</td><td>glisser hors viseur, ou ✕</td></tr>
+      <tr><td><b>Objet texte</b> du composer</td><td>RIEN (le tap sélectionne, le double-tap édite) — le geste n'est pas surchargé ici</td><td>—</td></tr>
+      <tr><td><b>Aperçu / reader</b> (ScenePlayer)</td><td>pause (invariant existant du viewer)</td><td>relâcher</td></tr>
+      <tr><td><b>« Mes stickers »</b> (grille)</td><td>retirer de la bibliothèque (S6)</td><td>confirmation inline</td></tr>
+      <tr><td><b>Chip Références</b></td><td>menu des 4 modes (existant)</td><td>tap ailleurs</td></tr>
+      <tr><td><b>Balayage bas</b> (frontière, M15)</td><td colspan="2">depuis la SCÈNE = nouvel objet texte ; depuis la BARRE HAUTE = fermer (auto-brouillon, P10 — l'accident est gratuit)</td></tr>
+    </tbody>
+  </table></div>
 </div></section>
 
 <!-- ================================================================ P10 -->
@@ -768,11 +840,14 @@ flowchart TD
       <div style="background:var(--phsocle);border-top:1px solid var(--phline);padding:8px;display:flex;flex-direction:column;gap:4px">
         <span class="ob">🌐 Public</span><span class="ob">👥 Amis</span><span class="ob">🏘 Communauté</span>
         <span class="ob">🔒 Privé</span><span class="ob on">⊖ Sauf… (EXCEPT)</span><span class="ob">⊕ Seulement… (ONLY)</span>
+        <span class="ob" style="opacity:.55">🏘 Communauté 🔒 borné par la publication de @source</span>
       </div>
       <div class="socle"><span class="aud">⊖ Sauf 3</span><span class="eye">👁</span><span class="pub">Publier</span></div>
     </div><figcaption><b>Audience.</b> Les 6 niveaux, inline depuis le chip — EXCEPT/ONLY ouvrent
     leur liste de personnes. En repost, le sélecteur est borné par la loi d'audience (FRIENDS et
-    COMMUNITY sont incomparables : un « rétrécissement » apparent peut élargir).</figcaption></figure>
+    COMMUNITY sont incomparables : un « rétrécissement » apparent peut élargir) — et les niveaux
+    bornés restent VISIBLES, verrouillés, avec leur raison en une ligne (rév. 2, U6 : exception
+    nommée à la loi 4 — une liste silencieusement amputée se lit comme un bug).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc" style="border-style:solid;border-color:var(--acc)">
         <div class="band"><span class="ob">Titre</span></div>
@@ -787,18 +862,25 @@ flowchart TD
       <div class="sc" style="opacity:.35"><div class="media169" style="flex:1"><span class="lbl">scène</span></div></div>
       <div class="ctx"><span class="ob on">⇡ dans la file — hors ligne OK</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publié ✓</span></div>
-    </div><figcaption><b>Publier.</b> Un seul verbe (<span class="mono">PublishIntent</span>),
-    une seule file offline — création ET édition — avec <span class="mono">clientMutationId</span>
-    pour la réconciliation optimiste (l'echo socket remplace le post temporaire).</figcaption></figure>
+    </div><figcaption><b>Publier.</b> Le bouton route vers les TROIS chemins d'envoi existants
+    (S2 — <span class="mono">PublishIntent</span> unique est déscopé, rév. 2 C11 : le verbe
+    unique était de l'hygiène, pas un gain), chacun avec son
+    <span class="mono">clientMutationId</span> pour la réconciliation optimiste (l'écho socket
+    remplace le post temporaire). La file UNIQUE création+édition est une cible post-v1 (§F).</figcaption></figure>
   </div>
   <ul class="klist" style="max-width:76ch">
-    <li>La <b>langue de publication</b> vit à côté de l'audience — héritée par les objets, surchargée
-      par objet (C6/B). Le web l'enverra enfin (<span class="mono">originalLanguage</span> jamais
-      transmis aujourd'hui pour un post ordinaire — défaut documenté).</li>
-    <li>La <b>qualification réel</b> s'affiche au socle avant publication (la dégradation
-      REEL→POST serveur reste l'autorité).</li>
-    <li>Fermer sans publier propose <b>Brouillon</b> — l'Étagère (P11) reprend exactement où on
-      s'est arrêté.</li>
+    <li>La <b>langue de publication</b> vit dans le PANNEAU (rév. 2, M13 — le socle garde trois
+      membres) et ne fait surface que si la détection contredit la langue système — héritée par
+      les objets, surchargée par objet (C6/B). Le web l'enverra enfin
+      (<span class="mono">originalLanguage</span> jamais transmis aujourd'hui pour un post
+      ordinaire — défaut documenté).</li>
+    <li>La <b>qualification réel</b> est un badge du chip FORMAT, en barre haute (M8/M13) — la
+      dégradation REEL→POST serveur reste l'autorité.</li>
+    <li>Fermer sans publier = <b>brouillon AUTOMATIQUE</b> + toast « Brouillon enregistré —
+      Jeter » (rév. 2, M10 : zéro question au moment le plus fragile, zéro perte possible ; le
+      mood auto-sauvegarde déjà). L'Étagère (P11) reprend exactement où on s'est arrêté.</li>
+    <li>Un <b>lieu joint sans pastille</b> se rappelle au socle par son chip « 📍 » (U10) — tap =
+      le retirer. Jamais de métadonnée invisible au moment de publier.</li>
   </ul>
 </div></section>
 
@@ -810,6 +892,7 @@ flowchart TD
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
         <span class="lbl" style="letter-spacing:.1em">FILE D'ENVOI</span>
         <span class="ob on">⇡ Story — envoi en cours…</span>
+        <span class="ob">⚠ Story — échec · Reprendre / Supprimer</span>
         <span class="lbl" style="letter-spacing:.1em;margin-top:4px">BROUILLONS</span>
         <span class="ob">📝 Réel — hier 22:10 · reprendre</span>
         <span class="lbl" style="letter-spacing:.1em;margin-top:4px">PUBLIÉES</span>
@@ -820,7 +903,10 @@ flowchart TD
       <div class="socle"><span class="aud">Mes contenus</span><span class="pub">+ Créer</span></div>
     </div><figcaption><b>Une liste d'états</b>, pas quatre écrans — fusion du tray perso, de
     « Mes stories », des brouillons et de la file. Tap = reprendre (intention
-    <span class="mono">.draft</span> / <span class="mono">.edit</span>).</figcaption></figure>
+    <span class="mono">.draft</span> / <span class="mono">.edit</span>). La rangée d'échec avec
+    Reprendre/Supprimer EXISTE (<span class="mono">FailedStoryRow</span>) et est conservée telle
+    quelle. « + Créer » : dernier format créé, jamais un menu (U12, P5). Un partage entrant
+    arrive ICI, en brouillon, annoncé par bannière (P18).</figcaption></figure>
     <div style="flex:1;min-width:280px">
       <h3>Actions d'auteur — préservées, chacune à sa place</h3>
       <div class="scrollx"><table>
@@ -842,19 +928,23 @@ flowchart TD
 <section id="p12"><div class="wrap">
   <div class="prail"><span class="pnum">P12</span><h2>Les viewers — trois chromes, un noyau</h2></div>
   <p class="lede"><span class="mono">MeeshyScenePlayer</span> rend le document partout : timelines,
-  canvas, layers fond/contenu/premier plan, hashtags, annotations, références, traduction par
-  objet, lieu épinglé. Ce qui change entre les trois, c'est le <b>chrome</b> — et rien d'autre.</p>
+  canvas, layers fond/contenu/premier plan, références, traduction par objet, lieu épinglé
+  (<span class="mono">hashtag</span> et <span class="mono">annotation</span> : kinds RÉSERVÉS,
+  hors v1 — O1/S5, rév. 2 M2). Ce qui change entre les trois, c'est le <b>chrome</b> — et rien
+  d'autre.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="display:flex;gap:2px;padding:24px 9px 4px"><span style="flex:1;height:3px;background:var(--cS);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span></div>
       <div class="ctx" style="padding-top:2px"><span class="ob">@aïcha · 2 h · ♫〰</span><span class="ob" style="margin-left:auto">⋯</span></div>
       <div class="ctx" style="padding-top:0"><span class="ob">Avec Alice, Bob</span></div>
       <div class="sc" style="margin-top:2px"><div class="media169" style="flex:1"><span class="lbl">ScenePlayer</span></div></div>
-      <div class="ctx"><span class="lbl">rail figé → réagir · répondre · 💬 · 👁 · ↻ · ⤴ · 🔖 · 🔇 · Abc</span></div>
+      <div class="ctx"><span class="lbl">rail figé → réagir · 💬 · ↻ · ⤴ · 🔖 · 🔇 · Abc</span></div>
       <div class="socle"><span class="aud">Répondre…</span><span class="eye">😊</span></div>
     </div><figcaption><span class="chip chS">S</span> <b>Story.</b> Barres segmentées, auto-avance,
     rail figé à l'entrée du slide, rangée « Avec … », commentaires flottants, cube inter-groupes,
-    interlude. Fenêtre 20 h ; référencé-expiré : une vue, 24 h.</figcaption></figure>
+    interlude. Fenêtre 20 h ; référencé-expiré : une vue, 24 h. Rail ≤ 7 cibles (rév. 2, M14) :
+    « répondre » sort du rail — le socle le porte déjà en permanence ; 👁 (vues) rejoint le menu
+    « … », visible pour l'auteur seul. Un verbe, une porte.</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
         <span class="ob">@marc · ↻ @aïcha · ♫〰</span>
@@ -865,7 +955,9 @@ flowchart TD
       <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
     </div><figcaption><span class="chip chP">P</span> <b>Post.</b> La carte de feed : content
     indexé rendu natif, le canvas embarqué EN sourdine, embeds (story repostée, YouTube), liens
-    tracés, impressions. Tap = le même ScenePlayer, immersif.</figcaption></figure>
+    tracés, impressions. Tap = le même ScenePlayer, immersif — QUI REPREND À LA POSITION de la
+    carte (loi 8, P19), et dont le chrome reste teinté par l'accent du post
+    (<span class="mono">authorColor</span> — rév. 2, C8).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc" style="margin:24px 0 0;border-radius:0;border:none">
         <div class="band"><span class="ob">Titre timé</span></div>
@@ -909,8 +1001,8 @@ flowchart TD
       <tr><td>Content (texte du post)</td><td class="ok">✓ dérivé des textes de scène (index)</td><td class="ok">✓ champ principal · 5 000 · mentions @ · hashtags</td><td class="ok">✓ légende (= content)</td><td class="ok">✓ « Comment tu vas ? » + moodEmoji</td></tr>
       <tr><td>Texte sur scène</td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si scène</td><td class="ok">✓ bandes par défaut · timé</td><td class="ab">— pas de scène</td></tr>
       <tr><td>Médias</td><td class="ok">✓ porteur/slide + premier plan</td><td class="ok">✓ carrousel (order écrit) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée</td><td class="ab">— jamais eu</td></tr>
-      <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
-      <tr><td>Coller une image</td><td class="nv">◆ objet de scène</td><td class="nv">◆ scène ou carte carrousel</td><td class="nv">◆ bandes/overlay</td><td class="ab">—</td></tr>
+      <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆ dès qu'une scène existe (M3)</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr><td>Coller une image (O12 : la surface décide)</td><td class="nv">◆ scène = média ≤2048 · panneau = sticker ≤512</td><td class="nv">◆ média (carte carrousel si sans scène) · panneau = sticker</td><td class="nv">◆ média bandes/overlay · panneau = sticker</td><td class="ab">—</td></tr>
       <tr><td>Filtres (8)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
       <tr><td>Éditeur média (crop·trim·vol)</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ trim vidéo</td><td class="ab">—</td></tr>
       <tr><td>Dessin</td><td class="ok">✓ immersif</td><td class="ok">✓ si scène</td><td class="ok">✓ traits timés</td><td class="ab">—</td></tr>
@@ -928,12 +1020,12 @@ flowchart TD
       <tr><td>Keyframes (x·y·scale·opacity·vol·easing)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
       <tr><td>Transitions (slide : entrée/sortie · clips : jointures)</td><td class="ok">✓ existant</td><td class="ok">✓ si scène</td><td class="ok">✓ via timeline</td><td class="ab">—</td></tr>
       <tr><td>Fond (couleur·dégradé·média)</td><td class="ok">✓ chip mouvable · loop=fond</td><td class="ok">✓ si scène</td><td class="ab">— vidéo = porteur</td><td class="ab">— teinte du thème</td></tr>
-      <tr><td>Langue par objet</td><td class="ok">✓ textes (audience-driven) <span class="nv">◆ généralisée</span></td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr><td>Langue par objet</td><td class="ok">✓ textes (audience-driven) — généralisation aux kinds non-texte : post-v1 (§F)</td><td class="nv">◆ textes</td><td class="nv">◆ textes</td><td class="ab">—</td></tr>
       <tr class="grp"><td colspan="5">Publication</td></tr>
       <tr><td>Audience</td><td class="ok">✓ 6 niveaux + EXCEPT/ONLY</td><td class="ok">3 exposés <span class="nv">◆ → 6 partout</span></td><td class="nv">◆ 6 (hérite du socle)</td><td class="ok">✓ 6 niveaux</td></tr>
       <tr><td>Langue de publication</td><td class="ok">✓</td><td class="ok">✓ iOS <span class="nv">◆ web l'envoie enfin</span></td><td class="ok">✓</td><td class="ok">✓</td></tr>
-      <tr><td>Brouillons</td><td class="ok">✓ StoryDraftStore</td><td class="nv">◆ (outbox texte seul aujourd'hui)</td><td class="nv">◆</td><td class="ok">✓ draft mood</td></tr>
-      <tr><td>File offline</td><td class="ok">✓ PublishQueue</td><td class="ok">✓ texte <span class="nv">◆ étendu média/audio</span></td><td class="nv">◆</td><td class="ok">✓ branche offline</td></tr>
+      <tr><td>Brouillons</td><td class="ok">✓ StoryDraftStore</td><td class="ab">— étendu P : post-v1 (§F ; outbox texte existante conservée)</td><td class="ab">— post-v1 (§F)</td><td class="ok">✓ draft mood</td></tr>
+      <tr><td>File offline</td><td class="ok">✓ PublishQueue</td><td class="ok">✓ texte — extension média/audio : post-v1 (§F)</td><td class="ab">— post-v1 (§F)</td><td class="ok">✓ branche offline</td></tr>
       <tr><td>Aperçu = lecteur</td><td class="ok">✓ (né en pause) <span class="nv">◆ au socle</span></td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆ bulle</td></tr>
       <tr><td>Édition publiée</td><td class="ok">✓ reset engagement · tri-état</td><td class="ok">✓ PUT (tri-état)</td><td class="ok">✓ = post</td><td class="ok">✓ statusUpdated</td></tr>
       <tr><td>Repost (source)</td><td class="ok">✓ → naît POST · snapshot média</td><td class="ok">✓ + citation</td><td class="ok">✓</td><td class="ok">✓ (mood copié)</td></tr>
@@ -943,7 +1035,7 @@ flowchart TD
       <tr><td>Progression · auto-avance</td><td class="ok">✓ barres 3 pt · scrub · pause 0,45 s</td><td class="ab">— carte</td><td class="ab">— boucle</td><td class="ab">— bulle</td></tr>
       <tr><td>Réactions</td><td class="ok">✓ scrub emoji + compteurs</td><td class="ok">✓ barre réactions</td><td class="ok">✓ rail</td><td class="ok">✓ statusReacted</td></tr>
       <tr><td>Commentaires (thread commun)</td><td class="ok">✓ overlay flottant traduit</td><td class="ok">✓ détail + feuille</td><td class="ok">✓ overlay</td><td class="ab">—</td></tr>
-      <tr><td>Réponse privée → conversation</td><td class="ok">✓ ReplyContext</td><td class="nv">◆</td><td class="nv">◆</td><td class="ok">✓ (réagir ouvre la conv)</td></tr>
+      <tr><td>Réponse privée → conversation</td><td class="ok">✓ ReplyContext</td><td class="ab">— post-v1 (§F)</td><td class="ab">— post-v1 (§F)</td><td class="ok">✓ (réagir ouvre la conv)</td></tr>
       <tr><td>Vues</td><td class="ok">✓ liste + réactions</td><td class="ok">✓ impressions</td><td class="ok">✓ compteur</td><td class="ok">✓</td></tr>
       <tr><td>Traductions (Prisme)</td><td class="ok">✓ natif + badge · barre langues · original au maintien</td><td class="ok">✓ natif + badge · retraduire</td><td class="ok">✓ captions traduites</td><td class="ok">✓</td></tr>
       <tr><td>Références en lecture</td><td class="ok">✓ badge · « Avec … » · marqueur SILENT</td><td class="ok">✓ idem</td><td class="ok">✓ + @ valides dans l'embed</td><td class="ok">✓ « Avec … »</td></tr>
@@ -954,6 +1046,10 @@ flowchart TD
       <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
       <tr><td>Partage externe · lien tracé</td><td class="ok">✓ /l/ token</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
       <tr><td>Transférer en message (interne)</td><td class="ok">✓ rail</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td>Créer un post depuis un média REÇU (e9, O13)</td><td class="nv">◆ seed story</td><td class="nv">◆ 2 gestes — appui long → « Créer un post » (lot G)</td><td class="nv">◆ si vidéo</td><td class="ab">—</td></tr>
+      <tr><td>Document (PDF…)</td><td class="ab">— jamais en scène</td><td class="ok">✓ pièce jointe du post SANS scène — jamais un objet ni une carte (G8)</td><td class="ab">—</td><td class="ab">—</td></tr>
+      <tr><td>Transport vidéo (PiP · AirPlay · vitesse · scrub · ±10 s · plein écran)</td><td class="ab">— gestes du reader (tap/hold/scrub)</td><td class="ok">✓ existant préservé (O16 — MeeshyVideoPlayer)</td><td class="ab">— boucle + rail (pipeline réel conservé)</td><td class="ab">—</td></tr>
+      <tr><td>Continuité de position (loi 8)</td><td class="ab">— slides séquencées</td><td class="ok">✓ carte → détail → plein écran → PiP (SharedAVPlayerManager)</td><td class="ok">✓ feed → Réels prouvé en prod</td><td class="ab">—</td></tr>
       <tr><td>Épingler au profil</td><td class="ok">✓ trail bord à bord (recensé 20/08)</td><td class="ok">✓ /pin</td><td class="ab">—</td><td class="ab">—</td></tr>
     </tbody>
   </table></div>
@@ -977,9 +1073,9 @@ flowchart TD
       indigo profond · violet profond — un jeton d'interface, pas un thème par écran.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Audience 6 niveaux partout</h4><p>Le
       feed n'expose que 3 niveaux aujourd'hui — le socle sert les 6, EXCEPT/ONLY compris.</p></div>
-    <div class="card"><h4><span class="tag tNew">nouveau</span> Réponse privée P·R</h4><p>Le
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Réponse privée P·R <span class="tag tAb">post-v1 (§F)</span></h4><p>Le
       ReplyContext des stories s'étend aux posts et réels — même conversation, même bulle
-      contextuelle.</p></div>
+      contextuelle. Aucun lot ne la construit en v1 : descope OPPOSABLE, §F (rév. 2, C12).</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Langue par objet</h4><p>Chaque objet
       déclare sa langue d'origine (préremplie) ; la publication l'hérite ; le Prisme traduit objet
       par objet.</p></div>
@@ -989,9 +1085,10 @@ flowchart TD
     <div class="card"><h4><span class="tag tNew">nouveau</span> Vrais stickers</h4><p>Bitmoji, Memoji,
       Genmoji et claviers tiers entrent par le collage (images) ; « Mes stickers » les garde —
       bibliothèque LOCALE, zéro sync backend. Le sticker posé voyage comme média du contenu.</p></div>
-    <div class="card"><h4><span class="tag tNew">nouveau</span> Coller une image</h4><p>Scène ou carte
-      de carrousel selon le contexte. PasteButton système uniquement — le presse-papiers n'est
-      jamais lu hors geste, le prompt iOS ne surgit jamais.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Coller une image</h4><p>LA SURFACE
+      DÉCIDE (O12) : scène ⇒ objet média pleine qualité ; panneau Stickers ⇒ sticker + « Mes
+      stickers ». PasteButton système uniquement — le presse-papiers n'est jamais lu hors geste,
+      le prompt iOS ne surgit jamais.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Son de fond sur Post</h4><p>Carrousel
       compris : la piste boucle sur la timeline du post pendant qu'on feuillette. Fil muet ; après
       l'auteur, ♫〰 si son ORIGINAL, crédit « titre · @pseudo · M:SS » si bibliothèque — l'atome de
@@ -1006,7 +1103,7 @@ flowchart TD
     <thead><tr><th>#</th><th>Question</th><th>Recommandation</th></tr></thead>
     <tbody>
       <tr><td class="mono">O1</td><td>Mentions/# : segments du content ou objets de scène ?</td><td>Les deux coexistent déjà (INLINE vs PINNED) — content pour le texte, objet pour la scène</td></tr>
-      <tr><td class="mono">O2</td><td>Migration du modèle — <b>TRANCHÉ : rupture A′</b> (porteur produit, 2026-08-20)</td><td>Fil v3 strict. Quatre pièces rendent la rupture PROPRE : création v1 refusée net (426 UPGRADE_REQUIRED + invite) · <b>mise à jour forcée</b> (plancher gateway + porte bloquante — mécanisme À CRÉER, vérifié absent) · <b>convertisseur serveur v1→v3 à la lecture</b> (l'archive éternelle et /republish survivent) · brouillons locaux migrés one-shot. Reco C conservée en P17 comme analyse</td></tr>
+      <tr><td class="mono">O2</td><td>Migration du modèle — <b>TRANCHÉ : rupture A′</b> (porteur produit, 2026-08-20)</td><td>Fil v3 strict. Quatre pièces rendent la rupture PROPRE : création v1 refusée net (426 UPGRADE_REQUIRED + invite) · <b>mise à jour forcée</b> (plancher gateway + porte bloquante — mécanisme À CRÉER, vérifié absent) · <b>convertisseur serveur v1→v3 à la lecture</b> (l'archive éternelle et /republish survivent) · brouillons locaux migrés one-shot. Reco C conservée en P17 comme analyse. <b>Rév. 2 (C5/O15)</b> : l'écriture stricte vit SOUS DRAPEAU — au merge, aucun écrivain n'émet v3 (parc iOS, web, Android) ; armée après les trois, le 426 sert la longue traîne (P20)</td></tr>
       <tr><td class="mono">O3</td><td>Scène pour un post texte ?</td><td><span class="mono">scenes: nil</span> — un cadre vide est une injonction</td></tr>
       <tr><td class="mono">O4</td><td>Timing par défaut</td><td><span class="mono">nil</span> = « suit la slide » (piste fantôme), distinct d'un choix</td></tr>
       <tr><td class="mono">O5</td><td>Bandes : zones contraintes ou ancres ?</td><td>Ancres — un objet peut chevaucher la frontière</td></tr>
@@ -1015,15 +1112,22 @@ flowchart TD
       <tr><td class="mono">O8</td><td>Sticker posé : format d'upload ?</td><td>Média du contenu claimable (TUS/PostMedia), comme tout média — jamais d'inline base64 dans le blob ; la bibliothèque reste locale</td></tr>
       <tr><td class="mono">O9</td><td>Lecture du presse-papiers</td><td>PasteButton/UIPasteControl UNIQUEMENT — la lecture programmatique déclenche le prompt système et brûle la confiance</td></tr>
       <tr><td class="mono">O10</td><td>Stickers interactifs : où vivent les votes ?</td><td>Contrat serveur LÉGER (table dédiée) — jamais dans le blob storyEffects ; le sticker reste un objet, la donnée vit à côté</td></tr>
-      <tr><td class="mono">O11</td><td>Publication programmée</td><td>Prémisse client best-effort (Étagère « programmé » + BGTask) ; la version FIABLE exige un scheduledAt serveur — trancher avant de l'annoncer</td></tr>
+      <tr><td class="mono">O11</td><td>Publication programmée</td><td>HORS v1 INTÉGRAL (gel — rév. 2, M4 : la « prémisse silencieuse » best-effort est abandonnée aussi) ; la version fiable exige un <span class="mono">scheduledAt</span> serveur</td></tr>
+      <tr><td class="mono">O12</td><td>Collage : quel pipeline ?</td><td><b>La surface décide</b> — scène ⇒ objet média ≤ 2 048 px ; panneau Stickers ⇒ sticker ≤ 512 px + bibliothèque ; promotion média→sticker explicite à l'inspecteur (rév. 2, C2)</td></tr>
+      <tr><td class="mono">O13</td><td>Média reçu → post (e9)</td><td>2 gestes, matérialisation cache-first, re-upload local v1 (pont serveur post-v1) ; JAMAIS de référence auto vers l'expéditeur — confidentialité de la conversation (rév. 2, C1)</td></tr>
+      <tr><td class="mono">O14</td><td>Partage entrant → Post/Story</td><td>L'extension DÉCRIT (fiche <span class="mono">share_pending_posts/</span>), l'app compose : consumer → brouillon Étagère + bannière — jamais de modale au boot (rév. 2, C9)</td></tr>
+      <tr><td class="mono">O15</td><td>Quand le 426 s'arme-t-il ?</td><td><span class="mono">CANVAS_V3_WRITE_STRICT</span> (défaut OFF) — armé quand les TROIS écrivains émettent v3 (iOS, web F5b, Android) ; symétrique de <span class="mono">CANVAS_V3_READ</span> (rév. 2, C5)</td></tr>
+      <tr><td class="mono">O16</td><td>Continuité de lecture &amp; PiP</td><td>« Un seul temps, celui du contenu » (loi 8) — clé = identité du média, moteur = <span class="mono">SharedAVPlayerManager</span>, PiP opt-in par surface, arbitrage appels événementiel existant (rév. 2, C10 — P19)</td></tr>
     </tbody>
   </table></div>
-  <h3>Risques nommés (à lever avant le plan d'implémentation)</h3>
+  <h3>Risques nommés — devenus des GATES de lots (rév. 2, M7 : les plans existent)</h3>
   <ul class="klist" style="max-width:78ch">
     <li><b>Coût du plan 2D</b> sur vieux matériel — N pistes vivantes au-dessus d'un canvas animé ;
-      le dépôt garde trace de réels qui chauffaient. Mesurer avant d'engager.</li>
+      le dépôt garde trace de réels qui chauffaient. GATE : mesure device A11 = critère de sortie
+      du lot D (pas d'appareil ⇒ STOP de lot, jamais un merge sur chiffre simulateur).</li>
     <li><b>Contenu réel des blobs</b> — <span class="mono">storyEffects</span> est validé en
-      <span class="mono">passthrough()</span> : auditer la base avant tout schéma strict.</li>
+      <span class="mono">passthrough()</span> : l'audit est l'INTRANT du convertisseur du lot A
+      (tolérant par contrat — champ inconnu ignoré + télémétrie).</li>
     <li><b>Profondeur de type SwiftUI</b> — le dépôt a déjà débordé la pile (device 1 008 Ko vs simu
       8 Mo). Le registre rend par effacement de type, jamais par composition générique profonde.</li>
   </ul>
@@ -1047,7 +1151,7 @@ flowchart TD
       <tr><td><b>Scène (composer &amp; lecture)</b></td><td>1 vidéo de fond 1080p + ≤ 20 layers actifs ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
       <tr><td><b>Image collée / importée</b></td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
       <tr><td><b>« Mes stickers » (local)</b></td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
-      <tr><td><b>Timeline plan 2D</b></td><td>pistes virtualisées ; barres et keyframes dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
+      <tr><td><b>Timeline plan 2D</b></td><td>≤ 60 objets/scène (cap du schéma v3) dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom ; la virtualisation ne vient que si le banc D4 la réclame — jamais par principe (rév. 2)</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
       <tr><td><b>Audio de fond (S·P·R)</b></td><td>boucle liée à la timeline du contenu (AVPlayerLooper), pas à la page du carrousel ; un seul canal audio</td><td>PlaybackCoordinator existant — la règle « qui claim le canal » ne change pas</td></tr>
       <tr><td><b>Polices (18 familles)</b></td><td>0 octet embarqué, matérialisation CoreText au premier usage, cache process</td><td>disponibilité sous test — vérifiée fichiers + exécution sur 18.2 ET 26.1</td></tr>
     </tbody>
@@ -1063,7 +1167,7 @@ flowchart TD
       <tr><td class="mono">PHPickerViewController</td><td>iOS 14</td><td>galerie sans permission</td><td>existant, inchangé</td></tr>
       <tr><td class="mono">AVPlayerLooper</td><td>iOS 10</td><td>boucle du fond jusqu'à fin de timeline</td><td>couvert partout</td></tr>
       <tr><td class="mono">CADisplayLink.preferredFrameRateRange</td><td>iOS 15</td><td>scrub timeline à 120 Hz (ProMotion)</td><td>opportuniste — dégrade seul à 60 Hz sur A11/écrans 60</td></tr>
-      <tr><td>Matériaux système (Liquid Glass 26+)</td><td>iOS 26</td><td>chrome du plateau</td><td>automatique via les matériaux — rien à gater, rien à imiter</td></tr>
+      <tr><td>Matériaux système (Liquid Glass 26+)</td><td>iOS 26</td><td>chrome du plateau</td><td>16-25 : <span class="mono">ultraThinMaterial</span> teinté (glassFill) + jetons MeeshyRadius/MeeshyShadow — c'est LE rendu de la plage plancher ; 26+ : Liquid Glass automatique via les matériaux, rien à gater, rien à imiter (rév. 2, M18)</td></tr>
       <tr><td><b>Bilan</b></td><td colspan="3"><b>aucune API &gt; iOS 16 n'est REQUISE</b> ; iOS 18 n'apporte qu'un bonus (glyphes clavier inline) ; iOS 27 : rien de privé, rien de déprécié — les sentinelles (test de polices, gardes de source) rougissent d'elles-mêmes au premier runtime qui bouge</td></tr>
     </tbody>
   </table></div>
@@ -1088,15 +1192,16 @@ flowchart TD
   repli naturel. Les vrais dangers ne sont pas des APIs mais quatre pièges de rendu déjà rencontrés
   par ce dépôt — profondeur de type, thermique, self-sizing, invariants de lecture — et chacun a
   désormais sa mitigation NOMMÉE dans le design, pas une promesse. Les trois inconnues de P14
-  (coût du plan 2D à mesurer, audit des blobs, exécution réelle sur un appareil iOS 16) restent
-  les seules choses que cette revue ne peut pas clore sur cette machine.</div>
+  sont devenues des GATES de lots (rév. 2) : la mesure A11 est un critère de sortie du lot D,
+  l'audit des blobs est l'intrant du convertisseur du lot A, l'exécution iOS 16 réelle reste au
+  gate final — les seules choses que cette revue ne peut pas clore sur cette machine.</div>
 </div></section>
 
 <!-- ================================================================ P16 -->
 <section id="p16"><div class="wrap">
   <div class="prail"><span class="pnum">P16</span><h2>Écart SOTA — les manques assumés, et leurs prémisses (2026-08-20)</h2></div>
   <p class="lede">Comparaison contre l'état de l'art des composers (Instagram, TikTok, Snapchat,
-  CapCut). Trois choses avant la table : le re-recensement a montré que plusieurs « manques »
+  CapCut, BeReal — rév. 2, M5). Trois choses avant la table : le re-recensement a montré que plusieurs « manques »
   supposés EXISTENT déjà (transitions, undo/redo, alt côté serveur) — la table ne liste que les
   vrais écarts ; chaque prémisse est la version MINIMALE qui tient dans le modèle proposé sans le
   déformer ; et la colonne serveur dit honnêtement ce qu'un client seul ne peut pas faire.</p>
@@ -1109,12 +1214,14 @@ flowchart TD
       <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ du blob v3</td></tr>
       <tr><td><b>Presets d'animation de texte</b> (pop, glissé, machine à écrire…)</td><td class="ab">les keyframes existent, aucun preset nommé</td><td>bibliothèque de presets = keyframes PRÉGÉNÉRÉS — des données, zéro vue neuve</td><td>non</td></tr>
       <tr><td><b>Layouts / collage</b> (2·3·4 cases)</td><td class="ab">médias premier plan libres seulement</td><td>presets d'ANCRES qui posent N objets média — des données encore</td><td>non</td></tr>
-      <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td>état « programmé » de l'Étagère, la file locale publie à l'heure (best-effort BGTask) — la version FIABLE attend un <span class="mono">scheduledAt</span> serveur (O11)</td><td>léger, pour la version fiable</td></tr>
+      <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td><b>hors v1 INTÉGRAL</b> (O11 gelé — la prémisse best-effort ne se promet pas non plus, rév. 2 M4) ; la version fiable exige <span class="mono">scheduledAt</span> serveur</td><td>léger, pour la version fiable</td></tr>
       <tr><td><b>Alt text</b> (accessibilité)</td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.alt</span>, schema :830) — aucun client ne l'écrit</td><td>un champ dans l'inspecteur média. La prémisse la moins chère de toute la table</td><td>non — le champ est déjà là</td></tr>
-      <tr><td><b>Désactiver / limiter les commentaires</b></td><td class="ab">absent (recensé hors périmètre)</td><td>drapeau au PublishIntent + garde sur les routes de commentaires</td><td>léger</td></tr>
+      <tr><td><b>Désactiver / limiter les commentaires</b></td><td class="ab">absent (recensé hors périmètre)</td><td>drapeau sur les payloads de création EXISTANTS (rév. 2, C11 — PublishIntent est déscopé S2) + garde sur les routes de commentaires</td><td>léger</td></tr>
       <tr><td><b>Duo / côte-à-côte</b> (duet)</td><td class="ab">repost & citation seuls</td><td><b>pas en v1</b> — scène scindée à 2 porteurs = coût lecteur réel ; l'attribution existe déjà (repost + SILENT auto)</td><td>oui</td></tr>
       <tr><td><b>Co-auteur</b> (post collaboratif)</td><td class="ab">références PINNED seules</td><td><b>pas en v1</b> — invitation + double attribution = contrat et ACL neufs</td><td>oui</td></tr>
       <tr><td><b>Calage au tempo</b> (beat-sync)</td><td class="ab">absent</td><td><b>pas en v1</b> — analyse audio embarquée, à mesurer après le plan 2D</td><td>non</td></tr>
+      <tr><td><b>Sticker-lien</b> (URL tappable posée sur la scène — standard Instagram) <span class="tag tNew">rév. 2, M6</span></td><td class="ab">absent — l'URL ne vit qu'en content/embed de carte</td><td>payload de sticker <span class="mono">{url}</span> rendu tappable via l'infrastructure de liens tracés existante — <b>post-v1 (§F)</b></td><td>non — les liens tracés existent</td></tr>
+      <tr><td><b>Double capture avant+arrière</b> (façon BeReal) <span class="tag tNew">rév. 2, M5</span></td><td class="ab">absente</td><td>deux objets <span class="mono">media</span> posés simultanément — tient dans le modèle sans le déformer (test de validité §6d) ; <b>post-v1 (§F)</b>. Retardateur/mains-libres : non-buts</td><td>non</td></tr>
     </tbody>
   </table></div>
   <div class="callout"><b>Non-buts explicites</b> — dits pour ne pas y revenir : filtres AR de
@@ -1172,6 +1279,249 @@ flowchart TD
   brouillons locaux migrés one-shot au premier lancement.</div>
 </div></section>
 
+
+<!-- ================================================================ P18 -->
+<section id="p18"><div class="wrap">
+  <div class="prail"><span class="pnum">P18</span><h2>Entrées externes — partage entrant &amp; média reçu <span class="tag tNew">rév. 2 · lot G</span></h2></div>
+  <p class="lede">Le composer devient joignable depuis TOUT ce que l'utilisateur reçoit ou
+  possède : la feuille de partage iOS (depuis n'importe quelle app) et les médias reçus en
+  conversation. Deux règles au-dessus de tout : <b>l'extension DÉCRIT, l'app compose</b> (O14) —
+  et <b>créer un post depuis un média reçu tient en 2 gestes</b> (O13). Rien ne se réinvente :
+  chaque pièce réutilise une mécanique vérifiée du dépôt.</p>
+
+  <h3>Le partage entrant — de n'importe quelle app vers un post</h3>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="lbl">feuille de partage iOS — Meeshy</span></div>
+      <div class="ctx"><span class="ob">💬 Message</span><span class="ob on">📰 Post</span><span class="ob">🟢 Story</span></div>
+      <div class="sc" style="flex:0 0 30%;align-items:center;justify-content:center"><span class="lbl">3 photos sélectionnées<br>≤ 20 fichiers · 500 Mio (ShareLimits)</span></div>
+      <div style="flex:1"></div>
+      <div class="socle"><span class="aud" style="opacity:.5">✕ Annuler</span><span class="pub">Envoyer à Meeshy</span></div>
+    </div><figcaption><b>1 · La destination.</b> « Post / Story » s'ajoute À CÔTÉ des
+    conversations — même feuille, même staging App Group. L'extension écrit une fiche versionnée
+    (<span class="mono">share_pending_posts/</span>, motif <span class="mono">SharePendingShare</span>)
+    et NE TENTE AUCUN envoi : un post exige des choix (audience, scène) que la feuille ne peut
+    pas porter.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px;border-color:var(--acc)"><span class="ob on">📤 Votre partage vous attend — Ouvrir</span></div>
+      <div class="sc" style="opacity:.4;flex:1"><div class="media169" style="flex:1"><span class="lbl">l'app, là où l'utilisateur allait</span></div></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">—</span></div>
+    </div><figcaption><b>2 · Au retour dans l'app.</b> Le consumer (décalqué de
+    <span class="mono">SharePendingSendConsumer</span>, mêmes deux points d'appel : boot +
+    avant-plan) a converti la fiche en BROUILLON de l'Étagère ; une bannière discrète l'annonce.
+    <b>Jamais de modale au boot</b> — un lancement appartient à sa cause (notification, appel).
+    N fiches = N brouillons ; TTL 7 j ; wipe au logout.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="ob">Post ▾</span><span class="ob" style="margin-left:auto">⋯</span></div>
+      <div class="sc"><div class="media169" style="flex:1"><span class="lbl">carrousel — 3 photos posées</span></div></div>
+      <div class="ctx"><span class="lbl">AMORCE : Aa · ☺ · ♫ · 📍</span></div>
+      <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>3 · Reprendre le brouillon.</b> Le composer s'ouvre préconfiguré
+    (profil P modifiable) : médias → scène/carrousel, URL et texte → <span class="mono">content</span>.
+    À partir d'ici, tout est le composer normal (P4-P10).</figcaption></figure>
+  </div>
+
+  <h3>Le média reçu — deux gestes, de la bulle au post</h3>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="lbl">conversation — média reçu de @sam</span></div>
+      <div class="sc" style="flex:0 0 38%"><div class="media169" style="flex:1"><span class="lbl">photo reçue (appui long…)</span></div></div>
+      <div class="ctx" style="flex-direction:column;align-items:stretch;gap:3px">
+        <span class="ob">↩︎ Répondre</span><span class="ob">➦ Transférer</span><span class="ob">⤓ Enregistrer</span>
+        <span class="ob on">📰 Créer un post</span>
+      </div>
+      <div class="socle"><span class="aud">Message…</span><span class="pub">🎙</span></div>
+    </div><figcaption><b>1 · Geste 1.</b> Appui long sur la bulle → « Créer un post » entre dans
+    le menu EXISTANT (<span class="mono">MessageActionResolver</span> — jamais un menu
+    parallèle). Gardes des actions sœurs : jamais un média <span class="mono">viewOnce</span>
+    (règle <span class="mono">isForwardable</span>), jamais une position.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="ob">Post ▾</span><span class="ob" style="margin-left:auto">⋯</span></div>
+      <div class="sc"><div class="media169" style="flex:1"><span class="lbl">média posé — déjà sur disque<br>(cache-first, zéro téléchargement)</span></div></div>
+      <div class="ctx"><span class="lbl">AMORCE : Aa · ☺ · ♫ · 📍</span></div>
+      <div class="socle"><span class="aud">🌐 Public</span><span class="eye">👁</span><span class="pub">Publier</span></div>
+    </div><figcaption><b>2 · Geste 2.</b> Le composer s'ouvre, média posé — matérialisé par la
+    cascade du flux « Enregistrer » (<span class="mono">AttachmentMediaSaveResolver.materialize</span> :
+    les octets sont déjà dans le cache dans le cas nominal). Publier = re-upload TUS depuis le
+    cache local, offline compris. Basculer en Story ? Le champ format (loi 9).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="ob">@moi · 2 min</span>
+        <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">le post publié</span></div></div>
+        <span class="ob">❤ 3 · 💬 1 · ↻ · 🔖</span>
+      </div>
+      <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
+    </div><figcaption><b>3 · Publié — sans trace de provenance.</b> AUCUNE référence automatique
+    vers l'expéditeur : un média reçu en privé n'est pas une publication, l'attribuer d'office
+    exposerait la relation privée (le repost pose une SILENT parce que la source est PUBLIQUE —
+    ici, mention manuelle seulement). Règle de confidentialité, pas une omission (O13).</figcaption></figure>
+  </div>
+  <div class="callout"><b>Ce que la v1 ne fait pas — dit ici, opposable en §F.</b> Le pont
+  serveur MessageAttachment→PostMedia (réutiliser le blob sans re-upload, modèle
+  <span class="mono">copyForwardedAttachments</span>) est la cible post-v1 : c'est l'économie de
+  bande passante, pas le geste. Un média chiffré passe par le SEUL chemin re-upload local (le
+  blob serveur est du chiffré). Un DOCUMENT reçu devient une pièce jointe du post sans scène —
+  jamais un objet, jamais une carte (G8).</div>
+</div></section>
+
+<!-- ================================================================ P19 -->
+<section id="p19"><div class="wrap">
+  <div class="prail"><span class="pnum">P19</span><h2>Continuité de lecture &amp; PiP — un seul temps, celui du contenu <span class="tag tNew">rév. 2 · loi 8</span></h2></div>
+  <p class="lede">La position de lecture et l'état de piste SURVIVENT au changement de chrome —
+  carte → détail → plein écran → PiP. Le contenu ne rembobine jamais parce que l'écran a changé.
+  Ce n'est pas un vœu : <b>le moteur existe et le handoff est prouvé en prod</b> — cette planche
+  nomme le contrat que le ScenePlayer formalise (O16).</p>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="ob">@aïcha · ♫〰</span>
+        <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">vidéo — 0:07 · autoplay MUET</span></div></div>
+        <span class="ob">❤ 12 · 💬 4 · 🔇</span>
+      </div>
+      <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
+    </div><figcaption><b>1 · Carte de fil.</b> Un seul lecteur actif dans le fil (budget P15),
+    muet — le mute est un état de SURFACE ici : dé-muter la carte ne dé-mute pas le fil
+    entier.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="margin-top:24px"><div class="media169" style="flex:1"><span class="lbl">MÊME player — 0:07, le son se rallume</span></div></div>
+      <div class="ctx"><span class="lbl">⏪10 · ⏯ · 10⏩ · ␥ scrub · 1,0× · AirPlay · PiP · ⤢</span></div>
+      <div class="socle"><span class="aud">@aïcha</span><span class="eye">🔊</span><span class="pub">Suivre</span></div>
+    </div><figcaption><b>2 · Détail / plein écran.</b> Le tap n'ouvre pas « une autre vidéo » :
+    la surface suivante ADOPTE le player (handoff par identité — <span class="mono">load()</span>
+    est un no-op sur le même média). Transport COMPLET existant, préservé tel quel
+    (<span class="mono">VideoTransportControls</span> : ±10 s, scrub prioritaire, vitesse,
+    AirPlay, PiP).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="position:relative;flex:1;margin-top:24px">
+        <div class="sc" style="opacity:.35;height:100%;margin:0"><div class="media169" style="flex:1"><span class="lbl">l'app — n'importe où</span></div></div>
+        <div style="position:absolute;right:8px;top:8px;width:44%;aspect-ratio:16/9;border:1.5px solid var(--acc);border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--phscene)"><span class="lbl" style="color:var(--acc)">PiP — 0:07 →</span></div>
+      </div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">—</span></div>
+    </div><figcaption><b>3 · PiP.</b> Swipe-down du plein écran = handoff PiP explicite (chemin
+    existant) ; la flèche de retour restaure la surface SANS couper la lecture ; le ✕ du PiP
+    STOPPE (jamais d'audio fantôme — les deux cas sont distingués par le moteur). Opt-in PAR
+    surface : une carte sans contrôle PiP visible n'arme jamais l'auto-PiP système.</figcaption></figure>
+  </div>
+  <ul class="klist" style="max-width:80ch">
+    <li><b>La clé de continuité est l'IDENTITÉ du média</b> (attachmentId/postMediaId), jamais la
+      chaîne d'URL — l'URL résolue varie (cache local vs distante), l'identité non. Position vive
+      dans le moteur unique ; position froide persistée par média
+      (<span class="mono">VideoPlaybackPositionStore</span>, zone morte de reprise).</li>
+    <li><b>Prouvé en prod, pas promis</b> : feed → Réels (même URL ⇒ la vidéo continue, seul le
+      son se rallume), inline → fullscreen (le fullscreen affiche le player courant sans
+      recharger), fullscreen → PiP au swipe-down. Le ScenePlayer FORMALISE ce contrat — il ne le
+      duplique jamais : un AVPlayer privé perdrait d'un coup la continuité, la télémétrie de
+      consommation (WatchSample) et l'arbitrage global (<span class="mono">PlaybackCoordinator</span>,
+      un seul média joue).</li>
+    <li><b>PiP d'appel et PiP média cohabitent sans registre neuf</b> : début d'appel ⇒
+      <span class="mono">stopAll()</span> ⇒ le PiP vidéo meurt ; tout <span class="mono">play()</span>
+      média est gaté sur « pas d'appel actif ». Deux contrôleurs, un seul vivant — le flux
+      événementiel existant.</li>
+    <li><b>Le mute a deux portées</b> : SURFACE sur les cartes (l'autoplay du fil reste muet),
+      CONTENU en immersif (détail, plein écran, PiP — dé-muter suit le contenu).</li>
+    <li><b>Dette nommée (§F)</b> : la preview du composer garde ses players privés (canvas
+      CALayer, boucle muette) — le handoff de position composer→lecture est post-v1 ; la LECTURE,
+      elle, est couverte v1. La continuité du son de FOND inter-surfaces suit le même contrat
+      d'identité, arbitrée par le canal audio unique.</li>
+  </ul>
+</div></section>
+
+<!-- ================================================================ P20 -->
+<section id="p20"><div class="wrap">
+  <div class="prail"><span class="pnum">P20</span><h2>La rupture vécue — l'écran que la longue traîne verra <span class="tag tNew">rév. 2 · O2/O15</span></h2></div>
+  <p class="lede">L'écriture stricte s'arme par DRAPEAU quand les trois écrivains émettent v3
+  (O15) — le 426 ne vise donc que la longue traîne des retardataires, jamais 100 % du parc.
+  Mais cette longue traîne est faite de vraies personnes : voici EXACTEMENT ce qu'elles voient,
+  et la garantie qui commande tout — <b>aucun contenu composé n'est jamais perdu</b>.</p>
+  <div class="phrow">
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:26px 12px 8px">
+        <span style="font-size:28px">⬆️</span>
+        <span class="lbl" style="text-align:center;color:var(--phink)">Mise à jour requise</span>
+        <span class="lbl" style="text-align:center">Cette version ne peut plus publier de stories.<br>Vos brouillons et votre file sont conservés.</span>
+        <span class="pub" style="margin-top:6px">Ouvrir l'App Store</span>
+      </div>
+      <div class="socle" style="justify-content:center"><span class="lbl">aucun bouton de fermeture — porte bloquante</span></div>
+    </div><figcaption><b>1 · La porte bloquante</b> (<span class="mono">UpgradeGateView</span>).
+    Montée au boot si le plancher lu au bootstrap (<span class="mono">GET /app/min-version</span>)
+    l'exige, ou à la première 426. Plein écran, non fermable, lien direct — l'OS n'installe pas à
+    notre place. 7 langues, RTL, comme toute UI neuve du dépôt. Le
+    <span class="mono">storeUrl</span> vient de la réponse serveur, résolu par plateforme
+    (<span class="mono">X-App-Platform</span> — un Android ne verra jamais un lien App Store).</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div class="sc" style="opacity:.4;margin-top:24px"><div class="media169" style="flex:1"><span class="lbl">la story composée</span></div></div>
+      <div class="ctx" style="border-color:#F87171"><span class="ob" style="border-color:#F87171;color:#F87171">✕ Publication refusée — mise à jour requise</span></div>
+      <div class="ctx"><span class="ob on">✓ Enregistrée en brouillon</span></div>
+      <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Mettre à jour</span></div>
+    </div><figcaption><b>2 · 426 en pleine publication.</b> Le refus est NET (code
+    <span class="mono">UPGRADE_REQUIRED</span> à la racine, contrat A5) — et le contenu part en
+    brouillon AUTOMATIQUEMENT (M10) : l'utilisateur ne perd jamais ce qu'il vient de composer.
+    Un item de file qui prend 426 passe en échec PERMANENT visible (l'onglet file de l'Étagère),
+    avec Reprendre après mise à jour — jamais une boucle de retry silencieuse.</figcaption></figure>
+    <figure class="phfig"><div class="ph"><div class="notch"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
+        <span class="lbl" style="letter-spacing:.1em">APRÈS MISE À JOUR</span>
+        <span class="ob on">⇡ Story — reprise automatique de la file</span>
+        <span class="lbl" style="letter-spacing:.1em;margin-top:4px">BROUILLONS</span>
+        <span class="ob">📝 Story (migrée v3) · reprendre</span>
+        <span class="lbl" style="margin-top:8px">brouillons ET file migrés one-shot au premier<br>lancement — même table de conversion que le serveur</span>
+      </div>
+      <div class="socle"><span class="aud">Mes contenus</span><span class="pub">+ Créer</span></div>
+    </div><figcaption><b>3 · Après la mise à jour.</b> La migration one-shot (lot B) convertit
+    les brouillons locaux v1→v3 ; la reprise de file REPUBLIE depuis le runtime du nouveau
+    binaire (l'encodage B7 émet toujours v3) — l'item en échec redevient publiable d'un tap.
+    Rien à re-composer, rien à comprendre.</figcaption></figure>
+  </div>
+  <div class="callout"><b>Qui ne voit JAMAIS ces écrans.</b> Le web (exempt de plancher — R6 :
+  il se déploie en lockstep, pas de binaire retardataire) ; tout parc à jour (l'armement O15
+  attend les trois écrivains v3) ; la LECTURE de l'archive (le convertisseur serveur est
+  permanent — une vieille story se lit toujours). La rupture est un péage de casting
+  d'ÉCRITURE pour retardataires, pas un mur.</div>
+</div></section>
+
+<!-- ================================================================ P21 -->
+<section id="p21"><div class="wrap">
+  <div class="prail"><span class="pnum">P21</span><h2>Les 18 styles de texte — spécimen <span class="tag tNew">rév. 2 · M17</span></h2></div>
+  <p class="lede">La rangée défilante du panneau Texte, dans SON ordre : les 11 familles
+  historiques puis les 7 ajoutées (2026-08-20), à la fin — l'ordre est un contrat de mémoire
+  musculaire, jamais retrié. Chaque aperçu de la rangée rend « Aa » DANS sa police. Ci-dessous,
+  le spécimen complet — <b>habillage web approximatif, non normatif</b> : les polices réelles
+  sont celles du résolveur iOS (<span class="mono">StoryTextFontResolver</span>, matérialisation
+  CoreText, 0 octet embarqué — sentinelle de disponibilité testée sur 18.2 et 26.1).</p>
+  <div class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
+    <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p></div>
+    <div class="card"><h4>machine</h4><p style="font-size:19px;font-family:'American Typewriter','Courier New',monospace;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>manuscrit</h4><p style="font-size:22px;font-family:'Snell Roundhand','Segoe Script',cursive;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>classique</h4><p style="font-size:21px;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>calligraphie</h4><p style="font-size:20px;font-family:'Zapfino','Brush Script MT',cursive;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>cartoon</h4><p style="font-size:20px;font-family:'Chalkboard SE','Comic Sans MS',cursive;font-weight:700;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>futuriste</h4><p style="font-size:18px;letter-spacing:.22em;text-transform:uppercase;font-weight:300;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>fantaisie</h4><p style="font-size:20px;font-family:Papyrus,fantasy;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>curve</h4><p style="font-size:21px;font-style:italic;color:var(--ink)">S a l u t  ◠  m o n d e</p><p style="font-size:11px">texte sur courbe — rendu plat ici, l'arc est CoreText</p></div>
+    <div class="card"><h4>tag</h4><p style="font-size:23px;font-weight:900;font-style:italic;transform:skewX(-8deg);-webkit-text-stroke:1px var(--acc);color:transparent">Salut le monde</p></div>
+    <div class="card"><h4>italique <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-style:italic;font-family:Georgia,serif;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>rétro <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:Georgia,serif;font-weight:700;letter-spacing:.04em;color:#E8B84B;text-shadow:2px 2px 0 rgba(0,0,0,.45)">Salut le monde</p></div>
+    <div class="card"><h4>élégant <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:Didot,'Bodoni MT',serif;font-weight:300;letter-spacing:.08em;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>affiche <span class="tag tNew">+7</span></h4><p style="font-size:21px;font-family:'Arial Narrow',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--ink)">Salut le monde</p></div>
+    <div class="card"><h4>bulle <span class="tag tNew">+7</span></h4><p style="font-size:19px;font-family:'Arial Rounded MT Bold','Trebuchet MS',sans-serif;font-weight:700;background:var(--acc);color:var(--acc-ink);display:inline-block;padding:3px 12px;border-radius:999px">Salut le monde</p></div>
+    <div class="card"><h4>note <span class="tag tNew">+7</span></h4><p style="font-size:17px;font-family:'American Typewriter',monospace;background:#E8DFA8;color:#221D3C;display:inline-block;padding:6px 10px;border-radius:3px;box-shadow:2px 3px 8px rgba(0,0,0,.3)">Salut le monde</p></div>
+    <div class="card"><h4>pinceau <span class="tag tNew">+7</span></h4><p style="font-size:23px;font-family:'Brush Script MT','Savoye LET',cursive;font-weight:700;color:var(--ink)">Salut le monde</p></div>
+  </div>
+  <ul class="klist" style="max-width:80ch;margin-top:14px">
+    <li><b>Sur média clair</b>, la bascule de lisibilité est celle du dépôt
+      (<span class="mono">CanvasChromeScheme</span>) : le style garde sa famille, le contraste
+      s'inverse — jamais un contour ajouté à la main par style.</li>
+    <li>Chaque style compose avec couleur · fond · taille · alignement · position — les réglages
+      EXISTANTS du panneau (P7), orthogonaux à la famille.</li>
+    <li>Le web (lot F) mappe les 18 noms vers des piles système équivalentes — mêmes noms, mêmes
+      intentions, un commentaire par famille cite la police iOS d'origine ; style inconnu ⇒
+      défaut, jamais un throw.</li>
+    <li>Les presets d'ANIMATION de texte (pop, machine à écrire…) sont une prémisse P16, post-v1 —
+      des keyframes prégénérés, pas des styles.</li>
+  </ul>
+</div></section>
+
 <footer><div class="wrap">
   <p><b>Sources vérifiées dans le code</b> (2026-08-19) — <span class="mono">StoryModels.swift</span>
   (StoryFilter, StoryKeyframe, familles d'objets), <span class="mono">ComposerToolPanelHost.swift</span>,
@@ -1181,5 +1531,5 @@ flowchart TD
   <span class="mono">ReelRepostEmbedCell.swift</span>, <span class="mono">PostService.ts</span>
   (repost → POST), spec <span class="mono">2026-08-19-post-references-design.md</span>, design
   <span class="mono">2026-08-15-story-atelier-design.md</span> (§11 : 39 features recensées).</p>
-  <p class="mono">Documents sœurs : 2026-08-19-meeshy-composer-design.md · 2026-08-20-meeshy-composer-execution-spec.md (décisions gelées, 6 lots) · rien n'est encore implémenté · Meeshy, Prisme Linguistique</p>
+  <p class="mono">Documents sœurs : 2026-08-19-meeshy-composer-design.md (rév. 2) · 2026-08-20-meeshy-composer-execution-spec.md (rév. 4 — décisions gelées O1–O16, lots A–H) · revue totale 2026-08-20 : 62 constats examinés, 33 réels intégrés, 8 réfutés avec preuve · rien n'est encore implémenté · Meeshy, Prisme Linguistique</p>
 </div></footer>

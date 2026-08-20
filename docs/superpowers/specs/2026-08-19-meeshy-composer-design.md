@@ -5,8 +5,9 @@ Statut : **SPÉCIFIÉ (2026-08-20) — arbitrages tous tranchés** ; exécution 
 `./2026-08-20-meeshy-composer-execution-spec.md` (7 lots, contrat gelé)
 Succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
-Planches visuelles (16 planches, inventaire exhaustif + matrice outil × format +
-revue système P15 + écart SOTA P16) : `./2026-08-19-meeshy-composer-views.html`
+Planches visuelles (21 planches — inventaire exhaustif, matrice outil × format,
+revue système P15, écart SOTA P16, entrées externes P18, continuité P19, rupture
+vécue P20, spécimen des styles P21) : `./2026-08-19-meeshy-composer-views.html`
 Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
 fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c),
