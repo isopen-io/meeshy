@@ -182,6 +182,8 @@ post-*
 # individually rather than narrowing the pattern blind, since its original intent
 # (likely a stray root-level artifact) is undocumented.
 !packages/shared/types/post-reference.ts
+!packages/shared/fixtures/canvas-v3/post-carousel-sound-library.json
+!packages/shared/fixtures/canvas-v3/post-sound-original.json
 
 # Development runtime (dev.sh)
 .pids/

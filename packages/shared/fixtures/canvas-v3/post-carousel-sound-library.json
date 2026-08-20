@@ -1,0 +1,14 @@
+{ "v": 3,
+  "sound": { "source": { "t": "library", "soundId": "snd_nuits_ete" }, "volume": 0.6, "bounds": { "start": 2, "end": 17 } },
+  "scenes": [
+    { "id": "s1", "objects": [
+      { "id": "m1", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+        "plane": "content", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+        "payload": { "mediaId": "64b000000000000000000011", "muted": true } }
+    ] },
+    { "id": "s2", "objects": [
+      { "id": "m2", "kind": "media", "anchor": { "t": "free", "x": 0.5, "y": 0.5 },
+        "plane": "content", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+        "payload": { "mediaId": "64b000000000000000000012", "muted": true } }
+    ] }
+  ] }

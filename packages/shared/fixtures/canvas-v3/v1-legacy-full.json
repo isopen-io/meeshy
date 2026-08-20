@@ -1,0 +1,37 @@
+{
+  "background": "color:#1E1B4B",
+  "backgroundTransform": { "scale": 1.1, "offsetX": 0.02, "offsetY": 0, "rotation": 0 },
+  "canvasAspectRatio": 1.7777,
+  "slideDuration": 7,
+  "timelineDuration": 9.5,
+  "opening": { "type": "fade" },
+  "closing": { "type": "slideUp" },
+  "clipTransitions": [
+    { "id": "ct1", "fromClipId": "c1", "toClipId": "c2", "kind": "crossfade", "duration": 0.4 }
+  ],
+  "musicTrackId": "legacy-track-9",
+  "backgroundAudioId": "snd_nuits_ete",
+  "backgroundAudioVolume": 0.6,
+  "backgroundAudioStart": 2,
+  "backgroundAudioEnd": 17,
+  "voiceTranscriptions": [
+    { "language": "fr", "content": "Salut à tous" },
+    { "language": "en", "content": "Hi everyone" }
+  ],
+  "textObjects": [ { "id": "t1", "text": "Salut", "textStyle": "retro", "x": 0.5, "y": 0.2,
+    "scale": 1.2, "rotation": 5, "zIndex": 3, "startTime": 1,
+    "sourceLanguage": "fr", "translations": { "en": "Hi" },
+    "keyframes": [ { "time": 1, "opacity": 0 }, { "time": 2, "opacity": 1 } ] } ],
+  "filter": "noir",
+  "filterIntensity": 0.8,
+  "stickers": ["✨"],
+  "stickerObjects": [ { "id": "st1", "emoji": "🔥", "x": 0.8, "y": 0.7, "scale": 1, "rotation": 0, "zIndex": 4,
+    "baseSize": 300, "anchorPoint": "center", "fadeIn": 0.3, "fadeOut": 0.5 } ],
+  "locationObjects": [ { "id": "L1",
+    "place": { "id": "pl1", "latitude": 4.0511, "longitude": 9.7679, "name": "Douala" },
+    "x": 0.3, "y": 0.85, "scale": 1, "rotation": 0, "zIndex": 5 } ],
+  "audioPlayerObjects": [ { "id": "a1", "postMediaId": "64b0000000000000000000aa",
+    "placement": "canvas", "x": 0.5, "y": 0.6, "volume": 1,
+    "waveformSamples": [0.2, 0.5, 0.3] } ],
+  "futureThing": { "unknown": true }
+}

@@ -1,0 +1,21 @@
+{ "v": 3, "scenes": [
+  { "id": "s1", "objects": [
+    { "id": "t1", "kind": "text", "anchor": { "t": "free", "x": 0.5, "y": 0.3 },
+      "plane": "fg", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+      "locale": "fr", "payload": { "text": "Premiere slide", "textStyle": "italic" } },
+    { "id": "st1", "kind": "sticker", "anchor": { "t": "free", "x": 0.8, "y": 0.7 },
+      "plane": "fg", "z": 1, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+      "timing": { "keyframes": [ { "time": 0, "scale": 0.8 }, { "time": 1, "scale": 1.2, "easing": "easeOut" } ] },
+      "payload": { "emoji": "🔥" } }
+  ] },
+  { "id": "s2", "opening": { "type": "fade" }, "objects": [
+    { "id": "p1", "kind": "place", "anchor": { "t": "free", "x": 0.3, "y": 0.85 },
+      "plane": "fg", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+      "payload": { "name": "Douala", "precision": "city" } }
+  ] },
+  { "id": "s3", "objects": [
+    { "id": "t3", "kind": "text", "anchor": { "t": "band", "edge": "bottom" },
+      "plane": "fg", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+      "locale": "fr", "payload": { "text": "Troisieme slide", "textStyle": "brush" } }
+  ] }
+] }

@@ -1,0 +1,5 @@
+{ "v": 3, "scenes": [ { "id": "s1", "objects": [
+  { "id": "t1", "kind": "text", "anchor": { "t": "free", "x": 0.5, "y": 0.42 },
+    "plane": "fg", "z": 0, "transform": { "scale": 1, "rotation": 0, "opacity": 1 },
+    "locale": "fr", "payload": { "text": "Bonjour", "textStyle": "neon", "textColor": "#FFFFFF" } }
+] } ] }
