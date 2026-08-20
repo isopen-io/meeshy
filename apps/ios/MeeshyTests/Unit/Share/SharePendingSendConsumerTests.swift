@@ -97,14 +97,30 @@ final class SharePendingSendConsumerTests: XCTestCase {
     private let photo = SharePendingSendConsumer.PendingMedia(
         relPath: "cid_abc/0.jpg", ext: "jpg", mime: "image/jpeg", bytes: 32)
 
+    /// Ancre de temps FIGÉE, partagée par les fiches fixture (`writeShare`
+    /// par défaut, `validPayload`) et par le `now:` passé à `consumeAll` dans
+    /// les tests qui ne portent pas spécifiquement sur la purge par âge.
+    /// L'écart entre les deux reste 0 pour toujours : sans elle, la purge par
+    /// âge (Task 11) traiterait ces fiches comme expirées dès que le vrai
+    /// relogue dépasse sept jours après la rédaction du test — exactement le
+    /// piège des dates absolues dans les fixtures.
+    private let fixtureNow = Date(timeIntervalSince1970: 1_785_000_000)
+
+    /// Ancre jumelle pour les payloads utilisant le littéral ISO
+    /// `"2026-07-29T10:00:00Z"` (`validPayload`, quelques payloads JSON bruts).
+    private let literalPayloadNow = ISO8601DateFormatter().date(
+        from: "2026-07-29T10:00:00Z")!
+
     // MARK: - Chemin nominal : une fiche, N cibles
 
     func test_consumeAll_enqueuesOneRowPerTarget() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(items.map(\.conversationId), ["conv1", "conv2", "conv3"])
@@ -117,10 +133,12 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// les octets après le premier envoi.
     func test_consumeAll_readsEachTargetsOwnPersistedClientMessageId() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let ids = await queue.enqueuedClientMessageIds
         XCTAssertEqual(ids, ["cid_abc_t0", "cid_abc_t1", "cid_abc_t2"])
@@ -128,10 +146,12 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
     func test_consumeAll_preservesTheShareCreationDate() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir, mediaRoot: nil)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(try XCTUnwrap(items.first?.createdAt.timeIntervalSince1970),
@@ -151,7 +171,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let mediaCalls = await queue.enqueuedMediaCalls
         let originCreatedAt = try XCTUnwrap(mediaCalls.first?.createdAt)
@@ -172,9 +193,11 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
     func test_consumeAll_whenEveryTargetIsEnqueued_deletesTheFiche() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir)
 
-        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue()).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         XCTAssertTrue(files(in: dir).isEmpty)
     }
@@ -191,11 +214,13 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// contenu de l'une avait fui vers la cible de l'autre.
     func test_consumeAll_withSeveralPendingFiches_consumesEachOfThemInOneCall() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(shareId: "cid_un", content: "un", conversationIds: ["convUn"], in: dir)
         try writeShare(shareId: "cid_deux", content: "deux", conversationIds: ["convDeux"], in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(
@@ -218,7 +243,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"],
@@ -236,7 +262,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(items.map(\.forwardedFromId), [nil, nil],
@@ -258,7 +285,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let calls = await queue.enqueuedMediaCalls
         XCTAssertEqual(calls.count, 1)
@@ -278,7 +306,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
 
         await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
-            .consumeAll(in: dir, mediaRoot: mediaRoot)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: mediaRoot.appendingPathComponent("cid_abc").path))
@@ -294,7 +322,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
                        in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let mediaCalls = await queue.enqueuedMediaCalls
         XCTAssertTrue(mediaCalls.isEmpty, "les octets sont déjà chez le serveur")
@@ -311,10 +340,12 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// re-téléverserait les octets de l'origine.
     func test_consumeAll_skipsTargetsAlreadyServed() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(states: [.sent, .pending, .pending], in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"])
@@ -324,11 +355,13 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// cibles servies MARQUÉES : la reprise suivante ne rejoue que ce qui reste.
     func test_consumeAll_whenOneTargetFails_keepsTheFicheWithProgress() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir)
         let queue = FakeOfflineMessageQueue()
         await queue.setThrowFromCallIndex(1)
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let reread = try XCTUnwrap(SharePendingSendConsumer.decodeRelay(
             try Data(contentsOf: dir.appendingPathComponent("cid_abc.json"))))
@@ -338,13 +371,16 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
     func test_consumeAll_afterAPartialFailure_resumesWhereItStopped() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try writeShare(in: dir)
         let failing = FakeOfflineMessageQueue()
         await failing.setThrowFromCallIndex(1)
-        await SharePendingSendConsumer(queue: failing).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: failing)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let recovering = FakeOfflineMessageQueue()
-        await SharePendingSendConsumer(queue: recovering).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: recovering)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let items = await recovering.enqueuedItems
         XCTAssertEqual(items.map(\.conversationId), ["conv2", "conv3"],
@@ -363,7 +399,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
                        in: dir, mediaRoot: mediaRoot)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         let mediaCalls = await queue.enqueuedMediaCalls
         XCTAssertTrue(mediaCalls.isEmpty, "l'origine était déjà servie")
@@ -381,7 +418,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
         let queue = FakeOfflineMessageQueue()
         await queue.setThrowFromCallIndex(0)
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
 
         XCTAssertTrue(FileManager.default.fileExists(
             atPath: mediaRoot.appendingPathComponent("cid_abc/0.jpg").path))
@@ -391,24 +429,29 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
     func test_consumeAll_whenEnqueueFails_keepsFileForRetry() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try write(validPayload(), named: "a.json", in: dir)
         let queue = FakeOfflineMessageQueue()
         await queue.setShouldThrow(true)
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: literalPayloadNow)
 
         XCTAssertEqual(files(in: dir), ["a.json"], "un échec d'enfilement ne doit RIEN supprimer")
     }
 
     func test_consumeAll_afterFailure_retrySucceedsAndDeletes() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try write(validPayload(), named: "a.json", in: dir)
         let queue = FakeOfflineMessageQueue()
         await queue.setShouldThrow(true)
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: literalPayloadNow)
 
         await queue.setShouldThrow(false)
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: literalPayloadNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(items.count, 1)
@@ -422,10 +465,11 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// politique que `NSEPendingMessageConsumer` pour un blob corrompu.
     func test_consumeAll_withCorruptPayload_dropsFileWithoutEnqueuing() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try write("pas du json", named: "a.json", in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0)
@@ -434,10 +478,11 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
     func test_consumeAll_ignoresNonJSONFiles() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try write("peu importe", named: "note.txt", in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0)
@@ -447,9 +492,10 @@ final class SharePendingSendConsumerTests: XCTestCase {
     func test_consumeAll_withMissingDirectory_isNoOp() async throws {
         let dir = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("absent-\(UUID().uuidString)", isDirectory: true)
+        let mediaRoot = try makeMediaRoot()
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0)
@@ -457,9 +503,10 @@ final class SharePendingSendConsumerTests: XCTestCase {
 
     func test_consumeAll_withEmptyDirectory_isNoOp() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0)
@@ -517,6 +564,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// fiche.
     func test_consumeAll_withNoTargets_dropsFileWithoutEnqueuingOrCrashing() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try write("""
         {"v":1,"clientMessageId":"cid_no_targets","createdAt":"2026-07-29T10:00:00Z",\
         "content":"bonjour","media":[],"uploadedAttachmentIds":null,"originTargetIndex":null,\
@@ -524,7 +572,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         """, named: "cid_no_targets.json", in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0, "aucune cible à servir : rien ne doit être enfilé")
@@ -536,6 +584,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// `current.targets[5]`.
     func test_consumeAll_withOriginIndexOutOfBounds_dropsFileWithoutEnqueuingOrCrashing() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         try write("""
         {"v":1,"clientMessageId":"cid_bad_origin","createdAt":"2026-07-29T10:00:00Z",\
         "content":"bonjour","media":[],"uploadedAttachmentIds":null,"originTargetIndex":5,\
@@ -549,7 +598,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         """, named: "cid_bad_origin.json", in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
 
         let count = await queue.enqueueCount
         XCTAssertEqual(count, 0, "l'origine ne désigne aucune cible : rien ne doit être enfilé")
@@ -567,6 +616,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
     /// `convPending`).
     func test_consumeAll_withMultiTargetShare_reenqueuesOnlyTargetsNotYetSent() async throws {
         let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
         let payload = """
         {"v":1,"clientMessageId":"cid_multi_00000000-0000-4000-8000-000000000000",\
         "createdAt":"2026-07-29T10:00:00Z","content":"bonjour","media":[],\
@@ -581,7 +631,8 @@ final class SharePendingSendConsumerTests: XCTestCase {
         try write(payload, named: "multi.json", in: dir)
         let queue = FakeOfflineMessageQueue()
 
-        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: literalPayloadNow)
 
         let items = await queue.enqueuedItems
         XCTAssertEqual(
@@ -704,6 +755,121 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertEqual(
             media.deletingLastPathComponent(), relay.deletingLastPathComponent(),
             "les deux dossiers doivent vivre dans le MÊME conteneur App Group"
+        )
+    }
+
+    // MARK: - Purge par âge
+
+    /// `share_pending_sends` n'a aujourd'hui NI cap NI TTL et n'est nettoyé
+    /// qu'au logout (`WidgetDataManager.wipeAll`) : un partage jamais repris —
+    /// parce que son compte est mort, parce que sa conversation a été
+    /// supprimée — resterait sur disque INDÉFINIMENT, avec ses octets.
+    func test_maxRelayAge_isSevenDays() {
+        XCTAssertEqual(SharePendingSendConsumer.maxRelayAge, 604_800)
+    }
+
+    func test_isExpired_atTheBoundary_isFalse() {
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
+        XCTAssertFalse(SharePendingSendConsumer.isExpired(
+            createdAt: now.addingTimeInterval(-604_800), now: now, maxAge: 604_800),
+            "exactement à l'âge maximal, la fiche vit encore")
+    }
+
+    func test_isExpired_beyondTheBoundary_isTrue() {
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
+        XCTAssertTrue(SharePendingSendConsumer.isExpired(
+            createdAt: now.addingTimeInterval(-604_801), now: now, maxAge: 604_800))
+    }
+
+    /// Une fiche datée du FUTUR (horloge changée) n'est pas expirée : la
+    /// purger détruirait un partage tout juste créé.
+    func test_isExpired_forAFutureDate_isFalse() {
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
+        XCTAssertFalse(SharePendingSendConsumer.isExpired(
+            createdAt: now.addingTimeInterval(3600), now: now, maxAge: 604_800))
+    }
+
+    func test_consumeAll_purgesAnExpiredFiche_withoutEnqueuingIt() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
+        try writeShare(createdAt: now.addingTimeInterval(-604_801), in: dir)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
+
+        let count = await queue.enqueueCount
+        XCTAssertEqual(count, 0, "une fiche expirée n'est pas enfilée, elle est jetée")
+        XCTAssertTrue(files(in: dir).isEmpty)
+    }
+
+    func test_consumeAll_purgesTheMediaFolderOfAnExpiredFiche() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
+        try writeShare(media: [photo], createdAt: now.addingTimeInterval(-604_801),
+                       in: dir, mediaRoot: mediaRoot)
+
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
+
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: mediaRoot.appendingPathComponent("cid_abc").path),
+            "les octets d'un partage expiré partent avec lui")
+    }
+
+    func test_consumeAll_keepsAFreshFiche() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let now = Date(timeIntervalSince1970: 1_785_000_000)
+        try writeShare(createdAt: now.addingTimeInterval(-3600), in: dir)
+        let queue = FakeOfflineMessageQueue()
+        await queue.setShouldThrow(true)
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot, now: now)
+
+        XCTAssertEqual(files(in: dir), ["cid_abc.json"],
+                       "un partage récent en échec transitoire reste réessayable")
+    }
+
+    /// Un dossier média ORPHELIN — sa fiche a disparu (purge de logout,
+    /// suppression manuelle, crash entre les deux écritures) — n'a plus aucune
+    /// chance d'être consommé. Il ne doit pas occuper le disque à vie.
+    func test_consumeAll_sweepsAnOrphanMediaFolder() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let orphan = mediaRoot.appendingPathComponent("cid_orphelin", isDirectory: true)
+        try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+        try Data(repeating: 3, count: 16).write(to: orphan.appendingPathComponent("0.jpg"))
+        // Une fiche vivante à côté, pour prouver que la purge ne balaie pas tout.
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+        await queue.setShouldThrow(true)
+
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot,
+                        now: Date(timeIntervalSince1970: 1_785_000_000))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: mediaRoot.appendingPathComponent("cid_abc").path),
+            "le dossier d'une fiche VIVANTE ne doit jamais être pris pour un orphelin"
+        )
+    }
+
+    func test_consumeAll_withoutAnyFiche_stillSweepsOrphanMediaFolders() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let orphan = mediaRoot.appendingPathComponent("cid_orphelin", isDirectory: true)
+        try FileManager.default.createDirectory(at: orphan, withIntermediateDirectories: true)
+
+        await SharePendingSendConsumer(queue: FakeOfflineMessageQueue())
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: Date())
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: orphan.path),
+            "l'ancien code sortait TÔT quand le dossier de fiches était vide — "
+            + "les octets orphelins survivaient à tout"
         )
     }
 }

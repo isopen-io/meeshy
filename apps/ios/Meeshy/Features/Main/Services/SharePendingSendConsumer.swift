@@ -195,6 +195,20 @@ final class SharePendingSendConsumer {
     /// détail d'implémentation SQLite.
     private static let fanoutOrderEpsilon: TimeInterval = 0.001
 
+    /// Sept jours. `share_pending_sends` n'avait NI cap NI TTL et n'était
+    /// nettoyé qu'au logout (`WidgetDataManager.wipeAll`) : un partage jamais
+    /// repris — compte mort, conversation supprimée, fichier illisible —
+    /// occupait le disque indéfiniment, avec ses octets.
+    nonisolated static let maxRelayAge: TimeInterval = 604_800
+
+    /// Une fiche datée du FUTUR (horloge de l'appareil changée) n'est PAS
+    /// expirée : la purger détruirait un partage tout juste créé.
+    nonisolated static func isExpired(
+        createdAt: Date, now: Date, maxAge: TimeInterval
+    ) -> Bool {
+        now.timeIntervalSince(createdAt) > maxAge
+    }
+
     private let queue: OfflineMessageQueueing
     private let logger = Logger(subsystem: "me.meeshy.app", category: "share-consumer")
 
@@ -204,8 +218,12 @@ final class SharePendingSendConsumer {
 
     func consumeAll(
         in directory: URL? = SharePendingSendConsumer.directoryURL(),
-        mediaRoot: URL? = SharePendingSendConsumer.mediaDirectoryURL()
+        mediaRoot: URL? = SharePendingSendConsumer.mediaDirectoryURL(),
+        now: Date = Date()
     ) async {
+        var liveShareIds: Set<String> = []
+        defer { sweepOrphanMediaFolders(in: mediaRoot, keeping: liveShareIds) }
+
         guard let directory else { return }
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: directory,
@@ -228,8 +246,40 @@ final class SharePendingSendConsumer {
                 remove(url, reason: "relais corrompu")
                 continue
             }
+            guard !Self.isExpired(
+                createdAt: share.createdAt, now: now, maxAge: Self.maxRelayAge
+            ) else {
+                remove(url, reason: "relais expiré")
+                discardMedia(shareId: share.clientMessageId, in: mediaRoot)
+                continue
+            }
+            liveShareIds.insert(share.clientMessageId)
             await consume(share, at: url, mediaRoot: mediaRoot)
         }
+    }
+
+    /// Un dossier média dont la fiche a disparu (purge de logout, crash entre
+    /// les deux écritures) n'a plus aucune chance d'être consommé. Balayé à
+    /// CHAQUE passage — et hors de la garde de sortie anticipée, sinon un
+    /// dossier de fiches vide le rendrait immortel.
+    private func sweepOrphanMediaFolders(in mediaRoot: URL?, keeping liveShareIds: Set<String>) {
+        guard let mediaRoot,
+              let folders = try? FileManager.default.contentsOfDirectory(
+                at: mediaRoot, includingPropertiesForKeys: nil) else { return }
+        for folder in folders where !liveShareIds.contains(folder.lastPathComponent) {
+            do {
+                try FileManager.default.removeItem(at: folder)
+            } catch {
+                logger.error(
+                    "Dossier média orphelin \(folder.lastPathComponent, privacy: .public) non balayé : \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    private func discardMedia(shareId: String, in mediaRoot: URL?) {
+        guard let mediaRoot else { return }
+        try? FileManager.default.removeItem(
+            at: mediaRoot.appendingPathComponent(shareId, isDirectory: true))
     }
 
     /// Une fiche décrit N cibles, mais l'enfilage est fait PAR CIBLE.

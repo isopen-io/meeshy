@@ -203,6 +203,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         }
         let stagingDirs = stagingDirectoriesOverride ?? [
             SharePendingSendConsumer.directoryURL(),
+            SharePendingSendConsumer.mediaDirectoryURL(),
             NSEPendingMessageConsumer.directoryURL(),
             NSEPendingPostConsumer.directoryURL(),
         ].compactMap { $0 }
