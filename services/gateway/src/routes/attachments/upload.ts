@@ -24,14 +24,23 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
 
 /**
- * Plafond du champ `content` de `POST /attachments/upload-text` (task-1-fix-
- * round-3, I2). AVANT : aucune limite dans le schéma Fastify — seule la
- * limite GLOBALE du serveur s'appliquait (`bodyLimit: 50MB`, `server.ts`),
- * donc un invité anonyme pouvait persister jusqu'à ~50 Mo de texte en un
- * seul appel REST documenté, sans rien forger. 10 Mo (~10 millions de
- * caractères) reste très généreux pour tout usage BubbleStream légitime
- * (plusieurs romans en texte brut) tout en abaissant nettement le plafond
- * réel, indépendamment de `bodyLimit`.
+ * Plafond RÉEL, en OCTETS, du champ `content` de `POST /attachments/upload-
+ * text` (task-1-fix-round-3, I2 ; corrigé round 4). Vérifié ci-dessous via
+ * `Buffer.byteLength(content, 'utf-8')` — la seule mesure qui corresponde
+ * exactement à ce que `Buffer.from(content, 'utf-8')` écrira sur disque
+ * (`AttachmentService.createTextAttachment`).
+ *
+ * AVANT round 4 : ce plafond n'était appliqué QUE via `maxLength` dans le
+ * schéma Fastify — or AJV compte des POINTS DE CODE Unicode, jamais des
+ * octets (vérifié par exécution isolée du moteur de schéma réellement
+ * utilisé). Avec des caractères astraux choisis délibérément par un
+ * attaquant (emoji, 4 octets chacun en UTF-8), un contenu de 10 485 760
+ * points de code passait la validation tout en pesant ~41,9 Mo une fois
+ * écrit sur disque — face au plafond global de 50 Mo du serveur
+ * (`server.ts`), une réduction réelle d'environ 16 % seulement, alors que ce
+ * commentaire affirmait alors abaisser « nettement » le plafond réel. 10 Mo
+ * reste très généreux pour tout usage BubbleStream légitime (plusieurs
+ * romans en texte brut) tout en abaissant réellement le plafond effectif.
  */
 export const MAX_TEXT_ATTACHMENT_LENGTH = 10 * 1024 * 1024;
 
@@ -205,6 +214,14 @@ export async function registerUploadRoutes(
             content: {
               type: 'string',
               description: 'Text content to save as a file',
+              // Barrière de schéma peu coûteuse : AJV compte des POINTS DE
+              // CODE Unicode, pas des octets — cette valeur ne borne donc PAS
+              // la taille réelle en octets (jusqu'à ×4 en pire cas avec des
+              // caractères astraux, voir le commentaire de
+              // `MAX_TEXT_ATTACHMENT_LENGTH` ci-dessus). Elle rejette
+              // seulement, tôt et à coût nul, un contenu manifestement
+              // démesuré avant l'appel au service ; le plafond RÉEL est
+              // vérifié en octets dans le handler ci-dessous.
               maxLength: MAX_TEXT_ATTACHMENT_LENGTH,
             },
             messageId: {
@@ -250,6 +267,18 @@ export async function registerUploadRoutes(
         }
 
         const { content, messageId } = request.body as UploadTextBody;
+
+        // task-1-fix-round-4 — plafond RÉEL, en octets : `Buffer.byteLength`
+        // mesure exactement ce que `Buffer.from(content, 'utf-8')` produira
+        // (AttachmentService.createTextAttachment), contrairement au
+        // `maxLength` du schéma ci-dessus qui ne borne que des points de code.
+        const contentByteLength = Buffer.byteLength(content, 'utf-8');
+        if (contentByteLength > MAX_TEXT_ATTACHMENT_LENGTH) {
+          return sendBadRequest(
+            reply,
+            `Content exceeds maximum size of ${MAX_TEXT_ATTACHMENT_LENGTH} bytes (received ${contentByteLength} bytes)`
+          );
+        }
 
         const userId = authContext.userId;
         const isAnonymous = authContext.isAnonymous;

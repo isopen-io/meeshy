@@ -900,3 +900,45 @@ describe('POST /attachments/upload-text — content size cap (task-1-fix-round-3
     expect(mockCreateTextAttachment).toHaveBeenCalledTimes(1);
   });
 });
+
+// task-1-fix-round-4 — le plafond round 3 comptait des POINTS DE CODE Unicode
+// (via `maxLength` AJV), pas des octets. Un contenu composé de caractères
+// astraux (4 octets chacun en UTF-8, 1 seul point de code chacun) peut donc
+// passer très en dessous de `MAX_TEXT_ATTACHMENT_LENGTH` points de code tout
+// en pesant NETTEMENT plus que `MAX_TEXT_ATTACHMENT_LENGTH` octets une fois
+// écrit sur disque par `Buffer.from(content, 'utf-8')` — jusqu'à ~4× en pire
+// cas. Ce test prouve que ce contournement est fermé : le plafond compte
+// désormais des octets réels (`Buffer.byteLength`), pas des caractères.
+describe('POST /attachments/upload-text — byte-based size cap, not codepoint-based (task-1-fix-round-4)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockCreateTextAttachment.mockResolvedValue({ id: 'should-not-be-created' });
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('rejects multi-byte content whose codepoint count passes the schema maxLength but whose UTF-8 byte weight exceeds MAX_TEXT_ATTACHMENT_LENGTH', async () => {
+    mockCreateTextAttachment.mockClear();
+
+    // 😀 (U+1F600) : exactement 1 point de code (ce qu'AJV `maxLength`
+    // compte), 4 octets en UTF-8 (ce que `Buffer.byteLength`/`Buffer.from`
+    // mesurent/écrivent réellement). `codepointCount` est le plus PETIT
+    // nombre de points de code pour lequel le poids en octets dépasse
+    // strictement le plafond, tout en restant très en dessous du plafond en
+    // points de code — la preuve la plus serrée du contournement.
+    const codepointCount = Math.floor(MAX_TEXT_ATTACHMENT_LENGTH / 4) + 1;
+    const content = '\u{1F600}'.repeat(codepointCount);
+
+    expect(codepointCount).toBeLessThan(MAX_TEXT_ATTACHMENT_LENGTH);
+    expect(Buffer.byteLength(content, 'utf-8')).toBeGreaterThan(MAX_TEXT_ATTACHMENT_LENGTH);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/attachments/upload-text',
+      payload: { content },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockCreateTextAttachment).not.toHaveBeenCalled();
+  });
+});
