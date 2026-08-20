@@ -1,7 +1,9 @@
 # MeeshyComposer — un seul objet pour créer, un seul noyau pour lire
 
 Date : 2026-08-19
-Statut : **proposition de design, non validée** — succède à `2026-08-15-story-atelier-design.md`
+Statut : **SPÉCIFIÉ (2026-08-20) — arbitrages tous tranchés** ; exécution :
+`./2026-08-20-meeshy-composer-execution-spec.md` (6 lots parallèles, contrat gelé)
+Succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
 Planches visuelles (16 planches, inventaire exhaustif + matrice outil × format +
 revue système P15 + écart SOTA P16) : `./2026-08-19-meeshy-composer-views.html`
@@ -49,16 +51,16 @@ MeeshyDocument
 ├── metadata    : place?, sound?, language, discoverability…
 └── scenes      : [Scene]?                           ← nil = document SANS scène
      └── Scene (9:16)
-          ├── ratio du contenu porteur (16:9, 1:1, 9:16…)
-          └── objects : [MeeshyObject]
+          └── objects : [MeeshyObject]      ← le ratio se lit du média PORTEUR (S8)
 ```
 
 Un `MeeshyObject` unique remplace les cinq familles :
 
 ```
 MeeshyObject
-├── id, kind        : text | media | sticker(emoji|image) | audio | place | drawing | mention | hashtag | annotation
-├── anchor          : .free(x,y) | .band(.top|.bottom) | .pinned(toObject:)   ← §2
+├── id, kind        : text | media | sticker(emoji|image) | audio | place | drawing | mention
+│                     (+ hashtag · annotation · interactive : RÉSERVÉS, hors v1 — O1/S5/O10)
+├── anchor          : .free(x,y) | .band(.top|.bottom)   (.pinned : RÉSERVÉ, hors v1 — S5)
 ├── layer           : plane (.background | .content | .foreground) + z dans le plan
 ├── transform       : scale, rotation, opacity            ← UNE définition
 ├── timing          : start?, end?, keyframes[]            ← UNE définition, optionnelle
@@ -398,9 +400,11 @@ Ce que la passe NE touche pas — le cœur du gain : scène 9:16 à bandes activ
 socle permanent, profils d'intention, loi des deux plans audio, bouton 🔇,
 collage, `↻` sans verbe, les 18 styles.
 
-## 7. Les arbitrages ouverts
+## 7. Les arbitrages — TOUS TRANCHÉS (2026-08-20)
 
-Ce sont les vraies décisions ; le reste en découle.
+Décisions gelées dans la spec d'exécution
+(`2026-08-20-meeshy-composer-execution-spec.md`, §B1) ; ce tableau conserve
+l'argumentaire qui a fondé chaque décision.
 
 | # | Question | Option A | Option B | Recommandation |
 |---|---|---|---|---|
@@ -512,5 +516,5 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
 
 ## 10. Statut
 
-Ce document est une **proposition**. Rien n'est implémenté. **O2 est tranché (A′, rupture assumée — porteur produit 2026-08-20)** ; les points restants de §7 (O1, O3–O11) et §8
+Rien n'est encore implémenté, mais ce document n'est plus une proposition ouverte : **les onze arbitrages sont tranchés** (O2 par le porteur produit ; O1, O3–O11 gelés dans la spec d'exécution du 2026-08-20, avec le découpage en six lots parallèles). Les points de §8
 demandent un arbitrage produit avant qu'un plan d'implémentation soit écrit.

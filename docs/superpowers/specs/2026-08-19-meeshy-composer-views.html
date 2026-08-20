@@ -204,7 +204,7 @@ footer .mono{font-size:11.5px}
   avant toute nouveauté.</b></p>
   <div class="meta">
     <span>2026-08-19 · rév. 2026-08-20</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
-    <span>statut : proposition — O2 TRANCHÉ : rupture A′ (porteur produit, P17) · O1/O3–O11 recommandés</span>
+    <span>statut : SPÉCIFIÉ — arbitrages TOUS tranchés · spec d'exécution 2026-08-20, six lots parallèles</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
   </div>
   <div class="legend">
@@ -1001,7 +1001,7 @@ flowchart TD
       <span class="mono">@marc · ↻ @aïcha</span> — jamais « a republié ». Généralisé : tout glyphe
       établi (↻, ♫〰, 👁) remplace son texte. iOS conforme depuis le 2026-08-19 ; web à aligner.</p></div>
   </div>
-  <h3>Arbitrages ouverts (décision produit requise)</h3>
+  <h3>Arbitrages — TOUS TRANCHÉS (2026-08-20, spec d'exécution · six lots) ; l'argumentaire reste ci-dessous</h3>
   <div class="scrollx"><table>
     <thead><tr><th>#</th><th>Question</th><th>Recommandation</th></tr></thead>
     <tbody>
@@ -1106,7 +1106,7 @@ flowchart TD
       <tr><td><b>Stickers interactifs</b> — sondage · question · quiz · curseur emoji · compte à rebours · « à vous »</td><td class="ab">absents (recensés hors périmètre par Story Atelier)</td><td>un kind <span class="mono">interactive</span> de MeeshyObject, posable/timable comme le reste ; rendu inerte élégant hors ligne et sur vieux clients</td><td><b>oui</b> — votes/réponses = table légère (O10), jamais dans le blob</td></tr>
       <tr><td><b>Détourage sujet → sticker</b> (« lift », façon stickers iMessage)</td><td class="ab">absent</td><td>VisionKit subject-lift sur photo importée/collée → sticker image dans « Mes stickers ». <b>API iOS 16 ✓ — pile notre plancher</b></td><td>non — client pur</td></tr>
       <tr><td><b>GIF / stickers animés</b></td><td class="ab">absent (collage = image fixe)</td><td>le collage accepte GIF/APNG → sticker animé local ; pas d'intégration Giphy en v1</td><td>non</td></tr>
-      <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ ADDITIF du blob</td></tr>
+      <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ du blob v3</td></tr>
       <tr><td><b>Presets d'animation de texte</b> (pop, glissé, machine à écrire…)</td><td class="ab">les keyframes existent, aucun preset nommé</td><td>bibliothèque de presets = keyframes PRÉGÉNÉRÉS — des données, zéro vue neuve</td><td>non</td></tr>
       <tr><td><b>Layouts / collage</b> (2·3·4 cases)</td><td class="ab">médias premier plan libres seulement</td><td>presets d'ANCRES qui posent N objets média — des données encore</td><td>non</td></tr>
       <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td>état « programmé » de l'Étagère, la file locale publie à l'heure (best-effort BGTask) — la version FIABLE attend un <span class="mono">scheduledAt</span> serveur (O11)</td><td>léger, pour la version fiable</td></tr>
@@ -1181,6 +1181,5 @@ flowchart TD
   <span class="mono">ReelRepostEmbedCell.swift</span>, <span class="mono">PostService.ts</span>
   (repost → POST), spec <span class="mono">2026-08-19-post-references-design.md</span>, design
   <span class="mono">2026-08-15-story-atelier-design.md</span> (§11 : 39 features recensées).</p>
-  <p class="mono">Document sœur : 2026-08-19-meeshy-composer-design.md · Proposition — rien n'est
-  implémenté · Meeshy, Prisme Linguistique</p>
+  <p class="mono">Documents sœurs : 2026-08-19-meeshy-composer-design.md · 2026-08-20-meeshy-composer-execution-spec.md (décisions gelées, 6 lots) · rien n'est encore implémenté · Meeshy, Prisme Linguistique</p>
 </div></footer>
