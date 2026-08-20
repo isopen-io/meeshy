@@ -383,7 +383,17 @@ describe('POST /refresh — signature forgée', () => {
     await app.close();
   });
 
-  it('accepte une signature invalide UNIQUEMENT si une session de confiance la couvre', async () => {
+  // task-1-fix-round-6 — décision du propriétaire, après clarification :
+  // « une forme de connexion à la fois », jamais « une application à la
+  // fois ». Le round 5 avait accepté ici une signature invalide couverte par
+  // une session de confiance de la MÊME application ; le propriétaire a
+  // explicitement écarté ce mélange de DEUX FORMES de justificatif — un
+  // jeton d'authentification à signature invalide ne doit JAMAIS être
+  // rattrapé par une session, quelle qu'elle soit. Le piège de cette route :
+  // elle reste la SEULE à tolérer un jeton EXPIRÉ (c'est sa raison d'être,
+  // via `ignoreExpiration` sur une signature authentique) — ce test prouve
+  // que ce n'est plus le cas pour une signature invalide.
+  it('refuse une signature invalide même si une session de confiance PARFAITEMENT valide existe — plus de rattrapage inter-formes (round 6)', async () => {
     const jwt = await import('jsonwebtoken');
     (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
       throw new Error('invalid signature');
@@ -392,64 +402,24 @@ describe('POST /refresh — signature forgée', () => {
       userId: USER_ID, username: 'alice', role: 'USER',
     });
 
-    // task-1-fix-round-5 — `/refresh` délègue désormais à `findTrustedSession`
-    // (`middleware/auth.ts`), qui inclut la règle « une application à la
-    // fois ». Ce test vérifie le CÂBLAGE de la route (elle accepte quand
-    // `findTrustedSession` trouve une session) ; la logique de classification
-    // web/native elle-même est testée à sa source (`auth-extended.test.ts`).
+    // Une session de confiance parfaitement valide existerait — elle ne doit
+    // pourtant jamais être consultée : la garde doit refuser AVANT même
+    // d'atteindre `findTrustedSession`.
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue({}),
-      },
-    });
 
-    const app = await buildApp({ prisma });
+    const app = await buildApp();
     const res = await app.inject({
       method: 'POST',
       url: '/refresh',
-      payload: { token: 'jeton-perime', sessionToken: 'session-de-confiance' },
-    });
-
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-
-  // task-1-fix-round-5 — la règle « une application à la fois » vaut ici
-  // aussi : une signature invalide couverte par une session de confiance
-  // d'une AUTRE application doit rester refusée. `findTrustedSession` porte
-  // déjà cette décision ; ce test prouve que `/refresh` respecte bien son
-  // verdict plutôt que de le court-circuiter.
-  it("refuse une signature invalide quand findTrustedSession refuse (repli d'une autre application)", async () => {
-    const jwt = await import('jsonwebtoken');
-    (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
-      throw new Error('invalid signature');
-    });
-    (jwt.decode as jest.Mock<any>).mockReturnValueOnce({
-      userId: USER_ID, username: 'alice', role: 'USER',
-    });
-
-    mockFindTrustedSession.mockResolvedValueOnce(null);
-    const prisma = makePrisma();
-
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/refresh',
-      payload: { token: 'jeton-perime', sessionToken: 'session-autre-application' },
-      headers: { 'user-agent': 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0' },
+      payload: { token: 'jeton-forge-avec-signature-bidon', sessionToken: 'session-de-confiance' },
     });
 
     expect(res.statusCode).toBe(401);
-    expect(mockFindTrustedSession).toHaveBeenCalledWith(
-      prisma,
-      expect.objectContaining({
-        userId: USER_ID,
-        sessionToken: 'session-autre-application',
-        requestUserAgent: 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0',
-      })
-    );
+    // Et surtout : aucun jeton signé par le serveur n'est renvoyé.
+    expect(res.json().data?.token).toBeUndefined();
+    // Preuve que ce n'est pas une coïncidence : le rattrapage n'est même
+    // plus TENTÉ.
+    expect(mockFindTrustedSession).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -503,10 +473,13 @@ describe('POST /refresh — with trusted session', () => {
     await app.close();
   });
 
-  // task-1-fix-round-5 — preuve que le User-Agent de la requête EN COURS est
-  // bien extrait et transmis à `findTrustedSession` (et non ignoré/oublié),
-  // seul canal par lequel la route peut établir « la même application ».
-  it('passe le User-Agent de la requête à findTrustedSession (câblage round 5)', async () => {
+  // task-1-fix-round-6 — documente explicitement l'intention du propriétaire
+  // (« on peut être connecté par plusieurs applications à la fois sans
+  // souci ») pour empêcher un futur round de réintroduire la règle du round
+  // 5 : `findTrustedSession` ne reçoit plus de signal d'application du tout
+  // (aucun `requestUserAgent` dans l'appel), et le succès du rafraîchissement
+  // ne dépend donc jamais du User-Agent de la requête en cours.
+  it("une session de confiance ne discrimine plus par application — connecté depuis plusieurs apps jamais pénalisé (round 6)", async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
     const prisma = makePrisma({
       userSession: {
@@ -515,20 +488,19 @@ describe('POST /refresh — with trusted session', () => {
       },
     });
     const app = await buildApp({ prisma });
-    await app.inject({
+    const res = await app.inject({
       method: 'POST',
       url: '/refresh',
       payload: { token: 'valid-jwt-token', sessionToken: 'my-session-token' },
-      headers: { 'user-agent': 'Mozilla/5.0 Chrome/126.0.0.0' },
+      // User-Agent délibérément différent de toute app "attendue" — n'a plus
+      // aucun effet sur l'issue.
+      headers: { 'user-agent': 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0' },
     });
 
+    expect(res.statusCode).toBe(200);
     expect(mockFindTrustedSession).toHaveBeenCalledWith(
       prisma,
-      expect.objectContaining({
-        userId: USER_ID,
-        sessionToken: 'my-session-token',
-        requestUserAgent: 'Mozilla/5.0 Chrome/126.0.0.0',
-      })
+      { userId: USER_ID, sessionToken: 'my-session-token' }
     );
     await app.close();
   });

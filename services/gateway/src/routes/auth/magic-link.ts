@@ -156,49 +156,52 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as { userId?: string; username?: string; role?: string };
         signatureVerified = true;
       } catch {
-        // Signature invalide : le contenu n'est plus qu'une prétention. On le
-        // lit uniquement pour retrouver la session à vérifier ci-dessous, et il
-        // ne vaut preuve d'identité que si un sessionToken de confiance la
-        // couvre effectivement.
+        // Signature invalide : le contenu n'est plus qu'une prétention.
+        // task-1-fix-round-6 — AVANT (round 5) : ce contenu non vérifié
+        // pouvait encore être rattrapé plus bas par une session de confiance
+        // trouvée pour ce `userId`. Le propriétaire a explicitement écarté ce
+        // mélange de DEUX FORMES de justificatif (« une forme de connexion à
+        // la fois ») : une signature invalide est désormais refusée sans
+        // AUCUN recours, qu'une session de confiance existe ou non. On décode
+        // quand même pour distinguer « aucun userId du tout » (401 générique
+        // ci-dessous) d'une signature invalide (401 explicite juste après).
         decoded = jwt.decode(token) as { userId?: string; username?: string; role?: string } | null;
-      }
-
-      let activeSession: { id: string } | null = null;
-
-      if (sessionToken && decoded?.userId) {
-        // task-1-fix-round-5 — reprend EXACTEMENT la politique de
-        // `middleware/auth.ts` (`findTrustedSession`), y compris la règle
-        // « une application à la fois » : ce repli interrogeait auparavant
-        // directement Prisma, sans jamais vérifier que le jeton expiré et la
-        // session de confiance provenaient de la même application — une
-        // porte ouverte à côté de celle fermée dans `createRegisteredUserContext`.
-        const requestUserAgent = (request.headers['user-agent'] as string | undefined) ?? null;
-        const session = await findTrustedSession(context.prisma, {
-          userId: decoded.userId,
-          sessionToken,
-          requestUserAgent,
-        });
-        if (session) {
-          activeSession = session;
-          logger.info('Token refresh via trusted session', { userId: decoded.userId });
-        }
       }
 
       if (!decoded?.userId) {
         return sendUnauthorized(reply, 'Token invalide ou expiré');
       }
 
-      // Une signature invalide n'est rattrapable QUE par une session de
-      // confiance retrouvée en base pour ce même utilisateur. Sans elle, le
-      // jeton présenté ne prouve rien : refus.
-      if (!signatureVerified && !activeSession) {
-        logger.warn('Refus de refresh : signature invalide et aucune session de confiance', {
+      if (!signatureVerified) {
+        logger.warn('Refus de refresh : signature invalide — aucun rattrapage par session (round 6)', {
           claimedUserId: decoded.userId
         });
         return sendUnauthorized(reply, 'Token invalide ou expiré');
       }
 
-      const user = await authService.getUserById(decoded!.userId!);
+      // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
+      // expirée, ce qui est la raison d'être de cette route
+      // (`ignoreExpiration` ci-dessus). C'est la SEULE forme acceptée :
+      // `activeSession`, si une session de confiance existe pour ce même
+      // utilisateur, ne fait plus que glisser sa fenêtre d'expiration
+      // (sliding window) plus bas — elle ne décide plus jamais de
+      // l'authentification elle-même, et ne discrimine plus par application
+      // (task-1-fix-round-6 retire la règle du round 5 : être connecté
+      // depuis plusieurs applications à la fois est légitime).
+      let activeSession: { id: string } | null = null;
+
+      if (sessionToken) {
+        const session = await findTrustedSession(context.prisma, {
+          userId: decoded.userId,
+          sessionToken,
+        });
+        if (session) {
+          activeSession = session;
+          logger.info('Session de confiance retrouvée pour glisser sa fenêtre d\'expiration', { userId: decoded.userId });
+        }
+      }
+
+      const user = await authService.getUserById(decoded.userId);
 
       if (!user) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
