@@ -189,11 +189,22 @@ export function convertV1ToV3(
   const soundId = str(blob.backgroundAudioId);
   const own = str(blob.voiceAttachmentId);
   if (soundId || own || transcriptions.length > 0) {
+    // `bounds` ne s'émet QUE comme un intervalle complet et valide. Un blob v1
+    // qui ne porte qu'une seule borne (trim de début seul) donnait auparavant
+    // `end: 0` via `num(..., 0)` — un intervalle qui finit AVANT de commencer,
+    // que le contrat CanvasV3 (invariant `end >= start`) refuse à juste titre.
+    // Le convertisseur est tolérant (spec « convertisseur v1→v3 tolérant ») :
+    // une borne manquante ou inversée dégrade en « pas de trim » (clip entier),
+    // jamais en donnée corrompue servie aux clients v3.
+    const audioStart = blob.backgroundAudioStart;
+    const audioEnd = blob.backgroundAudioEnd;
     doc.sound = {
       source: soundId ? { t: 'library', soundId } : { t: 'original' },
       volume: soundId || own ? num(blob.backgroundAudioVolume, 1) : 1,
-      ...(typeof blob.backgroundAudioStart === 'number' || typeof blob.backgroundAudioEnd === 'number'
-        ? { bounds: { start: num(blob.backgroundAudioStart, 0), end: num(blob.backgroundAudioEnd, 0) } }
+      ...(typeof audioStart === 'number' && Number.isFinite(audioStart) &&
+          typeof audioEnd === 'number' && Number.isFinite(audioEnd) &&
+          audioEnd >= audioStart
+        ? { bounds: { start: audioStart, end: audioEnd } }
         : {}),
       ...(transcriptions.length > 0 ? { transcriptions } : {}),
     };
