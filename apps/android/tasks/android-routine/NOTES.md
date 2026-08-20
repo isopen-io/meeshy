@@ -844,3 +844,25 @@ Append-only log of gotchas and decisions that save time next run.
   a local *before* that update (like `text`/`replyToId`/`effects` already are), else the async
   `sendOptimistic` reads the already-reset state and stamps the seed. Two pre-existing send-language tests
   (detected→es, undetectable→user-lang) are the guard that `display` preserves the old behaviour.
+
+## Slice `chat-forwarded-badge-source-name` (2026-08-20)
+- **A green local gate does NOT clear the PR's CI, because a `pull_request` build is the MERGE of
+  your head with the base — so it inherits whatever the base branch is carrying.** This slice
+  branched off `main` at `ccc81b25` (share-link `joinUrl` still `/join/`) and passed the full local
+  gate. Minutes later commit `0a8a1624` switched the producers to `/chat/` and updated the
+  `:core:model` presentation tests but MISSED the 3 `:feature:conversations` ViewModel tests (4
+  assertions still on `/join/`) — leaving `main` red (its own push run `32348038004` = `failure`).
+  The PR's Android check then failed on those 4 unrelated tests.
+- **Diagnosis order that worked:** the failing tests named a subsystem the diff never touched
+  (share links vs a forwarded badge) → suspect base. `actions_list … android.yml branch=main` showed
+  the newest main run was `failure` on `0a8a1624`; `get_commit --include-diff` showed it changed
+  production `/chat/` + presentation tests but not the ViewModel tests. That is the routine's "CI red
+  on base branch too" case — the one legitimate "not mine".
+- **Because I am the sole Android dev, "wait for base to recover" would wait forever.** The correct
+  in-scope repair: `git merge origin/main` into the branch (clean) + update the 4 stale ViewModel
+  assertions to `/chat/` (the deliberate, already-merged product decision; the legacy `/join/`
+  deep-link RECEIVERS `0a8a1624` kept on purpose stay `/join/`). Test-expectation-only, still
+  `apps/android` only, no production logic — turns the PR green AND repairs `main` on merge. Updating
+  a stale expectation to match an intentional product change is not "weakening a test".
+- **Reflex for next runs:** when a PR check fails on tests outside your slice, check
+  `android.yml` on `main` BEFORE touching your own code — the base may already be red.

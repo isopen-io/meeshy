@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiAttachmentTranslation
+import me.meeshy.sdk.model.ApiForwardedConversation
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.ApiMessageAttachment
 import me.meeshy.sdk.model.ApiMessageSender
@@ -32,6 +33,7 @@ private fun message(
     pinnedAt: String? = null,
     forwardedFromId: String? = null,
     forwardedFromConversationId: String? = null,
+    forwardedFromConversation: ApiForwardedConversation? = null,
     effectFlags: Int? = null,
     isBlurred: Boolean? = null,
     isViewOnce: Boolean? = null,
@@ -52,6 +54,7 @@ private fun message(
     pinnedAt = pinnedAt,
     forwardedFromId = forwardedFromId,
     forwardedFromConversationId = forwardedFromConversationId,
+    forwardedFromConversation = forwardedFromConversation,
     effectFlags = effectFlags,
     isBlurred = isBlurred,
     isViewOnce = isViewOnce,
@@ -1142,6 +1145,92 @@ class BubbleContentBuilderTest {
         )
 
         assertThat(content.isForwarded).isFalse()
+    }
+
+    @Test
+    fun `a forward from a group names the source conversation`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Team Meeshy",
+                    type = "group",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+    }
+
+    @Test
+    fun `a forward from a titleless public conversation falls back to its identifier`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = null,
+                    identifier = "meeshy-lobby",
+                    type = "public",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardedFromName).isEqualTo("meeshy-lobby")
+    }
+
+    @Test
+    fun `a forward from a direct conversation is not named`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Alice",
+                    type = "direct",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardedFromName).isNull()
+    }
+
+    @Test
+    fun `a forward with no source conversation payload has no source name`() {
+        val content = BubbleContentBuilder.build(
+            message(forwardedFromId = "orig-msg", forwardedFromConversationId = "orig-conv"),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardedFromName).isNull()
+    }
+
+    @Test
+    fun `a deleted forward never names its source`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                deletedAt = "2026-07-08T09:00:00Z",
+                forwardedFromId = "orig-msg",
+                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "group"),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardedFromName).isNull()
     }
 
     // --- Story / mood reply previews (postReplyTo / storyReplyToId) ---

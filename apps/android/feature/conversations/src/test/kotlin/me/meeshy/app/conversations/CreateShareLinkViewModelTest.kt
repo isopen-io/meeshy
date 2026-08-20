@@ -155,7 +155,7 @@ class CreateShareLinkViewModelTest {
         vm.submit()
         advanceUntilIdle()
 
-        assertThat(vm.state.value.createdJoinUrl).isEqualTo("https://meeshy.me/join/link-1")
+        assertThat(vm.state.value.createdJoinUrl).isEqualTo("https://meeshy.me/chat/link-1")
     }
 
     @Test
@@ -165,7 +165,7 @@ class CreateShareLinkViewModelTest {
         vm.submit()
         advanceUntilIdle()
 
-        assertThat(vm.state.value.createdJoinUrl).isEqualTo("https://staging.meeshy.me/join/link-1")
+        assertThat(vm.state.value.createdJoinUrl).isEqualTo("https://staging.meeshy.me/chat/link-1")
     }
 
     @Test

@@ -181,7 +181,9 @@ public fun MessageBubble(
                         modifier = Modifier.size(13.dp),
                     )
                     Text(
-                        text = stringResource(R.string.bubble_forwarded),
+                        text = content.forwardedFromName
+                            ?.let { stringResource(R.string.bubble_forwarded_from, it) }
+                            ?: stringResource(R.string.bubble_forwarded),
                         style = MaterialTheme.typography.labelSmall,
                         fontStyle = FontStyle.Italic,
                         color = onColor.copy(alpha = 0.6f),

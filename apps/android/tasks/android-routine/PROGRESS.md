@@ -2,6 +2,65 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Forwarded badge names its source conversation shipped** (slice
+> `chat-forwarded-badge-source-name`, feature-parity's Chat "Edited / pinned / forwarded indicators"
+> composite — the forwarded-source-name residual left open after `chat-forwarded-indicator`). **Step 0**:
+> no open `claude/apps/android/*` PR to merge first (open-PR list was 12 — gateway/web `$`-escaping fixes,
+> iOS transfer/Jules/audio-ZMQ, shared parity test, five Dependabot; none on an android-routine branch).
+> Branched off `origin/main` (`ccc81b25`) clean, branch created as the literal first action before any
+> edit. This container **reaches `dl.google.com`** (curl → 200), so the SDK bootstrapped (platform
+> `android-37.0` — the bare `android-37` package does not exist since minor SDK releases; CI's best-effort
+> provisioning step installs the same `.0` candidate) and the **full local gate ran here**.
+>
+> **The gap, re-proved by reading source**: `chat-forwarded-indicator` (2026-07-08) shipped a generic
+> italic "Transféré/Forwarded" chip gated on `!forwardedFromId.isNullOrBlank()`, but it never **named the
+> source conversation**. iOS `BubbleForwardedIndicator` names it via the pure `ForwardBadgePolicy`
+> (`apps/ios/.../Bubble/ForwardBadgePolicy.swift`) — a 3-way rule with an explicit twin at
+> `apps/web/lib/forward-badge.ts`: name shown for every group type, hidden for `direct`/`bot`, status quo
+> for an unknown type, blank name → hidden. The data is already on the wire — the gateway hoists
+> `forwardedFromConversation` (`{id,title,identifier,type,avatar}`) onto the message payload
+> (`MessageHandler.ts:1209-1210`) — Android's `ApiMessage` simply did not decode it.
+>
+> **Pure core (`:core:model`)**: new `ForwardBadgePolicy.conversationName(ref: ForwardReference?): String?`
+> — a faithful port of the iOS enum (hidden set `{direct, bot}`, `takeIf { isNotEmpty }` for the blank
+> guard, unknown type falls through to the name). `ForwardReference` gains `conversationType: String?`
+> (the field iOS carries at `CoreModels.swift:1595`).
+>
+> **Wiring**: `ApiMessage` gains a decoded `forwardedFromConversation: ApiForwardedConversation?`
+> (exactly the gateway's selected fields). `BubbleContentBuilder` folds it to a new
+> `BubbleContent.forwardedFromName` — building a `ForwardReference(conversationName = title ?: identifier,
+> conversationType = type)` (mirrors iOS's `title ?? identifier` fallback) and running the policy; a
+> deleted tombstone forces null (same suppress rule as `pinnedAtIso`/`isForwarded`). `MessageBubble`
+> renders `bubble_forwarded_from` ("Transféré de {name}") when non-null, else the existing generic
+> `bubble_forwarded` chip — same accent-coherent `Icons.AutoMirrored.Filled.Send` glyph. Strings ×1
+> (`bubble_forwarded_from`) EN/FR/ES/PT.
+>
+> **Tests**: +13 `ForwardBadgePolicyTest` (null ref, absent name, blank name → absent; each of the six
+> group types → named; `direct`/`bot` → hidden; unknown type → status-quo name; null type → name) + 5
+> `BubbleContentBuilderTest` (group forward names the source; titleless public falls back to identifier;
+> direct forward stays `isForwarded` but unnamed; a forward with no source-conversation payload is
+> unnamed; a deleted forward never names its source). Policy branch coverage total; the `MessageBubble`
+> render is exempt Compose glue per TDD-COVERAGE.
+>
+> **Verified**: `:core:model:testDebugUnitTest --tests ForwardBadgePolicyTest` green (BUILD SUCCESSFUL);
+> full `assembleDebug` + `testDebugUnitTest` across all modules green locally before the PR
+> (single container, `dl.google.com` reachable, `--max-workers=2` to dodge the proxy 429 burst).
+> Reviewer PASS. PR **#3228**.
+>
+> **CI incident — base branch was red, NOT this diff.** The PR's first Android check failed on 4
+> tests in `:feature:conversations` (`CreateShareLinkViewModelTest`, `MyShareLinksViewModelTest`,
+> `ShareLinkDetailViewModelTest`) — all `expected …/join/… but was …/chat/…`, none touching the
+> forwarded badge. Root cause: **main itself was red**. While this slice was in flight, commit
+> `0a8a1624` ("feat: les liens de partage créés pointent sur /chat") landed on `main`, switched the
+> share-link `joinUrl` producers to `/chat/` in production, updated the `:core:model` *presentation*
+> tests — but **missed the 3 `:feature:conversations` ViewModel tests** (4 assertions) still expecting
+> `/join/`. main's own push run `32348038004` was already `failure`. A PR's `pull_request` CI builds
+> the merge with the base, so this PR inherited the breakage. **Repair** (still `apps/android` only, no
+> production logic): merged the new `main` into the branch (clean, no conflicts) and corrected the 4
+> stale ViewModel assertions to `/chat/` — the deliberate, already-merged product decision (the legacy
+> `/join/` deep-link receivers `0a8a1624` intentionally kept are untouched). This turns the PR green
+> **and** repairs `main` on merge. Lesson logged in NOTES.
+
 > On 2026-08-20 **Composer language pill + picker shipped** (slice `composer-language-pill`,
 > feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the
 > **language-detection half** left open by `composer-live-sentiment`; the composite line is now `[x]`).

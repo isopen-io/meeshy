@@ -57,6 +57,21 @@ data class ApiMessageSender(
     val avatar: String? = null,
 )
 
+/**
+ * The SOURCE conversation of a forwarded message, hoisted onto the payload by
+ * the gateway (`forwardedFromConversation`) alongside `forwardedFromId`. Carries
+ * exactly the fields the gateway selects: `id`, `title`, `identifier`, `type`,
+ * `avatar`. Used to name the forward badge — see [ForwardBadgePolicy].
+ */
+@Serializable
+data class ApiForwardedConversation(
+    val id: String? = null,
+    val title: String? = null,
+    val identifier: String? = null,
+    val type: String? = null,
+    val avatar: String? = null,
+)
+
 /** Message — port of APIMessage (MessageModels.swift). */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -88,6 +103,7 @@ data class ApiMessage(
     val pinnedBy: String? = null,
     val forwardedFromId: String? = null,
     val forwardedFromConversationId: String? = null,
+    val forwardedFromConversation: ApiForwardedConversation? = null,
     val effectFlags: Int? = null,
     val isBlurred: Boolean? = null,
     val isViewOnce: Boolean? = null,

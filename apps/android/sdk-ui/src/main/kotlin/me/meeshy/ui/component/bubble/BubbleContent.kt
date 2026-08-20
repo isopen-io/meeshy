@@ -169,6 +169,13 @@ public data class BubbleContent(
     val expiresAtIso: String? = null,
     val pinnedAtIso: String? = null,
     val isForwarded: Boolean = false,
+    /**
+     * The SOURCE conversation's display name when the forward badge should name
+     * it (a group forward), else null — the badge then shows the generic
+     * "Forwarded" label. Resolved by `ForwardBadgePolicy`. Only meaningful when
+     * [isForwarded] is true.
+     */
+    val forwardedFromName: String? = null,
     val isStarred: Boolean = false,
     val isFirstInGroup: Boolean = true,
     val isLastInGroup: Boolean = true,
