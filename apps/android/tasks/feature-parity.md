@@ -1630,7 +1630,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       précédents en place, jamais un wipe ; `storyRingFor(conversation, now)` délègue au pur
       résolveur ; la ligne `MeeshyAvatar(..., storyRing = state.storyRingFor(...))` remplace le
       `StoryRingState.None` codé en dur, le peer d'un DM affiche maintenant l'anneau non-vu/vu
-      exactement comme sur iOS) ; presence/mood pending
+      exactement comme sur iOS) ; **mood done** (slice `conversation-row-mood`, 2026-08-20 :
+      port iOS `ConversationListView.conversationMoodStatus(for:)` +
+      `statusViewModel.statusForUser(userId:)?.moodEmoji` — pur `:feature:conversations`
+      `ConversationMoodStatus.moodEmojiFor(conversation, currentUserId, statuses)` : direct-only
+      gate via `otherParticipantUserId` (groupe/communauté/channel/bot → jamais de badge), lookup
+      `statusForUser(peerId)` SSOT, `moodEmoji.takeIf { isNotBlank() }` (jamais un badge vide, jamais
+      soi) ; `ConversationListUiState.moodStatuses` peint une fois depuis le `StatusBarCache` FRIENDS
+      partagé (`valueOrNull`, best-effort décoratif, aucun fetch propre — miroir EXACT de
+      `ContactsListViewModel.paintMoodStatusesFromCache`) ; `moodEmojiFor(conversation)` délègue au pur
+      résolveur ; la ligne `MeeshyAvatar(..., moodEmoji = state.moodEmojiFor(...))` remplace le `null`
+      codé en dur — le badge emoji du peer d'un DM remplace la pastille de présence comme sur iOS) ;
+      presence pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,

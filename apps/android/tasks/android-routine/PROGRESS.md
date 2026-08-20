@@ -2,6 +2,86 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation-row mood badge shipped** (slice `conversation-row-mood`,
+> feature-parity's Conversations `[~]` rich last-message-preview line — the `mood` avatar
+> affordance, the second of the three sub-gaps `presence/story-ring/mood`; story-ring merged
+> #3244 this same day, presence is the last one left). **Step 0**: the open Android PR of the
+> PRIOR iteration (#3244, story-ring) was green (Android CI success) and `mergeable_state:clean`
+> — squash-merged it to `main` (→ `949bb521`) as the literal first action before branching, per
+> the routine's step-0 gate. The other four open PRs at this instant (#3241 iOS, #3242/#3243/#3245
+> gateway/shared) are NOT android-routine slices — left untouched. Branched off the freshly-merged
+> `origin/main` (`949bb521`). This container **reaches `dl.google.com`** (curl → 200), so the full
+> local gate ran here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools `11076708`
+> `--channel=3`, aliased `android-37 → android-37.0`; Gradle 8.13 auto-fetched by the wrapper.
+>
+> **The gap (re-proved by a read-only recon subagent over iOS + gateway + Android)**: "mood" is
+> NOT a field on `User` or on conversation participants anywhere in the stack — it is a `moodEmoji`
+> string carried on an ephemeral STATUS-type Post, resolved **per-user at render time** via a
+> `statusForUser(userId)` lookup against the shared status feed. iOS
+> `ConversationListView.conversationMoodStatus(for:)` (`ConversationListView.swift:695`) gates on
+> `type == .direct`, resolves the other participant's `userId`, and passes
+> `statusViewModel.statusForUser(userId)?.moodEmoji` into `MeeshyAvatar(moodEmoji:)`, which paints
+> an emoji badge at the avatar's bottom-trailing corner, replacing the presence dot. Android's
+> `MeeshyAvatar` already accepted `moodEmoji: String?` and rendered exactly that (bottom-end
+> `Text`, presence dot suppressed when a mood is present) — but no conversation-row caller ever
+> supplied it. **No wire/DTO widening** was warranted (would diverge from iOS/gateway, where mood
+> never rides the participant payload): every supporting piece — `StatusEntry`, `statusForUser`,
+> `ApiPost.moodEmoji`, `StatusBarCache`, the 1h expiry law — was already ported. Contacts
+> (`ContactsListViewModel.moodEmojiFor`) is the established precedent this slice mirrors verbatim.
+>
+> **Pure core (`:feature:conversations`)**: `ConversationMoodStatus.moodEmojiFor(conversation,
+> currentUserId, statuses): String?` — direct-only + peer gate via the `otherParticipantUserId`
+> SSOT (`null` → no badge, so a group/community/channel/bot row is never decorated), then
+> `statuses.statusForUser(peerId)?.moodEmoji?.takeIf { it.isNotBlank() }` (the exact Contacts
+> lookup — a blank emoji never surfaces, and because the lookup is keyed by the PEER a self-only
+> status is never shown as the peer's badge).
+>
+> **State plumbing**: `ConversationListUiState.moodStatuses: List<StatusEntry>` new defaulted-empty
+> field + `moodEmojiFor(conversation)` state helper delegating to the pure resolver with the state's
+> `currentUserId`. `ConversationListViewModel` gains a `StatusBarCache` dep and calls a synchronous
+> `paintMoodStatusesFromCache()` at the end of `init` — reads whatever the shared FRIENDS statuses
+> bar already holds (`valueOrNull` collapses Fresh/Stale/Syncing; cold `Empty` → no badges), no fetch
+> of its own. Decorative affordance, never primary content — mirrors
+> `ContactsListViewModel.paintMoodStatusesFromCache` VERBATIM so mood resolution is identical across
+> every surface (single source of truth).
+>
+> **Wiring (Compose glue, coverage-exempt)**: `moodEmoji = state.moodEmojiFor(conversation)` threaded
+> through the row call site → `ConversationRow` → `ConversationRowContent` → the existing
+> `MeeshyAvatar(..., moodEmoji = …)` param.
+>
+> **Tests**: **+8 `ConversationMoodStatusTest`** (pure resolver — group never badged; direct with no
+> peer → null; peer with no live status → null; non-blank emoji surfaces; blank emoji → null; peer
+> picked among several; currentUserId decides which side is the peer; self-only status never surfaced
+> as the peer badge) — every branch of `moodEmojiFor` exercised. **+3 `ConversationListMoodStateTest`**
+> (state helper delegates with `moodStatuses`+`currentUserId`; empty set → null; identity swap
+> resolves the peer from the right side). **+3 `ConversationListViewModelTest`** (the FRIENDS bar
+> paints the peer's emoji onto its direct row through `init`; a DISCOVER-only status never decorates a
+> row; a cold cache leaves every row without a badge) — proving the `paintMoodStatusesFromCache`
+> init glue end-to-end. Two existing VM suites get a `StatusBarCache` (a seeded real cache in
+> `ConversationListViewModelTest` via a `FixedClock` helper mirroring Contacts; a relaxed mock
+> returning `CacheResult.Empty` in `ConversationLockFlowViewModelTest`).
+>
+> **RED-proof (mutation × 2)**: (a) dropping `takeIf { it.isNotBlank() }` fails **exactly** 1 test
+> (`a peer status with a blank mood emoji yields no badge` — 8 run, 1 failed, no collateral). (b)
+> keying the lookup by `currentUserId` instead of `peerId` fails **exactly** 4 tests (the peer-surfaces
+> + picked-among-several + currentUserId-decides + self-never-surfaced arms — 8 run, 4 failed). Both
+> restored after.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` across all modules green locally. New suites
+> ran: `ConversationMoodStatusTest` 8/8, `ConversationListMoodStateTest` 3/3, `ConversationListViewModelTest`
+> 73/73 (was 70). Reviewer PASS.
+>
+> **Next**: `presence` is the last of the three conversation-row avatar sub-gaps. `presenceStateFor`
+> already exists on the state AND is already passed into `MeeshyAvatar(presence = …)` at the row call
+> site (grep-verified: `ConversationListScreen.kt` passes `presence = state.presenceStateFor(...)`),
+> so the dot is ALREADY wired — the `presence` marker on feature-parity:1633 is now stale. Grep-verify
+> it renders (a mood badge now suppresses the dot when both are present, matching iOS) and, if truly
+> done, close the line with no new slice; otherwise the only remaining gap there is a live presence
+> SOURCE for conversation rows (`ApiConversation.participants` carries no `isOnline`/`lastActiveAt`, so
+> the dot only lights from live `user:status`/`presence:snapshot` socket frames — a genuinely cold
+> row shows none). After the row line closes, advance to the next Conversations `[◐]`/`[ ]` box or the
+> next build-order area (Chat).
+
 > On 2026-08-20 **Conversation-row story-ring shipped** (slice `conversation-row-story-ring`,
 > feature-parity's Conversations `[~]` rich last-message-preview line — the `story-ring` avatar
 > affordance that same line called out as pending). **Step 0**: two open
