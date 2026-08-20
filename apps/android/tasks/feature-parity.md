@@ -2534,9 +2534,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `MimeTypeResolver` SSOT (iOS `MimeTypeResolver.swift` port — declared type first, filename extension as
       fallback), typed via pure `AttachmentMessageType.forMime` (reusing `MediaKindClassifier`), and sent through
       the **same** durable upload→graft→send chain the clipboard path uses (`ChatViewModel.sendFileAttachment`).
-      Any composer text rides along as the body and clears. **Pending:** in-app camera capture, an emoji-ladder
-      tray grouping the entries, voice (socket audio pipeline), and per-pick upload-progress. **Location** ships
-      separately (see live-location rows).
+      Any composer text rides along as the body and clears. **Ladder tray grouping done** (slice
+      `chat-composer-attachment-ladder`, 2026-08-20): the lone `AttachFile` button becomes an "Add" toggle
+      opening a horizontal `ComposerAttachmentTray` (circular gradient discs + labels) above the composer Row.
+      Pure `:feature:chat` `ComposerAttachmentLadder.tiles(...)` ports iOS `UniversalComposerBar+Attachments`'s
+      `carouselTiles` — the fixed order Photo → Camera → File → Location → Voice → Emoji, each gated on the
+      participant's `ComposerAffordances` (permission) AND a host-capability `show*` flag (product policy; iOS
+      gates via `on* != nil`). Photo/Camera ride the *capture* capability (`canSendImages || canSendVideos`);
+      Photo suppressed under a recent-media strip (iOS `onRecentMediaSelected == nil`, Android has none yet →
+      defaulted off, branch kept). Each tile carries its iOS gradient hex. Live handlers today: Photo →
+      `filePicker.launch("image/*")`, File → `*/*`, Voice → `requestVoiceRecording()`; Camera/Location/Emoji
+      host flags off (no handler yet → never a dead-end tile). +14 tests (capture-OR arms, per-kind permission
+      and host gates, recent-strip suppression, read-only keeps attachments, fully-denied empty, order
+      preservation, live posture, colour parity). Strings ×7 EN/FR/ES/PT. **Pending:** in-app camera capture,
+      a send-location action, an emoji-into-text handler (each flips its host flag on), and per-pick
+      upload-progress. **Location** ships separately (see live-location rows).
 - [x] Large-paste detection → clipboard-content attachment — **detection + preview + send done**
       (slice `chat-clipboard-content-send`, 2026-07-16): the captured paste is now delivered as a real
       `text/plain` attachment through the durable upload→graft→send chain (see "Send with attachments"

@@ -13,6 +13,13 @@
     <string name="chat_record_voice">Grabar mensaje de voz</string>
     <string name="chat_effects_open">Efectos del mensaje</string>
     <string name="chat_attach_file">Adjuntar archivo</string>
+    <string name="chat_attach_open">Añadir adjunto</string>
+    <string name="composer_attach_photo">Fotos</string>
+    <string name="composer_attach_camera">Cámara</string>
+    <string name="composer_attach_file_tile">Archivo</string>
+    <string name="composer_attach_location">Ubicación</string>
+    <string name="composer_attach_voice">Voz</string>
+    <string name="composer_attach_emoji">Emoji</string>
     <string name="chat_composer_read_only">No puedes enviar mensajes en esta conversación</string>
     <string name="chat_slow_mode_wait">Modo lento · espera %1$ds</string>
     <string name="chat_effects_title">Efectos del mensaje</string>

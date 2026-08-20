@@ -33,6 +33,33 @@ ln -sfn android-37.0 $HOME/android-sdk/platforms/android-37
 `meeshy.sh check` runs green after. Also seen in the 2026-08-20 activity-heat / tags slices —
 this is now the standard bootstrap glitch.
 
+## Slice `chat-composer-attachment-ladder` (2026-08-20)
+- **When an iOS "which entries to show" decision is buried in a SwiftUI `View` computed property, the
+  faithful port is a pure resolver + a dumb renderer — split the two gate families explicitly.** iOS's
+  `carouselTiles` folds two unrelated questions into one list comprehension: *is the capability permitted*
+  and *did the host wire a handler* (`onCamera != nil`). Modelling them as one boolean would have made the
+  test matrix ambiguous. The clean shape is `tiles(affordances, showCamera=…, showLocation=…, …)`: permission
+  gates come off the value type, host-capability gates are defaulted flags. Each kind then has TWO
+  independently-tested arms (permission off with host on; host off with permission on), which is what the
+  reviewer's edge-case checklist wants and what a single combined gate can't express.
+- **Set the host-capability flags to reflect what the screen can ACTUALLY handle, at the call site — that is
+  how you honour "no dead-end tiles" without inventing UI.** Android has no camera launcher, no send-location
+  action, no emoji-into-text handler yet. Rather than render those tiles disabled (a dead end) or omit the
+  branches from the pure fn (losing future parity), the resolver keeps all six branches and the ChatScreen
+  passes `showCamera=false, showLocation=false, showEmoji=false`. Result today: exactly Photo/File/Voice.
+  The day a handler lands, its slice flips one flag to `true` and adds one `when` arm — no touch to the core.
+  A dedicated test locks this live posture so a regression (accidentally showing an unhandled tile) fails loud.
+- **`Icons.Filled.InsertDriveFile` does not exist — it's `Icons.AutoMirrored.Filled.InsertDriveFile`.** The
+  document-with-corner glyph is direction-aware, so Material parks it under `automirrored`. `grep` an existing
+  caller (`feature/feed/.../FeedComposerSheet.kt` imports the automirrored one) before guessing the package;
+  the filled-only import compiles-fails with "Unresolved reference". Same family: `Send`, `Reply`, `ArrowBack`.
+- **A `:feature:*` module's generated `R` is `me.meeshy.feature.<name>.R`, not `me.meeshy.app.<name>.R`.**
+  The Kotlin *package* of the source is `me.meeshy.app.chat` but the Android *namespace* (and thus `R`) is
+  `me.meeshy.feature.chat` (`feature/chat/build.gradle.kts` `namespace = "me.meeshy.feature.chat"`). A new
+  file in the module must `import me.meeshy.feature.chat.R` explicitly — the bare `R` resolves to the package,
+  which has none. Copy the `R` import from a sibling file in the same module rather than assuming it matches
+  the source package.
+
 ## Slice `conversation-row-activity-heat` (2026-08-20)
 - **Expose the SSOT palette, not just the primary hex.** Twice now I've watched a caller reach for a
   *pair* of accent hues (`primary` + `secondary`) that already lived on
