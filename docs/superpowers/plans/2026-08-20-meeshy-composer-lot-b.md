@@ -1,4 +1,4 @@
-# Lot B — Noyau SDK : modèle v3, pont de rendu, ScenePlayer — Implementation Plan
+# Lot B — Noyau SDK : modèle v3, pont de rendu, ScenePlayer — Implementation Plan (rév. 2 après revue Fable)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -18,6 +18,7 @@
 - Commits par chemins explicites ; ne JAMAIS toucher `apps/ios/project.yml` ni `project.pbxproj` (lot C fermera).
 - Interdit : `@ViewBuilder` génériques imbriqués sur le chemin du player (piège profondeur-de-type, garde de source en T5).
 - Les fixtures de `packages/shared/fixtures/canvas-v3/` sont la source de vérité — lues par `#filePath` (patron établi des tests du dépôt).
+- **B1 démarre après la Task A2 (fixtures) ; B2 démarre après la Task A3 (golden gelé)** — dépendances déclarées, pas de parallélisme A/B sur ces tâches.
 
 ---
 
@@ -134,8 +135,12 @@ struct CanvasV3MigrationTests {
         #expect(fx.textObjects.count == 1)
         #expect(fx.textObjects[0].textStyle == "retro")
         #expect(fx.stickerObjects?.count == 1)
+        // Clés v1 RÉELLES (revue Fable n°3) : place est un OBJET SharedPlace
+        // requis, l'audio référence PostMedia par postMediaId.
         #expect(fx.locationObjects.count == 1)
+        #expect(fx.locationObjects[0].place.name == "Douala")
         #expect(fx.audioPlayerObjects?.count == 1)
+        #expect(fx.audioPlayerObjects?[0].postMediaId == "64b0000000000000000000aa")
         #expect(fx.backgroundAudioId == "snd_nuits_ete")
         #expect(fx.backgroundAudioVolume == 0.6)
         #expect(fx.timelineDuration == 9.5)
@@ -167,9 +172,28 @@ struct CanvasV3MigrationTests {
 - Modify: `packages/MeeshySDK/Sources/MeeshySDK/Store/StoryDraftStore.swift`
 - Test: étendre `packages/MeeshySDK/Tests/MeeshyUITests/StoryDraftStoreTests.swift`
 
-- [ ] **Step 1: Test rouge** — seeder une ligne de brouillon dont `effects_json` est le blob v1 fixture ; recharger via l'API publique du store ; attendre : le brouillon rendu porte un blob v3 (décodable en `CanvasV3`) ET la ligne persistée a été réécrite (relecture brute = v3). Un brouillon déjà v3 ressort intact.
+**Contrat (revue Fable n°9-10)** : l'API publique du store CONTINUE de rendre
+des `StoryEffects` (le type de `StorySlide.effects` ne change pas) ; c'est la
+PERSISTANCE qui passe v3. Et il y a DEUX points de lecture d'`effects_json` —
+le chargement des slides (`:717`) ET `firstSlideEffects` (`:974`, titre/fond
+des cartes) : les deux passent par UN décodeur privé partagé, sinon la
+migration vide silencieusement le second.
+
+- [ ] **Step 1: Tests rouges** —
+  1. seeder une ligne dont `effects_json` est le blob v1 fixture ; recharger :
+     `slides[0].effects.textObjects[0].text == "Salut"` (le contenu SURVIT) ;
+  2. relecture SQL brute : le JSON persisté commence par `{"v":3` ;
+  3. `firstSlideEffects(draftId:)` rend des effets NON vides après migration
+     (le deuxième point de lecture ne se fait pas vider) ;
+  4. un brouillon déjà v3 ressort intact, sans réécriture.
 - [ ] **Step 2: Rouge.**
-- [ ] **Step 3: Implémenter** — au point de LECTURE du store (une seule fonction charge `effects_json` — la trouver et intervenir LÀ, pas aux appels) : si le JSON n'a pas `"v":3`, décoder en `StoryEffects`, convertir via `CanvasV3(migrating:)`, réencoder, PERSISTER, retourner. Échec de conversion ⇒ retourner le brouillon tel quel (tolérance, jamais de perte).
+- [ ] **Step 3: Implémenter** — extraire un décodeur privé unique
+  `decodeSlideEffects(_ json: String) -> StoryEffects?` : si le JSON porte
+  `"v":3` → décoder `CanvasV3` puis `StoryEffects(rendering:sceneIndex:0)`
+  (pont B2) ; sinon décodage legacy actuel. Les DEUX sites (`:717` et `:974`)
+  l'appellent. La migration one-shot (réencodage v3 persisté) se fait au
+  chargement des slides ; échec de conversion ⇒ ligne laissée telle quelle
+  (tolérance, jamais de perte).
 - [ ] **Step 4: Vert.** — **Step 5: Commit.**
 
 ---
@@ -217,8 +241,10 @@ public struct MeeshyScenePlayer: View {
 ```swift
 public enum BackgroundAudioAnnouncement: Equatable {
     case none                                   // pas de piste ⇒ RIEN (loi 5)
-    case original                               // ♫〰
-    case credit(title: String, username: String, duration: TimeInterval?) // « titre · @pseudo · M:SS »
+    case original                               // ♫〰 — si et seulement si piste propre
+    case credit(title: String?, username: String?, duration: TimeInterval?)
+    // métadonnées nil = marquee générique « ♫ — » : la forme CRÉDIT ne
+    // dégénère JAMAIS en note+onde (provenance, loi 4)
 }
 public extension AudioChipDisplay {
     static func backgroundAnnouncement(sound: BackgroundSoundV3?,
@@ -228,7 +254,7 @@ public extension AudioChipDisplay {
 }
 ```
 
-- [ ] **Step 1: Tests rouges** — `nil → .none` (existence) ; `.original → .original` ; `.library` + métadonnées → `.credit(...)` ; `.library` sans métadonnées résolues → `.credit(title:"", username:"", duration:nil)` N'EST PAS acceptable : attendre `.original`? NON — attendre `.credit` avec titre vide interdit : la règle est `.none`?… Décision de spec (B3.4) : une œuvre empruntée S'ATTRIBUE — si les métadonnées manquent encore (cache froid), le résolveur rend `.credit(title: "♫", username: "", duration: nil)` ? Trop flou. TRANCHER dans le test : métadonnées absentes ⇒ `.original` est FAUX (mentirait sur la provenance) ⇒ retourner `.none` est FAUX (la piste existe) ⇒ le contrat est : `sound != nil` et source library sans métadonnées ⇒ `.credit(title: "", …)` et la VUE affiche alors la note+onde en attendant la résolution — écrire exactement ce test avec ce commentaire, c'est le contrat de repli.
+- [ ] **Step 1: Tests rouges** — la signature devient `.credit(title: String?, username: String?, duration: TimeInterval?)` et les quatre cas sont : `nil → .none` (existence, loi 5) ; `.original → .original` (♫〰) ; `.library` + métadonnées → `.credit("Nuits d'été", "sam", 15)` ; `.library` SANS métadonnées (cache froid) → `.credit(nil, nil, nil)` — la FORME crédit est conservée : la vue rend alors un marquee générique « ♫ — », JAMAIS la note+onde, qui signifierait « son original » et mentirait sur la provenance (loi 4, « si et seulement si » — revue Fable n°11).
 - [ ] **Step 2: Rouge.**
 - [ ] **Step 3: Implémenter** dans le style du fichier (lire `AudioChipDisplay.resolve` existant d'abord — même vocabulaire, même forme). Fonction PURE : aucune requête, les métadonnées arrivent en paramètres (le lot E les résout).
 - [ ] **Step 4: Vert.** — **Step 5: Commit.**
@@ -241,7 +267,15 @@ public extension AudioChipDisplay {
 - [ ] `./apps/ios/meeshy.sh build` — l'app compile contre le SDK modifié (aucun fichier app touché par ce lot ; si un appel casse, c'est une régression d'API : corriger le SDK, pas l'app).
 - [ ] Commit final éventuel. Le lot merge DEUXIÈME (après A).
 
-## Self-review (fait à l'écriture du plan)
+## Self-review (rév. 2 — constats Fable intégrés)
+
+n°2-3 : assertions B2 alignées sur les clés v1 réelles (place objet, postMediaId) —
+la fixture corrigée du lot A décode sans throw. n°9-10 : B3 réécrit — deux points
+de lecture couverts par un décodeur unique, l'API publique garde StoryEffects, la
+persistance passe v3, la survie du titre est testée. n°11 : le repli de B5 reste
+en forme crédit, jamais note+onde. n°17 : dépendances B1←A2 et B2←A3 déclarées.
+
+## Self-review initial (rév. 1)
 
 - Couverture spec : §C1 (B1), §C2 miroir + golden partagé (B2), brouillons O2/A′ (B3), ScenePlayer + invariants nés-en-pause (B4), B3.4-5 provenance/existence (B5). ✓
 - Cohérence de types avec le lot A : noms `CanvasV3/SceneV3/ObjectV3/BackgroundSoundV3/KeyframeV3` identiques ; golden UNIQUE partagé. ✓
