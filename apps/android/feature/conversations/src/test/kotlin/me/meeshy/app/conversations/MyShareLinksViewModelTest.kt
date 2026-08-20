@@ -134,7 +134,7 @@ class MyShareLinksViewModelTest {
 
         assertThat(vm.webOrigin).isEqualTo("https://meeshy.me")
         assertThat(vm.joinUrlFor(link("link-1", identifier = "party")))
-            .isEqualTo("https://meeshy.me/join/party")
+            .isEqualTo("https://meeshy.me/chat/party")
     }
 
     @Test

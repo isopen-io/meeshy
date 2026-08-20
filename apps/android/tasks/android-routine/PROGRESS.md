@@ -45,7 +45,21 @@
 > **Verified**: `:core:model:testDebugUnitTest --tests ForwardBadgePolicyTest` green (BUILD SUCCESSFUL);
 > full `assembleDebug` + `testDebugUnitTest` across all modules green locally before the PR
 > (single container, `dl.google.com` reachable, `--max-workers=2` to dodge the proxy 429 burst).
-> Reviewer PASS.
+> Reviewer PASS. PR **#3228**.
+>
+> **CI incident — base branch was red, NOT this diff.** The PR's first Android check failed on 4
+> tests in `:feature:conversations` (`CreateShareLinkViewModelTest`, `MyShareLinksViewModelTest`,
+> `ShareLinkDetailViewModelTest`) — all `expected …/join/… but was …/chat/…`, none touching the
+> forwarded badge. Root cause: **main itself was red**. While this slice was in flight, commit
+> `0a8a1624` ("feat: les liens de partage créés pointent sur /chat") landed on `main`, switched the
+> share-link `joinUrl` producers to `/chat/` in production, updated the `:core:model` *presentation*
+> tests — but **missed the 3 `:feature:conversations` ViewModel tests** (4 assertions) still expecting
+> `/join/`. main's own push run `32348038004` was already `failure`. A PR's `pull_request` CI builds
+> the merge with the base, so this PR inherited the breakage. **Repair** (still `apps/android` only, no
+> production logic): merged the new `main` into the branch (clean, no conflicts) and corrected the 4
+> stale ViewModel assertions to `/chat/` — the deliberate, already-merged product decision (the legacy
+> `/join/` deep-link receivers `0a8a1624` intentionally kept are untouched). This turns the PR green
+> **and** repairs `main` on merge. Lesson logged in NOTES.
 
 > On 2026-08-20 **Composer language pill + picker shipped** (slice `composer-language-pill`,
 > feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the

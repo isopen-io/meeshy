@@ -115,7 +115,7 @@ class ShareLinkDetailViewModelTest {
         assertThat(state.phase).isEqualTo(ShareLinkDetailPhase.Loaded)
         assertThat(state.link?.linkId).isEqualTo("link-1")
         assertThat(state.presentation?.displayName).isEqualTo("Launch")
-        assertThat(state.presentation?.joinUrl).isEqualTo("https://meeshy.me/join/party")
+        assertThat(state.presentation?.joinUrl).isEqualTo("https://meeshy.me/chat/party")
         assertThat(state.presentation?.usesLabel).isEqualTo("3")
         assertThat(state.presentation?.maxUsesLabel).isEqualTo("50")
     }
