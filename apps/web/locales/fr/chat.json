@@ -32,6 +32,14 @@
       "messages": "Aperçu des messages",
       "historyHidden": "L'historique de cette conversation est privé.",
       "joinToReply": "Rejoindre pour répondre"
+    },
+    "thread": {
+      "participants": "{count} participants",
+      "live": "En direct",
+      "connecting": "Connexion…",
+      "reconnect": "Reconnecter",
+      "typingOne": "{name} écrit…",
+      "typingMany": "{count} personnes écrivent…"
     }
   }
 }

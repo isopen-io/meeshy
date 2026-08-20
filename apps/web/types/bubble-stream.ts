@@ -3,6 +3,7 @@
  * Utilisé dans les composants BubbleMessage et stream pages
  */
 import type { User, MessageWithTranslations } from '@meeshy/shared/types';
+import type { StreamVariant } from '@/lib/conversations/stream-variant';
 
 export interface BubbleStreamMessage extends MessageWithTranslations {
   isTranslated: boolean;
@@ -19,6 +20,15 @@ export interface BubbleStreamPageProps {
   linkId?: string;
   initialParticipants?: User[];
   anonymousPermissionHints?: string[];
+  /**
+   * `stream` (défaut) — le feed d'accueil, récent en haut, inchangé.
+   * `thread` — la conversation partagée `/chat/:linkId` : géométrie de
+   * messagerie (récent en bas), en-tête d'identité, Lentille des modes de
+   * lecture. Voir `lib/conversations/stream-variant.ts`.
+   */
+  variant?: StreamVariant;
+  conversationTitle?: string;
+  conversationType?: string;
 }
 
 /**

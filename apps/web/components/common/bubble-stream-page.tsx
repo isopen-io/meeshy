@@ -34,7 +34,13 @@ import { useStreamTranslation } from '@/hooks/use-stream-translation';
 import { useStreamUI } from '@/hooks/use-stream-ui';
 
 // Composants de stream extraits (NOUVEAUX)
-import { StreamHeader, StreamComposer, StreamSidebar } from '@/components/bubble-stream';
+import { StreamHeader, StreamThreadHeader, StreamComposer, StreamSidebar } from '@/components/bubble-stream';
+
+// Variante `thread` (/chat/:linkId) — géométrie de messagerie + Lentille
+import { streamScrollLayout } from '@/lib/conversations/stream-variant';
+import { useThreadActiveReadingMode } from '@/hooks/lentille/use-thread-reading-mode';
+import { useReadingModeStore } from '@/stores/reading-mode-store';
+import { useConversationAccent } from '@/hooks/conversations/use-conversation-accent';
 
 // Composants réutilisables
 import { ConversationMessages } from '@/components/conversations/ConversationMessages';
@@ -73,7 +79,16 @@ export function BubbleStreamPage({
   linkId,
   initialParticipants,
   anonymousPermissionHints,
+  variant = 'stream',
+  conversationTitle,
+  conversationType,
 }: BubbleStreamPageProps) {
+
+  // La géométrie de défilement de la variante — voir stream-variant.ts.
+  // `thread` : ancien en haut / récent en bas, la seule géométrie compatible
+  // avec la perspective Focal (ligne de focus ancrée près du BAS du viewport).
+  const isThread = variant === 'thread';
+  const scrollLayout = streamScrollLayout(variant);
 
   // i18n
   const { t, isLoading: isLoadingTranslations } = useI18n('conversations');
@@ -114,9 +129,42 @@ export function BubbleStreamPage({
     threshold: 200,
     linkId: isAnonymousMode ? linkId : undefined,
     containerRef: messagesContainerRef,
-    scrollDirection: 'down',
+    scrollDirection: scrollLayout.scrollDirection,
     disableAutoFill: false
   });
+
+  // Lentille de lecture — même magasin collant par conversation que la vue
+  // applicative (`ConversationView`) et que l'aperçu visiteur
+  // (`SharedConversationPreview`) : la clé est l'ObjectId de la conversation,
+  // le choix survit donc au passage visiteur → participant. Hooks appelés
+  // inconditionnellement (règle des hooks) ; seuls la variante `thread` monte
+  // le sélecteur et transmet le mode au fil.
+  const readingMode = useThreadActiveReadingMode(conversationId);
+  const setReadingMode = useReadingModeStore((state) => state.setMode);
+  const toggleReadingDensity = useReadingModeStore((state) => state.toggleDensity);
+
+  const handleReadingModeChange = useCallback(
+    (mode: Parameters<typeof setReadingMode>[1]) => {
+      if (conversationId) setReadingMode(conversationId, mode);
+    },
+    [conversationId, setReadingMode]
+  );
+  const handleToggleReadingDensity = useCallback(() => {
+    if (conversationId) toggleReadingDensity(conversationId);
+  }, [conversationId, toggleReadingDensity]);
+
+  // L'accent de la conversation (règle produit CLAUDE.md § Conversation
+  // Accent Color) : publié en variables CSS, consommé par l'en-tête, le ring
+  // de la carte focale et la Lentille via `--conv-accent`.
+  const accentStyle = useConversationAccent(
+    isThread && conversationId
+      ? ({
+          id: conversationId,
+          title: conversationTitle || '',
+          type: (conversationType || 'group') as never,
+        } as never)
+      : null
+  );
 
   // Mettre à jour la ref avec l'ObjectId de la conversation courante
   useEffect(() => {
@@ -255,24 +303,27 @@ export function BubbleStreamPage({
     const wasAdded = addMessage(message);
     console.log('✅ [BubbleStreamPage] addMessage returned:', wasAdded);
 
-    // Scroll automatique pour les nouveaux messages
+    // Scroll automatique pour les nouveaux messages — vers le RÉCENT de la
+    // variante : haut pour le feed (récent en haut), bas pour le fil partagé.
     // senderId is a Participant ID, compare via sender.userId or sender.user.id
     const senderUserId = getSenderUserId(message.sender as Record<string, unknown>) ?? message.senderId;
     if (senderUserId !== user.id) {
       setTimeout(() => {
-        if (messagesContainerRef.current) {
-          const { scrollTop } = messagesContainerRef.current;
+        const container = messagesContainerRef.current;
+        if (!container) return;
 
-          if (scrollTop < 300) {
-            messagesContainerRef.current.scrollTo({
-              top: 0,
-              behavior: 'smooth'
-            });
+        if (isThread) {
+          const distanceFromBottom =
+            container.scrollHeight - container.scrollTop - container.clientHeight;
+          if (distanceFromBottom < 300) {
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
           }
+        } else if (container.scrollTop < 300) {
+          container.scrollTo({ top: 0, behavior: 'smooth' });
         }
       }, 300);
     }
-  }, [addMessage, user.id, conversationId]);
+  }, [addMessage, user.id, conversationId, isThread]);
 
   // Hook Socket.IO (NOUVEAU - extrait)
   const {
@@ -501,15 +552,19 @@ export function BubbleStreamPage({
           messageComposerRef.current.clearMentionedUserIds();
         }
 
-        // Scroll automatique
-        const scrollToTop = () => {
-          if (messagesContainerRef.current) {
-            messagesContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
-          }
+        // Scroll automatique vers le récent de la variante (haut du feed,
+        // bas du fil partagé).
+        const scrollToLatest = () => {
+          const container = messagesContainerRef.current;
+          if (!container) return;
+          container.scrollTo({
+            top: isThread ? container.scrollHeight : 0,
+            behavior: 'smooth',
+          });
         };
 
-        setTimeout(scrollToTop, 100);
-        setTimeout(scrollToTop, 500);
+        setTimeout(scrollToLatest, 100);
+        setTimeout(scrollToLatest, 500);
       } else {
         throw new Error('Envoi du message échoué');
       }
@@ -575,7 +630,10 @@ export function BubbleStreamPage({
         }
       `}</style>
 
-      <div className="flex h-full min-h-0 w-full flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div
+        style={accentStyle as React.CSSProperties | undefined}
+        className="flex h-full min-h-0 w-full flex-col bg-gradient-to-br from-blue-50 via-white to-indigo-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900"
+      >
         {/* Offline banner for anonymous users */}
         {isAnonymousMode && !connectionStatus.isConnected && (
           <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 px-4 py-2 text-center text-sm text-amber-700 dark:text-amber-300">
@@ -587,13 +645,27 @@ export function BubbleStreamPage({
           {/* Colonne principale */}
           <section className="grid flex-1 min-h-0 grid-rows-[auto,1fr,auto] overflow-hidden">
 
-            {/* Header avec indicateur de connexion - COMPOSANT EXTRAIT */}
-            <StreamHeader
-              connectionStatus={connectionStatus}
-              typingUsers={typingUsers}
-              onReconnect={reconnect}
-              t={t}
-            />
+            {/* Header : identité de conversation + Lentille pour le fil
+                partagé, pilule de connexion historique pour le feed */}
+            {isThread ? (
+              <StreamThreadHeader
+                title={conversationTitle || t('bubbleStream.threadTitleFallback', 'Conversation')}
+                participantCount={activeUsers.length}
+                isConnected={connectionStatus.isConnected && connectionStatus.hasSocket}
+                typingUsers={typingUsers}
+                readingMode={readingMode}
+                onReadingModeChange={handleReadingModeChange}
+                onToggleDensity={handleToggleReadingDensity}
+                onReconnect={reconnect}
+              />
+            ) : (
+              <StreamHeader
+                connectionStatus={connectionStatus}
+                typingUsers={typingUsers}
+                onReconnect={reconnect}
+                t={t}
+              />
+            )}
 
             {/* Feed principal */}
             <div
@@ -625,10 +697,12 @@ export function BubbleStreamPage({
                 onLoadMore={loadMore}
                 t={t}
                 tCommon={tCommon}
-                reverseOrder={false}
-                scrollDirection="down"
-                scrollButtonDirection="up"
+                reverseOrder={scrollLayout.reverseOrder}
+                scrollDirection={scrollLayout.scrollDirection}
+                scrollButtonDirection={scrollLayout.scrollButtonDirection}
                 scrollContainerRef={messagesContainerRef}
+                readingMode={isThread ? readingMode : undefined}
+                scrollButtonOffsetClass={isThread ? 'right-6 xl:right-[360px]' : undefined}
               />
             </div>
 
@@ -649,6 +723,7 @@ export function BubbleStreamPage({
               userRole={user?.role}
               conversationId={normalizedConversationId || conversationId}
               permissionHints={permissionHints}
+              withSafeArea={isThread}
             />
           </section>
 

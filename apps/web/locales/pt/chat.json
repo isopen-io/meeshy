@@ -32,6 +32,14 @@
       "messages": "Pré-visualização das mensagens",
       "historyHidden": "O histórico desta conversa é privado.",
       "joinToReply": "Juntar-se para responder"
+    },
+    "thread": {
+      "participants": "{count} participantes",
+      "live": "Ao vivo",
+      "connecting": "Conectando…",
+      "reconnect": "Reconectar",
+      "typingOne": "{name} está escrevendo…",
+      "typingMany": "{count} pessoas estão escrevendo…"
     }
   }
 }

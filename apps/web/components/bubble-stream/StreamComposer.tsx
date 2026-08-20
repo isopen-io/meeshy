@@ -39,6 +39,13 @@ interface StreamComposerProps {
 
   // Permission hints for anonymous users
   permissionHints?: string[];
+
+  /**
+   * Rembourrage bas au-delà de la barre système (encoche iOS, barre de
+   * navigation Android). Activé par le fil partagé plein écran ; le feed
+   * d'accueil vit dans `DashboardLayout` qui gère déjà son propre bas.
+   */
+  withSafeArea?: boolean;
 }
 
 /**
@@ -61,11 +68,15 @@ export const StreamComposer = memo(forwardRef<unknown, StreamComposerProps>(
       userRole,
       placeholder,
       permissionHints,
+      withSafeArea = false,
     } = props;
 
     return (
       <div className="z-30 row-start-3 border-t border-gray-200/70 bg-white/98 backdrop-blur-xl shadow-2xl dark:border-gray-700/70 dark:bg-gray-950/98">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
+        <div
+          className="w-full px-4 sm:px-6 lg:px-8 py-4"
+          style={withSafeArea ? { paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' } : undefined}
+        >
           <MessageComposer
             ref={ref}
             value={value}

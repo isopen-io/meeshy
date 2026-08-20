@@ -81,6 +81,13 @@ interface ConversationMessagesProps {
   scrollContainerRef?: React.RefObject<HTMLDivElement | null>; // Ref externe du conteneur de scroll (pour BubbleStream)
   /** Lentille de lecture — `focal` par défaut (verdict vol. 3). */
   readingMode?: ReadingMode;
+  /**
+   * Position horizontale du bouton flottant. Par défaut elle est déduite de
+   * `scrollDirection` (le seul cas avec sidebar était le BubbleStream,
+   * `scrollDirection='down'`) ; la variante `thread` de la page partagée garde
+   * la sidebar en xl AVEC `scrollDirection='up'` et doit donc la nommer.
+   */
+  scrollButtonOffsetClass?: string;
 }
 
 const ConversationMessagesComponent = memo(function ConversationMessages({
@@ -115,7 +122,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   scrollDirection = 'up', // Par défaut: scroll vers le haut (comportement classique messagerie)
   scrollButtonDirection = 'down', // Par défaut: ArrowDown pour Conversations (descendre vers récent)
   scrollContainerRef, // Ref externe du conteneur de scroll (optionnelle)
-  readingMode = DEFAULT_READING_MODE
+  readingMode = DEFAULT_READING_MODE,
+  scrollButtonOffsetClass
 }: ConversationMessagesProps) {
   // Drapeau du fil Focal (`useReadingModesFlag`) — WF-110. `reverseOrder`
   // distingue le fil "Conversations" (ancien en haut, drapeau applicable) du
@@ -699,7 +707,8 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
               "fixed z-50",
               "bottom-[116px]", // Position unifiée: ~82px composer + 10px + 24px (hauteur icône)
               // Positionnement adapté: pour BubbleStream avec sidebar, ajuster la position
-              scrollDirection === 'down' ? "right-6 xl:right-[360px]" : "right-6",
+              scrollButtonOffsetClass ??
+                (scrollDirection === 'down' ? "right-6 xl:right-[360px]" : "right-6"),
               "rounded-full w-6 h-6 p-0",
               "backdrop-blur-xl bg-white/60 dark:bg-gray-900/60",
               "shadow-xl shadow-black/5 dark:shadow-black/20",

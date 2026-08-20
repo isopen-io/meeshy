@@ -35,8 +35,21 @@ jest.mock('@/components/conversations/ConversationLayout', () => ({
 }));
 
 jest.mock('@/components/common/bubble-stream-page', () => ({
-  BubbleStreamPage: ({ conversationId }: { conversationId?: string }) => (
-    <div data-testid="live-shared-view" data-conversation-id={conversationId} />
+  BubbleStreamPage: ({
+    conversationId,
+    variant,
+    conversationTitle,
+  }: {
+    conversationId?: string;
+    variant?: string;
+    conversationTitle?: string;
+  }) => (
+    <div
+      data-testid="live-shared-view"
+      data-conversation-id={conversationId}
+      data-variant={variant}
+      data-title={conversationTitle}
+    />
   ),
 }));
 
@@ -151,6 +164,15 @@ describe('SharedConversationExperience — un écran, trois rendus', () => {
     const view = await screen.findByTestId('live-shared-view');
     expect(view).toHaveAttribute('data-conversation-id', CONVERSATION_ID);
     expect(screen.queryByTestId('join-modal')).not.toBeInTheDocument();
+
+    // La variante `thread` : géométrie de messagerie (récent en bas), en-tête
+    // d'identité alimenté par le titre de la conversation, Lentille des modes.
+    expect(view).toHaveAttribute('data-variant', 'thread');
+    expect(view).toHaveAttribute('data-title', 'Week-end Ardèche');
+
+    // Le wrapper hauteur-viewport est ce qui FIGE le composer en bas : sans
+    // lui, `h-full` s'effondre et toute la page défile.
+    expect(view.closest('.h-\\[100dvh\\]')).not.toBeNull();
   });
 
   it('shows a visitor the preview with the join modal on top', async () => {

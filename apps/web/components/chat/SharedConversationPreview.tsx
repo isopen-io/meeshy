@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Lock, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MessagesDisplay } from '@/components/common/messages-display';
@@ -64,6 +64,25 @@ export function SharedConversationPreview({
 
   const participantCount =
     (data.stats?.totalMembers ?? 0) + (data.stats?.totalAnonymousParticipants ?? 0);
+
+  // L'aperçu s'ouvre sur le DERNIER message (le gateway sert l'historique en
+  // ordre croissant : le récent est en bas). Deux passes — une immédiate, une
+  // après la mesure du virtualiseur — pour atterrir au vrai bas.
+  const messageCount = messages.length;
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || messageCount === 0) return;
+
+    const scrollToEnd = () => {
+      container.scrollTop = container.scrollHeight;
+    };
+    const frame = requestAnimationFrame(scrollToEnd);
+    const settle = setTimeout(scrollToEnd, 150);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(settle);
+    };
+  }, [messageCount]);
 
   return (
     <div

@@ -8,5 +8,6 @@
  */
 
 export { StreamHeader } from './StreamHeader';
+export { StreamThreadHeader } from './StreamThreadHeader';
 export { StreamComposer } from './StreamComposer';
 export { StreamSidebar } from './StreamSidebar';

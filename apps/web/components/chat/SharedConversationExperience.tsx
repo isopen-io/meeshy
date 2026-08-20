@@ -157,15 +157,24 @@ export function SharedConversationExperience({ linkId }: SharedConversationExper
   }
 
   if (access.state === 'participant' && data?.currentUser) {
+    // Le wrapper hauteur-viewport est ce qui FIGE le composer en bas : sans
+    // lui, le `h-full` de la page s'effondre (le body n'a pas de hauteur),
+    // toute la page défile et la zone de saisie part avec l'historique.
+    // Même géométrie que l'aperçu visiteur ci-dessous.
     return (
-      <BubbleStreamPage
-        user={mapCurrentUserToUser(data.currentUser)}
-        conversationId={access.conversationId}
-        isAnonymousMode
-        linkId={linkId}
-        initialParticipants={mapParticipantsFromLinkData(data, true)}
-        anonymousPermissionHints={getAnonymousPermissionHints(data.link)}
-      />
+      <div className="h-[100dvh] w-full overflow-hidden">
+        <BubbleStreamPage
+          user={mapCurrentUserToUser(data.currentUser)}
+          conversationId={access.conversationId}
+          isAnonymousMode
+          linkId={linkId}
+          initialParticipants={mapParticipantsFromLinkData(data, true)}
+          anonymousPermissionHints={getAnonymousPermissionHints(data.link)}
+          variant="thread"
+          conversationTitle={data.conversation.title || data.link.name}
+          conversationType={data.conversation.type}
+        />
+      </div>
     );
   }
 
