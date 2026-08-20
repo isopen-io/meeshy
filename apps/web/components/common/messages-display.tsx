@@ -12,6 +12,10 @@ import { useI18n } from '@/hooks/useI18n';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 import { formatDayLabel } from '@/utils/date-format';
 import {
+  isFirstInGroup as computeIsFirstInGroup,
+  isLastInGroup as computeIsLastInGroup,
+} from '@/utils/message-grouping';
+import {
   useFocalScroller,
   FOCAL_ROW_ATTRIBUTE,
   FOCAL_SCALE_ATTRIBUTE,
@@ -435,9 +439,8 @@ export const MessagesDisplay = memo(function MessagesDisplay({
           };
           const prevMsg = index > 0 ? displayMessages[index - 1] : null;
           const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
-          const senderId = message.sender?.id;
-          const isFirstInGroup = !prevMsg || prevMsg.sender?.id !== senderId;
-          const isLastInGroup = !nextMsg || nextMsg.sender?.id !== senderId;
+          const isFirstInGroup = computeIsFirstInGroup(prevMsg, message);
+          const isLastInGroup = computeIsLastInGroup(nextMsg, message);
           const localStatus = (message as unknown as Record<string, unknown>)._localStatus as string | undefined;
           const tempId = (message as unknown as Record<string, unknown>)._tempId as string | undefined;
           const isSending = localStatus === 'sending';
@@ -520,9 +523,8 @@ export const MessagesDisplay = memo(function MessagesDisplay({
           };
           const prevMsg = virtualRow.index > 0 ? displayMessages[virtualRow.index - 1] : null;
           const nextMsg = virtualRow.index < displayMessages.length - 1 ? displayMessages[virtualRow.index + 1] : null;
-          const senderId = message.sender?.id;
-          const isFirstInGroup = !prevMsg || prevMsg.sender?.id !== senderId;
-          const isLastInGroup = !nextMsg || nextMsg.sender?.id !== senderId;
+          const isFirstInGroup = computeIsFirstInGroup(prevMsg, message);
+          const isLastInGroup = computeIsLastInGroup(nextMsg, message);
           const localStatus = (message as unknown as Record<string, unknown>)._localStatus as string | undefined;
           const tempId = (message as unknown as Record<string, unknown>)._tempId as string | undefined;
           const isSending = localStatus === 'sending';
