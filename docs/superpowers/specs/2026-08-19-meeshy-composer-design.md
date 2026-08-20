@@ -3,8 +3,11 @@
 Date : 2026-08-19
 Statut : **proposition de design, non validée** — succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
-Planches visuelles (14 planches, inventaire exhaustif + matrice outil × format) :
-`./2026-08-19-meeshy-composer-views.html`
+Planches visuelles (15 planches, inventaire exhaustif + matrice outil × format +
+revue système P15) : `./2026-08-19-meeshy-composer-views.html`
+Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
+intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
+fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c).
 
 ---
 
@@ -53,7 +56,7 @@ Un `MeeshyObject` unique remplace les cinq familles :
 
 ```
 MeeshyObject
-├── id, kind        : text | media | sticker | audio | place | drawing | mention | hashtag | annotation
+├── id, kind        : text | media | sticker(emoji|image) | audio | place | drawing | mention | hashtag | annotation
 ├── anchor          : .free(x,y) | .band(.top|.bottom) | .pinned(toObject:)   ← §2
 ├── layer           : plane (.background | .content | .foreground) + z dans le plan
 ├── transform       : scale, rotation, opacity            ← UNE définition
@@ -66,7 +69,9 @@ MeeshyObject
 animable (il n'a pas de keyframes aujourd'hui), un lieu devient déplaçable et
 redimensionnable comme un texte (demande explicite : « scalabilité, tout comme
 pour tous les autres objets »), une mention devient un objet posable au lieu
-d'un badge à part, et la timeline n'a plus qu'**un** type à afficher.
+d'un badge à part, et la timeline n'a plus qu'**un** type à afficher. Et le
+sticker cesse d'être un emoji obligatoire : son payload accepte une IMAGE — la
+porte d'entrée des vrais stickers (§6b).
 
 ---
 
@@ -265,6 +270,51 @@ champ.
 
 ---
 
+## 6a. Le son : la loi des deux plans (2026-08-20)
+
+Un chip audio n'existe que pour le son de **premier plan** — Story et Réel, là où
+l'objet posé EST du contenu. Le son de **fond** n'est jamais un chip : il s'annonce
+`♫〰` juste après les détails d'auteur (note PUIS onde — convention du header de
+story déjà verrouillée par test) et **boucle tant que la timeline du contenu
+court**, exactement comme la vidéo de fond.
+
+Nouveau : **un Post peut porter un son de fond, carrousel compris.** La piste est
+liée à la timeline du post, jamais à l'index de page — on feuillette, le son
+continue (même leçon que le compteur didSet qui rembobinait la clé audio du
+composer : le temps appartient au contenu, pas à la navigation). Le fil reste muet
+(règle d'autoplay existante) ; `♫〰` dit la présence. Le Réel adopte le même
+indicateur après l'auteur.
+
+## 6b. Vrais stickers, collage, bibliothèque locale (2026-08-20)
+
+**Coller une image** devient un geste de premier ordre : dans la scène (objet
+`media`/`sticker`) ou dans le carrousel (nouvelle carte) selon le contexte du
+composer. Lecture du presse-papiers UNIQUEMENT via le bouton système
+(`PasteButton`/`UIPasteControl`, iOS 16+) — `hasImages` décide de MONTRER le
+bouton sans rien lire, le prompt de confidentialité ne surgit jamais hors geste.
+Downsample à l'import (≤ 2 048 px, ImageIO) ; HDR normalisé SDR.
+
+**Les vrais stickers entrent par cette même porte.** Bitmoji, Memoji, Genmoji et
+tout clavier tiers copient des images : coller en fait un sticker posé — et
+l'ajoute à **« Mes stickers »**, la bibliothèque personnelle. Dès iOS 18, les
+glyphes clavier inline (`NSAdaptiveImageGlyph`) arrivent en bonus ; le collage
+reste le chemin universel 16→27.
+
+**La bibliothèque est LOCALE — feature d'application, pas de plateforme.** Aucune
+synchronisation backend, jamais (DiskCacheStore, policy dédiée, LRU 64 Mo,
+PNG ≤ 512 px). La distinction qui porte tout : un sticker *posé* dans un contenu
+publié voyage comme média du contenu — claimable comme n'importe quel média,
+sinon il n'existerait pas chez les lecteurs (même famille de défaut que les
+« médias web jamais rattachés ») ; la *collection*, elle, ne quitte pas l'appareil.
+
+## 6c. L'icône est le verbe (2026-08-20)
+
+`@marc · ↻ @aïcha` — jamais « a republié » : le glyphe suffit, l'air compte. La
+règle est GÉNÉRALE, pas un cas : tout glyphe établi (`↻` republication, `♫〰` son
+de fond, `👁` vues) remplace son texte partout où il apparaît. iOS est conforme
+depuis le 2026-08-19 (attribution icône + @handle) ; le web s'aligne dans le lot
+de parité.
+
 ## 7. Les arbitrages ouverts
 
 Ce sont les vraies décisions ; le reste en découle.
@@ -278,27 +328,69 @@ Ce sont les vraies décisions ; le reste en découle.
 | **O5** | Bandes actives | zones dédiées (contraintes) | ancrage sémantique, objets libres de déborder | **B** — un objet peut chevaucher la limite (une bulle à cheval sur l'image), l'ancrage n'est qu'un point de référence |
 | **O6** | Plateau configurable | 3 teintes fixes | jeton de thème + palette étendue | **A d'abord** (noir · indigo profond · violet profond, la demande), B ouvert ensuite |
 | **O7** | Export | rendu du registre (parité exacte, export web possible) | pipeline `StoryVideoExportService` conservé | **B maintenant, A en cible** — reprise du cas C8 de Story Atelier, inchangé |
+| **O8** | Sticker posé : format d'upload ? | média du contenu claimable (TUS/PostMedia) | inline dans le blob (base64) | **A** — jamais d'inline : le blob est plafonné à 256 Ko et un sticker fantôme serait la répétition des « médias web jamais rattachés » |
+| **O9** | Lecture du presse-papiers | PasteButton/UIPasteControl uniquement | lecture programmatique + gestion du prompt | **A** — le prompt système hors geste brûle la confiance ; `hasImages` suffit pour l'affordance |
 
 ---
 
-## 8. Ce qu'il faut vérifier avant d'engager
+## 8. Revue système — optimisation, performance, compatibilité iOS 16→27 (2026-08-20)
 
-Trois inconnues que je n'ai pas levées et qui changeraient la forme du plan :
+Revue de TOUT le système — composer, ScenePlayer, timeline, collage, stickers,
+audio. Chaque risque est ancré à un piège documenté de ce dépôt ; chaque garde est
+nommée. Détail visuel : planche P15. Appareil plancher : A11 (iPhone 8 / SE 2),
+iOS 16, 2-3 Go de RAM.
 
-1. **Le coût du plan 2D sur du vieux matériel.** Une timeline qui rend N pistes
-   vivantes au-dessus d'un canvas déjà animé est le point chaud évident. À
-   mesurer avant de s'y engager — la mémoire du dépôt garde trace de réels qui
-   chauffaient.
-2. **La compatibilité descendante réelle.** `Post.storyEffects` est validé en
-   `passthrough()` côté serveur : personne ne sait ce que les clients déployés
-   ont écrit. Un audit des blobs en base doit précéder tout schéma strict.
-3. **La profondeur de type SwiftUI.** Le dépôt a déjà connu un débordement de
-   pile par profondeur de type (device 1008 Ko vs simu 8 Mo). Un composer
-   générique bâti sur des `@ViewBuilder` imbriqués est exactement la forme qui
-   déclenche ça — le registre doit rendre par effacement de type, pas par
-   composition générique profonde.
+### Budgets imposés par le plancher
 
----
+| Surface | Budget | Garde |
+|---|---|---|
+| Fil + CanvasPlayer | 1 lecteur actif max, autoplay muet ; vignettes (thumbHash) ailleurs ; pause hors écran, pool | le piège « réels qui chauffent » ne se rejoue pas |
+| Scène | 1 vidéo de fond 1080p + ≤ 20 layers ; un objet = un CALayer, jamais une vue SwiftUI par objet | le canvas reste UIKit (StoryTextLayer + encre par métriques conservés) |
+| Image collée/importée | downsample ImageIO ≤ 2 048 px AVANT UIImage (48 Mpx décodée ≈ 190 Mo) ; HDR → SDR | export AVAssetWriter déterministe |
+| « Mes stickers » | DiskCacheStore dédié, LRU 64 Mo, PNG ≤ 512 px | store existant, zéro code de stockage neuf |
+| Timeline plan 2D | pistes virtualisées ; barres + keyframes dessinées en un passe | lanes 52 pt + graduation dérivée des libellés : invariants réutilisés |
+| Audio de fond | boucle liée à la timeline (AVPlayerLooper), canal unique | PlaybackCoordinator inchangé |
+| Polices (18) | 0 octet embarqué, cache CoreText | test de disponibilité — vérifié 18.2 ET 26.1 |
+
+### Portes API — aucune branche morte sur 16→27
+
+| API | Plancher | Conduite |
+|---|---|---|
+| `PasteButton`/`UIPasteControl` | 16 | seule voie de lecture — couvre toute la plage |
+| `hasImages`/`detectedPatterns` | 10/15 | affordance sans lecture ⇒ jamais de prompt |
+| `NSAdaptiveImageGlyph` | 18 | bonus clavier inline, `@available` + repli collage |
+| `PHPicker` · `AVPlayerLooper` · `preferredFrameRateRange` | 14 · 10 · 15 | existant / boucle / 120 Hz opportuniste |
+| Matériaux Liquid Glass | 26 | automatiques — rien à gater, rien à imiter |
+
+**Bilan : aucune API > iOS 16 n'est requise.** iOS 18 et 26 n'apportent que des
+bonus à repli naturel ; pour iOS 27, rien de privé ni de déprécié — les
+sentinelles (test des polices, gardes de source) rougissent d'elles-mêmes.
+
+### Registre des risques → mitigations (précédents du dépôt)
+
+1. **Profondeur de type SwiftUI** (pile device 1 008 Ko vs simu 8 Mo) → registre
+   par effacement de type, canvas UIKit, interdit `@ViewBuilder` génériques
+   imbriqués sur le chemin du player — garde de source dédiée.
+2. **Thermique** (« réels qui chauffent ») → 1 décodeur actif, résolution
+   adaptative, pause hors écran.
+3. **Self-sizing récursif** (UIHostingConfiguration + invalidateLayout) →
+   hauteur EXPLICITE des cellules autour du CanvasPlayer.
+4. **Invariants de lecture** (né en pause · cache gèle le fade · 4 chemins
+   relancent · boucle = fond seul) → repris comme lois du ScenePlayer ; la
+   surface de gardes source existante reste verte par construction.
+5. **Blobs v1 inconnus** (passthrough 256 Ko) → audit de base avant schéma
+   strict, lecture double v1/v3 (O2).
+6. **Prompt presse-papiers** → PasteButton uniquement (O9).
+7. **Sticker fantôme** (posé mais invisible aux lecteurs) → média du contenu
+   claimable (O8) ; seule la bibliothèque reste locale.
+8. **Le carrousel coupe le son à la page** (leçon du didSet qui rembobinait) →
+   piste liée à la timeline du post, jamais à l'index de page.
+9. **Mémoire A11 vs captures modernes** (24-48 Mpx dès iOS 26) → downsample
+   avant décodage, jamais `UIImage(data:)` brut.
+
+Restent ouvertes — les seules choses que cette revue ne peut pas clore ici : le
+**coût mesuré** du plan 2D sur A11 (prototype à chronométrer), l'**audit des
+blobs** en production, et une **exécution réelle sur un appareil iOS 16**.
 
 ## 9. Phasage proposé
 
@@ -308,13 +400,16 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
    (O2/B). Aucun changement visible. C'est la phase qui supprime les cinq
    copies de la géométrie et du temps.
 2. **La scène** — cadre 9:16, bandes ancrables, plateau et socle permanent.
-   Premier changement visible, sur le composer de story seul.
+   Premier changement visible, sur le composer de story seul. Le collage d'image
+   et « Mes stickers » (§6b) entrent ici : purement client, aucun contrat serveur.
 3. **Le plan 2D** — timeline verticale/horizontale, pistes fantômes.
 4. **L'intention** — `ComposerIntent` et les profils ; les composers parallèles
    meurent un par un, en commençant par ceux qui n'ont qu'un site d'appel.
 5. **Les viewers** — `MeeshyScenePlayer` sous les trois chromes ; les
    conventions de lecture déjà figées (durée, crédit sonore, rail figé, barre de
-   langues) sont reprises telles quelles.
+   langues) sont reprises telles quelles — plus la loi des deux plans audio et
+   `♫〰` après l'auteur sur Post/Réel (§6a), et l'attribution `↻` sans verbe
+   généralisée au web (§6c).
 6. **Le nettoyage** — schéma strict côté serveur une fois l'audit fait (§8.2),
    retrait de la lecture v2.
 
@@ -322,5 +417,5 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
 
 ## 10. Statut
 
-Ce document est une **proposition**. Rien n'est implémenté. Les points §7 et §8
+Ce document est une **proposition**. Rien n'est implémenté. Les points §7 (O1–O9) et §8
 demandent un arbitrage produit avant qu'un plan d'implémentation soit écrit.

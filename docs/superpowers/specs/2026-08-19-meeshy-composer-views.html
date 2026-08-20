@@ -192,7 +192,7 @@ footer .mono{font-size:11.5px}
 <a href="#p4">P4 Anatomie</a><a href="#p5">P5 Entrées</a><a href="#p6">P6 Scène</a>
 <a href="#p7">P7 Outils</a><a href="#p8">P8 Timeline</a><a href="#p9">P9 Capture</a>
 <a href="#p10">P10 Socle</a><a href="#p11">P11 Étagère</a><a href="#p12">P12 Viewers</a>
-<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a>
+<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a>
 </div></nav>
 
 <header><div class="wrap">
@@ -203,8 +203,9 @@ footer .mono{font-size:11.5px}
   qu'il fait selon le format. <b>Toutes les features existantes sont inventoriées et préservées
   avant toute nouveauté.</b></p>
   <div class="meta">
-    <span>2026-08-19</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
-    <span>statut : proposition — arbitrages O1–O7 ouverts</span>
+    <span>2026-08-19 · rév. 2026-08-20</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
+    <span>statut : proposition — arbitrages O1–O9 ouverts</span>
+    <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
   </div>
   <div class="legend">
     <span><span class="chip chS">S</span> Story · 20 h puis archive</span>
@@ -243,6 +244,10 @@ footer .mono{font-size:11.5px}
     <div class="card"><h4>6 · Le lecteur EST l'aperçu</h4><p>Composer et viewers partagent le même
       registre de rendu (<b class="mono">MeeshyScenePlayer</b>). L'aperçu du socle, la carte de
       feed, le viewer plein écran : trois chromes, un moteur. WYSIWYG par construction.</p></div>
+    <div class="card"><h4>7 · L'icône est le verbe</h4><p>Un glyphe établi n'est jamais doublé d'un
+      texte : <span class="mono">↻</span> suffit à dire « a republié », <span class="mono">♫〰</span>
+      suffit à dire « son de fond », <span class="mono">👁</span> à dire « vues ». Directive
+      2026-08-20 — l'air est une feature ; la verbosité se supprime partout, pas au cas par cas.</p></div>
   </div>
 </div></section>
 
@@ -532,7 +537,13 @@ flowchart TD
       <div class="panel"><span class="ob on">Recadrer</span><span class="ob">Rogner (trim)</span><span class="ob">Volume</span><span class="ob">Filtre (8)</span><span class="ob">Premier plan</span></div>
       <p>Caméra, galerie, dernière capture (jamais de prompt à l'ouverture — la demande d'accès
       part sur le tap, règle existante). Filtres : vintage, N&amp;B, chaud, froid, dramatic, vivid,
-      fade, chrome. <span class="tag tNew">nouveau</span> appui long sur la scène = capture (P9).</p>
+      fade, chrome. <span class="tag tNew">nouveau</span> appui long sur la scène = capture (P9).
+      <span class="tag tNew">nouveau</span> <b>Coller une image</b> : objet de scène, ou carte de
+      carrousel si le composer est en Post — selon le contexte, sans question. Lecture du
+      presse-papiers UNIQUEMENT via le bouton système (<span class="mono">PasteButton</span>,
+      iOS 16+) : <span class="mono">hasImages</span> décide de MONTRER le bouton sans rien lire,
+      et le prompt de confidentialité ne surgit jamais hors geste. Downsample à l'import
+      (≤ 2 048 px, ImageIO) et HDR normalisé en SDR — l'export reste déterministe.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>1 porteur par slide + médias premier plan
           (<span class="mono">fgMediaItem</span>).</p></span>
@@ -550,13 +561,21 @@ flowchart TD
       « titre · @pseudo · M:SS » le rend partout, décompte compris. Le toggle
       <span class="mono">allowSoundExtraction</span> est enfin transmis (défaut documenté :
       déclaré, jamais envoyé).</p>
+      <p><b>La loi des deux plans</b> (directive 2026-08-20) : un chip audio n'existe que pour le
+      son de PREMIER PLAN (Story · Réel). Le son de FOND n'est jamais un chip — il s'annonce
+      <span class="mono">♫〰</span> après les détails d'auteur (note PUIS onde, convention déjà
+      verrouillée par test) et boucle tant que la timeline du contenu n'est pas finie, exactement
+      comme la vidéo de fond. <span class="tag tNew">nouveau</span> un POST peut porter un son de
+      fond — carrousel compris : la piste joue pendant qu'on feuillette, liée à la timeline du
+      post, pas à la page. Le fil reste muet (règle autoplay existante) ; ♫〰 le dit.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>Fond (bibliothèque/fichier/micro, bornes,
           volume, variantes TTS) + chips audio premier plan posés sur la scène.</p></span>
         <span class="f"><span class="chip chP">P</span><p>Post audio (voix, transcription) et post
-          « utiliser ce son » — chemins existants conservés.</p></span>
-        <span class="f"><span class="chip chR">R</span><p>Son original de la vidéo + musique
-          empruntée ; pas de chips premier plan (la vidéo porte le son).</p></span>
+          « utiliser ce son » — conservés. <span class="tag tNew">nouveau</span> son de FOND
+          (carrousel compris) : boucle sur la timeline, fil muet, ♫〰 après l'auteur.</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Son original + musique empruntée ;
+          chips = premier plan uniquement, le fond s'annonce ♫〰 après l'auteur.</p></span>
         <span class="f"><span class="tag tAb">M —</span><p>Un mood n'a pas de piste.</p></span>
       </div></div>
 
@@ -573,15 +592,24 @@ flowchart TD
         <span class="f"><span class="tag tAb">M —</span><p>Pas de scène.</p></span>
       </div></div>
 
-    <div class="card"><h4>Stickers <span class="tag tEx">existant</span></h4>
-      <div class="panel"><span class="ob on">Catégories</span><span class="ob">Grille emoji</span></div>
-      <p>Zone dépliée mi-hauteur, choix = posé au centre, repli. <span class="tag tNew">nouveau</span>
-      un sticker devient un MeeshyObject entier : transform + <b>timing + keyframes</b> — il n'en
-      avait aucun.</p>
+    <div class="card"><h4>Stickers <span class="tag tEx">existant</span> <span class="tag tNew">+ vrais stickers</span></h4>
+      <div class="panel"><span class="ob on">Mes stickers</span><span class="ob">Grille emoji</span><span class="ob">📋 Coller</span></div>
+      <p>La grille emoji existante reste. <span class="tag tNew">nouveau</span> le sticker devient
+      un objet à part entière — <span class="mono">payload: emoji | image</span> — avec transform,
+      <b>timing et keyframes</b> (il n'en avait aucun). Les stickers IMAGE arrivent par le
+      COLLAGE : Bitmoji, Memoji, Genmoji et tout clavier tiers copient des images — coller en fait
+      un sticker posé, et l'ajoute à <b>« Mes stickers »</b>, la bibliothèque personnelle. Réception
+      clavier inline (<span class="mono">NSAdaptiveImageGlyph</span>) en bonus dès iOS 18, le
+      collage restant le chemin universel 16→27.</p>
+      <p><b>La bibliothèque est LOCALE — feature d'application, pas de plateforme.</b> Aucune
+      synchronisation backend, jamais (store disque local, LRU). La distinction qui compte : un
+      sticker <i>posé</i> dans un contenu publié voyage comme média du contenu (uploadé comme
+      n'importe quel média — sinon il n'existerait pas chez les lecteurs) ; la <i>collection</i>,
+      elle, ne quitte pas l'appareil.</p>
       <div class="fmt">
-        <span class="f"><span class="chip chS">S</span><p>Existant, animable désormais.</p></span>
-        <span class="f"><span class="chip chP">P</span><p>Sur scène.</p></span>
-        <span class="f"><span class="chip chR">R</span><p>Timé sur la vidéo.</p></span>
+        <span class="f"><span class="chip chS">S</span><p>Emoji (existant) + image ◆, animables.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène ; collé en Post sans scène ⇒ carte de carrousel (c'est une image).</p></span>
+        <span class="f"><span class="chip chR">R</span><p>Timé sur la vidéo, bandes comprises.</p></span>
         <span class="f"><span class="tag tAb">M —</span><p>L'emoji du mood est le moodEmoji, pas un
           sticker.</p></span>
       </div></div>
@@ -811,7 +839,7 @@ flowchart TD
     interlude. Fenêtre 20 h ; référencé-expiré : une vue, 24 h.</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
-        <span class="ob">@marc · a republié ↻ @aïcha</span>
+        <span class="ob">@marc · ↻ @aïcha · ♫〰</span>
         <span class="ob">content natif — Prisme + badge langue</span>
         <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">CanvasPlayer — autoplay muet, tap = plein écran</span></div></div>
         <span class="ob">Avec Alice · ❤ 12 · 💬 4 · ↻ 2 · 🔖</span>
@@ -827,7 +855,7 @@ flowchart TD
         <div class="band"><span class="ob">♫ Nuits d'été · @aïcha · 0:15</span></div>
       </div>
       <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · ♫ utiliser ce son</span></div>
-      <div class="socle"><span class="aud">@aïcha</span><span class="pub">Suivre</span></div>
+      <div class="socle"><span class="aud">@aïcha · ♫〰</span><span class="pub">Suivre</span></div>
     </div><figcaption><span class="chip chR">R</span> <b>Réel.</b> Pager vertical, boucle, crédit
     sonore en marquee avec décompte, « utiliser ce son » (si extraction autorisée), captions.
     Une story publiée = un réel de 20 h — même surface sociale, seul le TTL diffère.</figcaption></figure>
@@ -835,6 +863,12 @@ flowchart TD
   <div class="callout"><b>Invariant du rail (conservé).</b> Le plan d'actions est figé à l'entrée
   du slide — aucun bouton n'apparaît en cours de lecture. Les compteurs vivent, les surfaces non.
   Détail dans la feuille d'engagement commune ; transcription et signalement dans le menu « … ».</div>
+  <div class="callout"><b>La loi des deux plans audio (2026-08-20).</b> Un chip audio = son de
+  PREMIER PLAN, Story et Réel uniquement. Le son de FOND n'est jamais un chip : il s'annonce
+  <span class="mono">♫〰</span> juste après les détails d'auteur — sur les trois formats — et
+  boucle tant que la timeline du contenu court, comme la vidéo de fond. Et <b>l'icône est le
+  verbe</b> : <span class="mono">@marc · ↻ @aïcha</span>, jamais « a republié » en toutes lettres —
+  le glyphe suffit, l'air compte (généralisé, iOS déjà conforme depuis le 2026-08-19).</div>
 </div></section>
 
 <!-- ================================================================ P13 -->
@@ -851,12 +885,15 @@ flowchart TD
       <tr><td>Texte sur scène</td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si scène</td><td class="ok">✓ bandes par défaut · timé</td><td class="ab">— pas de scène</td></tr>
       <tr><td>Médias</td><td class="ok">✓ porteur/slide + premier plan</td><td class="ok">✓ carrousel (order écrit) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée</td><td class="ab">— jamais eu</td></tr>
       <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr><td>Coller une image</td><td class="nv">◆ objet de scène</td><td class="nv">◆ scène ou carte carrousel</td><td class="nv">◆ bandes/overlay</td><td class="ab">—</td></tr>
       <tr><td>Filtres (8)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
       <tr><td>Éditeur média (crop·trim·vol)</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓ trim vidéo</td><td class="ab">—</td></tr>
       <tr><td>Dessin</td><td class="ok">✓ immersif</td><td class="ok">✓ si scène</td><td class="ok">✓ traits timés</td><td class="ab">—</td></tr>
       <tr><td>Stickers</td><td class="ok">✓ <span class="nv">◆ +timing/keyframes</span></td><td class="ok">✓ si scène</td><td class="ok">✓ timés</td><td class="ab">— moodEmoji ≠ sticker</td></tr>
-      <tr><td>Son de fond</td><td class="ok">✓ biblio/fichier/micro · bornes · TTS</td><td class="ok">✓ audio post + emprunté</td><td class="ok">✓ piste vidéo + emprunt</td><td class="ab">—</td></tr>
-      <tr><td>Audio premier plan (chips)</td><td class="ok">✓</td><td class="ok">✓ (audioUrl)</td><td class="ab">— la vidéo porte le son</td><td class="ab">—</td></tr>
+      <tr><td>Stickers image (vrais)</td><td class="nv">◆ collage/clavier</td><td class="nv">◆ scène ou carrousel</td><td class="nv">◆ timés</td><td class="ab">—</td></tr>
+      <tr><td>Bibliothèque « Mes stickers »</td><td class="nv" colspan="3">◆ LOCALE — feature d'app, zéro sync backend ; le sticker POSÉ voyage comme média du contenu</td><td class="ab">—</td></tr>
+      <tr><td>Son de fond</td><td class="ok">✓ biblio/fichier/micro · bornes · TTS</td><td class="ok">✓ audio post + emprunté <span class="nv">◆ + fond (carrousel compris) : boucle timeline, fil muet</span></td><td class="ok">✓ piste vidéo + emprunt</td><td class="ab">—</td></tr>
+      <tr><td>Audio premier plan (chips)</td><td class="ok">✓ chips = premier plan SEUL (le fond n'est jamais un chip)</td><td class="ok">✓ lecteur du post audio (contenu, pas chip)</td><td class="ok">✓ chips premier plan uniquement</td><td class="ab">—</td></tr>
       <tr><td>Extraction de son (toggle)</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td></tr>
       <tr><td>Lieu — méta / pastille</td><td class="ok">✓ / ✓ <span class="nv">◆ scalable</span></td><td class="ok">✓ / si scène</td><td class="ok">✓ / timée</td><td class="ab">— / —</td></tr>
       <tr><td>Références 4 modes</td><td class="ok">✓ tous</td><td class="ok">✓ tous (PINNED ⇒ scène)</td><td class="ok">✓ tous</td><td class="ok">✓ sauf PINNED (pas de scène)</td></tr>
@@ -886,6 +923,8 @@ flowchart TD
       <tr><td>Références en lecture</td><td class="ok">✓ badge · « Avec … » · marqueur SILENT</td><td class="ok">✓ idem</td><td class="ok">✓ + @ valides dans l'embed</td><td class="ok">✓ « Avec … »</td></tr>
       <tr><td>Accès référencé expiré</td><td class="ok">✓ 24 h · consommé à la vue</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ok">✓ idem S</td></tr>
       <tr><td>Muet / son</td><td class="ok">✓ + mute par piste</td><td class="ok">✓ (autoplay muet)</td><td class="ok">✓</td><td class="ab">—</td></tr>
+      <tr><td>Indicateur ♫〰 après l'auteur</td><td class="ok">✓ note+onde (convention testée)</td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
+      <tr><td>Attribution ↻ sans verbe</td><td class="ab">— (pas d'attribution en story)</td><td class="ok">✓ iOS 2026-08-19 · web à aligner</td><td class="ok">✓ idem</td><td class="ab">—</td></tr>
       <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
       <tr><td>Partage externe · lien tracé</td><td class="ok">✓ /l/ token</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
       <tr><td>Épingler au profil</td><td class="ab">—</td><td class="ok">✓ /pin</td><td class="ab">—</td><td class="ab">—</td></tr>
@@ -920,6 +959,18 @@ flowchart TD
     <div class="card"><h4><span class="tag tNew">nouveau</span> Annotation</h4><p>Étiquette liée à un
       objet ou une zone (callout) — le kind est réservé dans le modèle ; l'UI viendra comme
       contrôle, jamais comme vue.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Vrais stickers</h4><p>Bitmoji, Memoji,
+      Genmoji et claviers tiers entrent par le collage (images) ; « Mes stickers » les garde —
+      bibliothèque LOCALE, zéro sync backend. Le sticker posé voyage comme média du contenu.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Coller une image</h4><p>Scène ou carte
+      de carrousel selon le contexte. PasteButton système uniquement — le presse-papiers n'est
+      jamais lu hors geste, le prompt iOS ne surgit jamais.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Son de fond sur Post</h4><p>Carrousel
+      compris : la piste boucle sur la timeline du post pendant qu'on feuillette. Fil muet, ♫〰
+      après l'auteur — la story et le réel disent déjà le son ainsi.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> L'icône est le verbe</h4><p>
+      <span class="mono">@marc · ↻ @aïcha</span> — jamais « a republié ». Généralisé : tout glyphe
+      établi (↻, ♫〰, 👁) remplace son texte. iOS conforme depuis le 2026-08-19 ; web à aligner.</p></div>
   </div>
   <h3>Arbitrages ouverts (décision produit requise)</h3>
   <div class="scrollx"><table>
@@ -932,6 +983,8 @@ flowchart TD
       <tr><td class="mono">O5</td><td>Bandes : zones contraintes ou ancres ?</td><td>Ancres — un objet peut chevaucher la frontière</td></tr>
       <tr><td class="mono">O6</td><td>Teintes du plateau</td><td>3 jetons d'abord (la demande), palette ensuite</td></tr>
       <tr><td class="mono">O7</td><td>Export</td><td>Pipeline actuel conservé, rendu-du-registre en cible (parité exacte, export web)</td></tr>
+      <tr><td class="mono">O8</td><td>Sticker posé : format d'upload ?</td><td>Média du contenu claimable (TUS/PostMedia), comme tout média — jamais d'inline base64 dans le blob ; la bibliothèque reste locale</td></tr>
+      <tr><td class="mono">O9</td><td>Lecture du presse-papiers</td><td>PasteButton/UIPasteControl UNIQUEMENT — la lecture programmatique déclenche le prompt système et brûle la confiance</td></tr>
     </tbody>
   </table></div>
   <h3>Risques nommés (à lever avant le plan d'implémentation)</h3>
@@ -943,6 +996,66 @@ flowchart TD
     <li><b>Profondeur de type SwiftUI</b> — le dépôt a déjà débordé la pile (device 1 008 Ko vs simu
       8 Mo). Le registre rend par effacement de type, jamais par composition générique profonde.</li>
   </ul>
+</div></section>
+
+<!-- ================================================================ P15 -->
+<section id="p15"><div class="wrap">
+  <div class="prail"><span class="pnum">P15</span><h2>Revue système — optimisation, performance, compatibilité iOS 16→27 (2026-08-20)</h2></div>
+  <p class="lede">La revue couvre TOUT le système — composer, ScenePlayer, timeline, collage,
+  stickers, audio — pas un aspect isolé. Chaque risque est ancré à un piège DOCUMENTÉ de ce dépôt,
+  chaque garde est nommée. Appareil plancher : A11 (iPhone 8 / SE 2), iOS 16, 2-3 Go de RAM.</p>
+
+  <h3>Budgets — ce que le plancher impose</h3>
+  <div class="scrollx"><table>
+    <thead><tr><th>Surface</th><th>Budget</th><th>Garde</th></tr></thead>
+    <tbody>
+      <tr><td><b>Fil avec CanvasPlayer</b></td><td>1 lecteur ACTIF maximum, autoplay muet ; les autres cartes servent leur vignette (thumbHash existant) ; pause hors écran, pool de réutilisation</td><td>le piège « réels qui chauffent » est documenté ici — le fil ne devient jamais N décodeurs</td></tr>
+      <tr><td><b>Scène (composer &amp; lecture)</b></td><td>1 vidéo de fond 1080p + ≤ 20 layers actifs ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
+      <tr><td><b>Image collée / importée</b></td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
+      <tr><td><b>« Mes stickers » (local)</b></td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
+      <tr><td><b>Timeline plan 2D</b></td><td>pistes virtualisées ; barres et keyframes dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
+      <tr><td><b>Audio de fond (S·P·R)</b></td><td>boucle liée à la timeline du contenu (AVPlayerLooper), pas à la page du carrousel ; un seul canal audio</td><td>PlaybackCoordinator existant — la règle « qui claim le canal » ne change pas</td></tr>
+      <tr><td><b>Polices (18 familles)</b></td><td>0 octet embarqué, matérialisation CoreText au premier usage, cache process</td><td>disponibilité sous test — vérifiée fichiers + exécution sur 18.2 ET 26.1</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Portes API — toute la plage 16→27, sans branche morte</h3>
+  <div class="scrollx"><table>
+    <thead><tr><th>API</th><th>Plancher</th><th>Usage ici</th><th>Conduite</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">PasteButton / UIPasteControl</td><td>iOS 16</td><td>coller image &amp; sticker</td><td>SEULE voie de lecture — couvre toute la plage, aucun gate</td></tr>
+      <tr><td class="mono">UIPasteboard.hasImages · detectedPatterns</td><td>10 · 15</td><td>décider de MONTRER le bouton</td><td>ne lit rien ⇒ pas de prompt ; jamais <span class="mono">.image</span> en direct</td></tr>
+      <tr><td class="mono">NSAdaptiveImageGlyph</td><td>iOS 18</td><td>Genmoji/Memoji inline au clavier</td><td><span class="mono">@available(iOS 18)</span>, repli = le collage (chemin universel)</td></tr>
+      <tr><td class="mono">PHPickerViewController</td><td>iOS 14</td><td>galerie sans permission</td><td>existant, inchangé</td></tr>
+      <tr><td class="mono">AVPlayerLooper</td><td>iOS 10</td><td>boucle du fond jusqu'à fin de timeline</td><td>couvert partout</td></tr>
+      <tr><td class="mono">CADisplayLink.preferredFrameRateRange</td><td>iOS 15</td><td>scrub timeline à 120 Hz (ProMotion)</td><td>opportuniste — dégrade seul à 60 Hz sur A11/écrans 60</td></tr>
+      <tr><td>Matériaux système (Liquid Glass 26+)</td><td>iOS 26</td><td>chrome du plateau</td><td>automatique via les matériaux — rien à gater, rien à imiter</td></tr>
+      <tr><td><b>Bilan</b></td><td colspan="3"><b>aucune API &gt; iOS 16 n'est REQUISE</b> ; iOS 18 n'apporte qu'un bonus (glyphes clavier inline) ; iOS 27 : rien de privé, rien de déprécié — les sentinelles (test de polices, gardes de source) rougissent d'elles-mêmes au premier runtime qui bouge</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>Registre des risques — chacun ancré à un piège documenté du dépôt</h3>
+  <div class="scrollx"><table>
+    <thead><tr><th>Risque</th><th>Précédent documenté</th><th>Mitigation engagée par le design</th></tr></thead>
+    <tbody>
+      <tr><td><b>Débordement de pile par profondeur de type SwiftUI</b> (device 1 008 Ko vs simu 8 Mo)</td><td>crash device réel, mémoire du dépôt</td><td>le registre rend par EFFACEMENT DE TYPE ; le canvas reste UIKit ; interdit <span class="mono">@ViewBuilder</span> génériques imbriqués dans le chemin du player — garde de source dédiée</td></tr>
+      <tr><td><b>Thermique</b> — N players dans le fil</td><td>« réels qui chauffent = SOTA »</td><td>1 décodeur actif, vignettes ailleurs, pause hors écran, résolution adaptative</td></tr>
+      <tr><td><b>Récursion self-sizing</b> autour du player en cellule</td><td>UIHostingConfiguration + invalidateLayout (mémoire du dépôt)</td><td>cellules du fil : hauteur EXPLICITE autour du CanvasPlayer, jamais de hosting self-sizing</td></tr>
+      <tr><td><b>Invariants de lecture</b> perdus dans la refonte</td><td>canvas né en pause · le cache gèle le fade (contentHash) · 4 chemins relancent la lecture · boucle = fond seul</td><td>repris comme LOIS du ScenePlayer (P12) — toute la surface de test source existante reste verte par construction</td></tr>
+      <tr><td><b>Blobs v1 inconnus</b> (passthrough 256 Ko)</td><td>constat Story Atelier §1</td><td>audit de la base AVANT schéma strict ; lecture double v1/v3 (O2) — 20 h de stories vivantes à tout instant</td></tr>
+      <tr><td><b>Prompt presse-papiers</b> — confiance brûlée</td><td>comportement système iOS 16+</td><td>PasteButton uniquement (O9) ; <span class="mono">hasImages</span> pour l'affordance, zéro lecture hors geste</td></tr>
+      <tr><td><b>Sticker fantôme</b> — posé mais invisible aux lecteurs</td><td>même famille que « médias web jamais rattachés » (réels web inexistants)</td><td>le sticker posé est un média du contenu, claimable (O8) ; la bibliothèque seule reste locale</td></tr>
+      <tr><td><b>Carrousel coupe le son</b> au changement de page</td><td>« compteur didSet en clé audio rembobine » (mémoire du dépôt)</td><td>la piste de fond est liée à la TIMELINE du post, jamais à l'index de page — même leçon, généralisée</td></tr>
+      <tr><td><b>Mémoire A11</b> — imports photo modernes</td><td>plancher 2-3 Go, captures 24-48 Mpx dès iOS 26</td><td>downsample AVANT décodage (ImageIO thumbnail), jamais UIImage(data:) brut</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>Verdict de la revue.</b> Rien dans la proposition n'exige une API
+  au-dessus d'iOS 16 ; les deux seuls bonus versionnés (glyphes clavier 18+, matériaux 26+) ont un
+  repli naturel. Les vrais dangers ne sont pas des APIs mais quatre pièges de rendu déjà rencontrés
+  par ce dépôt — profondeur de type, thermique, self-sizing, invariants de lecture — et chacun a
+  désormais sa mitigation NOMMÉE dans le design, pas une promesse. Les trois inconnues de P14
+  (coût du plan 2D à mesurer, audit des blobs, exécution réelle sur un appareil iOS 16) restent
+  les seules choses que cette revue ne peut pas clore sur cette machine.</div>
 </div></section>
 
 <footer><div class="wrap">
