@@ -193,7 +193,6 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
     /// start/stop, la lecture échoue silencieusement et le partage livre un
     /// fichier vide.
     func test_extension_pairsTheSecurityScopedAccess() throws {
-        try XCTSkipIf(true, "Activé par la Task 6 (extraction des fichiers dans ShareViewController)")
         try assertPresent(
             "startAccessingSecurityScopedResource",
             in: "ShareViewController.swift",

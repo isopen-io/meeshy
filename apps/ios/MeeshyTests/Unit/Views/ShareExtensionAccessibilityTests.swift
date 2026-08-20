@@ -103,7 +103,7 @@ final class ShareExtensionAccessibilityTests: XCTestCase {
 
         let list = condensed(source)
         XCTAssertTrue(
-            list.contains("selectedId = target.id") && list.contains(".buttonStyle(.plain)"),
+            list.contains("model.tapRow(target.id)") && list.contains(".buttonStyle(.plain)"),
             "La rangée doit être enveloppée dans un Button en .buttonStyle(.plain), "
             + "pour gagner le comportement natif sans changer son apparence."
         )
