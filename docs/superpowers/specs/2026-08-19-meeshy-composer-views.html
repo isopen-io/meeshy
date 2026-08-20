@@ -204,7 +204,7 @@ footer .mono{font-size:11.5px}
   avant toute nouveauté.</b></p>
   <div class="meta">
     <span>2026-08-19 · rév. 2026-08-20</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
-    <span>statut : proposition — O2 arbitré (reco C, P17) · O1/O3–O11 recommandés</span>
+    <span>statut : proposition — O2 TRANCHÉ : rupture A′ (porteur produit, P17) · O1/O3–O11 recommandés</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
   </div>
   <div class="legend">
@@ -1006,7 +1006,7 @@ flowchart TD
     <thead><tr><th>#</th><th>Question</th><th>Recommandation</th></tr></thead>
     <tbody>
       <tr><td class="mono">O1</td><td>Mentions/# : segments du content ou objets de scène ?</td><td>Les deux coexistent déjà (INLINE vs PINNED) — content pour le texte, objet pour la scène</td></tr>
-      <tr><td class="mono">O2</td><td>Migration du modèle — <b>L'ÉLÉMENT BLOQUANT, tranché en P17</b></td><td><b>C : le fil ne change pas</b> — familles existantes + champs additifs, MeeshyObject = adaptateur CLIENT. A (rupture) casse 20 h de stories vivantes ; B (lecture double) impose audit bloquant + double codec pour un gain utilisateur nul. Bascule v3-wire plus tard, sur critères seulement</td></tr>
+      <tr><td class="mono">O2</td><td>Migration du modèle — <b>TRANCHÉ : rupture A′</b> (porteur produit, 2026-08-20)</td><td>Fil v3 strict. Quatre pièces rendent la rupture PROPRE : création v1 refusée net (426 UPGRADE_REQUIRED + invite) · <b>mise à jour forcée</b> (plancher gateway + porte bloquante — mécanisme À CRÉER, vérifié absent) · <b>convertisseur serveur v1→v3 à la lecture</b> (l'archive éternelle et /republish survivent) · brouillons locaux migrés one-shot. Reco C conservée en P17 comme analyse</td></tr>
       <tr><td class="mono">O3</td><td>Scène pour un post texte ?</td><td><span class="mono">scenes: nil</span> — un cadre vide est une injonction</td></tr>
       <tr><td class="mono">O4</td><td>Timing par défaut</td><td><span class="mono">nil</span> = « suit la slide » (piste fantôme), distinct d'un choix</td></tr>
       <tr><td class="mono">O5</td><td>Bandes : zones contraintes ou ancres ?</td><td>Ancres — un objet peut chevaucher la frontière</td></tr>
@@ -1076,7 +1076,7 @@ flowchart TD
       <tr><td><b>Thermique</b> — N players dans le fil</td><td>« réels qui chauffent = SOTA »</td><td>1 décodeur actif, vignettes ailleurs, pause hors écran, résolution adaptative</td></tr>
       <tr><td><b>Récursion self-sizing</b> autour du player en cellule</td><td>UIHostingConfiguration + invalidateLayout (mémoire du dépôt)</td><td>cellules du fil : hauteur EXPLICITE autour du CanvasPlayer, jamais de hosting self-sizing</td></tr>
       <tr><td><b>Invariants de lecture</b> perdus dans la refonte</td><td>canvas né en pause · le cache gèle le fade (contentHash) · 4 chemins relancent la lecture · boucle = fond seul</td><td>repris comme LOIS du ScenePlayer (P12) — toute la surface de test source existante reste verte par construction</td></tr>
-      <tr><td><b>Blobs v1 inconnus</b> (passthrough 256 Ko)</td><td>constat Story Atelier §1</td><td>DÉCLASSÉ par O2/C (P17) : le fil ne change pas — l'audit devient hygiène non bloquante ; validation resserrée ADDITIVEMENT, jamais en big-bang</td></tr>
+      <tr><td><b>Blobs v1 inconnus</b> (passthrough 256 Ko)</td><td>constat Story Atelier §1</td><td>Avec O2/A′ : l'audit redevient un INTRANT — celui du convertisseur serveur v1→v3, tolérant par contrat (champ inconnu ignoré, rendu dégradé, jamais d'échec)</td></tr>
       <tr><td><b>Prompt presse-papiers</b> — confiance brûlée</td><td>comportement système iOS 16+</td><td>PasteButton uniquement (O9) ; <span class="mono">hasImages</span> pour l'affordance, zéro lecture hors geste</td></tr>
       <tr><td><b>Sticker fantôme</b> — posé mais invisible aux lecteurs</td><td>même famille que « médias web jamais rattachés » (réels web inexistants)</td><td>le sticker posé est un média du contenu, claimable (O8) ; la bibliothèque seule reste locale</td></tr>
       <tr><td><b>Carrousel coupe le son</b> au changement de page</td><td>« compteur didSet en clé audio rembobine » (mémoire du dépôt)</td><td>la piste de fond est liée à la TIMELINE du post, jamais à l'index de page — même leçon, généralisée</td></tr>
@@ -1136,7 +1136,7 @@ flowchart TD
   <div class="scrollx"><table>
     <thead><tr><th>#</th><th>Coupe</th><th>Gain conservé — pourquoi sans perte</th></tr></thead>
     <tbody>
-      <tr><td class="mono">S1</td><td><b>Le fil ne change pas.</b> MeeshyObject = vue CLIENT (adaptateur decode/encode) ; le fil garde les cinq familles + champs ADDITIFS (anchor, plane, locale, rate, sticker image) — le <span class="mono">passthrough()</span> serveur les accepte déjà</td><td>sticker animable, lieu scalable, timeline unique, langue par objet : tout est du rendu/édition client. Zéro migration, zéro lecture double, vieux clients intacts</td></tr>
+      <tr><td class="mono">S1</td><td><s>Le fil ne change pas</s> — <b>remplacée par la décision O2/A′</b> (rupture assumée, porteur produit 2026-08-20)</td><td>la simplification survit autrement : <b>UN convertisseur serveur v1→v3 à la lecture</b> — un seul endroit connaît les deux formes, les clients neufs ne parlent QUE v3</td></tr>
       <tr><td class="mono">S2</td><td><b>PublishIntent différé.</b> Le composer unifié appelle les trois chemins d'envoi existants</td><td>l'utilisateur voit UN composer ; le verbe unique est de l'hygiène, pas un gain</td></tr>
       <tr><td class="mono">S3</td><td><b>Mood hors v1.</b> StatusComposerView conservé tel quel</td><td>son UX est déjà saine (6 audiences, brouillon, offline) — elle ne change pas d'un pixel</td></tr>
       <tr><td class="mono">S4</td><td><b>Timeline v1 sans édition de keyframes DANS le plan</b> — pistes, plans, durées, fantômes ; les keyframes restent à l'inspecteur</td><td>la demande est « empiler + durées » : servie. Et c'était LE point chaud perf à mesurer</td></tr>
@@ -1158,6 +1158,18 @@ flowchart TD
   composer web, ou une feature exigeant des requêtes serveur sur les objets (les votes des
   stickers interactifs sont déjà HORS blob, O10). Conséquence immédiate : l'audit des blobs est
   déclassé en hygiène, et le plan d'implémentation devient écrivable.</div>
+  <div class="callout" style="border-left-color:var(--cR)"><b>Décision du porteur produit
+  (2026-08-20) — la rupture A′ est retenue</b>, contre la recommandation ci-dessus, qui reste
+  consignée comme analyse. Argument : un vieux client qui tente de créer reçoit un échec NET et
+  une invite de mise à jour — c'est un coût acceptable, l'idéal étant la mise à jour FORCÉE à la
+  détection de rupture. Ce que la décision implique, gravé au plan : <b>1)</b> création v1 →
+  <span class="mono">426 UPGRADE_REQUIRED</span> + message ; <b>2)</b> version plancher servie par
+  le gateway + porte bloquante client — mécanisme à CRÉER (vérifié : aucun header de version,
+  aucun plancher aujourd'hui) ; sur iOS, « forcer » = écran bloquant + lien App Store, l'OS
+  n'installe jamais à notre place ; <b>3)</b> le refus de création ne couvre pas la LECTURE :
+  l'archive éternelle et <span class="mono">/republish</span> ne survivent que par le
+  convertisseur serveur v1→v3 — il est permanent tant que l'archive porte du v1 ; <b>4)</b>
+  brouillons locaux migrés one-shot au premier lancement.</div>
 </div></section>
 
 <footer><div class="wrap">
