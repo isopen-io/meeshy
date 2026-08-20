@@ -292,6 +292,16 @@ assumée de Story Atelier, la voilà systématisée. Note sur la loi 7 (« l'ic�
 le verbe ») : l'attribution d'une œuvre empruntée est une *information*, pas un
 verbe — le crédit complet ne la contredit pas.
 
+**L'annonce n'existe que si la piste existe.** Pas de son ⇒ rien : ni glyphe
+barré, ni emplacement réservé — la présence du signe EST l'information (la loi 4
+du composer, appliquée au chrome de lecture).
+
+**Le bouton audio.** Partout où un contenu porte du son — carte de fil, vue
+détail, plein écran — un bouton (🔇/🔊) coupe ou rétablit d'un tap. Monté à la
+même condition d'existence, servi par le canal audio unique
+(`PlaybackCoordinator`) : c'est l'affordance qui rend supportable le « fil muet
+par défaut ».
+
 Nouveau : **un Post peut porter un son de fond, carrousel compris.** La piste est
 liée à la timeline du post, jamais à l'index de page — on feuillette, le son
 continue (même leçon que le compteur didSet qui rembobinait la clé audio du

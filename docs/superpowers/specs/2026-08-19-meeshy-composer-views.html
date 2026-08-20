@@ -569,9 +569,14 @@ flowchart TD
       le crédit complet <span class="mono">« titre · @pseudo · M:SS »</span> — marquee et décompte.
       C'est l'atome de résolution EXISTANT (<span class="mono">AudioChipDisplay.resolve</span> :
       soundId = emprunt → marquee ; piste propre → sinusoïde), promu règle des trois formats au
-      lieu d'être re-fabriqué par chaque header. <span class="tag tNew">nouveau</span> un POST peut
+      lieu d'être re-fabriqué par chaque header. <b>Et l'annonce n'existe que si une piste
+      EXISTE</b> — pas de son, rien : ni glyphe barré, ni emplacement réservé ; la présence du
+      signe EST l'information. <span class="tag tNew">nouveau</span> un POST peut
       porter un son de fond — carrousel compris : la piste joue pendant qu'on feuillette, liée à la
-      timeline du post, pas à la page. Le fil reste muet (règle autoplay existante).</p>
+      timeline du post, pas à la page. Le fil reste muet (règle autoplay existante) ; en
+      contrepartie, <b>carte, vue détail et plein écran portent un bouton audio</b> (🔇/🔊) qui
+      coupe ou rétablit d'un tap — monté à la même condition d'existence, servi par le canal
+      unique.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>Fond (bibliothèque/fichier/micro, bornes,
           volume, variantes TTS) + chips audio premier plan posés sur la scène.</p></span>
@@ -848,7 +853,7 @@ flowchart TD
         <span class="ob">@marc · ↻ @aïcha · ♫〰</span>
         <span class="ob">content natif — Prisme + badge langue</span>
         <div class="sc" style="flex:1;margin:0"><div class="media169" style="flex:1"><span class="lbl">CanvasPlayer — autoplay muet, tap = plein écran</span></div></div>
-        <span class="ob">Avec Alice · ❤ 12 · 💬 4 · ↻ 2 · 🔖</span>
+        <span class="ob">Avec Alice · ❤ 12 · 💬 4 · ↻ 2 · 🔖 · 🔇</span>
       </div>
       <div class="socle"><span class="aud">Commenter…</span><span class="pub">➤</span></div>
     </div><figcaption><span class="chip chP">P</span> <b>Post.</b> La carte de feed : content
@@ -860,7 +865,7 @@ flowchart TD
         <div class="media169"><span class="lbl">vidéo — boucle</span></div>
         <div class="band"><span class="ob">sous-titres timés</span></div>
       </div>
-      <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · ♫ utiliser ce son</span></div>
+      <div class="ctx"><span class="lbl">rail : ❤ · 💬 · ⤴ · 🔖 · 🔇 · ♫ utiliser ce son</span></div>
       <div class="socle"><span class="aud">@aïcha · ♫ Nuits d'été · @sam · 0:15</span><span class="pub">Suivre</span></div>
     </div><figcaption><span class="chip chR">R</span> <b>Réel.</b> Pager vertical, boucle,
     « utiliser ce son » (si extraction autorisée), captions. Le fond s'annonce après l'auteur :
@@ -872,13 +877,16 @@ flowchart TD
   Détail dans la feuille d'engagement commune ; transcription et signalement dans le menu « … ».</div>
   <div class="callout"><b>La loi des deux plans audio (2026-08-20).</b> Un chip audio = son de
   PREMIER PLAN, Story et Réel uniquement. Le son de FOND n'est jamais un chip : il s'annonce juste
-  après les détails d'auteur — sur les trois formats — et boucle tant que la timeline du contenu
+  après les détails d'auteur — sur les trois formats, et UNIQUEMENT quand une piste existe :
+  pas de son ⇒ rien, ni glyphe barré ni case vide — et boucle tant que la timeline du contenu
   court, comme la vidéo de fond. <b>Sa forme dit sa provenance</b> : <span class="mono">♫〰</span>
   si et seulement si le son est ORIGINAL ; s'il vient de la bibliothèque, le crédit complet
   <span class="mono">« titre · @pseudo · M:SS »</span> (marquee, décompte) — l'attribution d'une
   œuvre empruntée est une INFORMATION, pas un verbe : elle ne tombe pas sous la loi 7. Celle-ci
   reste entière ailleurs : <span class="mono">@marc · ↻ @aïcha</span>, jamais « a republié » en
-  toutes lettres (iOS conforme depuis le 2026-08-19).</div>
+  toutes lettres (iOS conforme depuis le 2026-08-19). <b>Corollaire d'accès :</b> carte, vue
+  détail et plein écran portent un bouton audio (🔇/🔊) — couper ou rétablir d'un tap tout contenu
+  qui a du son, monté seulement quand une piste existe, canal unique existant.</div>
 </div></section>
 
 <!-- ================================================================ P13 -->
@@ -932,8 +940,8 @@ flowchart TD
       <tr><td>Traductions (Prisme)</td><td class="ok">✓ natif + badge · barre langues · original au maintien</td><td class="ok">✓ natif + badge · retraduire</td><td class="ok">✓ captions traduites</td><td class="ok">✓</td></tr>
       <tr><td>Références en lecture</td><td class="ok">✓ badge · « Avec … » · marqueur SILENT</td><td class="ok">✓ idem</td><td class="ok">✓ + @ valides dans l'embed</td><td class="ok">✓ « Avec … »</td></tr>
       <tr><td>Accès référencé expiré</td><td class="ok">✓ 24 h · consommé à la vue</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ok">✓ idem S</td></tr>
-      <tr><td>Muet / son</td><td class="ok">✓ + mute par piste</td><td class="ok">✓ (autoplay muet)</td><td class="ok">✓</td><td class="ab">—</td></tr>
-      <tr><td>Fond annoncé après l'auteur</td><td class="ok">✓ ♫〰 si ORIGINAL · « titre · @pseudo · M:SS » si bibliothèque (atome AudioChipDisplay.resolve)</td><td class="nv">◆ même règle</td><td class="nv">◆ même règle</td><td class="ab">—</td></tr>
+      <tr><td>Bouton audio — couper/rétablir d'un tap</td><td class="ok">✓ rail + mute par piste</td><td class="ok">✓ autoplay muet <span class="nv">◆ bouton sur CARTE et DÉTAIL (si piste)</span></td><td class="ok">✓ rail <span class="nv">◆ montré si piste seulement</span></td><td class="ab">—</td></tr>
+      <tr><td>Fond annoncé après l'auteur — seulement si une piste EXISTE</td><td class="ok">✓ ♫〰 si ORIGINAL · « titre · @pseudo · M:SS » si bibliothèque (atome AudioChipDisplay.resolve) · pas de piste ⇒ rien</td><td class="nv">◆ même règle</td><td class="nv">◆ même règle</td><td class="ab">—</td></tr>
       <tr><td>Attribution ↻ sans verbe</td><td class="ab">— (pas d'attribution en story)</td><td class="ok">✓ iOS 2026-08-19 · web à aligner</td><td class="ok">✓ idem</td><td class="ab">—</td></tr>
       <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
       <tr><td>Partage externe · lien tracé</td><td class="ok">✓ /l/ token</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
@@ -978,7 +986,8 @@ flowchart TD
     <div class="card"><h4><span class="tag tNew">nouveau</span> Son de fond sur Post</h4><p>Carrousel
       compris : la piste boucle sur la timeline du post pendant qu'on feuillette. Fil muet ; après
       l'auteur, ♫〰 si son ORIGINAL, crédit « titre · @pseudo · M:SS » si bibliothèque — l'atome de
-      résolution existant, promu règle des trois formats.</p></div>
+      résolution existant, promu règle des trois formats. Pas de piste ⇒ aucune note ; et
+      carte/détail/plein écran gagnent un bouton 🔇 dès qu'un son existe.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> L'icône est le verbe</h4><p>
       <span class="mono">@marc · ↻ @aïcha</span> — jamais « a republié ». Généralisé : tout glyphe
       établi (↻, ♫〰, 👁) remplace son texte. iOS conforme depuis le 2026-08-19 ; web à aligner.</p></div>
