@@ -2514,7 +2514,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       exactly the boundary test). **Pending:** sending the captured content as a real clipboard_content
       attachment (gated on the not-yet-built attachment send pipeline).
 - [ ] In-app camera: photo capture + video recording (flash, front/back toggle)
-- [ ] Live sentiment + language detection ("smart context zone") with language pill/picker override
+- [~] Live sentiment + language detection ("smart context zone") with language pill/picker override —
+      **live sentiment done** (slice `composer-live-sentiment`, 2026-08-20): the composer shows a live
+      mood emoji derived from the draft as you type. Pure `:core:model` `SentimentAnalyzer.score(text)`
+      (faithful port of iOS `TextAnalyzer.computeSentiment` — the dictionary FR/EN/ES/DE scorer, NOT the
+      message-detail sheet's `NLTagger` ML scorer, which has no portable Android equivalent) +
+      `SentimentLevel.from(score)` (7 buckets, iOS thresholds, glyphs). `ChatUiState.composerSentiment`
+      derives it (null on a blank draft; `NEUTRAL` for wordless-sentiment text) and the composer renders
+      it as the input field's trailing glyph. +20 core tests (`SentimentTest`) +5 VM tests
+      (`ChatViewModelTest`). **Reste**: on-device language **detection** + the language pill/picker
+      override (needs a `LanguageDetector` seam over ML Kit — Android has no `NLLanguageRecognizer`) and
+      the ≥10-word detection lock — deferred as the next sub-slice.
 - [✅] @-mention autocomplete (debounced API + local merge) — **local roster + remote merge done**
       (remote merge `chat-mention-remote-merge` 2026-07-16): the local roster's `ChatMention` SSOT gained the two
       remaining pure pieces from iOS `MentionComposerController` — `shouldQueryRemote` (only fire once the trimmed

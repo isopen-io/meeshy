@@ -166,6 +166,7 @@ import me.meeshy.sdk.composer.SlowModeState
 import me.meeshy.sdk.link.LinkPreview
 import me.meeshy.sdk.link.LinkPreviewOutcome
 import me.meeshy.sdk.link.LinkPreviewParser
+import me.meeshy.sdk.model.SentimentLevel
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.waveform.MicAmplitudeDecibels
 import me.meeshy.sdk.model.waveform.VoiceRecordingFile
@@ -527,6 +528,7 @@ fun ChatScreen(
                     replyingToLabel = replyTarget?.let { it.senderName ?: it.text.take(40) },
                     hasEffects = state.hasPendingEffects,
                     clipboardContent = state.clipboardContent,
+                    sentiment = state.composerSentiment,
                     accentColor = accentColor,
                     onDraftChange = viewModel::onDraftChange,
                     onSend = viewModel::send,
@@ -2582,6 +2584,7 @@ private fun ChatComposer(
     replyingToLabel: String?,
     hasEffects: Boolean,
     clipboardContent: ClipboardContent?,
+    sentiment: SentimentLevel?,
     accentColor: Color,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
@@ -2821,6 +2824,17 @@ private fun ChatComposer(
                         modifier = Modifier.weight(1f),
                         placeholder = { Text(stringResource(R.string.chat_message_placeholder)) },
                         maxLines = 4,
+                        trailingIcon = if (sentiment != null) {
+                            {
+                                val description = stringResource(R.string.chat_composer_sentiment)
+                                Text(
+                                    text = sentiment.emoji,
+                                    modifier = Modifier.semantics { contentDescription = description },
+                                )
+                            }
+                        } else {
+                            null
+                        },
                     )
                     if (!isEditing && draft.isBlank() && clipboardContent == null &&
                         affordances.canSendAudios
