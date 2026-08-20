@@ -7,7 +7,7 @@ final class StoryModelsTests: XCTestCase {
 
     func testStoryTextStyleAllCases() {
         let cases = StoryTextStyle.allCases
-        XCTAssertEqual(cases.count, 11)
+        XCTAssertEqual(cases.count, 18)
         XCTAssertTrue(cases.contains(.bold))
         XCTAssertTrue(cases.contains(.neon))
         XCTAssertTrue(cases.contains(.typewriter))
@@ -19,6 +19,24 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertTrue(cases.contains(.fantasy))
         XCTAssertTrue(cases.contains(.curve))
         XCTAssertTrue(cases.contains(.tag))
+        XCTAssertTrue(cases.contains(.italic))
+        XCTAssertTrue(cases.contains(.retro))
+        XCTAssertTrue(cases.contains(.elegant))
+        XCTAssertTrue(cases.contains(.poster))
+        XCTAssertTrue(cases.contains(.bubble))
+        XCTAssertTrue(cases.contains(.note))
+        XCTAssertTrue(cases.contains(.brush))
+    }
+
+    /// Les sept familles ajoutées le 2026-08-20 le sont EN QUEUE : l'ordre de
+    /// `allCases` est celui du cycle d'attributs et des pickers, et le déplacer
+    /// changerait les habitudes de l'utilisateur sans qu'aucun autre test ne le voie.
+    func testStoryTextStyleKeepsHistoricalOrderFirst() {
+        XCTAssertEqual(
+            StoryTextStyle.allCases.prefix(11).map(\.rawValue),
+            ["bold", "neon", "typewriter", "handwriting", "classic",
+             "calligraphy", "cartoon", "futuristic", "fantasy", "curve", "tag"]
+        )
     }
 
     func testStoryTextStyleDisplayNames() {
