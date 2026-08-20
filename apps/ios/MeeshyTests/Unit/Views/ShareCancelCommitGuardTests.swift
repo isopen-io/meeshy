@@ -27,8 +27,36 @@ final class ShareCancelCommitGuardTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    /// Round 3 de revue (Minor) : strippait AUPARAVANT uniquement les
+    /// espaces, jamais les commentaires — un commentaire citant le motif
+    /// cherché (ex. `// ShareCancelPolicy.isCancelAllowed(...)`) suffisait à
+    /// garder la garde verte même si le code réel avait régressé vers
+    /// `.disabled(isSending)` seul. Passe maintenant par
+    /// `ShareSourceCommentStripping`, partagée avec
+    /// `ShareExtensionSourceGuardTests`, AVANT de collapser les espaces —
+    /// dans cet ordre, car un commentaire `//` a besoin du `\n` d'origine
+    /// pour savoir où il se termine.
     private func condensed(_ source: String) -> String {
-        source.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        ShareSourceCommentStripping.strippingComments(source)
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+    }
+
+    /// Contre-exemple EXACT du round 3 de revue : avant ce round, ce
+    /// commentaire suffisait à faire passer `test_cancelButton_isGatedBy…`
+    /// au vert alors même que le code réel aurait régressé vers
+    /// `.disabled(isSending)` seul, sans passer par `ShareCancelPolicy`.
+    func test_condensed_isNotDefeatedByACommentCitingThePattern() {
+        let regressedSourceWithDefeatComment = """
+        .disabled(isSending) // ShareCancelPolicy.isCancelAllowed(sendWasAttempted: sendWasAttempted) — désactivé temporairement
+        """
+
+        XCTAssertFalse(
+            condensed(regressedSourceWithDefeatComment)
+                .contains("ShareCancelPolicy.isCancelAllowed(sendWasAttempted: sendWasAttempted)"),
+            "un commentaire citant le motif ne doit plus suffire à masquer une régression du "
+            + "code réel — le verrou doit être dans du code exécuté, pas dans un commentaire"
+        )
     }
 
     /// Verrou 1 : Annuler doit passer par `ShareCancelPolicy`, jamais par
@@ -48,8 +76,14 @@ final class ShareCancelCommitGuardTests: XCTestCase {
     /// `false`, jamais réassigné à `false` ailleurs dans le fichier — sinon
     /// la même fenêtre se rouvrirait sous un autre nom (c'est exactement le
     /// piège que « déplacer isSending = false après le sleep » aurait recréé).
+    ///
+    /// Round 3 : source passée par `ShareSourceCommentStripping` (pas
+    /// `condensed`, qui collapse aussi les espaces — la première assertion a
+    /// besoin de la mise en forme exacte de la déclaration) pour qu'un
+    /// commentaire mentionnant `sendWasAttempted = false`/`= true` ne puisse
+    /// ni fausser le compte, ni masquer une régression réelle.
     func test_sendWasAttempted_isNeverResetToFalseAfterInit() throws {
-        let source = try shareSource()
+        let source = ShareSourceCommentStripping.strippingComments(try shareSource())
 
         XCTAssertTrue(
             source.contains("@State private var sendWasAttempted = false"),

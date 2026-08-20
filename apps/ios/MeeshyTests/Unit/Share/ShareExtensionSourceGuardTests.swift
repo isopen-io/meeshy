@@ -31,44 +31,11 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
             .map { (name: $0.lastPathComponent, code: try String(contentsOf: $0, encoding: .utf8)) }
     }
 
-    /// Retire les commentaires `//` et `/* */` ainsi que le contenu des
-    /// littéraux de chaîne, pour ne juger que du code exécuté.
+    /// Extrait dans `ShareSourceCommentStripping` (round 3 de revue) —
+    /// partagé avec `ShareCancelCommitGuardTests`, qui ne filtrait aucun
+    /// commentaire avant ce round.
     private func strippingComments(_ source: String) -> String {
-        var output = ""
-        var iterator = source.startIndex
-        var inLineComment = false
-        var inBlockComment = false
-
-        while iterator < source.endIndex {
-            let remaining = source[iterator...]
-            if inLineComment {
-                if source[iterator] == "\n" { inLineComment = false; output.append("\n") }
-                iterator = source.index(after: iterator)
-                continue
-            }
-            if inBlockComment {
-                if remaining.hasPrefix("*/") {
-                    inBlockComment = false
-                    iterator = source.index(iterator, offsetBy: 2)
-                    continue
-                }
-                iterator = source.index(after: iterator)
-                continue
-            }
-            if remaining.hasPrefix("//") {
-                inLineComment = true
-                iterator = source.index(iterator, offsetBy: 2)
-                continue
-            }
-            if remaining.hasPrefix("/*") {
-                inBlockComment = true
-                iterator = source.index(iterator, offsetBy: 2)
-                continue
-            }
-            output.append(source[iterator])
-            iterator = source.index(after: iterator)
-        }
-        return output
+        ShareSourceCommentStripping.strippingComments(source)
     }
 
     private func assertAbsent(_ needle: String, because reason: String) throws {
