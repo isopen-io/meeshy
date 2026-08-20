@@ -441,6 +441,13 @@ promu ; spec : ligne precision retirée + arbitrages consignés (§C2) ; P0 :
 dénominateur 51→57 (6 tâches B8), lignes B8 ajoutées, en-tête lot B honnête
 (« gate vert, rattrapage revue intégré ») ; gate FINAL : scheme complet 2 cibles +
 build app + suites gateway bun. Couvre 9, 10 (arbitrages), constats 20–22.
+Ligne héritée de B8b à TRANCHER ici (constat 1, résiduel) : `waveformSamples`
+reste hors du payload audio v3 — ni `v1-legacy-full.v3.json` ni
+`v1-legacy-rich.v3.json` ne le portent et `storyEffectsV3.ts` ne le mappe pas,
+donc l'émettre côté Swift casserait les deux juges partagés. Conséquence en
+l'état : un objet audio reconstruit depuis un document v3 revient avec
+`waveformSamples == []` (défaut d'init). Soit TS + fixture riche l'émettent (le
+pont Swift suit), soit la spec acte qu'il est re-dérivable côté lecteur.
 
 **Ordre : B8a → B8b → (B8c ∥ B8d) → B8e → B8f.** Chaque tâche : TDD strict,
 DoD vérifié, P0 au même commit que son gate (les tâches B8 s'ajoutent à la planche
