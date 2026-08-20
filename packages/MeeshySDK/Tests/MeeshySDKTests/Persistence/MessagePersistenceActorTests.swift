@@ -943,6 +943,7 @@ final class MessagePersistenceActorTests: XCTestCase {
         reactionSummary: [String: Int]? = nil,
         currentUserReactions: [String]? = nil,
         metadata: [String: Any]? = nil,
+        messageSource: String? = nil,
         createdAt: Date = Date()
     ) -> APIMessage {
         var json: [String: Any] = [
@@ -960,10 +961,55 @@ final class MessagePersistenceActorTests: XCTestCase {
         if let reactionSummary { json["reactionSummary"] = reactionSummary }
         if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
         if let metadata { json["metadata"] = metadata }
+        if let messageSource { json["messageSource"] = messageSource }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return try! decoder.decode(APIMessage.self, from: data)
+    }
+
+    // MARK: - Avis d'arrivée (join notice) — le fil ROUVERT garde son sens
+
+    /// `MessageRecord` portait `callSummaryJson` mais aucun `joinNoticeJson` :
+    /// l'avis d'arrivée perdait son metadata au passage par le store du fil, et
+    /// toute conversation ROUVERTE retombait sur le repli français générique
+    /// (icône téléphone) — alors que la vue dédiée traduisible existait.
+    func test_upsertFromAPIMessages_persistsJoinNotice_forReopenedThread() async throws {
+        let api = makeAPIMessage(
+            id: "srv_join",
+            conversationId: "conv_join",
+            content: "ano_bob a rejoint la conversation — visiteur sans compte",
+            metadata: [
+                "kind": "member-joined",
+                "participantId": "p1",
+                "displayName": "ano_bob",
+                "isAnonymous": true,
+                "viaShareLink": true,
+                "username": "ano_bob",
+                "givenName": "Bob Martin",
+                "linkRules": ["canSendMessages": true, "canSendFiles": false, "canSendImages": true],
+            ],
+            messageSource: "system"
+        )
+        try await actor.upsertFromAPIMessages([api])
+
+        let fetched = try actor.messages(for: "conv_join", limit: 10)
+        XCTAssertEqual(fetched.count, 1)
+        let message = fetched[0].toMessage(currentUserId: "someone-else")
+        XCTAssertEqual(message.messageSource, .system)
+        XCTAssertEqual(message.joinNotice?.displayName, "ano_bob")
+        XCTAssertEqual(message.joinNotice?.givenName, "Bob Martin")
+        XCTAssertEqual(message.joinNotice?.username, "ano_bob")
+        XCTAssertEqual(message.joinNotice?.linkRules?.canSendFiles, false)
+    }
+
+    /// Contre-épreuve : un message ordinaire ne gagne aucun avis fantôme.
+    func test_upsertFromAPIMessages_ordinaryMessage_hasNoJoinNotice() async throws {
+        let api = makeAPIMessage(id: "srv_plain", conversationId: "conv_join2", content: "Salut")
+        try await actor.upsertFromAPIMessages([api])
+
+        let fetched = try actor.messages(for: "conv_join2", limit: 10)
+        XCTAssertNil(fetched[0].toMessage(currentUserId: "someone-else").joinNotice)
     }
 
     // MARK: - Call notice (live → terminal, message d'appel vivant)

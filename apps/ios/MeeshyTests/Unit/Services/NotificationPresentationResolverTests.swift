@@ -32,6 +32,50 @@ final class NotificationPresentationResolverTests: XCTestCase {
         XCTAssertEqual(options, [])
     }
 
+    // MARK: - Conversation OUVERTE : rien à annoncer, le fil est sous les yeux
+
+    /// Une push de la conversation qu'on est en train de LIRE ne s'annonce
+    /// pas — ni bannière ni son, même socket down (retour d'avant-plan : le
+    /// socket met quelques secondes à revenir et les pushes en attente
+    /// tombaient en bannières sur la conversation affichée).
+    func test_pushForTheOpenConversation_neverBanners() {
+        for socketConnected in [true, false] {
+            let options = NotificationPresentationResolver.options(
+                socketConnected: socketConnected,
+                prefs: makePrefs(),
+                rawType: "new_message",
+                conversationType: "group",
+                conversationId: "conv-open",
+                activeConversationId: "conv-open"
+            )
+            XCTAssertEqual(options, [.badge], "socketConnected=\(socketConnected)")
+        }
+    }
+
+    func test_pushForAnotherConversation_stillBanners_whenSocketDown() {
+        let options = NotificationPresentationResolver.options(
+            socketConnected: false,
+            prefs: makePrefs(),
+            rawType: "new_message",
+            conversationType: "group",
+            conversationId: "conv-other",
+            activeConversationId: "conv-open"
+        )
+        XCTAssertEqual(options, [.banner, .list, .sound, .badge])
+    }
+
+    func test_pushWithoutConversation_isNotClampedByAnOpenOne() {
+        let options = NotificationPresentationResolver.options(
+            socketConnected: false,
+            prefs: makePrefs(),
+            rawType: "new_message",
+            conversationType: "direct",
+            conversationId: nil,
+            activeConversationId: "conv-open"
+        )
+        XCTAssertEqual(options, [.banner, .list, .sound, .badge])
+    }
+
     // MARK: - Socket down : bannière gatée par les préférences
 
     func test_socketDown_allowedType_returnsFullBanner() {

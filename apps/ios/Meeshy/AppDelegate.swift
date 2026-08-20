@@ -609,7 +609,9 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             socketConnected: socketConnected,
             prefs: UserPreferencesManager.shared.notification,
             rawType: userInfo["type"] as? String,
-            conversationType: userInfo["conversationType"] as? String
+            conversationType: userInfo["conversationType"] as? String,
+            conversationId: conversationId,
+            activeConversationId: MessageSocketManager.shared.activeConversationId
         ))
     }
 

@@ -58,3 +58,34 @@ export const resolveParticipantDisplayName = (
   participant?: DisplayNameBearingParticipant | null,
 ): string | null =>
   [participant?.displayName, participant?.user?.displayName].find(isNonBlank) ?? null;
+
+export type AnonymousSenderIdentity = {
+  readonly displayName: string;
+  readonly username: string;
+};
+
+/**
+ * Identité d'un auteur SANS COMPTE dans le fil : le nom DONNÉ au formulaire
+ * d'entrée prime en nom affiché, le pseudo `ano_…` descend en handle — chacun
+ * à sa place, comme pour un inscrit (displayName + @username). Avant ce
+ * résolveur, la bulle montrait le pseudo en nom et un handle vide.
+ */
+export const resolveAnonymousSenderIdentity = (participant: {
+  readonly displayName?: string | null;
+  readonly anonymousSession?: {
+    readonly profile?: {
+      readonly firstName?: string | null;
+      readonly lastName?: string | null;
+    } | null;
+  } | null;
+}): AnonymousSenderIdentity => {
+  const pseudo = participant.displayName?.trim() ?? '';
+  const givenName = [
+    participant.anonymousSession?.profile?.firstName,
+    participant.anonymousSession?.profile?.lastName,
+  ]
+    .map((part) => part?.trim() ?? '')
+    .filter((part) => part.length > 0)
+    .join(' ');
+  return { displayName: givenName || pseudo, username: pseudo };
+};

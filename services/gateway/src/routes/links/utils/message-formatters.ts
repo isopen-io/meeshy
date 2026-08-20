@@ -1,4 +1,5 @@
 import { transformTranslationsToArray } from '../../../utils/translation-transformer';
+import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 
 /**
  * Extracts sender info from unified Participant model
@@ -18,12 +19,17 @@ function extractSenderInfo(sender: any) {
     };
   }
 
+  // Auteur SANS COMPTE : le nom DONNÉ au formulaire d'entrée prime en
+  // displayName, le pseudo `ano_…` descend en username (handle) — chacun à sa
+  // place, comme pour un inscrit. Le profil de session (email/birthday) ne
+  // sort jamais : seule l'identité résolue est recopiée.
+  const identity = resolveAnonymousSenderIdentity(sender);
   return {
     id: sender.id,
-    username: sender.displayName,
-    firstName: sender.displayName,
-    lastName: '',
-    displayName: sender.displayName,
+    username: identity.username,
+    firstName: sender.anonymousSession?.profile?.firstName?.trim() || identity.displayName,
+    lastName: sender.anonymousSession?.profile?.lastName?.trim() || '',
+    displayName: identity.displayName,
     avatar: sender.avatar,
     isMeeshyer: false
   };

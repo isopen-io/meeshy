@@ -170,6 +170,9 @@ struct JoinNoticePresentation: Equatable {
 struct BubbleJoinNoticeView: View, Equatable {
     let notice: BubbleContent.JoinNotice
     let isDark: Bool
+    /// Heure du fil (« 08:26 ») — gravée EN PREMIER, centrée, même sémantique
+    /// que les stickers de date : l'avis est un jalon du fil, pas une parole.
+    var timeString: String? = nil
 
     var body: some View {
         let presentation = JoinNoticePresentation(notice: notice)
@@ -179,6 +182,12 @@ struct BubbleJoinNoticeView: View, Equatable {
             Spacer(minLength: 24)
 
             VStack(spacing: 3) {
+                if let timeString, !timeString.isEmpty {
+                    Text(timeString)
+                        .font(MeeshyFont.relative(9.5, weight: .semibold))
+                        .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
+                        .accessibilityIdentifier("bubble-join-notice-time")
+                }
                 HStack(spacing: 6) {
                     Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
                         .font(MeeshyFont.relative(11, weight: .semibold))

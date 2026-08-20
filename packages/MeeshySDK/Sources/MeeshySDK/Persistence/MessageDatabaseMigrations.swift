@@ -312,5 +312,14 @@ public enum MessageDatabaseMigrations {
                 t.add(column: "waitingForFanoutOriginSince", .datetime)
             }
         }
+
+        // Avis d'arrivée : le sens du message système `member-joined` doit
+        // survivre à la réouverture du fil — même convention nullable que
+        // `callSummaryJson` (lignes existantes → NULL → `nil`).
+        migrator.registerMigration("messages_join_notice") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "joinNoticeJson", .blob)
+            }
+        }
     }
 }

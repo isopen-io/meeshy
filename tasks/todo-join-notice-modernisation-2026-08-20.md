@@ -28,3 +28,19 @@ anonyme chacun à sa place, et les règles du lien d'entrée visibles.
 - [x] Web : parité nom donné + @handle dans `JoinNoticeMessage`
 - [x] Gates : shared 2315 vitest, gateway 231+13+26 jest + tsc, SDK 11 XCTest,
       app 102 XCTest (gardes localisation comprises), web 8 RTL
+
+## Lot 2 (2026-08-20 soir) — retours capture 17:53 + toasts
+- [x] **Fil ROUVERT** : `MessageRecord.joinNoticeJson` (colonne + migration + writer + toMessage)
+      — le store du fil perdait la notice même après le fix Codable (86/86 verts en worktree
+      isolé, RED prouvé à 4 assertions avant le fix)
+- [x] **Notice « gravée »** : heure en PREMIER, centrée, sémantique sticker de date
+      (BubbleJoinNoticeView.timeString, câblé Bulles + Focal)
+- [x] **Identité anonyme dans les bulles** : nom DONNÉ en displayName + pseudo ano_ en
+      @username — helper shared `resolveAnonymousSenderIdentity` (4 tests), REST messages
+      (select anonymousSession.profile + formatter, PII jamais servie, 4 tests), surface lien
+      (2 tests), socket (handle = pseudo)
+- [x] **Toasts dans la conversation ouverte** : la garde socket existait ; le trou était la
+      BANNIÈRE système `willPresent` (retour d'avant-plan, socket pas encore reconnecté) —
+      NotificationPresentationResolver gagne conversationId/activeConversationId (3 tests),
+      AppDelegate câble `MessageSocketManager.shared.activeConversationId`
+- [ ] Build app + suites iOS + push (beta)

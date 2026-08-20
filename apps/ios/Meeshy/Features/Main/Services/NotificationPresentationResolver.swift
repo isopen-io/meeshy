@@ -24,9 +24,20 @@ enum NotificationPresentationResolver {
         prefs: UserNotificationPreferences,
         rawType: String?,
         conversationType: String?,
+        conversationId: String? = nil,
+        activeConversationId: String? = nil,
         now: Date = Date()
     ) -> UNNotificationPresentationOptions {
         let badge: UNNotificationPresentationOptions = prefs.notificationBadgeEnabled ? [.badge] : []
+
+        // Une push de la conversation qu'on est en train de LIRE ne s'annonce
+        // pas : le fil est sous les yeux. Sans cette garde, le retour
+        // d'avant-plan (socket pas encore reconnecté) faisait tomber les
+        // pushes en attente en bannières sur la conversation affichée — le
+        // pendant système du guard `activeConversationId` du toast socket.
+        if let conversationId, conversationId == activeConversationId {
+            return badge
+        }
 
         if socketConnected {
             return badge

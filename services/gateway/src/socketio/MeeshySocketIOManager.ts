@@ -2574,7 +2574,12 @@ export class MeeshySocketIOManager {
           avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
           type: senderParticipant.type,
           userId: senderParticipant.userId,
-          username: senderParticipant.user?.username,
+          // Auteur sans compte : le pseudo `ano_…` sert de handle — sans lui,
+          // la bulle temps réel affichait un « @ » vide. Le REST sert en plus
+          // le nom donné au formulaire (le profil de session n'est pas chargé
+          // sur ce chemin).
+          username: senderParticipant.user?.username
+            ?? (senderParticipant.type === 'anonymous' ? senderParticipant.displayName : undefined),
           firstName: senderParticipant.user?.firstName || '',
           lastName: senderParticipant.user?.lastName || '',
         } : undefined,

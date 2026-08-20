@@ -129,7 +129,7 @@ enum FocalSystemRows {
                 // gateway (français), sans marquer que l'arrivant n'a pas de
                 // compte. La vue Bulles porte la même branche — les deux modes
                 // de lecture disent la même chose.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark)
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, timeString: content.meta.timeString)
             } else if let text = content.text?.raw, !text.isEmpty {
                 FocalSystemNoticeRow(text: text, isDark: isDark)
             } else {

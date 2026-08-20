@@ -84,6 +84,11 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     // Structured call-summary metadata (JSON blob) for system call messages.
     public var callSummaryJson: Data?
 
+    /// Avis d'arrivée (JSON `JoinNoticeMetadata`) pour les messages système
+    /// `member-joined`. Sans cette colonne, le fil ROUVERT perdait le sens de
+    /// l'avis et retombait sur le repli français générique.
+    public var joinNoticeJson: Data?
+
     /// Lieu partagé (JSON `SharedPlace`), hissé depuis `APIMessage.location`.
     /// Stocké en texte (pas en `Data`) car décodé/réencodé côté serveur comme
     /// un objet JSON top-level, jamais binaire — cohérent avec les autres
@@ -137,6 +142,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         cachedTimeString: String? = nil,
         changeVersion: Int64,
         callSummaryJson: Data? = nil,
+        joinNoticeJson: Data? = nil,
         recipientCount: Int = 0,
         locationJson: String? = nil
     ) {
@@ -198,6 +204,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.cachedTimeString = cachedTimeString
         self.changeVersion = changeVersion
         self.callSummaryJson = callSummaryJson
+        self.joinNoticeJson = joinNoticeJson
         self.recipientCount = recipientCount
         self.locationJson = locationJson
     }

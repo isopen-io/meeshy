@@ -218,6 +218,33 @@ describe('GET /links/:identifier/messages — ce que le schéma laisse passer', 
   // le formateur est plus maigre. Élargir le schéma ne doit rien matérialiser
   // sur cette route : une propriété portant un `default` serait émise même
   // absente de l'objet.
+  describe("identité d'un auteur anonyme — nom donné en nom, pseudo en handle", () => {
+    it('sert le nom du formulaire en displayName et le pseudo en username', async () => {
+      const withProfile = {
+        ...anonymousParticipant,
+        displayName: 'ano_camille_x1',
+        anonymousSession: { profile: { firstName: 'Camille', lastName: 'Dupont', email: 'c@example.com' } },
+      };
+      const [served] = await serveMessages([formatLinkMessageWithDetails(makeRawMessage(withProfile))]);
+
+      expect(served.sender.displayName).toBe('Camille Dupont');
+      expect(served.sender.firstName).toBe('Camille');
+      expect(served.sender.lastName).toBe('Dupont');
+      expect(served.sender.username).toBe('ano_camille_x1');
+    });
+
+    it('ne fuite pas le profil de session dans la réponse', async () => {
+      const withProfile = {
+        ...anonymousParticipant,
+        anonymousSession: { profile: { firstName: 'Camille', email: 'c@example.com', birthday: '1990-01-01' } },
+      };
+      const [served] = await serveMessages([formatLinkMessageWithDetails(makeRawMessage(withProfile))]);
+
+      expect(JSON.stringify(served)).not.toContain('c@example.com');
+      expect(JSON.stringify(served)).not.toContain('1990-01-01');
+    });
+  });
+
   describe("avis d'arrivée — le SENS doit atteindre le visiteur anonyme", () => {
     // La population même que l'avis concerne (les invités d'un lien) chargeait
     // le fil par cette route et recevait le message SANS `metadata` ni

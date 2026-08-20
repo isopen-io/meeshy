@@ -226,7 +226,7 @@ struct ThemedMessageBubble: View {
                 // Avant cette branche, une arrivée retombait sur la notice
                 // générique — dont l'icône est un TÉLÉPHONE, héritée des
                 // résumés d'appel.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark)
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, timeString: content.meta.timeString)
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
             }

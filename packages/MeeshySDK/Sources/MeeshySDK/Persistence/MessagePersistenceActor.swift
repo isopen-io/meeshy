@@ -65,7 +65,8 @@ fileprivate func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord
         && a.forwardedFromConversationId == b.forwardedFromConversationId
         && a.forwardedFromJson == b.forwardedFromJson
     let extras = a.mentionedUsersJson == b.mentionedUsersJson
-        && a.callSummaryJson == b.callSummaryJson && a.effectFlags == b.effectFlags
+        && a.callSummaryJson == b.callSummaryJson && a.joinNoticeJson == b.joinNoticeJson
+        && a.effectFlags == b.effectFlags
         && a.locationJson == b.locationJson
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery
         && sender && replyAndForward && extras
@@ -1726,6 +1727,11 @@ public actor MessagePersistenceActor {
                 // persisted so the rich call bubble survives a cache reload.
                 let callSummaryJson: Data? = api.callSummary.flatMap { encoder.encodeOrLog($0, field: "callSummaryJson", id: api.id) }
 
+                // Avis d'arrivée — même mécanique : sans cette colonne, le fil
+                // ROUVERT perdait le sens de l'avis et retombait sur le repli
+                // français générique.
+                let joinNoticeJson: Data? = api.joinNotice.flatMap { encoder.encodeOrLog($0, field: "joinNoticeJson", id: api.id) }
+
                 // Lieu partagé — même mécanique que callSummaryJson : le
                 // pipeline ne stocke pas l'`APIMessage` brut, seulement des
                 // colonnes dérivées, donc une position affichée en ligne mais
@@ -2044,6 +2050,7 @@ public actor MessagePersistenceActor {
                         cachedTimeString: timeString,
                         changeVersion: 0,
                         callSummaryJson: callSummaryJson,
+                        joinNoticeJson: joinNoticeJson,
                         recipientCount: api.recipientCount ?? 0,
                         locationJson: locationJson
                     )

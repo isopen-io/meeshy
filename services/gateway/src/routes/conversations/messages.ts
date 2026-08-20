@@ -20,7 +20,7 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
-import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, resolveParticipantDisplayName, resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import {
@@ -735,6 +735,10 @@ export function registerMessagesRoutes(
             type: true,
             role: true,
             language: true,
+            // Identité humaine d'un auteur SANS COMPTE : le nom donné au
+            // formulaire d'entrée vit dans le profil de session. Jamais servi
+            // brut (email/birthday) — résolu puis détruit au formatage.
+            anonymousSession: { select: { profile: true } },
             user: {
               select: messageSenderUserSelect
             }
@@ -1144,12 +1148,24 @@ export function registerMessagesRoutes(
           validatedMentions: message.validatedMentions,
 
           // Relations obligatoires
-          sender: message.sender ? {
-            ...message.sender,
-            username: message.sender.user?.username ?? message.sender.username ?? null,
+          sender: message.sender ? (() => {
+            // PII : le profil de session (email/birthday) ne sort JAMAIS — on
+            // en résout l'identité puis on le détruit avant le spread.
+            const { anonymousSession: _anonymousSession, ...senderData } = message.sender;
+            const anonymousIdentity = message.sender.type === 'anonymous'
+              ? resolveAnonymousSenderIdentity(message.sender)
+              : null;
+            return {
+            ...senderData,
+            username: anonymousIdentity?.username
+              ?? message.sender.user?.username ?? message.sender.username ?? null,
             // T16 — firstName/lastName were serialized but read by no client and
             // are no longer fetched (messageSenderUserSelect trims them).
-            displayName: resolveParticipantDisplayName(message.sender),
+            // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
+            // ano_ descend en handle (`username` ci-dessus).
+            displayName: anonymousIdentity && anonymousIdentity.displayName
+              ? anonymousIdentity.displayName
+              : resolveParticipantDisplayName(message.sender),
             avatar: resolveParticipantAvatar(message.sender),
             isOnline: senderPresenceVis.get(message.sender.userId ?? '')?.showOnline === false
               ? false
@@ -1157,7 +1173,8 @@ export function registerMessagesRoutes(
             lastActiveAt: senderPresenceVis.get(message.sender.userId ?? '')?.showLastSeenTimestamp === false
               ? null
               : (message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null),
-          } : null,
+          };
+          })() : null,
           attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
         };
