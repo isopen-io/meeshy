@@ -21,14 +21,20 @@ public struct SharedPlace: Codable, Equatable, Hashable, Sendable {
     public let address: String?
     /// Catégorie MapKit du POI (`MKPointOfInterestCategory.rawValue`).
     public let category: String?
+    /// Identifiant du lieu quand la source en fournit un (lieux posés côté
+    /// web/gateway — fixture gelée `v1-legacy-full.json`). `nil` pour un lieu
+    /// choisi via MapKit, qui n'en a pas.
+    public let id: String?
 
     public init(latitude: Double, longitude: Double,
-                name: String? = nil, address: String? = nil, category: String? = nil) {
+                name: String? = nil, address: String? = nil, category: String? = nil,
+                id: String? = nil) {
         self.latitude = latitude
         self.longitude = longitude
         self.name = name
         self.address = address
         self.category = category
+        self.id = id
     }
 
     public var clLocationCoordinate: CLLocationCoordinate2D {

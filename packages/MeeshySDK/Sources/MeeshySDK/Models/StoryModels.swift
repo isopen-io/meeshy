@@ -1621,6 +1621,11 @@ public struct StoryEffects: Codable, Sendable {
     // Effets de transition (entrée / sortie du slide)
     public var opening: StoryTransitionEffect?
     public var closing: StoryTransitionEffect?
+    /// Forme-objet `{type: …}` du convertisseur gateway v3, préservée telle
+    /// quelle pour le pont B2 : `slideUp` et consorts n'ont pas de cas enum.
+    /// Décodée seulement — jamais ré-encodée dans le JSON v1.
+    var openingWire: [String: CanvasJSONValue]?
+    var closingWire: [String: CanvasJSONValue]?
 
     // Objets canvas composites
     public var textObjects: [StoryTextObject]
@@ -1761,8 +1766,12 @@ public struct StoryEffects: Codable, Sendable {
         backgroundAudioEnd = try c.decodeIfPresent(TimeInterval.self, forKey: .backgroundAudioEnd)
         voiceAttachmentId = try c.decodeIfPresent(String.self, forKey: .voiceAttachmentId)
         voiceTranscriptions = try c.decodeIfPresent([StoryVoiceTranscription].self, forKey: .voiceTranscriptions)
-        opening = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .opening)
-        closing = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .closing)
+        let openingDecoded = Self.decodeTransition(c, .opening)
+        opening = openingDecoded.effect
+        openingWire = openingDecoded.wire
+        let closingDecoded = Self.decodeTransition(c, .closing)
+        closing = closingDecoded.effect
+        closingWire = closingDecoded.wire
         // Lossy per-element decode: one malformed object (another user's story)
         // is skipped rather than dropping the whole collection (or, via the
         // APIPost do/catch above, the whole story's effects).
@@ -1777,6 +1786,27 @@ public struct StoryEffects: Codable, Sendable {
         timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
         canvasAspectRatio = try c.decodeIfPresent(Double.self, forKey: .canvasAspectRatio)
+    }
+
+    /// Une transition v1 Swift est une CHAÎNE (`"fade"`) ; celle du
+    /// convertisseur gateway est un OBJET (`{"type":"fade"}`), au vocabulaire
+    /// plus large que l'enum. Les deux formes décodent, l'inconnue vaut `nil`
+    /// (tolérance) — l'objet est conservé dans `openingWire`/`closingWire`.
+    private static func decodeTransition(
+        _ c: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys
+    ) -> (effect: StoryTransitionEffect?, wire: [String: CanvasJSONValue]?) {
+        if let effect = try? c.decodeIfPresent(StoryTransitionEffect.self, forKey: key) {
+            return (effect, nil)
+        }
+        guard let wire = try? c.decodeIfPresent([String: CanvasJSONValue].self, forKey: key) else {
+            return (nil, nil)
+        }
+        guard case .string(let raw)? = wire["type"],
+              let effect = StoryTransitionEffect(rawValue: raw) else {
+            return (nil, wire)
+        }
+        return (effect, wire)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -4055,6 +4085,25 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
         self.opacity = opacity
         self.volume = volume
         self.easing = easing
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, time, x, y, scale, opacity, volume, easing
+    }
+
+    /// Un keyframe écrit par le convertisseur gateway (TS `Keyframe`) ne porte
+    /// pas d'`id` — fixture gelée `v1-legacy-full.json`. On en génère un
+    /// plutôt que de jeter tout l'objet porteur au décodage lossy.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        time = try c.decode(Float.self, forKey: .time)
+        x = try c.decodeIfPresent(CGFloat.self, forKey: .x)
+        y = try c.decodeIfPresent(CGFloat.self, forKey: .y)
+        scale = try c.decodeIfPresent(CGFloat.self, forKey: .scale)
+        opacity = try c.decodeIfPresent(CGFloat.self, forKey: .opacity)
+        volume = try c.decodeIfPresent(Float.self, forKey: .volume)
+        easing = try c.decodeIfPresent(StoryEasing.self, forKey: .easing)
     }
 }
 
