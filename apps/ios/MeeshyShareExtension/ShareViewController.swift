@@ -20,6 +20,10 @@ class ShareViewController: UIViewController {
 
     private var hostingController: UIHostingController<ShareContentView>?
     private let shareId = ShareSender.makeClientMessageId()
+    /// Round 2 de revue (Critical, effet secondaire) : `complete()` peut être
+    /// atteint par DEUX chemins (`onCancel`, `onFinish`) — ce verrou garantit
+    /// qu'un seul appel atteint réellement `extensionContext?.completeRequest`.
+    private let completionGate = ShareCompletionGate()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -88,7 +92,9 @@ class ShareViewController: UIViewController {
     }
 
     private func complete() {
-        extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        completionGate.fireOnce { [weak self] in
+            self?.extensionContext?.completeRequest(returningItems: nil, completionHandler: nil)
+        }
     }
 
     /// Round 1 de revue (fuite Important) : annuler APRÈS la copie mais AVANT
@@ -320,6 +326,13 @@ struct ShareContentView: View {
 
     @State private var model = ForwardPickerModel()
     @State private var isSending = false
+    /// Round 2 de revue (Critical) : verrou à SENS UNIQUE — armé au tout
+    /// début d'un envoi tenté, jamais réarmé à `false` ensuite. `isSending`
+    /// ne suffit pas : il redevient `false` avant le délai d'affichage qui
+    /// précède `onFinish()`, c'est exactement la fenêtre qui laissait le
+    /// bouton Annuler redevenir actif pendant que la fiche référençait déjà
+    /// les fichiers copiés. Voir `ShareCancelPolicy`.
+    @State private var sendWasAttempted = false
     @State private var resultMessage: String?
 
     var body: some View {
@@ -495,7 +508,7 @@ struct ShareContentView: View {
                 .background(Color.secondary.opacity(0.2))
                 .foregroundStyle(.primary)
                 .cornerRadius(12)
-                .disabled(isSending)
+                .disabled(!ShareCancelPolicy.isCancelAllowed(sendWasAttempted: sendWasAttempted))
 
                 if case .ready = state {
                     Button {
@@ -533,6 +546,7 @@ struct ShareContentView: View {
         let conversationIds = targets.map(\.id).filter { selected.contains($0) }
         guard !conversationIds.isEmpty else { return }
 
+        sendWasAttempted = true
         isSending = true
         Task {
             let served = await onSend(session, conversationIds, content, media)

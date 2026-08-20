@@ -188,7 +188,31 @@ nonisolated enum ShareMediaStaging {
     }
 
     /// Rend les octets d'un partage abandonné ou entièrement servi.
-    static func discard(shareId: String, in mediaRoot: URL) {
+    ///
+    /// Round 2 de revue (Critical) — défense en profondeur : si une fiche
+    /// VIVANTE référence encore ce dossier (un envoi a été COMMITTÉ, même
+    /// différé — `ShareSender.send` écrit la fiche AVANT le premier POST),
+    /// l'effacement est REFUSÉ. Passé ce point les fichiers ne sont plus
+    /// orphelins : `SharePendingSendConsumer` les reprendra à la prochaine
+    /// ouverture de l'app depuis ces mêmes `relPath`. La garde vit ICI, dans
+    /// le code qui détruit — pas seulement dans le code qui appelle
+    /// (`ShareViewController.discardStagedMedia`), pour qu'aucune autre porte
+    /// ne puisse la contourner demain.
+    ///
+    /// `pendingSendsDirectory` est injectable pour les tests ; en production
+    /// c'est le même conteneur App Group où la fiche est committée. `nil`
+    /// (conteneur indisponible) ne bloque PAS l'effacement : sans fiche
+    /// lisible nulle part, il n'y a rien à protéger.
+    static func discard(
+        shareId: String,
+        in mediaRoot: URL,
+        pendingSendsDirectory: URL? = SharePendingShare.directoryURL()
+    ) {
+        if let pendingSendsDirectory {
+            let recordFile = pendingSendsDirectory
+                .appendingPathComponent(SharePendingShare.fileName(forShareId: shareId))
+            guard !FileManager.default.fileExists(atPath: recordFile.path) else { return }
+        }
         let directory = mediaRoot.appendingPathComponent(shareId, isDirectory: true)
         try? FileManager.default.removeItem(at: directory)
     }

@@ -332,6 +332,10 @@ targets:
       - path: MeeshyShareExtension/ShareLimits.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
       - path: MeeshyShareExtension/SharePendingShare.swift
+      # Round 2 de revue (Critical) : ShareCancelPolicy/ShareCompletionGate,
+      # les deux verrous purs du cycle de vie de l'écran de partage
+      # (`ShareLifecycleGatesTests`). Même raison que les fichiers ci-dessus.
+      - path: MeeshyShareExtension/ShareLifecycleGates.swift
       # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
       # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
       # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),

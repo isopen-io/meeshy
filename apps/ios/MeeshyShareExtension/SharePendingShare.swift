@@ -128,7 +128,13 @@ nonisolated struct SharePendingShare: Codable, Equatable, Sendable {
     /// Le nom de fichier EST l'identifiant du partage : deux écritures du même
     /// partage écrasent le même fichier, donc ne peuvent pas produire deux
     /// rejeux.
-    var fileName: String { "\(clientMessageId).json" }
+    var fileName: String { Self.fileName(forShareId: clientMessageId) }
+
+    /// Même dérivation, utilisable sans fiche complète — `ShareMediaStaging.discard`
+    /// (round 2 de revue, Critical) n'a qu'un `shareId`, jamais la fiche entière,
+    /// pour décider si un dossier de médias est encore référencé par une fiche
+    /// vivante.
+    static func fileName(forShareId shareId: String) -> String { "\(shareId).json" }
 
     var isFullyServed: Bool { targets.allSatisfy { $0.state == .sent } }
 

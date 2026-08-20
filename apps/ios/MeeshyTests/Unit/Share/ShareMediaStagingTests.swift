@@ -192,4 +192,72 @@ final class ShareMediaStagingTests: XCTestCase {
         let mediaRoot = try makeDirectory()
         ShareMediaStaging.discard(shareId: "jamais-vu", in: mediaRoot)
     }
+
+    // MARK: - Défense en profondeur (round 2 de revue — Critical)
+    //
+    // Le bouton Annuler redevenait actif ~700 ms après un envoi tenté, pendant
+    // que la fiche de reprise (déjà committée, `ShareSender.send` écrit AVANT
+    // le premier POST) référençait encore ces mêmes fichiers. La garde côté UI
+    // (round 2, `ShareCancelPolicy`) suffit à fermer le symptôme ; celle-ci vit
+    // dans le code qui DÉTRUIT, pour qu'aucune autre porte ne puisse la
+    // contourner demain.
+
+    /// LE Critical : une fiche vivante référence encore ce dossier — l'effacer
+    /// perdrait des octets qu'une reprise différée attend.
+    func test_discard_whenALivingRecordReferencesTheShare_refusesToErase() throws {
+        let mediaRoot = try makeDirectory()
+        let shareDir = mediaRoot.appendingPathComponent("cid_committed", isDirectory: true)
+        try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 8).write(to: shareDir.appendingPathComponent("0.jpg"))
+
+        let pendingSendsDirectory = try makeDirectory()
+        try Data("{}".utf8).write(
+            to: pendingSendsDirectory.appendingPathComponent("cid_committed.json"))
+
+        ShareMediaStaging.discard(
+            shareId: "cid_committed", in: mediaRoot, pendingSendsDirectory: pendingSendsDirectory)
+
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: shareDir.path),
+            "une fiche vivante référence encore ce dossier — l'effacer perdrait des octets "
+            + "qu'une reprise différée attend"
+        )
+    }
+
+    /// La fuite fermée au round 1 ne doit PAS rouvrir : sans fiche vivante,
+    /// annuler efface toujours (annulation avant tout envoi).
+    func test_discard_withoutALivingRecord_stillErases() throws {
+        let mediaRoot = try makeDirectory()
+        let shareDir = mediaRoot.appendingPathComponent("cid_never_sent", isDirectory: true)
+        try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 8).write(to: shareDir.appendingPathComponent("0.jpg"))
+
+        let pendingSendsDirectory = try makeDirectory()
+
+        ShareMediaStaging.discard(
+            shareId: "cid_never_sent", in: mediaRoot, pendingSendsDirectory: pendingSendsDirectory)
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: shareDir.path),
+            "annuler AVANT tout envoi doit continuer d'effacer les fichiers copiés"
+        )
+    }
+
+    /// Une fiche référençant un AUTRE partage ne doit pas protéger celui-ci —
+    /// la vérification doit être scopée au `shareId` exact.
+    func test_discard_whenALivingRecordReferencesADifferentShare_stillErases() throws {
+        let mediaRoot = try makeDirectory()
+        let shareDir = mediaRoot.appendingPathComponent("cid_this_one", isDirectory: true)
+        try FileManager.default.createDirectory(at: shareDir, withIntermediateDirectories: true)
+        try Data(repeating: 1, count: 8).write(to: shareDir.appendingPathComponent("0.jpg"))
+
+        let pendingSendsDirectory = try makeDirectory()
+        try Data("{}".utf8).write(
+            to: pendingSendsDirectory.appendingPathComponent("cid_a_different_share.json"))
+
+        ShareMediaStaging.discard(
+            shareId: "cid_this_one", in: mediaRoot, pendingSendsDirectory: pendingSendsDirectory)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: shareDir.path))
+    }
 }
