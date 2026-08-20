@@ -143,8 +143,49 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
       updateMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
       delete: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
+      count: (jest.fn() as jest.Mock<any>).mockResolvedValue(0),
     },
     ...overrides,
+  } as any;
+}
+
+/**
+ * Un faux Prisma qui tient VRAIMENT une table : `count` y répond à partir des
+ * lignes restantes. Sans cela, aucune assertion ne peut distinguer « je compte
+ * les autres lignes » de « je compte n'importe quoi » — et c'est exactement la
+ * distinction que ces gardes doivent porter.
+ */
+function makeAttachmentStore(rows: Array<Record<string, any>>) {
+  const store = [...rows];
+
+  const findUnique = jest.fn() as jest.Mock<any>;
+  findUnique.mockImplementation(async ({ where }: any) => store.find((row) => row.id === where.id) ?? null);
+
+  const del = jest.fn() as jest.Mock<any>;
+  del.mockImplementation(async ({ where }: any) => {
+    const index = store.findIndex((row) => row.id === where.id);
+    if (index < 0) throw new Error('record not found');
+    return store.splice(index, 1)[0];
+  });
+
+  const count = jest.fn() as jest.Mock<any>;
+  count.mockImplementation(async ({ where }: any) =>
+    store.filter((row) =>
+      where.filePath !== undefined
+        ? row.filePath === where.filePath
+        : row.thumbnailPath === where.thumbnailPath
+    ).length
+  );
+
+  return {
+    messageAttachment: {
+      create: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
+      findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+      updateMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 0 }),
+      findUnique,
+      delete: del,
+      count,
+    },
   } as any;
 }
 
@@ -469,6 +510,83 @@ describe('AttachmentService — direct-access methods', () => {
       const svc = new AttachmentService(prisma as PrismaClient);
 
       await expect(svc.deleteAttachment(ATTACH_ID)).resolves.toBeUndefined();
+    });
+
+    // ─── Fichier PARTAGÉ entre plusieurs lignes ────────────────────────────
+    //
+    // Le transfert (`MessageProcessor.copyForwardedAttachments`) et la
+    // diffusion à plusieurs destinataires (`messaging/copyAttachments.ts`)
+    // recopient `filePath`/`thumbnailPath` à l'identique, sans dupliquer un
+    // octet. Le scénario ci-dessous est celui d'une photo envoyée à Famille et
+    // à Collègues : l'exemplaire éphémère de Famille expire, celui de
+    // Collègues doit rester lisible.
+
+    it('conserve le fichier tant qu’une autre ligne le référence, et ne l’efface qu’à la dernière', async () => {
+      const SHARED = '2024/01/diffusion.jpg';
+      const prisma = makeAttachmentStore([
+        makeAttachmentRow({ id: 'famille', filePath: SHARED }),
+        makeAttachmentRow({ id: 'collegues', filePath: SHARED }),
+      ]);
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('famille');
+
+      expect(prisma.messageAttachment.delete).toHaveBeenCalledWith({ where: { id: 'famille' } });
+      expect(mockFsUnlink).not.toHaveBeenCalled();
+
+      await svc.deleteAttachment('collegues');
+
+      expect(mockFsUnlink).toHaveBeenCalledTimes(1);
+      expect(mockFsUnlink).toHaveBeenCalledWith(`/uploads/${SHARED}`);
+    });
+
+    it('applique la même règle à la vignette, partagée par la même copie', async () => {
+      const SHARED = '2024/01/photo.jpg';
+      const THUMB = '2024/01/photo_thumb.jpg';
+      const prisma = makeAttachmentStore([
+        makeAttachmentRow({ id: 'famille', filePath: SHARED, thumbnailPath: THUMB }),
+        makeAttachmentRow({ id: 'collegues', filePath: SHARED, thumbnailPath: THUMB }),
+      ]);
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('famille');
+
+      expect(mockFsUnlink).not.toHaveBeenCalled();
+
+      await svc.deleteAttachment('collegues');
+
+      expect(mockFsUnlink.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+        `/uploads/${SHARED}`,
+        `/uploads/${THUMB}`,
+      ]);
+    });
+
+    it('une ligne seule sur son fichier : le fichier part, sans charger de collection', async () => {
+      const prisma = makeAttachmentStore([
+        makeAttachmentRow({ id: 'solo', filePath: '2024/01/solo.jpg' }),
+      ]);
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await svc.deleteAttachment('solo');
+
+      expect(mockFsUnlink).toHaveBeenCalledWith('/uploads/2024/01/solo.jpg');
+      expect(prisma.messageAttachment.count).toHaveBeenCalledWith({
+        where: { filePath: '2024/01/solo.jpg' },
+      });
+      expect(prisma.messageAttachment.findMany).not.toHaveBeenCalled();
+    });
+
+    it('un comptage en échec garde le fichier, sans retenir la ligne', async () => {
+      const prisma = makeAttachmentStore([
+        makeAttachmentRow({ id: 'solo', filePath: '2024/01/solo.jpg' }),
+      ]);
+      (prisma.messageAttachment.count as jest.Mock<any>).mockRejectedValue(new Error('mongo down'));
+      const svc = new AttachmentService(prisma as PrismaClient);
+
+      await expect(svc.deleteAttachment('solo')).resolves.toBeUndefined();
+
+      expect(prisma.messageAttachment.delete).toHaveBeenCalledWith({ where: { id: 'solo' } });
+      expect(mockFsUnlink).not.toHaveBeenCalled();
     });
   });
 

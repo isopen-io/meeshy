@@ -320,6 +320,26 @@ export class AttachmentService {
     return path.join(this.uploadBasePath, attachment.thumbnailPath);
   }
 
+  /**
+   * Supprime la LIGNE dans tous les cas ; n'efface les OCTETS que si plus
+   * aucune autre ligne ne les désigne.
+   *
+   * Plusieurs `MessageAttachment` partagent délibérément le même fichier : le
+   * transfert (`MessageProcessor.copyForwardedAttachments`) et la diffusion à
+   * plusieurs destinataires (`messaging/copyAttachments.ts`) recopient
+   * `filePath` / `thumbnailPath` à l'identique, sans dupliquer un octet. Un
+   * `unlink` inconditionnel emportait donc la photo de TOUS les autres
+   * destinataires — et celle de la conversation d'origine — dès qu'un seul
+   * exemplaire éphémère expirait sous `ExpiredMessagesCleanupService`.
+   *
+   * L'ORDRE porte l'invariant : la ligne part d'abord, donc le compte qui suit
+   * ne voit plus que les AUTRES — zéro veut dire « plus personne n'en dépend ».
+   * Compter avant obligerait à s'exclure soi-même et, surtout, deux
+   * suppressions concurrentes de deux copies se verraient mutuellement
+   * vivantes : aucune n'effacerait, et le fichier deviendrait un orphelin
+   * éternel que rien ne ramasse — `MaintenanceService` ne balaie que les LIGNES
+   * sans message, jamais les fichiers.
+   */
   async deleteAttachment(attachmentId: string): Promise<void> {
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
@@ -329,21 +349,39 @@ export class AttachmentService {
       throw new Error('Attachment not found');
     }
 
-    try {
-      const fullPath = path.join(this.uploadBasePath, attachment.filePath);
-      await fs.unlink(fullPath);
-
-      if (attachment.thumbnailPath) {
-        const thumbnailFullPath = path.join(this.uploadBasePath, attachment.thumbnailPath);
-        await fs.unlink(thumbnailFullPath).catch(() => {});
-      }
-    } catch (error) {
-      logger.error('Erreur suppression fichiers', error as Error);
-    }
-
     await this.prisma.messageAttachment.delete({
       where: { id: attachmentId },
     });
+
+    await this.unlinkIfUnreferenced('filePath', attachment.filePath);
+
+    if (attachment.thumbnailPath) {
+      await this.unlinkIfUnreferenced('thumbnailPath', attachment.thumbnailPath);
+    }
+  }
+
+  /**
+   * Un échec — comptage ou effacement — laisse le fichier en place : perdre un
+   * octet encore référencé est irréparable, en garder un orphelin ne l'est pas.
+   */
+  private async unlinkIfUnreferenced(
+    column: 'filePath' | 'thumbnailPath',
+    relativePath: string
+  ): Promise<void> {
+    const where: Prisma.MessageAttachmentWhereInput =
+      column === 'filePath' ? { filePath: relativePath } : { thumbnailPath: relativePath };
+
+    try {
+      const stillReferenced = await this.prisma.messageAttachment.count({ where });
+
+      if (stillReferenced > 0) {
+        return;
+      }
+
+      await fs.unlink(path.join(this.uploadBasePath, relativePath));
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+    }
   }
 
   /**
