@@ -192,7 +192,7 @@ footer .mono{font-size:11.5px}
 <a href="#p4">P4 Anatomie</a><a href="#p5">P5 Entrées</a><a href="#p6">P6 Scène</a>
 <a href="#p7">P7 Outils</a><a href="#p8">P8 Timeline</a><a href="#p9">P9 Capture</a>
 <a href="#p10">P10 Socle</a><a href="#p11">P11 Étagère</a><a href="#p12">P12 Viewers</a>
-<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a>
+<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a><a href="#p16">P16 Écart SOTA</a>
 </div></nav>
 
 <header><div class="wrap">
@@ -204,7 +204,7 @@ footer .mono{font-size:11.5px}
   avant toute nouveauté.</b></p>
   <div class="meta">
     <span>2026-08-19 · rév. 2026-08-20</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
-    <span>statut : proposition — arbitrages O1–O9 ouverts</span>
+    <span>statut : proposition — arbitrages O1–O11 ouverts</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
   </div>
   <div class="legend">
@@ -277,6 +277,10 @@ footer .mono{font-size:11.5px}
       <tr><td><b>Lieu</b> — pastille + métadonnée + précision de découvrabilité</td><td class="mono">locationObjects · storyLocationPicker (app-side)</td><td>Une source, deux rendus (P7 · Lieu) — pastille scalable</td></tr>
       <tr><td><b>Références</b> — @ inline · sélecteur (appui long = mode) · INLINE/PINNED/NOTE/SILENT · badge épinglé (referenceUserId) · tri-état à l'édition</td><td class="mono">ReferenceComposerBar, ReferenceModeMenu, StoryMentionPickerSheet, adoptDeclaredReferences</td><td>Objet <span class="mono">mention</span> (PINNED) + méta (autres modes) — P7</td></tr>
       <tr><td><b>Timeline</b> — pistes, règle graduée dérivée de la largeur des libellés, lanes 52 pt, keyframes x/y/scale/opacity/volume/easing</td><td class="mono">32 vues Timeline/* · StoryKeyframe</td><td>Plan 2D unique (P8)</td></tr>
+      <tr><td><b>Transitions</b> — entrée/sortie PAR SLIDE + transitions entre clips (Timeline V2) <span class="tag tEx">recensé 20/08</span></td><td class="mono">opening/closing: StoryTransitionEffect · clipTransitions: [StoryClipTransition]</td><td>Champ de la Scene + jointures du plan 2D — raté par le recensement initial, PAS un manque SOTA</td></tr>
+      <tr><td><b>Historique</b> — annuler/refaire global + pile dédiée pendant le dessin <span class="tag tEx">recensé 20/08</span></td><td class="mono">StoryComposerViewModel+History (undoGlobal/redoGlobal)</td><td>Historique du MeeshyDocument, conservé</td></tr>
+      <tr><td><b>Cadre par slide</b> — l'import d'un fond paysage impose un canvas 16:9 <span class="tag tEx">recensé 20/08</span></td><td class="mono">canvasAspectRatio (nil = 9:16)</td><td><b>ABSORBÉ</b> par la scène 9:16 à bandes actives : le porteur garde son ratio, le cadre plus jamais. Lecture v1 : letterbox dans la scène — à couvrir par O2</td></tr>
+      <tr><td>Caméra — flash (off/on/auto)</td><td class="mono">CameraView (flashMode)</td><td>Conservé dans la capture (P9)</td></tr>
       <tr><td><b>Aperçu</b> — canvas né en pause, bouton lecture</td><td class="mono">règle « born paused »</td><td>Aperçu du socle = ScenePlayer en mode preview</td></tr>
       <tr><td><b>Audience</b> — 6 niveaux + EXCEPT/ONLY</td><td class="mono">chip topbar + sheet</td><td>Socle (visible en permanence)</td></tr>
       <tr><td><b>Brouillons</b> + <b>file de publication</b> offline</td><td class="mono">StoryDraftStore (1 024 l.) · StoryPublishQueue (778 l.)</td><td>Étagère (P11) — moteurs conservés tels quels</td></tr>
@@ -297,6 +301,7 @@ footer .mono{font-size:11.5px}
       <tr><td>Audience — 3 niveaux exposés (Public/Amis/Privé)</td><td class="mono">menu :910-916</td><td>Socle : les 6 niveaux partout <span class="tag tNew">nouveau</span></td></tr>
       <tr><td><b>Références</b> 4 modes (câblées 2026-08-19, y compris son emprunté)</td><td class="mono">ReferenceComposerBar → 5 chemins d'envoi</td><td>P7 · Références</td></tr>
       <tr><td>Audio enregistré · <b>son emprunté</b> (post « utiliser ce son »)</td><td class="mono">publishAudioPost · createBorrowedSoundPost</td><td>Panneau Son, mêmes chemins</td></tr>
+      <tr><td>Transcription EMBARQUÉE — le device transcrit et l'envoie avec l'audio</td><td class="mono">CreatePostRequest.mobileTranscription</td><td>Panneau Son — conservée (raté du recensement initial)</td></tr>
       <tr><td>Qualification réel côté serveur (dégradation REEL→POST)</td><td class="mono">PostService.ts:203-225</td><td>Inchangé ; affichée dans le socle</td></tr>
       <tr><td>Hashtags &amp; liens tracés — extraction serveur</td><td class="mono">hashtagService · TrackingLink</td><td>Inchangé (automatique)</td></tr>
     </tbody>
@@ -323,6 +328,8 @@ footer .mono{font-size:11.5px}
       <tr><td>Rail figé à l'entrée du slide : réagir (scrub emoji), répondre, commentaires, vues, republier, partager, enregistrer (anneau), muet, langues (Abc + barre isomorphe réactions)</td><td class="mono">StoryViewerView+Sidebar</td><td>Chrome Story — invariant « rien n'apparaît en cours de lecture »</td></tr>
       <tr><td>Rangée « Avec … » (NOTE) + marqueur personnel SILENT</td><td class="mono">ReferenceNoteRow — posts depuis l'origine, story câblée 2026-08-19</td><td>ScenePlayer : rendu commun aux 3 viewers</td></tr>
       <tr><td>Commentaires flottants traduits · réponse privée → conversation · liste des vues avec réactions</td><td class="mono">CommentsOverlay · ReplyContext.story · storyViews</td><td>Noyau (thread commun) + chromes</td></tr>
+      <tr><td><b>Transférer en message</b> — la feuille d'envoi interne, depuis le viewer <span class="tag tEx">recensé 20/08</span></td><td class="mono">sharedContentWrapper → SharePicker</td><td>Rail des 3 viewers — distinct du partage externe</td></tr>
+      <tr><td><b>Trail de stories épinglées</b> au profil, bord à bord <span class="tag tEx">recensé 20/08</span></td><td class="mono">CollapsibleHeader (trail) · StoriesVivantsRail</td><td>Chrome profil — l'épinglage n'est PAS que pour les posts</td></tr>
       <tr><td>Accès référencé à un contenu expiré — fenêtre 24 h, droit consommé à la vue</td><td class="mono">referenceAccess · POST /posts/:id/view</td><td>Inchangé (S · M)</td></tr>
       <tr><td>Carte de post : contenu natif Prisme + badge, canvas de story embarqué (repost), embed YouTube, liens tracés, réactions, attribution icône+@handle, favori, impressions</td><td class="mono">FeedPostCard</td><td>Chrome Post = CanvasPlayer dans la carte</td></tr>
       <tr><td>Réels : pager vertical, autoplay/boucle, rail, crédit son marquee « titre · @pseudo · M:SS », « utiliser ce son », embed repost (liens de mentions valides 2026-08-19)</td><td class="mono">ReelsView · AudioChipDisplay.resolve · ReelRepostEmbedCell</td><td>Chrome Réel</td></tr>
@@ -919,6 +926,7 @@ flowchart TD
       <tr><td>Slides</td><td class="ok">✓ ≤10 (+ / dupl. / suppr.)</td><td class="ok">✓ = cartes carrousel</td><td class="ab">— une scène, montage interne</td><td class="ab">—</td></tr>
       <tr><td>Timeline plan 2D</td><td class="nv">◆ (remplace 32 vues)</td><td class="nv">◆ si scène</td><td class="nv">◆ piste maître verrouillée</td><td class="ab">—</td></tr>
       <tr><td>Keyframes (x·y·scale·opacity·vol·easing)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
+      <tr><td>Transitions (slide : entrée/sortie · clips : jointures)</td><td class="ok">✓ existant</td><td class="ok">✓ si scène</td><td class="ok">✓ via timeline</td><td class="ab">—</td></tr>
       <tr><td>Fond (couleur·dégradé·média)</td><td class="ok">✓ chip mouvable · loop=fond</td><td class="ok">✓ si scène</td><td class="ab">— vidéo = porteur</td><td class="ab">— teinte du thème</td></tr>
       <tr><td>Langue par objet</td><td class="ok">✓ textes (audience-driven) <span class="nv">◆ généralisée</span></td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
       <tr class="grp"><td colspan="5">Publication</td></tr>
@@ -945,7 +953,8 @@ flowchart TD
       <tr><td>Attribution ↻ sans verbe</td><td class="ab">— (pas d'attribution en story)</td><td class="ok">✓ iOS 2026-08-19 · web à aligner</td><td class="ok">✓ idem</td><td class="ab">—</td></tr>
       <tr><td>Enregistrer / favori</td><td class="ok">✓ auteur (anneau)</td><td class="ok">✓ bookmark</td><td class="ok">✓ bookmark</td><td class="ab">—</td></tr>
       <tr><td>Partage externe · lien tracé</td><td class="ok">✓ /l/ token</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
-      <tr><td>Épingler au profil</td><td class="ab">—</td><td class="ok">✓ /pin</td><td class="ab">—</td><td class="ab">—</td></tr>
+      <tr><td>Transférer en message (interne)</td><td class="ok">✓ rail</td><td class="ok">✓</td><td class="ok">✓</td><td class="ok">✓</td></tr>
+      <tr><td>Épingler au profil</td><td class="ok">✓ trail bord à bord (recensé 20/08)</td><td class="ok">✓ /pin</td><td class="ab">—</td><td class="ab">—</td></tr>
     </tbody>
   </table></div>
 </div></section>
@@ -1005,6 +1014,8 @@ flowchart TD
       <tr><td class="mono">O7</td><td>Export</td><td>Pipeline actuel conservé, rendu-du-registre en cible (parité exacte, export web)</td></tr>
       <tr><td class="mono">O8</td><td>Sticker posé : format d'upload ?</td><td>Média du contenu claimable (TUS/PostMedia), comme tout média — jamais d'inline base64 dans le blob ; la bibliothèque reste locale</td></tr>
       <tr><td class="mono">O9</td><td>Lecture du presse-papiers</td><td>PasteButton/UIPasteControl UNIQUEMENT — la lecture programmatique déclenche le prompt système et brûle la confiance</td></tr>
+      <tr><td class="mono">O10</td><td>Stickers interactifs : où vivent les votes ?</td><td>Contrat serveur LÉGER (table dédiée) — jamais dans le blob storyEffects ; le sticker reste un objet, la donnée vit à côté</td></tr>
+      <tr><td class="mono">O11</td><td>Publication programmée</td><td>Prémisse client best-effort (Étagère « programmé » + BGTask) ; la version FIABLE exige un scheduledAt serveur — trancher avant de l'annoncer</td></tr>
     </tbody>
   </table></div>
   <h3>Risques nommés (à lever avant le plan d'implémentation)</h3>
@@ -1023,7 +1034,10 @@ flowchart TD
   <div class="prail"><span class="pnum">P15</span><h2>Revue système — optimisation, performance, compatibilité iOS 16→27 (2026-08-20)</h2></div>
   <p class="lede">La revue couvre TOUT le système — composer, ScenePlayer, timeline, collage,
   stickers, audio — pas un aspect isolé. Chaque risque est ancré à un piège DOCUMENTÉ de ce dépôt,
-  chaque garde est nommée. Appareil plancher : A11 (iPhone 8 / SE 2), iOS 16, 2-3 Go de RAM.</p>
+  chaque garde est nommée. <b>Le plancher produit est iOS 16.0 — rien en dessous n'est supporté,
+  ni testé, ni visé</b> (cible de déploiement du projet). Quand la table des portes affiche un
+  plancher d'API INFÉRIEUR à 16, cela dit une seule chose : l'API couvre TOUTE notre plage — jamais
+  que la plage descend. Appareil plancher : A11 (iPhone 8 / SE 2) sous iOS 16, 2-3 Go de RAM.</p>
 
   <h3>Budgets — ce que le plancher impose</h3>
   <div class="scrollx"><table>
@@ -1076,6 +1090,40 @@ flowchart TD
   désormais sa mitigation NOMMÉE dans le design, pas une promesse. Les trois inconnues de P14
   (coût du plan 2D à mesurer, audit des blobs, exécution réelle sur un appareil iOS 16) restent
   les seules choses que cette revue ne peut pas clore sur cette machine.</div>
+</div></section>
+
+<!-- ================================================================ P16 -->
+<section id="p16"><div class="wrap">
+  <div class="prail"><span class="pnum">P16</span><h2>Écart SOTA — les manques assumés, et leurs prémisses (2026-08-20)</h2></div>
+  <p class="lede">Comparaison contre l'état de l'art des composers (Instagram, TikTok, Snapchat,
+  CapCut). Trois choses avant la table : le re-recensement a montré que plusieurs « manques »
+  supposés EXISTENT déjà (transitions, undo/redo, alt côté serveur) — la table ne liste que les
+  vrais écarts ; chaque prémisse est la version MINIMALE qui tient dans le modèle proposé sans le
+  déformer ; et la colonne serveur dit honnêtement ce qu'un client seul ne peut pas faire.</p>
+  <div class="scrollx"><table>
+    <thead><tr><th>Feature SOTA</th><th>État Meeshy</th><th>Prémisse proposée (minimale)</th><th>Serveur ?</th></tr></thead>
+    <tbody>
+      <tr><td><b>Stickers interactifs</b> — sondage · question · quiz · curseur emoji · compte à rebours · « à vous »</td><td class="ab">absents (recensés hors périmètre par Story Atelier)</td><td>un kind <span class="mono">interactive</span> de MeeshyObject, posable/timable comme le reste ; rendu inerte élégant hors ligne et sur vieux clients</td><td><b>oui</b> — votes/réponses = table légère (O10), jamais dans le blob</td></tr>
+      <tr><td><b>Détourage sujet → sticker</b> (« lift », façon stickers iMessage)</td><td class="ab">absent</td><td>VisionKit subject-lift sur photo importée/collée → sticker image dans « Mes stickers ». <b>API iOS 16 ✓ — pile notre plancher</b></td><td>non — client pur</td></tr>
+      <tr><td><b>GIF / stickers animés</b></td><td class="ab">absent (collage = image fixe)</td><td>le collage accepte GIF/APNG → sticker animé local ; pas d'intégration Giphy en v1</td><td>non</td></tr>
+      <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ du blob v3</td></tr>
+      <tr><td><b>Presets d'animation de texte</b> (pop, glissé, machine à écrire…)</td><td class="ab">les keyframes existent, aucun preset nommé</td><td>bibliothèque de presets = keyframes PRÉGÉNÉRÉS — des données, zéro vue neuve</td><td>non</td></tr>
+      <tr><td><b>Layouts / collage</b> (2·3·4 cases)</td><td class="ab">médias premier plan libres seulement</td><td>presets d'ANCRES qui posent N objets média — des données encore</td><td>non</td></tr>
+      <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td>état « programmé » de l'Étagère, la file locale publie à l'heure (best-effort BGTask) — la version FIABLE attend un <span class="mono">scheduledAt</span> serveur (O11)</td><td>léger, pour la version fiable</td></tr>
+      <tr><td><b>Alt text</b> (accessibilité)</td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.alt</span>, schema :830) — aucun client ne l'écrit</td><td>un champ dans l'inspecteur média. La prémisse la moins chère de toute la table</td><td>non — le champ est déjà là</td></tr>
+      <tr><td><b>Désactiver / limiter les commentaires</b></td><td class="ab">absent (recensé hors périmètre)</td><td>drapeau au PublishIntent + garde sur les routes de commentaires</td><td>léger</td></tr>
+      <tr><td><b>Duo / côte-à-côte</b> (duet)</td><td class="ab">repost & citation seuls</td><td><b>pas en v1</b> — scène scindée à 2 porteurs = coût lecteur réel ; l'attribution existe déjà (repost + SILENT auto)</td><td>oui</td></tr>
+      <tr><td><b>Co-auteur</b> (post collaboratif)</td><td class="ab">références PINNED seules</td><td><b>pas en v1</b> — invitation + double attribution = contrat et ACL neufs</td><td>oui</td></tr>
+      <tr><td><b>Calage au tempo</b> (beat-sync)</td><td class="ab">absent</td><td><b>pas en v1</b> — analyse audio embarquée, à mesurer après le plan 2D</td><td>non</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>Non-buts explicites</b> — dits pour ne pas y revenir : filtres AR de
+  visage (un moteur entier, pas une feature), live (un autre système), voice changer. Le détourage
+  VisionKit couvre le cas sticker sans moteur AR. <b>Lecture d'ensemble :</b> les prémisses 1 à 8
+  tiennent dans le modèle proposé sans le déformer — <span class="mono">interactive</span> est un
+  kind de plus, <span class="mono">rate</span> un champ de timing, presets et layouts des DONNÉES.
+  C'est le test de validité du modèle unique : une feature SOTA qui exigerait une famille d'objets
+  à part signalerait un modèle raté.</div>
 </div></section>
 
 <footer><div class="wrap">

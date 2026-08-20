@@ -3,11 +3,12 @@
 Date : 2026-08-19
 Statut : **proposition de design, non validée** — succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
-Planches visuelles (15 planches, inventaire exhaustif + matrice outil × format +
-revue système P15) : `./2026-08-19-meeshy-composer-views.html`
+Planches visuelles (16 planches, inventaire exhaustif + matrice outil × format +
+revue système P15 + écart SOTA P16) : `./2026-08-19-meeshy-composer-views.html`
 Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
-fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c).
+fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c),
+recensement complété + écart SOTA (§6d).
 
 ---
 
@@ -338,6 +339,41 @@ de fond, `👁` vues) remplace son texte partout où il apparaît. iOS est confo
 depuis le 2026-08-19 (attribution icône + @handle) ; le web s'aligne dans le lot
 de parité.
 
+## 6d. Recensement complété & écart SOTA (2026-08-20)
+
+Le re-recensement contre le code a corrigé QUATRE ratés de l'inventaire initial —
+des features existantes que la proposition doit porter, pas inventer :
+
+- **Transitions** : entrée/sortie PAR SLIDE (`opening`/`closing:
+  StoryTransitionEffect`) + transitions entre clips (`clipTransitions`,
+  Timeline V2) — un « manque SOTA » supposé qui n'en était pas un.
+- **Historique** : annuler/refaire global (`undoGlobal`/`redoGlobal`) + pile
+  dédiée pendant le dessin.
+- **Transfert en message** depuis les viewers (`sharedContentWrapper`) et
+  **trail de stories épinglées** au profil — l'épinglage n'est pas que pour les
+  posts.
+- **`canvasAspectRatio` par slide** (l'import d'un fond paysage impose un canvas
+  16:9) : la scène 9:16 fixe **l'absorbe** — le porteur garde son ratio, le
+  cadre plus jamais ; lecture v1 letterboxée, à couvrir par O2.
+
+S'y ajoutent la transcription embarquée (`mobileTranscription`), le flash caméra,
+et un fait précieux : **`PostMedia.alt` existe côté serveur sans aucun écrivain
+client** — l'alt text n'est pas un manque de plateforme, c'est un champ orphelin.
+
+**Écart SOTA** (détail en planche P16, avec la colonne « serveur ? » honnête) :
+prémisses proposées — stickers interactifs (kind `interactive`, votes = contrat
+léger, O10) · détourage sujet → sticker (VisionKit, iOS 16 pile notre plancher) ·
+GIF animés par collage · `timing.rate` (vitesse) · presets d'animation de texte
+(des keyframes prégénérés, zéro vue) · layouts par presets d'ancres ·
+publication programmée (Étagère, fiabilité = `scheduledAt` serveur, O11) ·
+alt text (le champ est déjà là) · limitation des commentaires (drapeau + garde).
+Explicitement PAS en v1 : duet, co-auteur, beat-sync. Non-buts : filtres AR de
+visage, live, voice changer.
+
+Le test de validité du modèle unique : chaque prémisse tient dans MeeshyObject
+sans le déformer — un kind, un champ, ou des données. Une feature qui exigerait
+une famille d'objets à part signalerait un modèle raté.
+
 ## 7. Les arbitrages ouverts
 
 Ce sont les vraies décisions ; le reste en découle.
@@ -353,6 +389,8 @@ Ce sont les vraies décisions ; le reste en découle.
 | **O7** | Export | rendu du registre (parité exacte, export web possible) | pipeline `StoryVideoExportService` conservé | **B maintenant, A en cible** — reprise du cas C8 de Story Atelier, inchangé |
 | **O8** | Sticker posé : format d'upload ? | média du contenu claimable (TUS/PostMedia) | inline dans le blob (base64) | **A** — jamais d'inline : le blob est plafonné à 256 Ko et un sticker fantôme serait la répétition des « médias web jamais rattachés » |
 | **O9** | Lecture du presse-papiers | PasteButton/UIPasteControl uniquement | lecture programmatique + gestion du prompt | **A** — le prompt système hors geste brûle la confiance ; `hasImages` suffit pour l'affordance |
+| **O10** | Stickers interactifs : où vivent les votes ? | table serveur légère dédiée | dans le blob storyEffects | **A** — le blob est plafonné et illisible pour l'agrégation ; le sticker reste un objet, la donnée vit à côté |
+| **O11** | Publication programmée | best-effort client (Étagère + BGTask) | `scheduledAt` serveur | **B pour l'annoncer, A comme prémisse silencieuse** — un « programmé » qui dépend de la vie de l'app ne se promet pas |
 
 ---
 
@@ -360,8 +398,11 @@ Ce sont les vraies décisions ; le reste en découle.
 
 Revue de TOUT le système — composer, ScenePlayer, timeline, collage, stickers,
 audio. Chaque risque est ancré à un piège documenté de ce dépôt ; chaque garde est
-nommée. Détail visuel : planche P15. Appareil plancher : A11 (iPhone 8 / SE 2),
-iOS 16, 2-3 Go de RAM.
+nommée. Détail visuel : planche P15. **Le plancher produit est iOS 16.0 — rien
+en dessous n'est supporté, ni testé, ni visé** (cible de déploiement du projet) ;
+un plancher d'API inférieur à 16 dans la table des portes dit seulement que l'API
+couvre TOUTE notre plage, jamais que la plage descend. Appareil plancher : A11
+(iPhone 8 / SE 2) sous iOS 16, 2-3 Go de RAM.
 
 ### Budgets imposés par le plancher
 
@@ -440,5 +481,5 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
 
 ## 10. Statut
 
-Ce document est une **proposition**. Rien n'est implémenté. Les points §7 (O1–O9) et §8
+Ce document est une **proposition**. Rien n'est implémenté. Les points §7 (O1–O11) et §8
 demandent un arbitrage produit avant qu'un plan d'implémentation soit écrit.
