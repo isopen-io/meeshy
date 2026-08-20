@@ -21,7 +21,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { matchesAudioSignature, matchesImageSignature } from '../../services/attachments/ContentSignature.js';
+import { classifyAnonymousAttachment } from '../../services/attachments/ContentSignature.js';
 
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
@@ -140,35 +140,20 @@ export async function registerUploadRoutes(
             return sendForbidden(reply, 'Share link not found');
           }
 
+          // Round 1 sécurité (task-1-fix-round-1) : la classification ne se
+          // fie plus SEULEMENT au `Content-Type` déclaré (en-tête multipart
+          // fourni par le client, jamais vérifié) — elle se MÉRITE par les
+          // octets, dans les limites décrites en tête de `ContentSignature.ts`
+          // (préfixe structurel, pas un parseur de conteneur — round 2). Un
+          // type déclaré dont la signature ne correspond à aucun conteneur
+          // connu retombe dans la branche « fichier », la plus stricte.
+          // `classifyAnonymousAttachment` est la décision UNIQUE, partagée
+          // avec `routes/uploads/tus-handler.ts`, pour que les deux chemins
+          // d'upload ne puissent pas diverger (round 2, Critical 1).
           for (const file of files) {
-            const declaresImage = file.mimeType.startsWith('image/');
-            const declaresAudio = file.mimeType.startsWith('audio/');
-
-            // Round 1 sécurité (task-1-fix-round-1) : la classification ne se
-            // fie plus SEULEMENT au `Content-Type` déclaré (en-tête multipart
-            // fourni par le client, jamais vérifié) — elle se MÉRITE par les
-            // octets. Sans ça, un PDF déclaré `audio/webm` traversait
-            // l'exemption vocale sans jamais être contrôlé, et un PDF déclaré
-            // `image/png` contournait déjà `allowAnonymousFiles` de la même
-            // façon (faiblesse préexistante, fermée ici du même geste). Un
-            // type déclaré dont la signature ne correspond à aucun conteneur
-            // connu retombe dans la branche « fichier », la plus stricte.
-            const isAudio = declaresAudio && matchesAudioSignature(file.buffer);
-            const isImage = !isAudio && declaresImage && matchesImageSignature(file.buffer);
-
-            // Décision produit : la voix suit le droit d'écrire dans la conversation, pas
-            // le droit d'envoyer des fichiers — un message vocal n'est jamais soumis à
-            // `allowAnonymousFiles` ni à `allowAnonymousImages`.
-            if (isAudio) {
-              continue;
-            }
-
-            if (isImage && !shareLink.allowAnonymousImages) {
-              return sendForbidden(reply, 'Images are not allowed for anonymous users on this conversation');
-            }
-
-            if (!isImage && !shareLink.allowAnonymousFiles) {
-              return sendForbidden(reply, 'File uploads are not allowed for anonymous users on this conversation');
+            const verdict = classifyAnonymousAttachment(file.mimeType, file.buffer, shareLink);
+            if (verdict.allowed === false) {
+              return sendForbidden(reply, verdict.reason);
             }
           }
         }

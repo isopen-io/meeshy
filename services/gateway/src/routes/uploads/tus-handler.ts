@@ -13,6 +13,12 @@ import jwt from 'jsonwebtoken';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
 import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
+import {
+  resolveAnonymousUploadIdentity,
+  fetchShareLinkAnonymousFlags,
+  readFilePrefix,
+} from '../../services/attachments/AnonymousUploadIdentity';
+import { classifyAnonymousAttachment, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'TusHandler' });
@@ -62,6 +68,11 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       // Extract userId from JWT or sessionToken
       let userId = 'anonymous';
       let isAnonymous = false;
+      // Lien de partage du participant anonyme résolu ci-dessous — seule
+      // source qui permette, à `onUploadFinish`, de consulter
+      // `allowAnonymousFiles`/`allowAnonymousImages` (task-1-fix-round-2,
+      // Critical 1 : ce chemin ne les consultait auparavant JAMAIS).
+      let anonymousShareLinkId: string | null = null;
       if (authHeader) {
         const token = String(authHeader).replace(/^Bearer\s+/i, '');
         try {
@@ -76,8 +87,21 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
           }
         }
       } else if (sessionToken) {
-        userId = String(sessionToken);
+        // Round 2 sécurité — AVANT : `userId = String(sessionToken)` traitait
+        // le jeton comme une identité de fait, sans jamais vérifier qu'il
+        // correspondait à un `Participant` actif ni consulter son lien de
+        // partage. Un jeton forgé/expiré/révoqué passait tel quel, et même
+        // un jeton valide ne donnait accès à AUCUNE autorisation : le chemin
+        // entier était donc aveugle à `allowAnonymousFiles`/`allowAnonymousImages`.
+        // Même résolution que `AuthMiddleware.createAnonymousUserContext`
+        // (`middleware/auth.ts`) — via `resolveAnonymousUploadIdentity`.
+        const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken));
+        if (!identity) {
+          throw { status_code: 401, body: 'Invalid session token\n' };
+        }
+        userId = identity.participantId;
         isAnonymous = true;
+        anonymousShareLinkId = identity.shareLinkId;
       }
 
       // PHASE 3 (2026-08-02) — un upload destiné à PostMedia sans uploadeur
@@ -86,7 +110,9 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       // vie : un orphelin garanti (constaté en prod le 2026-07-31, jeton
       // indécodable → `2026/07/anonymous/…`, 0 octet, jamais purgé). Les
       // pièces jointes de MESSAGE (participants anonymes compris) ne passent
-      // pas par ce contexte et restent inchangées.
+      // pas par ce contexte — leur propre garde (`allowAnonymousFiles`/
+      // `allowAnonymousImages`) vit plus bas, dans `onUploadFinish`
+      // (task-1-fix-round-2, Critical 1).
       if (isPostMediaUploadContext(upload.metadata?.uploadcontext)
           && postMediaUploaderOrNull({ userId, isAnonymous }) === null) {
         throw {
@@ -111,6 +137,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
           ...upload.metadata,
           userId,
           isAnonymous: isAnonymous ? 'true' : 'false',
+          anonymousShareLinkId: anonymousShareLinkId ?? '',
           uploadedAt: new Date().toISOString(),
         },
       };
@@ -120,6 +147,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       const mimeType = upload.metadata?.filetype || 'application/octet-stream';
       const userId = upload.metadata?.userId || 'anonymous';
       const isAnonymous = upload.metadata?.isAnonymous === 'true';
+      const anonymousShareLinkId = upload.metadata?.anonymousShareLinkId || null;
 
       const now = new Date();
       const year = now.getFullYear().toString();
@@ -247,6 +275,43 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
         logger.info(`[TUS] PostMedia created: ${storedName} (${fileSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
+        //
+        // Round 2 sécurité (task-1-fix-round-2, Critical 1) — AVANT : ce
+        // chemin créait la pièce jointe pour un participant anonyme sans
+        // JAMAIS consulter `allowAnonymousFiles`/`allowAnonymousImages` du
+        // lien de partage. Un invité dont le lien interdit tout pouvait
+        // téléverser ici et attacher le résultat à un message — le contrôle
+        // qu'exerce `routes/attachments/upload.ts` (REST) était entièrement
+        // court-circuité par ce second chemin. Même décision UNIQUE
+        // (`classifyAnonymousAttachment`, `ContentSignature.ts`) que la
+        // route REST, pour que les deux chemins ne puissent pas diverger.
+        //
+        // Placé ici (bytes déjà sur disque à `destPath`, comme pour la garde
+        // PostMedia ci-dessus) plutôt qu'à `onUploadCreate` : la
+        // classification audio/image se mérite par les octets (round 1), et
+        // aucun octet n'existe encore à la création de l'upload resumable.
+        if (isAnonymous) {
+          const shareLinkFlags = anonymousShareLinkId
+            ? await fetchShareLinkAnonymousFlags(prisma, anonymousShareLinkId)
+            : null;
+
+          if (!shareLinkFlags) {
+            await fs.unlink(destPath).catch((err) =>
+              logger.debug('[TUS] Anonymous message attachment cleanup failed (share link not found)', { destPath, err }));
+            logger.warn(`[TUS] Anonymous message attachment REFUSED — share link not found (userId=${userId})`);
+            throw { status_code: 403, body: 'Share link not found\n' };
+          }
+
+          const signaturePrefix = await readFilePrefix(destPath, RECOMMENDED_SIGNATURE_PREFIX_BYTES);
+          const verdict = classifyAnonymousAttachment(mimeType, signaturePrefix, shareLinkFlags);
+          if (verdict.allowed === false) {
+            await fs.unlink(destPath).catch((err) =>
+              logger.debug('[TUS] Anonymous message attachment cleanup failed (policy)', { destPath, err }));
+            logger.warn(`[TUS] Anonymous message attachment REFUSED — ${verdict.reason} (userId=${userId})`);
+            throw { status_code: 403, body: `${verdict.reason}\n` };
+          }
+        }
+
         const attachment = await prisma.messageAttachment.create({
           data: {
             fileName: storedName,

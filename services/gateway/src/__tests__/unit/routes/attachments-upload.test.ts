@@ -110,7 +110,11 @@ function multipartFileBuffer(filename: string, mimeType: string, content: Buffer
 // `AVAudioRecorder` codec .aac par défaut → M4A/MP4/ftyp), plus WAV/MP3
 // puisque `isAudioMimeType` (packages/shared) les reconnaît déjà.
 
-const WEBM_HEADER = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x9f, 0x42, 0x86, 0x81]); // EBML (WebM)
+const WEBM_HEADER = Buffer.concat([
+  Buffer.from([0x1a, 0x45, 0xdf, 0xa3]), // EBML magic
+  Buffer.from([0x42, 0x82, 0x84]), // élément EBML DocType (id 0x4282, taille 4)
+  Buffer.from('webm', 'ascii'),
+]); // EBML (WebM)
 const MP4_M4A_HEADER = Buffer.concat([
   Buffer.from([0x00, 0x00, 0x00, 0x18]),
   Buffer.from('ftypM4A ', 'ascii'),
@@ -122,8 +126,12 @@ const WAV_HEADER = Buffer.concat([
   Buffer.from('RIFF', 'ascii'),
   Buffer.from([0x24, 0x00, 0x00, 0x00]),
   Buffer.from('WAVEfmt ', 'ascii'),
-]); // WAV (RIFF/WAVE)
-const PNG_HEADER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+]); // WAV (RIFF/WAVE/fmt )
+const PNG_HEADER = Buffer.concat([
+  Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), // signature officielle
+  Buffer.from([0x00, 0x00, 0x00, 0x0d]), // longueur du chunk IHDR = 13 (constante du format)
+  Buffer.from('IHDR', 'ascii'),
+]);
 const JPEG_HEADER = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46]);
 // PDF réel — l'exploit documenté déclare ces octets sous un Content-Type audio/*.
 const PDF_HEADER = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n', 'binary');
@@ -602,6 +610,53 @@ describe('POST /attachments/upload — round 1 sécurité : l\'exemption se mér
         url: '/attachments/upload',
         headers: { 'content-type': CT },
         payload: multipartFileBuffer('voice.webm', 'audio/webm', WEBM_HEADER),
+      });
+      expect(res.statusCode).toBe(200);
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('POST /attachments/upload — round 2 sécurité : casse du Content-Type déclaré', () => {
+  it('refuse une vraie image déclarée IMAGE/PNG en majuscules quand les images sont interdites (task-1-fix-round-2, Important)', async () => {
+    const app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      // Fichiers autorisés, images interdites : avant la normalisation de
+      // casse, `.startsWith('image/')` sur 'IMAGE/PNG' était `false`, donc
+      // classé « fichier » et laissé passer par `allowAnonymousFiles: true`
+      // — précisément le contournement décrit dans le round 2.
+      prisma: makePrisma({ allowAnonymousFiles: true, allowAnonymousImages: false }),
+    });
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/attachments/upload',
+        headers: { 'content-type': CT },
+        payload: multipartFileBuffer('photo.png', 'IMAGE/PNG', PNG_HEADER),
+      });
+      expect(res.statusCode).toBe(403);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('accepte toujours un vocal déclaré AUDIO/WEBM en majuscules quand fichiers et images sont interdits', async () => {
+    const app = await buildApp({
+      authenticated: false,
+      isAnonymous: true,
+      participantId: 'part-001',
+      prisma: makePrisma({ allowAnonymousFiles: false, allowAnonymousImages: false }),
+    });
+    try {
+      mockUploadMultiple.mockResolvedValue([{ id: 'att-anon-voice-uppercase' }]);
+      const res = await app.inject({
+        method: 'POST',
+        url: '/attachments/upload',
+        headers: { 'content-type': CT },
+        payload: multipartFileBuffer('voice.webm', 'AUDIO/WEBM', WEBM_HEADER),
       });
       expect(res.statusCode).toBe(200);
     } finally {
