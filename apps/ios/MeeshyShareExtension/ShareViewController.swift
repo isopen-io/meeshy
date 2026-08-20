@@ -5,43 +5,64 @@ import SwiftUI
 /// Feuille « Partager vers Meeshy ».
 ///
 /// L'extension est AUTONOME : elle lit la session et les conversations dans
-/// l'App Group, poste elle-même au gateway, et n'ouvre jamais l'app. En cas
-/// d'échec, elle dépose un relais durable que `SharePendingSendConsumer`
-/// reprendra (cf. `ShareSender.send`).
+/// l'App Group, décrit l'envoi dans une fiche de reprise durable, et n'ouvre
+/// jamais l'app.
 ///
-/// Portée du lot 1 : texte et URL. L'`Info.plist` n'annonce que ces deux types
-/// — s'annoncer pour une image qu'on ne sait pas envoyer ferait apparaître
-/// Meeshy dans la feuille de partage de Photos pour y échouer.
+/// Portée : texte, URL, images, vidéos, GIFs et documents (`Info.plist`,
+/// 20 fichiers max), vers 10 destinataires au plus.
+///
+/// **L'extension COPIE les fichiers et DÉCRIT l'envoi ; elle ne garantit
+/// jamais l'upload.** Elle est tuable à tout instant, plafonnée à ~120 Mo, et
+/// n'a pas droit à `beginBackgroundTask`. Ce que la feuille n'a pas eu le temps
+/// de faire, `SharePendingSendConsumer` le reprend à la prochaine ouverture de
+/// l'app.
 class ShareViewController: UIViewController {
 
     private var hostingController: UIHostingController<ShareContentView>?
+    private let shareId = ShareSender.makeClientMessageId()
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
         extractContent { [weak self] content in
-            self?.installInterface(content: content)
+            guard let self else { return }
+            self.extractAttachments { media, failure in
+                self.installInterface(content: content, media: media, failure: failure)
+            }
         }
     }
 
     // MARK: - Composition de l'écran
 
-    private func installInterface(content: String?) {
+    private func installInterface(
+        content: String?,
+        media: [ShareStagedMedia],
+        failure: ShareMediaStagingError?
+    ) {
         let session = ShareSession.resolveLive()
         let state = ShareScreenState.resolve(
             session: session,
             targets: ShareConversationStore.liveTargets()
         )
+        let shareId = shareId
 
         let root = ShareContentView(
             content: content,
+            media: media,
+            stagingFailure: failure,
             state: state,
-            // Aucune capture : la session et le contenu arrivent par le
-            // chemin d'envoi lui-même, qui ne peut être emprunté que depuis
-            // l'état `.ready` — lequel porte déjà la session.
-            onSend: { session, target, content in
-                await ShareSender.send(content: content, to: target.id, session: session)
+            onSend: { session, conversationIds, content, media in
+                await ShareSender.send(
+                    share: SharePendingShare.make(
+                        shareId: shareId,
+                        createdAt: Date(),
+                        content: content,
+                        media: media,
+                        conversationIds: conversationIds
+                    ),
+                    session: session
+                )
             },
             onFinish: { [weak self] in self?.complete() }
         )
@@ -151,24 +172,141 @@ class ShareViewController: UIViewController {
         if let raw = data as? Data { return String(data: raw, encoding: .utf8) }
         return nil
     }
+
+    /// Accumulateur des fichiers copiés — même verrou que `ExtractionBox` :
+    /// `loadFileRepresentation` rappelle sur une file arbitraire, et plusieurs
+    /// pièces jointes répondent en parallèle.
+    private final class StagingBox: @unchecked Sendable {
+        private let lock = NSLock()
+        nonisolated(unsafe) private var staged: [Int: ShareStagedMedia] = [:]
+        nonisolated(unsafe) private var failure: ShareMediaStagingError?
+
+        nonisolated func offer(index: Int, media: ShareStagedMedia) {
+            lock.lock(); defer { lock.unlock() }
+            staged[index] = media
+        }
+
+        nonisolated func offer(failure value: ShareMediaStagingError) {
+            lock.lock(); defer { lock.unlock() }
+            if failure == nil { failure = value }
+        }
+
+        nonisolated var snapshot: (media: [ShareStagedMedia], failure: ShareMediaStagingError?) {
+            lock.lock(); defer { lock.unlock() }
+            return (staged.sorted { $0.key < $1.key }.map(\.value), failure)
+        }
+    }
+
+    /// Copie chaque fichier reçu DANS la closure de `loadFileRepresentation`,
+    /// de façon synchrone : l'URL fournie est SUPPRIMÉE au retour de cette
+    /// closure. La copier plus tard, ou l'ouvrir en asynchrone, ne trouverait
+    /// plus rien.
+    private func extractAttachments(
+        completion: @escaping ([ShareStagedMedia], ShareMediaStagingError?) -> Void
+    ) {
+        guard let items = extensionContext?.inputItems as? [NSExtensionItem],
+              let mediaRoot = ShareMediaStaging.prepareMediaRoot(shareId: shareId) else {
+            completion([], nil)
+            return
+        }
+
+        let fileProviders: [NSItemProvider] = items
+            .flatMap { $0.attachments ?? [] }
+            .filter { provider in
+                !provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+                    && !provider.hasItemConformingToTypeIdentifier(UTType.text.identifier)
+            }
+
+        guard !fileProviders.isEmpty else {
+            completion([], nil)
+            return
+        }
+
+        guard ShareLimits.fitsFileCount(fileProviders.count) else {
+            completion([], .fileCountExceeded(count: fileProviders.count, limit: ShareLimits.maxFiles))
+            return
+        }
+
+        let box = StagingBox()
+        let group = DispatchGroup()
+        let shareId = shareId
+
+        for (index, provider) in fileProviders.enumerated() {
+            guard let typeIdentifier = provider.registeredTypeIdentifiers.first else { continue }
+            group.enter()
+            provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
+                defer { group.leave() }
+                guard let url else {
+                    box.offer(failure: .copyFailed(error?.localizedDescription ?? "aucune URL fournie"))
+                    return
+                }
+                // Une URL issue de Fichiers/iCloud est security-scoped :
+                // sans la paire start/stop, la lecture échoue en silence.
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let media = try ShareMediaStaging.stage(
+                        source: url,
+                        into: mediaRoot,
+                        shareId: shareId,
+                        index: index,
+                        mime: ShareMediaStaging.mimeType(
+                            typeIdentifier: typeIdentifier,
+                            fileExtension: url.pathExtension),
+                        freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot)
+                    )
+                    box.offer(index: index, media: media)
+                } catch let error as ShareMediaStagingError {
+                    box.offer(failure: error)
+                } catch {
+                    box.offer(failure: .copyFailed(error.localizedDescription))
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            let (media, failure) = box.snapshot
+            let total = media.reduce(0) { $0 + $1.bytes }
+            guard ShareLimits.fitsByteBudget(total) else {
+                ShareMediaStaging.discard(shareId: shareId, in: mediaRoot)
+                completion([], .byteBudgetExceeded(total: total, limit: ShareLimits.maxTotalBytes))
+                return
+            }
+            completion(media, failure)
+        }
+    }
 }
 
 // MARK: - Interface
 
 struct ShareContentView: View {
     let content: String?
+    let media: [ShareStagedMedia]
+    let stagingFailure: ShareMediaStagingError?
     let state: ShareScreenState
-    let onSend: (ShareSession, ShareTarget, String) async -> ShareOutcome
+    let onSend: (ShareSession, [String], String?, [ShareStagedMedia]) async -> SharePendingShare
     let onFinish: () -> Void
 
-    @State private var selectedId: String?
+    @State private var model = ForwardPickerModel()
     @State private var isSending = false
     @State private var resultMessage: String?
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if let content {
+                if stagingFailure != nil {
+                    message(
+                        systemImage: "exclamationmark.icloud",
+                        text: String(
+                            localized: "share.media.unavailable",
+                            defaultValue: "Some files could not be prepared. Download them first, then try again."
+                        )
+                    )
+                    Divider()
+                } else if !media.isEmpty {
+                    mediaPreview(media)
+                    Divider()
+                } else if let content {
                     contentPreview(content)
                     Divider()
                 }
@@ -227,6 +365,27 @@ struct ShareContentView: View {
         content.hasPrefix("http://") || content.hasPrefix("https://")
     }
 
+    private func mediaPreview(_ media: [ShareStagedMedia]) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.title2)
+                .foregroundStyle(.tint)
+            Text(String(
+                localized: "share.media.count",
+                defaultValue: "\(media.count) file(s) ready to send"
+            ))
+            .font(.callout)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(Color.secondary.opacity(0.1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(
+            localized: "share.media.count",
+            defaultValue: "\(media.count) file(s) ready to send"
+        ))
+    }
+
     private func message(systemImage: String, text: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: systemImage)
@@ -244,7 +403,10 @@ struct ShareContentView: View {
 
     private func conversationList(_ targets: [ShareTarget]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "share.sendTo", defaultValue: "Send to"))
+            Text(String(
+                localized: "share.sendToMany",
+                defaultValue: "Send to (up to 10)"
+            ))
                 .font(.headline)
                 .padding(.horizontal)
                 .padding(.top)
@@ -254,9 +416,13 @@ struct ShareContentView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(targets) { target in
                         Button {
-                            selectedId = target.id
+                            guard ShareLimits.canSelectMore(
+                                selectedCount: model.selectedIds.count,
+                                isAlreadySelected: model.state(of: target.id) == .selected
+                            ) else { return }
+                            model.tapRow(target.id)
                         } label: {
-                            ShareTargetRow(target: target, isSelected: selectedId == target.id)
+                            ShareTargetRow(target: target, isSelected: model.state(of: target.id) == .selected)
                         }
                         .buttonStyle(.plain)
                         .disabled(isSending)
@@ -317,19 +483,27 @@ struct ShareContentView: View {
     }
 
     private var canSend: Bool {
-        selectedId != nil && !isSending && content?.isEmpty == false
+        !model.selectedIds.isEmpty && !isSending && (content?.isEmpty == false || !media.isEmpty)
     }
 
     private func send() {
-        guard case .ready(let session, let targets) = state,
-              let target = targets.first(where: { $0.id == selectedId }),
-              let content, !content.isEmpty else { return }
+        guard case .ready(let session, let targets) = state else { return }
+        let selected = model.beginBatch()
+        let conversationIds = targets.map(\.id).filter { selected.contains($0) }
+        guard !conversationIds.isEmpty else { return }
 
         isSending = true
         Task {
-            let outcome = await onSend(session, target, content)
+            let served = await onSend(session, conversationIds, content, media)
+            for (index, target) in served.targets.enumerated() {
+                model.finishSend(
+                    target.conversationId,
+                    succeeded: target.state == .sent,
+                    reason: target.state == .sent ? nil : "\(index)"
+                )
+            }
             isSending = false
-            resultMessage = outcome == .sent
+            resultMessage = ShareSender.outcome(of: served) == .sent
                 ? String(localized: "share.status.sent", defaultValue: "Envoyé")
                 : String(localized: "share.status.deferred", defaultValue: "Sera envoyé à la reconnexion")
             try? await Task.sleep(nanoseconds: 700_000_000)
