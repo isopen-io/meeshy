@@ -54,33 +54,6 @@ nonisolated enum ShareSender {
         }
     }
 
-    private struct Body: Encodable {
-        let clientMessageId: String
-        let content: String
-    }
-
-    static func request(
-        conversationId: String,
-        clientMessageId: String,
-        content: String,
-        session: ShareSession
-    ) -> URLRequest? {
-        guard let url = URL(
-            string: "\(session.apiBaseURL)/api/v1/conversations/\(conversationId)/messages"
-        ) else { return nil }
-
-        guard let body = try? JSONEncoder().encode(
-            Body(clientMessageId: clientMessageId, content: content)
-        ) else { return nil }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = body
-        return request
-    }
-
     /// Toute réponse non 2xx est différée plutôt que rejetée — y compris un 401.
     /// Un jeton périmé se rafraîchit côté app, et l'outbox rejouera ; abandonner
     /// ici perdrait le contenu sans recours.
@@ -89,56 +62,152 @@ nonisolated enum ShareSender {
         guard let statusCode, (200...299).contains(statusCode) else { return .deferred }
         return .sent
     }
+}
 
-    /// Tente l'envoi et, à défaut, dépose un relais durable pour l'app.
-    /// Ne renvoie `.sent` que sur accusé de réception du gateway.
-    static func send(
-        content: String,
-        to conversationId: String,
-        session: ShareSession,
-        urlSession: URLSession = .shared
-    ) async -> ShareOutcome {
-        let clientMessageId = makeClientMessageId()
+/// Le corps d'un envoi de partage.
+///
+/// **Il n'existe AUCUN champ de transfert sur cette structure, et c'est
+/// délibéré.** L'invariant produit (décision user) est qu'aucun destinataire ne
+/// voie de marque de transfert : diffuser par `forwardedFromId` ferait afficher
+/// « Transféré depuis Famille » aux collègues (`MessageHandler.ts:1187-1195` +
+/// `ForwardBadgePolicy.swift:15-21`). Ne PAS pouvoir l'exprimer est une garantie
+/// plus solide que se rappeler de ne pas le faire.
+///
+/// Les cibles 2..N passent par `copyAttachmentsFromMessageId` : le serveur crée
+/// de NOUVELLES pièces jointes pointant les MÊMES fichiers. Réutiliser les
+/// `attachmentIds` de la première cible les DÉPLACERAIT
+/// (`associateAttachmentsToMessage` est un `updateMany({ data: { messageId } })`,
+/// `AttachmentService.ts:161-173`) — le premier destinataire les perdrait.
+///
+/// L'encodage synthétisé omet les optionnels nil : un champ absent ne part pas
+/// en `null`.
+nonisolated struct ShareSendBody: Encodable, Equatable, Sendable {
+    let clientMessageId: String
+    let content: String?
+    let attachmentIds: [String]?
+    let copyAttachmentsFromMessageId: String?
+}
 
-        guard let request = request(
-            conversationId: conversationId,
-            clientMessageId: clientMessageId,
-            content: content,
-            session: session
-        ) else {
-            ShareLog.logger.error("Requête de partage inconstructible — relais différé")
-            return deferSend(clientMessageId: clientMessageId, conversationId: conversationId, content: content)
+nonisolated extension ShareSender {
+
+    /// Le corps à poster pour UNE cible — ou `nil` quand cette cible doit être
+    /// laissée à l'app (média pas encore téléversé, origine pas encore
+    /// acquittée). L'extension ne devine rien : elle décrit.
+    static func body(for share: SharePendingShare, targetIndex: Int) -> ShareSendBody? {
+        let clientMessageId = SharePendingShare.derivedClientMessageId(
+            shareId: share.clientMessageId, targetIndex: targetIndex)
+
+        guard !share.media.isEmpty else {
+            return ShareSendBody(
+                clientMessageId: clientMessageId, content: share.content,
+                attachmentIds: nil, copyAttachmentsFromMessageId: nil)
         }
 
-        do {
-            let (_, response) = try await urlSession.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode
-            if outcome(statusCode: status, error: nil) == .sent {
-                return .sent
-            }
-            ShareLog.logger.error("Partage refusé par le gateway (statut \(status ?? -1, privacy: .public)) — relais différé")
-        } catch {
-            ShareLog.logger.error("Partage en échec réseau (\(error.localizedDescription, privacy: .public)) — relais différé")
+        guard let uploaded = share.uploadedAttachmentIds, !uploaded.isEmpty else {
+            return nil
         }
 
-        return deferSend(clientMessageId: clientMessageId, conversationId: conversationId, content: content)
+        let origin = share.originTargetIndex ?? 0
+        if targetIndex == origin {
+            return ShareSendBody(
+                clientMessageId: clientMessageId, content: share.content,
+                attachmentIds: uploaded, copyAttachmentsFromMessageId: nil)
+        }
+
+        guard share.targets.indices.contains(origin),
+              let originServerId = share.targets[origin].serverMessageId else {
+            return nil
+        }
+        return ShareSendBody(
+            clientMessageId: clientMessageId, content: share.content,
+            attachmentIds: nil, copyAttachmentsFromMessageId: originServerId)
     }
 
-    /// Dépose la fiche de reprise pour un partage de texte à UNE cible.
-    /// Conservé pour le chemin texte historique ; le chemin multi-cibles passe
-    /// par `send(share:session:urlSession:)`.
-    private static func deferSend(
-        clientMessageId: String,
+    static func request(
         conversationId: String,
-        content: String
-    ) -> ShareOutcome {
-        SharePendingShare.make(
-            shareId: clientMessageId,
-            createdAt: Date(),
-            content: content,
-            media: [],
-            conversationIds: [conversationId]
-        ).commitLive()
-        return .deferred
+        body: ShareSendBody,
+        session: ShareSession
+    ) -> URLRequest? {
+        guard let url = URL(
+            string: "\(session.apiBaseURL)/api/v1/conversations/\(conversationId)/messages"
+        ) else { return nil }
+        guard let payload = try? JSONEncoder().encode(body) else { return nil }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(session.token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = payload
+        return request
+    }
+
+    /// L'identifiant serveur du message créé — indispensable aux cibles
+    /// suivantes, qui copieront SES pièces jointes.
+    static func serverMessageId(fromResponse data: Data) -> String? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let payload = root["data"] as? [String: Any] else { return nil }
+        return payload["id"] as? String
+    }
+
+    /// « Envoyé » ne se dit qu'une fois TOUTES les cibles servies : le dire
+    /// plus tôt mentirait sur les cibles restantes.
+    static func outcome(of share: SharePendingShare) -> ShareOutcome {
+        share.isFullyServed ? .sent : .deferred
+    }
+
+    /// Sert les cibles l'une après l'autre, en COMMITANT la fiche à chaque
+    /// transition.
+    ///
+    /// La fiche est écrite AVANT le premier POST : une extension tuée entre les
+    /// deux ne perd rien. Une cible en échec n'interrompt pas les suivantes —
+    /// perdre une cible n'est pas perdre le partage.
+    static func send(
+        share: SharePendingShare,
+        session: ShareSession,
+        urlSession: URLSession = .shared,
+        directory: URL? = SharePendingShare.directoryURL()
+    ) async -> SharePendingShare {
+        var current = share
+        commit(current, in: directory)
+
+        for index in current.targets.indices where current.targets[index].state != .sent {
+            guard let body = body(for: current, targetIndex: index),
+                  let request = request(
+                    conversationId: current.targets[index].conversationId,
+                    body: body, session: session)
+            else { continue }
+
+            do {
+                let (data, response) = try await urlSession.data(for: request)
+                let status = (response as? HTTPURLResponse)?.statusCode
+                if outcome(statusCode: status, error: nil) == .sent {
+                    current.targets[index].state = .sent
+                    current.targets[index].serverMessageId = serverMessageId(fromResponse: data)
+                } else {
+                    ShareLog.logger.error(
+                        "Cible refusée par le gateway (statut \(status ?? -1, privacy: .public)) — reprise différée")
+                    current.targets[index].state = .failed
+                }
+            } catch {
+                ShareLog.logger.error(
+                    "Cible en échec réseau (\(error.localizedDescription, privacy: .public)) — reprise différée")
+                current.targets[index].state = .failed
+            }
+            commit(current, in: directory)
+        }
+        return current
+    }
+
+    private static func commit(_ share: SharePendingShare, in directory: URL?) {
+        guard let directory else {
+            ShareLog.logger.error("Conteneur App Group indisponible — fiche de reprise impossible")
+            return
+        }
+        do {
+            try share.commit(in: directory)
+        } catch {
+            ShareLog.logger.error(
+                "Écriture de la fiche échouée : \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

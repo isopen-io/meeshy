@@ -656,6 +656,7 @@
 		8C71973F63C6D2DD7721589D /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1989863051D4DF28F94E0A06 /* ParticipantsView.swift */; };
 		8D2A45C0450889CDF692DE61 /* StoryRepostEmbedCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A6566054CAE1DF7C738454 /* StoryRepostEmbedCell.swift */; };
 		8D91C05CCD4926F60A5555F8 /* UserProfileViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69DD9DBB3A09F4E86E0960B0 /* UserProfileViewModelTests.swift */; };
+		8E3056EF3114194ED2819F8E /* ShareSenderFanoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30160D74851F3D5C204FA59C /* ShareSenderFanoutTests.swift */; };
 		8E82674CA2FEB957EF24248F /* CallSummaryTranscriptSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E0145573F466F213BD3043 /* CallSummaryTranscriptSectionTests.swift */; };
 		8E877AD2FE6781764A828BE3 /* TaskTimeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBDACFDE79DAEAEADD661F01 /* TaskTimeout.swift */; };
 		8E88E0A25DDBFEB531227B71 /* DataStorageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BED5467C7DF2902066B16BA /* DataStorageView.swift */; };
@@ -1485,6 +1486,7 @@
 		2F7955FEE33A52D416DD73C3 /* ConversationLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferences.swift; sourceTree = "<group>"; };
 		2FA122D0EA58DA2D0C5B3064 /* StoryViewerCommentRollbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerCommentRollbackTests.swift; sourceTree = "<group>"; };
 		2FE95B17EA1071B7915E63F2 /* CallBannerContrast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallBannerContrast.swift; sourceTree = "<group>"; };
+		30160D74851F3D5C204FA59C /* ShareSenderFanoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSenderFanoutTests.swift; sourceTree = "<group>"; };
 		303C8A844B0F98A92CE2CE52 /* IncomingCallViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallViewTests.swift; sourceTree = "<group>"; };
 		306276D89CA204981399861F /* MessageEditsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEditsDetailView.swift; sourceTree = "<group>"; };
 		30BD0F8F4D9194A8CE0C6E34 /* StoryViewerLanguageOverrideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerLanguageOverrideTests.swift; sourceTree = "<group>"; };
@@ -3930,6 +3932,7 @@
 				45748BA9D4C4EDE85874051B /* SharePendingSendConsumerTests.swift */,
 				4D7E9EE6FABF64C718A7DBB4 /* SharePendingSendContractTests.swift */,
 				80844041409DFB27A00A2238 /* SharePendingShareTests.swift */,
+				30160D74851F3D5C204FA59C /* ShareSenderFanoutTests.swift */,
 				2379098A20D54F068E3CB935 /* ShareSenderTests.swift */,
 				49CA6A32B378C30B346AE281 /* ShareSessionTests.swift */,
 			);
@@ -5621,6 +5624,7 @@
 				62BA90304945B538294198B8 /* SharePendingShareTests.swift in Sources */,
 				092822A12EB9B0A21762F328 /* SharePickerViewModelTests.swift in Sources */,
 				FEEE97B6F35353FED1F9F6CF /* ShareSender.swift in Sources */,
+				8E3056EF3114194ED2819F8E /* ShareSenderFanoutTests.swift in Sources */,
 				D8F0FA1DCE98F97A5C48D8BA /* ShareSenderTests.swift in Sources */,
 				F6A75A04625839FD5CAE5462 /* ShareSession.swift in Sources */,
 				8EB72D4A071D8D1DC4FF2D26 /* ShareSessionTests.swift in Sources */,

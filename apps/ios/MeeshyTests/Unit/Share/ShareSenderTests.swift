@@ -79,11 +79,19 @@ final class ShareSenderTests: XCTestCase {
 
     // MARK: - Requête
 
+    private func makeBody(content: String) -> ShareSendBody {
+        ShareSendBody(
+            clientMessageId: "cid_00000000-0000-4000-8000-000000000000",
+            content: content,
+            attachmentIds: nil,
+            copyAttachmentsFromMessageId: nil
+        )
+    }
+
     func test_request_targetsTheVersionedMessagesEndpoint() throws {
         let request = try XCTUnwrap(ShareSender.request(
             conversationId: "conv42",
-            clientMessageId: "cid_00000000-0000-4000-8000-000000000000",
-            content: "bonjour",
+            body: makeBody(content: "bonjour"),
             session: session
         ))
 
@@ -97,8 +105,7 @@ final class ShareSenderTests: XCTestCase {
     func test_request_carriesBearerTokenAndJSONContentType() throws {
         let request = try XCTUnwrap(ShareSender.request(
             conversationId: "conv42",
-            clientMessageId: "cid_00000000-0000-4000-8000-000000000000",
-            content: "bonjour",
+            body: makeBody(content: "bonjour"),
             session: session
         ))
 
@@ -112,8 +119,7 @@ final class ShareSenderTests: XCTestCase {
     func test_request_bodyCarriesExactlyClientMessageIdAndContent() throws {
         let request = try XCTUnwrap(ShareSender.request(
             conversationId: "conv42",
-            clientMessageId: "cid_00000000-0000-4000-8000-000000000000",
-            content: "bonjour",
+            body: makeBody(content: "bonjour"),
             session: session
         ))
         let body = try XCTUnwrap(request.httpBody)
@@ -130,8 +136,7 @@ final class ShareSenderTests: XCTestCase {
         let hostile = "\"quote\" \\backslash\\ \n saut"
         let request = try XCTUnwrap(ShareSender.request(
             conversationId: "conv42",
-            clientMessageId: "cid_00000000-0000-4000-8000-000000000000",
-            content: hostile,
+            body: makeBody(content: hostile),
             session: session
         ))
         let json = try XCTUnwrap(
