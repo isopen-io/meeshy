@@ -169,6 +169,43 @@ final class ShareExtensionSourceGuardTests: XCTestCase {
             .trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    private func assertPresent(_ needle: String, in fileName: String, because reason: String) throws {
+        let file = try XCTUnwrap(
+            try swiftSources().first { $0.name == fileName },
+            "\(fileName) est absent de l'extension"
+        )
+        XCTAssertTrue(
+            strippingComments(file.code).contains(needle),
+            "\(fileName) ne contient pas « \(needle) » — \(reason)"
+        )
+    }
+
+    /// Le process est plafonné à ~120 Mo : lire une vidéo de 400 Mo d'un seul
+    /// tenant le fait tuer par le système AVANT la première ligne de la fiche.
+    func test_extension_neverReadsAWholeFileIntoMemory() throws {
+        try assertAbsent(
+            "Data(contentsOf:",
+            because: "le plafond mémoire de 120 Mo impose un streaming par FileHandle"
+        )
+    }
+
+    /// Une URL issue de Fichiers/iCloud est security-scoped : sans la paire
+    /// start/stop, la lecture échoue silencieusement et le partage livre un
+    /// fichier vide.
+    func test_extension_pairsTheSecurityScopedAccess() throws {
+        try XCTSkipIf(true, "Activé par la Task 6 (extraction des fichiers dans ShareViewController)")
+        try assertPresent(
+            "startAccessingSecurityScopedResource",
+            in: "ShareViewController.swift",
+            because: "une URL de Fichiers/iCloud n'est lisible que sous portée sécurisée"
+        )
+        try assertPresent(
+            "stopAccessingSecurityScopedResource",
+            in: "ShareViewController.swift",
+            because: "une portée ouverte et jamais refermée fuit une ressource du système"
+        )
+    }
+
     /// Sans cet entitlement, la lecture du JWT renvoie `errSecItemNotFound`
     /// silencieusement et l'extension paraît « jamais connectée ».
     func test_entitlements_declareTheSharedKeychainGroup() throws {

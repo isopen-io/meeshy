@@ -316,6 +316,13 @@ targets:
       - path: MeeshyShareExtension/ShareSession.swift
       - path: MeeshyShareExtension/ShareConversationStore.swift
       - path: MeeshyShareExtension/ShareSender.swift
+      # Lot B-1 : plafonds et copie streamée. `ShareMediaStaging` importe
+      # UniformTypeIdentifiers (framework système, disponible au bundle de
+      # tests) et n'a aucune dépendance UIKit — comme les trois helpers
+      # au-dessus, il vit dans une cible app-extension que
+      # `@testable import Meeshy` n'atteint pas.
+      - path: MeeshyShareExtension/ShareLimits.swift
+      - path: MeeshyShareExtension/ShareMediaStaging.swift
       # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
       # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
       # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),
