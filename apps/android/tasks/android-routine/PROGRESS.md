@@ -2,6 +2,53 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Composer language pill + picker shipped** (slice `composer-language-pill`,
+> feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the
+> **language-detection half** left open by `composer-live-sentiment`; the composite line is now `[x]`).
+> **Step 0**: no open `claude/apps/android/*` PR to merge first (the full open-PR list was 11 — gateway/web
+> `$`-escaping fixes, iOS transfer/Jules, five Dependabot; none on an android-routine branch). Branched off
+> `origin/main` (`7d23ec0f`) clean, branch created as the literal first action before any edit. This
+> container **reaches `dl.google.com`** (curl → 200), so the SDK bootstrapped and the **full local gate ran
+> here** — note the platform is now **`android-37`** (not `android-35` as ROUTINE §Env still says); the first
+> gate run died with `Failed to find target with hash string 'android-37'` until `sdkmanager "platforms;android-37"`.
+>
+> **The gap, re-proved by reading source**: a grep showed `ComposeLanguageDetector` (the pure web-heuristic
+> port) was already wired ONLY at send-time to stamp `originalLanguage` — there was no live composer language
+> pill, no picker override, and no ≥10-word detection lock. iOS drives all three from `TextAnalyzer`
+> (`wordCountThreshold`=10, `isLanguageLocked`, `languageOverride`) + `ComposerLanguageResolver.resolve`.
+>
+> **Pure core (`:core:model`)**: new `ComposerLanguageState(detected, manualOverride, isLocked)`.
+> `onDraftChanged(draft)` re-detects each keystroke while unlocked & unoverridden, locks once the draft
+> reaches `WORD_LOCK_THRESHOLD`=10 words, and a blank draft releases the lock unless a manual pick holds.
+> `display(fallback)` = `manualOverride ?? detected ?? fallback` (iOS `displayLanguage`). `withManualPick`
+> overrides + freezes. **Design win over a naive port**: a `NO_DETECTION` sentinel (`""`, a value the
+> detector never returns) is passed as the detector fallback so a weak/undetectable draft yields `detected =
+> null` instead of pinning the pill to a stale guess — the pill then follows the LIVE fallback at read time.
+> This also removes any seed-timing fragility: `display` applies the fallback at read, not at detect.
+>
+> **Wiring (`:feature:chat`)**: `ChatUiState.composerLanguage` + `composerLanguageSeed` (the viewer's
+> `resolveUserLanguage`, seeded from the conversation-load collector) + `composerLanguageCode` getter.
+> `onDraftChange` folds `onDraftChanged`; new `onComposerLanguagePicked(code)`. The pill is now
+> **authoritative for the stamped `originalLanguage`** on the text AND file send paths — captured before the
+> clear via `composerLanguage.display(resolveUserLanguage(user))`, so a manual pick wins over detection —
+> replacing the previous per-send `ComposeLanguageDetector.detect(text, …)` (the clipboard/pasted-content
+> path keeps its own detection, a distinct signal). Reset to seed on send. `ChatScreen` renders a leading
+> `ComposerLanguagePill` (flag glyph + `DropdownMenu` over `LanguageData.commonLanguageCodes`, checkmark on
+> the current pick) — thin, coverage-exempt Compose glue. Strings ×1 (`chat_composer_language`) EN/FR/ES/PT.
+>
+> **Tests**: +18 `ComposerLanguageStateTest` (display precedence; detection surfaces/flips while unlocked;
+> undetectable draft never pins & never locks; word-threshold lock freezes further detection; manual
+> override suppresses detection; empty releases the lock but keeps a manual pick; released lock re-detects;
+> `withManualPick` locks; determinism) + 5 `ChatViewModelTest` (pill follows detection; pill seeds from the
+> user's resolved language; a pick overrides live detection; a pick stamps the outgoing message over
+> detection; send resets to the seed). Reducer branch coverage total; the pill/`DropdownMenu` are exempt
+> Compose glue per TDD-COVERAGE. The two pre-existing send-language tests (detected → es, undetectable → user
+> lang) stay green — `display` preserves both behaviours exactly.
+>
+> **Verified**: `:core:model` + `:feature:chat` suites green individually; full `assembleDebug` +
+> `testDebugUnitTest` across all modules green locally before the PR (single container, `dl.google.com`
+> reachable). Reviewer PASS.
+
 > On 2026-08-20 **Composer live sentiment shipped** (slice `composer-live-sentiment`,
 > feature-parity's Chat "Live sentiment + language detection (smart context zone)" composite — the
 > **live-sentiment** half). **Step 0**: no open `claude/apps/android/*` PR to merge first (checked

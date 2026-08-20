@@ -823,3 +823,24 @@ Append-only log of gotchas and decisions that save time next run.
   it was a compile break, "not a test assertion"), which is the whole point of running the gate
   before trusting a push. Lesson: after adding a cross-module symbol, grep every file that names it
   for a matching import, the declaring file included.
+
+## Slice `composer-language-pill` (2026-08-20)
+- **The container now builds against `android-37`, not `android-35`.** ROUTINE §Environment recipe still
+  installs `platforms;android-35`; the first gate run died with `Failed to find target with hash string
+  'android-37' in: /root/android-sdk`. Fix: `sdkmanager "platforms;android-37"`. (Left ROUTINE as-is this
+  slice — it's a doc drift to fix when the recipe is next touched; flagged here so the next run installs 37
+  directly and doesn't lose a 2-minute gate cycle to it.)
+- **A "detect or fall back to X" helper can't tell "I detected X" from "I gave up and returned X".**
+  `ComposeLanguageDetector.detect(text, fallback)` returns the fallback verbatim on a weak signal — so if a
+  stateful pill stores that result as its "detected language", it pins to whatever fallback happened to be
+  live at that keystroke and never re-floats. Fix in `ComposerLanguageState`: pass a `NO_DETECTION` sentinel
+  (`""`, a value the detector never returns) as the fallback, treat a `""` return as "no detection"
+  (`detected` stays null), and apply the *real* fallback only in `display(fallback)` at READ time. This both
+  matches iOS (`language` stays nil until a confident hit) and kills any seed-timing race — the pill's
+  fallback is resolved when read, never frozen at detect.
+- **When a live composer signal becomes authoritative for a persisted field, capture it BEFORE the clear.**
+  The pill now stamps `originalLanguage`, but `send()`/`sendFileAttachment()` reset `composerLanguage` in the
+  same `_state.update` that clears the draft. Read `composerLanguage.display(resolveUserLanguage(user))` into
+  a local *before* that update (like `text`/`replyToId`/`effects` already are), else the async
+  `sendOptimistic` reads the already-reset state and stamps the seed. Two pre-existing send-language tests
+  (detected→es, undetectable→user-lang) are the guard that `display` preserves the old behaviour.

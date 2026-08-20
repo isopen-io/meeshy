@@ -854,6 +854,78 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun composer_language_pill_follows_the_detected_language_of_the_draft() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+
+        vm.onDraftChange("Hola, ¿cómo estás? ¿Qué tal todo por allá?")
+
+        assertThat(vm.state.value.composerLanguageCode).isEqualTo("es")
+    }
+
+    @Test
+    fun composer_language_pill_seeds_from_the_users_resolved_language_before_typing() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", regionalLanguage = "de")
+        val h = harness(flowOf(CacheResult.Empty), currentUser = user, conversation = unreadConversation(unread = 0))
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.composerLanguageCode).isEqualTo("de")
+    }
+
+    @Test
+    fun picking_a_composer_language_overrides_live_detection() = runTest(dispatcher) {
+        val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
+        advanceUntilIdle()
+        vm.onDraftChange("Hola, ¿cómo estás? ¿Qué tal todo por allá?")
+        assertThat(vm.state.value.composerLanguageCode).isEqualTo("es")
+
+        vm.onComposerLanguagePicked("de")
+
+        // The manual pick wins and freezes detection — typing French no longer flips it.
+        vm.onDraftChange("Bonjour, comment allez-vous aujourd'hui ?")
+        assertThat(vm.state.value.composerLanguageCode).isEqualTo("de")
+    }
+
+    @Test
+    fun a_manual_language_pick_stamps_the_outgoing_message_over_detection() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        coEvery { repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+
+        // French user typing Spanish, but they explicitly pick German: the pick wins.
+        vm.onDraftChange("Hola, ¿cómo estás? ¿Qué tal todo por allá?")
+        vm.onComposerLanguagePicked("de")
+        vm.send()
+        advanceUntilIdle()
+
+        coVerify {
+            repo.sendOptimistic(
+                "c1",
+                "Hola, ¿cómo estás? ¿Qué tal todo por allá?",
+                "de",
+                user,
+                null,
+            )
+        }
+    }
+
+    @Test
+    fun sending_resets_the_composer_language_to_the_seed() = runTest(dispatcher) {
+        val user = MeeshyUser(id = "me", username = "atabeth", systemLanguage = "fr")
+        val (vm, repo, _) = viewModel(flowOf(CacheResult.Empty), currentUser = user)
+        coEvery { repo.sendOptimistic(any(), any(), any(), any(), any()) } returns "cmid_1"
+        advanceUntilIdle()
+        vm.onDraftChange("Hola, ¿cómo estás? ¿Qué tal todo por allá?")
+        vm.onComposerLanguagePicked("de")
+
+        vm.send()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.composerLanguageCode).isEqualTo("fr")
+    }
+
+    @Test
     fun removing_a_captured_clipboard_attachment_clears_it() = runTest(dispatcher) {
         val (vm, _, _) = viewModel(flowOf(CacheResult.Empty))
         advanceUntilIdle()
