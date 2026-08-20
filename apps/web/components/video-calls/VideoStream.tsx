@@ -143,7 +143,7 @@ export function VideoStream({
               </svg>
             </div>
             <p className="text-lg text-white font-semibold">{t('stream.disconnected')}</p>
-            <p className="text-sm text-gray-400 mt-1">{t('stream.participantLeft').replace('{name}', participantName || t('stream.participant'))}</p>
+            <p className="text-sm text-gray-400 mt-1">{t('stream.participantLeft', { name: participantName || t('stream.participant') })}</p>
           </div>
         </div>
       )}
