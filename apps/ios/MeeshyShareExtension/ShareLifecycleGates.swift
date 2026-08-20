@@ -33,15 +33,50 @@ nonisolated enum ShareCancelPolicy {
 /// silencieux. Porte l'invariant « `complete()` ne peut être atteint deux
 /// fois » — qu'un second appel vienne d'`onCancel` (tapé pendant la fenêtre
 /// avant round 2) ou du réveil du `Task` qui appelle `onFinish()`.
-nonisolated final class ShareCompletionGate {
-    private(set) var hasFired = false
+///
+/// Round 3 de revue (Important) : le corps était auparavant
+/// `guard !hasFired else { return false }; hasFired = true; action()`, SANS
+/// verrou — non atomique, donc deux appels réellement concurrents pouvaient
+/// tous deux franchir le `guard` avant qu'aucun n'ait eu la chance d'écrire
+/// `hasFired`. Ça « marchait » aujourd'hui uniquement parce que les deux
+/// appelants réels (`ShareViewController.swift`, `onCancel`/`onFinish`)
+/// s'exécutent tous les deux sur le MainActor — une coïncidence d'isolation,
+/// pas une garantie du type, alors que le type est délibérément
+/// `nonisolated` et qu'une extension de partage est précisément l'endroit où
+/// des callbacks arrivent sur des files arbitraires. Même idiome que
+/// `ExtractionBox`/`StagingBox` (`ShareViewController.swift`) : `NSLock` +
+/// `@unchecked Sendable` + `nonisolated(unsafe)` sur le stockage — le verrou
+/// EST la synchronisation que le compilateur ne peut pas voir à travers
+/// l'isolation d'acteur. Preuve de la race : `ShareLifecycleGatesTests
+/// .test_fireOnce_underGenuineConcurrentThreads_firesTheActionExactlyOnce`.
+nonisolated final class ShareCompletionGate: @unchecked Sendable {
+    private let lock = NSLock()
+    // `nonisolated(unsafe)` : mutée uniquement sous `lock`, jamais lue ni
+    // écrite ailleurs — même rationale qu'`ExtractionBox.text`/`.url`.
+    nonisolated(unsafe) private var _hasFired = false
 
     init() {}
 
+    /// Lecture protégée : un accès direct à la variable de stockage
+    /// contournerait le verrou et redeviendrait une lecture non synchronisée.
+    var hasFired: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return _hasFired
+    }
+
     @discardableResult
     func fireOnce(_ action: () -> Void) -> Bool {
-        guard !hasFired else { return false }
-        hasFired = true
+        lock.lock()
+        let shouldFire = !_hasFired
+        if shouldFire { _hasFired = true }
+        lock.unlock()
+
+        // `action()` s'exécute HORS du verrou : elle peut être un closure
+        // arbitraire (ici `extensionContext?.completeRequest`), et tenir le
+        // verrou pendant son exécution risquerait un deadlock si elle
+        // rappelait un jour dans `fireOnce` — la décision d'état, elle,
+        // reste atomique.
+        guard shouldFire else { return false }
         action()
         return true
     }
