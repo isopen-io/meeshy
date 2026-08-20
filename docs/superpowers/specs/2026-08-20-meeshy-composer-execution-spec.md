@@ -13,6 +13,9 @@ tranche I6 (doc sans média → FeedComposerSheet), architecture lot F réécrit
 Rév. 7 (2026-08-20) : cycle final — point d'attache de la négociation TRANCHÉ
 (threading du lecteur à travers les SERVICES, F1), exception temps réel (F3),
 ligne « v3 invalide » (F5), `volume?` au payload media (F10)
+Rév. 8 (2026-08-20) : P0 tableau de bord vivant (règle de maintenance en §E) ;
+lot A EXÉCUTÉ — 10/10 tâches TDD, gate 795 suites vertes, branche
+`feat/composer-lot-a` en attente de merge
 Design source : `./2026-08-19-meeshy-composer-design.md` (+ planches P1–P24)
 Ce document est la sortie de la revue totale : il fige les décisions, définit le
 contrat commun, et découpe l'exécution en **huit lots** (six parallélisables
@@ -421,6 +424,13 @@ référencé-expiré, offline, republication, édition avec reset,
 **accent déterministe par post (`authorColor` — chrome de carte, C8), transport
 vidéo complet (PiP · AirPlay · vitesse · scrubber · ±10 s · plein écran, C10)**…
 Une ligne perdue = un défaut bloquant, pas une note.
+
+**P0 est le tableau de bord vivant (rév. 8, demande du porteur produit).**
+La planche P0 des views (camembert + matrice fait·testé·sur-main·reste) se
+maintient STRICTEMENT : chaque tâche dont le gate passe la met à jour dans le
+MÊME commit que son gate ; le camembert ne compte une tâche qu'au gate PROUVÉ
+(rouge puis vert au runner). Un P0 périmé est un défaut bloquant au même titre
+qu'une ligne d'inventaire perdue — c'est un item du DoD de CHAQUE lot.
 
 ## F. Hors v1 — dit une fois, opposable
 
