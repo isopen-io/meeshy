@@ -237,6 +237,67 @@ export function unclaimedCanvasMediaIds(
   return unclaimed;
 }
 
+/**
+ * A7b (revue totale C6) — le pipeline de traduction des objets texte parle v3.
+ *
+ * Un texte v1 vit dans `textObjects[i]` ; un texte v3 vit dans
+ * `scenes[].objects[kind=text]`, son texte sous `payload.text`, sa langue
+ * d'origine sous `locale`, ses traductions sous `payload.translations`.
+ * Les deux helpers ci-dessous sont la SEULE lecture de cette différence :
+ * l'énumération (trigger + index de recherche + recomposition dérivée) et le
+ * chemin de persistance Mongo (l'objet ciblé par ID, jamais par index aveugle
+ * — une scène contient aussi des objets non-texte).
+ */
+export type StoryTranslatableText = {
+  id?: string;
+  text?: string;
+  content?: string;
+  sourceLanguage?: string;
+  translations?: Record<string, string>;
+  [key: string]: unknown;
+};
+
+export function storyTranslatableTexts(blob: unknown): StoryTranslatableText[] | undefined {
+  if (isCanvasV3(blob)) {
+    const texts = asArray((blob as { scenes?: unknown }).scenes)
+      .flatMap((scene) => asArray(scene.objects))
+      .filter((object) => object.kind === 'text')
+      .map((object): StoryTranslatableText => {
+        const payload = typeof object.payload === 'object' && object.payload !== null
+          ? (object.payload as Record<string, unknown>)
+          : {};
+        const translations = Object.fromEntries(
+          Object.entries(
+            typeof payload.translations === 'object' && payload.translations !== null
+              ? (payload.translations as Record<string, unknown>)
+              : {}
+          ).filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+        );
+        return {
+          ...(str(object.id) !== undefined ? { id: str(object.id) } : {}),
+          ...(typeof payload.text === 'string' ? { text: payload.text } : {}),
+          ...(str(object.locale) !== undefined ? { sourceLanguage: str(object.locale) } : {}),
+          ...(Object.keys(translations).length ? { translations } : {}),
+        };
+      });
+    return texts.length > 0 ? texts : undefined;
+  }
+  const textObjects = typeof blob === 'object' && blob !== null
+    ? (blob as { textObjects?: unknown }).textObjects
+    : undefined;
+  return Array.isArray(textObjects) ? (textObjects as StoryTranslatableText[]) : undefined;
+}
+
+export function translationSetPath(blob: unknown, objectId: string, lang: string): string | null {
+  if (!isCanvasV3(blob)) return null;
+  const scenes = asArray((blob as { scenes?: unknown }).scenes);
+  for (let s = 0; s < scenes.length; s++) {
+    const o = asArray(scenes[s].objects).findIndex((object) => object.id === objectId);
+    if (o >= 0) return `storyEffects.scenes.${s}.objects.${o}.payload.translations.${lang}`;
+  }
+  return null;
+}
+
 export function convertStoryEffectsForWire(effects: unknown): unknown {
   if (effects == null) return effects;
   if (isCanvasV3(effects)) return effects;

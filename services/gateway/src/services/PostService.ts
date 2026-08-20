@@ -25,6 +25,7 @@ import { projectReferencesForViewer, toPostReferences } from './posts/postRefere
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
 import { composeStoryContent, storyTextObjectText } from './posts/storyContentComposition';
+import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
@@ -376,10 +377,9 @@ export class PostService {
       });
     }
 
-    // Si story avec textObjects : remplir content comme index de recherche + déclencher traductions
-    const effects = data.storyEffects as Record<string, unknown> | undefined;
-    const rawTextObjects = effects?.textObjects;
-    const textObjects = Array.isArray(rawTextObjects) ? (rawTextObjects as StoryTextObjectRaw[]) : undefined;
+    // Si story avec textes posés (v1 `textObjects` OU v3 `scenes[].objects[kind=text]`,
+    // A7b) : remplir content comme index de recherche + déclencher traductions
+    const textObjects = storyTranslatableTexts(data.storyEffects);
 
     if (textObjects?.length) {
       const searchContent = composeStoryContent(textObjects);
@@ -1125,9 +1125,7 @@ export class PostService {
     // the story as new again. The publication date never moves: createdAt and
     // expiresAt are absent from updateData. Metadata-only updates (visibility)
     // leave engagement untouched. Same predicate as the route's broadcast flag.
-    const editedTextObjects = Array.isArray((data.storyEffects as Record<string, unknown> | undefined)?.textObjects)
-      ? ((data.storyEffects as Record<string, unknown>).textObjects as StoryTextObjectRaw[])
-      : undefined;
+    const editedTextObjects = storyTranslatableTexts(data.storyEffects);
     const storyContentEdit = post.type === PostType.STORY && storyContentEditRequested(data);
     if (storyContentEdit) {
       // `updatedAt` bouge sur CHAQUE écriture (compteurs de vues inclus) —

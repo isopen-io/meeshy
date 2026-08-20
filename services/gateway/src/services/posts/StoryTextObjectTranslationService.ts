@@ -19,6 +19,7 @@ import {
   composeStoryContentForLanguage,
   isContentDerivedFromTextObjects,
 } from './storyContentComposition';
+import { isCanvasV3, storyTranslatableTexts, translationSetPath } from './storyEffectsV3';
 
 const log = enhancedLogger.child({ module: 'StoryTextObjectTranslationService' });
 
@@ -85,6 +86,21 @@ export class StoryTextObjectTranslationService {
         return;
       }
 
+      // A7b (revue totale C6) — dans un document v3 les textes vivent dans
+      // `scenes[].objects[kind=text]` : le chemin v1 `textObjects.$i` y est
+      // MORT. `textObjectIndex` reste l'index PLAT de l'énumération des textes
+      // (le contrat du trigger avec le translator) ; la persistance, elle,
+      // cible l'objet par SON ID dans sa scène — une scène contient aussi des
+      // objets non-texte, l'index plat n'y est pas un index d'objet.
+      const docIsV3 = isCanvasV3(post.storyEffects);
+      const targetObjectId = docIsV3
+        ? storyTranslatableTexts(post.storyEffects)?.[textObjectIndex]?.id
+        : undefined;
+      if (docIsV3 && typeof targetObjectId !== 'string') {
+        log.warn('v3 doc has no text object at this index — skipping', { postId, textObjectIndex });
+        return;
+      }
+
       // Build $set fields for each translated language using MongoDB dot-notation.
       // Each language code is sanitized before interpolation to prevent field-path
       // injection via a compromised translator returning e.g. `"a.$set.foo"`.
@@ -95,7 +111,11 @@ export class StoryTextObjectTranslationService {
           log.warn('rejected malformed language code', { postId, textObjectIndex, lang });
           continue;
         }
-        setFields[`storyEffects.textObjects.${textObjectIndex}.translations.${lang}`] = text;
+        const path = docIsV3 && typeof targetObjectId === 'string'
+          ? translationSetPath(post.storyEffects, targetObjectId, lang)
+          : `storyEffects.textObjects.${textObjectIndex}.translations.${lang}`;
+        if (!path) continue;
+        setFields[path] = text;
         acceptedLanguages.push(lang);
       }
       if (Object.keys(setFields).length === 0) return;
@@ -182,8 +202,9 @@ export class StoryTextObjectTranslationService {
   }): Record<string, Prisma.InputJsonValue> {
     const { content, storyEffects, textObjectIndex, translations, languages } = params;
 
-    const effects = (storyEffects ?? null) as { textObjects?: unknown } | null;
-    const textObjects = Array.isArray(effects?.textObjects) ? [...effects.textObjects] : [];
+    // A7b — l'énumération v3/v1 est la MÊME que celle du trigger : le contrat
+    // de l'index plat `textObjectIndex` tient d'un bout à l'autre du pipeline.
+    const textObjects: unknown[] = [...(storyTranslatableTexts(storyEffects) ?? [])];
     if (!isContentDerivedFromTextObjects(content, textObjects)) return {};
 
     const target = textObjects[textObjectIndex] as Record<string, unknown> | undefined;
