@@ -1,6 +1,5 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import {
   userSchema,
   sessionSchema,
@@ -14,7 +13,7 @@ import {
   validateSessionRequestSchema
 } from '@meeshy/shared/types';
 import { AuthSchemas, SessionSchemas, validateSchema } from '@meeshy/shared/utils/validation';
-import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../../middleware/auth';
+import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
@@ -164,19 +163,20 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         decoded = jwt.decode(token) as { userId?: string; username?: string; role?: string } | null;
       }
 
-      let activeSession: { id: string; userId: string; expiresAt: Date } | null = null;
+      let activeSession: { id: string } | null = null;
 
       if (sessionToken && decoded?.userId) {
-        const hashedSession = crypto.createHash('sha256').update(sessionToken).digest('hex');
-        const session = await context.prisma.userSession.findFirst({
-          where: {
-            sessionToken: hashedSession,
-            userId: decoded.userId,
-            isValid: true,
-            isTrusted: true,
-            expiresAt: { gt: new Date() }
-          },
-          select: { id: true, userId: true, expiresAt: true }
+        // task-1-fix-round-5 — reprend EXACTEMENT la politique de
+        // `middleware/auth.ts` (`findTrustedSession`), y compris la règle
+        // « une application à la fois » : ce repli interrogeait auparavant
+        // directement Prisma, sans jamais vérifier que le jeton expiré et la
+        // session de confiance provenaient de la même application — une
+        // porte ouverte à côté de celle fermée dans `createRegisteredUserContext`.
+        const requestUserAgent = (request.headers['user-agent'] as string | undefined) ?? null;
+        const session = await findTrustedSession(context.prisma, {
+          userId: decoded.userId,
+          sessionToken,
+          requestUserAgent,
         });
         if (session) {
           activeSession = session;

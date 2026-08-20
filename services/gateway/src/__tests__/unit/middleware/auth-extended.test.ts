@@ -85,6 +85,16 @@ import {
 
 const JWT_SECRET = 'test-secret-key';
 
+// task-1-fix-round-5 — fixtures vérifiées empiriquement (`ua-parser-js`, cf.
+// commentaire de `classifyApplicationSignal` dans `middleware/auth.ts`) :
+// AUCUN client Meeshy natif (iOS via `URLSession` par défaut, Android via
+// OkHttp par défaut) ne produit de `browser.name` reconnu — un vrai
+// navigateur (web) en produit TOUJOURS un.
+const WEB_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+const WEB_BROWSER_NAME = 'Chrome';
+const NATIVE_USER_AGENT = 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0';
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function createMockPrisma(overrides: Record<string, unknown> = {}) {
@@ -652,7 +662,7 @@ describe('AuthMiddleware — JWT expired with sessionToken', () => {
     ).rejects.toThrow('Invalid JWT token');
   });
 
-  it('returns user context when JWT expired but trusted session is valid', async () => {
+  it('returns user context when JWT expired but trusted session is valid (même application — web)', async () => {
     const user = createTestUser();
     const rawSession = 'trusted-session-token';
     const prisma = createMockPrisma({
@@ -664,15 +674,187 @@ describe('AuthMiddleware — JWT expired with sessionToken', () => {
         isValid: true,
         isTrusted: true,
         expiresAt: new Date(Date.now() + 86400_000),
+        userAgent: WEB_USER_AGENT,
+        browserName: WEB_BROWSER_NAME,
       }),
     });
     const expiredToken = signExpiredJwt(user.id);
     const middleware = new AuthMiddleware(prisma as never);
 
-    const ctx = await middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession);
+    const ctx = await middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession, WEB_USER_AGENT);
 
     expect(ctx.isAuthenticated).toBe(true);
     expect(ctx.userId).toBe(user.id);
+  });
+
+  it('returns user context when JWT expired but trusted session is valid (même application — native)', async () => {
+    const user = createTestUser();
+    const rawSession = 'trusted-session-token-native';
+    const prisma = createMockPrisma({
+      userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
+      sessionFindFirst: (jest.fn() as jest.Mock<any>).mockResolvedValue({
+        id: 'session-2',
+        sessionToken: hashSessionToken(rawSession),
+        userId: user.id,
+        isValid: true,
+        isTrusted: true,
+        expiresAt: new Date(Date.now() + 86400_000),
+        userAgent: NATIVE_USER_AGENT,
+        browserName: null,
+      }),
+    });
+    const expiredToken = signExpiredJwt(user.id);
+    const middleware = new AuthMiddleware(prisma as never);
+
+    const ctx = await middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession, NATIVE_USER_AGENT);
+
+    expect(ctx.isAuthenticated).toBe(true);
+    expect(ctx.userId).toBe(user.id);
+  });
+
+  // task-1-fix-round-5 — décision produit : « une application à la fois ».
+  // Un jeton expiré obtenu depuis une application ne doit JAMAIS être
+  // rattrapé par une session de confiance enregistrée depuis une AUTRE
+  // application — ni web → mobile, ni l'inverse.
+  it('throws when the trusted session was created by a DIFFERENT application (web request, native session) — round 5', async () => {
+    const user = createTestUser();
+    const rawSession = 'trusted-session-token-cross-app';
+    const prisma = createMockPrisma({
+      userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
+      sessionFindFirst: (jest.fn() as jest.Mock<any>).mockResolvedValue({
+        id: 'session-3',
+        sessionToken: hashSessionToken(rawSession),
+        userId: user.id,
+        isValid: true,
+        isTrusted: true,
+        expiresAt: new Date(Date.now() + 86400_000),
+        // Session de confiance enregistrée depuis l'app NATIVE...
+        userAgent: NATIVE_USER_AGENT,
+        browserName: null,
+      }),
+    });
+    const expiredToken = signExpiredJwt(user.id);
+    const middleware = new AuthMiddleware(prisma as never);
+
+    // ...présentée par une requête WEB — refus, quand bien même le jeton et
+    // la session correspondent tous les deux au même utilisateur.
+    await expect(
+      middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession, WEB_USER_AGENT)
+    ).rejects.toThrow('Invalid JWT token');
+  });
+
+  it('throws when the trusted session was created by a DIFFERENT application (native request, web session) — round 5', async () => {
+    const user = createTestUser();
+    const rawSession = 'trusted-session-token-cross-app-2';
+    const prisma = createMockPrisma({
+      userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
+      sessionFindFirst: (jest.fn() as jest.Mock<any>).mockResolvedValue({
+        id: 'session-4',
+        sessionToken: hashSessionToken(rawSession),
+        userId: user.id,
+        isValid: true,
+        isTrusted: true,
+        expiresAt: new Date(Date.now() + 86400_000),
+        // Session de confiance enregistrée depuis le navigateur web...
+        userAgent: WEB_USER_AGENT,
+        browserName: WEB_BROWSER_NAME,
+      }),
+    });
+    const expiredToken = signExpiredJwt(user.id);
+    const middleware = new AuthMiddleware(prisma as never);
+
+    // ...présentée par une requête de l'app NATIVE — refus.
+    await expect(
+      middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession, NATIVE_USER_AGENT)
+    ).rejects.toThrow('Invalid JWT token');
+  });
+
+  // task-1-fix-round-5 — sens de la prudence : si la nature de l'application
+  // ne peut pas être établie (champ absent — session ancienne créée avant
+  // que `userAgent`/`browserName` soient renseignés), refuse le repli
+  // plutôt que de l'accorder.
+  it('throws when the trusted session\'s application nature is indeterminable (no userAgent captured — round 5 prudence)', async () => {
+    const user = createTestUser();
+    const rawSession = 'trusted-session-token-legacy';
+    const prisma = createMockPrisma({
+      userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
+      sessionFindFirst: (jest.fn() as jest.Mock<any>).mockResolvedValue({
+        id: 'session-5',
+        sessionToken: hashSessionToken(rawSession),
+        userId: user.id,
+        isValid: true,
+        isTrusted: true,
+        expiresAt: new Date(Date.now() + 86400_000),
+        // Session « ancienne » : aucun signal d'application capturé à la
+        // création — pas `null` non plus dans un vrai document Mongo, mais
+        // un mock reflète ici l'absence par `undefined`.
+        userAgent: null,
+        browserName: null,
+      }),
+    });
+    const expiredToken = signExpiredJwt(user.id);
+    const middleware = new AuthMiddleware(prisma as never);
+
+    await expect(
+      middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession, WEB_USER_AGENT)
+    ).rejects.toThrow('Invalid JWT token');
+  });
+
+  // task-1-fix-round-5 — test de non-régression qui manquait à ce niveau
+  // (déjà couvert à `routes/uploads/tus-handler.ts` depuis le round 4) : un
+  // jeton AUTHENTIQUE (signature valide) mais EXPIRÉ, décodant vers le
+  // `userId` d'un AUTRE utilisateur (la victime), présenté avec la PROPRE
+  // session de confiance (valide, MÊME application) de l'appelant. Bloqué
+  // PAR CONSTRUCTION du schéma — `UserSession.sessionToken` est `@unique`
+  // GLOBALEMENT (`packages/shared/prisma/schema.prisma`) — mais rien ne le
+  // documentait ni ne le gardait à CE niveau (`middleware/auth.ts`). Le mock
+  // ci-dessous simule fidèlement cette contrainte : une seule ligne existe
+  // pour ce `sessionToken` (celle de l'attaquant), et le filtre applique un
+  // AND sur TOUTES les clés de `where` — pas un stub uniforme qui ignore
+  // `where` et ne prouverait rien.
+  it("refuse le JWT authentique-mais-expiré d'AUTRUI, même accompagné de la PROPRE session de confiance (MÊME application) de l'appelant — non-régression round 5", async () => {
+    const ATTACKER_USER_ID = 'attacker-user-1';
+    const VICTIM_USER_ID = 'victim-user-1';
+    const attackerRawSessionToken = 'attacker-own-trusted-session-token';
+    const storedRow = {
+      id: 'session-attacker',
+      userId: ATTACKER_USER_ID,
+      sessionToken: hashSessionToken(attackerRawSessionToken),
+      isValid: true,
+      isTrusted: true,
+      expiresAt: new Date(Date.now() + 86400_000),
+      userAgent: WEB_USER_AGENT,
+      browserName: WEB_BROWSER_NAME,
+    };
+    const sessionFindFirst = (jest.fn() as jest.Mock<any>).mockImplementation(
+      ({ where }: { where: Record<string, unknown> }) => {
+        const matches = Object.entries(where).every(([key, expected]) => {
+          if (key === 'expiresAt') return true; // fraîcheur, non simulée ici
+          return (storedRow as Record<string, unknown>)[key] === expected;
+        });
+        return Promise.resolve(matches ? storedRow : null);
+      }
+    );
+    const prisma = createMockPrisma({ sessionFindFirst });
+
+    // Signature AUTHENTIQUE (même secret que le serveur) — pas un jeton
+    // forgé — décodant vers l'identifiant de la VICTIME, simplement expiré.
+    const victimAuthenticExpiredToken = signExpiredJwt(VICTIM_USER_ID);
+    const middleware = new AuthMiddleware(prisma as never);
+
+    await expect(
+      middleware.createAuthContext(`Bearer ${victimAuthenticExpiredToken}`, attackerRawSessionToken, WEB_USER_AGENT)
+    ).rejects.toThrow('Invalid JWT token');
+
+    expect(sessionFindFirst).toHaveBeenCalledWith({
+      where: {
+        sessionToken: hashSessionToken(attackerRawSessionToken),
+        userId: VICTIM_USER_ID,
+        isValid: true,
+        isTrusted: true,
+        expiresAt: { gt: expect.any(Date) },
+      },
+    });
   });
 });
 
@@ -905,6 +1087,8 @@ describe('AuthMiddleware — fire-and-forget catch callbacks', () => {
         isValid: true,
         isTrusted: true,
         expiresAt: new Date(Date.now() + 86400_000),
+        userAgent: WEB_USER_AGENT,
+        browserName: WEB_BROWSER_NAME,
       }),
     });
     (prisma as any).userSession.update = sessionUpdateMock;
@@ -912,7 +1096,7 @@ describe('AuthMiddleware — fire-and-forget catch callbacks', () => {
     const expiredToken = signExpiredJwt(user.id);
     const middleware = new AuthMiddleware(prisma as never);
 
-    const ctx = await middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession);
+    const ctx = await middleware.createAuthContext(`Bearer ${expiredToken}`, rawSession, WEB_USER_AGENT);
 
     await new Promise(r => setImmediate(r));
     expect(ctx.isAuthenticated).toBe(true);

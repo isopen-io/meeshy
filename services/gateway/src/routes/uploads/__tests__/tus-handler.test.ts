@@ -118,6 +118,17 @@ const JWT_SECRET = 'test-secret-tus-handler';
 const ORIGINAL_JWT_SECRET = process.env.JWT_SECRET;
 const ORIGINAL_UPLOAD_PATH = process.env.UPLOAD_PATH;
 
+// task-1-fix-round-5 — fixtures vérifiées empiriquement (`ua-parser-js`, cf.
+// commentaire de `classifyApplicationSignal` dans `middleware/auth.ts`) :
+// AUCUN client Meeshy natif (iOS via `URLSession` par défaut, Android via
+// OkHttp par défaut) ne produit de `browser.name` reconnu — un vrai
+// navigateur (web) en produit TOUJOURS un. TUS est le protocole des gros
+// téléversements resumable — le cas d'usage principal des apps natives —
+// d'où le choix de NATIVE_USER_AGENT comme fixture par défaut ci-dessous.
+const NATIVE_USER_AGENT = 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0';
+const WEB_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
 // ─── Fastify factice minimal (uniquement `.prisma`, seule dépendance lue) ──
 
 function buildFakeFastify(prisma: any) {
@@ -470,9 +481,9 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
   describe('JWT expiré + X-Session-Token — repli par session de confiance (task-1-fix-round-3, I3)', () => {
     const TRUSTED_RAW_SESSION_TOKEN = 'trusted-device-session-token';
 
-    it('accepte un jeton expiré quand une session de confiance valide existe pour le même utilisateur (cas légitime)', async () => {
+    it('accepte un jeton expiré quand une session de confiance valide existe pour le même utilisateur (cas légitime — même application)', async () => {
       const prisma = buildFakePrisma({
-        trustedSession: { id: 'session-1' },
+        trustedSession: { id: 'session-1', userAgent: NATIVE_USER_AGENT, browserName: null },
       });
       const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
 
@@ -481,6 +492,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
         headers: {
           authorization: `Bearer ${expiredToken}`,
           'x-session-token': TRUSTED_RAW_SESSION_TOKEN,
+          'user-agent': NATIVE_USER_AGENT,
         },
         filename: 'voice.webm',
         filetype: 'audio/webm',
@@ -500,6 +512,64 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
           expiresAt: { gt: expect.any(Date) },
         },
       });
+    });
+
+    // task-1-fix-round-5 — décision produit : « une application à la fois ».
+    it("refuse un jeton expiré quand la session de confiance provient d'une AUTRE application (web vs native — round 5)", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({
+        // Session de confiance enregistrée depuis le NAVIGATEUR web...
+        trustedSession: { id: 'session-1', userAgent: WEB_USER_AGENT, browserName: 'Chrome' },
+      });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onUploadCreate(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${expiredToken}`,
+              'x-session-token': TRUSTED_RAW_SESSION_TOKEN,
+              // ...présentée par une requête de l'app NATIVE — refus.
+              'user-agent': NATIVE_USER_AGENT,
+            }),
+          },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    // task-1-fix-round-5 — sens de la prudence : nature de l'application
+    // indéterminable (session ancienne, aucun User-Agent capturé à la
+    // création) ⇒ refuse plutôt que d'accorder.
+    it("refuse un jeton expiré quand la nature de l'application de la session de confiance est indéterminable (round 5 prudence)", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({
+        trustedSession: { id: 'session-1', userAgent: null, browserName: null },
+      });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onUploadCreate(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${expiredToken}`,
+              'x-session-token': TRUSTED_RAW_SESSION_TOKEN,
+              'user-agent': NATIVE_USER_AGENT,
+            }),
+          },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
 
     it('refuse un jeton expiré quand le X-Session-Token fourni ne correspond à aucune session de confiance', async () => {
@@ -599,6 +669,11 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
         sessionToken: hashSessionToken(ATTACKER_RAW_SESSION_TOKEN),
         isValid: true,
         isTrusted: true,
+        // task-1-fix-round-5 — la session de l'attaquant provient de l'app
+        // native ; le « contrôle positif » ci-dessous présente le même
+        // User-Agent, pour rester dans la MÊME application.
+        userAgent: NATIVE_USER_AGENT,
+        browserName: null,
       };
       const prisma = buildFakePrisma();
       prisma.userSession.findFirst = jest.fn<any>().mockImplementation(({ where }: any) => {
@@ -606,7 +681,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
           if (key === 'expiresAt') return true; // fraîcheur, non simulée ici
           return (storedRow as Record<string, unknown>)[key] === expected;
         });
-        return Promise.resolve(matches ? { id: storedRow.id } : null);
+        return Promise.resolve(matches ? storedRow : null);
       });
       return prisma;
     }
@@ -654,6 +729,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
         headers: {
           authorization: `Bearer ${jwt.sign({ userId: ATTACKER_USER_ID }, JWT_SECRET, { expiresIn: -10 })}`,
           'x-session-token': ATTACKER_RAW_SESSION_TOKEN,
+          'user-agent': NATIVE_USER_AGENT,
         },
         filename: 'voice.webm',
         filetype: 'audio/webm',
@@ -801,7 +877,9 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
 
     it('autorise le propriétaire dont le JWT a expiré PENDANT une reprise, via sa session de confiance (parité I3)', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
-      const prisma = buildFakePrisma({ trustedSession: { id: 'session-1' } });
+      const prisma = buildFakePrisma({
+        trustedSession: { id: 'session-1', userAgent: NATIVE_USER_AGENT, browserName: null },
+      });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
       seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
@@ -814,11 +892,42 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
             headers: headersFrom({
               authorization: `Bearer ${expiredOwnerToken}`,
               'x-session-token': 'trusted-device-session-token',
+              'user-agent': NATIVE_USER_AGENT,
             }),
           },
           'owned-upload'
         )
       ).resolves.toBeUndefined();
+    });
+
+    // task-1-fix-round-5 — parité I3/I1 : la règle « une application à la
+    // fois » s'applique aussi sur la reprise (PATCH/HEAD/DELETE), pas
+    // seulement à la création (POST).
+    it("refuse le propriétaire dont le JWT a expiré PENDANT une reprise si sa session de confiance provient d'une AUTRE application (round 5)", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFakePrisma({
+        // Session de confiance enregistrée depuis le navigateur web...
+        trustedSession: { id: 'session-1', userAgent: WEB_USER_AGENT, browserName: 'Chrome' },
+      });
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+
+      const expiredOwnerToken = jwt.sign({ userId: 'owner-1' }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onIncomingRequest(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${expiredOwnerToken}`,
+              'x-session-token': 'trusted-device-session-token',
+              // ...la reprise vient de l'app NATIVE — refus.
+              'user-agent': NATIVE_USER_AGENT,
+            }),
+          },
+          'owned-upload'
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
     });
 
     it("refuse un jeton FORGÉ même avec une session de confiance valide en base (le repli ne couvre que l'expiration, parité I3)", async () => {

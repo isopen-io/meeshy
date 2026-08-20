@@ -78,10 +78,13 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
    * (`jwt.TokenExpiredError` — jsonwebtoken vérifie la signature AVANT
    * l'expiration, donc ce cas ne passe jamais par une signature invalide)
    * obtient le repli, et seulement si une session de confiance ACTIVE existe
-   * en base pour ce `userId` précis, reprise TELLE QUELLE de
-   * `middleware/auth.ts` (`findTrustedSession`). Une signature invalide reste
-   * refusée sans recours, qu'une session de confiance existe ou non — la
-   * confiance vient de la session, jamais du JWT.
+   * en base pour ce `userId` précis ET provient de la MÊME application que
+   * la requête en cours (task-1-fix-round-5, « une application à la fois » —
+   * `User-Agent` de la requête transmis à `findTrustedSession`), reprise
+   * TELLE QUELLE de `middleware/auth.ts` (`findTrustedSession`). Une
+   * signature invalide reste refusée sans recours, qu'une session de
+   * confiance existe ou non — la confiance vient de la session, jamais du
+   * JWT.
    *
    * Retourne `null` sur tout échec d'authentification — ne lève jamais
    * elle-même : chaque appelant choisit son propre code HTTP.
@@ -90,6 +93,8 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
     const h = headers as any;
     const authHeader = h?.get?.('authorization') ?? h?.authorization;
     const sessionToken = h?.get?.('x-session-token') ?? h?.['x-session-token'];
+    const requestUserAgentRaw = h?.get?.('user-agent') ?? h?.['user-agent'];
+    const requestUserAgent = requestUserAgentRaw ? String(requestUserAgentRaw) : null;
 
     if (authHeader) {
       const token = String(authHeader).replace(/^Bearer\s+/i, '');
@@ -102,7 +107,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
           const decoded = jwt.decode(token) as { userId?: string; sub?: string } | null;
           const candidateUserId = decoded?.userId || decoded?.sub || null;
           const trustedSession = candidateUserId
-            ? await findTrustedSession(prisma, { userId: candidateUserId, sessionToken: String(sessionToken) })
+            ? await findTrustedSession(prisma, { userId: candidateUserId, sessionToken: String(sessionToken), requestUserAgent })
             : null;
 
           if (!trustedSession) {

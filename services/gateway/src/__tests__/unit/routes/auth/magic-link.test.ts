@@ -51,8 +51,10 @@ jest.mock('@meeshy/shared/types', () => ({
 }));
 
 const mockCreateUnifiedAuthMiddleware = jest.fn();
+const mockFindTrustedSession = jest.fn<any>().mockResolvedValue(null);
 jest.mock('../../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: (...args: any[]) => mockCreateUnifiedAuthMiddleware(...args),
+  findTrustedSession: (...args: unknown[]) => mockFindTrustedSession(...args),
 }));
 
 jest.mock('../../../../routes/auth/types', () => ({
@@ -390,9 +392,15 @@ describe('POST /refresh — signature forgée', () => {
       userId: USER_ID, username: 'alice', role: 'USER',
     });
 
+    // task-1-fix-round-5 — `/refresh` délègue désormais à `findTrustedSession`
+    // (`middleware/auth.ts`), qui inclut la règle « une application à la
+    // fois ». Ce test vérifie le CÂBLAGE de la route (elle accepte quand
+    // `findTrustedSession` trouve une session) ; la logique de classification
+    // web/native elle-même est testée à sa source (`auth-extended.test.ts`).
+    mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
     const prisma = makePrisma({
       userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: 'sess-1', userId: USER_ID, expiresAt: new Date() }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -407,13 +415,51 @@ describe('POST /refresh — signature forgée', () => {
     expect(res.statusCode).toBe(200);
     await app.close();
   });
+
+  // task-1-fix-round-5 — la règle « une application à la fois » vaut ici
+  // aussi : une signature invalide couverte par une session de confiance
+  // d'une AUTRE application doit rester refusée. `findTrustedSession` porte
+  // déjà cette décision ; ce test prouve que `/refresh` respecte bien son
+  // verdict plutôt que de le court-circuiter.
+  it("refuse une signature invalide quand findTrustedSession refuse (repli d'une autre application)", async () => {
+    const jwt = await import('jsonwebtoken');
+    (jwt.verify as jest.Mock<any>).mockImplementationOnce(() => {
+      throw new Error('invalid signature');
+    });
+    (jwt.decode as jest.Mock<any>).mockReturnValueOnce({
+      userId: USER_ID, username: 'alice', role: 'USER',
+    });
+
+    mockFindTrustedSession.mockResolvedValueOnce(null);
+    const prisma = makePrisma();
+
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'jeton-perime', sessionToken: 'session-autre-application' },
+      headers: { 'user-agent': 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(mockFindTrustedSession).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        userId: USER_ID,
+        sessionToken: 'session-autre-application',
+        requestUserAgent: 'Meeshy/1 CFNetwork/1408.0.4 Darwin/22.5.0',
+      })
+    );
+    await app.close();
+  });
 });
 
 describe('POST /refresh — with trusted session', () => {
   it('returns 200 and slides session TTL', async () => {
+    mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
     const prisma = makePrisma({
       userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: 'sess-1', userId: USER_ID, expiresAt: new Date() }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -434,10 +480,11 @@ describe('POST /refresh — with trusted session', () => {
   /// window des sessions trusted n'a JAMAIS fonctionné : elles expirent à
   /// leur TTL initial malgré l'activité de l'utilisateur.
   it('slides the session using the SCHEMA field lastActivityAt (not User.lastActiveAt)', async () => {
+    mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
     const update = jest.fn<any>().mockResolvedValue({});
     const prisma = makePrisma({
       userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: 'sess-1', userId: USER_ID, expiresAt: new Date() }),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
         update,
       },
     });
@@ -453,6 +500,36 @@ describe('POST /refresh — with trusted session', () => {
     expect(arg.data.expiresAt).toBeInstanceOf(Date);
     expect(arg.data.lastActivityAt).toBeInstanceOf(Date);
     expect(arg.data.lastActiveAt).toBeUndefined();
+    await app.close();
+  });
+
+  // task-1-fix-round-5 — preuve que le User-Agent de la requête EN COURS est
+  // bien extrait et transmis à `findTrustedSession` (et non ignoré/oublié),
+  // seul canal par lequel la route peut établir « la même application ».
+  it('passe le User-Agent de la requête à findTrustedSession (câblage round 5)', async () => {
+    mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
+    const prisma = makePrisma({
+      userSession: {
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+    await app.inject({
+      method: 'POST',
+      url: '/refresh',
+      payload: { token: 'valid-jwt-token', sessionToken: 'my-session-token' },
+      headers: { 'user-agent': 'Mozilla/5.0 Chrome/126.0.0.0' },
+    });
+
+    expect(mockFindTrustedSession).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({
+        userId: USER_ID,
+        sessionToken: 'my-session-token',
+        requestUserAgent: 'Mozilla/5.0 Chrome/126.0.0.0',
+      })
+    );
     await app.close();
   });
 });

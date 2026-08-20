@@ -9,6 +9,7 @@ import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { parseUserAgent } from '../services/GeoIPService';
 
 const authLogger = enhancedLogger.child({ module: 'auth' });
 
@@ -86,11 +87,50 @@ export type UnifiedAuthRequest = FastifyRequest & {
 
 // ===== REPLI PAR SESSION DE CONFIANCE =====
 
+export type ApplicationSignal = 'web' | 'native' | null;
+
+/**
+ * Classifie un couple (User-Agent brut, nom de navigateur reconnu) en
+ * signal d'application — task-1-fix-round-5, décision produit « une
+ * application à la fois » : le repli de session de confiance ne doit
+ * rattraper un JWT expiré que si les deux justificatifs proviennent de LA
+ * MÊME application (jamais web ↔ mobile).
+ *
+ * `'web'` = navigateur reconnu (`browserName` peuplé) ; `'native'` =
+ * application iOS/Android (aucun navigateur reconnu) ; `null` =
+ * indéterminable (aucun User-Agent capturé) — le seul état où la prudence
+ * du round 5 s'applique : refuser plutôt qu'accorder.
+ *
+ * Discriminant choisi après vérification EMPIRIQUE (`ua-parser-js`, le même
+ * parseur que `GeoIPService.parseUserAgent`, qui peuple déjà
+ * `UserSession.browserName` à la création — aucune logique dupliquée) :
+ * - iOS (`URLSession` par défaut, aucun override) → `"Meeshy/1
+ *   CFNetwork/1408.0.4 Darwin/22.5.0"` → AUCUN navigateur détecté.
+ * - Android (OkHttp par défaut) → `"okhttp/4.12.0"` → AUCUN navigateur
+ *   détecté.
+ * - Web mobile (Safari sur iPhone) → `browser.name: "Mobile Safari"`.
+ * - Web desktop (Chrome/Firefox/…) → `browser.name` toujours peuplé.
+ *
+ * `browserName` sépare donc PARFAITEMENT ces quatre cas réels, alors que
+ * `deviceType`/`isMobile` ne le peuvent PAS : Safari mobile ET l'app iOS
+ * native obtiennent toutes deux `isMobile: true` (forme de l'appareil, pas
+ * nature de l'application) — `GeoIPService.mergeClientHeaders` force
+ * `type: 'mobile'` sur `X-Meeshy-Platform: ios` SANS jamais toucher
+ * `browser`. `browserName` (présence/absence), contrairement à une
+ * comparaison exacte de chaîne d'agent utilisateur, reste stable d'une mise
+ * à jour de navigateur/OS à l'autre — seul `browserVersion` change.
+ */
+function classifyApplicationSignal(userAgent: string | null, browserName: string | null): ApplicationSignal {
+  if (!userAgent) return null;
+  return browserName ? 'web' : 'native';
+}
+
 /**
  * Politique UNIQUE de repli d'un JWT expiré vers une session de confiance —
  * extraite pour que tout chemin d'upload/route qui n'appelle pas
  * `createAuthContext` directement (task-1-fix-round-3, I3 :
- * `routes/uploads/tus-handler.ts`) puisse reprendre EXACTEMENT cette
+ * `routes/uploads/tus-handler.ts` ; task-1-fix-round-5 : `routes/auth/
+ * magic-link.ts`, `POST /refresh`) puisse reprendre EXACTEMENT cette
  * politique plutôt que d'en réinventer une divergente.
  *
  * AVANT (round 3) : `tus-handler.ts` testait `if (authHeader) {…} else if
@@ -99,20 +139,22 @@ export type UnifiedAuthRequest = FastifyRequest & {
  * envoie délibérément les deux en-têtes (`createAuthHeaders`,
  * `apps/web/lib/token-utils.ts`) précisément pour permettre ce repli.
  *
- * Ne vérifie qu'une chose : une session de confiance ACTIVE, liée au MÊME
- * `userId`, existe en base pour ce jeton de session. Ne devient jamais un
- * mécanisme d'authentification à lui seul — l'appelant doit déjà savoir QUEL
- * `userId` chercher, et ne doit le faire qu'après avoir constaté une
- * expiration (`jwt.TokenExpiredError`), jamais après une signature invalide :
- * un jeton forgé reste refusé sans recours, qu'une session de confiance
- * existe ou non — la confiance vient de la session, jamais du JWT.
+ * Vérifie deux choses : une session de confiance ACTIVE, liée au MÊME
+ * `userId`, existe en base pour ce jeton de session — ET (task-1-fix-round-5)
+ * cette session provient de la MÊME application que la requête en cours
+ * (`requestUserAgent`). Ne devient jamais un mécanisme d'authentification à
+ * lui seul — l'appelant doit déjà savoir QUEL `userId` chercher, et ne doit
+ * le faire qu'après avoir constaté une expiration (`jwt.TokenExpiredError`),
+ * jamais après une signature invalide : un jeton forgé reste refusé sans
+ * recours, qu'une session de confiance existe ou non — la confiance vient de
+ * la session, jamais du JWT.
  */
 export async function findTrustedSession(
   prisma: Pick<PrismaClient, 'userSession'>,
-  params: { userId: string; sessionToken: string }
+  params: { userId: string; sessionToken: string; requestUserAgent: string | null }
 ): Promise<{ id: string } | null> {
   const hashedSessionToken = hashSessionToken(params.sessionToken);
-  return prisma.userSession.findFirst({
+  const session = await prisma.userSession.findFirst({
     where: {
       sessionToken: hashedSessionToken,
       userId: params.userId,
@@ -121,6 +163,20 @@ export async function findTrustedSession(
       expiresAt: { gt: new Date() },
     },
   });
+
+  if (!session) return null;
+
+  const requestBrowserName = params.requestUserAgent
+    ? parseUserAgent(params.requestUserAgent)?.browser ?? null
+    : null;
+  const requestSignal = classifyApplicationSignal(params.requestUserAgent, requestBrowserName);
+  const sessionSignal = classifyApplicationSignal(session.userAgent, session.browserName);
+
+  if (requestSignal === null || sessionSignal === null || requestSignal !== sessionSignal) {
+    return null;
+  }
+
+  return { id: session.id };
 }
 
 // ===== SERVICE =====
@@ -133,14 +189,15 @@ export class AuthMiddleware {
 
   async createAuthContext(
     authorizationHeader?: string,
-    sessionToken?: string
+    sessionToken?: string,
+    requestUserAgent?: string | null
   ): Promise<UnifiedAuthContext> {
     const jwtToken = authorizationHeader?.startsWith('Bearer ')
       ? authorizationHeader.slice(7)
       : null;
 
     if (jwtToken) {
-      return this.createRegisteredUserContext(jwtToken, sessionToken);
+      return this.createRegisteredUserContext(jwtToken, sessionToken, requestUserAgent);
     }
 
     if (sessionToken) {
@@ -150,7 +207,11 @@ export class AuthMiddleware {
     return this.createUnauthenticatedContext();
   }
 
-  private async createRegisteredUserContext(jwtToken: string, sessionToken?: string): Promise<UnifiedAuthContext> {
+  private async createRegisteredUserContext(
+    jwtToken: string,
+    sessionToken?: string,
+    requestUserAgent?: string | null
+  ): Promise<UnifiedAuthContext> {
     try {
       let jwtPayload: Record<string, unknown>;
       let jwtExpired = false;
@@ -189,6 +250,7 @@ export class AuthMiddleware {
         const trustedSession = await findTrustedSession(this.prisma, {
           userId: jwtUserId,
           sessionToken,
+          requestUserAgent: requestUserAgent ?? null,
         });
 
         if (!trustedSession) {
@@ -516,7 +578,8 @@ export function createUnifiedAuthMiddleware(
     try {
       const authContext = await authMiddleware.createAuthContext(
         request.headers.authorization,
-        request.headers['x-session-token'] as string
+        request.headers['x-session-token'] as string,
+        request.headers['user-agent'] as string | undefined
       );
 
       if (options.requireAuth && !authContext.isAuthenticated) {
