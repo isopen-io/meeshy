@@ -224,8 +224,11 @@ export function registerSharingRoutes(
         data: { linkId: finalLinkId }
       });
 
-      // Retour compatible avec le frontend de service conversations (string du lien complet)
-      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/join/${finalLinkId}`;
+      // Retour compatible avec le frontend de service conversations (string du lien complet).
+      // `/chat/:linkId` est l'URL canonique (la page qui ouvre la conversation
+      // dans la vue courante) ; `/join/:linkId` ne survit qu'en 308 pour les
+      // liens déjà en circulation — un lien neuf ne prend pas le détour.
+      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${finalLinkId}`;
       return sendSuccess(reply, {
         link: inviteLink,
         code: finalLinkId,

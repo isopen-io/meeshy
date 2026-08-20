@@ -204,6 +204,11 @@ public struct CreatedShareLink {
     public let conversationId: String
     public let name: String?
     public let isActive: Bool
+
+    /// L'URL web canonique du lien — `/chat/<slug>` (voir `MyShareLink.joinUrl`).
+    /// Les feuilles de partage l'utilisent au lieu de fabriquer l'URL à la main
+    /// (deux d'entre elles codaient `https://meeshy.me/join/…` en dur).
+    public var joinUrl: String { "\(MeeshyConfig.shared.webOrigin)/chat/\(identifier ?? linkId)" }
 }
 
 // MARK: - User's Own Links (authenticated)
@@ -221,7 +226,11 @@ public struct MyShareLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let conversationTitle: String?
 
     public var displayName: String { name ?? identifier ?? linkId }
-    public var joinUrl: String { "\(MeeshyConfig.shared.webOrigin)/join/\(identifier ?? linkId)" }
+    /// `/chat/<slug>` est l'URL canonique d'un lien de partage — la page web qui
+    /// ouvre la conversation dans la vue courante ET un Universal Link revendiqué
+    /// par l'app (`DeepLinkRouter` → `.chatLink`, traité comme `.joinLink`).
+    /// `/join/<slug>` ne survit qu'en 308 pour les liens déjà en circulation.
+    public var joinUrl: String { "\(MeeshyConfig.shared.webOrigin)/chat/\(identifier ?? linkId)" }
 }
 
 public struct MyShareLinkStats: Codable, Sendable, CacheIdentifiable {

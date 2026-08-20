@@ -38,12 +38,12 @@ class CreatedShareLinkPresentationTest {
     @Test
     fun joinUrl_buildsFromTheWebOriginAndLinkId() {
         assertThat(created(linkId = "abc123").joinUrl("https://meeshy.me"))
-            .isEqualTo("https://meeshy.me/join/abc123")
+            .isEqualTo("https://meeshy.me/chat/abc123")
     }
 
     @Test
     fun joinUrl_dropsATrailingSlashOnTheOriginSoThePathNeverDoubles() {
         assertThat(created(linkId = "abc123").joinUrl("https://meeshy.me/"))
-            .isEqualTo("https://meeshy.me/join/abc123")
+            .isEqualTo("https://meeshy.me/chat/abc123")
     }
 }

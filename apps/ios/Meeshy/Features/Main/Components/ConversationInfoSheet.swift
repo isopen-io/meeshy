@@ -1080,7 +1080,7 @@ struct ConversationInfoSheet: View {
                 allowAnonymousMessages: true
             )
             let result = try await ShareLinkService.shared.createShareLink(request: request)
-            guard let shareURL = URL(string: "https://meeshy.me/join/\(result.linkId)") else {
+            guard let shareURL = URL(string: result.joinUrl) else {
                 throw URLError(.badURL)
             }
             await MainActor.run { shareableLink = ShareableLink(url: shareURL) }

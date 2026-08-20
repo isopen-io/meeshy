@@ -55,8 +55,7 @@ struct InviteFriendsSheet: View {
     @State private var shareableLink: ShareableLink?
 
     private var shareURL: String? {
-        guard let link = createdLink else { return nil }
-        return "https://meeshy.me/join/\(link.identifier ?? link.linkId)"
+        createdLink?.joinUrl
     }
 
     private var defaultInviteMessage: String {

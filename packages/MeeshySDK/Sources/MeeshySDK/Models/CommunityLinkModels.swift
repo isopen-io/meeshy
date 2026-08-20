@@ -18,7 +18,9 @@ public struct CommunityLink: Codable, Identifiable, Sendable, CacheIdentifiable 
         self.id = id
         self.name = name
         self.identifier = identifier
-        self.joinUrl = "\(baseUrl)/join/\(identifier)"
+        // `/chat/<identifier>` — l'URL canonique de partage (même règle que
+        // `MyShareLink.joinUrl` ; `/join` n'est plus qu'une 308 legacy).
+        self.joinUrl = "\(baseUrl)/chat/\(identifier)"
         self.memberCount = memberCount
         self.isActive = isActive
         self.createdAt = createdAt

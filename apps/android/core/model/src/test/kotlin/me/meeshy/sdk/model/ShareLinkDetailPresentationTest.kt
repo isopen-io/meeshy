@@ -49,7 +49,7 @@ class ShareLinkDetailPresentationTest {
     @Test
     fun joinUrl_reusesTheSharedBuilder() {
         assertThat(present(link(identifier = "party")).joinUrl)
-            .isEqualTo("https://meeshy.me/join/party")
+            .isEqualTo("https://meeshy.me/chat/party")
     }
 
     @Test

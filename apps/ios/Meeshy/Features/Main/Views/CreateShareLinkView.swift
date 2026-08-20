@@ -142,7 +142,7 @@ struct CreateShareLinkView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     formTextField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug)
                     if !customSlug.isEmpty {
-                        Text("meeshy.me/join/\(customSlug.lowercased())")
+                        Text("meeshy.me/chat/\(customSlug.lowercased())")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.8))
                             .padding(.horizontal, 14)

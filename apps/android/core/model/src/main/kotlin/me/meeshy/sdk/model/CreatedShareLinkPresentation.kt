@@ -15,12 +15,14 @@ public val CreatedShareLink.displayName: String
     get() = name?.takeIf { it.isNotBlank() } ?: linkId
 
 /**
- * The public, shareable join URL — `{webOrigin}/join/{linkId}`. Mirrors
+ * The public, shareable URL — `{webOrigin}/chat/{linkId}`, the canonical
+ * share page (`/join` only survives as a 308 redirect for links already in
+ * the wild — a fresh link never takes the detour). Mirrors
  * [MyShareLink.joinUrl]: a trailing slash on [webOrigin] is dropped so the path
  * never doubles up. The gateway sets [CreatedShareLink.linkId] to the custom
  * identifier when one was requested, so this is the same slug the owner chose.
  */
 public fun CreatedShareLink.joinUrl(webOrigin: String): String {
     val base = webOrigin.trimEnd('/')
-    return "$base/join/$linkId"
+    return "$base/chat/$linkId"
 }

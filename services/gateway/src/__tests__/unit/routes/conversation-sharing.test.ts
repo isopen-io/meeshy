@@ -406,7 +406,10 @@ describe('POST /conversations/:id/new-link', () => {
     await route.handler(req, reply);
     expect(reply._body?.data).toMatchObject({
       code: 'final-link-id',
-      link: expect.stringContaining('/join/final-link-id'),
+      // `/chat/:linkId` est l'URL canonique d'un lien de partage — `/join`
+      // n'est plus qu'une redirection 308 : le lien FABRIQUÉ ne doit plus
+      // jamais prendre le détour.
+      link: expect.stringContaining('/chat/final-link-id'),
       shareLink: expect.objectContaining({ linkId: 'final-link-id' }),
     });
   });
