@@ -1618,7 +1618,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       HIDDEN, LocalFireDepartment/accent/italic pour VIEW_ONCE, Timer/standardColor pour
       EPHEMERAL_ACTIVE ; 7 strings × 4 locales portées de `Localizable.xcstrings` iOS —
       partial-locale fallback via labels defaultés à `""` retombant sur le body standard) ;
-      presence/story-ring/mood pending
+      **story-ring done** (slice `conversation-row-story-ring`, 2026-08-20 : port iOS
+      `StoryViewModel.storyRingState(forUserId:)` + `ConversationListView.storyRingState(for:)`
+      — pur `:feature:conversations` `ConversationStoryRing.ringFor(userId, groups, now)`
+      applique 3 arms first-match : (1) userId absent OU groupe absent OU
+      `StoryGroup.isFullyExpired(now)` → `StoryRingState.None`, (2) `StoryGroup.hasUnviewed()`
+      → `Unread`, (3) sinon → `Read` ; overload `ringFor(conversation, currentUserId, groups,
+      now)` ajoute le direct-only gate via `otherParticipantUserId` (groupe/communauté/channel/bot
+      → jamais d'anneau) ; `ConversationListUiState.storyGroups` observe le cache-first
+      `StoryRepository.storiesStream()` via `toStoryGroups` — un sync-error laisse les groupes
+      précédents en place, jamais un wipe ; `storyRingFor(conversation, now)` délègue au pur
+      résolveur ; la ligne `MeeshyAvatar(..., storyRing = state.storyRingFor(...))` remplace le
+      `StoryRingState.None` codé en dur, le peer d'un DM affiche maintenant l'anneau non-vu/vu
+      exactement comme sur iOS) ; presence/mood pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,

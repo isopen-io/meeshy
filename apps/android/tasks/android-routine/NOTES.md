@@ -5,6 +5,40 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-20 — a UI parameter already accepted the affordance; the "gap" was a cold caller
+
+Slice `conversation-row-story-ring` (see PROGRESS.md). `MeeshyAvatar` had accepted `storyRing:
+StoryRingState` for weeks (sdk-ui, unit-covered rendering), but no conversation-row caller ever
+passed a non-`None` value — every row's ring was cold no matter what the peer had posted. Grep first
+for the *callers* of a UI affordance before assuming the ring itself needs building: the audit-shot
+that flagged "story ring missing on Android" was reading the row, not the widget. When the audit
+diff and the widget diff disagree, the audit is describing behaviour at the *edge*, not the *center*
+— fix the delegation, not the surface.
+
+## 2026-08-20 — cache-first observation of a repo you don't own: mock its stream in existing VM tests
+
+Slice `conversation-row-story-ring` (see PROGRESS.md). Adding a new dependency (`StoryRepository`)
+to `ConversationListViewModel`'s primary constructor breaks EVERY existing test that instantiates
+the VM — Kotlin's "No value passed for parameter …" compile error, 2 sites here. The instinct is to
+build a fake `StoryRepository`, but its ctor pulls 5 deps you don't need. Use `mockk<StoryRepository>
+(relaxed = true) { every { storiesStream(any(), any()) } returns emptyFlow() }` — one line, the
+observer subscribes, the flow completes, no story groups arrive, every existing behaviour proof
+runs unchanged. The `relaxed = true` on the mock covers every other method the VM might call now or
+in a future slice without breaking those tests each time.
+
+## 2026-08-20 — when a Step-0 PR closes as redundant, don't reopen — verify its head is an ancestor of main
+
+Step 0 of this run merged #3238 first (message-summary-kind), then found #3239 (attachment-ladder)
+had gone `dirty` because both slices had prepended to `PROGRESS.md`/`NOTES.md`. The resolution
+(merge origin/main into the PR branch, strip conflict markers so BOTH sections survive newest-first,
+push) shipped fine — but GitHub didn't auto-transition #3239 to `merged`; a maintainer closed it
+manually after confirming the head commit (`d0e91d3b`) had become an ancestor of `main` via the
+resolved-conflict merge commit and that `ComposerAttachmentLadder.kt`/`ComposerAttachmentTray.kt`/
+`ComposerAttachmentLadderTest.kt` were all present on `origin/main`. Lesson for next time an
+android-routine PR closes "without merging" while your fix was pushed: run `git merge-base
+--is-ancestor <head> origin/main` before treating it as blocked or opening a duplicate. If ancestor
+== true, the code shipped, and closed-not-merged is bookkeeping, not a re-do request.
+
 ## 2026-08-20 — "wire doesn't carry X" is a client-side blind spot claim, verify at the serializer
 
 Slice `conversation-row-message-summary-kind` (see PROGRESS.md). Previous run's Next-line hint
