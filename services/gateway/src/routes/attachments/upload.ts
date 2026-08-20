@@ -21,6 +21,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { UploadedFile, UploadTextBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { matchesAudioSignature, matchesImageSignature } from '../../services/attachments/ContentSignature.js';
 
 export async function registerUploadRoutes(
   fastify: FastifyInstance,
@@ -140,8 +141,20 @@ export async function registerUploadRoutes(
           }
 
           for (const file of files) {
-            const isImage = file.mimeType.startsWith('image/');
-            const isAudio = file.mimeType.startsWith('audio/');
+            const declaresImage = file.mimeType.startsWith('image/');
+            const declaresAudio = file.mimeType.startsWith('audio/');
+
+            // Round 1 sécurité (task-1-fix-round-1) : la classification ne se
+            // fie plus SEULEMENT au `Content-Type` déclaré (en-tête multipart
+            // fourni par le client, jamais vérifié) — elle se MÉRITE par les
+            // octets. Sans ça, un PDF déclaré `audio/webm` traversait
+            // l'exemption vocale sans jamais être contrôlé, et un PDF déclaré
+            // `image/png` contournait déjà `allowAnonymousFiles` de la même
+            // façon (faiblesse préexistante, fermée ici du même geste). Un
+            // type déclaré dont la signature ne correspond à aucun conteneur
+            // connu retombe dans la branche « fichier », la plus stricte.
+            const isAudio = declaresAudio && matchesAudioSignature(file.buffer);
+            const isImage = !isAudio && declaresImage && matchesImageSignature(file.buffer);
 
             // Décision produit : la voix suit le droit d'écrire dans la conversation, pas
             // le droit d'envoyer des fichiers — un message vocal n'est jamais soumis à
