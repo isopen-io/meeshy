@@ -12,12 +12,29 @@ import type { Conversation } from '@/types';
 import type { GetConversationsResponse } from '@/services/conversations/types';
 
 /**
+ * Forme d'UNE page stockée par React Query sous
+ * `queryKeys.conversations.infinite()`.
+ *
+ * `deletedConversationIds` / `deletedConversationIdsTruncated` sont des
+ * métadonnées d'ENVELOPPE du batch delta (voir `GetConversationsResponse`), pas
+ * du contenu d'une page : le `queryFn` de la liste pagine par OFFSET
+ * (`updatedSince` absent), où le serveur les rend toujours vides, et le
+ * catch-up delta les consomme à la volée (`mergeDeltaIntoCache`) sans jamais
+ * les stocker dans les pages. Une page du cache ne les porte donc pas — le type
+ * l'affirme, et `rebuildInfiniteConversationPages` n'a plus à fabriquer ces
+ * deux champs morts pour satisfaire un contrat qui ne les concerne pas.
+ */
+export type InfiniteConversationPage = Omit<
+  GetConversationsResponse,
+  'deletedConversationIds' | 'deletedConversationIdsTruncated'
+>;
+
+/**
  * Forme exacte de ce que React Query stocke sous
- * `queryKeys.conversations.infinite()` : une page PAR appel de `queryFn`, donc
- * une `GetConversationsResponse` par page.
+ * `queryKeys.conversations.infinite()` : une page PAR appel de `queryFn`.
  */
 export type InfiniteConversationData = {
-  pages: GetConversationsResponse[];
+  pages: InfiniteConversationPage[];
   pageParams: number[];
 };
 
