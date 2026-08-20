@@ -2,6 +2,87 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation-row story-ring shipped** (slice `conversation-row-story-ring`,
+> feature-parity's Conversations `[~]` rich last-message-preview line — the `story-ring` avatar
+> affordance that same line called out as pending). **Step 0**: two open
+> `claude/apps/android/*` slice PRs were merged into `main` first — #3238
+> (`conversation-row-message-summary-kind`, merged clean) and #3239
+> (`chat-composer-attachment-ladder`, closed as redundant after its head landed via a
+> resolved-conflict merge commit; both sides of the tracking-file conflicts were kept — my slice's
+> paragraph plus the message-summary-kind paragraph, per NOTES-lesson on prepend/newest-first).
+> Branched off `origin/main` (`13bedd98`) as the literal first action. This container **reaches
+> `dl.google.com`** (curl → 200), so the full local gate ran here; SDK bootstrapped
+> `platforms;android-37.0` via cmdline-tools `11076708` on `--channel=3` + the `android-37` symlink
+> alias, Gradle 8.13 via the wrapper.
+>
+> **The gap, re-proved by reading source (scout + independent verify)**: iOS renders a per-row story
+> ring on the direct-conversation avatar (`ConversationListView+Rows.swift:275,296` pipe `storyRingState`
+> into the row's `AvatarContext`), sourced from `StoryViewModel.storyRingState(forUserId:)`
+> (`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1351`) via
+> `ConversationListView.storyRingState(for:)` (`apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:690`).
+> Android's `ConversationListScreen.kt:637` called `MeeshyAvatar(name, containerColor, presence)`
+> WITHOUT a `storyRing` argument — the `MeeshyAvatar` parameter existed
+> (`sdk-ui/.../MeeshyAvatar.kt:67`) and its `Unread`/`Read`/`None` rendering was already unit-covered,
+> but no caller ever fed it a non-`None` value for a conversation row: the ring was cold at every
+> row, no matter what the peer had posted. A `StoryRepository.storiesStream()` cache-first flow was
+> already in the SDK (`apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/story/StoryRepository.kt`)
+> and consumed by `StoriesViewModel`, so the missing plumbing was the *lookup*, not the source.
+>
+> **Pure core (`:feature:conversations`)**: `ConversationStoryRing.ringFor(userId, groups, nowMillis)`
+> — framework-free, 3 first-match arms mirroring iOS EXACTLY: (1) `userId == null` OR no matching
+> group OR `StoryGroup.isFullyExpired(now)` → `StoryRingState.None`; (2) `StoryGroup.hasUnviewed()`
+> → `Unread`; (3) otherwise (all viewed, still active) → `Read`. Row overload
+> `ringFor(conversation, currentUserId, groups, now)` applies the iOS direct-only gate by delegating
+> peer-id resolution to the existing `ApiConversation.otherParticipantUserId` SSOT — a group /
+> community / channel / bot conversation never carries a ring. Every constant (isFullyExpired
+> semantics, hasUnviewed) reuses `me.meeshy.sdk.story.*` — no local re-implementation.
+>
+> **State plumbing (`:feature:conversations`)**: `ConversationListUiState.storyGroups: List<StoryGroup>`
+> new defaulted-empty field; `ConversationListViewModel.observeStoryGroups()` new observer collects
+> `storyRepository.storiesStream()` (cache-first `Fresh/Stale/Syncing` yield their value, `Empty`
+> yields nothing so the ring rests at the previous groups) and reduces via `toStoryGroups(currentUserId
+> = state.value.currentUserId)`. A sync-error is swallowed so a transient network hiccup never wipes
+> the rings — parity iOS `StoryViewModel.storyGroups` (a `@Published` that only writes on success).
+> `ConversationListUiState.storyRingFor(conversation, now)` delegates to the pure resolver.
+>
+> **Wiring (Compose glue, coverage-exempt)**: the row callsite (`ConversationListScreen.kt:231`)
+> gains `storyRing = state.storyRingFor(conversation, System.currentTimeMillis())`, threaded through
+> `ConversationRow` → `ConversationRowContent` → the existing `MeeshyAvatar(..., storyRing = …)`
+> parameter. Zero avatar-render churn — the ring painting already existed, only the value was cold.
+>
+> **Tests**: **+12 `ConversationStoryRingTest`** — per-user rule (null userId → None; missing group
+> → None; empty groups → None; fully-expired group with an unviewed story → None *rule 1 outranks
+> rule 3*; active + unviewed → Unread; active + all-viewed → Read; mixed one-expired-viewed +
+> one-active-viewed → Read *not-fully-expired arm*; multiple groups → the matching one is picked) +
+> row rule (direct with peer's Unread group → Unread; group-type conversation → None; direct with no
+> other participant → None; direct with peer having no active story → None). **+3
+> `ConversationListStoryRingStateTest`** — state helper resolves the peer's ring; empty state yields
+> None; state passes its own `currentUserId` so the peer is resolved from the right side (identity
+> swap makes "peer" the OTHER, only "me" has a story, yields Read). Every branch of both `ringFor`
+> overloads and every arm of the peer-side resolution covered. Compose glue (the row's
+> `MeeshyAvatar` param thread) is thin wiring, exempt per TDD-COVERAGE.
+>
+> **RED-proof (mutation)**: swapping `if (group.hasUnviewed())` for `if (false)` in the pure
+> resolver fails **exactly** 3 tests (the two Unread arms — per-user and row — plus the state helper
+> "peer's unread ring") — 15 run, 3 failed, no collateral — restored after.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` across all modules green locally
+> (973 actionable tasks — `BUILD SUCCESSFUL`). Two existing `:feature:conversations` VM tests
+> (`ConversationListViewModelTest`, `ConversationLockFlowViewModelTest`) fed a new mocked
+> `StoryRepository` whose `storiesStream(any(), any())` returns `emptyFlow()` — a minimal, honest
+> injection: the observer subscribes, the flow completes, no story groups arrive, state stays at
+> `storyGroups = emptyList()`, every existing behaviour proof runs unchanged. Reviewer PASS.
+>
+> **Next**: two Conversations row-preview sub-gaps remain at `feature-parity.md:1594` — `presence`
+> (a grep on `ConversationListScreen.kt:231` proves the dot is already wired via
+> `state.presenceStateFor(...)` piped into `MeeshyAvatar(presence = …)`, so the note is stale — do
+> not spend a slice on it, mark it verified-done in feature-parity) and `mood` (needs a Kotlin
+> mirror of iOS `StatusEntry`/`statusForUser(userId:)` on `:core:model` + a `StatusRepository`
+> analogue to `StoryRepository` before the same delegation shape can apply). Or advance the Chat
+> line: the `[◐] Universal composer` still has sub-gaps beyond the just-shipped attachment-ladder
+> (per feature-parity umbrella), the finer send-lifecycle glyph, or the composer's photo-specific
+> `PickVisualMedia` launcher noted as candidate in the attachment-ladder slice's Next.
+
 > On 2026-08-20 **Conversation-row message-summary-kind shipped** (slice
 > `conversation-row-message-summary-kind`, feature-parity's Conversations "rich last-message
 > preview" `[~]` — the `ephemeral / expired / hidden / view-once` sub-gap that same line listed

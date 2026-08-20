@@ -86,6 +86,9 @@ class ConversationLockFlowViewModelTest {
             every { currentUser } returns MutableStateFlow<MeeshyUser?>(null)
         },
         lockStore = lockStore,
+        storyRepository = mockk<me.meeshy.sdk.story.StoryRepository>(relaxed = true) {
+            every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
+        },
     )
 
     private fun ConversationListViewModel.enter(digits: String) {

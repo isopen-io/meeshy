@@ -31,6 +31,7 @@ import me.meeshy.sdk.model.ConversationFilters
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.PresenceSnapshotEvent
 import me.meeshy.sdk.model.PresenceState
+import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.UserCategoryCatalog
 import me.meeshy.sdk.model.UserPresence
 import me.meeshy.sdk.model.UserStatusEvent
@@ -41,7 +42,10 @@ import me.meeshy.sdk.socket.CategorySocketManager
 import me.meeshy.sdk.socket.MessageSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
 import me.meeshy.sdk.socket.SocketManager
+import me.meeshy.sdk.story.StoryRepository
+import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.theme.otherParticipantUserId
+import me.meeshy.ui.component.StoryRingState
 import javax.inject.Inject
 
 data class ConversationListUiState(
@@ -109,6 +113,15 @@ data class ConversationListUiState(
      * surfaces the deterministic [typingDisplayNameFor] name as its top-priority preview line.
      */
     val typers: Map<String, Map<String, ConversationTyper>> = emptyMap(),
+    /**
+     * Live cache-first mirror of the tray's story groups (source:
+     * [me.meeshy.sdk.story.StoryRepository.storiesStream]), keyed by author `userId`
+     * to feed the per-row story ring — port of iOS `StoryViewModel.storyGroups` used
+     * by `ConversationListView.storyRingState(for:)`. Empty until the first stream
+     * emission carries any value; a group is dropped once it is fully expired
+     * (parity iOS `StoryViewModel.storyRingState` `!group.isFullyExpired()` gate).
+     */
+    val storyGroups: List<StoryGroup> = emptyList(),
 ) {
     /** True when [conversationId] currently carries a PIN lock — drives the row's lock glyph. */
     fun isLocked(conversationId: String): Boolean = lockedConversationIds.contains(conversationId)
@@ -140,6 +153,21 @@ data class ConversationListUiState(
         return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
     }
 
+    /**
+     * The peer's story-ring state on [conversation]'s row avatar (parity iOS
+     * `ConversationListView.storyRingState(for:)`), derived from the live
+     * [storyGroups] mirror by [ConversationStoryRing]. `StoryRingState.None` for
+     * a group/community/channel/bot conversation or when the peer has no active
+     * story.
+     */
+    fun storyRingFor(conversation: ApiConversation, nowEpochMillis: Long): StoryRingState =
+        ConversationStoryRing.ringFor(
+            conversation = conversation,
+            currentUserId = currentUserId,
+            groups = storyGroups,
+            nowMillis = nowEpochMillis,
+        )
+
     /** True when a filter/search is narrowing the list yet nothing matches — distinct from a cold-empty cache. */
     val isFilteredEmpty: Boolean
         get() = conversations.isEmpty() && !showSkeleton && errorMessage == null &&
@@ -159,6 +187,7 @@ class ConversationListViewModel @Inject constructor(
     socketManager: SocketManager,
     sessionRepository: SessionRepository,
     private val lockStore: ConversationLockStore,
+    private val storyRepository: StoryRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -338,6 +367,29 @@ class ConversationListViewModel @Inject constructor(
 
         observePresence()
         observeTyping()
+        observeStoryGroups()
+    }
+
+    /**
+     * Cache-first mirror of [StoryRepository.storiesStream] into
+     * [ConversationListUiState.storyGroups] — the row's story ring reads from state,
+     * not from the repository directly (parity iOS `StoryViewModel.storyGroups`
+     * observed by `ConversationListView.storyRingState(for:)`). Failures leave the
+     * previous groups in place so a transient network hiccup never wipes the rings.
+     */
+    private fun observeStoryGroups() {
+        viewModelScope.launch {
+            storyRepository.storiesStream(onSyncError = { }).collect { result ->
+                val posts = when (result) {
+                    is CacheResult.Fresh -> result.value
+                    is CacheResult.Stale -> result.value
+                    is CacheResult.Syncing -> result.value
+                    CacheResult.Empty -> null
+                } ?: return@collect
+                val groups = posts.toStoryGroups(currentUserId = _state.value.currentUserId)
+                _state.update { it.copy(storyGroups = groups) }
+            }
+        }
     }
 
     /**

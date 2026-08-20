@@ -135,6 +135,11 @@ class ConversationListViewModelTest {
         every { categoryEvents } returns events
     }
 
+    private fun storyRepo(): me.meeshy.sdk.story.StoryRepository =
+        mockk<me.meeshy.sdk.story.StoryRepository>(relaxed = true) {
+            every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
+        }
+
     private fun viewModel(
         repo: ConversationRepository,
         connection: SocketManager = connectionSocket(),
@@ -146,9 +151,11 @@ class ConversationListViewModelTest {
         session: SessionRepository = session(),
         messageRepo: MessageRepository = messageRepository(),
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
+        storyRepository: me.meeshy.sdk.story.StoryRepository = storyRepo(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
         categoryRepository, categorySocketManager, connection, session, lockStore,
+        storyRepository,
     )
 
     private fun direct(id: String, otherId: String = "other") = ApiConversation(

@@ -118,6 +118,7 @@ import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.ui.component.CollapsibleSection
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.component.StoryRingState
 import me.meeshy.ui.component.chrome.FloatingGradientFab
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.component.chrome.MeeshyGlassSurface
@@ -229,6 +230,7 @@ fun ConversationListScreen(
                                 currentUserId = state.currentUserId,
                                 currentUserPrefs = state.currentUser,
                                 presence = state.presenceStateFor(conversation, System.currentTimeMillis()),
+                                storyRing = state.storyRingFor(conversation, System.currentTimeMillis()),
                                 draft = state.draftFor(conversation.id),
                                 typingDisplayName = state.typingDisplayNameFor(conversation.id),
                                 categories = state.categories,
@@ -412,6 +414,7 @@ private fun ConversationRow(
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
     presence: PresenceState?,
+    storyRing: StoryRingState,
     draft: ConversationDraft?,
     typingDisplayName: String?,
     categories: List<CategoryOption>,
@@ -470,6 +473,7 @@ private fun ConversationRow(
             currentUserId = currentUserId,
             currentUserPrefs = currentUserPrefs,
             presence = presence,
+            storyRing = storyRing,
             draft = draft,
             typingDisplayName = typingDisplayName,
             isPinned = isPinned,
@@ -533,6 +537,7 @@ private fun ConversationRowContent(
     currentUserId: String?,
     currentUserPrefs: MeeshyUser?,
     presence: PresenceState?,
+    storyRing: StoryRingState,
     draft: ConversationDraft?,
     typingDisplayName: String?,
     isPinned: Boolean,
@@ -638,6 +643,7 @@ private fun ConversationRowContent(
                 name = title,
                 containerColor = primaryAccent,
                 presence = presence,
+                storyRing = storyRing,
             )
             Column(
                 modifier = Modifier
