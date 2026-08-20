@@ -1,43 +1,52 @@
-# TODO — Cap membres 199+ et listing top-99 (2026-08-20)
+# TODO — Cap membres 199+ et listing top-99 (2026-08-20) — LIVRÉ
 
 Demande : listing conversations affiche 199+ au-delà de 199 membres (sauf admin plateforme = exact),
 et le listing des membres est restreint aux 99 plus actifs pour un USER plateforme / member de
 conversation, sauf rôle > member dans la communauté de la conversation. Dernier commit avec (beta).
 
-## Shared
-- [ ] `packages/shared/utils/member-visibility.ts` : MEMBER_COUNT_DISPLAY_CAP=199,
-      ACTIVE_MEMBER_LISTING_LIMIT=99, presentMemberCount(), isMemberListingRestricted()
-- [ ] Type `Conversation.memberCountCapped?: boolean` (types/conversation.ts)
-- [ ] Schémas Fastify : memberCountCapped dans conversationMinimalSchema + conversationSchema,
-      totalCountCapped dans le schéma pagination de la route participants
-- [ ] socketio-events.ts : memberCountCapped? sur les 4 payloads membership
+## Shared — fait (7fcfd0ea1)
+- [x] `packages/shared/utils/member-visibility.ts` : MEMBER_COUNT_DISPLAY_CAP=199,
+      ACTIVE_MEMBER_LISTING_LIMIT=99, presentMemberCount(), formatMemberCount(),
+      isMemberListingRestricted() — 15 tests vitest
+- [x] Type `Conversation.memberCountCapped?: boolean`
+- [x] Schémas Fastify : memberCountCapped (minimal + détail), totalCountCapped (pagination
+      participants) — gardés par api-schemas-member-count.test.ts
+- [x] socketio-events.ts : memberCountCapped? sur les 4 payloads membership
 
-## Gateway (tests d'abord)
-- [ ] GET /conversations : cap 199 + flag pour non-admin plateforme, exact pour ADMIN/BIGBOSS
-- [ ] GET /conversations/:id : idem
-- [ ] GET /conversations/search : idem
-- [ ] GET /conversations/:id/participants : pagination.totalCount cappé + flag
-- [ ] Mode restreint participants : USER+member sans rôle communauté élevé → top-99 par activité
-      (ConversationMessageStats.participantStats : messageCount desc, lastMessageAt desc,
-      complément isOnline/joinedAt), filtres+pagination sur la liste restreinte
-- [ ] Events socket membership : memberCount plafonné + flag
+## Gateway — fait (7fcfd0ea1)
+- [x] GET /conversations, /conversations/:id, /conversations/search : cap 199 + flag,
+      exact pour ADMIN/BIGBOSS
+- [x] GET /conversations/:id/participants : totalCount cappé + totalCountCapped
+- [x] Mode restreint top-99 (loadMostActiveParticipants) : stats participantStats
+      (messageCount desc, lastMessageAt desc), complément isOnline/joinedAt, filtres +
+      recherche + pagination SUR la liste bornée ; exemptions : rôle plateforme > USER,
+      rôle conversation > member, rôle communauté > member
+- [x] 4 fanouts membership plafonnés (broadcast unique — admin récupère l'exact au fetch REST)
+- [x] 245 tests verts (participants 95, core 150) + search 20 + fanout 9 ; tsc propre
 
-## Web (tests d'abord)
-- [ ] transformers.service.ts : propager memberCountCapped
-- [ ] LentilleFocusCard : afficher 199+ quand capped
-- [ ] Drawer participants : titre (199+) quand capped
-- [ ] use-socket-cache-sync applyMemberCount : propager le flag
+## Web — fait (efb6dd72b → 95d8f65ac)
+- [x] transformers : recopie memberCountCapped
+- [x] LentilleFocusCard : 199+ via formatMemberCount
+- [x] Drawer participants + HeaderToolbar : titre/aria (199+)
+- [x] applyMemberCount : pose effectif + flag ; delta de repli gelé sur compteur plafonné
 
-## iOS (tests d'abord)
-- [ ] MeeshyConversation.memberCountCapped (CodingKeys+decode+encode, round-trip GRDB)
-- [ ] APIConversation + toDomain
-- [ ] Events socket + ConversationListViewModel.memberCountAfterMembershipEvent
-- [ ] Affichage listing : ThemedConversationRow, ConversationListHelpers, LentilleFocusCard,
-      ConversationInfoSheet stat (helper memberCountDisplay)
+## iOS — fait (aa6d3fe71 → 408a49ea7, commit (beta))
+- [x] MeeshyConversation.memberCountCapped (CodingKeys+decode+encode — round-trip GRDB) +
+      memberCountDisplay (« 199+ ») — MemberCountCapTests 7/7
+- [x] APIConversation + toConversation ; PaginatedParticipantsPagination.totalCountCapped
+- [x] 4 events socket + memberCountAfterMembershipEvent (pose + gel du delta sur cappé)
+      — ConversationListViewModelTests 196/196
+- [x] Affichage : ThemedConversationRow, ConversationListHelpers, LentilleFocusCard,
+      ConversationInfoSheet (memberCountDisplay)
 
-## Gates & livraison
-- [ ] Tests gateway ciblés (bun) + tsc
-- [ ] Tests web ciblés
-- [ ] ./apps/ios/meeshy.sh build + tests ciblés
-- [ ] Commits par surface (chemins explicites — session concurrente active sur gateway/attachments),
-      dernier commit iOS avec (beta) dans le titre, push main
+## Livraison
+- [x] Push main 408a49ea7 (tête = commit (beta)) → ios-beta-trigger.yml déclenché (run 32366598496)
+
+## Restes connus (hors périmètre, documentés)
+- `conversation:stats` (socket) expose participantCount exact — panneau de stats, pas le listing.
+- Notification member_joined : metadata.memberCount non plafonné (non filtré isActive).
+- Surfaces liens/anonymous (`/conversation/:identifier`, link stats) hors listing, non plafonnées.
+- iOS chemin SDK ConversationSettingsView : totalMemberCount déduit de la taille de page
+  (CursorPagination sans totalCount) — comportement préexistant.
+- InfoSheet section membres affiche participants.count (= taille du listing restreint), la stat
+  au-dessus affiche 199+.
