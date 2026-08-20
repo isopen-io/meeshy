@@ -12,6 +12,22 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { PostMentionDisplayValue } from './postMentions';
 import { readDisplay } from './postMentions';
 import { postMentionInclude } from './postIncludes';
+import { convertStoryEffectsForWire } from './storyEffectsV3';
+
+/**
+ * La conversion v1→v3 à la lecture, DERRIÈRE `CANVAS_V3_READ` (défaut OFF).
+ *
+ * Entre le déploiement du lot A et celui du lot F, le web ne lit que les
+ * familles legacy : servir v3 pendant cette fenêtre viderait les stories web.
+ * Le drapeau rend le lockstep VRAI — le merge de A est inerte en lecture,
+ * l'armement est un acte de déploiement.
+ */
+function withWireStoryEffects<T>(post: T): T {
+  if (process.env.CANVAS_V3_READ !== '1') return post;
+  const effects = (post as { storyEffects?: unknown }).storyEffects;
+  if (effects == null) return post;
+  return { ...post, storyEffects: convertStoryEffectsForWire(effects) };
+}
 
 export interface PostReference {
   readonly userId: string;
@@ -149,7 +165,7 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };
-  return withNestedRepostMentions(flat);
+  return withNestedRepostMentions(withWireStoryEffects(flat));
 }
 
 /**
@@ -172,8 +188,13 @@ function withNestedRepostMentions<T>(post: T): T {
   const repostOf = (post as { repostOf?: unknown }).repostOf;
   if (!repostOf || typeof repostOf !== 'object') return post;
 
-  const nested = repostOf as { postMentions?: unknown; mentions?: unknown };
-  if (nested.postMentions === undefined && nested.mentions === undefined) return post;
+  // La conversion du blob précède le tri des mentions : le chemin « pas de
+  // références chargées » sort TÔT et laisserait sinon un
+  // `repostOf.storyEffects` v1 sur le fil.
+  const nested = withWireStoryEffects(repostOf as { postMentions?: unknown; mentions?: unknown });
+  if (nested.postMentions === undefined && nested.mentions === undefined) {
+    return nested === repostOf ? post : { ...post, repostOf: nested };
+  }
 
   return { ...post, repostOf: withMentions(nested) };
 }
