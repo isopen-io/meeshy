@@ -1,4 +1,16 @@
 import SwiftUI
+import MeeshySDK
+
+/// Annonce du fond audio (deux plans, B3.3) — provenance (B3.4) et
+/// existence (B3.5). `.none` sans piste ; `.original` si et seulement si la
+/// piste est propre (♫〰) ; `.credit` pour une piste de bibliothèque, dont les
+/// métadonnées peuvent être `nil` (cache froid) SANS jamais faire dégénérer
+/// la forme crédit vers `.original` — mentir sur la provenance.
+public nonisolated enum BackgroundAudioAnnouncement: Equatable, Sendable {
+    case none
+    case original
+    case credit(title: String?, username: String?, duration: TimeInterval?)
+}
 
 /// Contenu de la chip audio, à droite de la note (reader ET preview).
 ///
@@ -24,6 +36,24 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
         case let (nil, a?): return .marquee(text: a)
         case let (t?, nil): return .marquee(text: t)
         case (nil, nil):   return .waveform
+        }
+    }
+
+    // MARK: - Annonce du fond (B3.4 provenance, B3.5 existence)
+
+    /// Fonction PURE : aucune requête réseau — les métadonnées de
+    /// bibliothèque arrivent déjà résolues en paramètres (résolues par
+    /// l'appelant, lot E).
+    public static func backgroundAnnouncement(sound: BackgroundSoundV3?,
+                                               libraryTitle: String?,
+                                               libraryUsername: String?,
+                                               libraryDuration: TimeInterval?) -> BackgroundAudioAnnouncement {
+        guard let sound else { return .none }
+        switch sound.source {
+        case .original:
+            return .original
+        case .library:
+            return .credit(title: libraryTitle, username: libraryUsername, duration: libraryDuration)
         }
     }
 
