@@ -246,6 +246,7 @@
 		36FFD36E1BDF4B7DB8684535 /* ReelFeedAutoplayCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C175C5037FE8EE353B0088E /* ReelFeedAutoplayCoordinatorTests.swift */; };
 		374F227EDA842A08DDBA9169 /* VideoLegacySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E246EC2671118108315A654 /* VideoLegacySupport.swift */; };
 		3766458CB1DD8D0EC7D958AA /* CallManagerSwitchCameraFailureCorrectionSourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E9ADDBF1F90D18CF3C1AB14 /* CallManagerSwitchCameraFailureCorrectionSourceTests.swift */; };
+		3790161728D1078C0DECC660 /* SharePendingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7B5BBBF7AE59E03954AB45 /* SharePendingShare.swift */; };
 		37F6EC6393C05C6E31059FE6 /* LentilleOpenMyStoriesLiteralGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64C61F7D3BC776ADDD751270 /* LentilleOpenMyStoriesLiteralGuardTests.swift */; };
 		381F81D10BB316A9EBA09D3C /* ComposerIngestWiringParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DEB68390763A70DC94D15D /* ComposerIngestWiringParityTests.swift */; };
 		3856B8647E7B3481F886F2EC /* PhonebookViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21D55320D700F505E4E982B9 /* PhonebookViewModelTests.swift */; };
@@ -453,6 +454,7 @@
 		61E675A5E56BBE701CE5E2D4 /* UILanguageOverrideResolutionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9AFA7C1B9F78435B4ACC444 /* UILanguageOverrideResolutionTests.swift */; };
 		623B35771D12B4E267125E76 /* RingbackTone.caf in Resources */ = {isa = PBXBuildFile; fileRef = EB5EE4503F54AD17E8BFF2B2 /* RingbackTone.caf */; };
 		6244E27AB5798B46D776201F /* FocalFocusCurve.swift in Sources */ = {isa = PBXBuildFile; fileRef = 392228A8E58103CF50292FAC /* FocalFocusCurve.swift */; };
+		62BA90304945B538294198B8 /* SharePendingShareTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80844041409DFB27A00A2238 /* SharePendingShareTests.swift */; };
 		62D9C5669277FD2A97605460 /* MessageTranscriptionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E66AE8D6AB93D53D707C6CE /* MessageTranscriptionDetailView.swift */; };
 		6308516CD1AE5F50B386F8F6 /* LentillePeekView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20C2E86CB5DC19422840641 /* LentillePeekView.swift */; };
 		6309726100FAB9E3BC8B711B /* AccentVectorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C6ED80E6F1C24FF148E4050 /* AccentVectorTests.swift */; };
@@ -1172,6 +1174,7 @@
 		F8ADEF69418A9E8DF3D85AD6 /* FirebasePerformance in Frameworks */ = {isa = PBXBuildFile; productRef = DD8DF5D8FEF1CC714CCA0262 /* FirebasePerformance */; };
 		F8CCEE0D02F27F09DCA12DF2 /* RiverCoordinateSpace.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFB21CAA05294D50AE9D0444 /* RiverCoordinateSpace.swift */; };
 		F8DA6B91C8B0EF234B6382CE /* LentilleBridgeLine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B16808B02CE1D01E4F237649 /* LentilleBridgeLine.swift */; };
+		F8DCE36719FFB65F78F8D055 /* SharePendingShare.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B7B5BBBF7AE59E03954AB45 /* SharePendingShare.swift */; };
 		F8EE6AFE76516263EFE90F4D /* BlockActionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29784E4B82067B56D9D10EAE /* BlockActionCoordinator.swift */; };
 		F8FA8185BD9AE0D382F10CB0 /* ThemedMessageBubbleEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B512194E10E24E2E25E75DE2 /* ThemedMessageBubbleEquatableTests.swift */; };
 		F924D0E40498CC6DD4A6A1B7 /* ImageDownsamplingConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F3F3D277F5BF4FE32DDAB11 /* ImageDownsamplingConfig.swift */; };
@@ -1883,6 +1886,7 @@
 		8012F097B238A3CC916C0033 /* EffectsPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EffectsPickerView.swift; sourceTree = "<group>"; };
 		804118AB7F23565038B5AF61 /* ReelFeedLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelFeedLayoutTests.swift; sourceTree = "<group>"; };
 		807FBFB5D86D33C91AF92446 /* BubbleBlurRevealLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleBlurRevealLifecycle.swift; sourceTree = "<group>"; };
+		80844041409DFB27A00A2238 /* SharePendingShareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePendingShareTests.swift; sourceTree = "<group>"; };
 		80A6931F6BCF56B490F08E08 /* ShareLinkEntryResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareLinkEntryResolverTests.swift; sourceTree = "<group>"; };
 		80B01017FC5DE43205452E24 /* ThermalStateMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitorTests.swift; sourceTree = "<group>"; };
 		80CBF63F82D0BCE84B4C5CFD /* UserProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
@@ -2015,6 +2019,7 @@
 		9A7A6AE0EA22076F1445C2EC /* ReelsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReelsViewModel.swift; sourceTree = "<group>"; };
 		9B37744DF180C0475CEC1982 /* StoryLocationReaderTapOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryLocationReaderTapOverlay.swift; sourceTree = "<group>"; };
 		9B64110BEBC127E45190E935 /* IslandGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandGeometry.swift; sourceTree = "<group>"; };
+		9B7B5BBBF7AE59E03954AB45 /* SharePendingShare.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePendingShare.swift; sourceTree = "<group>"; };
 		9BB52A80633BE2A3D8B0CDF9 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		9BD520E5744EF7F42AD99D06 /* PresenceManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManagerTests.swift; sourceTree = "<group>"; };
 		9BDD09BEE88655937A889452 /* LentilleFlatRowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFlatRowTests.swift; sourceTree = "<group>"; };
@@ -3768,6 +3773,7 @@
 				FB04FED5D59B6F0B6FF8EE80 /* ShareConversationStore.swift */,
 				CC69F2836B4C59AA98898ECD /* ShareLimits.swift */,
 				F8EFC95C0FF653255E36C2CC /* ShareMediaStaging.swift */,
+				9B7B5BBBF7AE59E03954AB45 /* SharePendingShare.swift */,
 				38409F8503C5B7515CB12B2A /* ShareSender.swift */,
 				4B107F4F561B9A77D015C5D4 /* ShareSession.swift */,
 				CB0B3A386CCD8465AA25E475 /* ShareViewController.swift */,
@@ -3919,6 +3925,7 @@
 				47B4BC7C0C383F30A12929DC /* ShareMediaStagingTests.swift */,
 				45748BA9D4C4EDE85874051B /* SharePendingSendConsumerTests.swift */,
 				4D7E9EE6FABF64C718A7DBB4 /* SharePendingSendContractTests.swift */,
+				80844041409DFB27A00A2238 /* SharePendingShareTests.swift */,
 				2379098A20D54F068E3CB935 /* ShareSenderTests.swift */,
 				49CA6A32B378C30B346AE281 /* ShareSessionTests.swift */,
 			);
@@ -4546,6 +4553,7 @@
 				09897C6B14B9ADACC14BEC80 /* ShareConversationStore.swift in Sources */,
 				3F5C78BF9DE54A4E17886C04 /* ShareLimits.swift in Sources */,
 				7A9B61951A145A11654D51AC /* ShareMediaStaging.swift in Sources */,
+				F8DCE36719FFB65F78F8D055 /* SharePendingShare.swift in Sources */,
 				55E4B9F141528FB063392591 /* ShareSender.swift in Sources */,
 				8115E23A29F3045F09922DC9 /* ShareSession.swift in Sources */,
 				B3B40380C96A37C8E9AD7D64 /* ShareViewController.swift in Sources */,
@@ -5603,6 +5611,8 @@
 				8E9CD6E2D1AB0049AA12161C /* ShareMediaStagingTests.swift in Sources */,
 				015639F4ABBDBB5E69223C73 /* SharePendingSendConsumerTests.swift in Sources */,
 				7166609F29C3B1F9290F8C4D /* SharePendingSendContractTests.swift in Sources */,
+				3790161728D1078C0DECC660 /* SharePendingShare.swift in Sources */,
+				62BA90304945B538294198B8 /* SharePendingShareTests.swift in Sources */,
 				092822A12EB9B0A21762F328 /* SharePickerViewModelTests.swift in Sources */,
 				FEEE97B6F35353FED1F9F6CF /* ShareSender.swift in Sources */,
 				D8F0FA1DCE98F97A5C48D8BA /* ShareSenderTests.swift in Sources */,

@@ -124,74 +124,21 @@ nonisolated enum ShareSender {
         return deferSend(clientMessageId: clientMessageId, conversationId: conversationId, content: content)
     }
 
+    /// Dépose la fiche de reprise pour un partage de texte à UNE cible.
+    /// Conservé pour le chemin texte historique ; le chemin multi-cibles passe
+    /// par `send(share:session:urlSession:)`.
     private static func deferSend(
         clientMessageId: String,
         conversationId: String,
         content: String
     ) -> ShareOutcome {
-        let pending = SharePendingSend(
-            clientMessageId: clientMessageId,
-            conversationId: conversationId,
+        SharePendingShare.make(
+            shareId: clientMessageId,
+            createdAt: Date(),
             content: content,
-            createdAt: Date()
-        )
-        pending.persist()
+            media: [],
+            conversationIds: [conversationId]
+        ).commitLive()
         return .deferred
-    }
-}
-
-/// Relais durable écrit par l'extension, relu par l'app.
-///
-/// Le contrat est DUPLIQUÉ côté app (`SharePendingSendConsumer.PendingSend`) :
-/// l'extension est sans dépendance SDK, les deux cibles ne peuvent donc pas
-/// partager un type. Même situation que `ConversationSnapshotPayload` /
-/// `ConversationLocalSnapshot` côté NSE. `SharePendingSendContractTests` est le
-/// garde-fou : il compile les deux miroirs et vérifie qu'ils s'accordent.
-nonisolated struct SharePendingSend: Codable, Equatable, Sendable {
-    let clientMessageId: String
-    let conversationId: String
-    let content: String
-    let createdAt: Date
-
-    static let appGroupIdentifier = ShareSession.appGroupIdentifier
-    static let directoryName = "share_pending_sends"
-
-    /// Le nom de fichier EST le `clientMessageId` : deux écritures du même
-    /// envoi écrasent le même fichier, donc ne peuvent pas produire deux
-    /// messages au rejeu.
-    var fileName: String { "\(clientMessageId).json" }
-
-    static func encoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        return encoder
-    }
-
-    static func directoryURL() -> URL? {
-        FileManager.default
-            .containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
-            .appendingPathComponent(directoryName, isDirectory: true)
-    }
-
-    @discardableResult
-    func persist() -> Bool {
-        guard let directory = Self.directoryURL() else {
-            ShareLog.logger.error("Conteneur App Group indisponible — relais impossible")
-            return false
-        }
-        do {
-            try FileManager.default.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-            try Self.encoder().encode(self).write(
-                to: directory.appendingPathComponent(fileName),
-                options: .atomic
-            )
-            return true
-        } catch {
-            ShareLog.logger.error("Écriture du relais échouée : \(error.localizedDescription, privacy: .public)")
-            return false
-        }
     }
 }

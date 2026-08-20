@@ -323,6 +323,7 @@ targets:
       # `@testable import Meeshy` n'atteint pas.
       - path: MeeshyShareExtension/ShareLimits.swift
       - path: MeeshyShareExtension/ShareMediaStaging.swift
+      - path: MeeshyShareExtension/SharePendingShare.swift
       # Vecteurs partagés Lentille/Focal (contrat LWS-5, workshop
       # tasks/lentille-focal-workshop.md §2.3) : le même JSON que les suites
       # Jest (packages/shared/__tests__/vectors/) et JUnit (Android, phase 2),
