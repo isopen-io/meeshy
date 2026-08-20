@@ -668,6 +668,42 @@ struct OutboxDispatcher: OutboxDispatching {
         ))
     }
 
+    /// Résout `copyAttachmentsFromMessageId` pour CETTE ligne — un partage
+    /// multi-destinataires COPIE les pièces jointes du message porté par
+    /// l'origine, jamais un transfert (voir `ShareFanoutOriginResolver`).
+    ///
+    /// Sortie anticipée sur `item.copyAttachmentsFromClientMessageId == nil`
+    /// (round 1 de revue, Minor) : un message ORDINAIRE — l'écrasante
+    /// majorité — ne paie plus une lecture GRDB sur la clé `""` dont le
+    /// résultat était de toute façon ignoré.
+    ///
+    /// L'origine non encore acquittée lève `OutboxDeferralError
+    /// .waitingForFanoutOrigin` — erreur TYPÉE, pas un `NSError` générique —
+    /// pour qu'`OutboxFlusher` la reconnaisse (`isWaitingForFanoutOrigin`) et
+    /// replanifie la ligne SANS consommer `attempts`, borné par
+    /// `OutboxFlusher.fanoutOriginWaitTimeout` : partir maintenant livrerait
+    /// un message VIDE de pièces jointes, mais un simple `NSError` (round 1
+    /// précédent) épuisait le budget de tentatives en ~30s — exactement le
+    /// délai qu'un upload photo/vidéo sur réseau médiocre dépasse en usage
+    /// nominal.
+    private func resolveCopyAttachmentsFromMessageId(for item: OfflineQueueItem) async throws -> String? {
+        guard let originClientMessageId = item.copyAttachmentsFromClientMessageId else { return nil }
+        let resolvedServerId = try? await DependencyContainer.shared.messagePersistence
+            .resolveServerId(for: originClientMessageId)
+        let fanout = ShareFanoutOriginResolver.resolve(
+            copyAttachmentsFromClientMessageId: originClientMessageId,
+            resolvedServerId: resolvedServerId
+        )
+        switch fanout {
+        case .notAFanout:
+            return nil
+        case .ready(let serverMessageId):
+            return serverMessageId
+        case .waitingForOrigin(let clientMessageId):
+            throw OutboxDeferralError.waitingForFanoutOrigin(clientMessageId: clientMessageId)
+        }
+    }
+
     private func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
             let item: OfflineQueueItem
@@ -691,6 +727,31 @@ struct OutboxDispatcher: OutboxDispatching {
                 if let one = item.localAudioPath, !one.isEmpty { return [one] }
                 return []
             }()
+
+            // Round 1 de revue (Important 3) : `sendWithAttachmentsAsync` —
+            // donc les deux branches socket ci-dessous (rejeu audio/média
+            // hors-ligne) — n'a AUCUN moyen de transmettre
+            // `copyAttachmentsFromMessageId`. Le handler gateway
+            // `handleMessageSendWithAttachments` ne le lit pas non plus (seul
+            // `message:send`, le path texte, le fait —
+            // `SocketMessageSendWithAttachmentsSchema` côté gateway ne
+            // déclare pas le champ, Zod le supprimerait en silence). Aucune
+            // cible non-origine ne porte de média local aujourd'hui
+            // (`SharePendingSendConsumer.enqueue` ne pose
+            // `copyAttachmentsFromClientMessageId` QUE sur les lignes SANS
+            // média local) : cette combinaison n'arrive jamais en pratique,
+            // mais rien ne l'empêchait STRUCTURELLEMENT, et le champ aurait
+            // disparu EN SILENCE. Échoue fort plutôt que de laisser partir un
+            // message vide de la promesse de copie.
+            let hasLocalMediaToReplay = !pendingAudioPaths.isEmpty || !(item.localMediaPaths?.isEmpty ?? true)
+            if hasLocalMediaToReplay, let unsupportedOriginId = item.copyAttachmentsFromClientMessageId {
+                throw NSError(
+                    domain: "OutboxDispatcher",
+                    code: 501,
+                    userInfo: [NSLocalizedDescriptionKey:
+                        "Fan-out de partage (\(unsupportedOriginId)) non supporté sur le chemin socket média/audio local"]
+                )
+            }
 
             if !pendingAudioPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -866,28 +927,7 @@ struct OutboxDispatcher: OutboxDispatching {
             // pièces jointes du message porté par la première — jamais un
             // transfert, qui ferait afficher « Transféré depuis <conversation
             // source> » au destinataire (décision user, invariant produit).
-            let fanout = ShareFanoutOriginResolver.resolve(
-                copyAttachmentsFromClientMessageId: item.copyAttachmentsFromClientMessageId,
-                resolvedServerId: try? await DependencyContainer.shared.messagePersistence
-                    .resolveServerId(for: item.copyAttachmentsFromClientMessageId ?? "")
-            )
-            let copyAttachmentsFromMessageId: String?
-            switch fanout {
-            case .notAFanout:
-                copyAttachmentsFromMessageId = nil
-            case .ready(let serverMessageId):
-                copyAttachmentsFromMessageId = serverMessageId
-            case .waitingForOrigin(let clientMessageId):
-                // Partir maintenant livrerait un message VIDE de pièces
-                // jointes. L'outbox réessaie en backoff : l'origine est dans la
-                // même file, elle partira d'abord.
-                throw NSError(
-                    domain: "OutboxDispatcher",
-                    code: 425,
-                    userInfo: [NSLocalizedDescriptionKey:
-                        "Origine de partage \(clientMessageId) pas encore acquittée"]
-                )
-            }
+            let copyAttachmentsFromMessageId = try await resolveCopyAttachmentsFromMessageId(for: item)
 
             let request = SendMessageRequest(
                 content: item.content,

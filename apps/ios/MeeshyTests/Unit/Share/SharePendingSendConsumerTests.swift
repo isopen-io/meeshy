@@ -138,6 +138,38 @@ final class SharePendingSendConsumerTests: XCTestCase {
                        1_785_000_000, accuracy: 1)
     }
 
+    // MARK: - Ordre explicite « origine d'abord » (revue round 1, Important 1)
+
+    /// `OutboxFlusher` trie par `ORDER BY createdAt ASC` SANS départage : un
+    /// `createdAt` identique sur toutes les cibles laissait l'ordre observé
+    /// dépendre d'un détail d'implémentation SQLite (ordre d'insertion), pas
+    /// d'une garantie. Chaque cible doit désormais recevoir un `createdAt`
+    /// STRICTEMENT croissant selon sa position — origine en premier.
+    func test_consumeAll_assignsStrictlyIncreasingCreatedAt_originFirst() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        try writeShare(media: [photo], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue).consumeAll(in: dir, mediaRoot: mediaRoot)
+
+        let mediaCalls = await queue.enqueuedMediaCalls
+        let originCreatedAt = try XCTUnwrap(mediaCalls.first?.createdAt)
+        let copyCreatedAts = (await queue.enqueuedItems).map(\.createdAt)
+        XCTAssertEqual(copyCreatedAts.count, 2, "conv2 et conv3 copient depuis l'origine")
+        for copyCreatedAt in copyCreatedAts {
+            XCTAssertLessThan(
+                originCreatedAt, copyCreatedAt,
+                "l'origine doit trier AVANT chaque copie sur `ORDER BY createdAt ASC`, "
+                + "sans dépendre de l'ordre d'insertion SQLite"
+            )
+        }
+        XCTAssertLessThan(
+            copyCreatedAts[0], copyCreatedAts[1],
+            "chaque cible suivante garde elle aussi un ordre STABLE et explicite"
+        )
+    }
+
     func test_consumeAll_whenEveryTargetIsEnqueued_deletesTheFiche() async throws {
         let dir = try makeDirectory()
         try writeShare(in: dir)

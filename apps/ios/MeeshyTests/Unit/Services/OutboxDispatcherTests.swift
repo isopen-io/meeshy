@@ -35,8 +35,15 @@ final class OutboxDispatcherTests: XCTestCase {
     }
 
     private func encode<T: Encodable>(_ value: T) -> Data {
-        // Force-unwrap: test data is always encodable.
-        try! JSONEncoder().encode(value)
+        // `.iso8601` matches `OutboxDispatcher.decoder` AND the real
+        // persistence encoder (`OfflineQueue.swift`) — a default JSONEncoder
+        // here would silently corrupt `OfflineQueueItem.createdAt` (encoded
+        // as a Double, decoded as ISO8601 string), sending every OfflineQueueItem
+        // fixture down the "corrupt payload, drop" branch instead of the
+        // branch under test. Force-unwrap: test data is always encodable.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try! encoder.encode(value)
     }
 
     private var corrupt: Data { Data("not-valid-json".utf8) }
@@ -61,6 +68,83 @@ final class OutboxDispatcherTests: XCTestCase {
         do {
             try await makeSUT().dispatch(record)
             XCTFail("Expected dispatch to throw code 501 for .repostStory")
+        } catch let error as NSError {
+            XCTAssertEqual(error.domain, "OutboxDispatcher")
+            XCTAssertEqual(error.code, 501)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    // MARK: - sendMessage: fan-out copy with an unresolved origin → typed deferral error (round 1 fix, Critical)
+
+    /// Round 1 de revue (Critical) — le dispatcher doit lever une erreur
+    /// TYPÉE (`OutboxDeferralError.waitingForFanoutOrigin`), pas un `NSError`
+    /// générique : c'est ce qui permet à `OutboxFlusher` de reconnaître le
+    /// cas et de replanifier la ligne SANS consommer `attempts` (voir
+    /// `OutboxFlusherTests
+    /// .test_flush_waitingForFanoutOrigin_doesNotConsumeRetryBudget_norExhaust`).
+    /// Un identifiant d'origine jamais vu de `resolveServerId` résout
+    /// toujours `nil` — exactement l'état d'une origine pas encore acquittée.
+    func test_dispatch_sendMessage_fanoutCopyWithUnresolvedOrigin_throwsTypedDeferralError() async {
+        let unresolvedOriginId = "cid_never_acknowledged_\(UUID().uuidString)"
+        let item = OfflineQueueItem(
+            id: "qid-fanout-wait",
+            clientMessageId: "cid-fanout-wait",
+            conversationId: "conv-abc",
+            content: "photo de vacances",
+            originalLanguage: nil,
+            replyToId: nil,
+            forwardedFromId: nil,
+            forwardedFromConversationId: nil,
+            attachmentIds: nil,
+            localAudioPath: nil,
+            copyAttachmentsFromClientMessageId: unresolvedOriginId,
+            createdAt: Date()
+        )
+        let record = makeRecord(kind: .sendMessage, payload: encode(item), id: "ofq_fanout-wait")
+
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected OutboxDeferralError.waitingForFanoutOrigin while the origin is unresolved")
+        } catch OutboxDeferralError.waitingForFanoutOrigin(let clientMessageId) {
+            XCTAssertEqual(clientMessageId, unresolvedOriginId)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    // MARK: - sendMessage: fan-out copy carrying local media → NSError 501 (round 1 fix, Important 3)
+
+    /// Round 1 de revue (Important 3) — `sendWithAttachmentsAsync` (donc les
+    /// deux branches socket de rejeu média/audio hors-ligne) n'a AUCUN moyen
+    /// de transmettre `copyAttachmentsFromMessageId`, et le handler gateway
+    /// `handleMessageSendWithAttachments` ne le lit pas non plus. Aucune
+    /// cible non-origine ne porte de média local aujourd'hui
+    /// (`SharePendingSendConsumer.enqueue`), donc cette combinaison n'arrive
+    /// jamais en pratique — mais rien ne l'empêchait STRUCTURELLEMENT, et le
+    /// champ aurait disparu EN SILENCE. Le dispatcher échoue fort à la place.
+    func test_dispatch_sendMessage_withLocalMediaAndFanoutCopy_throwsCode501() async {
+        let item = OfflineQueueItem(
+            id: "qid-fanout-media",
+            clientMessageId: "cid-fanout-media",
+            conversationId: "conv-abc",
+            content: "",
+            originalLanguage: nil,
+            replyToId: nil,
+            forwardedFromId: nil,
+            forwardedFromConversationId: nil,
+            attachmentIds: nil,
+            localAudioPath: nil,
+            localMediaPaths: ["pending-media/cid-fanout-media/0.jpg"],
+            copyAttachmentsFromClientMessageId: "cid_origin",
+            createdAt: Date()
+        )
+        let record = makeRecord(kind: .sendMessage, payload: encode(item), id: "ofq_fanout-media")
+
+        do {
+            try await makeSUT().dispatch(record)
+            XCTFail("Expected dispatch to throw code 501 for local media + fan-out copy")
         } catch let error as NSError {
             XCTAssertEqual(error.domain, "OutboxDispatcher")
             XCTAssertEqual(error.code, 501)

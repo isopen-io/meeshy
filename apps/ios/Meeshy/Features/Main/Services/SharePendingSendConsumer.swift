@@ -176,6 +176,25 @@ final class SharePendingSendConsumer {
         try encoder().encode(share).write(to: file, options: .atomic)
     }
 
+    /// Round 1 de revue (Important 1) — écart minimal, en secondes, entre le
+    /// `createdAt` de deux cibles CONSÉCUTIVES d'un même partage.
+    ///
+    /// `enqueue` posait jusqu'ici `share.createdAt` IDENTIQUE sur TOUTES les
+    /// cibles, origine comprise. Or `OutboxFlusher` trie par
+    /// `ORDER BY createdAt ASC` SANS départage (`OutboxFlusher.swift`) : sur
+    /// une égalité stricte, l'ordre observé (origine avant copies) n'était
+    /// qu'un effet de bord de l'ordre d'insertion SQLite — jamais une
+    /// garantie. S'il s'inverse, chaque copie part avant son origine, tombe
+    /// systématiquement dans `ShareFanoutOriginResolver.waitingForOrigin`.
+    ///
+    /// GRDB stocke `Date` avec une précision de la MILLISECONDE
+    /// (`"yyyy-MM-dd HH:mm:ss.SSS"`, `GRDB/Core/Support/Foundation/Date.swift`)
+    /// : 1 ms est le plus petit écart qui survit à cet arrondi sans jamais
+    /// produire deux lignes à égalité, donc le plus petit qui rende l'ordre
+    /// EXPLICITE dans la clé de tri persistée elle-même plutôt que dans un
+    /// détail d'implémentation SQLite.
+    private static let fanoutOrderEpsilon: TimeInterval = 0.001
+
     private let queue: OfflineMessageQueueing
     private let logger = Logger(subsystem: "me.meeshy.app", category: "share-consumer")
 
@@ -235,9 +254,18 @@ final class SharePendingSendConsumer {
         // `{ lhs, _ in lhs == origin }` n'est pas un ordre faible strict, et
         // `sorted` n'en garantit alors AUCUN résultat.
         let order = [origin] + current.targets.indices.filter { $0 != origin }
-        for index in order where current.targets[index].state != .sent {
+        for (position, index) in order.enumerated() where current.targets[index].state != .sent {
+            // Round 1 de revue (Important 1) — `position` vient de `order`,
+            // qui place TOUJOURS l'origine en position 0 : même une reprise
+            // partielle (certaines cibles déjà `.sent`) recalcule le MÊME
+            // `order` à partir du MÊME `origin`, donc la même cible reçoit
+            // toujours le même écart d'un appel à l'autre.
+            let rowCreatedAt = share.createdAt.addingTimeInterval(
+                Self.fanoutOrderEpsilon * TimeInterval(position))
             do {
-                try await enqueue(current, targetIndex: index, origin: origin, mediaRoot: mediaRoot)
+                try await enqueue(
+                    current, targetIndex: index, origin: origin, mediaRoot: mediaRoot,
+                    createdAt: rowCreatedAt)
                 current.targets[index].state = .sent
                 do {
                     try Self.commit(current, to: url)
@@ -288,7 +316,8 @@ final class SharePendingSendConsumer {
         _ share: PendingShare,
         targetIndex: Int,
         origin: Int,
-        mediaRoot: URL?
+        mediaRoot: URL?,
+        createdAt: Date
     ) async throws {
         let target = share.targets[targetIndex]
         let clientMessageId = target.clientMessageId
@@ -313,7 +342,7 @@ final class SharePendingSendConsumer {
                 // Les octets sont PARTAGÉS entre les cibles : les balayer ici
                 // laisserait les suivantes sans rien.
                 deletesSourceFiles: false,
-                createdAt: share.createdAt
+                createdAt: createdAt
             )
             return
         }
@@ -331,7 +360,7 @@ final class SharePendingSendConsumer {
             localAudioPath: nil,
             copyAttachmentsFromClientMessageId:
                 (isOrigin || share.media.isEmpty) ? nil : originClientMessageId,
-            createdAt: share.createdAt
+            createdAt: createdAt
         ))
     }
 
