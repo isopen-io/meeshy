@@ -38,7 +38,6 @@ final class ForwardPickerRowEquatableTests: XCTestCase {
             accentHex: accentHex,
             isDark: isDark,
             state: state,
-            a11yName: name,
             onTap: onTap,
             onSend: onSend,
             onMoodTap: nil
