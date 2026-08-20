@@ -430,6 +430,25 @@ final class StoryDraftStoreTests: XCTestCase {
                        "Un composer 16:9 ne doit pas rouvrir en portrait au second chargement")
     }
 
+    /// `canvasAspectRatio` est un état PAR SLIDE (le composer en écrit un par
+    /// slide courante, jusqu'à dix par brouillon) — pas une propriété de
+    /// brouillon. Un brouillon dont SEULE la deuxième slide est 16:9 doit
+    /// restituer ce ratio sur `slides[1]` après la migration one-shot, sans
+    /// le prêter à `slides[0]` ni le perdre.
+    func test_load_thenReload_v1RichBlob_twoSlides_secondSlideKeepsOwnRatio() throws {
+        try seedRawSlide(id: "s1", effectsJSON: fixtureJSON("v1-legacy-rich"), orderIndex: 0)
+        try seedRawSlide(id: "s2", effectsJSON: richFixtureJSON(canvasAspectRatio: 1.5), orderIndex: 1)
+
+        _ = store.load(draftId: draftId)
+        let reloaded = try XCTUnwrap(store.load(draftId: draftId))
+        XCTAssertEqual(reloaded.slides.map(\.id), ["s1", "s2"])
+
+        XCTAssertNil(reloaded.slides[0].effects.canvasAspectRatio,
+                    "La première slide ne porte aucun ratio propre : elle ne doit pas hériter celui de la seconde")
+        XCTAssertEqual(reloaded.slides[1].effects.canvasAspectRatio ?? -1, 1.5, accuracy: 0.0001,
+                       "Un composer 16:9 en DEUXIÈME slide ne doit pas rouvrir en portrait au second chargement")
+    }
+
     // MARK: - Helpers
 
     private enum FixtureError: Error, CustomStringConvertible {

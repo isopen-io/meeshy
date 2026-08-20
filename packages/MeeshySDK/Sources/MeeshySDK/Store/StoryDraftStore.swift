@@ -434,22 +434,26 @@ public final class StoryDraftStore: @unchecked Sendable {
                         arguments: [draftId]
                     )
                 }
-                // Ratio de canvas de la composition — même précédent que le
-                // thumbHash ci-dessus. Le remap v3 CONSOMME `canvasAspectRatio`
-                // pour repositionner les ancres (le porteur garde son ratio
-                // intrinsèque, la scène letterboxe) mais ne le LOGE nulle part :
-                // légitime pour le fil, pas pour le brouillon local — sans
-                // cette clé, un composer 16:9 rouvrirait en portrait dès le
-                // premier autosave. Absent = effacé, comme les autres méta.
-                if let canvasAspectRatio = slides.first?.effects.canvasAspectRatio {
+                // Ratio de canvas — état PAR SLIDE (le composer en écrit un
+                // par slide courante, `StoryComposerViewModel+Elements.swift`
+                // :557/:656/:764, jusqu'à dix slides par brouillon). Le remap
+                // v3 CONSOMME `canvasAspectRatio` pour repositionner les
+                // ancres (le porteur garde son ratio intrinsèque, la scène
+                // letterboxe) mais ne le LOGE nulle part : légitime pour le
+                // fil, pas pour le brouillon local — sans une clé PAR SLIDE,
+                // seule la première rouvrirait dans sa forme et toute slide
+                // suivante rouvrirait en portrait dès le premier autosave.
+                // Balayage puis réécriture : une slide retirée du brouillon
+                // n'y laisse pas de méta orpheline.
+                try db.execute(
+                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key LIKE 'canvasAspectRatio:%'",
+                    arguments: [draftId]
+                )
+                for slide in slides {
+                    guard let canvasAspectRatio = slide.effects.canvasAspectRatio else { continue }
                     try db.execute(
-                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'canvasAspectRatio', ?)",
-                        arguments: [draftId, String(canvasAspectRatio)]
-                    )
-                } else {
-                    try db.execute(
-                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'canvasAspectRatio'",
-                        arguments: [draftId]
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, ?, ?)",
+                        arguments: [draftId, "canvasAspectRatio:\(slide.id)", String(canvasAspectRatio)]
                     )
                 }
                 // `created_at` n'est posé qu'à la première écriture : le
@@ -811,16 +815,19 @@ public final class StoryDraftStore: @unchecked Sendable {
                             arguments: [migration.json, draftId, migration.id])
                     }
                     // Le remap v3 absorbe `canvasAspectRatio` sans le loger nulle
-                    // part (cf. `save()` ci-dessus) : capturé ICI, au moment même
-                    // où la migration one-shot s'apprête à écraser la seule copie
-                    // qui le porte encore — sans ça, rien ne le restituerait avant
-                    // le prochain `save()`, potentiellement jamais pour un
-                    // brouillon simplement rouvert puis refermé sans édition.
-                    if let first = decoded.first, first.migratedJSON != nil,
-                       let ratio = first.slide.effects.canvasAspectRatio {
+                    // part (cf. `save()` ci-dessus) : capturé ICI, PAR SLIDE
+                    // MIGRÉE, au moment même où la migration one-shot s'apprête
+                    // à écraser la seule copie qui le porte encore — sans ça,
+                    // rien ne le restituerait avant le prochain `save()`,
+                    // potentiellement jamais pour un brouillon simplement
+                    // rouvert puis refermé sans édition. Une slide n'ayant pas
+                    // migré (déjà v3) n'a rien à capturer ici : sa méta, si
+                    // elle existe, date d'un `save()` antérieur.
+                    for entry in decoded where entry.migratedJSON != nil {
+                        guard let ratio = entry.slide.effects.canvasAspectRatio else { continue }
                         try db.execute(
-                            sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'canvasAspectRatio', ?)",
-                            arguments: [draftId, String(ratio)])
+                            sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, ?, ?)",
+                            arguments: [draftId, "canvasAspectRatio:\(entry.slide.id)", String(ratio)])
                     }
                 }
             }
@@ -832,11 +839,11 @@ public final class StoryDraftStore: @unchecked Sendable {
                 let editingPostId = try Self.metaValue(db, draftId: draftId, key: "editingPostId")
                 let pendingPublishAt = try Self.metaValue(db, draftId: draftId, key: "pendingPublishAt")
                 let lastPublishError = try Self.metaValue(db, draftId: draftId, key: "lastPublishError")
-                let canvasAspectRatio = try Self.metaValue(db, draftId: draftId, key: "canvasAspectRatio")
+                let canvasAspectRatios = try Self.canvasAspectRatiosBySlide(db, draftId: draftId)
                 return (visibility: visibility, idsJSON: idsJSON,
                         originalLanguage: originalLanguage, editingPostId: editingPostId,
                         pendingPublishAt: pendingPublishAt, lastPublishError: lastPublishError,
-                        canvasAspectRatio: canvasAspectRatio)
+                        canvasAspectRatios: canvasAspectRatios)
             }
             let visibilityUserIds = meta.idsJSON
                 .flatMap { $0.data(using: .utf8) }
@@ -844,13 +851,16 @@ public final class StoryDraftStore: @unchecked Sendable {
                                                      field: "story draft visibilityUserIds",
                                                      id: draftId, logger: Logger.cache) } ?? []
 
-            // Restitution du ratio de canvas : le canvas v3 ne le loge pas
-            // (cf. écriture ci-dessus), la première slide décodée depuis un
+            // Restitution du ratio de canvas, PAR SLIDE : le canvas v3 ne le
+            // loge pas (cf. écriture ci-dessus), toute slide décodée depuis un
             // document déjà v3 revient donc toujours à `nil` sans ce recours à
-            // la méta — un composer 16:9 rouvrirait en portrait.
-            if let raw = meta.canvasAspectRatio, let ratio = Double(raw),
-               slides.indices.contains(0), slides[0].effects.canvasAspectRatio == nil {
-                slides[0].effects.canvasAspectRatio = ratio
+            // la méta — sans la boucle sur TOUTES les slides (et pas la seule
+            // première), un composer 16:9 en deuxième slide ou au-delà
+            // rouvrirait en portrait.
+            for index in slides.indices {
+                guard slides[index].effects.canvasAspectRatio == nil,
+                      let ratio = meta.canvasAspectRatios[slides[index].id] else { continue }
+                slides[index].effects.canvasAspectRatio = ratio
             }
 
             return (slides: slides,
@@ -950,6 +960,24 @@ public final class StoryDraftStore: @unchecked Sendable {
             db,
             sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = ?",
             arguments: [draftId, key])
+    }
+
+    /// Ratios de canvas PAR SLIDE, indexés `canvasAspectRatio:<slideId>` (cf.
+    /// `save()`/`load()`) — un composer peut porter jusqu'à dix slides à des
+    /// ratios indépendants ; une seule clé par brouillon ne peut pas les
+    /// représenter toutes.
+    private static func canvasAspectRatiosBySlide(_ db: Database, draftId: String) throws -> [String: Double] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: "SELECT key, value FROM story_draft_meta WHERE draft_id = ? AND key LIKE 'canvasAspectRatio:%'",
+            arguments: [draftId])
+        return rows.reduce(into: [String: Double]()) { result, row in
+            let key: String = row["key"]
+            let value: String = row["value"]
+            guard let slideId = key.split(separator: ":", maxSplits: 1).last.map(String.init),
+                  let ratio = Double(value) else { return }
+            result[slideId] = ratio
+        }
     }
 
     private static func dateFromMeta(_ raw: String?) -> Date? {
