@@ -374,6 +374,30 @@ Le test de validité du modèle unique : chaque prémisse tient dans MeeshyObjec
 sans le déformer — un kind, un champ, ou des données. Une feature qui exigerait
 une famille d'objets à part signalerait un modèle raté.
 
+## 6e. La passe de simplification (2026-08-20)
+
+Question posée : que peut-on couper **sans perdre le gain utilisateur final** ?
+Réponse structurelle d'abord : le gain vit à ~90 % côté CLIENT (édition, rendu,
+timeline, bandes, socle). La proposition transportait aussi un chantier
+d'HYGIÈNE serveur (schéma strict, nouveau format de fil, verbe de publication
+unique) hérité de Story Atelier — c'est lui qui portait le blocage, et il se
+découple. Huit coupes, chacune avec le gain conservé :
+
+| # | Coupe | Gain utilisateur conservé — pourquoi sans perte |
+|---|---|---|
+| S1 | **Le fil ne change pas.** `MeeshyObject` devient une vue CLIENT (adaptateur aux frontières decode/encode) ; le fil garde les cinq familles + champs ADDITIFS (anchor, plane, locale, rate, sticker image) — le serveur `passthrough()` les accepte DÉJÀ | sticker animable, lieu scalable, timeline unique, langue par objet : tout est rendu/édition client. Zéro migration, zéro lecture double, vieux clients intacts |
+| S2 | **PublishIntent différé.** Le composer unifié APPELLE les trois chemins d'envoi existants (createStory/createPost/status) | l'utilisateur voit UN composer ; le verbe unique est de l'hygiène, pas un gain |
+| S3 | **Mood hors v1.** `StatusComposerView` actuel conservé tel quel ; il rejoint MeeshyComposer en dernier, ou jamais si le gain reste nul | l'UX mood ne change pas d'un pixel — elle est déjà saine (petit composer, 6 audiences, brouillon, offline) |
+| S4 | **Timeline v1 sans édition de keyframes dans le plan.** Le plan 2D montre pistes, plans, durées, fantômes ; les keyframes s'éditent dans l'inspecteur (existant) | la demande est « empiler + durées » — servie ; l'édition fine keyframe-par-keyframe dans le plan est un raffinement, et c'était LE point chaud perf à mesurer |
+| S5 | **Trois ancres, pas quatre.** `.free`, `.band(.top)`, `.band(.bottom)` ; `.pinned(toObject:)` et le kind `annotation` qui en dépend partent en « plus tard » | personne n'a demandé l'ancrage relatif ; c'est de la complexité de solveur sans demande |
+| S6 | **« Mes stickers » v1 = les récents.** Grille LRU des derniers collés ; appui long = retirer. Pas de gestion (dossiers, renommage) | le geste demandé — coller, retrouver, reposer — est intégralement servi |
+| S7 | **L'Étagère = MyStoriesView étendue.** Elle a DÉJÀ Published/Drafts (vérifié à l'écran) ; on ajoute file d'envoi + archive, on ne construit pas une vue neuve | même surface pour l'utilisateur, coût divisé |
+| S8 | **`Scene.ratio` supprimé du modèle.** Le ratio se lit du média PORTEUR (il le connaît déjà) — un concept de moins | aucun : c'était une redondance |
+
+Ce que la passe NE touche pas — le cœur du gain : scène 9:16 à bandes actives,
+socle permanent, profils d'intention, loi des deux plans audio, bouton 🔇,
+collage, `↻` sans verbe, les 18 styles.
+
 ## 7. Les arbitrages ouverts
 
 Ce sont les vraies décisions ; le reste en découle.
@@ -381,7 +405,7 @@ Ce sont les vraies décisions ; le reste en découle.
 | # | Question | Option A | Option B | Recommandation |
 |---|---|---|---|---|
 | **O1** | Mentions & hashtags | segments du `content` (comme aujourd'hui) | objets de scène posables | **A pour le texte du post, B pour la scène** — les deux coexistent déjà dans le modèle (INLINE vs PINNED) ; les unifier de force perdrait l'un des deux |
-| **O2** | Migration du modèle | `MeeshyObject` v3 en rupture | v3 dérivé de `StoryEffects`, lecture des deux | **B** — 20 h de stories vivantes en base à tout instant ; une rupture les casse |
+| **O2** | Migration du modèle | ~~A : v3 en rupture~~ · B : v3 dérivé, lecture double | **C (issue de §6e/S1) : le fil ne change pas** — familles existantes + champs additifs, adaptateur client unique | **C** — A casse 20 h de stories vivantes ; B impose audit bloquant + double codec des deux côtés pour un gain utilisateur NUL vs C. Bascule v3-wire plus tard sur critères : blob p95 > 128 Ko, réécriture du composer web, ou feature exigeant des requêtes serveur sur les objets (les votes O10 sont déjà HORS blob) |
 | **O3** | Scène pour un POST | toujours une scène (vide si texte seul) | `scenes: nil` tant qu'aucun objet visuel | **B** — un cadre vide EST une invitation à le remplir, exactement le sentiment d'outillage à éviter |
 | **O4** | Timing par défaut | tout objet naît avec start=0, end=durée | timing `nil` = « suit la slide » | **B** — `nil` se distingue d'un choix, et c'est ce qui permet la piste fantôme |
 | **O5** | Bandes actives | zones dédiées (contraintes) | ancrage sémantique, objets libres de déborder | **B** — un objet peut chevaucher la limite (une bulle à cheval sur l'image), l'ancrage n'est qu'un point de référence |
@@ -442,8 +466,10 @@ sentinelles (test des polices, gardes de source) rougissent d'elles-mêmes.
 4. **Invariants de lecture** (né en pause · cache gèle le fade · 4 chemins
    relancent · boucle = fond seul) → repris comme lois du ScenePlayer ; la
    surface de gardes source existante reste verte par construction.
-5. **Blobs v1 inconnus** (passthrough 256 Ko) → audit de base avant schéma
-   strict, lecture double v1/v3 (O2).
+5. **Blobs v1 inconnus** (passthrough 256 Ko) → DÉCLASSÉ par O2/C : le fil ne
+   change pas, l'audit devient une tâche d'hygiène non bloquante ; la
+   validation serveur se resserre ADDITIVEMENT (valider le connu, tolérer le
+   reste), jamais en big-bang.
 6. **Prompt presse-papiers** → PasteButton uniquement (O9).
 7. **Sticker fantôme** (posé mais invisible aux lecteurs) → média du contenu
    claimable (O8) ; seule la bibliothèque reste locale.
@@ -460,9 +486,10 @@ blobs** en production, et une **exécution réelle sur un appareil iOS 16**.
 
 Chaque phase est livrable seule et laisse le produit fonctionnel.
 
-1. **L'objet** — `MeeshyObject` + `MeeshyDocument`, lecture des deux modèles
-   (O2/B). Aucun changement visible. C'est la phase qui supprime les cinq
-   copies de la géométrie et du temps.
+1. **L'objet** — `MeeshyObject` + `MeeshyDocument` en MÉMOIRE, adaptateur aux
+   frontières (O2/C) : le fil ne change pas. Aucun changement visible. C'est la
+   phase qui supprime les cinq copies de la géométrie et du temps — côté client,
+   le seul côté qui en souffrait.
 2. **La scène** — cadre 9:16, bandes ancrables, plateau et socle permanent.
    Premier changement visible, sur le composer de story seul. Le collage d'image
    et « Mes stickers » (§6b) entrent ici : purement client, aucun contrat serveur.
@@ -474,8 +501,9 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
    langues) sont reprises telles quelles — plus la loi des deux plans audio et
    l'annonce du fond après l'auteur, ♫〰 ou crédit selon la provenance (§6a), et
    l'attribution `↻` sans verbe généralisée au web (§6c).
-6. **Le nettoyage** — schéma strict côté serveur une fois l'audit fait (§8.2),
-   retrait de la lecture v2.
+6. **Le nettoyage** — resserrement ADDITIF de la validation serveur (valider le
+   connu, tolérer le reste) ; un v3-wire n'est déclenché que par les critères de
+   bascule d'O2/C, jamais par calendrier.
 
 ---
 

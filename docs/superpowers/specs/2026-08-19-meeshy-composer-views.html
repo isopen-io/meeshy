@@ -192,7 +192,7 @@ footer .mono{font-size:11.5px}
 <a href="#p4">P4 Anatomie</a><a href="#p5">P5 Entrées</a><a href="#p6">P6 Scène</a>
 <a href="#p7">P7 Outils</a><a href="#p8">P8 Timeline</a><a href="#p9">P9 Capture</a>
 <a href="#p10">P10 Socle</a><a href="#p11">P11 Étagère</a><a href="#p12">P12 Viewers</a>
-<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a><a href="#p16">P16 Écart SOTA</a>
+<a href="#p13">P13 Matrice</a><a href="#p14">P14 Nouveautés</a><a href="#p15">P15 Revue 16→27</a><a href="#p16">P16 Écart SOTA</a><a href="#p17">P17 Simplification</a>
 </div></nav>
 
 <header><div class="wrap">
@@ -204,7 +204,7 @@ footer .mono{font-size:11.5px}
   avant toute nouveauté.</b></p>
   <div class="meta">
     <span>2026-08-19 · rév. 2026-08-20</span><span>succède à Story&nbsp;Atelier (2026-08-15)</span>
-    <span>statut : proposition — arbitrages O1–O11 ouverts</span>
+    <span>statut : proposition — O2 arbitré (reco C, P17) · O1/O3–O11 recommandés</span>
     <span>rév. 2026-08-20 : revue système complète (P15) + stickers réels · collage · son de post · loi de l'icône</span>
   </div>
   <div class="legend">
@@ -1006,7 +1006,7 @@ flowchart TD
     <thead><tr><th>#</th><th>Question</th><th>Recommandation</th></tr></thead>
     <tbody>
       <tr><td class="mono">O1</td><td>Mentions/# : segments du content ou objets de scène ?</td><td>Les deux coexistent déjà (INLINE vs PINNED) — content pour le texte, objet pour la scène</td></tr>
-      <tr><td class="mono">O2</td><td>Migration du modèle</td><td>v3 dérivé de StoryEffects, lecture des deux — 20 h de stories vivantes à tout instant, une rupture les casse</td></tr>
+      <tr><td class="mono">O2</td><td>Migration du modèle — <b>L'ÉLÉMENT BLOQUANT, tranché en P17</b></td><td><b>C : le fil ne change pas</b> — familles existantes + champs additifs, MeeshyObject = adaptateur CLIENT. A (rupture) casse 20 h de stories vivantes ; B (lecture double) impose audit bloquant + double codec pour un gain utilisateur nul. Bascule v3-wire plus tard, sur critères seulement</td></tr>
       <tr><td class="mono">O3</td><td>Scène pour un post texte ?</td><td><span class="mono">scenes: nil</span> — un cadre vide est une injonction</td></tr>
       <tr><td class="mono">O4</td><td>Timing par défaut</td><td><span class="mono">nil</span> = « suit la slide » (piste fantôme), distinct d'un choix</td></tr>
       <tr><td class="mono">O5</td><td>Bandes : zones contraintes ou ancres ?</td><td>Ancres — un objet peut chevaucher la frontière</td></tr>
@@ -1076,7 +1076,7 @@ flowchart TD
       <tr><td><b>Thermique</b> — N players dans le fil</td><td>« réels qui chauffent = SOTA »</td><td>1 décodeur actif, vignettes ailleurs, pause hors écran, résolution adaptative</td></tr>
       <tr><td><b>Récursion self-sizing</b> autour du player en cellule</td><td>UIHostingConfiguration + invalidateLayout (mémoire du dépôt)</td><td>cellules du fil : hauteur EXPLICITE autour du CanvasPlayer, jamais de hosting self-sizing</td></tr>
       <tr><td><b>Invariants de lecture</b> perdus dans la refonte</td><td>canvas né en pause · le cache gèle le fade (contentHash) · 4 chemins relancent la lecture · boucle = fond seul</td><td>repris comme LOIS du ScenePlayer (P12) — toute la surface de test source existante reste verte par construction</td></tr>
-      <tr><td><b>Blobs v1 inconnus</b> (passthrough 256 Ko)</td><td>constat Story Atelier §1</td><td>audit de la base AVANT schéma strict ; lecture double v1/v3 (O2) — 20 h de stories vivantes à tout instant</td></tr>
+      <tr><td><b>Blobs v1 inconnus</b> (passthrough 256 Ko)</td><td>constat Story Atelier §1</td><td>DÉCLASSÉ par O2/C (P17) : le fil ne change pas — l'audit devient hygiène non bloquante ; validation resserrée ADDITIVEMENT, jamais en big-bang</td></tr>
       <tr><td><b>Prompt presse-papiers</b> — confiance brûlée</td><td>comportement système iOS 16+</td><td>PasteButton uniquement (O9) ; <span class="mono">hasImages</span> pour l'affordance, zéro lecture hors geste</td></tr>
       <tr><td><b>Sticker fantôme</b> — posé mais invisible aux lecteurs</td><td>même famille que « médias web jamais rattachés » (réels web inexistants)</td><td>le sticker posé est un média du contenu, claimable (O8) ; la bibliothèque seule reste locale</td></tr>
       <tr><td><b>Carrousel coupe le son</b> au changement de page</td><td>« compteur didSet en clé audio rembobine » (mémoire du dépôt)</td><td>la piste de fond est liée à la TIMELINE du post, jamais à l'index de page — même leçon, généralisée</td></tr>
@@ -1106,7 +1106,7 @@ flowchart TD
       <tr><td><b>Stickers interactifs</b> — sondage · question · quiz · curseur emoji · compte à rebours · « à vous »</td><td class="ab">absents (recensés hors périmètre par Story Atelier)</td><td>un kind <span class="mono">interactive</span> de MeeshyObject, posable/timable comme le reste ; rendu inerte élégant hors ligne et sur vieux clients</td><td><b>oui</b> — votes/réponses = table légère (O10), jamais dans le blob</td></tr>
       <tr><td><b>Détourage sujet → sticker</b> (« lift », façon stickers iMessage)</td><td class="ab">absent</td><td>VisionKit subject-lift sur photo importée/collée → sticker image dans « Mes stickers ». <b>API iOS 16 ✓ — pile notre plancher</b></td><td>non — client pur</td></tr>
       <tr><td><b>GIF / stickers animés</b></td><td class="ab">absent (collage = image fixe)</td><td>le collage accepte GIF/APNG → sticker animé local ; pas d'intégration Giphy en v1</td><td>non</td></tr>
-      <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ du blob v3</td></tr>
+      <tr><td><b>Vitesse</b> — ralenti / accéléré</td><td class="ab">absent (aucun champ <span class="mono">rate</span> — vérifié)</td><td><span class="mono">timing.rate</span> sur le média porteur (0,5× · 2×) ; export via <span class="mono">setRate</span></td><td>non — un champ ADDITIF du blob</td></tr>
       <tr><td><b>Presets d'animation de texte</b> (pop, glissé, machine à écrire…)</td><td class="ab">les keyframes existent, aucun preset nommé</td><td>bibliothèque de presets = keyframes PRÉGÉNÉRÉS — des données, zéro vue neuve</td><td>non</td></tr>
       <tr><td><b>Layouts / collage</b> (2·3·4 cases)</td><td class="ab">médias premier plan libres seulement</td><td>presets d'ANCRES qui posent N objets média — des données encore</td><td>non</td></tr>
       <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td>état « programmé » de l'Étagère, la file locale publie à l'heure (best-effort BGTask) — la version FIABLE attend un <span class="mono">scheduledAt</span> serveur (O11)</td><td>léger, pour la version fiable</td></tr>
@@ -1124,6 +1124,40 @@ flowchart TD
   kind de plus, <span class="mono">rate</span> un champ de timing, presets et layouts des DONNÉES.
   C'est le test de validité du modèle unique : une feature SOTA qui exigerait une famille d'objets
   à part signalerait un modèle raté.</div>
+</div></section>
+
+<!-- ================================================================ P17 -->
+<section id="p17"><div class="wrap">
+  <div class="prail"><span class="pnum">P17</span><h2>La passe de simplification — couper sans perdre (2026-08-20)</h2></div>
+  <p class="lede">Le constat qui commande tout : <b>le gain utilisateur vit à ~90 % côté client</b>
+  (édition, rendu, timeline, bandes, socle). La proposition transportait AUSSI un chantier
+  d'hygiène serveur hérité de Story Atelier — schéma strict, nouveau format de fil, verbe de
+  publication unique. C'est lui qui portait le blocage, et il se découple. Huit coupes :</p>
+  <div class="scrollx"><table>
+    <thead><tr><th>#</th><th>Coupe</th><th>Gain conservé — pourquoi sans perte</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">S1</td><td><b>Le fil ne change pas.</b> MeeshyObject = vue CLIENT (adaptateur decode/encode) ; le fil garde les cinq familles + champs ADDITIFS (anchor, plane, locale, rate, sticker image) — le <span class="mono">passthrough()</span> serveur les accepte déjà</td><td>sticker animable, lieu scalable, timeline unique, langue par objet : tout est du rendu/édition client. Zéro migration, zéro lecture double, vieux clients intacts</td></tr>
+      <tr><td class="mono">S2</td><td><b>PublishIntent différé.</b> Le composer unifié appelle les trois chemins d'envoi existants</td><td>l'utilisateur voit UN composer ; le verbe unique est de l'hygiène, pas un gain</td></tr>
+      <tr><td class="mono">S3</td><td><b>Mood hors v1.</b> StatusComposerView conservé tel quel</td><td>son UX est déjà saine (6 audiences, brouillon, offline) — elle ne change pas d'un pixel</td></tr>
+      <tr><td class="mono">S4</td><td><b>Timeline v1 sans édition de keyframes DANS le plan</b> — pistes, plans, durées, fantômes ; les keyframes restent à l'inspecteur</td><td>la demande est « empiler + durées » : servie. Et c'était LE point chaud perf à mesurer</td></tr>
+      <tr><td class="mono">S5</td><td><b>Trois ancres, pas quatre.</b> <span class="mono">.pinned(toObject:)</span> et le kind <span class="mono">annotation</span> partent en « plus tard »</td><td>l'ancrage relatif est de la complexité de solveur sans demande</td></tr>
+      <tr><td class="mono">S6</td><td><b>« Mes stickers » v1 = les récents</b> (grille LRU, appui long = retirer)</td><td>coller, retrouver, reposer — le geste entier est servi ; la gestion (dossiers) n'apporte rien en v1</td></tr>
+      <tr><td class="mono">S7</td><td><b>L'Étagère = MyStoriesView étendue</b> (elle a déjà Published/Drafts — vérifié à l'écran) : + file d'envoi, + archive</td><td>même surface, coût divisé</td></tr>
+      <tr><td class="mono">S8</td><td><b><span class="mono">Scene.ratio</span> supprimé</b> — le ratio se lit du média porteur</td><td>aucun : c'était une redondance du modèle</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><b>L'élément bloquant, arbitré — O2 (le modèle).</b> C'était le seul
+  arbitrage NON LOCAL : il conditionnait la phase 1 et, à travers l'audit des blobs, tout le
+  calendrier. <b>A</b> (v3 en rupture) casse 20 h de stories vivantes — exclu d'office.
+  <b>B</b> (v3 dérivé + lecture double) paie un audit bloquant, un double codec des deux côtés et
+  un risque de divergence pendant la transition, pour un gain UTILISATEUR nul par rapport à C.
+  <b>C</b> (issue de S1) : le fil ne change pas ; l'unification vit dans un adaptateur client —
+  le seul endroit qui connaisse les deux formes, même philosophie que le Prisme (on stocke le
+  rang, pas le résultat). <b>Recommandation : C.</b> Bascule vers un vrai v3-wire PLUS TARD,
+  déclenchée par des critères et jamais par calendrier : blob p95 &gt; 128 Ko, réécriture du
+  composer web, ou une feature exigeant des requêtes serveur sur les objets (les votes des
+  stickers interactifs sont déjà HORS blob, O10). Conséquence immédiate : l'audit des blobs est
+  déclassé en hygiène, et le plan d'implémentation devient écrivable.</div>
 </div></section>
 
 <footer><div class="wrap">
