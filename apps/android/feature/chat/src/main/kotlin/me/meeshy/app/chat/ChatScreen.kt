@@ -50,6 +50,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddLink
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.AttachFile
@@ -2689,6 +2690,15 @@ private fun ChatComposer(
             onPickFile(bytes, completedFile.name, "audio/mp4")
         }
     }
+    var attachmentTrayOpen by remember { mutableStateOf(false) }
+    val ladderTiles = remember(affordances) {
+        ComposerAttachmentLadder.tiles(
+            affordances = affordances,
+            showCamera = false,
+            showLocation = false,
+            showEmoji = false,
+        )
+    }
     Surface(color = MeeshyTheme.tokens.backgroundPrimary) {
         Column(
             modifier = Modifier
@@ -2696,6 +2706,22 @@ private fun ChatComposer(
                 .navigationBarsPadding()
                 .imePadding(),
         ) {
+            if (attachmentTrayOpen && ladderTiles.isNotEmpty() && !recording.isRecording && !affordances.isReadOnly) {
+                ComposerAttachmentTray(
+                    tiles = ladderTiles,
+                    onTileClick = { kind ->
+                        attachmentTrayOpen = false
+                        when (kind) {
+                            AttachmentTileKind.Photo -> filePicker.launch("image/*")
+                            AttachmentTileKind.File -> filePicker.launch("*/*")
+                            AttachmentTileKind.Voice -> requestVoiceRecording()
+                            AttachmentTileKind.Camera,
+                            AttachmentTileKind.Location,
+                            AttachmentTileKind.Emoji -> Unit
+                        }
+                    },
+                )
+            }
             if (replyingToLabel != null) {
                 Row(
                     modifier = Modifier
@@ -2809,12 +2835,12 @@ private fun ChatComposer(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (!isEditing) {
-                        if (affordances.showsAttachmentLadder) {
-                            IconButton(onClick = { filePicker.launch("*/*") }) {
+                        if (ladderTiles.isNotEmpty()) {
+                            IconButton(onClick = { attachmentTrayOpen = !attachmentTrayOpen }) {
                                 Icon(
-                                    imageVector = Icons.Filled.AttachFile,
-                                    contentDescription = stringResource(R.string.chat_attach_file),
-                                    tint = MeeshyTheme.tokens.textSecondary,
+                                    imageVector = if (attachmentTrayOpen) Icons.Filled.Close else Icons.Filled.Add,
+                                    contentDescription = stringResource(R.string.chat_attach_open),
+                                    tint = if (attachmentTrayOpen) accentColor else MeeshyTheme.tokens.textSecondary,
                                 )
                             }
                         }
