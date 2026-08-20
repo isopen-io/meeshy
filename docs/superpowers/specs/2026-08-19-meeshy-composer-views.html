@@ -258,7 +258,7 @@ footer .mono{font-size:11.5px}
     <thead><tr><th>Feature</th><th>Aujourd'hui</th><th>Destination</th></tr></thead>
     <tbody>
       <tr><td><b>Slides</b> ≤10 · ajouter / dupliquer / supprimer</td><td class="mono">SlideStrip (addSlide, duplicateSlide(at:), context-menu Supprimer)</td><td>Rail de scènes, mêmes 3 actions</td></tr>
-      <tr><td><b>Texte</b> — 7 styles (normal, gras, italique, manuscrit, machine, néon, rétro)</td><td class="mono">StoryTextObject + fontForStyle</td><td>Objet <span class="mono">text</span>, payload styles inchangé</td></tr>
+      <tr><td><b>Texte</b> — 18 familles de style (gras, néon, machine, manuscrit, classique, calligraphie, cartoon, futuriste, fantaisie, curve, tag · + 2026-08-20 : italique, rétro, élégant, affiche, bulle, note, pinceau)</td><td class="mono">StoryTextStyle (18 cas) + StoryFont/StoryTextFontResolver</td><td>Objet <span class="mono">text</span>, payload styles inchangé — « italique » et « rétro » réunifient le vocabulaire historique du lecteur</td></tr>
       <tr><td>Texte — couleur, fond, taille, alignement, position, offset, <b>édition en zone</b></td><td class="mono">textPosition/textColor/textBg/textAlign/textSize/textOffsetY · édition inline (zone)</td><td>Panneau contextuel Texte (P7)</td></tr>
       <tr><td>Texte — timing + keyframes (x, y, scale, opacity, easing)</td><td class="mono">startTime/keyframes — StoryKeyframe</td><td>Timing du MeeshyObject, plan 2D (P8)</td></tr>
       <tr><td><b>Dessin</b> — mode immersif, pinceaux, épaisseur avec aperçu de pointe, couleur, liste des traits</td><td class="mono">StoryDrawingToolbar + DrawingStrokeList</td><td>Objet <span class="mono">drawing</span> ; panneau reste ouvert tant que le mode est actif</td></tr>
@@ -510,11 +510,12 @@ flowchart TD
 
   <div class="grid g2">
     <div class="card"><h4>Texte <span class="tag tEx">existant</span></h4>
-      <div class="panel"><span class="ob on">Style</span><span class="ob">Police (7)</span><span class="ob">Couleur</span><span class="ob">Fond</span><span class="ob">Taille</span><span class="ob">Align</span><span class="ob">Langue</span></div>
+      <div class="panel"><span class="ob on">Style</span><span class="ob">Famille (18)</span><span class="ob">Couleur</span><span class="ob">Fond</span><span class="ob">Taille</span><span class="ob">Align</span><span class="ob">Langue</span></div>
       <p>Tap <span class="mono">Aa</span> → objet au centre, clavier levé, <b>édition en zone</b>
       (règle existante). Double-tap un texte = ré-édition ; tap = sélection (inspecteur prérempli).
-      7 styles : normal, gras, italique, manuscrit, machine à écrire, néon, rétro. L'onglet Langue
-      déclare la langue d'origine de l'objet — préremplie par détection.</p>
+      18 familles de style (rangée défilante d'aperçus « Aa », chacun rendu dans sa police) — dont
+      « italique » et « rétro », le vocabulaire historique du lecteur enfin productible. L'onglet
+      Langue déclare la langue d'origine de l'objet — préremplie par détection.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>Complet. Les textes composent le
           <span class="mono">content</span> indexé.</p></span>
@@ -847,7 +848,7 @@ flowchart TD
     <tbody>
       <tr class="grp"><td colspan="5">Composition</td></tr>
       <tr><td>Content (texte du post)</td><td class="ok">✓ dérivé des textes de scène (index)</td><td class="ok">✓ champ principal · 5 000 · mentions @ · hashtags</td><td class="ok">✓ légende (= content)</td><td class="ok">✓ « Comment tu vas ? » + moodEmoji</td></tr>
-      <tr><td>Texte sur scène</td><td class="ok">✓ 7 styles · zone · timing · keyframes</td><td class="ok">✓ si scène</td><td class="ok">✓ bandes par défaut · timé</td><td class="ab">— pas de scène</td></tr>
+      <tr><td>Texte sur scène</td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si scène</td><td class="ok">✓ bandes par défaut · timé</td><td class="ab">— pas de scène</td></tr>
       <tr><td>Médias</td><td class="ok">✓ porteur/slide + premier plan</td><td class="ok">✓ carrousel (order écrit) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée</td><td class="ab">— jamais eu</td></tr>
       <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆</td><td class="ab">—</td></tr>
       <tr><td>Filtres (8)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
