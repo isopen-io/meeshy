@@ -8,17 +8,19 @@ porte e9, partage entrant, drapeau d'écriture, continuité de lecture), loi 8,
 Rév. 5 (2026-08-20) : O17 négociation de forme à la LECTURE (« personne ne lit
 du vide ») — `X-Canvas-Caps`, sentinelle v1 localisée, garantie de restitution
 de l'archive posée en loi 11
-Design source : `./2026-08-19-meeshy-composer-design.md` (+ planches P1–P17)
+Design source : `./2026-08-19-meeshy-composer-design.md` (+ planches P1–P21)
 Ce document est la sortie de la revue totale : il fige les décisions, définit le
-contrat commun, et découpe l'exécution en **sept lots** (six parallélisables
-A–F + le lot G d'entrées externes, séquencé après C) avec interfaces gelées.
+contrat commun, et découpe l'exécution en **huit lots** (six parallélisables
+A–F + le lot G d'entrées externes séquencé après C + le lot H Android en
+lockstep, hors chaîne de merge iOS/web mais condition d'armement des deux
+drapeaux) avec interfaces gelées.
 Chaque lot est raffinable puis exécutable dans son worktree.
 
 ---
 
 ## A. Verdict de revue — solide et réalisable, après six correctifs
 
-Le design est solide : la doctrine (7 lois) est stable depuis P1, l'inventaire
+Le design est solide : la doctrine (onze lois — 7 stables depuis P1, 8-10 ajoutées en rév. 4, 11 en rév. 5) tient depuis P1, l'inventaire
 P2 est vérifié contre le code (deux passes, la seconde a corrigé quatre ratés),
 les budgets P15 sont chiffrés sur le plancher réel, et chaque risque est ancré à
 un précédent documenté du dépôt. La revue de cohérence — le document a été

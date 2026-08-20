@@ -2,7 +2,7 @@
 
 Date : 2026-08-19
 Statut : **SPÉCIFIÉ (2026-08-20) — arbitrages tous tranchés** ; exécution :
-`./2026-08-20-meeshy-composer-execution-spec.md` (7 lots, contrat gelé)
+`./2026-08-20-meeshy-composer-execution-spec.md` (8 lots, contrat gelé)
 Succède à `2026-08-15-story-atelier-design.md`
 Portée : composition ET lecture des quatre formats (Story · Post · Réel · Status)
 Planches visuelles (21 planches — inventaire exhaustif, matrice outil × format,
@@ -748,7 +748,9 @@ ouverte : **les arbitrages sont tranchés** — O1–O11 (O2 par le porteur
 produit) puis O12–O16 (revue totale du 2026-08-20), gelés dans la spec
 d'exécution rév. 4. **Les plans d'exécution existent** : lots A–F écrits et
 passés par deux cycles de revue adversariale (43 constats, 43 réels, tous
-intégrés) ; lot G (entrées externes) à écrire à son lancement. Les inconnues
+intégrés) ; lot G (entrées externes) à écrire à son lancement ; lot H
+(Android, lockstep — condition d'armement des deux drapeaux) porté par
+l'équipe Android sur les mêmes fixtures. Les inconnues
 de §8 ne sont plus des questions ouvertes mais des GATES de lots : la mesure
 A11 est un critère de sortie du lot D (pas d'appareil ⇒ STOP), l'audit des
 blobs v1 est l'intrant du convertisseur du lot A.
