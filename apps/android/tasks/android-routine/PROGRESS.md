@@ -2,6 +2,50 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation lock open-gate shipped** (slice `conversation-lock-open-gate`,
+> feature-parity's Conversations lock composite — the "open-gate on tap" sub-gap left open by
+> `conversation-lock-menu`). **Step 0**: checked the full open-PR list (8 open, none on a
+> `claude/apps/android/*` branch — #3220/#3218 gateway, #3217 iOS, five Dependabot), so no
+> prior-iteration PR to merge first. Branched off `origin/main` (`1eeff7c7`) clean, branch created
+> as the literal first action before any edit. `dl.google.com` reachable here (curl → 200), so the
+> **full local gate ran locally**, not only on CI.
+>
+> **The gap, re-proved by reading source**: `ConversationListScreen`'s row `onClick` called
+> `onConversationClick(conversation.id)` **directly** — a locked conversation opened straight
+> through, its 🔒 badge purely cosmetic on tap. iOS gates this: `ConversationListView` row tap does
+> `if isLocked { lockSheetMode = .openConversation } else { onSelect }`, and
+> `ConversationLockSheet.Mode.openConversation` verifies the 4-digit code then calls `onSuccess()`
+> **without removing the lock** (distinct from `.unlockConversation`, which removes it).
+>
+> **SOTA over iOS by extraction + honest effect naming**: the decision is lifted out of the view
+> into the already-pure `LockPinReducer`. New `LockPinMode.OPEN_CONVERSATION` mirrors
+> `completeUnlock` but emits a brand-new **`LockPinEffect.OpenConversation(id)`** — deliberately
+> distinct from `RemoveLock` — so "reveal once, stays locked" is provable in a unit test (the
+> reducer test asserts `doesNotContain(RemoveLock)`). New `LockPinCopy.OPEN` gives the sheet its own
+> honest header ("Locked conversation" / "Enter the code … to open it"), not the misleading
+> "Unlock" copy, since the lock is not being removed.
+>
+> **Wiring**: `ConversationListViewModel.onConversationTap(id)` consults the authoritative
+> `lockStore.isLocked(id)` (same synchronous read `onLockToggle` uses, not the mirrored state set —
+> so a tap can't race a just-applied lock) → locked opens the `OPEN_CONVERSATION` sheet, unlocked
+> emits on a new one-shot **`openConversation: Flow<String>`** (a `Channel(BUFFERED).receiveAsFlow()`,
+> the same idiom as this file's existing `refreshRequests`; an event, not state, so a config-change
+> replay never re-navigates). `applyLockResult` routes the `OpenConversation` effect to the same
+> channel. `ConversationListScreen` collects it in a `LaunchedEffect(viewModel)` → `onConversationClick`,
+> and the row `onClick` now calls `onConversationTap` — the gate is the **single** navigation entry
+> point (grep confirms one `onConversationClick(` call site left, inside the collector).
+>
+> **Tests**: +5 `LockPinReducerTest` (open length=4, copy=OPEN, correct-code→OpenConversation+Completed
+> AND not RemoveLock, wrong-code→CODE_INCORRECT+no effects, null-id inert) + 4
+> `ConversationLockFlowViewModelTest` (unlocked tap navigates straight, locked tap opens the gate and
+> does NOT navigate, correct open code navigates + keeps the lock, wrong open code keeps the gate + no
+> nav) — all against the real `InMemoryConversationLockStore`, nav events collected off the real
+> `openConversation` flow, never a mock. Reducer branch coverage total; the sheet/`LaunchedEffect`
+> are exempt Compose glue per TDD-COVERAGE. Strings ×2 (title+subtitle) across EN/FR/ES/PT.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` green (the 2 new suites), then full
+> `assembleDebug` + `testDebugUnitTest` across all modules green locally before push.
+
 > On 2026-08-19 **Conversation lock/unlock shipped** (slice `conversation-lock-menu`,
 > feature-parity's Conversations "Pinned/muted/archived… locked pending" composite line — the
 > locked sub-gap). No open `claude/apps/android/*` PR to merge first (checked the full open-PR list:

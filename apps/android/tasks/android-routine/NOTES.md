@@ -760,3 +760,35 @@ Append-only log of gotchas and decisions that save time next run.
   a dead-end fix (no-master-PIN → chain setup→lock instead of iOS's "go to Settings" alert). The
   Composable is left a dumb dots+keypad renderer. TDD-COVERAGE's "push decisions out of the
   Composable" is not just style here — it's what makes the SOTA-over-iOS improvements provable.
+
+## Slice `conversation-lock-open-gate` (2026-08-20)
+- **A cosmetic lock badge is a real bug, not a cosmetic one.** The `conversation-lock-menu` slice
+  shipped the 🔒 badge and the lock/unlock PIN flow but left the row's tap calling
+  `onConversationClick(id)` **directly** — so a "locked" conversation opened straight through. The
+  lock protected nothing on tap. When a prior slice defers "content-hiding" as a follow-up, check
+  whether the *entry point* is also ungated; a lock that doesn't gate opening is worse than no lock
+  (it implies protection that isn't there). The open-gate is the sub-gap that makes the badge mean
+  something.
+- **Extending a shipped pure reducer is the cheapest possible parity move.** Adding
+  `LockPinMode.OPEN_CONVERSATION` was: one enum arm, one `pinLength`/`copy` arm each (both already
+  `when`-exhaustive so the compiler *forced* me to handle the new arm — no silent fallthrough), one
+  `complete*` branch mirroring `completeUnlock`, and one new effect. 5 reducer tests covered every
+  branch. The Kotlin `when`-exhaustiveness on the sealed/enum types is the safety net: adding a mode
+  produced compile errors at exactly the 4 sites that needed a decision, no more.
+- **Name the effect for the outcome, not the mechanism — it buys a provable distinction.** `OPEN`
+  and `UNLOCK` both verify a 4-digit code against the same oracle; the ONLY difference is `OPEN`
+  keeps the lock. Emitting a distinct `LockPinEffect.OpenConversation` (not reusing `RemoveLock`)
+  let the reducer test assert `effects.doesNotContain(RemoveLock)` — the "reveal once, stays locked"
+  contract is now a red-if-broken test, not a comment. Reusing `RemoveLock` with a flag would have
+  made that untestable.
+- **One-shot navigation = `Channel(BUFFERED).receiveAsFlow()`, never a `StateFlow`.** Navigation is
+  an event: a `StateFlow<String?>` would re-fire on every re-collection (config change, process
+  restart) and re-navigate. The `Channel` idiom already lived in this file (`refreshRequests`), so
+  no new dependency. Testing it: `launch { vm.openConversation.collect { list += it } }` +
+  `advanceUntilIdle()` before and after the action, then `job.cancel()`. `BUFFERED` means a
+  `trySend` before the collector attaches is still delivered, so the test isn't order-fragile.
+- **Read from the store, not the mirrored UI state, for a tap-time lock decision.** `onConversationTap`
+  reads `lockStore.isLocked(id)` (synchronous, authoritative) rather than
+  `_state.value.isLocked(id)` (a mirror collected off the store's flow, one dispatch behind). A tap
+  landing in the same frame as a just-applied unlock must see the truth, not the lagging mirror —
+  same discipline `onLockToggle` already followed.

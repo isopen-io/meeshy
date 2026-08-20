@@ -46,11 +46,12 @@ internal fun LockPinCopy.titleRes(): Int = when (this) {
     LockPinCopy.ENTER_CODE -> R.string.conversations_lock_title_enter_code
     LockPinCopy.CONFIRM_CODE -> R.string.conversations_lock_title_confirm_code
     LockPinCopy.UNLOCK -> R.string.conversations_lock_title_unlock
+    LockPinCopy.OPEN -> R.string.conversations_lock_title_open
 }
 
 /** Whether a [LockPinCopy]'s subtitle interpolates the conversation name. */
 internal fun LockPinCopy.subtitleTakesName(): Boolean = when (this) {
-    LockPinCopy.ENTER_CODE, LockPinCopy.CONFIRM_CODE, LockPinCopy.UNLOCK -> true
+    LockPinCopy.ENTER_CODE, LockPinCopy.CONFIRM_CODE, LockPinCopy.UNLOCK, LockPinCopy.OPEN -> true
     else -> false
 }
 
@@ -62,6 +63,7 @@ private fun LockPinCopy.subtitleRes(): Int = when (this) {
     LockPinCopy.ENTER_CODE -> R.string.conversations_lock_subtitle_enter_code
     LockPinCopy.CONFIRM_CODE -> R.string.conversations_lock_subtitle_confirm_code
     LockPinCopy.UNLOCK -> R.string.conversations_lock_subtitle_unlock
+    LockPinCopy.OPEN -> R.string.conversations_lock_subtitle_open
 }
 
 @StringRes

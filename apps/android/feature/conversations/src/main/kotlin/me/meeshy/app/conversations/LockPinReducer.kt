@@ -23,8 +23,13 @@ public const val MASTER_PIN_LENGTH: Int = 6
 /** Per-conversation code length (4 digits) — parity iOS. */
 public const val CONVERSATION_PIN_LENGTH: Int = 4
 
-/** The three lock flows reachable from the conversation context menu. */
-public enum class LockPinMode { SETUP_MASTER_PIN, LOCK_CONVERSATION, UNLOCK_CONVERSATION }
+/**
+ * The lock flows the sheet can drive. The first three are reachable from the
+ * conversation context menu; [OPEN_CONVERSATION] is the tap gate — entering a
+ * locked conversation's code to view it *without* removing the lock (parity iOS
+ * `ConversationLockSheet.Mode.openConversation`).
+ */
+public enum class LockPinMode { SETUP_MASTER_PIN, LOCK_CONVERSATION, UNLOCK_CONVERSATION, OPEN_CONVERSATION }
 
 /** Which localized header copy the sheet shows for the current `(mode, step)`. */
 public enum class LockPinCopy {
@@ -34,6 +39,7 @@ public enum class LockPinCopy {
     ENTER_CODE,
     CONFIRM_CODE,
     UNLOCK,
+    OPEN,
 }
 
 /** The failure surfaced under the PIN dots after an incorrect entry. */
@@ -56,7 +62,7 @@ public data class LockPinState(
         get() = when (mode) {
             LockPinMode.SETUP_MASTER_PIN -> MASTER_PIN_LENGTH
             LockPinMode.LOCK_CONVERSATION -> if (step == 0) MASTER_PIN_LENGTH else CONVERSATION_PIN_LENGTH
-            LockPinMode.UNLOCK_CONVERSATION -> CONVERSATION_PIN_LENGTH
+            LockPinMode.UNLOCK_CONVERSATION, LockPinMode.OPEN_CONVERSATION -> CONVERSATION_PIN_LENGTH
         }
 
     /** The buffer being edited: the confirm buffer during step 2, else the primary buffer. */
@@ -76,6 +82,7 @@ public data class LockPinState(
                 else -> LockPinCopy.CONFIRM_CODE
             }
             LockPinMode.UNLOCK_CONVERSATION -> LockPinCopy.UNLOCK
+            LockPinMode.OPEN_CONVERSATION -> LockPinCopy.OPEN
         }
 }
 
@@ -90,6 +97,13 @@ public sealed interface LockPinEffect {
     public data class CommitMasterPin(val pin: String) : LockPinEffect
     public data class CommitLock(val conversationId: String, val pin: String) : LockPinEffect
     public data class RemoveLock(val conversationId: String) : LockPinEffect
+
+    /**
+     * The tap gate accepted the code — navigate into [conversationId]. The lock is
+     * deliberately left in place (contrast [RemoveLock]): opening a locked
+     * conversation reveals it once, it stays locked for the next visit.
+     */
+    public data class OpenConversation(val conversationId: String) : LockPinEffect
 
     /** The flow finished successfully — dismiss the sheet (or chain the next one). */
     public object Completed : LockPinEffect
@@ -130,6 +144,7 @@ public class LockPinReducer(private val oracle: LockPinOracle) {
         LockPinMode.SETUP_MASTER_PIN -> completeSetup(state)
         LockPinMode.LOCK_CONVERSATION -> completeLock(state)
         LockPinMode.UNLOCK_CONVERSATION -> completeUnlock(state)
+        LockPinMode.OPEN_CONVERSATION -> completeOpen(state)
     }
 
     private fun completeSetup(state: LockPinState): LockPinResult = when (state.step) {
@@ -167,6 +182,13 @@ public class LockPinReducer(private val oracle: LockPinOracle) {
         state.conversationId == null -> LockPinResult(state, emptyList())
         oracle.verifyLock(state.conversationId, state.pin) ->
             LockPinResult(state, listOf(LockPinEffect.RemoveLock(state.conversationId), LockPinEffect.Completed))
+        else -> verifyFailure(state, LockPinError.CODE_INCORRECT)
+    }
+
+    private fun completeOpen(state: LockPinState): LockPinResult = when {
+        state.conversationId == null -> LockPinResult(state, emptyList())
+        oracle.verifyLock(state.conversationId, state.pin) ->
+            LockPinResult(state, listOf(LockPinEffect.OpenConversation(state.conversationId), LockPinEffect.Completed))
         else -> verifyFailure(state, LockPinError.CODE_INCORRECT)
     }
 

@@ -73,6 +73,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -135,6 +136,14 @@ fun ConversationListScreen(
     header: @Composable () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    // A tap resolves to navigation only through the ViewModel's one-shot gate: an
+    // unlocked row emits immediately; a locked row emits after its PIN sheet accepts
+    // the code. Collecting the event (not reading state) keeps a config-change replay
+    // from re-navigating.
+    LaunchedEffect(viewModel) {
+        viewModel.openConversation.collect { onConversationClick(it) }
+    }
 
     MeeshyBackground {
     Scaffold(
@@ -215,7 +224,7 @@ fun ConversationListScreen(
                                 draft = state.draftFor(conversation.id),
                                 categories = state.categories,
                                 previewMessages = state.previewFor(conversation.id),
-                                onClick = { onConversationClick(conversation.id) },
+                                onClick = { viewModel.onConversationTap(conversation.id) },
                                 onTogglePin = { viewModel.togglePin(conversation.id) },
                                 onToggleMute = { viewModel.toggleMute(conversation.id) },
                                 onToggleMentionsOnly = { viewModel.toggleMentionsOnly(conversation.id) },
