@@ -225,8 +225,17 @@ export class TusUploadService {
             // Un jeton neuf ne sert à rien s'il n'est pas envoyé : les en-têtes
             // sont reconstruits (jamais réutilisés) sur la MÊME instance `upload`.
             // Sa propriété `url` (fixée par le POST de création, si atteint) est
-            // préservée : `start()` reprend via une requête HEAD à l'offset déjà
-            // accepté par le serveur, au lieu de retéléverser le fichier entier.
+            // préservée : dans le cas nominal, `start()` reprend via une requête
+            // HEAD à l'offset déjà accepté par le serveur, au lieu de retéléverser
+            // le fichier entier. Réserve : si ce HEAD échoue lui-même avec un statut
+            // 4xx (jeton encore refusé, upload introuvable côté serveur...),
+            // tus-js-client n'appelle PAS notre `onError` — elle remet `url` à
+            // `null` en silence et relance une création neuve (POST), donc un
+            // redémarrage depuis zéro sans aucun signal ici (`_resumeUpload` dans
+            // node_modules/tus-js-client/lib/upload.js). `onError` n'est réinvoqué
+            // que si cette création neuve échoue à son tour. `hasAttemptedAuthRetry`
+            // borne bien la boucle à une seule tentative, mais ne garantit pas que
+            // la reprise se fasse toujours depuis l'offset déjà accepté.
             upload.options.headers = createAuthHeaders(undefined) as Record<string, string>;
             upload.start();
           });
