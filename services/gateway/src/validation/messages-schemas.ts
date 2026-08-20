@@ -34,6 +34,20 @@ const playbackStretch = z.object({
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
   endedBy: z.enum(['pause', 'seek', 'muted', 'completed', 'dismissed', 'superseded'])
+}).refine((s) => s.endMs > s.startMs, {
+  /**
+   * `endMs > startMs` STRICT (pas `>=`) : miroir explicite du filtre `isUsable`
+   * dans `services/gateway/src/utils/playback-trace.ts:78`, qui jette silencieusement
+   * une entrée de durée nulle ou inversée à la persistance. Rejeter au wire
+   * transforme une perte silencieuse en `400 Validation Error` — le client peut
+   * loguer et retenter au lieu de croire son rapport persisté.
+   *
+   * Décision produit distincte des refines 234/236 (`>=`, segment ponctuel admis) :
+   * ici la sémantique documentée est « une écoute réellement CONTINUE »
+   * (`playback-trace.ts:7`) — une durée nulle n'est pas une écoute.
+   */
+  path: ['endMs'],
+  message: 'STRETCH_END_MUST_EXCEED_START'
 });
 
 // ============================================
