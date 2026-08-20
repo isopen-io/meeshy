@@ -59,9 +59,12 @@ final class SharePendingSendConsumerTests: XCTestCase {
         XCTAssertTrue(files(in: dir).isEmpty, "le fichier doit être supprimé après enfilement")
     }
 
-    /// Le `clientMessageId` forgé par l'extension DOIT traverser intact : c'est
-    /// lui qui empêche un doublon si le POST initial avait en fait abouti et
-    /// que seule la réponse s'est perdue.
+    /// Le `clientMessageId` forgé par l'extension traverse, mais DÉRIVÉ par
+    /// cible (`_t0`, `_t1`, …) : c'est ce qui empêche un doublon si le POST
+    /// initial avait en fait abouti et que seule la réponse s'est perdue,
+    /// tout en distinguant les cibles d'un même fan-out. Un payload legacy
+    /// (une seule `conversationId`, pas de `targets`) est promu par
+    /// `decodeRelay` en fiche à UNE cible, d'index 0 — d'où le suffixe `_t0`.
     func test_consumeAll_preservesClientMessageIdForServerSideDedup() async throws {
         let dir = try makeDirectory()
         let cmid = "cid_11111111-1111-4111-8111-111111111111"
@@ -71,7 +74,7 @@ final class SharePendingSendConsumerTests: XCTestCase {
         await SharePendingSendConsumer(queue: queue).consumeAll(in: dir)
 
         let ids = await queue.enqueuedClientMessageIds
-        XCTAssertEqual(ids, [cmid])
+        XCTAssertEqual(ids, [cmid + "_t0"])
     }
 
     func test_consumeAll_withSeveralPayloads_consumesAll() async throws {
