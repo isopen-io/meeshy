@@ -6,7 +6,11 @@ de lois (onze, P1 + spec §A), résidus « six lots », footer O1–O17, carte l
 TOUT INTÉGRÉ le 2026-08-20 (commit « revue d'intégration appliquée ») : I3-I9,
 les 13 mineurs, les 4 overflow (vérifiés en appliquant : O1 déjà fait, O2 ¶
 ajouté, O3 jetons --kf/--play, O4 polices réelles P21 depuis StoryModels:59-79).
-P22-P24 écrites. Ce fichier reste comme trace ; plus rien d'ouvert ici.
+P22-P24 écrites. CYCLE FINAL (w1w7nrpic) intégré le même jour : 10 confirmés /
+0 réfuté — F1 point d'attache threading services (spec rév. 7), F3 exception
+temps réel, F5 ligne v3-invalide, F10 volume payload, P22 glyphes prod, P23
+Split/Simple, P24 C7b, 12 mineurs, 6 overflow. Commit 778631143.
+Ce fichier reste comme trace ; plus rien d'ouvert ici.
 Détail historique ci-dessous :
 
 ## MAJEURS confirmés
