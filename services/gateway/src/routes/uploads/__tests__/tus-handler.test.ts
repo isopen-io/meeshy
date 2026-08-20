@@ -70,6 +70,15 @@ jest.mock('@tus/file-store', () => ({
       return file;
     }
     async getUpload(id: string) {
+      // Sentinelle pour task-1-fix-round-4 : reproduit une erreur de magasin
+      // qui n'est NI `ERRORS.FILE_NOT_FOUND` (404) NI `ERRORS.FILE_NO_LONGER_
+      // EXISTS` (410) — les deux SEULS codes que le vrai `FileStore.getUpload`
+      // (`@tus/file-store`, `dist/index.js`) documente pour une absence
+      // réelle d'upload. Toute autre erreur (E/S, permission, magasin de
+      // config indisponible…) ne prouve AUCUNE absence.
+      if (id === 'storage-error-upload-id') {
+        throw { status_code: 500, body: 'Something went wrong with that request\n' };
+      }
       const record = mockFileStoreRecords.get(id);
       if (!record) {
         throw { status_code: 404, body: 'Not found\n' };
@@ -545,6 +554,118 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     });
   });
 
+  // ── task-1-fix-round-4 : régression non couverte par le round 3. Le
+  // scénario le plus délicat du repli de session de confiance (I3) n'était
+  // nommé par AUCUN test : un jeton JWT AUTHENTIQUE (signature valide, donc
+  // jamais forgé) mais EXPIRÉ, décodant vers le `userId` d'un AUTRE
+  // utilisateur (la victime), présenté avec la PROPRE session de confiance
+  // (valide) de l'appelant. Le relecteur a vérifié que l'attaque est
+  // bloquée PAR CONSTRUCTION du schéma — `UserSession.sessionToken` est
+  // `@unique` GLOBALEMENT (`packages/shared/prisma/schema.prisma`), donc une
+  // ligne dont le `sessionToken` haché correspond au jeton de l'attaquant ne
+  // peut appartenir qu'à UN SEUL `userId` (celui de l'attaquant) — la
+  // combinaison `{ userId: victime, sessionToken: hash(jeton attaquant) }`
+  // ne peut donc JAMAIS matcher. Rien ne documentait ni ne gardait cette
+  // propriété : ce test la nomme, pour l'avenir, si quelqu'un relâchait un
+  // jour cette contrainte d'unicité.
+  //
+  // Distinct des tests « jeton FORGÉ » ci-dessus/ci-dessous (I3, I1) : ceux-là
+  // ont une signature INVALIDE — un mode d'échec différent, qui court-circuite
+  // avant même d'atteindre `findTrustedSession` (`jwt.verify` échoue avant
+  // `TokenExpiredError`). Ici la signature est AUTHENTIQUE, seulement expirée.
+  describe('JWT authentique-mais-expiré d\'AUTRUI + session de confiance PROPRE — bloqué par l\'unicité de sessionToken (task-1-fix-round-4)', () => {
+    const ATTACKER_RAW_SESSION_TOKEN = 'attacker-own-trusted-session-token';
+    const ATTACKER_USER_ID = 'attacker-user-1';
+    const VICTIM_USER_ID = 'victim-user-1';
+
+    /**
+     * Mock `userSession.findFirst` qui simule fidèlement une collection
+     * `UserSession` réelle sous la contrainte `@unique` de `sessionToken` :
+     * une seule ligne existe pour ce jeton (celle de l'attaquant, propriétaire
+     * réel du jeton), et le filtre est un AND sur TOUTES les clés de `where`
+     * — exactement le comportement Mongo/Prisma. Contrairement à
+     * `overrides.trustedSession` (stub uniforme, ignore `where`), ce mock
+     * distingue vraiment : la requête ne matche QUE si `userId` demandé ET
+     * `sessionToken` demandé correspondent TOUS LES DEUX à la ligne stockée.
+     * Si une future régression retirait `userId` du `where` produit par
+     * `findTrustedSession`, ce mock cesserait de filtrer dessus et
+     * matcherait par le seul `sessionToken` — faisant tomber le test négatif
+     * ci-dessous.
+     */
+    function buildFaithfulUniqueSessionPrisma() {
+      const storedRow = {
+        id: 'session-attacker',
+        userId: ATTACKER_USER_ID,
+        sessionToken: hashSessionToken(ATTACKER_RAW_SESSION_TOKEN),
+        isValid: true,
+        isTrusted: true,
+      };
+      const prisma = buildFakePrisma();
+      prisma.userSession.findFirst = jest.fn<any>().mockImplementation(({ where }: any) => {
+        const matches = Object.entries(where).every(([key, expected]) => {
+          if (key === 'expiresAt') return true; // fraîcheur, non simulée ici
+          return (storedRow as Record<string, unknown>)[key] === expected;
+        });
+        return Promise.resolve(matches ? { id: storedRow.id } : null);
+      });
+      return prisma;
+    }
+
+    it("refuse le JWT authentique-mais-expiré de la VICTIME, même accompagné de la PROPRE session de confiance valide de l'attaquant", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFaithfulUniqueSessionPrisma();
+      await registerTusRoutes(buildFakeFastify(prisma));
+      if (!captured) throw new Error('onUploadCreate not captured');
+
+      // Signature AUTHENTIQUE (même secret que le serveur) — pas un jeton
+      // forgé — décodant vers l'identifiant de la VICTIME, simplement expiré.
+      const victimAuthenticExpiredToken = jwt.sign({ userId: VICTIM_USER_ID }, JWT_SECRET, { expiresIn: -10 });
+
+      await expect(
+        captured.onUploadCreate(
+          {
+            headers: headersFrom({
+              authorization: `Bearer ${victimAuthenticExpiredToken}`,
+              'x-session-token': ATTACKER_RAW_SESSION_TOKEN,
+            }),
+          },
+          { metadata: { filename: 'voice.webm', filetype: 'audio/webm' }, size: WEBM_HEADER.length }
+        )
+      ).rejects.toMatchObject({ status_code: 401 });
+
+      expect(prisma.userSession.findFirst).toHaveBeenCalledWith({
+        where: {
+          sessionToken: hashSessionToken(ATTACKER_RAW_SESSION_TOKEN),
+          userId: VICTIM_USER_ID,
+          isValid: true,
+          isTrusted: true,
+          expiresAt: { gt: expect.any(Date) },
+        },
+      });
+      expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
+    });
+
+    it("contrôle positif : la MÊME session de confiance accepte quand elle accompagne le jeton expiré de SON PROPRE propriétaire (le mock discrimine vraiment, ce n'est pas un stub toujours-null)", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      const prisma = buildFaithfulUniqueSessionPrisma();
+
+      const result = await runFullUpload({
+        prisma,
+        headers: {
+          authorization: `Bearer ${jwt.sign({ userId: ATTACKER_USER_ID }, JWT_SECRET, { expiresIn: -10 })}`,
+          'x-session-token': ATTACKER_RAW_SESSION_TOKEN,
+        },
+        filename: 'voice.webm',
+        filetype: 'audio/webm',
+        bytes: WEBM_HEADER,
+      });
+
+      expect(result.status_code).toBe(200);
+      const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
+      expect(createCall.data.uploadedBy).toBe(ATTACKER_USER_ID);
+    });
+  });
+
   describe('sans credential — inchangé', () => {
     it('refuse une requête sans Authorization ni X-Session-Token', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
@@ -582,6 +703,21 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await expect(
         captured.onIncomingRequest({ headers: headersFrom({}) }, 'legacy-upload')
       ).resolves.toBeUndefined();
+    });
+
+    // task-1-fix-round-4 — AVANT : ce `catch` traitait TOUTE erreur de
+    // `getUpload` (pas seulement 404/410, les deux SEULS codes qui signifient
+    // une absence réelle) comme « rien à protéger, laisser passer » — une
+    // panne du magasin (E/S, permission…) ouvrait donc l'accès PAR DÉFAUT à
+    // un upload qui existe bel et bien, faute d'avoir pu lire ses métadonnées.
+    it("NE masque PAS une erreur de magasin qui ne signifie pas une absence — la propage, ne laisse jamais passer par défaut", async () => {
+      const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
+      await registerTusRoutes(buildFakeFastify(buildFakePrisma()));
+      if (!captured) throw new Error('onIncomingRequest not captured');
+
+      await expect(
+        captured.onIncomingRequest({ headers: headersFrom({}) }, 'storage-error-upload-id')
+      ).rejects.toMatchObject({ status_code: 500 });
     });
 
     it('refuse un PATCH/HEAD/DELETE sans aucun credential sur un upload existant', async () => {

@@ -155,13 +155,28 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       let existingUpload: Awaited<ReturnType<typeof uploadDataStore.getUpload>>;
       try {
         existingUpload = await uploadDataStore.getUpload(uploadId);
-      } catch {
-        // Pas encore créé (POST — `uploadId` est un id FRAÎCHEMENT généré à
-        // cet instant, rien à comparer ; `onUploadCreate` gère déjà sa propre
-        // authentification) ou déjà disparu/expiré : dans les deux cas, le
-        // gestionnaire réel de `@tus/server` fait le même appel juste après
-        // et rend lui-même le 404/410 approprié. Rien à protéger ici.
-        return;
+      } catch (err) {
+        // task-1-fix-round-4 — AVANT : ce `catch` traitait TOUTE erreur (pas
+        // seulement « introuvable ») comme « rien à protéger, laisser passer »
+        // — une panne du magasin (E/S, permission, config indisponible…)
+        // ouvrait donc l'accès PAR DÉFAUT à un upload qui EXISTE bel et bien,
+        // faute d'avoir pu en lire les métadonnées. Seuls 404
+        // (`ERRORS.FILE_NOT_FOUND` — id inconnu, cas du POST ; `onUploadCreate`
+        // gère déjà sa propre authentification) et 410
+        // (`ERRORS.FILE_NO_LONGER_EXISTS` — enregistrement présent mais
+        // fichier disparu du disque, upload expiré) signifient réellement une
+        // ABSENCE d'upload à protéger — les deux SEULS codes que
+        // `FileStore.getUpload` (`@tus/file-store`, `dist/index.js`) documente
+        // pour ce cas. Dans les deux cas, le gestionnaire réel de
+        // `@tus/server` fait le même appel juste après et rend lui-même le
+        // 404/410 approprié. Toute autre erreur est rethrow : `Server.handle`
+        // (`@tus/server`, `server.js`) la convertit en réponse HTTP
+        // (`error.status_code || 500`), jamais en laissez-passer silencieux.
+        const statusCode = (err as { status_code?: number } | null)?.status_code;
+        if (statusCode === 404 || statusCode === 410) {
+          return;
+        }
+        throw err;
       }
 
       const ownerUserId = existingUpload.metadata?.userId;
