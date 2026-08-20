@@ -10,6 +10,7 @@
 
 import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -123,6 +124,18 @@ export class PostReactionService {
 
     if (existingReaction) {
       return { ...this.mapReactionToData(existingReaction), unchanged: true };
+    }
+
+    // Plafond des cinq réactions (2026-08-20) : règle déclarée UNE SEULE
+    // FOIS dans `packages/shared/utils/reaction-limit.ts`. Comptage effectué
+    // uniquement ici, APRÈS avoir établi (bloc ci-dessus) qu'il s'agit d'une
+    // création réelle — un `findFirst` qui aurait trouvé l'emoji déjà posé ne
+    // consomme aucune place et ne doit jamais être bloqué par ce plafond.
+    const existingReactionCount = await this.prisma.postReaction.count({
+      where: { postId, userId }
+    });
+    if (!isReactionAllowed(existingReactionCount)) {
+      throw new Error(REACTION_LIMIT_REACHED_MESSAGE);
     }
 
     try {
