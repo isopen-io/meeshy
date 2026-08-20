@@ -18,6 +18,13 @@ const makePrismaMock = () => {
       findMany: jest.fn(async ({ where }: any) =>
         rows.filter(r => r.attachmentId === where.attachmentId
           && (where.participantId ? r.participantId === where.participantId : true))),
+      // Plafond des cinq réactions (2026-08-20) : décompte des réactions déjà
+      // posées par CE participant sur CETTE pièce jointe, tous emojis
+      // confondus — c'est ce que `addAttachmentReaction` interroge avant une
+      // création réelle.
+      count: jest.fn(async ({ where }: any) =>
+        rows.filter(r => r.attachmentId === where.attachmentId
+          && r.participantId === where.participantId).length),
       // Miroir de l'upsert Mongo réel sur la clé TRIPLE
       // (attachmentId, participantId, emoji) : un second emoji du même
       // participant EMPILE une ligne de plus, il n'écrase jamais la première.

@@ -12,6 +12,7 @@ import type {
   ReactionUpdateEvent
 } from '@meeshy/shared/types';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 
 /**
@@ -153,6 +154,20 @@ export class ReactionService {
     });
     if (existingReaction) {
       return { reaction: this.mapReactionToData(existingReaction), unchanged: true };
+    }
+
+    // Plafond des cinq réactions (2026-08-20) : la règle est déclarée UNE
+    // SEULE FOIS dans `packages/shared/utils/reaction-limit.ts` — ici on ne
+    // fait que compter et décider. Ce comptage n'a lieu QUE lorsqu'on sait
+    // déjà (bloc ci-dessus) qu'il s'agit d'une création réelle : un `upsert`
+    // qui ne ferait que confirmer un emoji déjà posé ne consomme aucune place,
+    // donc ne doit jamais être bloqué par ce garde-fou, sous peine de rendre
+    // impossible de reposer un emoji déjà présent une fois au plafond.
+    const existingReactionCount = await this.prisma.reaction.count({
+      where: { messageId, participantId }
+    });
+    if (!isReactionAllowed(existingReactionCount)) {
+      throw new Error(REACTION_LIMIT_REACHED_MESSAGE);
     }
 
     // Multi-réactions (2026-08-18) : la clé unique DB porte le TRIPLET
