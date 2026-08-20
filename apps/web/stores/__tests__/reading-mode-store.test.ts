@@ -54,9 +54,9 @@ describe('reading mode — le choix est collant, par conversation', () => {
 
   // Le bouton `Aa` du volume 4 : une bascule densité, réversible d'un geste.
   // Départ EXPLICITE en Focal — le défaut ambiant est désormais Bulles
-  // (2026-08-20), et `nextDensity('bubble')` rentre par Focal (cf. le témoin
-  // dédié juste en dessous), pas par Script : fixer le point de départ rend
-  // ce témoin indépendant de ce que vaut le défaut.
+  // (2026-08-20) : fixer le point de départ rend ce témoin indépendant de ce
+  // que vaut le défaut (voir le témoin dédié juste en dessous pour le
+  // départ Bulles).
   it('toggles between Focal and Script density without touching other lenses', () => {
     const { setMode, toggleDensity } = useReadingModeStore.getState();
     setMode(CONVERSATION_A, 'focal');
@@ -68,13 +68,14 @@ describe('reading mode — le choix est collant, par conversation', () => {
     expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
   });
 
-  // Depuis la vue bulles héritée, `Aa` doit ramener dans les rangées plates
-  // plutôt que de laisser l'utilisateur coincé hors des deux densités.
-  it('brings the legacy bubble view back into the flat densities', () => {
+  // Round 1 (2026-08-20) : l'enchaînement d'origine, rétabli — depuis la vue
+  // bulles héritée (défaut ou choix explicite), `Aa` saute directement à
+  // Script plutôt que de faire une escale par Focal.
+  it('jumps directly from the legacy bubble view to Script density', () => {
     useReadingModeStore.getState().setMode(CONVERSATION_A, 'bubble');
 
     useReadingModeStore.getState().toggleDensity(CONVERSATION_A);
 
-    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
+    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('script');
   });
 });

@@ -263,25 +263,26 @@ describe('mux du fil — LensSwitcher et le menu Lentille sont indiscernables', 
   });
 
   /**
-   * MIS À JOUR EXPRÈS (2026-08-17, puis RE-mis à jour le 2026-08-20).
+   * MIS À JOUR EXPRÈS (2026-08-17, puis RE-mis à jour le 2026-08-20, puis
+   * REVENU EN ARRIÈRE — round 1 du 2026-08-20).
    *
    * Le fil part en Bulles (défaut). `Aa` reste un CHOIX explicite — la
    * façade lit `auto`, le traduit, puis écrit le résultat de `nextDensity` —
    * donc il continue de gouverner, et le fait SORTIR du défaut.
    *
-   * Ce que la traduction de `auto` VAUT a changé le 2026-08-20
-   * (`DEFAULT_READING_MODE` passe de `focal` à `bubble`,
-   * `lib/conversations/reading-mode.ts`) : la façade lit désormais `auto` et
-   * le traduit en `bubble`, pas `focal`. `nextDensity('bubble')` rentre par
-   * `Focal` — même règle que « depuis la vue bulles héritée, `Aa` ramène
-   * dans les densités plates par Focal » (`stores/__tests__/reading-mode-store.test.ts`,
-   * "brings the legacy bubble view back into the flat densities"). Avant ce
-   * lot, la façade calculait encore `nextDensity('focal')` = `script` alors
-   * que le fil affichait déjà les Bulles — une incohérence entre ce que
-   * l'écran montrait et ce que la façade croyait montrer. Ce défaut est
-   * maintenant net : premier `Aa` depuis Bulles ⇒ Focal, pas Script.
+   * Passer le défaut de Focal à Bulles (Task 5) exposait au cas ORDINAIRE
+   * (aucune préférence) une règle de `nextDensity` jusque-là réservée au
+   * choix explicite de Bulles : « depuis une vue non plate, entrer par Focal
+   * plutôt que de laisser l'utilisateur hors des deux densités ». Pour tout
+   * le monde sans préférence, ça rallongeait la séquence à trois temps
+   * (Bulles → Focal → Script) là où elle en tenait deux avant Task 5. Le
+   * propriétaire a tranché contre cet effet de bord : l'enchaînement
+   * d'origine revient — un seul `Aa` depuis Bulles atterrit directement sur
+   * Script. Ce témoin rougirait si l'étape Focal était réintroduite (la
+   * densité lue après le premier `Aa` redeviendrait `'focal'`, pas
+   * `'script'`).
    */
-  it('`Aa` (bascule de densité) fait sortir le fil du défaut Bulles vers Focal', async () => {
+  it('`Aa` (bascule de densité) fait sortir le fil du défaut Bulles vers Script', async () => {
     mockFocalActive = true;
     render(<ConversationMessages {...defaultProps} reverseOrder />);
     await screen.findByTestId('messages-display');
@@ -293,16 +294,6 @@ describe('mux du fil — LensSwitcher et le menu Lentille sont indiscernables', 
     // `findBy` et non `getBy` : le module Focal est chargé par `next/dynamic`,
     // donc son premier montage — qui n'a plus lieu au rendu initial depuis le
     // défaut Bulles — passe par une résolution asynchrone.
-    expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
-      'data-density',
-      'focal'
-    );
-
-    // Un second `Aa` bascule ensuite Focal → Script, exactement comme avant.
-    act(() => {
-      useReadingModeStore.getState().toggleDensity(CONVERSATION_ID);
-    });
-
     expect(await screen.findByTestId('focal-thread-mount')).toHaveAttribute(
       'data-density',
       'script'

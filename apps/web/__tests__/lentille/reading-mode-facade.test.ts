@@ -179,8 +179,8 @@ describe('façade — le contrat public de `reading-mode-store` ne bouge pas', (
 
   // Départ EXPLICITE en Focal (voir `stores/__tests__/reading-mode-store.test.ts`
   // pour le même ajustement) : le défaut ambiant est désormais Bulles, et
-  // `nextDensity('bubble')` rentre par Focal — fixer le point de départ rend
-  // ce témoin indépendant de ce que vaut le défaut.
+  // fixer le point de départ rend ce témoin indépendant de ce que vaut le
+  // défaut (voir le témoin dédié juste en dessous pour le départ Bulles).
   it('`Aa` bascule Focal ↔ Script', () => {
     act(() => {
       useReadingModeStore.getState().setMode(CONVERSATION_A, 'focal');
@@ -197,7 +197,9 @@ describe('façade — le contrat public de `reading-mode-store` ne bouge pas', (
     expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
   });
 
-  it('`Aa` ramène la vue à bulles héritée dans les densités plates', () => {
+  // Round 1 (2026-08-20) : l'enchaînement d'origine, rétabli — depuis la vue
+  // bulles héritée, `Aa` saute directement à Script, sans escale par Focal.
+  it('`Aa` saute directement de la vue bulles héritée à Script', () => {
     act(() => {
       useReadingModeStore.getState().setMode(CONVERSATION_A, 'bubble');
     });
@@ -205,7 +207,7 @@ describe('façade — le contrat public de `reading-mode-store` ne bouge pas', (
       useReadingModeStore.getState().toggleDensity(CONVERSATION_A);
     });
 
-    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('focal');
+    expect(useReadingModeStore.getState().getMode(CONVERSATION_A)).toBe('script');
   });
 
   it('les trois lentilles du sélecteur historique font toutes un ALLER-RETOUR — `bubble` compris (amendement S1)', () => {

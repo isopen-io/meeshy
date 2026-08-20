@@ -52,11 +52,20 @@ export function isFlatReadingMode(mode: ReadingMode): boolean {
 }
 
 /**
- * `Aa` : Focal ↔ Script. Depuis la vue bulles héritée, on rentre dans les
- * densités plates par Focal plutôt que de laisser l'utilisateur hors des deux.
+ * `Aa` : bascule de densité.
+ *
+ * Un choix EXPLICITE de Focal ou de Script continue d'alterner entre les
+ * deux, exactement comme avant. Depuis la vue bulles héritée — défaut ou
+ * choix explicite — `Aa` saute directement à Script : l'enchaînement
+ * d'origine, rétabli round 1 (2026-08-20) après que la bulle soit devenue le
+ * défaut (Task 5) ait exposé au cas ordinaire une escale par Focal jusque-là
+ * réservée au choix explicite de Bulles, rallongeant la séquence à trois
+ * temps pour tout le monde. Le propriétaire a tranché contre cet effet de
+ * bord : voir `stores/__tests__/reading-mode-store.test.ts`,
+ * "jumps directly from the legacy bubble view to Script density".
  */
 export function nextDensity(mode: ReadingMode): ReadingMode {
-  return mode === 'focal' ? 'script' : 'focal';
+  return mode === 'script' ? 'focal' : 'script';
 }
 
 // =============================================================================
