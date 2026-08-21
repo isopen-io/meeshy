@@ -5,6 +5,24 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-21 — comment on-demand translation: gotchas
+- **MockK `coAnswers` is a member infix, NOT a top-level import.** `import io.mockk.coAnswers`
+  → *Unresolved reference*. Write `coEvery { … } coAnswers { gate.await() }` and import nothing
+  extra (only `coEvery`). Same for `answers`. (The build failed only at test-compile, so it was
+  cheap to catch — but it costs a full `compileDebugUnitTestKotlin` cycle.)
+- **Flipping a dead arm live breaks the test that asserted the dead behaviour.** The comment
+  request arm was gated behind `CommentProjection.build` NOT passing `includeTranslatable`; a
+  pre-existing test (`content-less language is inert`) asserted the old `RequestTranslation -> Unit`
+  no-op. Enabling the arm made a content-less tap fire a request (relaxed mock → non-null →
+  display changed). This is not a regression — it is the slice's intended behaviour change, so the
+  obsolete test was **rewritten to the new contract** (a content-less tap now requests + leaves the
+  display until a translation lands), a strictly stronger assertion. Not a floor-lowering.
+- **Fold on-demand translation onto the LIVE row, translations-only** (`retranslated(id, translations)`),
+  never replace the whole comment from the tap-time snapshot: `replyCount` lives on `ApiPostComment`
+  and a realtime reply can bump it while the translate is in flight — a wholesale swap would revert it.
+  (PostDetail could `rawPost.value = merged` wholesale because its count overlay is a *separate* flow;
+  comments carry the mutable count on the row itself, so the rule differs.)
+
 ## 2026-08-21 (latest) — `--offline` full-assemble trap; `dl.google.com` reachability varies by container; on-demand translation for a caller-held post = a stateless repo method returning the merged post, NOT the cache-mutating one.
 
 Slice `feed-post-detail-translation-request`. Three lessons.

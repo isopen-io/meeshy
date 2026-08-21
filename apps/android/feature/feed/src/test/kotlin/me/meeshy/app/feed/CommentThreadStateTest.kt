@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import org.junit.Test
 
 /**
@@ -227,5 +228,34 @@ class CommentThreadStateTest {
             .removed("pending-0")
         assertThat(state.comments.map { it.id }).containsExactly("pending-1")
         assertThat(state.pendingIds).containsExactly("pending-1")
+    }
+
+    @Test
+    fun retranslated_replacesOnlyTheMatchingCommentsTranslations() {
+        val entries = mapOf("es" to ApiPostTranslationEntry(text = "Hola"))
+        val state = CommentThreadState()
+            .appended(page = listOf(comment("a"), comment("b")), nextCursor = null, more = false)
+            .retranslated("a", entries)
+
+        assertThat(state.comments.first { it.id == "a" }.translations).isEqualTo(entries)
+        assertThat(state.comments.first { it.id == "b" }.translations).isNull()
+    }
+
+    @Test
+    fun retranslated_preservesEveryOtherFieldNotablyReplyCount() {
+        val state = CommentThreadState()
+            .appended(page = listOf(comment("a")), nextCursor = null, more = false)
+            .bumpReplyCount("a", 3)
+            .retranslated("a", mapOf("es" to ApiPostTranslationEntry(text = "Hola")))
+
+        assertThat(state.comments.single().replyCount).isEqualTo(3)
+    }
+
+    @Test
+    fun retranslated_isInertForAnUnknownComment() {
+        val base = CommentThreadState()
+            .appended(page = listOf(comment("a")), nextCursor = null, more = false)
+        assertThat(base.retranslated("zzz", mapOf("es" to ApiPostTranslationEntry(text = "Hola"))))
+            .isSameInstanceAs(base)
     }
 }
