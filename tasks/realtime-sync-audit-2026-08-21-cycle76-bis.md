@@ -1,7 +1,13 @@
-# Cycle 76 — Android écoutait deux canaux que personne ne prononce
+# Cycle 76-bis — Android écoutait deux canaux que personne ne prononce
 
 **Date** : 2026-08-21
 **Branche** : `claude/keen-hamilton-od92vt`
+**Suffixe `-bis`** : deux cycles ont porté le numéro 76 en parallèle. L'autre
+(`claude/keen-hamilton-rhm97u`, `…-cycle76.md`) a fusionné le premier et garde le
+nom canonique. Les deux partent de la MÊME leçon du cycle 75 et en exploitent les
+deux moitiés : l'autre cherche un émetteur sans écouteur (`message:restored-for-me`
+non écouté par iOS), celui-ci un écouteur branché sur un nom qui n'existe pas.
+Aucun fichier de code en commun.
 **Périmètre** :
 - android (`sdk-core/.../socket/MessageSocketManager.kt`,
   `core/model/.../SocketEvents.kt`, `feature/chat/.../ChatViewModel.kt`)
