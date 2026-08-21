@@ -3150,8 +3150,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       flight is ignored (`FeedUiState.translatingLanguages`, keyed `postId|lang`, mirrors chat). +20 tests
       (+8 `PostTranslationMergeTest`, +8 `PostRepositoryTest`, +3 `FeedViewModelTest`, +1 `FeedPostBuilderTest`;
       mutation-proved ×2). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL.
-      **Follow-up:** the same request arm on the post-detail + comments surfaces (`PostDetailViewModel`/
-      `PostCommentsViewModel` still carry the dead `RequestTranslation -> Unit` arm), and the per-story timeline strip.
+      **Post-detail request arm shipped** (slice `feed-post-detail-translation-request`, 2026-08-21):
+      the full-screen post opened from the feed reused `FeedPostBuilder.build` (so its strip already passed
+      `includeTranslatable = true`), but `PostDetailViewModel.onFlagTap` carried the dead `RequestTranslation
+      -> Unit` arm — a translatable chip surfaced yet did nothing. That arm now calls a per-post
+      `requestOnDemandTranslation` (in-flight guard via new `PostDetailUiState.translatingLanguages` /
+      `PostDetailStatus.translating`): it blocking-translates through the new stateless
+      `PostRepository.translatePost(post, target): ApiPost?` and — because the detail VM owns its post in
+      `rawPost` outside the feed cache — swaps the freshly-merged post into `rawPost` + points `activeCode` at
+      the new language, so the strip's translatable chip becomes a live content chip and the reader lands on
+      it. `translatePost` and the cache-mutating `requestOnDemandTranslation` now share the single
+      translate-then-`PostTranslationMerge` law (`translateAndMerge`); a failed/blank/idempotent translation
+      leaves the strip untouched to retry; a second in-flight tap is ignored. +10 tests (+7 `PostRepositoryTest`
+      for `translatePost`, +3 `PostDetailViewModelTest`; mutation-proved ×2 — in-flight guard, active-language
+      switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
+      **Follow-up:** the same request arm on the **comments** surface (`PostCommentsViewModel` still carries the
+      dead `RequestTranslation -> Unit` arm — heavier: comments translate `ApiPostComment` via their own path,
+      no `PostRepository.translatePost` reuse), and the per-story timeline strip.
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`

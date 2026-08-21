@@ -5,7 +5,31 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
-## 2026-08-21 (latest) — SDK bootstrap: on THIS container the pristine `android-37.0` recipe is the one that works; the `cp→android-37` patch recipe FAILS. And on-demand translation = mirror the chat repository, not the iOS socket path.
+## 2026-08-21 (latest) — `--offline` full-assemble trap; `dl.google.com` reachability varies by container; on-demand translation for a caller-held post = a stateless repo method returning the merged post, NOT the cache-mutating one.
+
+Slice `feed-post-detail-translation-request`. Three lessons.
+
+**(1) `dl.google.com` reachability is not fixed per environment.** Prior runs recorded it 403-blocked (forcing
+CI-as-compiler). THIS container reached it (`curl -o /dev/null -w '%{http_code}'` → **200**), so the full local
+SDK bootstrap + `meeshy.sh check` ran locally. Always probe it at run start; don't assume the last run's verdict.
+
+**(2) `--offline` breaks a *full* `assembleDebug` after a *targeted* run.** If your first gradle invocation only
+built `:sdk-core` + `:feature:feed` (targeted `--tests`), only those modules' deps are cached. A subsequent
+`./gradlew assembleDebug testDebugUnitTest --offline` then dies resolving `:app`'s deps (androidx.browser:1.8.0,
+com.google.zxing:core, androidx.activity:1.7.0 …) — "No cached version … available for offline mode". Run the
+full check **online** the first time; `--offline` is only safe once every module's deps are warm.
+
+**(3) On-demand translation for a post the VM owns outside the feed cache.** `PostRepository
+.requestOnDemandTranslation(postId, target)` mutates `_feedCache` and returns `Boolean` — perfect for the feed
+list VM that observes that cache. But `PostDetailViewModel` holds its post in a private `rawPost` from an
+independent `getPost` fetch and never observes `_feedCache`, so that method's mutation would be invisible to it.
+The right shape is a **stateless** `translatePost(post, target): ApiPost?` that returns the merged post; the VM
+swaps it into `rawPost` and points `activeCode` at the new language. Factor the shared trim→translate→
+`PostTranslationMerge` law into one private `translateAndMerge` and have BOTH methods delegate (behaviour of the
+cache one is identical under single-thread — its existing tests stay green). Same lesson will recur for comments
+(`ApiPostComment`, different type/path — needs its own comment-translation method, no `translatePost` reuse).
+
+## 2026-08-21 — SDK bootstrap: on THIS container the pristine `android-37.0` recipe is the one that works; the `cp→android-37` patch recipe FAILS. And on-demand translation = mirror the chat repository, not the iOS socket path.
 
 Slice `feed-post-translation-request`. Two lessons.
 
