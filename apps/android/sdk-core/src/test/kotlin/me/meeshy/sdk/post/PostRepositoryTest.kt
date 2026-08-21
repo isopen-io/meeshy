@@ -461,4 +461,90 @@ class PostRepositoryTest {
 
         assertThat(stored).isFalse()
     }
+
+    // --- On-demand post translation for a caller-held post (translatePost) ---
+
+    @Test
+    fun translatePost_translatesTheSourceAndReturnsTheMergedPost() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translatePost(
+            ApiPost(id = "p9", content = "Bonjour", originalLanguage = "fr"),
+            "es",
+        )
+
+        assertThat(merged?.translations?.get("es")?.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun translatePost_forwardsTheSourceTextAndLanguages_andTrimsTheTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+        val slot = slot<TranslateRequest>()
+        coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
+
+        repo.translatePost(ApiPost(id = "p9", content = "Bonjour", originalLanguage = "fr"), "  es  ")
+
+        assertThat(slot.captured.text).isEqualTo("Bonjour")
+        assertThat(slot.captured.sourceLanguage).isEqualTo("fr")
+        assertThat(slot.captured.targetLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun translatePost_isInertForABlankTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "   ")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translatePost_isInertWhenThePostHasNoSourceText() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "   "), "es")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translatePost_returnsNullWhenTheTranslatorFails() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } throws IOException("offline")
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translatePost_returnsNullForABlankTranslation() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("   ")
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translatePost_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translatePost(
+            ApiPost(
+                id = "p9",
+                content = "Bonjour",
+                originalLanguage = "fr",
+                translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")),
+            ),
+            "es",
+        )
+
+        assertThat(merged).isNull()
+    }
 }

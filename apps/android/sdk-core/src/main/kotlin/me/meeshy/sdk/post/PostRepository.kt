@@ -412,11 +412,37 @@ class PostRepository @Inject constructor(
      * blank string, or the translation already matches what is cached (idempotent).
      */
     suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
-        val target = targetLanguage.trim()
-        if (target.isEmpty()) return false
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val merged = translateAndMerge(post, targetLanguage) ?: return false
+        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+        return true
+    }
+
+    /**
+     * On-demand translation for a post the caller already holds (the post-detail
+     * surface owns its post outside the feed cache): blocking-translates [post]'s
+     * original text into [targetLanguage] and returns the merged post the caller
+     * can swap in. Returns `null` — inert, no state to change — for the same reasons
+     * [requestOnDemandTranslation] returns `false` (blank target, no source text,
+     * network failure, blank translation, or an idempotent no-op). The cache-mutating
+     * [requestOnDemandTranslation] and this pull-and-return variant share the single
+     * translate-then-[PostTranslationMerge] law in [translateAndMerge].
+     */
+    suspend fun translatePost(post: ApiPost, targetLanguage: String): ApiPost? =
+        translateAndMerge(post, targetLanguage)
+
+    /**
+     * The shared translate-then-merge law: trim the target, read the post's source
+     * text, blocking-translate it, and fold the result into [post] via
+     * [PostTranslationMerge]. Returns the merged post, or `null` when nothing should
+     * change (blank target, no source, network failure, blank translation, or an
+     * idempotent match — [PostTranslationMerge.mergeTranslation] returning `null`).
+     */
+    private suspend fun translateAndMerge(post: ApiPost, targetLanguage: String): ApiPost? {
+        val target = targetLanguage.trim()
+        if (target.isEmpty()) return null
         val source = post.content
-        if (source.isNullOrBlank()) return false
+        if (source.isNullOrBlank()) return null
 
         val translated = when (
             val result = apiCall {
@@ -430,22 +456,11 @@ class PostRepository @Inject constructor(
             }
         ) {
             is NetworkResult.Success -> result.data.translatedText
-            is NetworkResult.Failure -> return false
+            is NetworkResult.Failure -> return null
         }
-        if (translated.isBlank()) return false
+        if (translated.isBlank()) return null
 
-        var stored = false
-        _feedCache.value = _feedCache.value?.map { current ->
-            if (current.id != postId) return@map current
-            val merged = PostTranslationMerge.mergeTranslation(current, target, translated)
-            if (merged != null) {
-                stored = true
-                merged
-            } else {
-                current
-            }
-        }
-        return stored
+        return PostTranslationMerge.mergeTranslation(post, target, translated)
     }
 
     suspend fun viewPost(postId: String, duration: Int? = null): NetworkResult<Unit> =

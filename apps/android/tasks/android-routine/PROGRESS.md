@@ -2,6 +2,61 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Post-detail on-demand translation shipped** (slice `feed-post-detail-translation-request`,
+> feature-parity's Feed §F Prisme line — the post-detail arm of the `request-missing-languages` follow-up;
+> only the **comments** arm + the per-story timeline strip remain there).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 14 open PRs at branch
+> time (#3268/#3267/#3266/#3263/#3262/#3259/#3255/#3253/#3250/#3249/#3247/#3245/#3243/#3242 web/shared/
+> gateway/ios/sdk) are none android-routine. Prior android iteration (`feed-post-translation-request`, #3265)
+> already merged into main. Branched off freshly-fetched `origin/main` (`83687db6`).
+>
+> **SDK bootstrap — `dl.google.com` was REACHABLE this run** (`curl` → 200; unlike prior containers where it
+> was 403-blocked). Pristine `android-37.0` recipe worked: `sdkmanager --channel=3 "platforms;android-37.0"
+> "build-tools;35.0.0" "platform-tools"`; `local.properties` → `sdk.dir=$HOME/android-sdk`; run online once
+> then `-Pandroid.builder.sdkDownload=false`. **Trap re-confirmed**: `--offline` fails a full `assembleDebug`
+> when only sdk-core/feature:feed deps were cached by an earlier targeted run — `:app` needs androidx.browser,
+> zxing, activity etc. that were never fetched. Run the full `assembleDebug testDebugUnitTest` ONLINE.
+>
+> **The gap (read-only recon over iOS + Android)**: the feed's flag-strip on-demand request arm (slice
+> `feed-post-translation-request`) left `PostDetailViewModel.onFlagTap`'s `RequestTranslation -> Unit` arm
+> dead. `FeedPostBuilder.build` already sets `includeTranslatable = true` universally, so the post-detail
+> strip *surfaces* a configured-but-absent language as a translatable chip — but tapping it did nothing.
+> The feed's own `PostRepository.requestOnDemandTranslation(postId, target)` mutates `_feedCache`, which the
+> detail VM does NOT observe (it owns its post in `rawPost` from an independent `getPost` fetch). So the
+> faithful move was a **stateless** repository method returning the merged post the caller swaps in.
+>
+> **Repository (`:sdk-core` `PostRepository`)**: new `translatePost(post: ApiPost, target): ApiPost?` — trims
+> target, reads source, blocking-translates via `translationApi.translate`, folds into the post via
+> `PostTranslationMerge.mergeTranslation`; returns the merged post or `null` (blank target/no source/network
+> failure/blank translation/idempotent). Extracted the shared `translateAndMerge` law and **refactored the
+> existing `requestOnDemandTranslation` to delegate to it** (behaviour identical under single-thread — its 8
+> tests stayed green), so both surfaces share one translate-then-merge path.
+>
+> **VM wiring (`:feature:feed` `PostDetailViewModel`)**: `onFlagTap`'s `RequestTranslation` arm now calls a
+> new private `requestOnDemandTranslation(target)` — in-flight guard via new `PostDetailStatus.translating`
+> (surfaced as `PostDetailUiState.translatingLanguages`, symmetric with `FeedUiState`); `viewModelScope.launch`
+> translate → on success `rawPost.value = merged` + `activeCode.value = target` so the card switches once the
+> merged post lands; cancellation-safe, failure surfaces `errorMessage`, `finally` clears the in-flight key.
+>
+> **Tests: +10** — `PostRepositoryTest` +7 (`translatePost`: translates+returns merged / forwards source+langs
+> & trims target / inert blank target / inert no source / null on translator failure / null on blank
+> translation / idempotent null), `PostDetailViewModelTest` +3 (translatable tap requests & switches to merged
+> / failed tap leaves display unchanged / second in-flight tap no duplicate). **Mutation (RED proof) ×2**:
+> (a) remove the VM in-flight guard → **exactly** `a second tap while a translation is in flight does not fire
+> a duplicate request` fails (1 of 33); (b) drop `activeCode.value = target` → **exactly** `onFlagTap on a
+> translatable language requests it and switches to the merged translation` fails (1 of 33). Both restored.
+>
+> **Verified**: targeted `:sdk-core` + `:feature:feed` `testDebugUnitTest` green; full `assembleDebug`
+> `testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → BUILD SUCCESSFUL locally this run. Reviewer PASS.
+> Diff is `apps/android` only (4 code/test files + tracking docs).
+>
+> **Next**: the **comments** on-demand request arm (`PostCommentsViewModel.onCommentFlagTap` still carries the
+> dead `RequestTranslation -> Unit` arm) — heavier: comments are `ApiPostComment` translated via their own
+> path, so it needs a comment-translation repository method (no `translatePost` reuse). Re-scout the iOS
+> comment-translation path first. Otherwise the per-story timeline flag strip, or the Chat `slow`/retry glyph
+> tier (still waits on outbox retry-state plumbing). Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Feed on-demand post-translation shipped** (slice `feed-post-translation-request`,
 > feature-parity's Feed §F Prisme line — the `request-missing-languages` sub-gap, now `[x]`; only the
 > per-story timeline strip + the post-detail/comments request arms remain there).

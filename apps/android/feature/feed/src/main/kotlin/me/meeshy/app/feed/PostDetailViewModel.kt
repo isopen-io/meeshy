@@ -43,6 +43,7 @@ data class PostDetailUiState(
     val showSkeleton: Boolean = false,
     val notFound: Boolean = false,
     val errorMessage: String? = null,
+    val translatingLanguages: Set<String> = emptySet(),
 )
 
 @HiltViewModel
@@ -201,9 +202,9 @@ class PostDetailViewModel @Inject constructor(
     }
 
     /**
-     * Tap on the post's Prisme language-flag chip: switch the displayed language, or revert to
-     * the default resolution when the chip is already active. Inert until the post has loaded,
-     * and inert for a content-less language (a read-only strip never surfaces one). The pure
+     * Tap on the post's Prisme language-flag chip: switch the displayed language, revert to
+     * the default resolution when the chip is already active, or translate a configured-but-absent
+     * language on demand and switch to it once it lands. Inert until the post has loaded. The pure
      * [LanguageFlagTapResolver] owns the decision — one rule shared with the feed and chat.
      */
     fun onFlagTap(code: String) {
@@ -219,8 +220,38 @@ class PostDetailViewModel @Inject constructor(
         when (result) {
             is LanguageFlagTapResolver.Result.Activate -> activeCode.value = result.code
             LanguageFlagTapResolver.Result.Revert -> activeCode.value = null
-            is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * The viewer tapped a configured language the post has no content for yet: translate it on
+     * demand, swap the freshly-merged post into [rawPost] (so the strip's translatable chip becomes
+     * a live content chip), and point [activeCode] at it so the reader lands on the translation. A
+     * failed or inert translation leaves the strip untouched to retry; a second tap while the request
+     * is in flight is ignored via [PostDetailStatus.translating]. Mirror of the feed card's
+     * `requestOnDemandTranslation`, scoped to the single open post.
+     */
+    private fun requestOnDemandTranslation(targetLanguage: String) {
+        val post = rawPost.value ?: return
+        if (targetLanguage in status.value.translating) return
+        status.update { it.copy(translating = it.translating + targetLanguage) }
+        viewModelScope.launch {
+            try {
+                val merged = postRepository.translatePost(post, targetLanguage)
+                if (merged != null) {
+                    rawPost.value = merged
+                    activeCode.value = targetLanguage
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                status.update { it.copy(error = e.message) }
+            } finally {
+                status.update { it.copy(translating = it.translating - targetLanguage) }
+            }
         }
     }
 
@@ -249,6 +280,7 @@ class PostDetailViewModel @Inject constructor(
             showSkeleton = showSkeleton,
             notFound = st.notFound,
             errorMessage = st.error,
+            translatingLanguages = st.translating,
         )
     }
 
@@ -263,4 +295,5 @@ private data class PostDetailStatus(
     val hasLoaded: Boolean = false,
     val notFound: Boolean = false,
     val error: String? = null,
+    val translating: Set<String> = emptySet(),
 )
