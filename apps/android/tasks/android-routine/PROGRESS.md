@@ -2,6 +2,75 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Feed on-demand post-translation shipped** (slice `feed-post-translation-request`,
+> feature-parity's Feed §F Prisme line — the `request-missing-languages` sub-gap, now `[x]`; only the
+> per-story timeline strip + the post-detail/comments request arms remain there).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 12 open PRs at branch
+> time (#3263/#3262/#3259/#3255/#3253/#3249/#3247/#3245/#3243/#3242 web/shared/gateway, #3257/#3250 iOS) are
+> none android-routine. Prior android iteration (`feed-realtime-comment-count`) already merged. Branched off
+> freshly-fetched `origin/main` (`6062746b`).
+>
+> **SDK bootstrap — the pristine-`android-37.0` recipe is the ONLY one that works on this container (the
+> `cp→android-37` patch recipe FAILS here):** `sdkmanager --channel=3 "platforms;android-37.0"` still writes
+> malformed metadata (`source.properties` → `ApiLevel=37.0`, "Platform 17"), but AGP 8.13 maps `compileSdk 37`
+> → the `android-37.0` **dir** directly and BUILDS GREEN. The intervening notes' `cp -r android-37.0 android-37`
+> + sed-to-`android-37` recipe was tried first here and FAILED: AGP's error message reads "compile SDK version
+> **37.0**" and it wants the minor-versioned dir, so a hand-made `android-37` (even with perfect metadata) is
+> never matched — `Failed to find target with hash string 'android-37'`. Two more traps: (1) a first `./gradlew`
+> auto-re-downloads the pristine malformed `android-37.0` on top of your patch → keep auto-download OFF with
+> `-Pandroid.builder.sdkDownload=false` after the initial install; (2) `--offline` fails the first ever run
+> (AGP 8.13.0 plugin not yet cached) — run online once. `assembleDebug testDebugUnitTest` green after (973 tasks).
+>
+> **The gap (scout + read-only recon over iOS + Android)**: iOS's feed flag strip routes a content-less
+> language tap to a translation request (`FeedPostCard.handleFlagTap` → `PostService.requestTranslation`,
+> REST `POST /posts/:id/translate`, completed by a socket event). Android's `FeedViewModel.onPostFlagTap`
+> had a **dead** `RequestTranslation -> Unit` arm and the strip passed `includeTranslatable = false`, so a
+> configured-but-absent language never even surfaced. Chat already shipped this exact pattern
+> (`ChatViewModel.requestOnDemandTranslation` → `MessageRepository.requestTranslation` translate+merge) — the
+> faithful, apps/android-only move was to mirror it (NOT iOS's socket path — Android has no post-translation
+> socket consumer, which would be blocked/cross-cutting).
+>
+> **Pure reducer (`:core:model` `PostTranslationMerge`)**: the map-keyed sibling of `MessageTranslationMerge`
+> — `mergeTranslation(post, target, translated): ApiPost?`. Blank target/text → null; identical entry already
+> present (case-insensitive key match, same text) → null; else upsert (replace in place under the original
+> key, else append under the trimmed code). No tombstone guard (ApiPost has no `deletedAt`).
+>
+> **Repository (`:sdk-core` `PostRepository`)**: gains `translationApi: TranslationApi` (Hilt-provided, as
+> `MessageRepository`) + `requestOnDemandTranslation(postId, target): Boolean` — trims target, reads the cached
+> post's source text, blocking-translates via `translationApi.translate`, merges into `_feedCache` via
+> `PostTranslationMerge`; returns whether stored. Inert (`false`, no network) for unknown post / blank target /
+> no source / failure / blank result / idempotent. The old fire-and-forget `requestTranslation` (dead, iOS
+> socket-path parity) left untouched.
+>
+> **VM wiring (`:feature:feed`)**: `onPostFlagTap`'s `RequestTranslation` arm now calls a new
+> `requestOnDemandTranslation` (mirror of chat's, keyed per post): in-flight guard via new
+> `FeedUiState.translatingLanguages` (`postId|lang`), `viewModelScope.launch` translate → on success
+> `activeLanguageOverride += postId→target` so the card switches once the merged post arrives off the cache
+> stream; cancellation-safe, failure surfaces `errorMessage`. `FeedPostBuilder` flips `includeTranslatable = true`.
+>
+> **Tests: +20** — `PostTranslationMergeTest` +8 (append to empty / alongside existing preserving order /
+> replace in place / case-insensitive key kept / idempotent no-op / blank target / blank text / trims code),
+> `PostRepositoryTest` +8 (stores + reports success / forwards source text+langs & trims / inert unknown post /
+> inert blank target / inert no source / translator-failure false / blank-translation false / idempotent false),
+> `FeedViewModelTest` +3 (tap translatable → requests & switches to merged / failed leaves language unchanged /
+> second in-flight tap no duplicate), `FeedPostBuilderTest` +1 (configured-absent language surfaces as a
+> translatable chip). **Mutation (RED proof) ×2**: (a) neuter `PostTranslationMerge`'s idempotence clause →
+> **exactly** `is a no-op when the identical translation is already present` fails (1 of 8); (b) neuter the VM
+> in-flight guard → **exactly** `a second tap while a translation is in flight does not fire a duplicate request`
+> fails (1 of 70). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → **BUILD SUCCESSFUL**
+> (973 tasks) locally this run. New suites ran green (PostTranslationMergeTest 8/8, PostRepositoryTest 30/30,
+> FeedViewModelTest 70/70, FeedPostBuilderTest 28/28). Reviewer PASS. Diff is `apps/android` only (7 files +
+> tracking docs).
+>
+> **Next**: the same on-demand request arm on the **post-detail + comments** surfaces (`PostDetailViewModel`/
+> `PostCommentsViewModel` still carry the dead `RequestTranslation -> Unit` arm — a thin follow-up reusing
+> `PostRepository.requestOnDemandTranslation`, though comments translate via their own path — re-scout). Or the
+> per-story timeline flag strip (heavier — needs a story translation surface). Otherwise the Chat `slow`/retry
+> glyph tier still waits on outbox retry-state plumbing. Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Live feed comment-count sync shipped** (slice `feed-realtime-comment-count`,
 > feature-parity's Feed §F social-feed realtime block — extends the created/deleted/liked/bookmarked
 > overlay family with `comment:added`/`comment:deleted`).

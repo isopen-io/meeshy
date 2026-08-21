@@ -3137,8 +3137,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       refresh/re-emit — instant-app) + `onPostFlagTap`. +19 tests (+8 `FeedPostBuilderTest`, +5
       `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest` still green). `:sdk-ui` + `:feature:feed`
       + `:feature:chat` `testDebugUnitTest` + `:app:assembleDebug` → BUILD SUCCESSFUL.
-      **Follow-up:** the interactive `includeTranslatable` arm (tap a configured-but-absent language on a
-      post to request it on demand — needs a post on-demand translation path), and the per-story timeline strip.
+      **On-demand request arm shipped** (slice `feed-post-translation-request`, 2026-08-21): the feed strip
+      now passes `includeTranslatable = true`, so a configured-but-absent content language surfaces as a
+      translatable chip (only when the post already carries a preferred translation — `MessageLanguageStrip`
+      returns empty for an untranslated post regardless). Tapping it drives `FeedViewModel.onPostFlagTap`'s
+      `LanguageFlagTapResolver.Result.RequestTranslation` arm (was a dead `Unit`) →
+      `PostRepository.requestOnDemandTranslation(postId, target): Boolean` — the map-keyed sibling of
+      `MessageRepository.requestTranslation`: blocking-translates the post's original text via `TranslationApi`
+      and upserts the result into the in-memory feed cache through the new pure `PostTranslationMerge`
+      (`:core:model`), so the card switches live off the cache stream + the `activeLanguageOverride` activates
+      it. A failed/blank/idempotent translation leaves the chip in place to retry; a second tap while in
+      flight is ignored (`FeedUiState.translatingLanguages`, keyed `postId|lang`, mirrors chat). +20 tests
+      (+8 `PostTranslationMergeTest`, +8 `PostRepositoryTest`, +3 `FeedViewModelTest`, +1 `FeedPostBuilderTest`;
+      mutation-proved ×2). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL.
+      **Follow-up:** the same request arm on the post-detail + comments surfaces (`PostDetailViewModel`/
+      `PostCommentsViewModel` still carry the dead `RequestTranslation -> Unit` arm), and the per-story timeline strip.
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
@@ -3669,7 +3682,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Prisme Linguistique on the feed: post content rendered in the viewer's preferred
       language with a discreet « Traduit » indicator (`ApiPost.displayContent`/`isTranslated`
       port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
-      per-post flag strip / request-missing-languages pending
+      per-post flag strip **shipped** + request-missing-languages **shipped** (slice
+      `feed-post-translation-request`, 2026-08-21 — tap a configured-but-absent language chip to translate
+      the post on demand and switch to it, via `PostRepository.requestOnDemandTranslation` + `PostTranslationMerge`)
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)

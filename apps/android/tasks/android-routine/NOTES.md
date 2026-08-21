@@ -5,7 +5,43 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
-## 2026-08-21 (latest) — Feed realtime = a family of `FeedRealtimeHead` overlays; add the next event as one more overlay, don't invent a mechanism
+## 2026-08-21 (latest) — SDK bootstrap: on THIS container the pristine `android-37.0` recipe is the one that works; the `cp→android-37` patch recipe FAILS. And on-demand translation = mirror the chat repository, not the iOS socket path.
+
+Slice `feed-post-translation-request`. Two lessons.
+
+**(1) SDK bootstrap — stop patching to `android-37`.** The malformed metadata (`android-37.0/source.properties`
+→ `AndroidVersion.ApiLevel=37.0`, `Pkg.Desc=…Platform 17`) is back, so the older notes' reflex was to
+`cp -r android-37.0 android-37` + sed the metadata to a clean `android-37`. **That recipe FAILED here.** AGP
+8.13.0's own diagnostic reads "compile SDK version **37.0**" and it resolves `compileSdk 37` to the
+minor-versioned **dir** `android-37.0` directly — a hand-made `android-37`, even with byte-perfect
+`source.properties`+`package.xml`, is never matched (`sdkmanager --list_installed` shows it, AGP still says
+`Failed to find target with hash string 'android-37'`). The recipe that works, every time, on this container:
+```bash
+sdkmanager --channel=3 "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"   # pristine, DON'T patch
+# build with auto-download OFF so the first ./gradlew can't re-fetch the malformed dir over any edits:
+./gradlew assembleDebug testDebugUnitTest -Pandroid.builder.sdkDownload=false
+```
+Two traps that cost a cycle: (a) the very first `./gradlew` of a fresh container needs to run **online** — AGP
+8.13.0's plugin artifact isn't cached yet, so `--offline` dies with "Plugin com.android.application 8.13.0 not
+found"; run once online, then `--offline` is fine. (b) AGP auto-downloads the platform if it's missing — with
+auto-download ON it silently re-fetches the pristine (malformed-metadata) `android-37.0`, which is actually
+what we want, so DON'T fight it; the only reason to pass `sdkDownload=false` is to stop it clobbering a manual
+edit. Net: **install pristine `android-37.0`, patch NOTHING, let AGP map `compileSdk 37 → android-37.0`.**
+
+**(2) On-demand post translation = the map-keyed sibling of the chat message path.** Feed posts store
+translations as `Map<code, ApiPostTranslationEntry>` (vs. the message list form), so the merge is a NEW pure
+`PostTranslationMerge` (map upsert, case-insensitive key match, idempotent) — not a reuse of
+`MessageTranslationMerge`. But the REST/cache flow is identical: `PostRepository.requestOnDemandTranslation`
+blocking-translates via `TranslationApi` + merges into `_feedCache`, exactly like
+`MessageRepository.requestTranslation`. Do NOT mirror iOS's literal `POST /posts/:id/translate` fire-and-forget
++ socket-completion path — Android has no post-translation socket consumer, so that variant is blocked/
+cross-cutting. Adding `translationApi` to `PostRepository`'s constructor means updating its ~16 test
+`PostRepository(api)` call sites (`sed 's/PostRepository(api)/PostRepository(api, translationApi)/g'` + a
+class-level relaxed mock). And `includeTranslatable = true` only surfaces a translatable chip when the post
+ALREADY has a preferred translation — `MessageLanguageStrip.build` early-returns empty for an untranslated
+post regardless of the flag (Prisme rule 1), so a fully-monolingual card still shows no strip.
+
+## 2026-08-21 — Feed realtime = a family of `FeedRealtimeHead` overlays; add the next event as one more overlay, don't invent a mechanism
 
 Slice `feed-realtime-comment-count`. The feed's live-sync surface is now a coherent **overlay family** on
 `FeedRealtimeHead`: `posts`+`newPostsCount` (created), `removedIds` (deleted), `likes: LikeOverlay` (like),
