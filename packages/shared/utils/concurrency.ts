@@ -79,7 +79,13 @@ export async function settleWithConcurrency<T, R>(
  */
 export function chunk<T>(items: readonly T[], size: number): T[][] {
   if (items.length === 0) return [];
-  const step = Number.isFinite(size) ? Math.max(1, Math.floor(size)) : items.length;
+  // `size` non finie OU < 1 ⇒ tranche unique (step = tout le tableau). Le test
+  // `size >= 1` est indispensable : `Math.max(1, Math.floor(size))` ramenait un
+  // `size` fini < 1 (0, négatif, fractionnaire) à `step = 1`, fragmentant la
+  // liste en singletons au lieu de la tranche unique documentée — alors que le
+  // chemin non fini (NaN/Infinity) l'honorait déjà. Un `size` absurde signifie
+  // « ne pas découper », pas « découper au grain 1 ».
+  const step = Number.isFinite(size) && size >= 1 ? Math.floor(size) : items.length;
   const chunks: T[][] = [];
   for (let start = 0; start < items.length; start += step) {
     chunks.push(items.slice(start, start + step));
