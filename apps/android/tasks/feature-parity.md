@@ -1529,8 +1529,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       straight through — it opens a `LockPinMode.OPEN_CONVERSATION` sheet that verifies the
       4-digit code then navigates via a one-shot `openConversation` event, leaving the lock
       in place (parity iOS `ConversationLockSheet.Mode.openConversation`; a new
-      `LockPinEffect.OpenConversation` distinct from `RemoveLock`). Remaining lock sub-gaps
-      (Settings master-PIN change/remove/unlock-all, swipe-to-lock) tracked below.
+      `LockPinEffect.OpenConversation` distinct from `RemoveLock`). **Unlock-all done** (slice
+      `conversation-lock-unlock-all`, 2026-08-21): a global "unlock everything" affordance —
+      pure `LockPinMode.UNLOCK_ALL` reducer arm (verify the 6-digit master PIN once → new
+      `LockPinEffect.RemoveAllLocks`, else `MASTER_PIN_INCORRECT`; master PIN left in place,
+      parity iOS `ConversationLockSheet.Mode.unlockAll` which calls `removeAllLocks()` only) →
+      `ConversationListViewModel.onUnlockAll` (inert unless a lock exists, guarded on the
+      authoritative store) drops every per-conversation lock at once via the already-present
+      `ConversationLockStore.removeAllLocks()`. Surfaced as a top-bar `LockOpen` action that
+      appears ONLY while `ConversationListUiState.canUnlockAll` (≥1 locked conversation) — iOS
+      buries it in Settings, Android surfaces it contextually and hides it when irrelevant.
+      +4 reducer + 4 VM-flow tests, mutation-proven (flipping the master-PIN guard fails exactly
+      the wrong-PIN arm). EN/FR/ES/PT strings. Remaining lock sub-gaps (Settings master-PIN
+      change/remove, swipe-to-lock) tracked below.
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending

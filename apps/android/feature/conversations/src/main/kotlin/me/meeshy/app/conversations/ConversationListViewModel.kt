@@ -142,6 +142,14 @@ data class ConversationListUiState(
     fun isLocked(conversationId: String): Boolean = lockedConversationIds.contains(conversationId)
 
     /**
+     * True when at least one conversation is locked — gates the "unlock all" affordance
+     * (parity iOS Settings, which only offers unlock-all while a lock exists). A lock can
+     * only be set after the master PIN is verified, so a non-empty set already implies a
+     * master PIN is present; the sheet re-verifies it regardless.
+     */
+    val canUnlockAll: Boolean get() = lockedConversationIds.isNotEmpty()
+
+    /**
      * The single surfaced typer's display name for [conversationId] (deterministic), or `null`
      * when nobody there is composing — drives the row's "… is typing" preview line.
      */
@@ -639,6 +647,19 @@ class ConversationListViewModel @Inject constructor(
         _state.update { it.copy(lockPrompt = prompt) }
     }
 
+    /**
+     * Opens the master-PIN sheet to drop every conversation lock at once (parity iOS
+     * Settings → `ConversationLockSheet.Mode.unlockAll`). Inert when nothing is locked —
+     * the entry affordance is hidden then anyway ([ConversationListUiState.canUnlockAll]),
+     * but the guard reads the authoritative store so a stale tap can never open an empty
+     * unlock-all sheet. Any pending chained lock is dropped (this is not a lock flow).
+     */
+    fun onUnlockAll() {
+        if (lockStore.lockedConversationIds.isEmpty()) return
+        pendingLockConversationId = null
+        _state.update { it.copy(lockPrompt = LockPinState(LockPinMode.UNLOCK_ALL, conversationId = null)) }
+    }
+
     /** Feeds a digit tap into the open lock sheet; no-op when none is shown. */
     fun onLockDigit(digit: Int) {
         val current = _state.value.lockPrompt ?: return
@@ -664,6 +685,7 @@ class ConversationListViewModel @Inject constructor(
                 is LockPinEffect.CommitMasterPin -> lockStore.setMasterPin(effect.pin)
                 is LockPinEffect.CommitLock -> lockStore.setLock(effect.conversationId, effect.pin)
                 is LockPinEffect.RemoveLock -> lockStore.removeLock(effect.conversationId)
+                LockPinEffect.RemoveAllLocks -> lockStore.removeAllLocks()
                 is LockPinEffect.OpenConversation -> openConversationRequests.trySend(effect.conversationId)
                 LockPinEffect.Completed -> {
                     val pending = pendingLockConversationId

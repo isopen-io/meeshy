@@ -47,6 +47,7 @@ internal fun LockPinCopy.titleRes(): Int = when (this) {
     LockPinCopy.CONFIRM_CODE -> R.string.conversations_lock_title_confirm_code
     LockPinCopy.UNLOCK -> R.string.conversations_lock_title_unlock
     LockPinCopy.OPEN -> R.string.conversations_lock_title_open
+    LockPinCopy.UNLOCK_ALL -> R.string.conversations_lock_title_unlock_all
 }
 
 /** Whether a [LockPinCopy]'s subtitle interpolates the conversation name. */
@@ -64,6 +65,7 @@ private fun LockPinCopy.subtitleRes(): Int = when (this) {
     LockPinCopy.CONFIRM_CODE -> R.string.conversations_lock_subtitle_confirm_code
     LockPinCopy.UNLOCK -> R.string.conversations_lock_subtitle_unlock
     LockPinCopy.OPEN -> R.string.conversations_lock_subtitle_open
+    LockPinCopy.UNLOCK_ALL -> R.string.conversations_lock_subtitle_unlock_all
 }
 
 @StringRes
@@ -103,7 +105,11 @@ internal fun ConversationLockPinSheet(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             Icon(
-                imageVector = if (prompt.copy == LockPinCopy.UNLOCK) Icons.Filled.LockOpen else Icons.Filled.Lock,
+                imageVector = if (prompt.copy == LockPinCopy.UNLOCK || prompt.copy == LockPinCopy.UNLOCK_ALL) {
+                    Icons.Filled.LockOpen
+                } else {
+                    Icons.Filled.Lock
+                },
                 contentDescription = null,
                 tint = MeeshyPalette.Indigo500,
                 modifier = Modifier.size(44.dp),
