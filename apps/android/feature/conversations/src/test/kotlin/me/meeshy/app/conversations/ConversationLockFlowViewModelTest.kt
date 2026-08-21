@@ -311,4 +311,74 @@ class ConversationLockFlowViewModelTest {
         assertThat(vm.state.value.lockPrompt?.error).isEqualTo(LockPinError.CODE_INCORRECT)
         assertThat(store.isLocked("c1")).isTrue()
     }
+
+    // MARK: - Unlock-all (Settings → drop every conversation lock with the master PIN)
+
+    @Test
+    fun can_unlock_all_is_true_only_while_a_conversation_is_locked() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+        assertThat(vm.state.value.canUnlockAll).isFalse()
+
+        store.setLock("c1", "4321")
+        advanceUntilIdle()
+        assertThat(vm.state.value.canUnlockAll).isTrue()
+    }
+
+    @Test
+    fun the_correct_master_pin_drops_every_lock_at_once() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+            setLock("c2", "1111")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onUnlockAll()
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.UNLOCK_ALL)
+        assertThat(vm.state.value.lockPrompt?.conversationId).isNull()
+
+        vm.enter("123456")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+        assertThat(store.isLocked("c1")).isFalse()
+        assertThat(store.isLocked("c2")).isFalse()
+        assertThat(vm.state.value.canUnlockAll).isFalse()
+        // Unlock-all drops the locks but leaves the master PIN in place (iOS parity).
+        assertThat(store.hasMasterPin()).isTrue()
+    }
+
+    @Test
+    fun a_wrong_unlock_all_master_pin_keeps_every_lock() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply {
+            setMasterPin("123456")
+            setLock("c1", "4321")
+            setLock("c2", "1111")
+        }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onUnlockAll()
+        vm.enter("000000")
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.lockPrompt?.mode).isEqualTo(LockPinMode.UNLOCK_ALL)
+        assertThat(vm.state.value.lockPrompt?.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
+        assertThat(store.isLocked("c1")).isTrue()
+        assertThat(store.isLocked("c2")).isTrue()
+    }
+
+    @Test
+    fun unlock_all_is_inert_when_nothing_is_locked() = runTest(dispatcher) {
+        val store = InMemoryConversationLockStore().apply { setMasterPin("123456") }
+        val vm = viewModel(store)
+        advanceUntilIdle()
+
+        vm.onUnlockAll()
+
+        assertThat(vm.state.value.lockPrompt).isNull()
+    }
 }

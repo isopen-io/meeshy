@@ -273,4 +273,37 @@ class LockPinReducerTest {
             .type(LockPinState(LockPinMode.OPEN_CONVERSATION, conversationId = null), "4321")
         assertThat(done.effects).isEmpty()
     }
+
+    // MARK: - Unlock-all (Settings master-PIN → drop every lock) flow
+
+    @Test
+    fun unlock_all_length_is_six_and_takes_no_conversation() {
+        val s = LockPinState(LockPinMode.UNLOCK_ALL, conversationId = null)
+        assertThat(s.pinLength).isEqualTo(6)
+    }
+
+    @Test
+    fun unlock_all_copy_is_unlock_all() {
+        assertThat(LockPinState(LockPinMode.UNLOCK_ALL, null).copy).isEqualTo(LockPinCopy.UNLOCK_ALL)
+    }
+
+    @Test
+    fun the_correct_master_pin_removes_every_lock_and_completes() {
+        val done = reducer(masterPin = "123456")
+            .type(LockPinState(LockPinMode.UNLOCK_ALL, null), "123456")
+        assertThat(done.effects).containsExactly(
+            LockPinEffect.RemoveAllLocks,
+            LockPinEffect.Completed,
+        ).inOrder()
+    }
+
+    @Test
+    fun a_wrong_unlock_all_master_pin_flags_it_and_removes_nothing() {
+        val wrong = reducer(masterPin = "123456")
+            .type(LockPinState(LockPinMode.UNLOCK_ALL, null), "000000")
+        assertThat(wrong.state.pin).isEmpty()
+        assertThat(wrong.state.confirmPin).isEmpty()
+        assertThat(wrong.state.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
+        assertThat(wrong.effects).isEmpty()
+    }
 }

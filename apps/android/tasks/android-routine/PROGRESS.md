@@ -2,6 +2,58 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Conversation lock "unlock-all" shipped** (slice `conversation-lock-unlock-all`,
+> feature-parity's Conversations `[~]` "Pinned/muted/archived/locked" line — the `unlock-all` sub-gap of
+> its "Remaining lock sub-gaps" note, now done; only Settings master-PIN change/remove + swipe-to-lock remain).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 10 open PRs at branch
+> time (#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none
+> android-routine. Branched off freshly-fetched `origin/main` (`7f1de533`).
+>
+> **SDK bootstrap (see NOTES 2026-08-21 latest):** used the ROUTINE-pinned `commandlinetools-linux-11076708`,
+> which STILL mis-registers the 37.x preview package (`android-37.0/source.properties` → "Platform 17",
+> `ApiLevel=37.0`). The `cp -r android-37.0 android-37` + sed on `source.properties` was NOT enough this run —
+> AGP also rejected `android-37/package.xml`'s stale `path="platforms;android-37.0"` + `<api-level>37.0</api-level>`
+> ("Failed to find target with hash string 'android-37'"). Full fix: patch BOTH `source.properties` AND
+> `package.xml` (path→android-37, api-level→37) in the copy, and remove the malformed `android-37.0` dir so its
+> unparseable `ApiLevel=37.0` cannot abort the platform scan. `assembleDebug testDebugUnitTest` green after.
+> Container reached `dl.google.com` (curl → 200). Also: `./gradlew … | tail` swallows gradle's exit code — a
+> failed build reads as exit 0; capture to a file and grep for `BUILD FAILED` instead.
+>
+> **The gap**: iOS `ConversationLockSheet.Mode.unlockAll` (Settings) verifies the 6-digit master PIN once, then
+> calls `ConversationLockManager.removeAllLocks()` — dropping every per-conversation lock while leaving the
+> master PIN set. Android's `LockPinReducer` had setup/lock/unlock/open arms but no unlock-all; the store's
+> `ConversationLockStore.removeAllLocks()` already existed but was dead code (only `resetForLogout` used it).
+>
+> **Pure reducer arm (`:feature:conversations` `LockPinReducer`)**: new `LockPinMode.UNLOCK_ALL` (6-digit
+> pinLength, `LockPinCopy.UNLOCK_ALL` header) + `LockPinEffect.RemoveAllLocks` + `completeUnlockAll` — a single
+> step: `verifyMasterPin` → `[RemoveAllLocks, Completed]`, else `verifyFailure(MASTER_PIN_INCORRECT)` (buffer
+> cleared, sheet stays open). Faithful to iOS: no new error type, master PIN untouched.
+>
+> **Wiring**: `ConversationListViewModel.onUnlockAll()` (inert unless `lockStore.lockedConversationIds` is
+> non-empty — authoritative store read, not the mirrored state, so a stale tap can't open an empty sheet) opens
+> the sheet in UNLOCK_ALL mode; `applyLockResult` maps `RemoveAllLocks → lockStore.removeAllLocks()`. New derived
+> `ConversationListUiState.canUnlockAll = lockedConversationIds.isNotEmpty()`. `ConversationLockPinSheet` maps
+> the new copy → title/subtitle strings + the LockOpen glyph. `ConversationListScreen` renders a top-bar
+> `LockOpen` action shown ONLY while `canUnlockAll` (SOTA over iOS: contextual affordance, hidden when no locks;
+> iOS buries it in Settings). EN/FR/ES/PT strings ×3.
+>
+> **Tests**: **+8** — `LockPinReducerTest` +4 (unlock-all is 6-digit; copy is UNLOCK_ALL; correct master →
+> `[RemoveAllLocks, Completed]`; wrong master → `MASTER_PIN_INCORRECT`, no effects, buffer cleared),
+> `ConversationLockFlowViewModelTest` +4 (`canUnlockAll` reactive to the lock set; correct master drops both
+> locks + closes sheet + master PIN stays; wrong master keeps both locks; inert when nothing locked, on a real
+> `InMemoryConversationLockStore`). **Mutation (RED proof)**: flipping `verifyMasterPin(state.pin)` → `true`
+> fails exactly the wrong-PIN arms (2 failed of 29), restored via `git checkout`.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` (both suites) green; full `assembleDebug
+> testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is `apps/android` only (10 files).
+>
+> **Next**: the sibling Settings master-PIN **change/remove** arms (scout #2 — `changeMasterPin`/`removeMasterPin`,
+> store methods `setMasterPin`/`forceRemoveMasterPin` already present) is the natural follow-on, once an Android
+> Settings "Security" surface exists to host them (none today — master-PIN setup is only reachable via the
+> conversation context menu). Otherwise the Chat `slow`/retry glyph tier remains (heavier — needs the outbox
+> retry-state surfaced through `LocalSendState`). Re-scout read-only before committing.
+
 > On 2026-08-21 **Sub-200ms sending-clock debounce shipped** (slice `chat-send-clock-reveal-debounce`,
 > feature-parity's Chat `[~]` "Delivery status" line — the `invisible pre-200ms debounce` half of its
 > **Pending** 8-state clause, now shipped; only the finer `slow`/retry glyph tier remains).
