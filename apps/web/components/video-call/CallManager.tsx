@@ -635,18 +635,36 @@ export function CallManager() {
 
   /**
    * Handle media toggle (remote participant)
+   *
+   * Vague 136 — `event.participantId` is `CallParticipant.participantId`, the
+   * FK to `Participant.id` (`resolveActiveCallParticipant`,
+   * `CallEventsHandler.ts`), never the roster row's own `.id` that
+   * `updateParticipant`/`removeParticipant` key on (`call-store.ts`). Passing
+   * it straight through matched nothing for a real call — same identity-space
+   * bug class as Vague 132/133 (alert payloads), never touched by either.
+   * Resolve the roster entry the same way `resolveParticipantName`
+   * (`VideoCallInterface.tsx`) already does — `(p.userId || p.participantId)`
+   * against `(event.userId || event.participantId)` — THEN update it by its
+   * own `.id`, leaving `updateParticipant`'s id-keyed contract untouched for
+   * every other caller.
    */
   const handleMediaToggle = useCallback(
     (event: CallMediaToggleEvent) => {
       logger.debug('[CallManager]', 'Media toggle - participantId: ' + event.participantId + ', type: ' + event.mediaType + ', enabled: ' + event.enabled);
 
+      const identity = event.userId || event.participantId;
+      const participant = useCallStore
+        .getState()
+        .currentCall?.participants.find((p) => (p.userId || p.participantId) === identity);
+      if (!participant) return;
+
       // Update participant state
       if (event.mediaType === 'audio') {
-        updateParticipant(event.participantId, {
+        updateParticipant(participant.id, {
           isAudioEnabled: event.enabled,
         });
       } else if (event.mediaType === 'video') {
-        updateParticipant(event.participantId, {
+        updateParticipant(participant.id, {
           isVideoEnabled: event.enabled,
         });
       }

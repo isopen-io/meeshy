@@ -9133,3 +9133,103 @@ non testable.
   ce sandbox). Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880 lignes) ;
   ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans ce
   sandbox ; gaps d'infrastructure groupe documentés dans `2026-08-13-group-calls-gap-analysis.md`.
+
+## Vague 136 — `call:media-toggled` carried the WRONG identity space, same bug class as Vague 132/133, on a channel neither touched (gateway + web) (2026-08-21)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Base explicite
+sur `origin/main` (`468e9fc1`, branche à parité bit à bit — Vague 135 déjà mergée, vérifié
+`git merge-base --is-ancestor` avant de commencer). Trois audits dédiés en parallèle (subagents,
+lecture directe) mandatés avec la liste explicite des correctifs déjà livrés (Vagues 126-135) pour
+ne rien redécouvrir — un sur le canal `canCallBack`/anonyme, un sur les services gateway non encore
+audités (`CallCleanupService`, `call-push-mirroring`, `callAnalyticsAggregate`, `callHistory`,
+`CallService`), un sur les hooks/composants web non encore audités (`VideoCallInterface.tsx`,
+`CallManager.tsx`, `use-video-call.ts`, `use-call-banner.ts`, `call-store.ts`,
+`webrtc-service.ts`). Toolchains iOS/Android toujours hors d'atteinte dans ce sandbox. Les deux
+correctifs W4/W5 documentés `2026-08-13-group-calls-gap-analysis.md` (agrégation d'état de
+connexion/qualité par pair) ont été RE-VÉRIFIÉS en lisant `use-webrtc-p2p.ts` et
+`use-peer-connections.ts`/`use-call-quality.ts` directement : déjà corrigés par une vague
+antérieure non documentée dans ce fichier — le doc gap-analysis est partiellement périmé, non
+retouché ici (hors gabarit chirurgical de cette vague).
+
+- **Root cause** : `handleMediaToggle` (`CallEventsHandler.ts`) résolvait l'émetteur via
+  `resolveActiveCallParticipantId`, qui renvoie `CallParticipant.participantId` — la FK vers
+  `Participant.id` — et plaçait CETTE valeur, seule, dans `CallMediaToggleEvent.participantId`.
+  Côté web, `CallManager.handleMediaToggle` appelait `updateParticipant(event.participantId, …)`
+  tel quel ; `call-store.ts`'s `updateParticipant`/`removeParticipant` indexent le roster par
+  `CallParticipant.id` — la ligne elle-même, un TROISIÈME espace d'identité disjoint de la FK.
+  Comparaison entre deux espaces qui ne se recoupent jamais pour un appel réel : exactement le bug
+  de classe « espace d'identité » que la Vague 132 avait nommé et corrigé sur les canaux qualité/
+  capture d'écran/participant-left — jamais porté sur le canal media-toggle, qu'aucune des Vagues
+  126-135 ne touchait.
+- **Scénario de défaillance** : appel de groupe A/B/C (3+ participants, maillage déjà correct
+  depuis la Vague 126). B coupe son micro en cours d'appel. Le gateway résout B vers son
+  `participantId` (espace FK) et diffuse `call:media-toggled` à A et C (`socket.to`, B exclu).
+  `handleMediaToggle` de A et C appelle `updateParticipant(<id espace FK>, …)`, qui ne trouve
+  AUCUNE entrée de roster correspondante (le roster est indexé par `CallParticipant.id`/`.userId`)
+  et ne fait rien, silencieusement. Idem pour la caméra.
+- **Effet observable** : `VideoStream.tsx` (icône `MicOff`/`VideoOff`) et
+  `DraggableParticipantOverlay` lisent ce même champ de roster pour CHAQUE vignette distante — un
+  pair coupé son micro ne montre jamais l'icône muet, et un pair qui éteint sa caméra garde une
+  image figée (pas de placeholder « vidéo coupée ») pour le RESTE de l'appel. Défaut silencieux
+  (aucune erreur, aucun toast) — un vrai bug de correction confidentialité/UX : les autres
+  participants ne peuvent pas savoir qui est réellement muet.
+- **Fix** :
+  - Gateway — `handleMediaToggle` appelle désormais `resolveActiveCallParticipant` (déjà utilisée
+    par les émetteurs qualité/capture d'écran, Vague 132) au lieu du wrapper
+    `resolveActiveCallParticipantId`, et ajoute le `userId` résolu (`participant.userId ??
+    participantId`, dérivation identique) au payload diffusé — `participantId` (legacy) reste
+    inchangé pour compatibilité descendante.
+  - Types partagés — `CallMediaToggleEvent` gagne un `userId?: string` optionnel, miroir de
+    `CallQualityAlertEvent`/`CallScreenCaptureEvent`/`CallParticipantLeftEvent`.
+  - Web — `CallManager.handleMediaToggle` résout désormais l'entrée de roster via
+    `(p.userId || p.participantId) === (event.userId || event.participantId)` — exactement la
+    résolution que `resolveParticipantName` (`VideoCallInterface.tsx`, Vague 131/132) utilise déjà
+    pour le même roster — puis appelle `updateParticipant`/`removeParticipant` par le `.id` PROPRE
+    de l'entrée trouvée, sans toucher au contrat de `call-store.ts` (toujours indexé par `.id` pour
+    tous ses autres appelants). Aucune entrée trouvée ⇒ no-op silencieux (jamais de throw), cf. le
+    payload malformé/en retard déjà toléré ailleurs dans ce fichier.
+  - iOS/Android audités en lecture, non modifiés : iOS (`CallManager.swift`) est architecturalement
+    mono-pair pour ce canal — `isRemoteVideoEnabled`/`isRemoteAudioEnabled` sont des scalaires
+    assignés directement sur `callId` match, sans lookup par `participantId` — non affecté par ce
+    bug de classe. Android (`CallSignalManager.kt`) relaie le payload brut via un `SharedFlow` sans
+    lookup ici non plus ; le champ `userId` ajouté est additif (Decodable/JSON tolèrent une clé
+    inconnue des deux côtés), sans risque de régression.
+- **Tests** (TDD, RED confirmé contre le code non corrigé) :
+  `CallEventsHandler-media-toggle.test.ts` — 1 cas neuf (`userId` présent et distinct du
+  `participantId` legacy sur le toggle audio) + 1 cas neuf (repli anonyme : `userId` égale la FK
+  quand `participant.userId` est absent). `CallManager.mediaToggleIdentity.test.tsx` (nouveau
+  fichier, 4 cas) : mute correct par `userId` (pair enregistré), coupure vidéo correcte par
+  `userId`, repli `participantId` (payload sans `userId`, pair anonyme), no-op silencieux si aucune
+  entrée ne correspond (jamais de throw, jamais de mutation d'une autre vignette) — RED confirmé :
+  3/4 cas échouaient contre le code non corrigé (le 4ᵉ, no-op, passait trivialement puisque rien ne
+  matchait déjà avant le fix). Sweep gateway `--testPathPatterns="[Cc]all"` : **52 suites / 1218
+  tests** verts, 0 régression. Sweep gateway `--testPathPatterns="socketio"` (surface complète) :
+  **90 suites / 2078 tests** verts, 0 régression. `npx tsc --noEmit` gateway : 0. Sweep web
+  `--testPathPatterns="[Cc]all"` : **54 suites / 510 tests** verts, 0 régression. `npx tsc --noEmit`
+  (apps/web, diff `git stash`/`stash pop`) : **1768** erreurs préexistantes identiques avant/après
+  (0 nouvelle, 0 corrigée).
+- **Non fait volontairement / reste ouvert** : `CallSystemMessage.tsx:63` — `canCallBack` sans garde
+  `!isAnonymous` (reconduit depuis la Vague 134 ; ré-audité cette vague — trace de portée complète
+  confirme AUCUN chemin réel `isAnonymous=true` + `conversationType∈{direct,group}` aujourd'hui,
+  protégé par un hardcode SANS RAPPORT (`bubble-stream-page.tsx:613` force
+  `conversationType="public"`) et par le refus gateway inconditionnel `denyAnonymous()` — mais reste
+  un vrai trou de profondeur-de-défense, non testé, fragile au premier retrait de ce hardcode ;
+  candidat de choix pour la prochaine vague, correctif trivial déjà écrit dans l'audit). **Trouvaille
+  de sévérité plus élevée, différée intentionnellement** (fix multi-sites, design à trancher — pas
+  chirurgicale) : un appel de groupe répondu par UN SEUL invité ne génère plus AUCUN signal de
+  « manqué » (ni push `call_cancel`, ni `Notification` persistée) pour les autres invités qui n'ont
+  jamais répondu — `clearRingingTimeout` (`CallEventsHandler.ts:3392`) est scopé par `callId` entier
+  et s'annule dès la PREMIÈRE réponse, et les trois portes de `handleMissedCall`/
+  `sendCallCancellationPushes` sont gatées sur le statut TERMINAL du call entier (`missed`), jamais
+  atteignable une fois quelqu'un a répondu — alors que `getUnrespondedParticipants`
+  (`CallService.ts:2547`) calcule déjà exactement le bon sous-ensemble mais n'est invoqué nulle part
+  après une réponse. Effet : sonnerie fantôme côté CallKit/Android pour l'invité non-répondant
+  jusqu'à son propre timeout ~45s, zéro entrée de notification/badge. Non couvert par les tests
+  existants (vérifié). Piste de correctif : découpler l'appel à `getUnrespondedParticipants` +
+  fan-out `call_cancel` du gate `status === 'missed'`, sur CHAQUE chemin terminal
+  (`call:end`/`call:leave`/force-end/ringing-timeout), plutôt que de suivre un ringing-timeout par
+  callId entier. Reconduits (inchangés) : dead code / god-object `CallManager.swift` (~5880
+  lignes) ; ADR `actor CallEventQueue` non implémenté ; toolchains iOS/Android hors d'atteinte dans
+  ce sandbox ; gaps d'infrastructure groupe documentés dans
+  `2026-08-13-group-calls-gap-analysis.md` (partiellement périmé — W4/W5 déjà résolus, à
+  rafraîchir).

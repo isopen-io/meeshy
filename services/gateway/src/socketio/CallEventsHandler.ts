@@ -1486,8 +1486,12 @@ export class CallEventsHandler {
       // `participantId` (Participant.id ObjectId), NOT userId. Passing
       // userId here matched nothing and the toggle silently failed.
       // Resolve to the real participantId before calling the service.
-      const participantId = await this.resolveActiveCallParticipantId(userId, data.callId);
-      if (!participantId) {
+      // Vague 136 — resolve the FULL identity (not just the legacy FK) so the
+      // broadcast below can carry `userId` too: a web/iOS/Android roster keys
+      // its participants by `CallParticipant.id`/`User.id`, never by this FK
+      // alone (same class of bug as Vague 132/133's alert-identity mismatch).
+      const resolved = await this.resolveActiveCallParticipant(userId, data.callId);
+      if (!resolved) {
         socket.emit(CALL_EVENTS.ERROR, {
           code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
           message: 'You are not a participant in this call',
@@ -1495,6 +1499,7 @@ export class CallEventsHandler {
         } as CallError);
         return;
       }
+      const { participantId, userId: resolvedUserId } = resolved;
       await this.callService.updateParticipantMedia(
         data.callId,
         participantId,
@@ -1510,6 +1515,7 @@ export class CallEventsHandler {
       const toggleEvent: CallMediaToggleEvent = {
         callId: data.callId,
         participantId,
+        userId: resolvedUserId,
         mediaType,
         enabled: data.enabled
       };

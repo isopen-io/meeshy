@@ -602,6 +602,15 @@ export interface CallModeChangedEvent {
 export interface CallMediaToggleEvent {
   readonly callId: string;
   readonly participantId: string;
+  /**
+   * `User.id` of the toggling peer (falls back to the legacy `participantId`
+   * FK for an anonymous participant) — mirrors `CallQualityAlertEvent`/
+   * `CallScreenCaptureEvent`/`CallParticipantLeftEvent`. `participantId`
+   * alone is `CallParticipant.participantId`, the FK to `Participant.id`,
+   * never a roster row's own `.id` — a client roster keyed by `.id`/`.userId`
+   * can never match it directly (Vague 136).
+   */
+  readonly userId?: string;
   readonly mediaType: 'audio' | 'video';
   readonly enabled: boolean;
 }

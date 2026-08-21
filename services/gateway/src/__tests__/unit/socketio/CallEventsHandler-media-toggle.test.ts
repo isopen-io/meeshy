@@ -8,6 +8,14 @@
  * peer's state on every self-toggle. `socket.to()` excludes the sender and is
  * the only correct primitive here — this was already true for video but was
  * missed for audio.
+ *
+ * Vague 136 — the payload also carries `userId` now (mirrors
+ * `CallQualityAlertEvent`/`CallScreenCaptureEvent`, Vague 132): the pre-fix
+ * `participantId`-only payload is `CallParticipant.participantId`, the FK to
+ * `Participant.id`, never a client roster row's own `.id`/`.userId` — no web/
+ * iOS/Android roster could ever match it. `resolveActiveCallParticipant`
+ * derives `userId` identically to the alert emitters (`participant.userId ??
+ * participantId`, i.e. the legacy FK for an anonymous participant).
  */
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
@@ -142,6 +150,13 @@ describe('CallEventsHandler — media toggle broadcast excludes sender', () => {
       expect(payload.mediaType).toBe('audio');
       expect(payload.enabled).toBe(false);
     });
+
+    it('includes the toggling peer\'s userId, distinct from the legacy participantId FK (Vague 136)', () => {
+      const [, payload] = socketRoomEmit.mock.calls[0];
+      expect(payload.userId).toBe(USER_ID);
+      expect(payload.participantId).toBe('participant-1');
+      expect(payload.userId).not.toBe(payload.participantId);
+    });
   });
 
   describe('call:toggle-video (reference behaviour, must stay excluded)', () => {
@@ -164,6 +179,34 @@ describe('CallEventsHandler — media toggle broadcast excludes sender', () => {
     it('broadcasts via socket.to (excludes sender), never io.to', () => {
       expect(socketRoomEmit).toHaveBeenCalledTimes(1);
       expect(ioRoomEmit).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('call:toggle-audio — anonymous toggler (Vague 136)', () => {
+    it('falls back userId to the legacy participantId FK when no linked User exists', async () => {
+      const prisma = makePrisma();
+      const callService = {
+        updateParticipantMedia: jest.fn<any>().mockResolvedValue(undefined),
+        getCallSession: jest.fn<any>().mockResolvedValue({
+          // Anonymous participant: no `.participant.userId`, only the
+          // legacy `participantId` FK — mirrors resolveActiveCallParticipant's
+          // own `participant.userId ?? participantId` derivation.
+          participants: [{ participantId: 'participant-anon-1', leftAt: null, participant: null }],
+        }),
+      } as any;
+      const { socket, io, handlers, socketRoomEmit } = makeSocket();
+
+      // An anonymous caller's resolved userId (auth middleware) IS their
+      // Participant.id — never a session token, see gateway CLAUDE.md
+      // "authContext.userId n'est PAS toujours un User.id".
+      const handler = new CallEventsHandler(prisma, callService);
+      handler.setupCallEvents(socket as any, io as any, () => 'participant-anon-1');
+
+      await handlers[CALL_EVENTS.TOGGLE_AUDIO]({ callId: VALID_CALL_ID, enabled: false });
+
+      const [, payload] = socketRoomEmit.mock.calls[0];
+      expect(payload.userId).toBe('participant-anon-1');
+      expect(payload.participantId).toBe('participant-anon-1');
     });
   });
 });
