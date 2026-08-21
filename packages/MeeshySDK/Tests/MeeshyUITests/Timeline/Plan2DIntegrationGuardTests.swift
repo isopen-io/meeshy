@@ -213,7 +213,144 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "La session de glissement doit se refermer au relâchement")
     }
 
-    // MARK: - Guard 3 — ComposerControlsLayer n'est pas touché
+    // MARK: - Guard 3 — le diff de D3 ne déborde pas de Timeline/**
+    //
+    // La garde d'origine n'épinglait QU'UN fichier (`ComposerControlsLayer`)
+    // et laissait tout le reste du dépôt hors de vue. Elle est étendue en
+    // trois temps :
+    //
+    //   a. le MANIFESTE du diff — la liste des fichiers que D3 touche est
+    //      écrite ici ; chacun doit exister, et chacun doit tomber soit dans
+    //      le périmètre possédé (`Story/Timeline/**` en source comme en
+    //      test), soit dans la liste COURTE et NOMMÉE des écarts assumés ;
+    //   b. un balayage de l'arbre : aucun fichier hors `Story/Timeline/**`
+    //      ne référence le plan — c'est la fuite d'ownership que le
+    //      manifeste seul ne verrait pas (il ne connaît que ce qu'on lui
+    //      déclare) ;
+    //   c. les hash de contenu des DEUX voisins immédiats hors périmètre :
+    //      `ComposerControlsLayer` (l'entrée du composer) et
+    //      `TimelineExportFlow` (celui qui PRÉSENTE le conteneur racine).
+    //
+    // Écart assumé et consigné : `Resources/Localizable.xcstrings` vit hors
+    // `Story/Timeline/**` mais est le catalogue UNIQUE du module — toute
+    // chaîne neuve du plan doit y entrer pour tenir la règle des 7 langues.
+    // Le contourner (littéraux non localisés) coûterait plus cher que
+    // l'écart. Second écart : la matrice `docs/superpowers/specs/
+    // 2026-08-19-meeshy-composer-views.html`, dont ce lot ne touche QUE sa
+    // propre ligne (règle P0 du lot D).
+
+    /// Les DEUX seuls chemins hors périmètre que D3 s'autorise.
+    static let declaredOutOfScopePaths: Set<String> = [
+        "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+        "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html"
+    ]
+
+    static let ownedPathPrefixes: [String] = [
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/"
+    ]
+
+    /// Le MANIFESTE : tout ce que D3 touche, du premier commit d'intégration
+    /// à celui-ci.
+    static let d3DiffPaths: [String] = [
+        "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html",
+        "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic/Plan2DLayout.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/Plan2DProjectAdapter.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/Plan2DReorderResolver.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineHost.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Inspector/ClipInspector.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DIntegrationGuardTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DLayoutTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DRestoredCapabilitiesTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DViewGuardTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/TimelineLocalizationTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelFollowSlideTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DProjectAdapterTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DReorderResolverTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/StoryTimelineHost_ReorderTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/TimelineInspectorHost_FollowSlideTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/ClipInspectorSnapshotTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/ClipInspectorTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_audioSelected.inspector-audioSelected-dark.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_audioSelected.inspector-audioSelected-light.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_followingSlide_hidesFollowSlideButton.inspector-followingSlide-hidesButton-dark.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_followingSlide_hidesFollowSlideButton.inspector-followingSlide-hidesButton-light.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_noSelection.inspector-noSelection-dark.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_noSelection.inspector-noSelection-light.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_textSelected.inspector-textSelected-dark.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_textSelected.inspector-textSelected-light.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_videoSelected.inspector-videoSelected-dark.png",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_videoSelected.inspector-videoSelected-light.png"
+    ]
+
+    static func isWithinOwnership(_ path: String) -> Bool {
+        ownedPathPrefixes.contains { path.hasPrefix($0) } || declaredOutOfScopePaths.contains(path)
+    }
+
+    func test_everyFileOfTheD3Diff_exists() {
+        for path in Self.d3DiffPaths {
+            XCTAssertTrue(
+                FileManager.default.fileExists(atPath: Self.repoRoot.appendingPathComponent(path).path),
+                "Chemin déclaré au manifeste mais absent du dépôt : \(path)"
+            )
+        }
+    }
+
+    func test_everyFileOfTheD3Diff_staysInsideTheOwnedPerimeterOrIsADeclaredException() {
+        let strays = Self.d3DiffPaths.filter { !Self.isWithinOwnership($0) }
+        XCTAssertEqual(strays, [],
+                      "Le lot D ne possède que Timeline/** — tout autre fichier doit être un écart NOMMÉ (catalogue, matrice)")
+    }
+
+    /// Contrôle positif : la garde doit réellement rejeter un chemin hors
+    /// périmètre non déclaré.
+    func test_guardRejectsAFileOutsideThePerimeter() {
+        XCTAssertFalse(Self.isWithinOwnership("packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/ComposerControlsLayer.swift"))
+        XCTAssertFalse(Self.isWithinOwnership("apps/ios/Meeshy.xcodeproj/project.pbxproj"))
+        XCTAssertTrue(Self.isWithinOwnership("packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift"))
+    }
+
+    /// Balayage de l'ARBRE, pas du manifeste : le plan ne doit avoir fuité
+    /// dans aucun fichier hors `Story/Timeline/**`.
+    func test_noFileOutsideTimeline_referencesThePlan() throws {
+        let root = Self.sourcesRoot
+        guard let walker = FileManager.default.enumerator(at: root,
+                                                          includingPropertiesForKeys: nil) else {
+            return XCTFail("Sources/MeeshyUI doit être parcourable")
+        }
+        var offenders: [String] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            guard !relative.hasPrefix("Story/Timeline/") else { continue }
+            let source = try String(contentsOf: url, encoding: .utf8)
+            if source.contains("Plan2D") { offenders.append(relative) }
+        }
+        XCTAssertEqual(offenders, [],
+                      "Le plan 2D appartient à Timeline/** — aucune fuite hors périmètre")
+    }
+
+    /// Contrôle positif du balayage : le motif cherché est bien celui qui
+    /// trahirait une fuite.
+    func test_treeScanDetectsAPlanReferenceInASample() {
+        XCTAssertTrue("struct Fake { let tracks: [Plan2DTrack] = [] }".contains("Plan2D"))
+        XCTAssertFalse("struct Fake { let tracks: [TrackBar] = [] }".contains("Plan2D"))
+    }
+
+    // MARK: - Guard 3c — les deux voisins immédiats hors périmètre
+
+    func test_timelineExportFlow_contentIsUnchanged() throws {
+        let data = try Data(contentsOf: Self.timelineExportFlowURL)
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        XCTAssertEqual(
+            digest,
+            "de4d954b0876b86e2e0569ceec31029967e4fb8e7f4f68ec682ad5af9363f54c",
+            "TimelineExportFlow.swift PRÉSENTE le conteneur racine mais n'appartient pas à ce lot — aucune ligne ne doit bouger"
+        )
+    }
 
     func test_composerControlsLayer_contentIsUnchanged() throws {
         let data = try Data(contentsOf: Self.composerControlsLayerURL)
@@ -253,6 +390,20 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     private static var timelineInspectorHostURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/Views/Container/TimelineInspectorHost.swift")
+    }
+
+    private static var repoRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Timeline
+            .deletingLastPathComponent()   // MeeshyUITests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // MeeshySDK
+            .deletingLastPathComponent()   // packages
+            .deletingLastPathComponent()   // racine du dépôt
+    }
+
+    private static var timelineExportFlowURL: URL {
+        sourcesRoot.appendingPathComponent("Story/TimelineExportFlow.swift")
     }
 
     private static var composerControlsLayerURL: URL {
