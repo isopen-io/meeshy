@@ -221,6 +221,15 @@ nonisolated public enum FocalMetrics {
         /// `Row.paddingVertical − focusCardInnerMargin` (5 − 4 = 1 pt) du
         /// bas de la cellule, soit 4 pt sous le contenu ⇒ 16 + 4.
         public static let overhang: CGFloat = chipSize / 2 + 4
+        /// Chip d'identité (avatar + nom + date) posée sur la ligne du HAUT
+        /// pour un message en focus qui n'est pas tête de groupe — une
+        /// superposition, jamais une hauteur de rangée (instantané, zéro
+        /// relayout).
+        public static let identityAvatarSize: CGFloat = 18
+        public static let identityChipHeight: CGFloat = 24
+        /// La carte s'arrête à `Row.paddingVertical − focusCardInnerMargin`
+        /// (1 pt) du haut de la cellule ⇒ 4 pt au-dessus du contenu.
+        public static let identityOverhang: CGFloat = identityChipHeight / 2 + 4
     }
 
     nonisolated public enum HiddenChrome {

@@ -1369,6 +1369,10 @@ struct ConversationListView: View {
                 // Même source que la rangée plate (pastille de présence).
                 presenceFor: { conversation in
                     presenceManager.presenceState(for: conversation.participantUserId ?? "")
+                },
+                onForceSync: { _ in
+                    HapticFeedback.light()
+                    conversationViewModel.forceSync()
                 }
             )
             // Scène (2026-08-21) : un consommateur de plus du MÊME relais —

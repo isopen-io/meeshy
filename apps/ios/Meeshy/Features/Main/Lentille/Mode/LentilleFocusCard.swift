@@ -55,6 +55,8 @@ struct LentilleFocusCard: View, Equatable {
     var onMoveToSection: (String) -> Void = { _ in }
     var onFilterByTag: (String?) -> Void = { _ in }
     var onRemoveTag: (MeeshyConversationTag) -> Void = { _ in }
+    /// Appui sur l'icône de synchronisation ⇒ synchronisation IMMÉDIATE.
+    var onForceSync: () -> Void = {}
     /// Pastille de présence de l'avatar (2026-08-22 : « il manque la
     /// pastille de présence dans la magnificence ») — même source que la
     /// rangée plate ; `.offline`/`nil` = aucun point.
@@ -139,15 +141,28 @@ struct LentilleFocusCard: View, Equatable {
                     .offset(x: LentilleMetrics.ModeNotch.right, y: -LentilleMetrics.ModeNotch.top)
             }
         }
-        // behaviour-matrix:L08 — le badge de type (groupe/canal/bot +
-        // memberCount) est absorbé par la focus card. Coin bas-droit : le seul
-        // coin libre (avatar à gauche, encoche en haut à droite).
+        // behaviour-matrix:L08 + 2026-08-22 : l'effectif (type + memberCount)
+        // est SUR la ligne basse, coin droit, juste avant l'icône de
+        // synchronisation en cours (appui = synchroniser maintenant).
         .overlay(alignment: .bottomTrailing) {
-            if conversation.type != .direct {
-                typeBadge
-                    .padding(.trailing, MeeshySpacing.sm)
-                    .padding(.bottom, MeeshySpacing.xs)
+            HStack(spacing: MeeshySpacing.xs) {
+                if conversation.type != .direct {
+                    typeBadge
+                }
+                if conversation.userState.hasPendingSync {
+                    syncChip
+                }
+            }
+            .offset(x: -LentilleMetrics.ModeNotch.right, y: -LentilleMetrics.ModeNotch.top)
+        }
+        // Nom PERSONNALISÉ affiché ⇒ le nom original, centré sur la ligne du
+        // haut (2026-08-22).
+        .overlay(alignment: .top) {
+            if let original = Self.originalName(conversation: conversation) {
+                notchChip(original)
+                    .offset(y: LentilleMetrics.ModeNotch.top)
                     .allowsHitTesting(false)
+                    .accessibilityLabel(original)
             }
         }
     }
@@ -290,25 +305,48 @@ struct LentilleFocusCard: View, Equatable {
         }
     }
 
-    // MARK: - Chip de type + memberCount (behaviour-matrix:L08)
+    // MARK: - Chip de type + memberCount (behaviour-matrix:L08) — sur la ligne
+
+    /// Le nom ORIGINAL quand un nom personnalisé est affiché à sa place.
+    nonisolated static func originalName(conversation: Conversation) -> String? {
+        guard let custom = conversation.userState.customName, !custom.isEmpty else { return nil }
+        let original = conversation.title ?? conversation.identifier
+        return original == custom ? nil : original
+    }
 
     private var typeBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: Self.typeBadgeIcon(for: conversation.type))
-                .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
                 .imageScale(.small)
             if conversation.memberCount > 1 {
                 Text(conversation.memberCountDisplay)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
+                    .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
             }
         }
         .foregroundColor(accent)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(
-            Capsule()
-                .fill(accent.opacity(isDark ? 0.2 : 0.15))
-        )
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xs)
+        .background(Capsule(style: .continuous).fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
+        .overlay(Capsule(style: .continuous).strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1))
+        .accessibilityLabel(conversation.memberCountDisplay)
+    }
+
+    /// Synchronisation en cours : même glyphe que la rangée plate, mais un
+    /// BOUTON — l'appui force la synchronisation immédiatement.
+    private var syncChip: some View {
+        Button(action: onForceSync) {
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                .foregroundColor(accent)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
+                .background(Capsule(style: .continuous).fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
+                .overlay(Capsule(style: .continuous).strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1))
+                .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "conversations.focus.sync_now", defaultValue: "Synchroniser maintenant", bundle: .main))
     }
 
     private static func typeBadgeIcon(for type: MeeshyConversation.ConversationType) -> String {
@@ -529,6 +567,8 @@ struct LentilleFocusCardHost: View {
     var onRemoveTag: (_ conversation: Conversation, _ tag: MeeshyConversationTag) -> Void = { _, _ in }
     /// Présence de l'élu, relue à chaque tick (lecture de dictionnaire).
     var presenceFor: (Conversation) -> PresenceState? = { _ in nil }
+    /// Appui sur l'icône de synchronisation de la carte.
+    var onForceSync: (Conversation) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -581,6 +621,7 @@ struct LentilleFocusCardHost: View {
                     onMoveToSection: { sectionId in onMoveToSection(conversation.id, sectionId) },
                     onFilterByTag: onFilterByTag,
                     onRemoveTag: { tag in onRemoveTag(conversation, tag) },
+                    onForceSync: { onForceSync(conversation) },
                     presenceState: presenceFor(conversation)
                 )
                 .equatable()

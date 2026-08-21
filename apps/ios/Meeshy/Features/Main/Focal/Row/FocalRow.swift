@@ -117,7 +117,11 @@ struct FocalRow: View {
 
             // Le message EN FOCUS (Focal) porte toujours son identité — avatar,
             // présence, mood, jour et heure — même en continuation de groupe.
-            if input.isFirstInGroup || input.isFocused {
+            // Tête de groupe seulement : un message en focus qui n'est pas
+            // tête de groupe porte son identité SUR la ligne du haut de la
+            // carte (superposition, `focusIdentityChip`) — la hauteur de la
+            // rangée ne dépend jamais du focus (instantané, zéro relayout).
+            if input.isFirstInGroup {
                 FocalIdentityHeader(
                     isMe: content.isMe,
                     senderDisplayName: input.senderDisplayName,
@@ -181,11 +185,14 @@ struct FocalRow: View {
 
             failedRetrySection
             flagAndReactionsRow
+                // En focus, la bande SUR la ligne basse remplace visuellement
+                // cette ligne — qui garde sa place (hauteur stable).
+                .opacity(input.isFocused ? 0 : 1)
 
-            if !input.isFirstInGroup && !input.isFocused {
+            if !input.isFirstInGroup {
                 FocalMetaRow(
                     isMe: content.isMe,
-                    timeString: content.meta.timeString,
+                    timeString: headerTimeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
                     indent: indent,
@@ -196,6 +203,23 @@ struct FocalRow: View {
                 )
             }
 
+        }
+        // Focus (2026-08-22) : identité sur la ligne du HAUT (hors tête de
+        // groupe, qui a déjà la sienne) et bande sur la ligne BASSE — des
+        // superpositions, aucune hauteur réservée : elles apparaissent AVEC
+        // la carte, au tick d'élection.
+        .overlay(alignment: .topLeading) {
+            if input.isFocused && !input.isFirstInGroup {
+                focusIdentityChip
+                    .padding(.leading, indent)
+                    .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if input.isFocused {
+                focusStrip
+                    .offset(y: FocalMetrics.FocusStrip.overhang)
+            }
         }
         // F-083ter (F15) : « les effets (bitfield) s'appliquent au bloc
         // contenu » — même overlay que le chemin bulle
@@ -486,8 +510,12 @@ struct FocalRow: View {
     /// rangée (Prisme déjà résolu), jamais une seconde résolution.
     /// En focus : « Aujourd'hui 12:45 », « Hier 18:45 », « Mardi 23:40 »,
     /// « Sam. 3 oct. 2025 · 14:41 » (`FocalFocusTimestamp`) ; sinon l'heure seule.
+    /// En focus : la date complète PRÉ-CALCULÉE par la configuration
+    /// (`input.focusTimestamp`) ; le calcul en body n'est qu'un filet.
     private var headerTimeString: String {
-        guard input.isFocused, let sentAt = input.sentAt else { return content.meta.timeString }
+        guard input.isFocused else { return content.meta.timeString }
+        if let precomputed = input.focusTimestamp { return precomputed }
+        guard let sentAt = input.sentAt else { return content.meta.timeString }
         return FocalFocusTimestamp.label(
             sentAt: sentAt,
             timeString: content.meta.timeString,
@@ -542,9 +570,7 @@ struct FocalRow: View {
             isMe: content.isMe,
             isLastReceivedMessage: input.isLastReceivedMessage
         )
-        if input.isFocused {
-            focusStrip
-        } else if (content.translation != nil && !content.isBlurred) || showsReactions {
+        if (content.translation != nil && !content.isBlurred) || showsReactions {
             HStack(alignment: .center, spacing: 6) {
                 // Jamais de drapeau EN CLAIR sur un message protégé (revue
                 // adversariale 2026-08-18) : la bulle floute sa bande de
@@ -607,12 +633,25 @@ struct FocalRow: View {
             .contentShape(Circle())
     }
 
-    /// Sur la bordure basse du message en focus : les drapeaux des
-    /// traductions DISPONIBLES (toucher = afficher cette langue), l'icône de
-    /// traduction du mode bulle (détails), le (+) emoji et les réactions.
+    /// Sur la ligne BASSE de la carte du message en focus, dans CET ordre
+    /// (directive 2026-08-22) : l'icône de traduction (détails), les
+    /// drapeaux (afficher le contenu dans cette langue), le (+) emoji, puis
+    /// les réactions — fond PLEIN quand j'ai réagi. Superposition : aucune
+    /// hauteur réservée, donc affichage instantané au tick d'élection.
     private var focusStrip: some View {
         HStack(alignment: .center, spacing: 4) {
             if let translation = content.translation, !content.isBlurred {
+                Button {
+                    actions.onShowTranslationDetail?(content.messageId)
+                } label: {
+                    focusChip {
+                        Image(systemName: "character.bubble")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(focusAccent)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "focal.focus.translation_detail", defaultValue: "Détails de traduction", bundle: .main))
                 ForEach(
                     Self.focusFlagCodes(
                         originalLangCode: translation.originalLangCode,
@@ -631,54 +670,90 @@ struct FocalRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel(LanguageData.info(for: code.lowercased())?.name ?? code)
                 }
-                Button {
-                    actions.onShowTranslationDetail?(content.messageId)
-                } label: {
-                    focusChip {
-                        Image(systemName: "character.bubble")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(focusAccent)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "focal.focus.translation_detail", defaultValue: "Détails de traduction", bundle: .main))
             }
-            if content.isMe {
-                // L'overlay ne propose son (+) qu'aux messages REÇUS : le
-                // message en focus l'offre toujours.
-                Button {
-                    actions.onOpenReactPicker?(content.messageId)
-                } label: {
-                    focusChip {
-                        Image(systemName: "face.smiling")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundColor(focusAccent)
-                    }
+            Button {
+                actions.onOpenReactPicker?(content.messageId)
+            } label: {
+                focusChip {
+                    Image(systemName: "face.smiling")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(focusAccent)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "focal.focus.add_reaction", defaultValue: "Ajouter une réaction", bundle: .main))
             }
-            BubbleReactionsOverlay(
-                messageId: content.messageId,
-                summaries: content.reactions,
-                isMe: content.isMe,
-                isDark: input.isDark,
-                // Forcé : le (+) du message reçu en focus, dernier ou pas.
-                isLastReceivedMessage: true,
-                accentHex: input.accentHex,
-                onAddReaction: actions.onAddReaction,
-                onToggleReaction: actions.onToggleReaction,
-                onOpenReactPicker: actions.onOpenReactPicker,
-                onShowReactions: actions.onShowReactions
-            )
-            .equatable()
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "focal.focus.add_reaction", defaultValue: "Ajouter une réaction", bundle: .main))
+            ForEach(content.reactions, id: \.emoji) { reaction in
+                focusReactionChip(reaction)
+            }
             Spacer(minLength: 0)
         }
         .padding(.leading, indent)
-        // SUR la ligne de la carte (comme l'encoche CATÉGORIE de la liste) :
-        // le rembourrage négatif rend la hauteur réservée, la bande déborde
-        // sous le contenu jusqu'à centrer ses chips sur la bordure.
-        .padding(.bottom, -FocalMetrics.FocusStrip.overhang)
+    }
+
+    /// Réaction sur la ligne : fond PLEIN (accent) si j'ai réagi, sinon la
+    /// chip neutre ; toucher = basculer, maintenir = qui a réagi.
+    private func focusReactionChip(_ reaction: MeeshyReactionSummary) -> some View {
+        let mine = reaction.includesMe
+        return Button {
+            HapticFeedback.light()
+            actions.onToggleReaction?(reaction.emoji)
+        } label: {
+            HStack(spacing: 2) {
+                Text(reaction.emoji).font(.caption2)
+                if reaction.count > 1 {
+                    Text("\(reaction.count)")
+                        .font(.caption2.weight(.bold))
+                        .foregroundColor(mine ? .white : focusAccent)
+                }
+            }
+            .padding(.horizontal, reaction.count > 1 ? 7 : 4)
+            .frame(height: 24)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(mine ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
+                    .overlay(Capsule(style: .continuous).fill(mine ? Color.clear : focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
+                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(mine ? 1 : 0.45), lineWidth: mine ? 1.5 : 1))
+            )
+            .frame(height: FocalMetrics.FocusStrip.chipSize)
+            .contentShape(Capsule(style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in
+            HapticFeedback.medium()
+            actions.onShowReactions?(content.messageId)
+        })
+        .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
+    }
+
+    /// Identité (avatar + nom + date complète) SUR la ligne du HAUT de la
+    /// carte, pour un message en focus qui n'est pas tête de groupe.
+    private var focusIdentityChip: some View {
+        HStack(spacing: 6) {
+            MeeshyAvatar(
+                name: input.senderDisplayName,
+                context: .postReaction,
+                accentColor: input.senderColorHex,
+                avatarURL: input.senderAvatarURL,
+                isDark: input.isDark
+            )
+            Text(input.senderDisplayName)
+                .font(MeeshyFont.relative(11.5, weight: .bold))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: input.isDark))
+                .lineLimit(1)
+            Text(headerTimeString)
+                .font(MeeshyFont.relative(10.5))
+                .foregroundColor(MeeshyColors.textMuted(isDark: input.isDark))
+                .lineLimit(1)
+                .layoutPriority(1)
+        }
+        .padding(.leading, 3)
+        .padding(.trailing, MeeshySpacing.sm)
+        .frame(height: FocalMetrics.FocusStrip.identityChipHeight)
+        .background(
+            Capsule(style: .continuous)
+                .fill(MeeshyColors.backgroundSecondary(isDark: input.isDark))
+                .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(0.45), lineWidth: 1))
+        )
     }
 
     @ViewBuilder

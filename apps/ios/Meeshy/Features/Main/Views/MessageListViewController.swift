@@ -1388,7 +1388,9 @@ final class MessageListViewController: UIViewController {
                     // Focal : le message en focus (posé à la POSE par
                     // `syncFocalFocusDetails`) porte ses détails complets.
                     isFocused: self.focalDetailedLocalId == localId,
-                    sentAt: message.createdAt
+                    sentAt: message.createdAt,
+                    // Pré-calculée ici, jamais dans un body (directive 2026-08-22).
+                    focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil
                 )
                 var focalActions = FocalRowActions()
                 focalActions.onToggleReaction = { emoji in toggleReactionHandler?(messageId, emoji) }
@@ -2925,7 +2927,13 @@ extension MessageListViewController {
         }
         let poses = FocalScrollPerspective.poses(cells: geometries, focusY: focusY, reduceMotion: reduceMotion)
         let focused = FocalScrollPerspective.focusedId(cells: geometries, focusY: focusY, currentId: focalFocusedLocalId)
+        let electionChanged = focalFocusedLocalId != focused
         focalFocusedLocalId = focused
+        // Les détails du message en focus apparaissent AVEC la carte, pas au
+        // posé (directive 2026-08-22) : la reconfiguration ne change aucune
+        // hauteur (chips et identité sont des superpositions sur les lignes
+        // de la carte), elle ne coûte qu'un rendu de deux cellules.
+        if electionChanged { syncFocalFocusDetails() }
         let accent = UIColor(Color(hex: accentColor))
         let isDark = self.isDark
         let body = {
@@ -2957,6 +2965,20 @@ extension MessageListViewController {
     /// Les détails du message en focus (identité, jour + heure, texte
     /// plafonné) — par UNE reconfiguration ciblée, jamais par frame : posés à
     /// la pose tant que la scène est active, rendus à l'aplatissement.
+    /// Même loi et mêmes mots que le message en focus de la rangée.
+    func focalFocusTimestamp(for sentAt: Date) -> String {
+        FocalFocusTimestamp.label(
+            sentAt: sentAt,
+            timeString: TimeStringCache.shared.format(sentAt),
+            now: Date(),
+            calendar: .current,
+            locale: .current,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+        )
+    }
+
     func syncFocalFocusDetails() {
         guard let dataSource else { return }
         let target = (readingMode == .focal && focalSceneActive) ? focalFocusedLocalId : nil

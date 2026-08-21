@@ -400,3 +400,15 @@ Le body d'une bulle a lien heberge un `LinkPreviewCard` dont le `.frame(minHeigh
 5. Badge non-lus de la carte `fixedSize` + priorité 3 : c'est le NOM qui tronque, jamais le badge (il se comprimait en « ⋮ »).
 
 **Alternatives rejetées**: pousser les voisines par une hauteur de rangée variable (relayout à chaque tick) ; un `.offset` dans `LentillePerspective` (dossier gelé « opacité et échelle seules », garde de source) ; rendre la bande en overlay hors cellule (elle doit défiler avec le message).
+
+## 2026-08-22 (bis) : la bulle en focus montre tout AVEC la carte — rien ne change de hauteur ; effectif, synchronisation et nom original sur les lignes de la carte de liste
+
+**Statut**: Accepté (directives utilisateur)
+
+**Décision**:
+1. **Instantané = zéro changement de hauteur.** Les détails du message en focus (identité, date complète, bande de chips) sont des SUPERPOSITIONS sur les lignes de la carte : identité (avatar 18 + nom + date) sur la ligne du HAUT pour un message qui n'est pas tête de groupe (`focusIdentityChip`, `FocusStrip.identityOverhang`), bande sur la ligne BASSE (`focusStrip`, `FocusStrip.overhang`), ligne drapeau+réactions interne conservée mais effacée (`opacity`), méta-rangée conservée. Comme aucune hauteur ne dépend du focus, `syncFocalFocusDetails()` est appelé AU TICK d'élection (`applyFocalPerspectiveToVisibleCells`, `electionChanged`) : deux cellules re-rendues, aucun relayout — plus d'attente du posé.
+2. **Date pré-calculée** : `FocalRowInput.focusTimestamp` est formatée à la configuration de la cellule (`MessageListViewController.focalFocusTimestamp(for:)`, même loi `FocalFocusTimestamp`), jamais dans un body.
+3. **Ordre de la bande** : icône de traduction (détails) → drapeaux (afficher le contenu dans cette langue, l'active en anneau plein) → (+) emoji (toujours, messages reçus ou envoyés) → réactions en chips, fond PLEIN (accent) si j'ai réagi (`includesMe`), toucher = basculer, maintenir = qui a réagi. Plus d'`BubbleReactionsOverlay` dans la bande.
+4. **Carte de liste** : l'effectif (type + memberCount) est SUR la ligne basse, coin droit, juste avant l'icône de synchronisation en cours (`userState.hasPendingSync`), qui est un BOUTON — l'appui rejoue l'outbox immédiatement (`ConversationListViewModel.forceSync()` → `ConversationStore.flushOutbox()`). Quand un nom personnalisé est affiché, le nom ORIGINAL (`title ?? identifier`, s'il diffère) est centré sur la ligne du haut.
+
+**Alternatives rejetées**: reconfigurer la cellule en focus avec un en-tête inséré (changement de hauteur pendant le défilement ⇒ saut de contenu, relayout sous l'entonnoir) ; formater la date dans le body (coût par rendu, directive explicite) ; garder l'overlay de réactions (pas de « fond plein », (+) réservé aux messages reçus).

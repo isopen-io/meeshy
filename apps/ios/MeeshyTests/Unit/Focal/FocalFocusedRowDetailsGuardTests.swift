@@ -35,10 +35,28 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
             "La rangée en focus doit demander à son en-tête d'identité une heure PERMANENTE " +
             "(`revealsTimeAlways: input.isFocused`) — sinon l'heure suit le révélé et disparaît au repos."
         )
-        XCTAssertTrue(
-            row.contains("if input.isFirstInGroup || input.isFocused {"),
-            "Le message en focus porte son en-tête d'identité même en continuation de groupe."
-        )
+        // 2026-08-22 : l'identité d'un message en focus qui n'est pas tête de
+        // groupe est une SUPERPOSITION sur la ligne du haut (hauteur stable,
+        // affichage instantané) — plus un en-tête inséré dans la rangée.
+        XCTAssertFalse(row.contains("if input.isFirstInGroup || input.isFocused {"), "plus d'en-tête inséré au focus")
+        XCTAssertTrue(row.contains("if input.isFocused && !input.isFirstInGroup { focusIdentityChip"), "identité sur la ligne du haut")
+        XCTAssertTrue(row.contains(".offset(y: -FocalMetrics.FocusStrip.identityOverhang)"))
+    }
+
+    /// 2026-08-22 : tout ce que porte la bulle en focus apparaît AVEC la carte
+    /// — au tick d'élection, jamais au posé — parce que rien ne change de
+    /// hauteur : bande et identité sont des superpositions, la date est
+    /// pré-calculée à la configuration.
+    func test_focusDetails_areInstant_noHeightChange_precomputedDate() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertTrue(row.contains(".opacity(input.isFocused ? 0 : 1)"), "la ligne drapeau+réactions garde sa place, elle s'efface")
+        XCTAssertTrue(row.contains("if !input.isFirstInGroup { FocalMetaRow("), "la méta-rangée reste, focus ou pas")
+        XCTAssertTrue(row.contains("if let precomputed = input.focusTimestamp { return precomputed }"), "date pré-calculée")
+        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains("if electionChanged { syncFocalFocusDetails() }"), "détails synchronisés au tick d'élection")
+        XCTAssertTrue(controller.contains("focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil"))
+        let input = try normalized("Meeshy/Features/Main/Focal/Core/FocalRowInput.swift")
+        XCTAssertTrue(input.contains("let focusTimestamp: String?"))
     }
 
     /// 2026-08-21 : le message en focus porte sur sa bordure basse les
@@ -46,15 +64,20 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     /// réactions ; ses coches (haut-droite) ouvrent les détails de lecture.
     func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
-        XCTAssertTrue(row.contains("if input.isFocused { focusStrip }"), "la bordure basse remplace la ligne drapeau+réactions en focus")
+        XCTAssertTrue(row.contains("if input.isFocused { focusStrip .offset(y: FocalMetrics.FocusStrip.overhang) }"), "la bande est une superposition SUR la ligne basse")
         XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
         XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
-        XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, même sur mes messages")
-        XCTAssertTrue(row.contains("isLastReceivedMessage: true,"), "les réactions + (+) du message reçu, dernier ou pas")
+        XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, toujours")
         XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches ouvrent les détails de lecture")
-        // 2026-08-22 : les chips sont SUR la ligne de la carte (débord sous le
-        // contenu), la cellule ne les rogne pas et passe au-dessus.
-        XCTAssertTrue(row.contains(".padding(.bottom, -FocalMetrics.FocusStrip.overhang)"), "la bande déborde jusqu'à la ligne")
+        // Ordre (directive 2026-08-22) : traduction → drapeaux → (+) → réactions.
+        let strip = try XCTUnwrap(row.range(of: "private var focusStrip: some View {"))
+        let tail = row[strip.lowerBound...]
+        let iTranslate = try XCTUnwrap(tail.range(of: "\"character.bubble\"")).lowerBound
+        let iFlags = try XCTUnwrap(tail.range(of: "Self.focusFlagCodes(")).lowerBound
+        let iPlus = try XCTUnwrap(tail.range(of: "\"face.smiling\"")).lowerBound
+        let iReactions = try XCTUnwrap(tail.range(of: "focusReactionChip(reaction)")).lowerBound
+        XCTAssertTrue(iTranslate < iFlags && iFlags < iPlus && iPlus < iReactions, "ordre : traduction, drapeaux, (+), réactions")
+        XCTAssertTrue(row.contains(".fill(mine ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))"), "fond PLEIN quand j'ai réagi")
         let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains("cell.clipsToBounds = false"))
         XCTAssertTrue(controller.contains("cell.layer.zPosition = isFocusedCell ? 1 : 0"))

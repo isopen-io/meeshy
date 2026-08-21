@@ -142,6 +142,10 @@ struct FocalRowInput: Equatable {
     /// (`FocalMetrics.Focus.maxCharacters`) pour tenir dans une magnificence
     /// lisible. Posé par l'hôte À LA POSE seulement (jamais par frame).
     let isFocused: Bool
+    /// Date complète du message en focus, PRÉ-CALCULÉE à la configuration
+    /// (directive 2026-08-22 : « la date doit être pré-calculée et affichée
+    /// instantanément ») — jamais formatée dans un body.
+    let focusTimestamp: String?
     /// Date d'envoi — affichée en clair (jour + heure) sur le message en focus.
     let sentAt: Date?
 
@@ -181,7 +185,8 @@ struct FocalRowInput: Equatable {
         effects: MessageEffects = .none,
         isLastReceivedMessage: Bool = false,
         isFocused: Bool = false,
-        sentAt: Date? = nil
+        sentAt: Date? = nil,
+        focusTimestamp: String? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -219,6 +224,7 @@ struct FocalRowInput: Equatable {
         self.isLastReceivedMessage = isLastReceivedMessage
         self.isFocused = isFocused
         self.sentAt = sentAt
+        self.focusTimestamp = focusTimestamp
     }
 
     /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
@@ -271,6 +277,7 @@ struct FocalRowInput: Equatable {
             && lhs.isLastReceivedMessage == rhs.isLastReceivedMessage
             && lhs.isFocused == rhs.isFocused
             && lhs.sentAt == rhs.sentAt
+            && lhs.focusTimestamp == rhs.focusTimestamp
     }
 }
 

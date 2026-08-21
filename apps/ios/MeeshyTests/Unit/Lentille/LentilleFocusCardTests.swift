@@ -457,6 +457,28 @@ extension LentilleFocusCardTests {
         XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0, reduceMotion: false), 0, "au repos, rien")
     }
 
+    /// 2026-08-22 : effectif SUR la ligne basse à droite, avant l'icône de
+    /// synchronisation (un BOUTON : appui = synchroniser maintenant) ; nom
+    /// original centré sur la ligne du haut quand un nom personnalisé s'affiche.
+    func test_focusCard_memberCountAndSyncOnTheBottomLine_originalNameOnTheTopLine() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("Button(action: onForceSync)"), "l'icône de synchronisation est un bouton")
+        XCTAssertTrue(code.contains("if conversation.userState.hasPendingSync {"), "visible seulement si une synchronisation est en attente")
+        XCTAssertTrue(code.contains(".overlay(alignment: .top) {"), "nom original centré en haut")
+        XCTAssertTrue(code.contains("Self.originalName(conversation: conversation)"))
+        XCTAssertTrue(code.contains("store.flushOutbox()") == false, "la carte ne touche pas au store : la liste câble le VM")
+    }
+
+    func test_originalName_onlyWhenACustomNameHidesIt() {
+        var renamed = makeConversation()
+        renamed.userState.customName = "Mon équipe"
+        XCTAssertEqual(LentilleFocusCard.originalName(conversation: renamed), "Equipe Produit")
+        XCTAssertNil(LentilleFocusCard.originalName(conversation: makeConversation()), "sans nom personnalisé : rien")
+        var same = makeConversation()
+        same.userState.customName = "Equipe Produit"
+        XCTAssertNil(LentilleFocusCard.originalName(conversation: same), "identique au titre : rien à rappeler")
+    }
+
     func test_categoryText_isTheCurrentCategoryUppercased_orTheFallback() {
         XCTAssertEqual(LentilleFocusCard.categoryText(current: "Travail", fallback: "Catégorie"), "TRAVAIL")
         XCTAssertEqual(LentilleFocusCard.categoryText(current: nil, fallback: "Catégorie"), "CATÉGORIE")

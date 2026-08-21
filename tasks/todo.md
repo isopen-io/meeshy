@@ -317,6 +317,12 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
       rangée) — vérifié ; respiration ×3 autour de la rangée élue (`LentilleFocusBreathing`, 12 pt,
       rampe) — vérifié ; « Conversations avec ce tag » ; héros « Voir mes affiliations » → `.affiliate` ;
       badge non-lus non compressible.
+- [x] Lot 7 (directives 22/08 bis) : détails du focus INSTANTANÉS (superpositions sur les lignes, sync
+      au tick d'élection, date pré-calculée `FocalRowInput.focusTimestamp`) — vérifié simulateur pendant la
+      décélération (tête de groupe et continuation) ; ordre traduction → drapeaux → (+) → réactions (fond
+      plein si j'ai réagi) ; carte de liste : effectif + sync (bouton → `flushOutbox`) sur la ligne basse à
+      droite, nom original centré en haut si nom personnalisé (non vus : aucune conversation renommée /
+      groupe non élu pendant la capture).
 - [ ] Rivière lots 2–5 inchangés (ci-dessous).
 
 ## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`
