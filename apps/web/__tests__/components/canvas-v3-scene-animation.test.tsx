@@ -164,3 +164,67 @@ describe('CanvasV3Scene — transitions de clip (F7a)', () => {
     expect(parseFloat(screen.getByTestId('canvas-v3-object-t1').style.opacity)).toBeCloseTo(1, 4);
   });
 });
+
+/**
+ * F7a (correction de revue) — le facteur de transition de clip est réservé aux
+ * médias POSÉS. Le legacy retournait AVANT de calculer `fgOpacity` pour un
+ * porteur `isBackground` (`StoryViewer.tsx:925`), et le fond couleur/dégradé
+ * n'était même pas un objet : c'était le style du conteneur (`:846`, `:878`),
+ * jamais fondu. Or le convertisseur gateway émet un objet `kind:'media'`
+ * d'id `bg` pour TOUTE story v1 à fond (`storyEffectsV3.ts:71-75`), sans durée :
+ * `resolveClipTransitionOpacity` le juge alors hors fenêtre et rend 0 — fond
+ * DISPARU dès qu'un slide porte des transitions.
+ */
+describe('CanvasV3Scene — le fond hors du fondu de clip (F7a)', () => {
+  const crossfade = [{ fromClipId: 'm1', toClipId: 'm2', kind: 'crossfade', duration: 1 }];
+
+  const bgObject = (id: string, payload: Record<string, unknown>) => ({
+    id,
+    kind: 'media',
+    anchor: { t: 'free', x: 0.5, y: 0.5 },
+    plane: 'bg',
+    z: 0,
+    transform: { scale: 1, rotation: 0, opacity: 1 },
+    payload,
+  });
+
+  it('keeps the converted background object opaque under clip transitions', () => {
+    const doc = scene([bgObject('bg', { background: 'gradient:#101010,#303030', transform: null })], crossfade);
+    render(<CanvasV3Scene doc={doc} playheadSec={1.5} />);
+
+    expect(parseFloat(screen.getByTestId('canvas-v3-object-bg').style.opacity)).toBeCloseTo(1, 4);
+  });
+
+  it('keeps a background carrier opaque under clip transitions, as the legacy early return did', () => {
+    const doc = scene(
+      [bgObject('m0', { mediaURL: '/m/bg.mp4', mediaType: 'video', isBackground: true })],
+      crossfade
+    );
+    render(<CanvasV3Scene doc={doc} playheadSec={1.5} />);
+
+    expect(parseFloat(screen.getByTestId('canvas-v3-object-m0').style.opacity)).toBeCloseTo(1, 4);
+  });
+
+  it('still fades a background carrier named by a transition — a posed clip keeps its window', () => {
+    const doc = scene(
+      [
+        bgObject('m1', { mediaURL: '/m/bg.mp4', mediaType: 'video', isBackground: true, duration: 2 }),
+        {
+          id: 'm2',
+          kind: 'media',
+          anchor: { t: 'free', x: 0.5, y: 0.5 },
+          plane: 'content',
+          z: 0,
+          transform: { scale: 1, rotation: 0, opacity: 1 },
+          timing: { start: 2 },
+          payload: { mediaURL: '/m/b.jpg', mediaType: 'image', duration: 4 },
+        },
+      ],
+      crossfade
+    );
+    render(<CanvasV3Scene doc={doc} playheadSec={2.25} />);
+
+    expect(parseFloat(screen.getByTestId('canvas-v3-object-m1').style.opacity)).toBeCloseTo(1, 4);
+    expect(parseFloat(screen.getByTestId('canvas-v3-object-m2').style.opacity)).toBeCloseTo(0.25, 4);
+  });
+});

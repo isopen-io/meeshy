@@ -229,9 +229,20 @@ function clipWindowDuration(o: ObjectV3, start: number): number | undefined {
   return end !== undefined ? end - start : undefined;
 }
 
+/// Le FOND ne participe jamais au fondu de clip : le legacy retournait AVANT
+/// de calculer `fgOpacity` pour un porteur `isBackground` (`StoryViewer.tsx:925`)
+/// et le fond couleur/dégradé n'était même pas un objet — c'était le style du
+/// conteneur (`:846`, `:878`), jamais fondu. Le convertisseur gateway, lui,
+/// émet un objet `kind:'media'` d'id `bg` SANS durée pour toute story v1 à fond
+/// (`storyEffectsV3.ts:71-75`) : le juger sur la fenêtre de clip le déclarerait
+/// hors champ et le ferait DISPARAÎTRE.
+function isBackgroundObject(o: ObjectV3): boolean {
+  return str(o.payload.background) !== undefined || o.payload.isBackground === true;
+}
+
 /// Composition d'opacité identique au legacy : keyframes × facteur de
-/// transition, ce dernier réservé aux CLIPS (objets média), et seulement quand
-/// le slide porte des transitions.
+/// transition, ce dernier réservé aux CLIPS POSÉS (objets média non-fond), et
+/// seulement quand le slide porte des transitions.
 function resolveAnimation(
   o: ObjectV3,
   transitions: readonly StoryClipTransitionData[],
@@ -241,7 +252,7 @@ function resolveAnimation(
   try {
     const start = numeric(o.timing?.start) ?? 0;
     const keyframed = resolveKeyframeState(storyKeyframes(o.timing), playheadSec, start);
-    const transitioned = o.kind === 'media' && transitions.length > 0;
+    const transitioned = o.kind === 'media' && !isBackgroundObject(o) && transitions.length > 0;
     if (!keyframed && !transitioned) return null;
     const opacity = transitioned
       ? (keyframed?.opacity ?? o.transform.opacity)
