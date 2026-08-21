@@ -2,6 +2,69 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Story on-demand translation shipped** (slice `story-viewer-translation-request`,
+> feature-parity's Feed §F Prisme line — the **per-story timeline flag strip** arm, the LAST item on the
+> `request-missing-languages` follow-up. The whole follow-up (feed card / post-detail / comments / story) is
+> now done).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the open PRs at branch time are
+> all web/shared/gateway/ios/sdk — none android-routine). Prior android iteration
+> (`feed-comment-translation-request`, #3273) already merged into main. Branched off freshly-fetched
+> `origin/main` (`9233e850`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (`curl` → 200). Pristine `android-37.0` recipe worked
+> (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran the full
+> `assembleDebug testDebugUnitTest` locally.
+>
+> **The gap (read-only recon over iOS + Android)**: the story viewer's language quick bar
+> (`StoryViewerViewModel.availableLanguagesFor`) only listed languages ALREADY present in `StoryItem.translations`
+> — a configured content language the story had no translation for yet never surfaced, so a viewer could not
+> request one. iOS surfaces on-demand story translation via `StoryLanguageDetailView` (a full picker, socket-
+> completed `POST /posts/:id/translate`). Android has no story-translation socket consumer, so — exactly as the
+> feed post/comment arms did — the faithful move is **pull-translate-and-merge**, surfacing configured-but-absent
+> languages as translatable chips directly in the quick bar (no separate picker sheet needed yet).
+>
+> **`:core:model` `StoryTranslationMerge`** (new, list-keyed sibling of `PostTranslationMerge`):
+> `mergeTranslation(item: StoryItem, target, text): StoryItem?` upserts into the `List<StoryTranslation>` — blank
+> target/text guard, idempotent (same lang case-insensitive + same content → null), in-place replace preserving
+> position & original casing, else append under the trimmed target.
+>
+> **`:sdk-core` `StoryRepository`**: now injects `TranslationApi`; new stateless
+> `translateStory(item, target): StoryItem?` (story-shaped sibling of `PostRepository.translatePost`) — trims
+> target, reads `item.content` as source (empty `sourceLanguage` → translator auto-detects; stories carry no
+> `originalLanguage`), blocking-translates via `translationApi.translate`, folds via `StoryTranslationMerge`.
+> Null on blank target / no source / network failure / blank translation / idempotent.
+>
+> **`:feature:stories` `StoryViewerViewModel`**: `StoryLanguageOption` gains `isTranslatable`/`isTranslating`;
+> `availableLanguagesFor` appends each configured content language (`LanguageResolver.preferredContentLanguages`)
+> absent from the present set as a translatable chip — GATED on the story already carrying ≥1 translation (a
+> pure-original story never dumps every preferred language) and on a real logged-in viewer (an anonymous viewer
+> with no prefs sees only present translations). New `requestStoryTranslation(code)`: in-flight guard via
+> `translatingLanguages` (keyed `storyId|lang`), pull-translate-and-merge into `rawItems`, then switch the
+> "Exploration" `languageOverride` to the target so the slide re-renders in it even when a higher-priority
+> language is already present (Prisme auto-resolution would otherwise keep the primary). Cancellation-safe;
+> failure inert (strip retries); `finally` clears the key. **`:sdk-ui` `LanguageQuickStrip`**: `LanguageQuickOption`
+> gains the two flags; a translatable chip reads dimmed with a "+" affordance ("…" in flight). **`StoryViewerScreen`**
+> routes a translatable tap to `requestStoryTranslation`, a content tap to `toggleLanguageOverride`.
+>
+> **Tests: +21** — `StoryTranslationMergeTest` +8 (append no-translations / append preserving order / replace
+> in place preserving position+casing / blank target / blank text / trims target / idempotent / case-insensitive
+> replace), `StoryRepositoryTest` +7 (`translateStory`: translates+merges / forwards source & trims target /
+> inert blank target / inert no source / null on failure / null on blank / idempotent), `StoryViewerViewModelTest`
+> +6 (translatable surfaces once translated / none when no translations / present language never re-offered /
+> requests+merges+switches / failed leaves display / second in-flight no duplicate). **Mutation (RED proof) ×2**:
+> (a) drop the VM in-flight guard → **exactly** `a second in-flight request … does not fire a duplicate` fails
+> (1 of 50); (b) drop `languageOverride = storyId to target` → **exactly** `requesting a translation … switches
+> to it` fails (1 of 50) — the switch test deliberately uses a secondary language (en present, de requested) so
+> Prisme auto-resolution cannot mask the missing override. Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → BUILD SUCCESSFUL
+> locally this run. Reviewer PASS. Diff is `apps/android` only (5 code + 3 test files + tracking docs).
+>
+> **Next**: Feed §F Prisme's `request-missing-languages` follow-up is now COMPLETE across every surface. Candidates:
+> the Chat `slow`/retry glyph tier (still waits on outbox retry-state plumbing), or the next unchecked Feed/Stories
+> parity box. Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Comment on-demand translation shipped** (slice `feed-comment-translation-request`,
 > feature-parity's Feed §F Prisme line — the **comments** arm of the `request-missing-languages` follow-up.
 > Only the per-story timeline flag strip remains on that line).
