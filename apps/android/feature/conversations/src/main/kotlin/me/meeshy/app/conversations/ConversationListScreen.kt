@@ -173,6 +173,18 @@ fun ConversationListScreen(
                     )
                 },
                 actions = {
+                    // A global "unlock all" affordance surfaces only while at least one
+                    // conversation is locked (parity iOS Settings, which offers unlock-all
+                    // contextually) — tapping it opens the master-PIN sheet that drops every
+                    // lock at once. Hidden otherwise, so the bar stays quiet in the common case.
+                    if (state.canUnlockAll) {
+                        IconButton(onClick = viewModel::onUnlockAll) {
+                            Icon(
+                                Icons.Filled.LockOpen,
+                                contentDescription = stringResource(R.string.conversations_unlock_all),
+                            )
+                        }
+                    }
                     // iOS parity: search moves to the bottom bar; sign-out lives in
                     // Settings (Danger section), so the top keeps only Contacts.
                     IconButton(onClick = onContacts) {

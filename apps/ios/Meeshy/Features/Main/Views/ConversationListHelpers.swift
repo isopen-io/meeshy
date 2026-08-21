@@ -195,7 +195,8 @@ struct ConversationPreviewView: View {
                         HStack(spacing: 3) {
                             Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
                                 .font(.caption2)
-                            Text(conversation.memberCountDisplay + " " + String(localized: "unit.members", defaultValue: "membres"))
+                            Text(MembersCountLabel.text(conversation.memberCount,
+                                                        capped: conversation.memberCountCapped))
                                 .font(.caption2.weight(.medium))
                         }
                         .foregroundColor(headerContentColor.opacity(0.9))
@@ -483,7 +484,7 @@ struct ThemedCommunityCard: View, Equatable {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(community.name), "
-            + "\(community.memberCount) " + String(localized: "unit.members", defaultValue: "membres") + ", "
+            + MembersCountLabel.text(community.memberCount) + ", "
             + "\(community.conversationCount) " + String(localized: "tab.conversations", defaultValue: "Conversations")
         )
         .accessibilityAddTraits(.isButton)

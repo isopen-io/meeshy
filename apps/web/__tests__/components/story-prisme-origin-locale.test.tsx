@@ -31,9 +31,9 @@ function createPost(overrides: Partial<Post> = {}): Post {
     shareCount: 0,
     isPinned: false,
     isEdited: false,
-    createdAt: '2026-08-20T10:00:00Z',
-    updatedAt: '2026-08-20T10:00:00Z',
-    expiresAt: '2026-08-21T10:00:00Z',
+    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
     ...overrides,
   };
 }

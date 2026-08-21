@@ -29,7 +29,19 @@ public const val CONVERSATION_PIN_LENGTH: Int = 4
  * locked conversation's code to view it *without* removing the lock (parity iOS
  * `ConversationLockSheet.Mode.openConversation`).
  */
-public enum class LockPinMode { SETUP_MASTER_PIN, LOCK_CONVERSATION, UNLOCK_CONVERSATION, OPEN_CONVERSATION }
+public enum class LockPinMode {
+    SETUP_MASTER_PIN,
+    LOCK_CONVERSATION,
+    UNLOCK_CONVERSATION,
+    OPEN_CONVERSATION,
+
+    /**
+     * Settings-level "unlock everything": verify the master PIN once, then drop
+     * every per-conversation lock in one go (parity iOS `ConversationLockSheet.Mode.unlockAll`).
+     * The master PIN itself stays set — only the conversation locks are removed.
+     */
+    UNLOCK_ALL,
+}
 
 /** Which localized header copy the sheet shows for the current `(mode, step)`. */
 public enum class LockPinCopy {
@@ -40,6 +52,7 @@ public enum class LockPinCopy {
     CONFIRM_CODE,
     UNLOCK,
     OPEN,
+    UNLOCK_ALL,
 }
 
 /** The failure surfaced under the PIN dots after an incorrect entry. */
@@ -63,6 +76,7 @@ public data class LockPinState(
             LockPinMode.SETUP_MASTER_PIN -> MASTER_PIN_LENGTH
             LockPinMode.LOCK_CONVERSATION -> if (step == 0) MASTER_PIN_LENGTH else CONVERSATION_PIN_LENGTH
             LockPinMode.UNLOCK_CONVERSATION, LockPinMode.OPEN_CONVERSATION -> CONVERSATION_PIN_LENGTH
+            LockPinMode.UNLOCK_ALL -> MASTER_PIN_LENGTH
         }
 
     /** The buffer being edited: the confirm buffer during step 2, else the primary buffer. */
@@ -83,6 +97,7 @@ public data class LockPinState(
             }
             LockPinMode.UNLOCK_CONVERSATION -> LockPinCopy.UNLOCK
             LockPinMode.OPEN_CONVERSATION -> LockPinCopy.OPEN
+            LockPinMode.UNLOCK_ALL -> LockPinCopy.UNLOCK_ALL
         }
 }
 
@@ -97,6 +112,13 @@ public sealed interface LockPinEffect {
     public data class CommitMasterPin(val pin: String) : LockPinEffect
     public data class CommitLock(val conversationId: String, val pin: String) : LockPinEffect
     public data class RemoveLock(val conversationId: String) : LockPinEffect
+
+    /**
+     * Drop every per-conversation lock at once (the unlock-all flow). The master
+     * PIN is deliberately left in place — parity iOS `unlockAll`, which calls
+     * `removeAllLocks()` only.
+     */
+    public object RemoveAllLocks : LockPinEffect
 
     /**
      * The tap gate accepted the code — navigate into [conversationId]. The lock is
@@ -145,6 +167,7 @@ public class LockPinReducer(private val oracle: LockPinOracle) {
         LockPinMode.LOCK_CONVERSATION -> completeLock(state)
         LockPinMode.UNLOCK_CONVERSATION -> completeUnlock(state)
         LockPinMode.OPEN_CONVERSATION -> completeOpen(state)
+        LockPinMode.UNLOCK_ALL -> completeUnlockAll(state)
     }
 
     private fun completeSetup(state: LockPinState): LockPinResult = when (state.step) {
@@ -191,6 +214,13 @@ public class LockPinReducer(private val oracle: LockPinOracle) {
             LockPinResult(state, listOf(LockPinEffect.OpenConversation(state.conversationId), LockPinEffect.Completed))
         else -> verifyFailure(state, LockPinError.CODE_INCORRECT)
     }
+
+    private fun completeUnlockAll(state: LockPinState): LockPinResult =
+        if (oracle.verifyMasterPin(state.pin)) {
+            LockPinResult(state, listOf(LockPinEffect.RemoveAllLocks, LockPinEffect.Completed))
+        } else {
+            verifyFailure(state, LockPinError.MASTER_PIN_INCORRECT)
+        }
 
     private fun mismatch(state: LockPinState, error: LockPinError, entryStep: Int): LockPinResult =
         LockPinResult(state.copy(step = entryStep, pin = "", confirmPin = "", error = error), emptyList())
