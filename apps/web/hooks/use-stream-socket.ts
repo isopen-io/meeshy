@@ -178,9 +178,76 @@ export function useStreamSocket({
   }, [user.id]);
 
   // Handler pour le statut utilisateur
+  //
+  // La liste des présents est SEMÉE à l'ouverture — `conversation:stats` porte
+  // `stats.onlineUsers` — et c'était, jusqu'ici, la seule fois qu'elle bougeait :
+  // ce gestionnaire était un corps VIDE, et le seul autre écrivain de la liste
+  // écoutait `conversation:online-stats`, canal que la passerelle n'a jamais
+  // émis et que le cycle 77 a retiré. Qui arrivait après vous n'apparaissait
+  // jamais ; qui partait restait affiché, pour toute la durée de la session.
+  //
+  // Les deux moitiés du défaut se protégeaient l'une l'autre : le gestionnaire
+  // vide paraissait couvert par le canal riche, et le canal riche paraissait
+  // dispensé d'émetteur par le gestionnaire présent. Retirer le canal mort a
+  // donc laissé la liste avec UN SEUL écrivain — la semence du join.
+  //
+  // `user:status` est le canal qui porte réellement ce fait : la passerelle le
+  // diffuse aux rooms de conversation à chaque connexion et déconnexion, et les
+  // trois clients s'en servent déjà pour leur présence. Il ne porte qu'un
+  // delta — un identifiant, un nom, un état — là où l'instantané défunt
+  // promettait la liste entière ; c'est assez pour la tenir à jour à partir de
+  // la semence, et c'est le seul des deux qu'on puisse tenir sans refaire deux
+  // requêtes par conversation à chaque connexion.
   const handleUserStatus = useCallback((userId: string, username: string, isOnline: boolean) => {
-    // Géré par les événements socket - peut être étendu si nécessaire
-  }, []);
+    if (!userId || userId === user.id) return;
+
+    const current = activeUsersRef.current;
+    const known = current.find(u => u.id === userId);
+
+    if (!isOnline) {
+      if (!known) return;
+      onActiveUsersUpdate(current.filter(u => u.id !== userId));
+      return;
+    }
+
+    if (known) return;
+
+    // `user:status` ne porte pas de profil — ni prénom, ni avatar, ni langue.
+    // L'entrée est donc MINIMALE et assumée : le nom d'affichage suffit à la
+    // pastille, et le prochain `conversation:stats` (à la prochaine ouverture)
+    // la remplacera par la forme complète. Inventer un profil ferait pire.
+    onActiveUsersUpdate([
+      ...current,
+      {
+        id: userId,
+        username,
+        firstName: '',
+        lastName: '',
+        email: '',
+        avatar: '',
+        role: 'USER' as const,
+        permissions: {
+          canAccessAdmin: false,
+          canManageUsers: false,
+          canManageGroups: false,
+          canManageConversations: false,
+          canViewAnalytics: false,
+          canModerateContent: false,
+          canViewAuditLogs: false,
+          canManageNotifications: false,
+          canManageTranslations: false,
+        },
+        systemLanguage: 'fr',
+        regionalLanguage: 'fr',
+        autoTranslateEnabled: true,
+        isOnline: true,
+        isActive: true,
+        createdAt: new Date(),
+        lastActiveAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as User,
+    ]);
+  }, [user.id, onActiveUsersUpdate]);
 
   // Handler pour les statistiques de conversation
   const handleConversationStats = useCallback((data: any) => {

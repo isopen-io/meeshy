@@ -11611,3 +11611,42 @@ et c'est la troisième fois.
 > **Une correction de contrat ou de charge utile se termine par un `grep` des
 > FRÈRES**, pas du seul symbole corrigé. Les canaux d'un même pipeline
 > (`*:reaction-sync`, `*:translation-*`) partagent l'émetteur, donc le défaut.
+
+### Cycle 77-bis — Retirer un canal mort découvre parfois un gestionnaire vide
+
+Le retrait de `conversation:online-stats` classait ce canal « inoffensif :
+aucun consommateur d'interface, nulle part ». C'était vrai sur iOS, faux sur le
+web : au bout de sa chaîne de six niveaux, un handler de quarante lignes
+alimentait la liste des présents de la vue stream. Il était bien mort. Mais la
+question qu'il posait — **qui tient cette liste à jour, alors ?** — n'a pas été
+posée, et la réponse dormait quarante lignes plus haut dans le même fichier :
+
+```ts
+const handleUserStatus = useCallback((userId, username, isOnline) => {
+  // Géré par les événements socket - peut être étendu si nécessaire
+}, []);
+```
+
+Résultat à l'écran : liste semée à l'ouverture, puis figée. Qui arrive après
+vous n'apparaît jamais ; qui part reste affiché.
+
+> **Les deux moitiés d'un défaut se protègent l'une l'autre.** Le gestionnaire
+> vide paraissait couvert par le canal riche à côté de lui ; le canal riche
+> paraissait dispensé d'émetteur par la présence d'un récepteur complet. Lue
+> seule, chacune ressemble à une décision — « c'est géré ailleurs ».
+
+Et le corollaire opératoire, qu'aucune garde ne peut porter — une garde de
+contrat raisonne sur des NOMS de canaux, jamais sur ce que les gestionnaires
+écrivent :
+
+> **Avant de retirer du code mort, demander ce qu'il ALIMENTAIT, et qui l'écrit
+> encore une fois qu'il est parti.** Un récepteur mort qui était le seul
+> écrivain apparent d'un état d'interface laisse cet état sans personne.
+
+Enfin, le commentaire du gestionnaire vide DISAIT le défaut : « géré par les
+événements socket - peut être étendu si nécessaire ».
+
+> Un corps de gestionnaire vide portant un commentaire d'intention (« géré
+> ailleurs », « à étendre si besoin ») est un aveu, pas une note : c'est
+> l'endroit exact où quelqu'un s'est arrêté. Aller vérifier qui fait le travail
+> à sa place — souvent personne.

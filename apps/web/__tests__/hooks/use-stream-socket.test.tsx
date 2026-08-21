@@ -24,6 +24,9 @@ jest.mock('@/hooks/use-socketio-messaging', () => ({
     if (options.onUserTyping) {
       (global as any).__mockOnUserTyping = options.onUserTyping;
     }
+    if (options.onUserStatus) {
+      (global as any).__mockOnUserStatus = options.onUserStatus;
+    }
     return {
       isConnected: true,
       sendMessage: mockSendMessage,
@@ -143,5 +146,70 @@ describe('useStreamSocket', () => {
     act(() => {
       jest.advanceTimersByTime(8000);
     });
+  });
+  // ─── Présence : la liste des présents suit `user:status` ───────────────────
+  //
+  // Elle est SEMÉE au join par `conversation:stats` (`stats.onlineUsers`). Son
+  // seul autre écrivain écoutait `conversation:online-stats`, canal que la
+  // passerelle n'a jamais émis et que le cycle 77 a retiré — laissant la liste
+  // avec un unique écrivain et ce gestionnaire-ci VIDE. Qui arrivait après vous
+  // n'apparaissait pas ; qui partait restait affiché toute la session.
+
+  const renderWithActiveUsers = (activeUsers: User[], onActiveUsersUpdate: jest.Mock) =>
+    renderHook(() =>
+      useStreamSocket({
+        conversationId: 'conv-123',
+        user: mockUser,
+        activeUsers,
+        isLoadingTranslations: false,
+        onNewMessage: jest.fn(),
+        onMessageEdited: jest.fn(),
+        onMessageDeleted: jest.fn(),
+        onTranslation: jest.fn(),
+        onActiveUsersUpdate,
+      })
+    );
+
+  const emitUserStatus = (userId: string, username: string, isOnline: boolean) => {
+    act(() => {
+      (global as any).__mockOnUserStatus(userId, username, isOnline);
+    });
+  };
+
+  it('adds a newly online user to the active list', () => {
+    const onActiveUsersUpdate = jest.fn();
+    renderWithActiveUsers([], onActiveUsersUpdate);
+
+    emitUserStatus('user-456', 'otheruser', true);
+
+    expect(onActiveUsersUpdate).toHaveBeenCalledTimes(1);
+    const next = onActiveUsersUpdate.mock.calls[0][0] as User[];
+    expect(next.map(u => u.id)).toEqual(['user-456']);
+    expect(next[0].username).toBe('otheruser');
+  });
+
+  it('removes a user from the active list when they go offline', () => {
+    const onActiveUsersUpdate = jest.fn();
+    const known = { id: 'user-456', username: 'otheruser' } as User;
+    renderWithActiveUsers([known], onActiveUsersUpdate);
+
+    emitUserStatus('user-456', 'otheruser', false);
+
+    expect(onActiveUsersUpdate).toHaveBeenCalledTimes(1);
+    expect((onActiveUsersUpdate.mock.calls[0][0] as User[]).map(u => u.id)).toEqual([]);
+  });
+
+  // Trois no-ops, et chacun compte : sans eux le gestionnaire remplacerait la
+  // liste à CHAQUE trame de présence, et chaque remplacement remonte au parent.
+  it('ignores its own status, already-known arrivals and unknown departures', () => {
+    const onActiveUsersUpdate = jest.fn();
+    const known = { id: 'user-456', username: 'otheruser' } as User;
+    renderWithActiveUsers([known], onActiveUsersUpdate);
+
+    emitUserStatus(mockUser.id, 'me', true);
+    emitUserStatus('user-456', 'otheruser', true);
+    emitUserStatus('user-789', 'ghost', false);
+
+    expect(onActiveUsersUpdate).not.toHaveBeenCalled();
   });
 });
