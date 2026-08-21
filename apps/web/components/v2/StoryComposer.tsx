@@ -12,6 +12,7 @@ import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from 
 import { ReferencePicker } from '@/components/composer/ReferencePicker';
 import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
 import { useReferences } from '@/hooks/composer/useReferences';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
@@ -193,9 +194,13 @@ type CanvasComposerState = {
   audio?: readonly CanvasAudioSource[];
 };
 
+/// Constat 23 — forme jumelle du convertisseur gateway
+/// (`baseObject({ id: 'bg' }, 'media', 'bg', z++)`, `storyEffectsV3.ts:73`)
+/// et d'iOS (`ObjectV3(id: "bg", …)`, `CanvasV3Migration.swift:174`) : l'objet
+/// de fond porte l'id LITTÉRAL, jamais un id généré.
 function backgroundObject(background: string): UnrankedObjectV3 {
   return {
-    id: generateStoryObjectId(),
+    id: 'bg',
     kind: 'media',
     anchor: { t: 'free', x: 0.5, y: 0.5 },
     plane: 'bg',
@@ -208,13 +213,21 @@ function backgroundObject(background: string): UnrankedObjectV3 {
 /// d'objet texte : l'écran web n'a pas de famille `textObjects`, son contenu
 /// est donc toujours ce texte-là. Sans lui, `StoryViewer` en v3 n'affiche plus
 /// rien (le bloc legacy `story.content` ne se monte plus).
-function rootTextObject(content: string, textStyle: TextStyle): UnrankedObjectV3 {
+///
+/// Constat 4 — `locale` porte la langue d'ORIGINE du texte, résolue comme
+/// `originalLanguage` (même mécanisme : la locale d'INTERFACE active de
+/// l'auteur, `getCurrentInterfaceLocale`). Sans elle, le résolveur de lecture
+/// (`CanvasV3Scene`) ne peut jamais faire concourir la langue d'origine à son
+/// rang dans le prisme (règle 3 du Prisme) — absente quand la locale est
+/// inconnue, jamais devinée.
+function rootTextObject(content: string, textStyle: TextStyle, locale: string | undefined): UnrankedObjectV3 {
   return {
     id: generateStoryObjectId(),
     kind: 'text',
     anchor: { t: 'free', x: 0.5, y: 0.5 },
     plane: 'fg',
     transform: NEUTRAL_TRANSFORM,
+    ...(locale ? { locale } : {}),
     payload: { text: content, textStyle },
   };
 }
@@ -260,9 +273,10 @@ function audioObject(audio: CanvasAudioSource): UnrankedObjectV3 {
 /// `z` est le rang d'INSERTION (fond, texte racine, porteur, audio), pas un
 /// ordre par plan — le plan porte déjà l'empilement à la lecture.
 function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
+  const locale = getCurrentInterfaceLocale() || undefined;
   const objects: ObjectV3[] = [
     backgroundObject(state.background),
-    ...(state.content?.trim() ? [rootTextObject(state.content, state.textStyle)] : []),
+    ...(state.content?.trim() ? [rootTextObject(state.content, state.textStyle, locale)] : []),
     ...(state.media ?? []).map(mediaObject),
     ...(state.audio ?? []).map(audioObject),
   ].map((object, index) => ({ ...object, z: index }));

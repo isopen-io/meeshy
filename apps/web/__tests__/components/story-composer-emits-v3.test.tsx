@@ -29,6 +29,13 @@ jest.mock('@/stores/auth-store', () => ({
     selector({ authToken: 'token-1' }),
 }));
 
+// F7d (constat 4) — le texte racine porte `locale`, résolue comme
+// `originalLanguage` (même mécanisme, `getCurrentInterfaceLocale`).
+const mockGetCurrentInterfaceLocale = jest.fn();
+jest.mock('@/stores/language-store', () => ({
+  getCurrentInterfaceLocale: () => mockGetCurrentInterfaceLocale(),
+}));
+
 let mockUploadedAttachments: UploadedAttachmentResponse[] = [];
 let mockSelectedFiles: File[] = [];
 
@@ -102,6 +109,7 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
   beforeEach(() => {
     mockSelectedFiles = [new File(['x'], 'placeholder.jpg', { type: 'image/jpeg' })];
     mockUploadedAttachments = [];
+    mockGetCurrentInterfaceLocale.mockReturnValue('fr');
   });
 
   it('emits a v3 document and no legacy v1 family - the shared schema is the judge', () => {
@@ -128,6 +136,9 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(background).toBeDefined();
     expect(background?.kind).toBe('media');
     expect(background?.payload.background).toBe('#C4704B');
+    // Constat 23 — forme jumelle du convertisseur gateway (`baseObject({ id: 'bg' }, …)`)
+    // et d'iOS (`ObjectV3(id: "bg", …)`) : l'objet de fond porte l'id littéral.
+    expect(background?.id).toBe('bg');
   });
 
   it('normalises the gradient background to the canonical gradient:from,to form', () => {
@@ -142,6 +153,7 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
   });
 
   it('synthesises the root text as a fg text object carrying the picked style (G3)', () => {
+    mockGetCurrentInterfaceLocale.mockReturnValue('fr');
     const { published } = renderComposer();
     typeContent('Bonjour');
     fireEvent.click(screen.getByText('Ne'));
@@ -153,10 +165,25 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(text?.plane).toBe('fg');
     expect(text?.anchor).toEqual({ t: 'free', x: 0.5, y: 0.5 });
     expect(text?.payload).toMatchObject({ text: 'Bonjour', textStyle: 'neon' });
+    // Constat 4 — `locale` porté par le texte racine, résolue comme
+    // `originalLanguage` : sans elle, `CanvasV3Scene` ne peut pas faire
+    // concourir la langue d'origine à son rang dans le prisme (règle 3).
+    expect(text?.locale).toBe('fr');
 
     const reference = objectsOf(fixture('minimal-text'))[0];
-    const referenceKeys = Object.keys(reference).filter((k) => k !== 'locale').sort();
+    const referenceKeys = Object.keys(reference).sort();
     expect(Object.keys(text ?? {}).sort()).toEqual(referenceKeys);
+  });
+
+  it('omits locale on the root text object when the active UI locale is unknown - never a guessed language', () => {
+    mockGetCurrentInterfaceLocale.mockReturnValue('');
+    const { published } = renderComposer();
+    typeContent('Bonjour');
+    clickPublish();
+
+    const doc = parseEmitted(published().storyEffects);
+    const text = objectsOf(doc).find((o) => o.kind === 'text');
+    expect(text).not.toHaveProperty('locale');
   });
 
   it('never synthesises an empty text object when the story carries no text', () => {
