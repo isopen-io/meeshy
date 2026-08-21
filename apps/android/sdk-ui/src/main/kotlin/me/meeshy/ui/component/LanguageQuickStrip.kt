@@ -35,12 +35,21 @@ import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
-/** One flag chip of the scrubbable language bar. Pure data, opaque to the SDK. */
+/**
+ * One flag chip of the scrubbable language bar. Pure data, opaque to the SDK.
+ *
+ * [isTranslatable] marks a configured language with no content yet — it reads as a
+ * dimmed flag with a "+" affordance and, when tapped, requests an on-demand
+ * translation instead of switching the displayed language. [isTranslating] shows the
+ * request is in flight. A content chip is neither.
+ */
 @Immutable
 data class LanguageQuickOption(
     val code: String,
     val flag: String,
     val label: String,
+    val isTranslatable: Boolean = false,
+    val isTranslating: Boolean = false,
 )
 
 /**
@@ -104,7 +113,11 @@ private fun LanguageChipTile(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
-                alpha = if (isActive || isHighlighted) 1f else 0.55f
+                alpha = when {
+                    option.isTranslatable && !isHighlighted -> 0.55f
+                    isActive || isHighlighted -> 1f
+                    else -> 0.55f
+                }
             }
             .clip(CircleShape)
             .clickable(onClick = onClick)
@@ -112,7 +125,19 @@ private fun LanguageChipTile(
         contentAlignment = Alignment.Center,
     ) {
         Text(text = option.flag, fontSize = 22.sp)
-        if (isActive) {
+        // A translatable chip (a configured language with no content yet) carries a
+        // "+" affordance — "…" while its request is in flight. A content chip shows
+        // the active underline instead.
+        if (option.isTranslatable) {
+            Text(
+                text = if (option.isTranslating) "…" else "+",
+                fontSize = 12.sp,
+                color = MeeshyPalette.Indigo400,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 1.dp, end = 1.dp),
+            )
+        } else if (isActive) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

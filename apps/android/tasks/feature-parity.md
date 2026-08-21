@@ -3180,7 +3180,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +3 `CommentThreadStateTest`/`CommentRepliesStateTest`, +1 `CommentProjectionTest`, +4 `PostCommentsViewModelTest`;
       1 obsolete dead-arm test rewritten to the new contract; mutation-proved ×2 — in-flight guard, active-language
       switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
-      **Follow-up:** the per-story timeline strip.
+      **Story request arm shipped** (slice `story-viewer-translation-request`, 2026-08-21): the story viewer's
+      language quick bar (`StoryViewerViewModel.availableLanguagesFor`) previously listed only present
+      `StoryItem.translations`, so a configured-but-absent language was never requestable. It now appends each
+      configured content language (`LanguageResolver.preferredContentLanguages`) absent from the present set as a
+      translatable chip — gated on the story already carrying ≥1 translation (a pure-original story never dumps
+      every preferred language) and on a real logged-in viewer. `StoryLanguageOption`/`LanguageQuickOption` gain
+      `isTranslatable`/`isTranslating` (dimmed flag + "+" affordance, "…" in flight); `StoryViewerScreen` routes a
+      translatable tap to the new `requestStoryTranslation(code)` (in-flight guard via `translatingLanguages` keyed
+      `storyId|lang`), which blocking-translates through the new stateless `StoryRepository.translateStory(item,
+      target): StoryItem?` (story-shaped sibling of `translatePost`; `TranslationApi` now injected) and folds via
+      the new `:core:model` `StoryTranslationMerge` (list-keyed sibling of `PostTranslationMerge` — upsert into
+      `List<StoryTranslation>`, blank/idempotent guards, in-place-or-append), then switches the Exploration
+      `languageOverride` to the target so the slide re-renders even when a higher-priority language is already
+      present. Failed/blank/idempotent leaves the strip to retry; a second in-flight tap is ignored. +21 tests
+      (+8 `StoryTranslationMergeTest`, +7 `StoryRepositoryTest`, +6 `StoryViewerViewModelTest`; mutation-proved ×2 —
+      in-flight guard, override switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL
+      (local, SDK 37 bootstrapped). **The `request-missing-languages` follow-up is now COMPLETE on every surface
+      (feed card / post-detail / comments / story).**
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
