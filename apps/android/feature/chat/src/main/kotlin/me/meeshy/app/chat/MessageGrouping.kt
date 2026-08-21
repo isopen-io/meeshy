@@ -5,14 +5,21 @@ import kotlin.math.abs
 /**
  * The minimal projection of a message needed to decide consecutive-sender
  * grouping: its [id], the [senderId] that authored it, whether it is one of the
- * viewer's own outgoing messages, and the parsed send time in epoch millis
- * ([createdAtMillis] is null when the timestamp is missing/unparsable).
+ * viewer's own outgoing messages, the parsed send time in epoch millis
+ * ([createdAtMillis] is null when the timestamp is missing/unparsable), and
+ * [isSystem] — whether this is a system message (e.g. a join/leave notice)
+ * rather than a genuine turn at talk.
+ *
+ * [isSystem] is orthogonal to [isOutgoing]: a join notice can concern the
+ * viewer themself (`isOutgoing = true`, e.g. "You joined the conversation")
+ * while still being a system message, never a spoken turn.
  */
 data class MessageGroupInput(
     val id: String,
     val senderId: String?,
     val isOutgoing: Boolean,
     val createdAtMillis: Long?,
+    val isSystem: Boolean = false,
 )
 
 /**
@@ -30,11 +37,19 @@ data class MessageGroupPosition(
 }
 
 /**
- * Pure SSOT that clusters an ascending message list into consecutive-sender runs
- * — the grouping iOS never actually computed (it hardcodes `isLastInGroup: true`
- * and always shows the avatar), so Android renders genuinely grouped bubbles.
+ * Pure SSOT that clusters an ascending message list into consecutive-sender runs.
+ * Web (`apps/web/utils/message-grouping.ts`) and iOS
+ * (`apps/ios/Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift`) compute
+ * the identical rule; any change here must be mirrored on both.
  *
- * Two adjacent messages belong to the same run when BOTH hold:
+ * Two adjacent messages belong to the same run when ALL hold:
+ *  - **Neither is a system message.** A system message (e.g. a join/leave
+ *    notice) is never a turn at talk: it always forms its own standalone group
+ *    and never continues a neighbour's run, either as predecessor or successor.
+ *    This matters because a join notice is written with the arriver as its
+ *    author — grouping on sender id alone would fold the newcomer's first real
+ *    bubble into their own join notice's run, and the bubble would lose avatar,
+ *    name, and timestamp all at once.
  *  - **Same author.** Two outgoing messages share the single "self" identity; two
  *    incoming messages match only on equal, non-null [MessageGroupInput.senderId].
  *    An incoming message with a null sender id never groups (it can't be proven to
@@ -71,6 +86,7 @@ object MessageGrouping {
 
     private fun continuous(earlier: MessageGroupInput?, later: MessageGroupInput?, gapMillis: Long): Boolean {
         if (earlier == null || later == null) return false
+        if (earlier.isSystem || later.isSystem) return false
         return sameAuthor(earlier, later) && withinGap(earlier, later, gapMillis)
     }
 
