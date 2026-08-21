@@ -149,11 +149,22 @@ défaut de classe plutôt que de le corriger, et aurait forcé un remontage comp
 AUTRE état local ajouté un jour à ce composant héritera du même piège. À vérifier
 si le composant s'étoffe.
 
-**La famille est plus large que cette bannière.** « Un état local de rejet /
-masquage / repli qu'aucune transition ne réarme » est cherchable, contrairement à
-la question du cycle 79 sur l'effet des handlers. Le motif est
-`useState(false)` + un seul `set…(true)` dans le fichier, sur un composant monté
-sans `key` et paramétré par une entité. Passe à faire.
+**La famille est plus large que cette bannière — et la passe a été FAITE, elle
+revient propre.** « Un état local de rejet / masquage / repli qu'aucune
+transition ne réarme » est cherchable, contrairement à la question du cycle 79
+sur l'effet des handlers : le motif est `useState(false)` + un seul `set…(true)`,
+sur un composant paramétré par une entité. Balayage de `components/` et
+`hooks/` — deux candidats, **aucun défaut** :
+
+| composant | verdict |
+|---|---|
+| `common/SystemStatusBanner.tsx` | **déjà apparié** — `setDismissedUpdate(false)` sur une nouvelle inscription de service worker : la montante existe |
+| `notifications/PushPermissionBanner.tsx` | **hors classe** — le sujet est la permission navigateur, un état GLOBAL non paramétré par une entité, et le rejet vaut pour la session (ne pas harceler). Rien ne change d'identité sous le booléen |
+
+Le défaut de ce cycle était donc isolé côté web. Ce qui le distinguait des deux
+autres est précisément le critère à retenir : **le composant est paramétré par
+une entité** (`conversationId`) **et monté sans `key`**. Un booléen de rejet n'est
+un défaut que là.
 
 **Les domaines voisins nommés au cycle 79 restent ouverts** : appartenance à une
 communauté, épinglage/archivage de CONVERSATION (distinct de l'épinglage de
