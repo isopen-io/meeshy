@@ -14,12 +14,20 @@
  * (rien, ou un libellé « Expiré »). Sinon : `< 1 h` → `Xm` ; `>= 1 h` avec reste → `XhYm` ;
  * `>= 1 h` sans reste → `Xh`.
  *
+ * Une borne NON FINIE (`NaN`, `±Infinity`) retombe elle aussi sur `null` — un `expiresAt` absent
+ * ou malformé atteint cette loi via `new Date(x).getTime()` (`new Date(undefined) → NaN`), et sans
+ * cette garde l'arithmétique fuyait un `"NaNm"`/`"Infinityh"` visible à l'écran au lieu du repli
+ * « pas de compte à rebours ». Même garde `Number.isFinite` que ses jumelles `formatClock`
+ * (`duration-format.ts`) et `isExpired` (`apps/web/utils/time-remaining.ts`, date invalide → `false`).
+ *
  * Un reste strictement positif mais sous la minute (`0 < diff < 60 s`) est arrondi à `1m` — jamais
  * `0m` : `null` (déjà "Expiré") est la seule sémantique du zéro. Une story dans sa dernière minute
  * (état atteint par CHAQUE story avant expiration) affichait sinon un « 0m » trompeur au lieu de la
  * plus petite unité restante.
  */
 export function formatTimeRemaining(targetMs: number, nowMs: number): string | null {
+  if (!Number.isFinite(targetMs) || !Number.isFinite(nowMs)) return null;
+
   const diffMs = targetMs - nowMs;
   if (diffMs <= 0) return null;
 
