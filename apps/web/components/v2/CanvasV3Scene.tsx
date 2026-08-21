@@ -18,6 +18,19 @@ const STORY_DESIGN_WIDTH = 1080;
 const BAND_INSET = '6%';
 const DEFAULT_STICKER_SIZE = 140;
 const PLANE_Z = { bg: 0, content: 10, fg: 20 } as const;
+/// Constat 2 (revue F7b, rattrapage) — le voile de lisibilité DOIT peindre
+/// au-dessus du seul plan `bg` (parité `story.mediaUrl` legacy,
+/// `StoryViewer.tsx` ancien :944-950 : le média de fond principal était SOUS
+/// le voile, tout le reste — objets posés, texte — au-dessus). `container-
+/// Type: 'inline-size'` (racine de la scène, requis pour le `cqw` du texte)
+/// force `contain: layout`, qui établit un contexte d'empilement local : un
+/// frère externe placé APRÈS la scène ne peut plus s'intercaler ENTRE ses
+/// plans, il ne peut que peindre au-dessus de la scène ENTIÈRE ou en dessous.
+/// D'où la prop `overlay` : StoryViewer choisit toujours le contenu/la classe
+/// du voile (le composant reste agnostique de sa raison d'être), mais c'est
+/// la scène qui le positionne, au bon plan, dans SON propre contexte
+/// d'empilement.
+const OVERLAY_Z = PLANE_Z.content - 1;
 /// Parité iOS reprise du chemin legacy (`StoryViewer.tsx:951-956`) : un média
 /// POSÉ occupe 65 % de la petite dimension du canvas à `scale = 1`
 /// (`baseMediaSize = shortDim * 0.65`), jamais toute la largeur.
@@ -93,6 +106,10 @@ export interface CanvasV3SceneProps {
   /// STATIQUE ; présente, les keyframes et les transitions de clip sont jouées.
   playheadSec?: number;
   videoGateHandlers?: CanvasV3VideoGateHandlers;
+  /// Nœud opaque peint entre le plan `bg` et le plan `content` (voir
+  /// `OVERLAY_Z`) — la scène ne sait pas CE QUE c'est ni POURQUOI (voile de
+  /// lisibilité, ou tout futur habillage d'hôte), seulement OÙ l'empiler.
+  overlay?: ReactNode;
 }
 
 const str = (v: unknown): string | undefined =>
@@ -600,6 +617,7 @@ export function CanvasV3Scene({
   muted = true,
   playheadSec,
   videoGateHandlers,
+  overlay,
 }: CanvasV3SceneProps) {
   const scene = doc.scenes?.[sceneIndex];
   if (!scene) return null;
@@ -611,6 +629,11 @@ export function CanvasV3Scene({
       className={cn('relative w-full overflow-hidden', className)}
       style={{ aspectRatio: SCENE_ASPECT_RATIO, containerType: 'inline-size' }}
     >
+      {overlay !== undefined && (
+        <div className="absolute inset-0" style={{ zIndex: OVERLAY_Z }}>
+          {overlay}
+        </div>
+      )}
       {scene.objects.map((raw) => {
         const o = normalizedObject(raw);
         if (!o) return null;

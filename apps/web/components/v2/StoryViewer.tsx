@@ -22,8 +22,13 @@ import { BackgroundSoundBadge } from './BackgroundSoundBadge';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 
 /// Voile de lisibilité — identique aux DEUX chemins (legacy et v3, constat
-/// 19). `CanvasV3Scene` reste un composant PUR : c'est StoryViewer qui le
-/// monte AUTOUR de la scène, jamais le composant lui-même.
+/// 19). `CanvasV3Scene` reste un composant PUR : StoryViewer choisit tout
+/// seul son contenu/sa classe et lui reste propriétaire (défini ICI) — il ne
+/// fait que transiter par la prop `overlay` de la scène, seule capable de le
+/// positionner ENTRE ses plans internes (`OVERLAY_Z`, `CanvasV3Scene.tsx`) ;
+/// un frère DOM externe ne le peut plus depuis que la racine de la scène
+/// établit son propre contexte d'empilement (`containerType`, requis par le
+/// `cqw` du texte).
 const READABILITY_SCRIM_CLASS =
   'absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none';
 
@@ -866,7 +871,18 @@ function StoryViewer({
   /// Constat 15 — la chaîne ORDONNÉE du Prisme (`getUserLanguagePreferences`,
   /// source de vérité unique côté web, déjà consommée par PinnedMessageBanner
   /// / useConversationFiltering), jamais une seule langue tronquée à son rang 1.
-  const preferredLanguages = authUser ? getUserLanguagePreferences(authUser) : [];
+  /// Correction rattrapage (revue) — `/story/:id` est une route PUBLIQUE
+  /// (`middleware.ts` ne garde que `/admin`) : `authUser` vaut `null` pour un
+  /// visiteur SANS compte, alors que `userLanguage` (prop, `usePreferredLanguage()`
+  /// → language-store persistant) reste DISPONIBLE sans compte. Vider la chaîne
+  /// dans ce cas ferait retomber `resolveText()` sur l'original — régression du
+  /// Prisme pour tout visiteur anonyme. Le repli n'est engagé QUE sans compte ;
+  /// avec compte, la chaîne complète prime toujours sur la langue unique.
+  const preferredLanguages = authUser
+    ? getUserLanguagePreferences(authUser)
+    : userLanguage
+      ? [userLanguage]
+      : [];
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
@@ -907,20 +923,25 @@ function StoryViewer({
             legacy ci-dessous (média de fond, overlays `effects.*`, stickers)
             devient le REPLI, jamais rendu simultanément. */}
         {isCanvasV3 ? (
-          <>
-            <CanvasV3Scene
-              doc={effects as CanvasV3}
-              mediaById={story.mediaById}
-              preferredLanguages={preferredLanguages}
-              className="absolute inset-0"
-              muted={isBackgroundSoundMuted}
-              playheadSec={playheadSec}
-              videoGateHandlers={primaryVideoGateHandlers}
-            />
-            {/* Constat 19 — voile de lisibilité, parité stricte avec le
-                chemin legacy ci-dessous. */}
-            <div className={READABILITY_SCRIM_CLASS} data-testid="story-readability-scrim" />
-          </>
+          <CanvasV3Scene
+            doc={effects as CanvasV3}
+            mediaById={story.mediaById}
+            preferredLanguages={preferredLanguages}
+            className="absolute inset-0"
+            muted={isBackgroundSoundMuted}
+            playheadSec={playheadSec}
+            videoGateHandlers={primaryVideoGateHandlers}
+            /* Constat 19 (corrigé rattrapage) — le voile doit peindre SOUS
+               les objets posés/le texte, comme sur le chemin legacy
+               ci-dessous (le média de fond principal SEUL est sous le voile,
+               :944-950). Un frère externe ne peut plus le faire : la racine
+               de la scène est un contexte d'empilement local (`container-
+               Type`), un frère APRÈS elle ne peint qu'au-dessus de la scène
+               ENTIÈRE, fg compris — d'où `overlay`, qui délègue le CONTENU du
+               voile à StoryViewer et sa POSITION dans les plans à la scène
+               (voir `OVERLAY_Z`, `CanvasV3Scene.tsx`). */
+            overlay={<div className={READABILITY_SCRIM_CLASS} data-testid="story-readability-scrim" />}
+          />
         ) : (
           <>
         {/* Media background */}

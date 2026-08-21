@@ -176,6 +176,37 @@ describe('StoryViewer — le v3 monte CanvasV3Scene, le legacy devient le repli 
     expect(screen.getByTestId('story-readability-scrim')).toBeInTheDocument();
   });
 
+  // MINEUR (revue) — la présence seule ne prouvait rien sur l'EMPILEMENT : la
+  // racine de `CanvasV3Scene` établit son propre contexte d'empilement
+  // (`containerType`, requis par le `cqw` du texte du fil), donc un voile
+  // rendu comme FRÈRE APRÈS elle peint sur la scène ENTIÈRE, texte `fg`
+  // compris — l'inverse du legacy, où le voile est SOUS le texte
+  // (`StoryViewer.tsx` ancien :948, avant les `mediaObjects`/textes de
+  // `:950+`). Ce test juge l'ORDRE, pas seulement l'enveloppe : le voile doit
+  // vivre DANS la scène (elle seule peut l'intercaler entre ses plans) et son
+  // z-index doit rester SOUS celui du texte `fg`, jamais au-dessus.
+  it('paints the readability scrim UNDER the fg text, not over it — order, not just presence', () => {
+    render(
+      <StoryViewer
+        stories={[baseStory({ storyEffects: v3Fixture('minimal-text') as StoryData['storyEffects'] })]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    const scene = screen.getByTestId('canvas-v3-scene');
+    const scrim = screen.getByTestId('story-readability-scrim');
+    const text = screen.getByTestId('canvas-v3-object-t1');
+
+    expect(scene.contains(scrim)).toBe(true);
+    const scrimZ = Number(scrim.parentElement?.style.zIndex);
+    const textZ = Number(text.style.zIndex);
+    expect(Number.isNaN(scrimZ)).toBe(false);
+    expect(Number.isNaN(textZ)).toBe(false);
+    expect(scrimZ).toBeLessThan(textZ);
+  });
+
   // Constat 3 — le crédit de bibliothèque voyage sur l'objet `kind:audio` de
   // fond de la scène (name, soundAuthorUsername, duration), jamais dégradé en
   // `♫ —` par défaut alors que la métadonnée est SUR LE FIL.

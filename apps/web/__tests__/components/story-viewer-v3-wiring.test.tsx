@@ -55,17 +55,19 @@ jest.mock('@/hooks/social/use-stories', () => ({
 
 // Constat 15 : un utilisateur avec DEUX préférences in-app (système ET
 // régionale) — l'ancien câblage n'en aurait laissé passer qu'une seule.
+// Mutable : le test du visiteur SANS compte (BLOQUANT, revue) bascule
+// `mockAuthUser` à `null` — `/story/:id` est une route PUBLIQUE
+// (`middleware.ts` ne garde que `/admin`), `useAuthStore.user` y vaut bien
+// `null` pour un visiteur anonyme.
+let mockAuthUser: Record<string, unknown> | null = {
+  id: 'user-1',
+  username: 'alice',
+  avatar: null,
+  systemLanguage: 'es',
+  regionalLanguage: 'fr',
+};
 jest.mock('@/stores/auth-store', () => ({
-  useAuthStore: (selector: (s: unknown) => unknown) =>
-    selector({
-      user: {
-        id: 'user-1',
-        username: 'alice',
-        avatar: null,
-        systemLanguage: 'es',
-        regionalLanguage: 'fr',
-      },
-    }),
+  useAuthStore: (selector: (s: unknown) => unknown) => selector({ user: mockAuthUser }),
 }));
 
 let capturedProps: CanvasV3SceneProps | null = null;
@@ -130,6 +132,13 @@ function staticV3Story(): StoryData {
 describe('StoryViewer — câblage réel de CanvasV3Scene (F7b)', () => {
   beforeEach(() => {
     capturedProps = null;
+    mockAuthUser = {
+      id: 'user-1',
+      username: 'alice',
+      avatar: null,
+      systemLanguage: 'es',
+      regionalLanguage: 'fr',
+    };
     global.requestAnimationFrame = jest.fn(() => 1) as unknown as typeof requestAnimationFrame;
     global.cancelAnimationFrame = jest.fn();
   });
@@ -151,6 +160,26 @@ describe('StoryViewer — câblage réel de CanvasV3Scene (F7b)', () => {
     // importe pour ce constat.
     expect(capturedProps?.preferredLanguages?.slice(0, 2)).toEqual(['es', 'fr']);
     expect(capturedProps?.preferredLanguages?.length).toBeGreaterThanOrEqual(2);
+  });
+
+  // BLOQUANT (revue) — `/story/:id` est une route PUBLIQUE : un visiteur SANS
+  // compte a `authUser === null`, mais garde `userLanguage` (prop, langue
+  // persistante hors-compte). Vider `preferredLanguages` dans ce cas fait
+  // retomber `resolveText()` sur l'ORIGINAL pour tout visiteur anonyme —
+  // régression du Prisme. Le repli n'est engagé QUE sans compte : avec
+  // compte, la chaîne complète (constat 15 ci-dessus) prime toujours.
+  it('falls back to the single userLanguage prop for a visitor WITHOUT an account — never an empty Prisme chain', () => {
+    mockAuthUser = null;
+    render(
+      <StoryViewer
+        stories={[v3Story()]}
+        initialIndex={0}
+        userLanguage="es"
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+    expect(capturedProps?.preferredLanguages).toEqual(['es']);
   });
 
   it('passes the primary video gate handlers so the v3 buffering indicator can live (constat 14)', () => {
