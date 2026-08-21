@@ -12,8 +12,6 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { CanvasV3Schema, type CanvasV3, type ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 import { StoryComposer, StoryComposerProps } from '@/components/v2/StoryComposer';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
@@ -29,8 +27,14 @@ jest.mock('@/stores/auth-store', () => ({
     selector({ authToken: 'token-1' }),
 }));
 
-// F7d (constat 4) — le texte racine porte `locale`, résolue comme
-// `originalLanguage` (même mécanisme, `getCurrentInterfaceLocale`).
+// F7d (constat 4, corrigé après rejet DoD — arbitrage 4 vs 8) — le texte
+// racine porte toujours du CONTENU (G3 : synthétisé seulement quand
+// `content` est non vide), donc le résolveur PARTAGÉ avec `originalLanguage`
+// (`resolveOriginalLanguageForCreate`, `posts.service.ts`) refuse TOUJOURS
+// de deviner sa `locale` depuis la locale d'interface — même mécanisme,
+// même garde, jamais deux réponses possibles à « quelle langue pour ce
+// texte ? ». `getCurrentInterfaceLocale` reste mocké ici car c'est LUI que
+// le résolveur partagé interroge en coulisses.
 const mockGetCurrentInterfaceLocale = jest.fn();
 jest.mock('@/stores/language-store', () => ({
   getCurrentInterfaceLocale: () => mockGetCurrentInterfaceLocale(),
@@ -49,12 +53,6 @@ jest.mock('@/hooks/composer/useAttachmentUpload', () => ({
     clearAttachments: jest.fn(),
   }),
 }));
-
-const FIXTURES = join(__dirname, '../../../../packages/shared/fixtures/canvas-v3');
-
-function fixture(name: string): CanvasV3 {
-  return CanvasV3Schema.parse(JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), 'utf8')));
-}
 
 function createAttachment(overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse {
   return {
@@ -165,20 +163,12 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(text?.plane).toBe('fg');
     expect(text?.anchor).toEqual({ t: 'free', x: 0.5, y: 0.5 });
     expect(text?.payload).toMatchObject({ text: 'Bonjour', textStyle: 'neon' });
-    // Constat 4 — `locale` porté par le texte racine, résolue comme
-    // `originalLanguage` : sans elle, `CanvasV3Scene` ne peut pas faire
-    // concourir la langue d'origine à son rang dans le prisme (règle 3).
-    expect(text?.locale).toBe('fr');
-
-    const reference = objectsOf(fixture('minimal-text'))[0];
-    const referenceKeys = Object.keys(reference).sort();
-    expect(Object.keys(text ?? {}).sort()).toEqual(referenceKeys);
   });
 
-  it('omits locale on the root text object when the active UI locale is unknown - never a guessed language', () => {
-    mockGetCurrentInterfaceLocale.mockReturnValue('');
+  it('never guesses a locale on the root text object once content is present - DoD rejection of F7d (constat 4 BLOQUANT) : a client-guessed `locale` becomes `sourceLanguage` server-side (`storyEffectsV3.ts:333`) and is PREFERRED over text detection (`PostService.ts:584`), and short-circuits the reader Prisme (`CanvasV3Scene.tsx` `sameLanguage(language, o.locale)`) - a wrong guess mistranslates AND mis-ranks. The root text object exists only when content is non-empty, so the resolver shared with `originalLanguage` (arbitrage 8) always refuses it here, even with a known, truthy interface locale', () => {
+    mockGetCurrentInterfaceLocale.mockReturnValue('fr');
     const { published } = renderComposer();
-    typeContent('Bonjour');
+    typeContent('Hello there');
     clickPublish();
 
     const doc = parseEmitted(published().storyEffects);

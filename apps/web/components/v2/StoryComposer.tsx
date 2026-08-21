@@ -12,7 +12,7 @@ import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from 
 import { ReferencePicker } from '@/components/composer/ReferencePicker';
 import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
 import { useReferences } from '@/hooks/composer/useReferences';
-import { getCurrentInterfaceLocale } from '@/stores/language-store';
+import { resolveOriginalLanguageForCreate } from '@/services/posts.service';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
@@ -214,12 +214,26 @@ function backgroundObject(background: string): UnrankedObjectV3 {
 /// est donc toujours ce texte-là. Sans lui, `StoryViewer` en v3 n'affiche plus
 /// rien (le bloc legacy `story.content` ne se monte plus).
 ///
-/// Constat 4 — `locale` porte la langue d'ORIGINE du texte, résolue comme
-/// `originalLanguage` (même mécanisme : la locale d'INTERFACE active de
-/// l'auteur, `getCurrentInterfaceLocale`). Sans elle, le résolveur de lecture
-/// (`CanvasV3Scene`) ne peut jamais faire concourir la langue d'origine à son
-/// rang dans le prisme (règle 3 du Prisme) — absente quand la locale est
-/// inconnue, jamais devinée.
+/// Constat 4, corrigé après rejet DoD de F7d (BLOQUANT, arbitrage 4 vs 8) —
+/// `locale` n'est PLUS posée depuis `getCurrentInterfaceLocale()` en direct :
+/// ce champ n'est pas inerte à la lecture. Le gateway le recopie en
+/// `sourceLanguage` sur l'objet (`storyEffectsV3.ts:333`) et le PRÉFÈRE à la
+/// détection serveur (`PostService.ts:584`
+/// `obj.sourceLanguage ?? detectLanguage(text)`) ; le lecteur, lui, l'utilise
+/// pour court-circuiter le prisme (`CanvasV3Scene.tsx`
+/// `sameLanguage(language, o.locale)`). Une locale d'interface DEVINÉE et
+/// fausse (auteur fr-interface écrivant en anglais) déclenchait donc à la
+/// fois une traduction fr→* sur un texte anglais ET servait l'original
+/// anglais à un lecteur fr-primaire — l'inversion que la règle 3 du Prisme
+/// interdit, la MÊME classe de bug que celle qu'`originalLanguage` corrige
+/// déjà côté POST (arbitrage 8). `locale` est donc résolue par le même
+/// résolveur PARTAGÉ que `originalLanguage`
+/// (`resolveOriginalLanguageForCreate`, `posts.service.ts`) plutôt que par un
+/// second mécanisme dupliqué à la garde opposée. Ce texte racine ne portant
+/// JAMAIS un `content` vide (le G3 ci-dessus), le résolveur refuse
+/// systématiquement de deviner — `locale` reste absente tant que le composer
+/// web n'expose pas de sélecteur de langue EXPLICITE pour l'auteur (contre
+/// iOS, `StoryComposerViewModel+Elements.swift:674`).
 function rootTextObject(content: string, textStyle: TextStyle, locale: string | undefined): UnrankedObjectV3 {
   return {
     id: generateStoryObjectId(),
@@ -273,7 +287,10 @@ function audioObject(audio: CanvasAudioSource): UnrankedObjectV3 {
 /// `z` est le rang d'INSERTION (fond, texte racine, porteur, audio), pas un
 /// ordre par plan — le plan porte déjà l'empilement à la lecture.
 function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
-  const locale = getCurrentInterfaceLocale() || undefined;
+  // `storyEffects: {}` n'est ici qu'un marqueur de vérité (« ceci EST une
+  // story ») — le résolveur ne lit jamais ses champs, seule sa présence
+  // compte (voir la doc de `resolveOriginalLanguageForCreate`).
+  const locale = resolveOriginalLanguageForCreate({ storyEffects: {}, content: state.content });
   const objects: ObjectV3[] = [
     backgroundObject(state.background),
     ...(state.content?.trim() ? [rootTextObject(state.content, state.textStyle, locale)] : []),
