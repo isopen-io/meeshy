@@ -199,6 +199,23 @@ describe('useStreamSocket', () => {
     expect((onActiveUsersUpdate.mock.calls[0][0] as User[]).map(u => u.id)).toEqual([]);
   });
 
+  // Deux arrivées dans le MÊME tick. `activeUsersRef` ne se resynchronise que
+  // par l'effet monté sur la prop `activeUsers` — donc sans réécriture immédiate
+  // de la ref, les deux trames liraient la même liste d'avant et la seconde
+  // écraserait la première : deux personnes qui se connectent ensemble, une
+  // seule qui apparaît.
+  it('keeps both arrivals when two presence frames land in the same tick', () => {
+    const onActiveUsersUpdate = jest.fn();
+    renderWithActiveUsers([], onActiveUsersUpdate);
+
+    emitUserStatus('user-456', 'alice', true);
+    emitUserStatus('user-789', 'bob', true);
+
+    expect(onActiveUsersUpdate).toHaveBeenCalledTimes(2);
+    const last = onActiveUsersUpdate.mock.calls[1][0] as User[];
+    expect(last.map(u => u.id)).toEqual(['user-456', 'user-789']);
+  });
+
   // Trois no-ops, et chacun compte : sans eux le gestionnaire remplacerait la
   // liste à CHAQUE trame de présence, et chaque remplacement remonte au parent.
   it('ignores its own status, already-known arrivals and unknown departures', () => {

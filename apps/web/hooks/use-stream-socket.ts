@@ -198,6 +198,19 @@ export function useStreamSocket({
   // promettait la liste entière ; c'est assez pour la tenir à jour à partir de
   // la semence, et c'est le seul des deux qu'on puisse tenir sans refaire deux
   // requêtes par conversation à chaque connexion.
+  //
+  // La ref est réécrite AUSSITÔT après chaque remontée, sans attendre que le
+  // parent re-rende : `activeUsersRef` ne se resynchronise que par l'effet monté
+  // sur la prop `activeUsers`, donc deux trames de présence arrivées dans le même
+  // tick liraient toutes deux la MÊME liste d'avant — et la seconde écraserait
+  // l'arrivée annoncée par la première. Deux personnes qui se connectent
+  // ensemble, une seule qui apparaît. L'effet de la prop reste la source de
+  // vérité et repassera par-dessus ; cette écriture ne fait que tenir l'intervalle.
+  const publishActiveUsers = useCallback((next: User[]) => {
+    activeUsersRef.current = next;
+    onActiveUsersUpdate(next);
+  }, [onActiveUsersUpdate]);
+
   const handleUserStatus = useCallback((userId: string, username: string, isOnline: boolean) => {
     if (!userId || userId === user.id) return;
 
@@ -206,7 +219,7 @@ export function useStreamSocket({
 
     if (!isOnline) {
       if (!known) return;
-      onActiveUsersUpdate(current.filter(u => u.id !== userId));
+      publishActiveUsers(current.filter(u => u.id !== userId));
       return;
     }
 
@@ -216,7 +229,7 @@ export function useStreamSocket({
     // L'entrée est donc MINIMALE et assumée : le nom d'affichage suffit à la
     // pastille, et le prochain `conversation:stats` (à la prochaine ouverture)
     // la remplacera par la forme complète. Inventer un profil ferait pire.
-    onActiveUsersUpdate([
+    publishActiveUsers([
       ...current,
       {
         id: userId,
@@ -247,7 +260,7 @@ export function useStreamSocket({
         updatedAt: new Date(),
       } as unknown as User,
     ]);
-  }, [user.id, onActiveUsersUpdate]);
+  }, [user.id, publishActiveUsers]);
 
   // Handler pour les statistiques de conversation
   const handleConversationStats = useCallback((data: any) => {

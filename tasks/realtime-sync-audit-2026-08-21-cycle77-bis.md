@@ -85,6 +85,14 @@ Ajout à l'arrivée, retrait au départ, et **trois no-op** : soi-même, un arri
 déjà connu, un partant inconnu. Sans eux, chaque trame de présence remplacerait
 la liste entière, et chaque remplacement remonte au parent.
 
+La ref locale est réécrite AUSSITÔT après chaque remontée, sans attendre le
+re-rendu du parent. `activeUsersRef` ne se resynchronise que par l'effet monté
+sur la prop `activeUsers` : sans cette écriture, deux trames de présence arrivées
+dans le MÊME tick liraient toutes deux la liste d'avant, et la seconde écraserait
+l'arrivée annoncée par la première. **Deux personnes qui se connectent ensemble,
+une seule qui apparaît.** L'effet de la prop reste la source de vérité et repasse
+par-dessus ; l'écriture ne fait que tenir l'intervalle.
+
 `user:status` ne porte qu'un delta — identifiant, nom, état. L'entrée créée est
 donc MINIMALE et assumée : pas de prénom, pas d'avatar, pas de langue. Le nom
 d'affichage suffit à la pastille, et le prochain `conversation:stats` la
@@ -100,9 +108,10 @@ très probablement pourquoi il n'a jamais été implémenté.
 
 | gate | résultat |
 |---|---|
-| `use-stream-socket` — 3 tests neufs, sur le gestionnaire VIDE de `main` | **2 ROUGES** |
-| `use-stream-socket` — après correctif | 8/8 verts |
-| web — suites socket, hooks, orchestrateur | vertes (inchangées) |
+| `use-stream-socket` — 3 tests de présence, sur le gestionnaire VIDE de `main` | **2 ROUGES** |
+| `use-stream-socket` — test de la double arrivée, sans la réécriture de ref | **1 ROUGE** |
+| `use-stream-socket` — après correctif | 9/9 verts |
+| web — 115 suites de hooks | 2354 tests verts |
 
 Le témoin rouge est la preuve qui compte : les tests ont été écrits contre le
 `main` fusionné, et deux d'entre eux échouent dessus.
