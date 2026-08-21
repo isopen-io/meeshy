@@ -178,55 +178,104 @@ Branche `feat/ios-list-scroll-fluidity` (worktree `../v2_meeshy-ios-list-fluidit
 `origin/main` bfd152fe2). Simulateur cible : `Meeshy-iOS26` `C295B364-8CA6-4214-BC52-E411A97EBFE2`.
 
 ## Lot A — harnais de mesure (sans code produit)
-- [ ] Script de scène reproductible (idb) : liste 4 swipes, fil 4 swipes
-- [ ] Métrique objective : `simctl io recordVideo` + `ffmpeg mpdecimate` (frames dupliquées
+- [x] Script de scène reproductible (idb) : liste 4 swipes, fil 4 swipes
+- [x] Métrique objective : `simctl io recordVideo` + `ffmpeg mpdecimate` (frames dupliquées
       = hitches) + Time Profiler (`xctrace`, CPU main thread pendant le geste)
-- [ ] Référence chiffrée sur `origin/main` (liste Lentille, fil Script, fil Bulles)
+- [x] Référence chiffrée sur `origin/main` (liste Lentille, fil Script, fil Bulles)
 
 ## Lot B — liste de conversations (Lentille + peau historique)
 Fluidité (cartes H1-H19) :
-- [ ] H1/H2 `LentilleFeatureFlag.isEnabled` : plus de `ProcessInfo.environment` par appel
+- [x] H1/H2 `LentilleFeatureFlag.isEnabled` : plus de `ProcessInfo.environment` par appel
       (instantané d'environnement unique par processus) ; drapeau lu UNE fois par passe et
       descendu aux rangs (`usesLentilleSkin`)
-- [ ] H3 menu contextuel natif : construit À L'OUVERTURE (closure), plus à chaque passe
-- [ ] H4 `preferredContentLanguages` hissé une fois par passe
-- [ ] H18 `shouldAutoLoadPreview` O(1) (index) au lieu de `firstIndex` O(n) par rang
-- [ ] H6 avatar Lentille : contexte dédié sans ressort `repeatForever` par rang
-- [ ] H8 candidature focale via `onGeometryChange` (plus de `GeometryReader`+`onChange`/rang)
-- [ ] H15/H17 aplatissement + tableau de candidats : pas d'allocation O(liste) par passe/tick
-- [ ] H10 libellés `RelativeTimeFormatter` mis en cache (plus de `String(localized:)` par tick)
+- [x] H3 menu contextuel natif : construit À L'OUVERTURE (closure), plus à chaque passe
+- [x] H4 `preferredContentLanguages` hissé une fois par passe
+- [x] H18 `shouldAutoLoadPreview` O(1) (index) au lieu de `firstIndex` O(n) par rang
+- [x] H6 avatar Lentille : contexte dédié sans ressort `repeatForever` par rang
+- [x] H8 candidature focale via `onGeometryChange` (plus de `GeometryReader`+`onChange`/rang)
+- [x] H15/H17 aplatissement + tableau de candidats : pas d'allocation O(liste) par passe/tick
+- [~] H10 libellés `RelativeTimeFormatter` — ÉVALUÉ, NON FAIT : une lecture `String(localized:)` par appel
+      (~µs, table de chaînes déjà mise en cache par Foundation) contre le risque d'un libellé figé au
+      changement de langue in-app ; pas de gain mesurable, non modifié
 Effets :
-- [ ] L1 carte de focus : suit la rangée élue à CHAQUE tick (position vivante), peinte
+- [x] L1 carte de focus : suit la rangée élue à CHAQUE tick (position vivante), peinte
       DERRIÈRE le contenu de la rangée (plus de masquage de la 2ᵉ ligne), jamais dans le vide
-- [ ] L2 encoche : libellé cohérent avec les modes réellement offerts
-- [ ] L4 pilule de section : libellé = section du haut de l'écran (plus de libellé périmé)
-- [ ] L5 sticker épinglé vs en-tête replié (trail de stories) : plus de chevauchement
-- [ ] L7 queue de liste : 400 pt de vide → juste ce qu'exigent barre de recherche + bande
-- [ ] Vérification simulateur (captures avant/après, métrique Lot A)
+- [x] L2 encoche : libellé cohérent avec les modes réellement offerts
+- [x] L4 pilule de section : libellé = section du haut de l'écran (plus de libellé périmé)
+- [x] L5 sticker épinglé vs en-tête replié (trail de stories) : plus de chevauchement
+- [x] L7 queue de liste : 400 pt de vide → juste ce qu'exigent barre de recherche + bande
+- [x] Vérification simulateur (captures avant/après, métrique Lot A)
 
 ## Lot C — fil de messages (Bulles + Script)
-- [ ] Verrou de scène : plus de `layoutAttributesForItem` ×2n par frame
-- [ ] `FocalRowInput.==` sans allocation ; `statusForUser` O(1) ; direction de layout et
+- [x] Verrou de scène : plus de `layoutAttributesForItem` ×2n par frame
+- [x] `FocalRowInput.==` sans allocation ; `statusForUser` O(1) ; direction de layout et
       résolution de langue mises en cache par instantané (plus par cellule)
-- [ ] Bulles : `BubbleContent` construit à la configuration, plus dans `body`
-- [ ] Menu contextuel iOS 26 : second arbre de vue construit à l'ouverture seulement
-- [ ] `GeometryReader` par cellule (`MessageFramePreferenceKey`) → `onGeometryChange` ou retrait
-- [ ] `MessageListView` : objets d'environnement parasites (P1-5) hors du chemin `update`
-- [ ] Chrome (boutons/composeur/pilule) : retour à la levée du doigt vérifié au simulateur
-- [ ] Vérification simulateur + métrique Lot A
+- [x] Bulles : `BubbleContent` construit à la configuration, plus dans `body`
+- [x] Menu contextuel iOS 26 : vérifié — `nativeMessageContextMenu` passe `menu()` et `preview()` en
+      closures au `.contextMenu` natif (paresseux), la bulle/rangée est construite UNE fois et réutilisée
+- [x] `GeometryReader` par cellule (`MessageFramePreferenceKey`) → `onGeometryChange` ou retrait
+- [~] `MessageListView` : objets d'environnement (P1-5) — ÉVALUÉ : `updateUIViewController` n'est que
+      des affectations gardées (`didSet` à égalité) + insets gardés ; sans mesure d'un coût, non modifié
+- [x] Chrome (boutons/composeur/pilule) : retour à la levée du doigt vérifié au simulateur
+- [x] Vérification simulateur (3 modes, chrome, pose) — métrique Lot A non rejouée après le lot D
 
 ## Lot D — modes Bulles · Script · Focal complets et sélectionnables
-- [ ] Bulles : entrée des menus (liste + chip) ; choix collant rendu en `.bubbles` drapeau ON
+- [x] Bulles : entrée des menus (liste + chip) ; choix collant rendu en `.bubbles` drapeau ON
       (règle de CONSOMMATION, loi partagée intacte — même chemin que le web)
-- [ ] Focal : passe de perspective MINIMALE (transform + opacity CALayer sur les cellules
+- [x] Focal : passe de perspective MINIMALE (transform + opacity CALayer sur les cellules
       visibles, loi `.thread` partagée, zéro relayout, zéro élection/atterrissage/carte) ;
       retrait du clamp `.focal → .script` ; retour dans `displayOrder` et `LentilleModeMenu`
-- [ ] Script : bouton (+) réaction rapide (`isLastReceivedMessage`), champ mort
-      `revealsTimestamp` tranché
-- [ ] Docs : `apps/ios/decisions.md` (entrée 2026-08-21), `docs/focal-retrait-ios-2026-08-18.md`
+- [x] Script : bouton (+) réaction rapide (`FocalRowInput.isLastReceivedMessage`, règle unique
+      `BubbleReactionsOverlay.isMounted` partagée avec la bulle) ; `revealsTimestamp` SUPPRIMÉ (aucun
+      écrivain, aucun lecteur)
+- [x] Docs : `apps/ios/decisions.md` (entrée 2026-08-21), `docs/focal-retrait-ios-2026-08-18.md`
       (addendum « réintroduction minimale »)
-- [ ] Vérification simulateur des 3 modes (ouverture, défilement, bascule live)
+- [x] Vérification simulateur des 3 modes (ouverture, défilement, bascule live par le chip) — captures
+      21/08 16:5x ; Focal à l'OUVERTURE réparé (carte + détails + heure permanente + sur-réserve)
+
+Ajouts 21/08 (retours user en cours de session) :
+- [x] Pull-to-refresh coincé sous Lentille (offset relatif à l'inset, SDK)
+- [x] Rail « moi » : 💭 / (+) / tap = listing « Mes stories »
+- [x] Carte de focus MAGNIFIÉE (contenu réel, suit le doigt, menu natif)
+- [x] Focal : compaction (proportions), carte accent du message en focus, détails à la pose
+- [x] `MessageListLayout` : plus de boucle dispatch du rattrapage (Time Profiler)
+- [ ] Mesure Instruments après (CPU main thread) — non rejouée
+- [x] Aperçu long-press = carte des DERNIERS MESSAGES (`ConversationPreviewView`) sur les deux chemins,
+      `LentillePeekView` (menu des modes dans l'aperçu) SUPPRIMÉE — décision user 21/08
+- [x] Pilule de section = sticker qui TIENT la ligne d'épinglage (plus « le plus haut », périmé)
+- [x] Focal : toute reconfiguration repose la perspective (carte perdue à l'ouverture) ; détails
+      synchronisés au repos ; `focalOverscan` posé au premier layout ; heure permanente en focus
+
+## Review — session 2 du 21/08 (simulateur Meeshy-iOS26 + iPhone physique)
+
+**Livré** :
+- Déploiement device (`meeshy.sh device`, « Services CEO i16pm », build 1791) du code du simulateur.
+- Aperçu d'appui long = carte des DERNIERS MESSAGES (`ConversationPreviewView`) sur les deux
+  chemins OS ; `LentillePeekView` supprimée (décision user : le menu des modes dans l'aperçu
+  « ne sert à rien ») ; `LongPressPreviewGuardTests` ; recette L12 amendée.
+- Pilule de section périmée (« AUJOURD'HUI » sous « PLUS ANCIEN ») : règle « sticker qui tient
+  la ligne », ligne mesurée une fois sur le conteneur (6 tests).
+- Focal à l'ouverture : carte absente avant tout défilement (reconfigurations de cellule sans
+  repose) → repose en complétion de chaque apply ; détails synchronisés au repos ;
+  `focalOverscan` au premier layout ; heure du message en focus PERMANENTE
+  (`FocalIdentityHeader.revealsTimeAlways`, elle passait par le révélé) — 2 gardes.
+- Script/Focal : (+) d'ajout rapide de réaction (`isLastReceivedMessage`), règle unique
+  `BubbleReactionsOverlay.isMounted` ; `revealsTimestamp` supprimé (champ mort).
+- Bundle de tests de la branche : 2 erreurs de compilation héritées (b7c3adb08/87edb34a4,
+  jamais compilé) + 8 tests rouges jamais exécutés (chemin `#filePath` à 3 remontées, fixture
+  hors portée de la loi, attentes du clamp retiré, structure `passContext`, inset
+  `accessoryCollapsedHeight`) — corrigés.
+- Vérifié au simulateur : liste (carte magnifiée, pilule, aperçu), fil (ouverture, défilement,
+  bascule live Focal → Script → Bulles → Focal par le chip).
+
+**Évalué, non modifié** : H10 (gain ~µs contre libellé figé au changement de langue), P1-5
+(`update` borné à des affectations gardées), menu contextuel iOS 26 du fil (déjà paresseux).
+
+**Observations hors périmètre** : le header replié (`CollapsibleHeader`, SDK) laisse voir le
+sticker qui passe dessous (dégradé 0.75 → 0, design) ; la pilule de section double le libellé du
+sticker épinglé sur la même ligne (design I-063, à trancher) ; mesure Instruments après lot D non
+rejouée ; `meeshy.sh test` complet non rejoué (25 suites ciblées seulement).
 
 ## Lot E — clôture
-- [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé) puis `meeshy.sh test`
+- [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé, 24 classes, simulateur dédié) puis `meeshy.sh test`
 - [ ] `tasks/lessons.md` si correction user ; revue finale ; commits par lot

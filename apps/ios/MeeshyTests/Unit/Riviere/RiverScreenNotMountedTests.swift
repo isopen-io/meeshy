@@ -9,9 +9,10 @@ import XCTest
 /// **Position A — le MENU ne grise plus Rivière en dur (R-135, livré).**
 /// `LentilleModeMenuModel.build` dérive désormais `isDisabled` pour Rivière
 /// EXACTEMENT comme pour Focal/Script/Résumé
-/// (`capabilities.availableModes.contains(mode)`) sur les TROIS surfaces de
+/// (`capabilities.availableModes.contains(mode)`) sur les DEUX surfaces de
 /// liste (encoche `LentilleFocusCard`, sous-menu contextuel
-/// `LentilleReadingModeSubmenu`, aperçu `LentillePeekView` —
+/// `LentilleReadingModeSubmenu` — l'aperçu `LentillePeekView` est supprimé
+/// depuis le 2026-08-21 ;
 /// `LentilleReadingModeContext.capabilitiesInput` lit désormais
 /// `LentilleFeatureFlag.isRiviereModeEnabled`). Voir `ModeMenuModelTests`
 /// pour le comportement complet (grisée drapeau OFF, dégrisée drapeau ON +
