@@ -115,28 +115,36 @@ final class StoryHeaderMetaGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - 2. Audio de fond : note musicale PUIS onde animée
+    // MARK: - 2. Audio de fond : résolveur unique (E1)
 
-    func test_backgroundAudio_rendersMusicNoteThenAnimatedWaveform() throws {
+    /// Supersède `test_backgroundAudio_rendersMusicNoteThenAnimatedWaveform`
+    /// (directive user 2026-07-30, « note PUIS onde ») : depuis la Task E1
+    /// du lot MeeshyComposer (« un résolveur, trois surfaces »), le header
+    /// ne fabrique plus cet affichage inline — il délègue à
+    /// `BackgroundSoundBadge`, qui vérifie ELLE-MÊME la convention note PUIS
+    /// onde (`BackgroundSoundBadgeTests.test_originalCase_
+    /// rendersMusicNoteThenWaveform`, `Components/BackgroundSoundBadge.swift`).
+    /// La directive produit n'a pas changé de sens, seulement de point de
+    /// vérification — cette garde-ci ne teste plus que le CÂBLAGE : le
+    /// header monte la vue commune avec l'annonce résolue par le parent, et
+    /// ne reconstruit plus la branche `if hasBackgroundAudio { … }` d'origine.
+    func test_backgroundAudio_delegatesToBackgroundSoundBadge() throws {
         let header = try headerBlock()
 
-        guard let branch = header.range(of: "if hasBackgroundAudio {") else {
-            XCTFail("La branche audio de fond du header est introuvable")
-            return
-        }
-        let audioBranch = String(header[branch.upperBound...])
-
-        guard let note = audioBranch.range(of: #"Image(systemName: "music.note")"#),
-              let waveform = audioBranch.range(of: "StoryHeaderAudioWaveform(") else {
-            XCTFail(
-                "Un audio de fond doit afficher la note musicale ET l'onde animée : " +
-                "la note dit la présence de la piste, l'onde dit que ça joue."
-            )
-            return
-        }
         XCTAssertTrue(
-            note.lowerBound < waveform.lowerBound,
-            "L'onde vient À LA SUITE de la note musicale (directive user 2026-07-30)."
+            header.contains("BackgroundSoundBadge("),
+            "Le header doit monter BackgroundSoundBadge — la vue commune E1 " +
+            "partagée avec la carte de post et le plein écran réel."
+        )
+        XCTAssertTrue(
+            header.contains("announcement: backgroundSoundAnnouncement"),
+            "L'annonce doit être celle résolue par le parent (BackgroundAudioAnnouncement), " +
+            "pas reconstruite localement dans le header."
+        )
+        XCTAssertFalse(
+            header.contains("if hasBackgroundAudio {"),
+            "L'ancienne branche ad hoc a été retirée — l'existence de la piste (B3.5) " +
+            "est désormais gérée PAR BackgroundSoundBadge elle-même."
         )
     }
 
