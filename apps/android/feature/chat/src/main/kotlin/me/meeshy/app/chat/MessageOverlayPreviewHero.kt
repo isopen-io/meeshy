@@ -12,8 +12,10 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
@@ -22,8 +24,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import java.util.Locale
+import me.meeshy.ui.R
+import me.meeshy.ui.component.bubble.BubbleAccessibilityStrings
 import me.meeshy.ui.component.bubble.BubbleContent
+import me.meeshy.ui.component.bubble.BubbleDeliveryA11yStrings
 import me.meeshy.ui.component.bubble.MessageBubble
+import me.meeshy.ui.component.bubble.MessageBubbleAccessibilityLabel
 import kotlin.math.roundToInt
 
 /**
@@ -83,8 +90,48 @@ internal fun MessageOverlayPreviewHero(
                     transformOrigin = origin
                 },
         ) {
-            MessageBubble(content = content, outgoingColor = accentColor)
+            MessageBubble(
+                content = content,
+                outgoingColor = accentColor,
+                accessibilityLabel = rememberBubbleAccessibilityLabel(content),
+            )
         }
+    }
+}
+
+/**
+ * Resolves the localized [BubbleAccessibilityStrings] and composes the single spoken label for
+ * [content] via the pure [MessageBubbleAccessibilityLabel]. Safe here because the hero is
+ * non-interactive; the interactive list bubble never passes an accessibility label. No time text
+ * is supplied — the bubble shows no clock in its meta row.
+ */
+@Composable
+private fun rememberBubbleAccessibilityLabel(content: BubbleContent): String {
+    val strings = BubbleAccessibilityStrings(
+        unknownSender = stringResource(R.string.bubble_a11y_unknown_sender),
+        deleted = stringResource(R.string.bubble_message_deleted),
+        replyToAuthor = stringResource(R.string.bubble_a11y_reply_to),
+        replyToExcerpt = stringResource(R.string.bubble_a11y_reply_to_excerpt),
+        images = stringResource(R.string.bubble_a11y_images),
+        audios = stringResource(R.string.bubble_a11y_audios),
+        location = stringResource(R.string.bubble_a11y_location),
+        file = stringResource(R.string.bubble_a11y_file),
+        edited = stringResource(R.string.bubble_edited),
+        pinned = stringResource(R.string.bubble_a11y_pinned),
+        ephemeral = stringResource(R.string.bubble_a11y_ephemeral),
+        reactions = stringResource(R.string.bubble_a11y_reactions),
+        delivery = BubbleDeliveryA11yStrings(
+            sending = stringResource(R.string.bubble_status_pending),
+            queued = stringResource(R.string.bubble_status_queued),
+            sent = stringResource(R.string.bubble_status_sent),
+            delivered = stringResource(R.string.bubble_status_delivered),
+            read = stringResource(R.string.bubble_status_read),
+            failed = stringResource(R.string.bubble_status_failed),
+        ),
+    )
+    val locale: Locale = LocalConfiguration.current.locales[0]
+    return remember(content, strings, locale) {
+        MessageBubbleAccessibilityLabel.compose(content, strings, locale)
     }
 }
 

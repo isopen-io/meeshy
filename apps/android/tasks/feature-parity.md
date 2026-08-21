@@ -1641,7 +1641,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ContactsListViewModel.paintMoodStatusesFromCache`) ; `moodEmojiFor(conversation)` délègue au pur
       résolveur ; la ligne `MeeshyAvatar(..., moodEmoji = state.moodEmojiFor(...))` remplace le `null`
       codé en dur — le badge emoji du peer d'un DM remplace la pastille de présence comme sur iOS) ;
-      presence pending
+      **presence done** (vérifié 2026-08-21 : le dot de présence était déjà câblé — `ConversationListScreen.kt`
+      passe `presence = state.presenceStateFor(conversation, System.currentTimeMillis())` jusqu'au
+      `MeeshyAvatar(..., presence = …)` de la rangée, aux côtés de `storyRing` et `moodEmoji` ; les trois
+      affordances d'avatar coexistent comme sur iOS, un badge mood supprimant le dot quand les deux sont
+      présents). La ligne rangée « rich last-message preview » est désormais complète.
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
@@ -2121,6 +2125,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
       gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
       `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
+- [~] Message-bubble VoiceOver/TalkBack composed label — **pure composer done** (slice
+      `chat-bubble-a11y-label`, 2026-08-21 : port iOS `MessageAccessibilityLabelComposer.compose`
+      (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`).
+      Pur `:sdk-ui` `MessageBubbleAccessibilityLabel.compose(content, strings, locale, timeText?)` :
+      un unique libellé parlé dans l'ordre gelé iOS — sender → reply → text → images → audios →
+      location/files → time → delivery → edited → pinned → ephemeral → reactions — joint par `, `.
+      Chaînes injectées via `BubbleAccessibilityStrings` (motif `RelativeTimeFormat`, zéro dépendance
+      Android, JVM-testable). Court-circuit supprimé (sender + « message supprimé »). Écarts assumés
+      vs iOS documentés : pas de distinction image/vidéo (un seul compteur « images »), pas de « vous »
+      pour l'auteur de la réponse (modèle Android sans `isMe`), pas d'horloge dans la meta-row (⇒
+      `timeText` fourni seulement là où une heure est visible). **+20 tests** mutation-prouvés (casser
+      le court-circuit supprimé → 1 échec exact ; effondrer l'arm excerpt de réponse → 2 échecs exacts).
+      **Câblage sûr, non destructif** : `MessageBubble` gagne un param opt-in `accessibilityLabel:
+      String? = null` appliqué via `clearAndSetSemantics` — branché UNIQUEMENT au héros de l'overlay
+      long-press (`MessageOverlayPreviewHero`, non-interactif « never intercepts input »), où
+      effondrer l'arbre sémantique est prouvablement sûr. La bulle interactive de la liste garde
+      `null` → ses cibles tactiles par-élément (réactions, images, long-press) intactes. Le libellé
+      composé de la liste attend un test instrumenté TalkBack (hors du gate JVM). Strings EN/FR/ES/PT.
+      **Reste** : câbler le libellé composé sur la bulle de liste derrière une vérif TalkBack instrumentée.
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
