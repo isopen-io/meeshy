@@ -220,6 +220,33 @@ porte la clé, donc il EFFACE. Sur le fil la question ne se pose pas (Socket.IO 
 garde, enveloppe présente = écrit, `undefined` compris). Jumeau iOS :
 `ConversationSyncEngine.handleUnreadUpdated` — toute évolution touche les deux.
 
+### Appartenance à une conversation — une grille CLOSE, montantes et descendantes appariées
+Cinq transitions déplacent la LIGNE de la liste, et elles se traitent par paires. Toutes vivent dans
+`use-socket-cache-sync.ts` :
+
+| transition | événement (moi) | geste |
+|---|---|---|
+| on m'ajoute | `conversation:new` | `fetchConversationIntoCache` |
+| je pars / on me retire | `conversation:participant-left` | `dropConversationFromCache` |
+| on me bannit | `conversation:participant-banned` | `dropConversationFromCache` |
+| **on me débannit** | `conversation:participant-unbanned` + `membershipRestored !== false` | `fetchConversationIntoCache` |
+
+`fetchConversationIntoCache` et `dropConversationFromCache` sont les DEUX seuls gestes, et ils sont
+exactement inverses : n'en écrire un troisième nulle part. La remise en liste est une **lecture
+bornée** `GET /conversations/:id`, jamais un rejeu de pages (cf. la règle sur les préfixes de query
+infinite paginée par OFFSET ci-dessus), et elle est idempotente aux deux bouts — avant la requête et
+à sa résolution.
+
+Le tri-état `membershipRestored` / `membershipEnded` se lit **par la NÉGATIVE** : `false` seul dit
+« aucune appartenance n'a bougé » ; l'ABSENCE dit « elle a bougé », parce qu'un serveur antérieur au
+champ ne l'envoyait pas et bougeait toujours. Donc `!== false`, jamais `=== true`. Jumeau iOS :
+`didRestoreMembership = membershipRestored ?? true` (`ParticipantUnbannedEvent`, MeeshySDK).
+
+Piège de forme : un handler dont tout le corps réécrit un CHAMP sur une ligne de liste (un effectif,
+un aperçu) est un no-op muet dès qu'un handler voisin sait retirer cette ligne. Le `map` ne trouve
+rien, le cache ressort identique, aucune erreur n'est levée — et `staleTime: Infinity` plus un delta
+upsert-only sur `Conversation.updatedAt` ne rattrapent rien avant la réconciliation complète (24 h).
+
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
 et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST
