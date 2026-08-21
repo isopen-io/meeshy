@@ -134,10 +134,16 @@ public nonisolated enum ComposerReferences {
     /// C'est la transition INLINE → autre chose : passer une référence en badge,
     /// en note ou en silence n'a de sens que si le pseudo quitte la phrase.
     /// Frontière de mot à droite : `@alice` ne doit pas emporter `@alicia`.
+    ///
+    /// Frontière de mot à GAUCHE `(?<![\p{L}\p{N}_-])` — jumelle du `NAME_BOUNDARY_LEFT`
+    /// TS (`packages/shared/utils/mention-parser.ts`) : un `@` précédé d'un caractère
+    /// de nom appartient à une adresse e-mail (`bob@alice`), n'a jamais été détecté
+    /// comme mention, et ne doit donc pas être retiré ici. Sans ce lookbehind, la
+    /// suppression frappait un span que la détection n'avait jamais reconnu.
     public static func removingHandle(_ username: String, from text: String) -> String {
         let escaped = NSRegularExpression.escapedPattern(for: username)
         guard let regex = try? NSRegularExpression(
-            pattern: "\\s*@\(escaped)(?![\\p{L}\\p{N}_.-])",
+            pattern: "\\s*(?<![\\p{L}\\p{N}_-])@\(escaped)(?![\\p{L}\\p{N}_.-])",
             options: [.caseInsensitive]
         ) else { return text }
 
