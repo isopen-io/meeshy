@@ -58,7 +58,6 @@ const mockPresSetupEventListeners = jest.fn();
 const mockPresOnUserStatus = jest.fn();
 const mockPresOnPresenceSnapshot = jest.fn();
 const mockPresOnConversationStats = jest.fn();
-const mockPresOnConversationOnlineStats = jest.fn();
 const mockPresOnReactionAdded = jest.fn();
 const mockPresOnReactionRemoved = jest.fn();
 const mockPresOnConversationJoined = jest.fn();
@@ -172,7 +171,6 @@ jest.mock('@/services/socketio/presence.service', () => ({
     onUserStatus: (...args: unknown[]) => mockPresOnUserStatus(...args),
     onPresenceSnapshot: (...args: unknown[]) => mockPresOnPresenceSnapshot(...args),
     onConversationStats: (...args: unknown[]) => mockPresOnConversationStats(...args),
-    onConversationOnlineStats: (...args: unknown[]) => mockPresOnConversationOnlineStats(...args),
     onReactionAdded: (...args: unknown[]) => mockPresOnReactionAdded(...args),
     onReactionRemoved: (...args: unknown[]) => mockPresOnReactionRemoved(...args),
     onConversationJoined: (...args: unknown[]) => mockPresOnConversationJoined(...args),
@@ -306,7 +304,6 @@ describe('SocketIOOrchestrator', () => {
     mockPresOnUserStatus.mockReturnValue(jest.fn());
     mockPresOnPresenceSnapshot.mockReturnValue(jest.fn());
     mockPresOnConversationStats.mockReturnValue(jest.fn());
-    mockPresOnConversationOnlineStats.mockReturnValue(jest.fn());
     mockPresOnReactionAdded.mockReturnValue(jest.fn());
     mockPresOnReactionRemoved.mockReturnValue(jest.fn());
     mockPresOnConversationJoined.mockReturnValue(jest.fn());
@@ -1862,13 +1859,6 @@ describe('SocketIOOrchestrator', () => {
       const listener = jest.fn();
       orchestrator.onConversationStats(listener);
       expect(mockPresOnConversationStats).toHaveBeenCalledWith(listener);
-    });
-
-    it('onConversationOnlineStats delegates to presenceService', () => {
-      const orchestrator = SocketIOOrchestrator.getInstance();
-      const listener = jest.fn();
-      orchestrator.onConversationOnlineStats(listener);
-      expect(mockPresOnConversationOnlineStats).toHaveBeenCalledWith(listener);
     });
 
     it('onReactionAdded delegates to presenceService', () => {

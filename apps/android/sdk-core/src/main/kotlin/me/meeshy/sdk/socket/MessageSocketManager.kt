@@ -55,8 +55,7 @@ class MessageSocketManager @Inject constructor(
     private val _reactionAdded = buf<ReactionUpdateEvent>()
     private val _reactionRemoved = buf<ReactionUpdateEvent>()
     private val _unreadUpdated = buf<UnreadUpdateEvent>()
-    private val _translationCompleted = buf<TranslationEvent>()
-    private val _translationInProgress = buf<TranslationEvent>()
+    private val _translationReceived = buf<TranslationEvent>()
     private val _transcriptionReady = buf<TranscriptionReadyEvent>()
     private val _audioTranslationReady = buf<AudioTranslationEvent>()
     private val _attachmentUpdated = buf<AttachmentUpdatedEvent>()
@@ -84,8 +83,15 @@ class MessageSocketManager @Inject constructor(
     val reactionAdded: SharedFlow<ReactionUpdateEvent> = _reactionAdded.asSharedFlow()
     val reactionRemoved: SharedFlow<ReactionUpdateEvent> = _reactionRemoved.asSharedFlow()
     val unreadUpdated: SharedFlow<UnreadUpdateEvent> = _unreadUpdated.asSharedFlow()
-    val translationCompleted: SharedFlow<TranslationEvent> = _translationCompleted.asSharedFlow()
-    val translationInProgress: SharedFlow<TranslationEvent> = _translationInProgress.asSharedFlow()
+    /**
+     * La traduction d'un message. UN seul canal la porte, `message:translation`.
+     *
+     * Il y en avait deux : `message:translated` alimentait un flow
+     * `translationCompleted` jumeau, dont le collecteur appliquait exactement
+     * le même merge. Ce nom-là n'a jamais été émis par la passerelle — le
+     * contrat le déclarait, personne ne le produisait (cycle 77).
+     */
+    val translationReceived: SharedFlow<TranslationEvent> = _translationReceived.asSharedFlow()
     val transcriptionReady: SharedFlow<TranscriptionReadyEvent> = _transcriptionReady.asSharedFlow()
     val audioTranslationReady: SharedFlow<AudioTranslationEvent> = _audioTranslationReady.asSharedFlow()
     val attachmentUpdated: SharedFlow<AttachmentUpdatedEvent> = _attachmentUpdated.asSharedFlow()
@@ -122,8 +128,7 @@ class MessageSocketManager @Inject constructor(
         listen("reaction:added", _reactionAdded)
         listen("reaction:removed", _reactionRemoved)
         listen("conversation:unread-updated", _unreadUpdated)
-        listen("message:translated", _translationCompleted)
-        listen("message:translation", _translationInProgress)
+        listen("message:translation", _translationReceived)
         listen("audio:transcription-ready", _transcriptionReady)
         listen("audio:translation-ready", _audioTranslationReady)
         listen("message:attachment-updated", _attachmentUpdated)

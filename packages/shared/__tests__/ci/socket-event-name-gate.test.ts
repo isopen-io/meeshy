@@ -140,6 +140,26 @@ function isTestPath(absolutePath: string): boolean {
   return TEST_PATH_MARKERS.some((marker) => absolutePath.includes(marker));
 }
 
+/**
+ * Un commentaire n'est pas un abonnement.
+ *
+ * `SocialSocketManager` explique, en prose, pourquoi il NE s'abonne PAS à
+ * `post:reaction-sync` — et l'explication cite la ligne qu'elle dit ne pas
+ * écrire : « there is no `socket.on("post:reaction-sync")` ». Sans ce
+ * dépouillement, la garde lisait cette phrase comme un abonnement vivant et
+ * rougissait sur le commentaire qui documente sa propre absence.
+ *
+ * C'est la version miroir du piège que la garde jumelle
+ * (`socket-event-emitter-gate`) évite du côté du contrat : là-bas la prose
+ * pouvait faire passer un nom pour DÉCLARÉ, ici elle le fait passer pour
+ * ABONNÉ. La même précaution vaut aux deux bouts du fil.
+ *
+ * La garde `([^:])` devant `//` épargne les URLs (`https://…`).
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+}
+
 function collectSourceFiles(absoluteRoot: string): ReadonlyArray<string> {
   let entries: ReadonlyArray<string>;
   try {
@@ -168,7 +188,7 @@ type Occurrence = {
 function collectOccurrences(): ReadonlyArray<Occurrence> {
   return SCANNED_ROOTS.flatMap(({ platform, path }) =>
     collectSourceFiles(join(REPO_ROOT, path)).flatMap((absolute) => {
-      const source = readFileSync(absolute, 'utf8');
+      const source = stripComments(readFileSync(absolute, 'utf8'));
       const file = relative(REPO_ROOT, absolute);
       return LITERAL_PATTERNS.flatMap(({ label, regex }) =>
         [...source.matchAll(new RegExp(regex.source, regex.flags))].map((match) => ({

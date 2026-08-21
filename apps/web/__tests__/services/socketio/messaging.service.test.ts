@@ -16,7 +16,6 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
   MESSAGE_CONSUMED: 'message:consumed',
-  SYSTEM_MESSAGE: 'system:message',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
   PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
@@ -63,7 +62,6 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
     MESSAGE_CONSUMED: 'message:consumed',
-    SYSTEM_MESSAGE: 'system:message',
     ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
     MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
     PENDING_MESSAGES_DELIVERED: 'message:pending-delivered',
@@ -697,22 +695,6 @@ describe('MessagingService', () => {
 
         const data = { conversationId: 'conv-1', userId: 'u1', type: 'read' as const };
         socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_CONSUMED, data);
-        await Promise.resolve();
-
-        expect(listener).toHaveBeenCalledWith(data);
-      });
-    });
-
-    describe('message:system', () => {
-      it('calls message listener via convertMessageFn', async () => {
-        const svc = new MessagingService();
-        const socket = makeSocket();
-        const listener = jest.fn();
-        svc.onNewMessage(listener);
-        svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
-
-        const data = { type: 'system', content: 'User joined' };
-        socket._trigger(SERVER_EVENTS_MOCK.SYSTEM_MESSAGE, data);
         await Promise.resolve();
 
         expect(listener).toHaveBeenCalledWith(data);

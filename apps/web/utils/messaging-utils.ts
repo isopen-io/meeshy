@@ -91,7 +91,6 @@ export function createStandardMessageCallbacks(options: {
   onUserStatus?: (userId: string, username: string, isOnline: boolean) => void;
   onTranslation?: (messageId: string, translations: any[]) => void;
   onConversationStats?: (data: any) => void;
-  onConversationOnlineStats?: (data: any) => void;
 }) {
   return {
     onNewMessage: (message: Message) => {
@@ -113,10 +112,6 @@ export function createStandardMessageCallbacks(options: {
     onConversationStats: (data: any) => {
       options.onConversationStats?.(data);
     },
-    
-    onConversationOnlineStats: (data: any) => {
-      options.onConversationOnlineStats?.(data);
-    }
   };
 }
 

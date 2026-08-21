@@ -46,7 +46,6 @@ const SERVER_EVENTS_MOCK = {
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
   MESSAGE_CONSUMED: 'message:consumed',
-  SYSTEM_MESSAGE: 'message:system',
   ATTACHMENT_STATUS_UPDATED: 'attachment:status-updated',
   MENTION_CREATED: 'mention:created',
 };
@@ -105,7 +104,6 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     MESSAGE_EDITED: 'message:edited',
     MESSAGE_DELETED: 'message:deleted',
     MESSAGE_CONSUMED: 'message:consumed',
-    SYSTEM_MESSAGE: 'message:system',
     ATTACHMENT_STATUS_UPDATED: 'attachment:status-updated',
     MENTION_CREATED: 'mention:created',
   },

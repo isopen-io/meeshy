@@ -240,55 +240,6 @@ export function useStreamSocket({
     }
   }, [conversationId, onActiveUsersUpdate]);
 
-  // Handler pour les statistiques en ligne
-  const handleConversationOnlineStats = useCallback((data: any) => {
-    if (!data || data.conversationId !== conversationId) return;
-
-    if (Array.isArray(data.onlineUsers)) {
-      const usersToDisplay = [...data.onlineUsers];
-
-      if (!usersToDisplay.find((u: any) => u.id === user?.id)) {
-        usersToDisplay.unshift({
-          id: user?.id,
-          username: user?.username,
-          firstName: user?.firstName,
-          lastName: user?.lastName,
-          avatar: user?.avatar,
-          systemLanguage: user?.systemLanguage,
-          displayName: user?.displayName
-        });
-      }
-
-      onActiveUsersUpdate(usersToDisplay.map((u: any) => ({
-        id: u.id,
-        username: u.username,
-        firstName: u.firstName,
-        lastName: u.lastName,
-        avatar: u.avatar || '',
-        role: 'USER' as const,
-        permissions: {
-          canAccessAdmin: false,
-          canManageUsers: false,
-          canManageGroups: false,
-          canManageConversations: false,
-          canViewAnalytics: false,
-          canModerateContent: false,
-          canViewAuditLogs: false,
-          canManageNotifications: false,
-          canManageTranslations: false,
-        },
-        systemLanguage: u.systemLanguage || 'fr',
-        regionalLanguage: 'fr',
-        autoTranslateEnabled: true,
-        isOnline: true,
-        isActive: true,
-        createdAt: new Date(),
-        lastActiveAt: new Date(),
-        updatedAt: new Date()
-      } as any)));
-    }
-  }, [conversationId, user, onActiveUsersUpdate]);
-
   // Hook Socket.IO principal
   const {
     sendMessage: sendMessageToService,
@@ -307,7 +258,6 @@ export function useStreamSocket({
     onUserStatus: handleUserStatus,
     onTranslation,
     onConversationStats: handleConversationStats,
-    onConversationOnlineStats: handleConversationOnlineStats,
   });
 
   // Écouter l'événement CONVERSATION_JOINED pour obtenir l'ObjectId normalisé

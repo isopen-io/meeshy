@@ -620,18 +620,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.translationCompleted.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.applyTranslation(
-                            event.messageId,
-                            event.targetLanguage,
-                            event.translatedContent,
-                        )
-                    }
-                }
-            }
-            launch {
-                messageSocketManager.translationInProgress.collect { event ->
+                messageSocketManager.translationReceived.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.applyTranslation(
                             event.messageId,

@@ -282,7 +282,7 @@ class MessageRepository @Inject constructor(
     }
 
     /**
-     * Applies a `message:translated` / `message:translation` socket update to the
+     * Applies a `message:translation` socket update to the
      * cache — the translated content is upserted into the message's translations so
      * the Prisme renders it live (progressive translation). No outbox: this is
      * inbound server truth, never a local mutation. A no-op merge (blank, duplicate,
@@ -363,7 +363,7 @@ class MessageRepository @Inject constructor(
      * language the message has no content for yet. Blocking-translates the
      * message's original text into [targetLanguage] and upserts the result into
      * the cache via [MessageTranslationMerge] so the open bubble can switch to it
-     * — the same live re-render path as an inbound `message:translated`. No outbox:
+     * — the same live re-render path as an inbound `message:translation`. No outbox:
      * a translation is derived server truth, never a local mutation to replay.
      *
      * Returns `true` only when a non-blank translation was actually stored. Inert
