@@ -114,7 +114,9 @@ nonisolated public enum LentilleMetrics {
         /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
         /// rangées voisines s'écartent de la ligne de focus de ce montant
         /// pendant la scène — translation de compositor, zéro relayout.
-        public static let breathing: CGFloat = 18
+        /// 18 → 30 le 2026-08-22 : les chips d'étiquettes qui débordent
+        /// sous la carte gardent une marge avec la rangée suivante.
+        public static let breathing: CGFloat = 30
         /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36
@@ -177,6 +179,11 @@ nonisolated public enum LentilleMetrics {
         public static let size: CGFloat = 6
         public static let maxCount: Int = 3
         public static let emojiSize: CGFloat = 11
+        /// Chips d'étiquettes de la carte de focus (2026-08-22 : « plus
+        /// petites ») — un cran sous l'encoche de mode.
+        public static let chipFontSize: CGFloat = 8
+        public static let chipPaddingHorizontal: CGFloat = 6
+        public static let chipPaddingVertical: CGFloat = 2
     }
 
     // MARK: - Sourdine

@@ -293,11 +293,16 @@ struct LentilleFocusCard: View, Equatable {
     /// lignes — retour à la ligne naturel après l'auteur, la suite dessous
     /// (directive 2026-08-22). Le dernier expéditeur, pour TOUTES les
     /// conversations (2026-08-21) — la rangée plate le réserve aux groupes.
+    @ViewBuilder
     private var previewLine: some View {
-        (senderPrefix + Text(previewText).font(LentilleMetrics.Line2.font).foregroundColor(textSecondary))
-            .lineLimit(2)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
+        // Rien à dire (ni expéditeur, ni texte) ⇒ rien de monté : un `Text`
+        // vide concaténé cassait la mise en page de toute la carte (rangée
+        // « charlie amah », 2026-08-22).
+        if !previewText.isEmpty || !(conversation.lastMessageSenderName ?? "").isEmpty {
+            (senderPrefix + Text(previewText).font(LentilleMetrics.Line2.font).foregroundColor(textSecondary))
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
     }
 
     private var senderPrefix: Text {
@@ -476,7 +481,7 @@ struct LentilleFocusCard: View, Equatable {
             }
             if conversation.tags.count > LentilleMetrics.Tags.maxCount {
                 Text("+\(conversation.tags.count - LentilleMetrics.Tags.maxCount)")
-                    .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                    .font(MeeshyFont.relative(LentilleMetrics.Tags.chipFontSize, weight: LentilleMetrics.ModeNotch.weight))
                     .foregroundColor(textMuted)
             }
         }
@@ -516,11 +521,11 @@ struct LentilleFocusCard: View, Equatable {
             }
         } label: {
             Text(tag.name)
-                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                .font(MeeshyFont.relative(LentilleMetrics.Tags.chipFontSize, weight: LentilleMetrics.ModeNotch.weight))
                 .foregroundColor(.white)
                 .lineLimit(1)
-                .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, MeeshySpacing.xs)
+                .padding(.horizontal, LentilleMetrics.Tags.chipPaddingHorizontal)
+                .padding(.vertical, LentilleMetrics.Tags.chipPaddingVertical)
                 .background(Capsule(style: .continuous).fill(Color(hex: tag.color)))
                 .overlay(
                     Capsule(style: .continuous)

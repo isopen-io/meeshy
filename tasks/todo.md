@@ -331,6 +331,9 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
       padding 14, respiration 18 (jeton partagé mis à jour) ; aperçu « Auteur : texte » sur 2 lignes (vérifié) ;
       chips uniformes sur toutes les bulles en focus — identité à gauche, date + coche à droite, capsules en bas
       (vérifié tête de groupe).
+- [x] Lot 10 (22/08) : scène désarmée à 4,5 s ; chips d'étiquettes 8 pt, respiration 30 (vérifiée) ; garde
+      aperçu vide. NON revérifié : chip d'étiquette sur une carte (élection de Meeshy Global impossible à la
+      main), carte vide observée 2× sur « charlie amah » (hypothèse `Text` vide + fixedSize, garde posée).
 - [ ] Rivière lots 2–5 inchangés (ci-dessous).
 
 ## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`

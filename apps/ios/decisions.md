@@ -439,3 +439,9 @@ Le body d'une bulle a lien heberge un `LinkPreviewCard` dont le `.frame(minHeigh
 **Statut**: Accepté (directive utilisateur)
 
 **Décision**: `FocalMetrics.Scene.restDelay` 2,0 → 4,5 s (+ `flattenDuration` 0,45 s = 4,95 s) — un seul token, lu par la liste (`LentilleSceneActivity`) et par le fil (`scheduleFocalFlatten`). Les boutons de la carte restent actifs pendant tout ce temps : c'est voulu (la magnificence est un état de lecture, pas un flash).
+
+## 2026-08-22 (sexies) : chips d'étiquettes plus petites, marge autour de la carte de liste, garde sur l'aperçu vide
+
+**Statut**: Accepté (directive utilisateur)
+
+**Décision**: chips d'étiquettes de la carte de focus en 8 pt (`LentilleMetrics.Tags.chipFontSize`, rembourrage 6/2) ; respiration des rangées voisines 18 → 30 pt pour que les chips qui débordent sous la carte gardent une marge avec la rangée suivante. Garde : l'aperçu « Auteur : texte » n'est monté que s'il y a quelque chose à dire — une carte VIDE (fond + encoche de mode seuls, rien dans l'arbre d'accessibilité) a été observée deux fois pendant une scène sur une rangée sans dernier message (« charlie amah ») ; hypothèse : un `Text` vide concaténé avec `fixedSize` casse la mise en page du bloc. À re-vérifier au simulateur (l'élection de cette rangée est difficile à reproduire à la main).
