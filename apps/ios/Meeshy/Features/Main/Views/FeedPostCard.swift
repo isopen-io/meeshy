@@ -292,6 +292,14 @@ struct FeedPostCard: View {
         theme.mode.isDark ? accentColor : MeeshyColors.indigo600Hex
     }
 
+    /// Annonce du fond (E1) — MÊME expression que le badge de la rangée
+    /// auteur, exposée comme UNE valeur réutilisable : le bouton muet
+    /// (B3.6, Task E2) partage cette valeur avec le badge, jamais une
+    /// seconde condition d'existence qui pourrait diverger.
+    private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
+        BackgroundSoundBadge.announcement(for: post.storyEffects)
+    }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -683,7 +691,7 @@ struct FeedPostCard: View {
                     // avec le viewer story et le plein écran réel (E1) —
                     // BackgroundSoundBadge rend EmptyView sans piste (B3.5).
                     BackgroundSoundBadge(
-                        announcement: BackgroundSoundBadge.announcement(for: post.storyEffects),
+                        announcement: backgroundSoundAnnouncement,
                         accentHex: backgroundSoundAccentHex
                     )
                     .equatable()
@@ -931,6 +939,9 @@ struct FeedPostCard: View {
 
     // MARK: - Actions Bar
     @State private var likeAnimating = false
+    /// Muet LOCAL à la carte (B3.6, Task E2) — jamais `isGlobalMuted` du
+    /// viewer story : surfaces indépendantes, chacune son propre lecteur.
+    @State private var isBackgroundSoundMuted = false
 
     /// Effective liked state: socket-driven override when available, else post.isLiked.
     private var effectiveIsLiked: Bool { isLiked ?? post.isLiked }
@@ -1148,6 +1159,28 @@ struct FeedPostCard: View {
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
             .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
+
+            // Muet du fond (B3.6, Task E2) — monté SI ET SEULEMENT SI une
+            // piste existe, sur la MÊME valeur que le badge de la rangée
+            // auteur (`backgroundSoundAnnouncement`) : un seul prédicat
+            // partagé, jamais une seconde condition qui pourrait diverger.
+            if BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement) {
+                Spacer()
+
+                Button {
+                    isBackgroundSoundMuted.toggle()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isBackgroundSoundMuted))
+                        .font(MeeshyFont.relative(17))
+                        .foregroundColor(theme.textSecondary)
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+                .accessibilityLabel(isBackgroundSoundMuted
+                    ? String(localized: "a11y.feed.post.sound.unmute", defaultValue: "Réactiver le son du fond", bundle: .main)
+                    : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
+            }
         }
         .padding(.top, 4)
     }

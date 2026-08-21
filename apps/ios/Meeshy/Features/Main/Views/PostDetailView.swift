@@ -51,6 +51,11 @@ struct PostDetailView: View {
     @State private var audioFullscreen: AudioFullscreenSource?
     /// Lieu du post ouvert plein écran (sticker / carte de la page Detail).
     @State private var detailFullscreenPlace: BubbleFullscreenPlace?
+    /// Muet LOCAL du canvas story inline (natif OU repost-de-story, RF3) —
+    /// B3.6, Task E2. Pilote `mute:` aux DEUX sites `StoryReaderRepresentable`
+    /// (mutuellement exclusifs — un seul rend à la fois). Jamais
+    /// `isGlobalMuted` du viewer story : surfaces indépendantes.
+    @State private var isCanvasMuted = false
     @State private var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State private var commentBlurEnabled: Bool = false
     @State private var commentEffects: MessageEffects = .none
@@ -1513,16 +1518,18 @@ struct PostDetailView: View {
                 }
             }
 
-            // Story-type repost — render the canvas. Unmuted to match the native
-            // story detail (RF3); the SHARED `storyCanvasContainer` brings the SAME
-            // off-screen + call-aware pause wiring, so the repost canvas can't play
-            // with sound while scrolled off-screen.
+            // Story-type repost — render the canvas. Unmuted by default to match
+            // the native story detail (RF3); a local mute toggle in the actions
+            // bar (B3.6, Task E2) can silence it — `isCanvasMuted`. The SHARED
+            // `storyCanvasContainer` brings the SAME off-screen + call-aware
+            // pause wiring, so the repost canvas can't play with sound while
+            // scrolled off-screen.
             if isStoryRepost {
                 storyCanvasContainer(
                     StoryReaderRepresentable(
                         repost: repost,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                        mute: false,
+                        mute: isCanvasMuted,
                         isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
                     )
                 )
@@ -1785,6 +1792,28 @@ struct PostDetailView: View {
                 ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
                 : String(localized: "a11y.post.bookmark_add", defaultValue: "Ajouter aux favoris", bundle: .main))
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
+
+            // Muet du canvas (B3.6, Task E2) — monté SI ET SEULEMENT SI une
+            // piste existe. Résolveur partagé (E1) sur `StoryItem(feedPost:)`,
+            // qui retombe déjà sur `repost.storyEffects` quand le post n'a pas
+            // de contenu propre — la MÊME cascade que `storyCanvasSection` /
+            // `repostEmbed` ci-dessous, donc le prédicat ne peut pas diverger
+            // du canvas RÉELLEMENT rendu.
+            if BackgroundSoundBadge.showsMuteButton(for: BackgroundSoundBadge.announcement(for: StoryItem(feedPost: post).storyEffects)) {
+                Spacer()
+
+                Button {
+                    isCanvasMuted.toggle()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isCanvasMuted))
+                        .font(.body)
+                        .foregroundColor(theme.textSecondary)
+                }
+                .accessibilityLabel(isCanvasMuted
+                    ? String(localized: "a11y.feed.post.sound.unmute", defaultValue: "Réactiver le son du fond", bundle: .main)
+                    : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -1793,8 +1822,10 @@ struct PostDetailView: View {
     // MARK: - Story Canvas (inline reader)
 
     /// Renders a story post's canvas inline via `StoryReaderRepresentable`
-    /// (audio active). Pauses when scrolled off-screen or during a call.
-    /// Empty guard covers an expired/asset-less story (no black box).
+    /// (audio active by default; local mute toggle in the actions bar,
+    /// B3.6, Task E2 — `isCanvasMuted`). Pauses when scrolled off-screen or
+    /// during a call. Empty guard covers an expired/asset-less story (no
+    /// black box).
     @ViewBuilder
     private func storyCanvasSection(_ post: FeedPost) -> some View {
         // Le garde « indisponible » s'évalue sur la conversion ENRICHIE
@@ -1825,7 +1856,7 @@ struct PostDetailView: View {
                 StoryReaderRepresentable(
                     story: renderedItem,
                     preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
-                    mute: false,
+                    mute: isCanvasMuted,
                     isPaused: StoryDetailPlaybackPolicy.isPaused(visible: storyCanvasVisible, callActive: isCallActive)
                 )
             )

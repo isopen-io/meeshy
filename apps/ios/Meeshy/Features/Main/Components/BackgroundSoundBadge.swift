@@ -150,4 +150,24 @@ extension BackgroundSoundBadge {
             libraryDuration: backgroundEntry?.duration.map(TimeInterval.init)
         )
     }
+
+    /// B3.6 — Lot E, Task E2 : le bouton 🔇 existe SI ET SEULEMENT SI une
+    /// piste existe — LE MÊME prédicat que l'annonce elle-même (B3.5),
+    /// jamais une seconde condition d'existence recopiée localement qui
+    /// pourrait diverger. Les surfaces qui montent un bouton muet appellent
+    /// CE booléen sur l'annonce qu'elles ont déjà résolue pour leur badge
+    /// (`announcement(for:)` ci-dessus) — jamais un `!= .none` recopié à la
+    /// main sur un `StoryEffects?` séparé.
+    static func showsMuteButton(for announcement: BackgroundAudioAnnouncement) -> Bool {
+        announcement != .none
+    }
+
+    /// Icône du bouton muet — B3.6, « l'icône dit l'état » : SEUL l'état
+    /// local de la surface décide, jamais la provenance/l'annonce. Même
+    /// convention que `VideoTransportControls.muteButton` (SDK, plein écran
+    /// post) et le rail muet du viewer story (`StoryViewerView+Sidebar`) —
+    /// un seul jeu d'icônes, jamais une variante par surface.
+    static func muteIconName(isMuted: Bool) -> String {
+        isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+    }
 }

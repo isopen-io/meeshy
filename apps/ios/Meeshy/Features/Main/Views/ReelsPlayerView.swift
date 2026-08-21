@@ -523,6 +523,11 @@ struct ReelPageView: View {
     @State private var audioFullscreen: AudioFullscreenSource?
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelFullscreenPlace: BubbleFullscreenPlace?
+    /// Muet LOCAL du fond audio storyEffects (B3.6, Task E2) — distinct de
+    /// l'audio NATIF du réel, qui reste toujours actif (`manager.isMuted`
+    /// réaffirmé par `drive()`, non touché ici). Jamais `isGlobalMuted` du
+    /// viewer story : surfaces indépendantes.
+    @State private var isBackgroundSoundMuted = false
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State private var selectedLanguage: String?
@@ -925,12 +930,30 @@ struct ReelPageView: View {
 
             // Annonce du fond (B3.3-5), résolveur unique partagé avec la
             // carte de post et le viewer story (E1) — BackgroundSoundBadge
-            // rend EmptyView sans piste (B3.5).
-            BackgroundSoundBadge(
-                announcement: BackgroundSoundBadge.announcement(for: reel.storyEffects),
-                accentHex: accentColor
-            )
-            .equatable()
+            // rend EmptyView sans piste (B3.5). Résolue UNE fois : le bouton
+            // muet (B3.6, Task E2) juste après partage la MÊME valeur — un
+            // seul prédicat, jamais une seconde résolution qui pourrait
+            // diverger.
+            let announcement = BackgroundSoundBadge.announcement(for: reel.storyEffects)
+            BackgroundSoundBadge(announcement: announcement, accentHex: accentColor)
+                .equatable()
+
+            // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
+            // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
+            // false`, non touché ici).
+            if BackgroundSoundBadge.showsMuteButton(for: announcement) {
+                Button {
+                    isBackgroundSoundMuted.toggle()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isBackgroundSoundMuted))
+                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+                .accessibilityLabel(isBackgroundSoundMuted
+                    ? String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main)
+                    : String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main))
+            }
         }
     }
 
