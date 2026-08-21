@@ -833,7 +833,8 @@
         "canSendAudios": "Send audio",
         "canSendLinks": "Send links",
         "canSendLocations": "Share their location"
-      }
+      },
+      "unavailable": "Profile unavailable"
     },
     "forward": {
       "title": "Forward message",

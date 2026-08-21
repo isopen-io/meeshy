@@ -837,7 +837,8 @@
         "canSendAudios": "Envoyer de l’audio",
         "canSendLinks": "Envoyer des liens",
         "canSendLocations": "Partager sa position"
-      }
+      },
+      "unavailable": "Fiche indisponible"
     },
     "forward": {
       "title": "Transférer le message",
