@@ -247,6 +247,43 @@ class CallSignalMapperTest {
         assertThat(CallRetryPolicy.isRetryable(reason)).isTrue()
     }
 
+    // `call:force-leave` — the server takes THIS device out of a call it no
+    // longer has the right to be in (end of conversation membership: left,
+    // banned, removed by a moderator, thread deleted for oneself). The call
+    // may carry on for the others; what ends is this side's participation, so
+    // the FSM sees exactly a remote hang-up. Identity-gated like its siblings:
+    // the frame names the call it removes us from, never "the current call".
+    // The gateway emits it since cycle 75; before that it was verified dead
+    // and deliberately unsubscribed.
+
+    @Test
+    fun `endedSignal decodes a force-leave frame as a RemoteHangUp keyed by its id`() {
+        assertThat(
+            CallSignalMapper.endedSignal(
+                "call:force-leave",
+                """{"callId":"c9","reason":"membership_ended"}"""
+            )
+        ).isEqualTo(CallEndedSignal("c9", CallEvent.RemoteHangUp))
+    }
+
+    @Test
+    fun `endedSignal decodes a force-leave frame with no reason`() {
+        assertThat(CallSignalMapper.endedSignal("call:force-leave", """{"callId":"c9"}"""))
+            .isEqualTo(CallEndedSignal("c9", CallEvent.RemoteHangUp))
+    }
+
+    @Test
+    fun `endedSignal drops an untargetable force-leave frame`() {
+        assertThat(CallSignalMapper.endedSignal("call:force-leave", """{"callId":""}"""))
+            .isNull()
+    }
+
+    @Test
+    fun `map keeps a force-leave frame inert — the teardown is identity-gated`() {
+        assertThat(CallSignalMapper.map("call:force-leave", """{"callId":"c9"}"""))
+            .isNull()
+    }
+
     @Test
     fun `endedSignal is null for a non-teardown frame`() {
         assertThat(CallSignalMapper.endedSignal("call:signal", """{"callId":"c9","signal":{"type":"answer"}}"""))

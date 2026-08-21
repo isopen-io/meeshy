@@ -216,7 +216,27 @@ export const SERVER_EVENTS = {
   CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
   CALL_ALREADY_ANSWERED: 'call:already-answered',
   CALL_SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
-  /** Server-side GC/admin forced the call to end — clients should dismiss call UI. */
+  /**
+   * Le serveur sort UN destinataire de l'appel — il ne dit rien de l'appel
+   * lui-même, qui continue pour les autres. Émis vers la room PERSONNELLE du
+   * sorti (`ROOMS.user`), jamais vers la room de l'appel.
+   *
+   * Unique émetteur : la fin d'appartenance
+   * (`CallEventsHandler.endCallParticipationForDepartedMember`, cycle 75) —
+   * quitter, être banni, être retiré, supprimer le fil pour soi. Le sorti a
+   * déjà perdu le droit d'être là ; ses appareils démontent la
+   * `RTCPeerConnection` et referment l'écran d'appel sur cet événement, seul
+   * chemin par lequel ils l'apprennent (le verbe `call:force-leave` CLIENT,
+   * qui porte le même nom en sens inverse, exige une appartenance active et
+   * est donc muet précisément dans ce cas).
+   *
+   * Récepteurs : iOS (`MessageSocketManager` → `CallManager.callForcedLeave`,
+   * qui clôt aussi la session CallKit) et web (`components/video-call/
+   * CallManager`). Android ne l'écoute pas encore (`CallSignalManager
+   * .INBOUND_EVENTS`) : le média y est tout de même coupé par le
+   * `call:participant-left` que les pairs restants reçoivent, seul l'écran
+   * d'appel du sorti survit.
+   */
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',

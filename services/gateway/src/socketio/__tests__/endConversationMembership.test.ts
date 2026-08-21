@@ -40,6 +40,9 @@ function makeManager(order: string[]) {
     endLiveLocationForDepartedMember: jest.fn<any>((conversationId: string, userId: string) => {
       order.push(`end-live-location:${conversationId}:${userId}`);
     }),
+    endCallParticipationForDepartedMember: jest.fn<any>(async (conversationId: string, userId: string) => {
+      order.push(`end-call:${conversationId}:${userId}`);
+    }),
     invalidateParticipantCache: jest.fn<any>((userId: string, conversationId: string) => {
       order.push(`invalidate:${userId}:${conversationId}`);
     }),
@@ -56,9 +59,46 @@ describe('endConversationMembership', () => {
 
     expect(order).toEqual([
       `end-live-location:${CONV_ID}:${USER_ID}`,
+      `end-call:${CONV_ID}:${USER_ID}`,
       `leave:socket-a:${ROOMS.conversation(CONV_ID)}`,
       `invalidate:${USER_ID}:${CONV_ID}`,
     ]);
+  });
+
+  it("sort le partant de l'appel EN COURS — la room de l'appel n'est pas celle du fil", async () => {
+    const order: string[] = [];
+    const { io } = makeIo(order, ['socket-a']);
+    const manager = makeManager(order);
+
+    await endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID });
+
+    expect(manager.endCallParticipationForDepartedMember).toHaveBeenCalledWith(CONV_ID, USER_ID);
+  });
+
+  it("ATTEND la sortie d'appel avant d'évincer — le partant apprend par la room de l'appel qu'il doit démonter sa connexion", async () => {
+    const order: string[] = [];
+    const { io } = makeIo(order, ['socket-a']);
+    const manager = makeManager(order);
+    manager.endCallParticipationForDepartedMember = jest.fn<any>(async () => {
+      await new Promise(resolve => setTimeout(resolve, 5));
+      order.push(`end-call:${CONV_ID}:${USER_ID}`);
+    });
+
+    await endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID });
+
+    expect(order.indexOf(`end-call:${CONV_ID}:${USER_ID}`)).toBeLessThan(
+      order.indexOf(`leave:socket-a:${ROOMS.conversation(CONV_ID)}`)
+    );
+  });
+
+  it("sort de l'appel même quand le partant n'a AUCUN socket connecté — la ligne d'appel est un état SERVEUR", async () => {
+    const order: string[] = [];
+    const { io } = makeIo(order, []);
+    const manager = makeManager(order);
+
+    await endConversationMembership({ io, manager, conversationId: CONV_ID, userId: USER_ID });
+
+    expect(manager.endCallParticipationForDepartedMember).toHaveBeenCalledWith(CONV_ID, USER_ID);
   });
 
   it('sort TOUS les appareils du partant, pas seulement celui qui a agi', async () => {
