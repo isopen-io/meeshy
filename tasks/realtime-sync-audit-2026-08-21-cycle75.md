@@ -161,7 +161,29 @@ la route appelante vient de passer la ligne à `false`. Un témoin le prouve **p
 la structure** (`expect(JSON.stringify(where)).not.toContain('isActive')`) et
 non par un effet — l'absence d'une clause ne se lit pas dans un résultat.
 
-### 3.4 Pourquoi `call:force-leave` en plus de `call:participant-left`
+### 3.4 La clé d'identité, et pourquoi elle est complète
+
+`participant: { userId, conversationId }` branche sur `Participant.userId`, donc
+sur un `User.id`. Le `userId` que porte `endConversationMembership` est, lui,
+`User.id` pour un compte mais **`Participant.id` pour un invité de lien
+partagé** — le piège que `services/gateway/CLAUDE.md` documente longuement, dont
+le symptôme est une liste VIDE et non une erreur.
+
+Vérifié, pas déduit : un invité sans compte ne peut détenir AUCUNE ligne
+`CallParticipant`. Les deux seules portes d'entrée d'un appel exigent
+`resolveParticipantId` (`where: { userId, conversationId, isActive: true }`),
+qui ne résout rien pour lui :
+
+- `call:initiate` → `if (!participantId) { NOT_A_PARTICIPANT; return; }`
+- `CallService.joinCall` → `if (!participantId) throw NOT_A_PARTICIPANT`
+
+Le même constat fonde déjà le `userId: { not: null }` de `resolveCallEndedRooms`
+(« un participant sans compte n'est jamais sonné »). La clé unique est donc
+complète pour toute identité qui peut réellement se trouver dans un appel — et
+si un jour les invités y accèdent, cette requête est l'un des sites à brancher
+sur les deux colonnes.
+
+### 3.5 Pourquoi `call:force-leave` en plus de `call:participant-left`
 
 Les deux événements ne disent pas la même phrase :
 
@@ -178,7 +200,7 @@ ambiguïté, et c'est celle qu'iOS savait déjà entendre.
 La room personnelle est aussi la seule que l'éviction ne touche pas : la phrase
 arrive quel que soit l'ordre.
 
-### 3.5 Raison gravée : `completed`
+### 3.6 Raison gravée : `completed`
 
 `CallEndReason` n'accueille aucune valeur neuve. Un départ d'appartenance grave
 `completed` — ce que produit déjà un raccroché ordinaire. Aucun client n'a de
@@ -189,7 +211,7 @@ posée pour un appel qu'on n'a plus le droit de rejoindre.
 dont le défaut (`connectionLost`) sert inchangé son appelant historique —
 l'expiration d'une fenêtre de grâce.
 
-### 3.6 Les trois clients
+### 3.7 Les trois clients
 
 | client | avant | après |
 |---|---|---|
@@ -218,6 +240,7 @@ l'expiration d'une fenêtre de grâce.
 | gateway — suites neuves + touchées | 18/18 (dont 12 rouges sans le correctif, vérifié par `git stash`) |
 | gateway — suite complète | voir § Revue |
 | web — `CallManager.forceLeave.test.tsx` | 5/5 |
+| web — suite complète | 743 suites / 13885 tests verts (21 skipped) |
 | android — `CallSignalMapperTest` (+4 cas) | via CI `Android` (SDK inatteignable en conteneur, cf. l'en-tête de `.github/workflows/android.yml`) |
 
 ---
