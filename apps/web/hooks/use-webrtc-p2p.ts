@@ -345,9 +345,17 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             // state: in a group call, one peer failing must not toast/kill
             // the call while others are still connected, and 'Connected!'
             // must fire once for the call, not once per participant join.
+            //
+            // No toast.error here (Vague 151) — the sole consumer of this
+            // hook's onError, VideoCallInterface.handleWebRTCError, already
+            // shows a translated toast for 'PEER_CONNECTION_FAILED' (its
+            // English copy is byte-identical to what this call site used to
+            // hardcode: locales/en/calls.json toasts.peerConnectionFailed).
+            // Toasting here too meant every locale saw TWO stacked toasts for
+            // the same failure — one correctly translated, one always in
+            // English regardless of locale.
             if (aggregated === 'failed' && previousAggregated !== 'failed') {
               setError('Connection failed');
-              toast.error('Connection failed. Please try again.');
               onError?.(new Error('PEER_CONNECTION_FAILED'));
             } else if (aggregated === 'connected' && previousAggregated !== 'connected') {
               setConnecting(false);
@@ -415,8 +423,15 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
                 // EVERY participant's ICE has failed — one peer failing in a
                 // group call while others are still connected must not toast
                 // an error for (or call onError on) the whole call.
+                //
+                // No toast.error here (Vague 151 — see the matching comment
+                // on the aggregated-'failed' branch of onConnectionStateChange
+                // above): VideoCallInterface.handleWebRTCError already shows
+                // a translated toast for 'ICE_CONNECTION_FAILED', identical
+                // in English to what this line used to hardcode
+                // (locales/en/calls.json toasts.iceConnectionFailed) — this
+                // call site toasted a second, always-English copy alongside it.
                 setError('ICE connection failed');
-                toast.error('Connection failed. Retrying...');
                 onError?.(new Error('ICE_CONNECTION_FAILED'));
               }
             }
