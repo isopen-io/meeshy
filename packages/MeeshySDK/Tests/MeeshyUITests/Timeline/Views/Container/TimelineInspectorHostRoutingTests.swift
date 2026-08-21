@@ -227,26 +227,45 @@ final class TimelineInspectorHostRoutingTests: XCTestCase {
                      "L'audio n'a pas de KeyframeInspector dédié — ce keyframe route vers le clip, jamais vers ici")
     }
 
-    func test_resolveAudioKeyframeOwnerSnapshot_audioKeyframeId_returnsTheOwningClip() {
+    // MARK: - La normalisation au BUS
+
+    /// La fiche qu'un losange audio ouvre — interrogée sur l'id TAPÉ, comme
+    /// le fait la garde d'ouverture avant toute normalisation.
+    func test_selectionKind_audioKeyframeId_resolvesToTheOwningClip() {
         let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
-        vm.selectClip(id: "kf-vol")
-        let snapshot = TimelineInspectorHost.resolveAudioKeyframeOwnerSnapshot(viewModel: vm)
-        XCTAssertEqual(snapshot?.id, "aud-1")
-        XCTAssertEqual(snapshot?.kind, .audio)
+        guard case .clip(let snapshot) = TimelineInspectorHost.selectionKind(for: "kf-vol", viewModel: vm) else {
+            XCTFail("Un losange audio doit résoudre vers la fiche de SON clip")
+            return
+        }
+        XCTAssertEqual(snapshot.id, "aud-1")
+        XCTAssertEqual(snapshot.kind, .audio)
     }
 
-    /// Le résolveur ne connaît QUE les keyframes audio : un losange de média
-    /// garde son `KeyframeInspector` propre, il ne doit jamais se faire
-    /// rabattre sur la fiche de son clip.
-    func test_resolveAudioKeyframeOwnerSnapshot_mediaKeyframeId_returnsNil() {
+    func test_resolvedOwnerId_audioKeyframeId_returnsTheOwningClipId() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        XCTAssertEqual(TimelineInspectorHost.resolvedOwnerId(for: "kf-vol", viewModel: vm), "aud-1",
+                       "C'est cet id que le bus doit porter — pas celui du losange")
+    }
+
+    /// La normalisation ne connaît QUE les keyframes audio : un losange de
+    /// média garde son `KeyframeInspector` propre, son id EST déjà celui que
+    /// le bus doit porter — il ne doit jamais se faire rabattre sur son clip.
+    func test_resolvedOwnerId_mediaKeyframeId_returnsTheIdItself() {
         let vm = makeViewModel(project: projectWithKeyframe(clipId: "media-1", keyframeId: "kf-1"))
-        vm.selectClip(id: "kf-1")
-        XCTAssertNil(TimelineInspectorHost.resolveAudioKeyframeOwnerSnapshot(viewModel: vm))
+        XCTAssertEqual(TimelineInspectorHost.resolvedOwnerId(for: "kf-1", viewModel: vm), "kf-1")
+    }
+
+    /// Ni un id de clip, ni un id inconnu : la normalisation est l'identité
+    /// partout ailleurs.
+    func test_resolvedOwnerId_clipIdAndUnknownId_returnTheIdItself() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        XCTAssertEqual(TimelineInspectorHost.resolvedOwnerId(for: "aud-1", viewModel: vm), "aud-1")
+        XCTAssertEqual(TimelineInspectorHost.resolvedOwnerId(for: "nope", viewModel: vm), "nope")
     }
 
     func test_presentedSelection_audioKeyframeTap_opensTheClipInspector_neverADeadEnd() {
         let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
-        vm.inspectClip(id: "kf-vol")
+        TimelineInspectorHost.inspectIfResolvable(id: "kf-vol", viewModel: vm)
         guard case .clip(let snapshot) = TimelineInspectorHost.presentedSelection(viewModel: vm) else {
             XCTFail("Un tap sur un losange audio doit ouvrir la fiche du clip — avant ce correctif la sheet ne s'ouvrait jamais")
             return
@@ -276,18 +295,63 @@ final class TimelineInspectorHostRoutingTests: XCTestCase {
         XCTAssertEqual(snapshot.id, "media-1")
     }
 
-    func test_inspectIfResolvable_audioKeyframeId_opensTheOwningClip() {
+    /// Le losange audio ouvre la fiche de son clip — et le BUS de sélection
+    /// porte l'id de ce clip, pas celui du losange. Router au seul niveau de
+    /// la PRÉSENTATION laissait `selectedClipId` sur `kf-vol` : la fiche
+    /// montrait `aud-1` pendant que les commandes, l'anneau du plan et les
+    /// poignées de bord visaient un id qu'aucune piste ne porte (revue DoD
+    /// de D6c, constat 1 — la divergence bus/fiche).
+    func test_inspectIfResolvable_audioKeyframeId_posesTheOwningClipOnTheSelectionBus() {
         let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
 
         TimelineInspectorHost.inspectIfResolvable(id: "kf-vol", viewModel: vm)
 
-        XCTAssertEqual(vm.selection.inspectedClipId, "kf-vol",
-                       "Un losange audio résout désormais — la garde ne doit pas l'écarter")
+        XCTAssertEqual(vm.selection.selectedClipId, "aud-1",
+                       "Le bus doit porter l'id du PORTEUR — c'est lui que lisent addKeyframeAtPlayhead, splitSelectedAtPlayhead, l'anneau du plan et les poignées de bord")
+        XCTAssertEqual(vm.selection.inspectedClipId, "aud-1",
+                       "L'invariant inspectedClipId == selectedClipId ne souffre aucune exception")
         guard case .clip(let snapshot) = TimelineInspectorHost.presentedSelection(viewModel: vm) else {
             XCTFail("Le losange audio doit ouvrir la fiche de SON clip")
             return
         }
         XCTAssertEqual(snapshot.id, "aud-1")
+    }
+
+    /// Ce que la seule comparaison de `snapshot.id` ne pouvait pas voir : le
+    /// bouton « Point de volume » — la SEULE surface d'édition de la courbe,
+    /// celle qui justifie tout l'arbitrage 3 — appelle
+    /// `addKeyframeAtPlayhead(volume:)`, qui lit `selectedClipId`. Un bus
+    /// resté sur l'id du losange le rendait INERTE, sans effet ni message.
+    func test_addVolumePoint_afterTappingAnAudioKeyframe_landsOnTheOwningClip() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        TimelineInspectorHost.inspectIfResolvable(id: "kf-vol", viewModel: vm)
+        vm.scrub(to: 3.0, precise: true)
+
+        vm.addKeyframeAtPlayhead(volume: 0.7)
+
+        XCTAssertEqual(vm.project.audioPlayerObjects.first?.keyframes?.count, 2,
+                       "Le point de volume doit se poser sur aud-1 — la commande vise selectedClipId, pas la fiche rendue")
+    }
+
+    /// Les deux autres surfaces bornées par la même égalité : le plan
+    /// surligne `track.id == selectedTrackId` et ne pose ses poignées de bord
+    /// que là. Un id de keyframe ne désigne AUCUNE piste — la piste consultée
+    /// perdait son anneau, la piste audio n'en gagnait pas, et le rognage de
+    /// ce clip devenait impossible.
+    func test_inspectIfResolvable_audioKeyframeId_selectsATrackThePlanCanHighlightAndTrim() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        TimelineInspectorHost.inspectIfResolvable(id: "kf-vol", viewModel: vm)
+
+        let tracks = Plan2DLayout.tracks(from: Plan2DProjectAdapter.effects(from: vm.project),
+                                         slideDuration: Double(vm.project.slideDuration))
+        XCTAssertTrue(tracks.contains { $0.id == vm.selection.selectedClipId },
+                      "La sélection doit désigner une PISTE du plan — sinon l'anneau ne se dessine nulle part")
+        let zones = Plan2DView.edgeHandleZones(tracks: tracks,
+                                               selectedTrackId: vm.selection.selectedClipId,
+                                               zoom: .fit, laneWidth: 300,
+                                               slideDuration: Double(vm.project.slideDuration))
+        XCTAssertEqual(Set(zones.map(\.trackId)), ["aud-1"],
+                       "Les poignées de bord doivent se poser sur la piste audio — son rognage reste possible")
     }
 
     /// Le clip SYNTHÉTIQUE reste sélectionnable : il RÉSOUT (`.clip`), c'est

@@ -137,6 +137,63 @@ struct Plan2DLayoutTests {
                "kf-over (temps absolu 7) doit être écrêté à la FIN de la barre (4), pas dériver hors d'elle")
     }
 
+    /// La collision que l'écrêtage engendre, épinglée telle qu'elle est
+    /// ASSUMÉE (revue DoD de D6c, constat 3) : deux keyframes au-delà de la
+    /// même borne s'y replient sur la MÊME abscisse. Aucun n'est retiré — le
+    /// plan garde leur identité, et c'est ce que le hit-test départage
+    /// ensuite.
+    @Test("Deux keyframes au-delà de la fin se replient sur la MÊME abscisse — aucun n'est supprimé (collision assumée, revue DoD de D6c, constat 3)")
+    func keyframes_twoBeyondATrimmedWindow_collapseOnTheSameEdge() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "clip", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 2, duration: 2,
+                                 keyframes: [StoryKeyframe(id: "kf-over-1", time: 5),
+                                             StoryKeyframe(id: "kf-over-2", time: 6)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        let track = tracks(effects).first
+        #expect(track?.bar == .timed(start: 2, end: 4))
+        #expect(Set(track?.keyframes.map(\.id) ?? []) == ["kf-over-1", "kf-over-2"],
+               "L'écrêtage ne retire JAMAIS un losange du plan — il le replie, c'est tout")
+        #expect(track?.keyframeTimes == [4, 4],
+               "Les deux débordent la même borne : ils s'y replient tous les deux")
+    }
+
+    /// Et la collision n'est jamais DÉFINITIVE : le rognage ne touche que
+    /// `duration`, jamais `StoryKeyframe.time`. Ré-étendre la fin du clip
+    /// re-sépare les deux losanges là où ils ont toujours été — le temps
+    /// STOCKÉ fait foi, l'écrêtage n'était qu'un repli d'affichage.
+    @Test("Ré-étendre la fin du clip re-sépare les losanges repliés — rien n'avait été perdu, le temps stocké fait foi")
+    func keyframes_collapsedByATrim_separateAgainWhenTheBarIsExtended() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "clip", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 2, duration: 5,
+                                 keyframes: [StoryKeyframe(id: "kf-over-1", time: 5),
+                                             StoryKeyframe(id: "kf-over-2", time: 6)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        let track = tracks(effects).first
+        #expect(track?.bar == .timed(start: 2, end: 7))
+        #expect(track?.keyframeTimes == [7, 7],
+               "kf-over-2 (absolu 8) reste écrêté à 7 ; kf-over-1 (absolu 7) y tombe de plein droit")
+
+        let extended = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "clip", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 2, duration: 8,
+                                 keyframes: [StoryKeyframe(id: "kf-over-1", time: 5),
+                                             StoryKeyframe(id: "kf-over-2", time: 6)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        #expect(tracks(extended).first?.keyframeTimes == [7, 8],
+               "La collision était réversible : les deux losanges retrouvent leurs abscisses distinctes")
+    }
+
     @Test("Un chip audio décalé projette lui aussi ses losanges en absolu")
     func audioKeyframes_areProjectedOntoTheAbsoluteAxis() {
         let effects = StoryEffects(

@@ -362,6 +362,28 @@ final class Plan2DViewGuardTests: XCTestCase {
         )
     }
 
+    /// Le versant VUE de la collision assumée (revue DoD de D6c, constat 3) :
+    /// deux losanges repliés sur la même abscisse par l'écrêtage de
+    /// `Plan2DLayout.markers` ne peuvent pas être départagés par la distance —
+    /// le hit-test en désigne UN, et un seul. Ce test épingle ce que
+    /// l'utilisateur obtient (une cible, pas un `nil`, pas une oscillation)
+    /// sans prétendre LEQUEL : l'ordre entre temps égaux n'est pas une
+    /// garantie de la bibliothèque de tri, et le plan n'en fait pas une
+    /// promesse. La collision reste réversible — ré-étendre la barre les
+    /// re-sépare (`Plan2DLayoutTests`).
+    func test_keyframeHit_onTwoKeyframesCollapsedByClamping_stillDesignatesExactlyOne() {
+        let track = Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 4),
+                                keyframes: [Plan2DKeyframe(id: "kf-over-1", time: 4),
+                                            Plan2DKeyframe(id: "kf-over-2", time: 4)])
+        // laneWidth choisie pour que x(t) = t * 10 en zoom .fit sur 10 s.
+        let xOfTheEdge = Plan2DView.labelColumnWidth + 40
+        let hit = Plan2DView.keyframeHit(touchX: xOfTheEdge, track: track,
+                                         zoom: .fit, laneWidth: 100, slideDuration: 10)
+        XCTAssertTrue(["kf-over-1", "kf-over-2"].contains(hit),
+                      "Deux losanges à la même abscisse : le tap en désigne un — jamais aucun")
+    }
+
     func test_keyframeHit_beyondItsHitRadius_returnsNil() {
         let track = Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0,
                                 bar: .timed(start: 0, end: 10),

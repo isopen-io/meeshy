@@ -295,6 +295,25 @@ public nonisolated enum Plan2DLayout {
     /// plutôt que simplement précis à sa nouvelle borne. Un `.ghost` n'a pas de
     /// fenêtre à écrêter (O4, aucun timing n'a été choisi) : le temps reste
     /// tel quel.
+    ///
+    /// QUELLE VALEUR FAIT FOI (tranché en revue DoD de D6c, constat 3) : le
+    /// temps STOCKÉ. L'écrêtage est une affordance de DESSIN et de hit-test,
+    /// jamais une vérité de modèle — `StoryKeyframe.time` ne bouge pas, et
+    /// l'en-tête du `KeyframeInspector`
+    /// (`TimelineInspectorHost.keyframeSnapshot`) continue délibérément
+    /// d'annoncer le temps NON écrêté. Le losange replié au bord dit « il y a
+    /// ça au-delà de la coupe », l'en-tête dit OÙ. Écrêter aussi l'en-tête
+    /// ferait mentir la fiche sur une donnée intacte, et ré-étendre la barre
+    /// démentirait aussitôt le chiffre affiché.
+    ///
+    /// CONSÉQUENCE ASSUMÉE : plusieurs keyframes au-delà de la même borne s'y
+    /// replient sur la MÊME abscisse, et `Plan2DView.keyframeHit` n'en désigne
+    /// alors qu'un. La collision est RÉVERSIBLE, jamais destructrice — aucun
+    /// losange n'est retiré du tableau, et ré-étendre la fin du clip les
+    /// re-sépare tels qu'ils étaient (`trimClipEnd` ne touche que `duration`).
+    /// C'est le prix payé pour qu'un keyframe rogné reste visible plutôt que
+    /// de disparaître hors de sa barre ; l'alternative — le laisser dériver —
+    /// est celle que le mineur 15 a corrigée.
     private static func markers(of keyframes: [StoryKeyframe]?, clipStart: Double?,
                                 window: TrackBar) -> [Plan2DKeyframe] {
         let origin = max(0, clipStart ?? 0)

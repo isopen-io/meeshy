@@ -510,7 +510,7 @@ final class Plan2DSnapScaleTests: XCTestCase {
 /// La préséance du BORD sur un losange qui le recouvre (`Plan2DView.tapTarget`,
 /// mineur 19) reste INCONDITIONNELLE — mais depuis que les losanges AUDIO
 /// routent vers l'inspecteur de LEUR CLIP (constat 1, `TimelineInspectorHost.
-/// resolveAudioKeyframeOwnerSnapshot`), les deux issues possibles d'un tap sur
+/// inspectIfResolvable`), les deux issues possibles d'un tap sur
 /// ce chevauchement (`.track` ou `.keyframe`) atterrissent désormais sur la
 /// MÊME fiche : celle du clip audio. La préséance de l'arête ne prive donc
 /// plus jamais l'utilisateur d'un inspecteur pour une famille dont le losange
@@ -558,7 +558,9 @@ final class Plan2DAudioKeyframeEdgeReconciliationTests: XCTestCase {
         }
 
         let viaKeyframe = makeViewModel(project: project)
-        viaKeyframe.inspectClip(id: "kf-edge")
+        TimelineInspectorHost.inspectIfResolvable(id: "kf-edge", viewModel: viaKeyframe)
+        XCTAssertEqual(viaKeyframe.selection.selectedClipId, "aud-1",
+                       "Même destination ET même bus : router au seul niveau de la présentation laissait selectedClipId sur l'id du losange, et les commandes de la fiche visaient alors un id qu'aucune piste ne porte")
         guard case .clip(let keyframeSnapshot) = TimelineInspectorHost.presentedSelection(viewModel: viaKeyframe) else {
             return XCTFail("Le losange doit AUSSI ouvrir la fiche du clip — jamais un cul-de-sac")
         }

@@ -243,7 +243,7 @@ public struct TimelineInspectorHost: View {
 
     /// Construit la `ClipSnapshot` d'un objet audio — extrait de
     /// `resolveClipSnapshot` pour être RÉUTILISÉ par
-    /// `resolveAudioKeyframeOwnerSnapshot` ci-dessous : les deux chemins
+    /// `audioKeyframeOwnerSnapshot` ci-dessous : les deux chemins
     /// doivent produire EXACTEMENT la même fiche, qu'on tape le CLIP ou l'un
     /// de ses losanges de volume.
     private static func audioClipSnapshot(_ audio: StoryAudioPlayerObject,
@@ -281,13 +281,15 @@ public struct TimelineInspectorHost: View {
     /// contrairement à eux, la cible n'est pas le keyframe lui-même mais le
     /// clip qui le PORTE — un keyframe audio ne produit donc jamais de cas
     /// `.keyframe(…)`, seulement `.clip(…)`.
-    public static func resolveAudioKeyframeOwnerSnapshot(
-        viewModel: TimelineViewModel
-    ) -> ClipInspector.ClipSnapshot? {
-        guard let id = viewModel.selection.selectedClipId else { return nil }
-        return audioKeyframeOwnerSnapshot(id: id, viewModel: viewModel)
-    }
-
+    ///
+    /// Deux appelants, tous deux VIVANTS et tous deux sur l'id TAPÉ, jamais
+    /// sur la sélection : `selectionKind(for:)`, qui décide si une fiche
+    /// s'ouvrirait, et `resolvedOwnerId(for:)`, qui dit ce que le bus doit
+    /// alors porter. Il n'existe volontairement pas de variante
+    /// `resolve…(viewModel:)` lisant `selection.selectedClipId` : depuis la
+    /// normalisation au bus, cette sélection ne vaut PLUS jamais l'id d'un
+    /// losange audio, et une telle variante serait morte par construction
+    /// (revue DoD de D6c, constat 2).
     private static func audioKeyframeOwnerSnapshot(
         id: String, viewModel: TimelineViewModel
     ) -> ClipInspector.ClipSnapshot? {
@@ -300,10 +302,19 @@ public struct TimelineInspectorHost: View {
     /// Pure mapping from the current selection to a `KeyframeSnapshot`.
     /// A keyframe id is searched across every clip's `keyframes` collection
     /// (media + text ONLY — an audio keyframe id resolves to its OWNING clip
-    /// via `resolveAudioKeyframeOwnerSnapshot` above, never to a case here).
+    /// via `audioKeyframeOwnerSnapshot` above, never to a case here).
     /// The owning clip's start time is added to the keyframe's relative
     /// `time` to produce an absolute timeline position so the inspector
     /// header reads correctly.
+    ///
+    /// Ce temps absolu n'est délibérément PAS écrêté à la barre rendue,
+    /// contrairement au losange que dessine `Plan2DLayout.markers` : sur un
+    /// clip rogné plus court que son dernier keyframe, le losange se replie
+    /// au bord (affordance de dessin) pendant que cet en-tête annonce le
+    /// temps STOCKÉ, qui seul fait foi. `StoryKeyframe.time` survit au
+    /// rognage — écrêter aussi la fiche ferait mentir la seule surface qui
+    /// dit encore où se trouve réellement le keyframe (revue DoD de D6c,
+    /// constat 3 ; décision consignée en toutes lettres dans `markers`).
     public static func resolveKeyframeSnapshot(
         viewModel: TimelineViewModel
     ) -> (snapshot: KeyframeInspector.KeyframeSnapshot, clipId: String)? {
@@ -416,6 +427,10 @@ public struct TimelineInspectorHost: View {
         if let clip = clipSnapshot(id: id, viewModel: viewModel) {
             return .clip(clip)
         }
+        // La famille AUDIO : la cible n'est pas le losange mais le clip qui
+        // le PORTE. Cette branche répond sur l'id TAPÉ — c'est ici que la
+        // garde d'ouverture apprend qu'une fiche existe, avant que
+        // `resolvedOwnerId(for:)` ne pose le porteur sur le bus.
         if let clip = audioKeyframeOwnerSnapshot(id: id, viewModel: viewModel) {
             return .clip(clip)
         }
@@ -444,7 +459,30 @@ public struct TimelineInspectorHost: View {
     /// refuser aussi l'anneau de sélection serait une seconde régression.
     public static func inspectIfResolvable(id: String, viewModel: TimelineViewModel) {
         guard selectionKind(for: id, viewModel: viewModel) != nil else { return }
-        viewModel.inspectClip(id: id)
+        viewModel.inspectClip(id: resolvedOwnerId(for: id, viewModel: viewModel))
+    }
+
+    /// L'id que le BUS de sélection doit porter pour un id TAPÉ — celui du
+    /// PORTEUR, jamais celui du losange qu'on rabat sur lui.
+    ///
+    /// Router le losange audio au seul niveau de la PRÉSENTATION faisait
+    /// diverger la fiche et le bus : la sheet montrait `aud-1` pendant que
+    /// `selection.selectedClipId` valait `kf-vol`. Trois surfaces, toutes
+    /// bornées par cet id, devenaient alors inertes EN SILENCE — les
+    /// commandes de la fiche (`addKeyframeAtPlayhead(volume:)`, le bouton
+    /// « Point de volume », SEULE surface d'édition de la courbe ;
+    /// `addKeyframeAtPlayhead()` ; `splitSelectedAtPlayhead()`, qui rendent
+    /// toutes `nil` sur un id de keyframe et sortent sans message),
+    /// l'anneau du plan (`Plan2DView` : `track.id == selectedTrackId`) et
+    /// les poignées de bord (`edgeHandleZones`, bornées par la même
+    /// égalité). Normaliser ICI, au bus, rend leur cible aux trois d'un seul
+    /// geste et laisse la présentation lire une sélection déjà juste
+    /// (revue DoD de D6c, constat 1).
+    ///
+    /// Un id de clip, un losange de média/texte ou une transition se rendent
+    /// eux-mêmes : seule la famille AUDIO a un porteur à désigner.
+    public static func resolvedOwnerId(for id: String, viewModel: TimelineViewModel) -> String {
+        audioKeyframeOwnerSnapshot(id: id, viewModel: viewModel)?.id ?? id
     }
 
     // MARK: - Body
@@ -492,8 +530,12 @@ public struct TimelineInspectorHost: View {
             onFollowSlide: { [viewModel] in
                 viewModel.followSlide(id: clipId)
             },
-            // `splitSelectedAtPlayhead` lit `selectedClipId` : correct sans
-            // changement, puisque `inspect(_:)` pose les deux identifiants.
+            // `splitSelectedAtPlayhead` lit `selectedClipId`, comme
+            // `onAddKeyframe` et `onAddVolumePoint` ci-dessus et dessous :
+            // correct parce que `inspect(_:)` pose les deux identifiants ET
+            // que `inspectIfResolvable` y met l'id du PORTEUR
+            // (`resolvedOwnerId(for:)`). Router un losange audio à la seule
+            // PRÉSENTATION rendrait ces trois commandes inertes en silence.
             onSplit: { viewModel.splitSelectedAtPlayhead() },
             onClose: { viewModel.endInspection() },
             // Stepper de PRÉCISION, pas un geste : `dragClip` aurait fait

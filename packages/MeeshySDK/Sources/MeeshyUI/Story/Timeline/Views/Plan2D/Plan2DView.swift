@@ -569,7 +569,7 @@ public struct Plan2DView: View, Equatable {
     ///
     /// Reconciliation avec l'inspectabilité d'un keyframe AUDIO (arbitrage 3,
     /// D6c) : CLOSE, sans changement de règle ici. `TimelineInspectorHost.
-    /// resolveAudioKeyframeOwnerSnapshot` route désormais tout losange audio
+    /// inspectIfResolvable` route désormais tout losange audio
     /// vers l'inspecteur de SON CLIP — la même fiche que `.track` ouvrirait
     /// pour cette piste. Les deux issues de `tapTarget` sur un chevauchement
     /// audio (`.track` ou `.keyframe`) atterrissent donc sur LA MÊME sheet
