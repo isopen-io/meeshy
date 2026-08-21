@@ -111,6 +111,10 @@ nonisolated public enum LentilleMetrics {
         @MainActor public static var nameFont: Font { MeeshyFont.relative(nameSize, weight: Name.weight) }
         public static let shadowRadius: CGFloat = 12
         public static let shadowY: CGFloat = 4
+        /// Ombre de la carte — nommée ici (`Core/`) : `0.35` est un littéral
+        /// de loi interdit en dur dans les fichiers de peau.
+        public static let shadowOpacityDark: Double = 0.35
+        public static let shadowOpacityLight: Double = 0.12
         /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
         /// rangées voisines s'écartent de la ligne de focus de ce montant
         /// pendant la scène — translation de compositor, zéro relayout.

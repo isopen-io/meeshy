@@ -181,7 +181,7 @@ struct LentilleFocusCard: View, Equatable {
                     .opacity(Self.ringOpacity(reduceMotion: reduceMotion))
             )
             .shadow(
-                color: Color.black.opacity(isDark ? 0.35 : 0.12),
+                color: Color.black.opacity(isDark ? LentilleMetrics.FocusCard.shadowOpacityDark : LentilleMetrics.FocusCard.shadowOpacityLight),
                 radius: LentilleMetrics.FocusCard.shadowRadius,
                 x: 0,
                 y: LentilleMetrics.FocusCard.shadowY

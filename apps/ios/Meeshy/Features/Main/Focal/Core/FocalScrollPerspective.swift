@@ -168,6 +168,15 @@ nonisolated enum FocalScrollPerspective {
     /// mange ces rembourrages asymétriques pour encadrer le message avec
     /// les mêmes espaces qu'en Script (directive user 2026-08-21).
     static let focusCardInnerMargin: CGFloat = 4
+    /// Teintes de la carte et de ses chips (fond SwiftUI de la rangée en
+    /// focus) — nommées ici, dans `Core/`, parce que le garde des littéraux
+    /// de loi (`scripts/check-law-literals.sh`) interdit `0.45`/`0.40`/`0.35`
+    /// en dur dans les fichiers de peau.
+    static let focusCardFillOpacityDark: Double = 0.16
+    static let focusCardFillOpacityLight: Double = 0.10
+    static let focusCardBorderOpacityDark: Double = 0.55
+    static let focusCardBorderOpacityLight: Double = 0.40
+    static let focusChipRingOpacity: Double = 0.45
 
     static func focusCardInsets(isFirstInGroup: Bool) -> UIEdgeInsets {
         let top = FocalMetrics.Row.paddingVertical + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0) - focusCardInnerMargin

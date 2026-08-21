@@ -643,7 +643,7 @@ struct FocalRow: View {
                 Capsule(style: .continuous)
                     .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
                     .overlay(Capsule(style: .continuous).fill(filled ? Color.clear : focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
-                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(isActive || filled ? 1 : 0.45), lineWidth: isActive || filled ? 1.5 : 1))
+                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(isActive || filled ? 1 : FocalScrollPerspective.focusChipRingOpacity), lineWidth: isActive || filled ? 1.5 : 1))
             )
             .contentShape(Capsule(style: .continuous))
     }
@@ -739,10 +739,10 @@ struct FocalRow: View {
     /// s'arrête à `focusCardHorizontalInset` du bord de la cellule.
     private var focusCardBackground: some View {
         RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
-            .fill(focusAccent.opacity(input.isDark ? 0.16 : 0.10))
+            .fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))
             .overlay(
                 RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
-                    .strokeBorder(focusAccent.opacity(input.isDark ? 0.55 : 0.40), lineWidth: 1)
+                    .strokeBorder(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardBorderOpacityDark : FocalScrollPerspective.focusCardBorderOpacityLight), lineWidth: 1)
             )
             .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
