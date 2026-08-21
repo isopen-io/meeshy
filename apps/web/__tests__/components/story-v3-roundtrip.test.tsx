@@ -118,9 +118,17 @@ function createStoryPost(overrides: Partial<Post> = {}): Post {
     shareCount: 0,
     isPinned: false,
     isEdited: false,
-    createdAt: '2026-08-20T10:00:00Z',
-    updatedAt: '2026-08-20T10:00:00Z',
-    expiresAt: '2026-08-21T10:00:00Z',
+    // Dates RELATIVES : une story vit 24 h, et ce montage figeait
+    // `expiresAt: '2026-08-21T10:00:00Z'`. Passé cette heure, la story
+    // devenait expirée pour de vrai — la vue ne rendait plus rien et les cinq
+    // témoins de rendu tombaient ensemble, sans qu'une ligne de code ait
+    // changé. La CI l'a prouvé : verte à 09:13 UTC, rouge à 10:11.
+    // Aucun test de ce fichier n'assert l'expiration ; ils décrivent tous le
+    // rendu d'une story VIVANTE. La rendre vivante par construction supprime
+    // la bombe sans toucher à une seule assertion.
+    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    expiresAt: new Date(Date.now() + 23 * 60 * 60 * 1000).toISOString(),
     author: { id: 'author-1', username: 'alice', displayName: 'Alice', avatar: null },
     ...overrides,
   };
