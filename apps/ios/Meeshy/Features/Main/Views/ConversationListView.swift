@@ -695,6 +695,9 @@ struct ConversationListView: View {
                     // courbe `.list` du miroir gelé. Posée AU-DESSUS du portillon
                     // `.equatable()` du rang — elle ne rediffuse rien, elle repeint.
                     .lentillePerspective(isEnabled: perspectiveEnabled)
+                    // Respiration (2026-08-22) : les voisines de la rangée élue
+                    // s'écartent pendant la scène — translation seule.
+                    .lentilleFocusBreathing(isEnabled: perspectiveEnabled)
                     // Candidature à la focus card : le rang publie son milieu dans
                     // une boîte INERTE. Écrire n'élit rien — seul un tick de
                     // défilement déclenche l'élection (§4.2).
@@ -1362,6 +1365,10 @@ struct ConversationListView: View {
                     HapticFeedback.light()
                     // Même mutation que la feuille d'infos (optimiste + rollback).
                     ConversationOptionsViewModel(conversation: conversation).removeTag(tag.name)
+                },
+                // Même source que la rangée plate (pastille de présence).
+                presenceFor: { conversation in
+                    presenceManager.presenceState(for: conversation.participantUserId ?? "")
                 }
             )
             // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
@@ -1387,6 +1394,7 @@ struct ConversationListView: View {
                 switch action {
                 case .findMembers: router.push(.peopleDiscovery(.discover))
                 case .myContacts: router.push(.contacts(.contacts))
+                case .myAffiliates: router.push(.affiliate)
                 case .newMessage: onNewConversation?()
                 case .story: storyViewModel.showStoryComposer = true
                 case .mood: showStatusComposer = true

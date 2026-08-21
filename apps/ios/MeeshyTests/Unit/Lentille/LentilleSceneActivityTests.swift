@@ -124,6 +124,7 @@ final class LentilleSceneActivityTests: XCTestCase {
         XCTAssertEqual(code.components(separatedBy: "ConversationListQuickActions(").count - 1, 1,
                        "Une seule fabrique, deux montages : zéro divergence entre queue et état vide.")
         for door in ["case .findMembers: router.push(.peopleDiscovery(.discover))", "case .myContacts: router.push(.contacts(.contacts))",
+                     "case .myAffiliates: router.push(.affiliate)",
                      "case .newMessage: onNewConversation?()", "case .story: storyViewModel.showStoryComposer = true",
                      "case .mood: showStatusComposer = true", "case .post: router.pendingOpenFeedComposer = true",
                      "case .invite: showCreateAffiliate = true", "case .shortcutLink: showCreateTrackingLink = true"] {
@@ -131,14 +132,14 @@ final class LentilleSceneActivityTests: XCTestCase {
         }
     }
 
-    func test_quickActionsView_exposesTheEightDoors_inOrder_heroesFirst() {
+    func test_quickActionsView_exposesTheNineDoors_inOrder_heroesFirst() {
         XCTAssertEqual(
             ConversationListQuickActions.Action.allCases,
-            [.findMembers, .myContacts, .newMessage, .story, .mood, .post, .invite, .shortcutLink]
+            [.findMembers, .myContacts, .myAffiliates, .newMessage, .story, .mood, .post, .invite, .shortcutLink]
         )
         // État vide : les deux héros sortent de la grille (gros boutons) ;
         // en queue de liste, tout le monde est une tuile.
-        XCTAssertEqual(ConversationListQuickActions.Action.heroes, [.findMembers, .myContacts])
+        XCTAssertEqual(ConversationListQuickActions.Action.heroes, [.findMembers, .myContacts, .myAffiliates])
         XCTAssertEqual(
             ConversationListQuickActions.Action.tiles(isEmptyState: true),
             [.newMessage, .story, .mood, .post, .invite, .shortcutLink]

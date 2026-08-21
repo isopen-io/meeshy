@@ -1446,6 +1446,14 @@ final class MessageListViewController: UIViewController {
                 focalRow = nil
             }
 
+            // Chips du message en focus SUR la ligne de la carte : elles
+            // débordent du bas de la cellule — jamais rognées, et la cellule
+            // passe au-dessus de ses voisines le temps du focus.
+            let isFocusedCell = self.readingMode.usesFlatRow && self.focalDetailedLocalId == localId
+            cell.clipsToBounds = false
+            cell.contentView.clipsToBounds = false
+            cell.layer.zPosition = isFocusedCell ? 1 : 0
+
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,

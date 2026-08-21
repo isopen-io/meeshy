@@ -212,6 +212,17 @@ nonisolated public enum FocalMetrics {
     /// dans `ConversationView.swift`. `translateY` et `opacityEnd` restent
     /// mirrorées pour la parité EXHAUSTIVE `thread.*` de la tâche 0, sans
     /// consommateur à ce jour.
+    /// Chips de la bordure basse du message en focus (2026-08-22 : « les
+    /// icônes doivent être SUR la bordure, comme CATÉGORIE dans la liste »).
+    nonisolated public enum FocusStrip {
+        public static let chipSize: CGFloat = 32
+        /// Débord sous le bas du contenu pour que le CENTRE des chips tombe
+        /// sur la ligne de la carte : la carte s'arrête à
+        /// `Row.paddingVertical − focusCardInnerMargin` (5 − 4 = 1 pt) du
+        /// bas de la cellule, soit 4 pt sous le contenu ⇒ 16 + 4.
+        public static let overhang: CGFloat = chipSize / 2 + 4
+    }
+
     nonisolated public enum HiddenChrome {
         public static let translateY: CGFloat = 94
         public static let opacityEnd: Double = 0

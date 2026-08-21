@@ -109,6 +109,14 @@ nonisolated public enum LentilleMetrics {
         @MainActor public static var nameFont: Font { MeeshyFont.relative(nameSize, weight: Name.weight) }
         public static let shadowRadius: CGFloat = 12
         public static let shadowY: CGFloat = 4
+        /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
+        /// rangées voisines s'écartent de la ligne de focus de ce montant
+        /// pendant la scène — translation de compositor, zéro relayout.
+        public static let breathing: CGFloat = 12
+        /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
+        /// pas), pleine une rangée plus loin — jamais de saut au passage.
+        public static let breathingRampStart: CGFloat = 36
+        public static let breathingRampLength: CGFloat = 40
     }
 
     // MARK: - Encoche de mode

@@ -901,6 +901,7 @@
 		BB18C66329E4BEA7FE851612 /* ConversationDashboardViewAccessibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E6F228E20A92A7FAF19308B /* ConversationDashboardViewAccessibilityTests.swift */; };
 		BB7975915D5DE6500D693743 /* ScrollTimePillState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A781514A6B46A12E83A2EC29 /* ScrollTimePillState.swift */; };
 		BBAC79C7D3A0CAEF2D1252B3 /* AppSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3CE66C1F8945461C57C1634 /* AppSourceGuardTests.swift */; };
+		BC24F597DBB5A85157292B5B /* LentilleFocusBreathing.swift in Sources */ = {isa = PBXBuildFile; fileRef = D279BF271406A3DFE785C5DE /* LentilleFocusBreathing.swift */; };
 		BC528560A05135EA4B834F26 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = CB2ED1DFFA3DC4B2D30E2DD7 /* Localizable.xcstrings */; };
 		BC6BD73B7CF49C7A70D9D011 /* StoryViewerScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66B484CFD599D9F34CE9984 /* StoryViewerScopeTests.swift */; };
 		BC7587D450857E83CBA5DD99 /* BackgroundTransitionCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C24503025218676515DACAED /* BackgroundTransitionCoordinator.swift */; };
@@ -2295,6 +2296,7 @@
 		D21222EB0CEF6B1025F1EE4F /* CommentTargetHunterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommentTargetHunterTests.swift; sourceTree = "<group>"; };
 		D2163A972AA92DB44D792FAE /* SectionScrollPillTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SectionScrollPillTests.swift; sourceTree = "<group>"; };
 		D247E22464A72EF66B5D4F5F /* CallProviderIconTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallProviderIconTests.swift; sourceTree = "<group>"; };
+		D279BF271406A3DFE785C5DE /* LentilleFocusBreathing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleFocusBreathing.swift; sourceTree = "<group>"; };
 		D2A57B5220A3B23BFD04A391 /* SkeletonStoryThumb.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkeletonStoryThumb.swift; sourceTree = "<group>"; };
 		D2E9D9F147489D464DA6B635 /* MockMessageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockMessageService.swift; sourceTree = "<group>"; };
 		D3397276448BC17060DDA394 /* ConversationOptionsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationOptionsViewModel.swift; sourceTree = "<group>"; };
@@ -4093,6 +4095,7 @@
 		CEED013278C29B181C784E87 /* Mode */ = {
 			isa = PBXGroup;
 			children = (
+				D279BF271406A3DFE785C5DE /* LentilleFocusBreathing.swift */,
 				D04B3E337CE9827D1E706EFF /* LentilleFocusCard.swift */,
 				42EA7ADA718E12E472A91E7F /* LentilleModeLabels.swift */,
 				74CD7D2B0DCB9B18DCF93A88 /* LentilleModeMenu.swift */,
@@ -4912,6 +4915,7 @@
 				F8DA6B91C8B0EF234B6382CE /* LentilleBridgeLine.swift in Sources */,
 				A7C8BD115A9BA7F0433E9978 /* LentilleConversationRow.swift in Sources */,
 				26F0559EDDB0C0A8E368082B /* LentilleFeatureFlag.swift in Sources */,
+				BC24F597DBB5A85157292B5B /* LentilleFocusBreathing.swift in Sources */,
 				A69F02AFC4AAB1072D630EC9 /* LentilleFocusCard.swift in Sources */,
 				14E67C01DEBB5BEA94E0BAC9 /* LentilleFocusElection.swift in Sources */,
 				08022232D6B6647CCE074A85 /* LentilleFocusElectionHost.swift in Sources */,

@@ -17376,6 +17376,53 @@
         }
       }
     },
+    "conversations.quick.my_affiliates": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عرض إحالاتي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine Empfehlungen ansehen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See my affiliations"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver mis afiliaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voir mes affiliations"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vedi le mie affiliazioni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ver minhas afiliações"
+          }
+        }
+      }
+    },
     "focal.focus.add_reaction": {
       "extractionState": "manual",
       "localizations": {
@@ -49339,43 +49386,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "عرض المحادثات بهذا الوسم"
+            "value": "المحادثات بهذا الوسم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unterhaltungen mit diesem Tag anzeigen"
+            "value": "Unterhaltungen mit diesem Tag"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Show conversations with this tag"
+            "value": "Conversations with this tag"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostrar conversaciones con esta etiqueta"
+            "value": "Conversaciones con esta etiqueta"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Afficher les conversations avec ce tag"
+            "value": "Conversations avec ce tag"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostra conversazioni con questo tag"
+            "value": "Conversazioni con questo tag"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mostrar conversas com esta etiqueta"
+            "value": "Conversas com esta etiqueta"
           }
         }
       }

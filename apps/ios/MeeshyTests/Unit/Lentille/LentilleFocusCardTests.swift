@@ -434,6 +434,29 @@ extension LentilleFocusCardTests {
         )
     }
 
+    /// 2026-08-22 : la carte porte la pastille de présence de la rangée plate.
+    func test_focusCard_paintsThePresenceDot_fromTheSameSourceAsTheFlatRow() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("presenceState: presenceState,"), "l'avatar de la carte reçoit la présence")
+        XCTAssertTrue(code.contains("presenceState: presenceFor(conversation)"), "l'hôte la relit pour l'élu")
+    }
+
+    /// Respiration (2026-08-22) : les voisines s'écartent de la ligne de
+    /// focus, la rangée élue ne bouge pas, jamais de saut au passage.
+    func test_breathing_pushesNeighboursAway_neverTheElectedRow_andRampsSmoothly() {
+        let full = LentilleMetrics.FocusCard.breathing
+        let far = LentilleMetrics.FocusCard.breathingRampStart + LentilleMetrics.FocusCard.breathingRampLength + 1
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: 0, level: 1, reduceMotion: false), 0)
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: 20, level: 1, reduceMotion: false), 0, "dans la demi-rangée : l'élue")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 1, reduceMotion: false), -full, "au-dessus ⇒ vers le haut")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: -far, level: 1, reduceMotion: false), full, "en dessous ⇒ vers le bas")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0.5, reduceMotion: false), -full / 2, "suit le niveau de scène")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 1, reduceMotion: true), 0)
+        let mid = LentilleMetrics.FocusCard.breathingRampStart + LentilleMetrics.FocusCard.breathingRampLength / 2
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: -mid, level: 1, reduceMotion: false), full / 2, accuracy: 0.001)
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0, reduceMotion: false), 0, "au repos, rien")
+    }
+
     func test_categoryText_isTheCurrentCategoryUppercased_orTheFallback() {
         XCTAssertEqual(LentilleFocusCard.categoryText(current: "Travail", fallback: "Catégorie"), "TRAVAIL")
         XCTAssertEqual(LentilleFocusCard.categoryText(current: nil, fallback: "Catégorie"), "CATÉGORIE")

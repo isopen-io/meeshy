@@ -55,6 +55,10 @@ struct LentilleFocusCard: View, Equatable {
     var onMoveToSection: (String) -> Void = { _ in }
     var onFilterByTag: (String?) -> Void = { _ in }
     var onRemoveTag: (MeeshyConversationTag) -> Void = { _ in }
+    /// Pastille de présence de l'avatar (2026-08-22 : « il manque la
+    /// pastille de présence dans la magnificence ») — même source que la
+    /// rangée plate ; `.offline`/`nil` = aucun point.
+    var presenceState: PresenceState? = nil
     /// Horloge de la date complète (injectée par les tests).
     var now: Date = Date()
 
@@ -69,6 +73,7 @@ struct LentilleFocusCard: View, Equatable {
             && lhs.reduceMotion == rhs.reduceMotion
             && lhs.categories == rhs.categories
             && lhs.activeTagFilter == rhs.activeTagFilter
+            && lhs.presenceState == rhs.presenceState
     }
 
     /// Date COMPLÈTE du dernier message, MÊME loi que le message en focus du
@@ -188,6 +193,7 @@ struct LentilleFocusCard: View, Equatable {
             kind: conversation.type == .direct ? .user : .entity,
             accentColor: conversation.accentColor,
             avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+            presenceState: presenceState,
             isDark: isDark
         )
     }
@@ -219,7 +225,10 @@ struct LentilleFocusCard: View, Equatable {
                 .layoutPriority(2)
             Spacer(minLength: 0)
             if conversation.userState.unreadCount > 0 {
+                // Jamais comprimé : c'est le NOM qui tronque, pas le badge.
                 unreadBadge
+                    .fixedSize()
+                    .layoutPriority(3)
             }
         }
     }
@@ -446,7 +455,7 @@ struct LentilleFocusCard: View, Equatable {
                     onFilterByTag(tag.name)
                 } label: {
                     Label(
-                        String(localized: "conversations.focus.tag_filter", defaultValue: "Afficher les conversations avec ce tag", bundle: .main),
+                        String(localized: "conversations.focus.tag_filter", defaultValue: "Conversations avec ce tag", bundle: .main),
                         systemImage: "line.3.horizontal.decrease.circle.fill"
                     )
                 }
@@ -518,6 +527,8 @@ struct LentilleFocusCardHost: View {
     var onMoveToSection: (_ conversationId: String, _ sectionId: String) -> Void = { _, _ in }
     var onFilterByTag: (String?) -> Void = { _ in }
     var onRemoveTag: (_ conversation: Conversation, _ tag: MeeshyConversationTag) -> Void = { _, _ in }
+    /// Présence de l'élu, relue à chaque tick (lecture de dictionnaire).
+    var presenceFor: (Conversation) -> PresenceState? = { _ in nil }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -569,7 +580,8 @@ struct LentilleFocusCardHost: View {
                     activeTagFilter: activeTagFilter,
                     onMoveToSection: { sectionId in onMoveToSection(conversation.id, sectionId) },
                     onFilterByTag: onFilterByTag,
-                    onRemoveTag: { tag in onRemoveTag(conversation, tag) }
+                    onRemoveTag: { tag in onRemoveTag(conversation, tag) },
+                    presenceState: presenceFor(conversation)
                 )
                 .equatable()
                 .frame(

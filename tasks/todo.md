@@ -312,6 +312,11 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
 - [x] Message en focus : bordure basse (drapeaux dispo + icône traduction + (+) emoji + réactions),
       coches de l'en-tête → détails de lecture. Vérifié simulateur : « Aujourd'hui 14:36 », chips 🇫🇷 / 🅰 /
       😂 / ☺ sur la bordure. Limite : la bordure arrive au POSÉ (détails synchronisés au repos).
+- [x] Lot 6 (directives 22/08) : chips du focus SUR la ligne de la carte (`FocusStrip.overhang`, cellule
+      sans clip + zPosition) — vérifié simulateur ; pastille de présence sur la carte (même source que la
+      rangée) — vérifié ; respiration ×3 autour de la rangée élue (`LentilleFocusBreathing`, 12 pt,
+      rampe) — vérifié ; « Conversations avec ce tag » ; héros « Voir mes affiliations » → `.affiliate` ;
+      badge non-lus non compressible.
 - [ ] Rivière lots 2–5 inchangés (ci-dessous).
 
 ## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`

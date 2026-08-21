@@ -598,10 +598,12 @@ struct FocalRow: View {
             .frame(width: 24, height: 24)
             .background(
                 Circle()
-                    .fill(focusAccent.opacity(input.isDark ? 0.18 : 0.14))
-                    .overlay(Circle().strokeBorder(focusAccent.opacity(isActive ? 1 : 0.35), lineWidth: isActive ? 1.5 : 0.7))
+                    // Opaque : la chip est POSÉE sur la ligne de la carte.
+                    .fill(MeeshyColors.backgroundSecondary(isDark: input.isDark))
+                    .overlay(Circle().fill(focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
+                    .overlay(Circle().strokeBorder(focusAccent.opacity(isActive ? 1 : 0.45), lineWidth: isActive ? 1.5 : 1))
             )
-            .frame(width: 32, height: 32)
+            .frame(width: FocalMetrics.FocusStrip.chipSize, height: FocalMetrics.FocusStrip.chipSize)
             .contentShape(Circle())
     }
 
@@ -673,6 +675,10 @@ struct FocalRow: View {
             Spacer(minLength: 0)
         }
         .padding(.leading, indent)
+        // SUR la ligne de la carte (comme l'encoche CATÉGORIE de la liste) :
+        // le rembourrage négatif rend la hauteur réservée, la bande déborde
+        // sous le contenu jusqu'à centrer ses chips sur la bordure.
+        .padding(.bottom, -FocalMetrics.FocusStrip.overhang)
     }
 
     @ViewBuilder

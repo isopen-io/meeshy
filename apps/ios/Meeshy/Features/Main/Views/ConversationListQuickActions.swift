@@ -18,12 +18,13 @@ import MeeshyUI
 struct ConversationListQuickActions: View, Equatable {
 
     enum Action: CaseIterable, Equatable {
-        case findMembers, myContacts, newMessage, story, mood, post, invite, shortcutLink
+        case findMembers, myContacts, myAffiliates, newMessage, story, mood, post, invite, shortcutLink
 
         var icon: String {
             switch self {
             case .findMembers: return "magnifyingglass"
             case .myContacts: return "person.crop.circle.badge.checkmark"
+            case .myAffiliates: return "person.2.wave.2.fill"
             case .newMessage: return "square.and.pencil"
             case .story: return "plus.circle.fill"
             case .mood: return "face.smiling"
@@ -37,6 +38,7 @@ struct ConversationListQuickActions: View, Equatable {
             switch self {
             case .findMembers: return String(localized: "conversations.quick.find_members", defaultValue: "Chercher des membres à qui écrire", bundle: .main)
             case .myContacts: return String(localized: "conversations.quick.my_contacts", defaultValue: "Voir mes contacts sur Meeshy", bundle: .main)
+            case .myAffiliates: return String(localized: "conversations.quick.my_affiliates", defaultValue: "Voir mes affiliations", bundle: .main)
             case .newMessage: return String(localized: "conversations.quick.newMessage", defaultValue: "Nouveau message", bundle: .main)
             case .story: return String(localized: "conversations.quick.story", defaultValue: "Créer une story", bundle: .main)
             case .mood: return String(localized: "conversations.quick.mood", defaultValue: "Poser un mood", bundle: .main)
@@ -52,6 +54,7 @@ struct ConversationListQuickActions: View, Equatable {
             switch self {
             case .findMembers: return [MeeshyColors.indigo500, MeeshyColors.indigo700]
             case .myContacts: return [MeeshyColors.success, MeeshyColors.indigo500]
+            case .myAffiliates: return [MeeshyColors.shareAccent, MeeshyColors.purple500]
             case .newMessage: return [MeeshyColors.indigo500, MeeshyColors.indigo700]
             case .story: return [MeeshyColors.purple500, MeeshyColors.purple700]
             case .mood: return [MeeshyColors.warning, MeeshyColors.purple500]
@@ -61,11 +64,12 @@ struct ConversationListQuickActions: View, Equatable {
             }
         }
 
-        /// Les deux GROS boutons de l'état vide (directive 2026-08-21) :
+        /// Les GROS boutons de l'état vide (directives 2026-08-21/22) :
         /// chercher des membres à qui écrire, retrouver ses contacts sur
-        /// Meeshy (synchronisation du carnet). En queue de liste, ils
+        /// Meeshy (synchronisation du carnet), voir ses affiliations (les
+        /// personnes invitées qui sont venues). En queue de liste, ils
         /// redeviennent des tuiles ordinaires.
-        nonisolated static let heroes: [Action] = [.findMembers, .myContacts]
+        nonisolated static let heroes: [Action] = [.findMembers, .myContacts, .myAffiliates]
 
         nonisolated static func tiles(isEmptyState: Bool) -> [Action] {
             isEmptyState ? allCases.filter { !heroes.contains($0) } : allCases

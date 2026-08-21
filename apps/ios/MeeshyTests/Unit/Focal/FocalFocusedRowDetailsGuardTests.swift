@@ -52,6 +52,12 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, même sur mes messages")
         XCTAssertTrue(row.contains("isLastReceivedMessage: true,"), "les réactions + (+) du message reçu, dernier ou pas")
         XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches ouvrent les détails de lecture")
+        // 2026-08-22 : les chips sont SUR la ligne de la carte (débord sous le
+        // contenu), la cellule ne les rogne pas et passe au-dessus.
+        XCTAssertTrue(row.contains(".padding(.bottom, -FocalMetrics.FocusStrip.overhang)"), "la bande déborde jusqu'à la ligne")
+        let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(controller.contains("cell.clipsToBounds = false"))
+        XCTAssertTrue(controller.contains("cell.layer.zPosition = isFocusedCell ? 1 : 0"))
         let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(header.contains("Button(action: onShowReadStatus)"), "les coches sont un bouton quand la rangée sait ouvrir les détails")
     }
