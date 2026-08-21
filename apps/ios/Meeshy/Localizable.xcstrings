@@ -25374,53 +25374,6 @@
         }
       }
     },
-    "accessibility.unread_messages": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld رسائل غير مقروءة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld ungelesene Nachrichten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld unread messages"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld mensajes no leídos"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld messages non lus"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld messaggi non letti"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld mensagens não lidas"
-          }
-        }
-      }
-    },
     "accessibility.user_profile.hint": {
       "extractionState": "manual",
       "localizations": {
