@@ -17,6 +17,7 @@ import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import { resolveParticipantRights } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
@@ -461,7 +462,39 @@ export function registerParticipantsRoutes(
                 hasEmail: { type: 'boolean', description: 'An email was supplied (value withheld from ordinary members)' },
                 hasBirthday: { type: 'boolean', description: 'A birthday was supplied (value withheld from ordinary members)' },
                 email: { type: 'string', nullable: true, description: 'Admins/moderators only' },
-                birthday: { type: 'string', format: 'date-time', nullable: true, description: 'Admins/moderators only' }
+                birthday: { type: 'string', format: 'date-time', nullable: true, description: 'Admins/moderators only' },
+                entryCapabilities: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'What this visitor may actually do (rights ?? permissions). Visible to every member; null when the participant has an account.',
+                  properties: {
+                    canSendMessages: { type: 'boolean' },
+                    canSendFiles: { type: 'boolean' },
+                    canSendImages: { type: 'boolean' },
+                    canSendVideos: { type: 'boolean' },
+                    canSendAudios: { type: 'boolean' },
+                    canSendLocations: { type: 'boolean' },
+                    canSendLinks: { type: 'boolean' },
+                    canViewHistory: { type: 'boolean' }
+                  }
+                },
+                entryLink: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'Settings of the share link used to join. Admins/moderators only — the room holds other visitors who came through that same link. IP ranges are never exposed.',
+                  properties: {
+                    name: { type: 'string', nullable: true },
+                    isActive: { type: 'boolean' },
+                    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                    maxUses: { type: 'number', nullable: true },
+                    currentUses: { type: 'number' },
+                    requireNickname: { type: 'boolean' },
+                    requireEmail: { type: 'boolean' },
+                    requireBirthday: { type: 'boolean' },
+                    allowedCountries: { type: 'array', items: { type: 'string' } },
+                    allowedLanguages: { type: 'array', items: { type: 'string' } }
+                  }
+                }
               }
             }
           }
@@ -520,8 +553,52 @@ export function registerParticipantsRoutes(
       const shareLink = participant.anonymousSession?.shareLinkId
         ? await prisma.conversationShareLink.findUnique({
             where: { id: participant.anonymousSession.shareLinkId },
-            select: { name: true }
+            select: {
+              name: true,
+              isActive: true,
+              allowViewHistory: true,
+              expiresAt: true,
+              maxUses: true,
+              currentUses: true,
+              requireNickname: true,
+              requireEmail: true,
+              requireBirthday: true,
+              allowedCountries: true,
+              allowedLanguages: true
+            }
           })
+        : null;
+
+      // Ce que la personne peut faire, et non ce que le lien autorise
+      // AUJOURD'HUI : l'hôte a pu le modifier depuis, sans que cela retire quoi
+      // que ce soit à qui est déjà entré. `resolveParticipantRights` porte cette
+      // règle pour tout le service.
+      //
+      // `canViewHistory` suit encore le lien en direct — c'est le régime de
+      // `historyFloorFor`, et un lien INTROUVABLE n'y borne rien : l'énoncer
+      // autrement ferait diverger la fiche de ce que la lecture applique.
+      const entryCapabilities = isAnonymous
+        ? {
+            ...resolveParticipantRights(participant),
+            canViewHistory: shareLink?.allowViewHistory ?? true
+          }
+        : null;
+
+      // Second cercle. `allowedIpRanges` n'est pas dans le `select` : ce qui
+      // n'est pas chargé ne peut pas fuiter par un oubli de projection.
+      const entryLink = isAnonymous && viewerHostsTheRoom && shareLink
+        ? {
+            name: shareLink.name ?? null,
+            isActive: shareLink.isActive,
+            expiresAt: shareLink.expiresAt ?? null,
+            maxUses: shareLink.maxUses ?? null,
+            currentUses: shareLink.currentUses,
+            requireNickname: shareLink.requireNickname,
+            requireEmail: shareLink.requireEmail,
+            requireBirthday: shareLink.requireBirthday,
+            allowedCountries: shareLink.allowedCountries ?? [],
+            allowedLanguages: shareLink.allowedLanguages ?? []
+          }
         : null;
 
       return sendSuccess(reply, {
@@ -544,7 +621,9 @@ export function registerParticipantsRoutes(
         hasEmail: !!profile?.email,
         hasBirthday: !!profile?.birthday,
         email: viewerHostsTheRoom ? (profile?.email ?? null) : null,
-        birthday: viewerHostsTheRoom ? (profile?.birthday ?? null) : null
+        birthday: viewerHostsTheRoom ? (profile?.birthday ?? null) : null,
+        entryCapabilities,
+        entryLink
       });
     } catch (error) {
       logger.error('Error fetching participant profile', error as Error);

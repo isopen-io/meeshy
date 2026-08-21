@@ -41,6 +41,46 @@ export const AnonymousRightsOverrideSchema = z.object({
   canSendLinks: z.boolean().optional(),
 })
 
+/**
+ * Ce qu'un visiteur entré par lien a le droit de faire — premier cercle de la
+ * fiche de participant, visible de tout membre.
+ *
+ * C'est la résolution EFFECTIVE (`anonymousSession.rights ?? permissions`), pas
+ * la configuration courante du lien : celle-ci a pu changer depuis l'arrivée, et
+ * ne régit plus qui est déjà entré.
+ *
+ * @see services/gateway/src/services/participantRights.ts
+ */
+export const ParticipantEntryCapabilitiesSchema = ParticipantPermissionsSchema.extend({
+  canViewHistory: z.boolean(),
+})
+export type ParticipantEntryCapabilities = z.infer<typeof ParticipantEntryCapabilitiesSchema>
+
+/**
+ * Les réglages du lien emprunté — second cercle, réservé aux administrateurs et
+ * modérateurs de la conversation.
+ *
+ * Même raison que pour l'email : la salle contient d'autres visiteurs venus par
+ * ce même lien, et sa configuration est celle de l'hôte, pas un renseignement sur
+ * la personne. `allowedIpRanges` n'y figure volontairement pas — une règle de
+ * pare-feu n'a aucune surface d'affichage.
+ *
+ * @see schema.prisma → ConversationShareLink
+ */
+export const ParticipantEntryLinkSchema = z.object({
+  name: z.string().nullable(),
+  isActive: z.boolean(),
+  expiresAt: z.coerce.date().nullable(),
+  maxUses: z.number().nullable(),
+  currentUses: z.number(),
+  requireNickname: z.boolean(),
+  requireEmail: z.boolean(),
+  requireBirthday: z.boolean(),
+  allowedCountries: z.array(z.string()),
+  allowedLanguages: z.array(z.string()),
+})
+export type ParticipantEntryLink = z.infer<typeof ParticipantEntryLinkSchema>
+
 export const AnonymousSessionSchema = z.object({
   shareLinkId: z.string(),
   session: AnonymousSessionDetailsSchema,
