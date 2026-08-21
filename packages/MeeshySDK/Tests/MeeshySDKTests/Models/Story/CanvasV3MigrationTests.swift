@@ -328,4 +328,20 @@ struct CanvasV3MigrationTests {
         #expect(object(document, "t1")?.z == 7)
         #expect(object(document, "m1")?.z == 9)
     }
+
+    @Test func thumbHashAlone_keepsItsScene_throughTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.thumbHash = "1QcSHQRnh493V4dIh4eXh0h4kJUI"
+        let document = CanvasV3(migrating: effects)
+        #expect(document.scenes.count == 1)
+        #expect(document.scenes.first?.objects.isEmpty == true)
+        #expect(document.scenes.first?.thumbHash == "1QcSHQRnh493V4dIh4eXh0h4kJUI")
+        let back = StoryEffects(rendering: document, sceneIndex: 0)
+        #expect(back.thumbHash == "1QcSHQRnh493V4dIh4eXh0h4kJUI")
+    }
+
+    @Test func trulyEmptyCanvas_emitsNoScene() throws {
+        let document = CanvasV3(migrating: StoryEffects())
+        #expect(document.scenes.isEmpty)
+    }
 }

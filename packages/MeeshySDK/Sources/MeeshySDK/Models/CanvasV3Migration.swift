@@ -339,8 +339,16 @@ public extension CanvasV3 {
             sound = nil
         }
 
-        // O3 — aucun objet visuel ⇒ AUCUN cadre : jamais de scène vide au fil.
-        self.init(v: 3, scenes: remapped.isEmpty ? [] : [scene], sound: sound)
+        // O3 — un cadre n'existe que s'il PORTE quelque chose : objet, empreinte
+        // (thumbHash calculé en aval du persist par la file hors-ligne), durée
+        // ou transition. Un canvas réellement vide n'émet toujours aucune scène.
+        let sceneCarriesSomething = !remapped.isEmpty
+            || scene.thumbHash != nil
+            || scene.timelineDuration != nil
+            || scene.opening != nil
+            || scene.closing != nil
+            || scene.clipTransitions?.isEmpty == false
+        self.init(v: 3, scenes: sceneCarriesSomething ? [scene] : [], sound: sound)
     }
 
     private static func mediaPayload(_ media: StoryMediaObject) -> [String: CanvasJSONValue] {
