@@ -141,6 +141,20 @@ data class ApiMessage(
             isViewOnce = isViewOnce,
             hasExpiry = !expiresAt.isNullOrBlank(),
         )
+
+    /**
+     * True for a notice the conversation emits about itself (someone joined,
+     * someone left) rather than a turn at talk. A join notice carries the
+     * arriver as its author, so this mark — not the sender id — is what keeps
+     * it out of the newcomer's first bubble group. See `MessageGrouping`
+     * (feature/chat) and its two mirrors: `apps/web/utils/message-grouping.ts`,
+     * `apps/ios/.../Bubble/MessageDayGrouping.swift`.
+     *
+     * The comparison is exact, like both mirrors: a casing change on the
+     * gateway must move the three platforms together, not pass unnoticed here.
+     */
+    val isSystemMessage: Boolean
+        get() = messageSource == "system"
 }
 
 @Serializable
