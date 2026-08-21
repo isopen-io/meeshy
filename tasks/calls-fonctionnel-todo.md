@@ -9233,3 +9233,33 @@ retouché ici (hors gabarit chirurgical de cette vague).
   ce sandbox ; gaps d'infrastructure groupe documentés dans
   `2026-08-13-group-calls-gap-analysis.md` (partiellement périmé — W4/W5 déjà résolus, à
   rafraîchir).
+
+## Vague 137 — `canCallBack` (`CallSystemMessage`) manquait le garde `!isAnonymous` que porte déjà `canJoin` (web) (2026-08-21)
+
+Point d'entrée : reprend directement le candidat laissé par la Vague 136 (trace de portée complète
+déjà faite dans cette même session — voir son audit dédié). Suite immédiate de la Vague 136, même
+branche.
+
+- **Root cause** : `canCallBack = !isLive && conversationSupportsCalls` — asymétrique avec son
+  jumeau `canJoin = isLive && conversationSupportsCalls && !isAnonymous`, sans raison fonctionnelle :
+  le gateway refuse `denyAnonymous()` INCONDITIONNELLEMENT sur `call:initiate` comme sur
+  `call:join`, quel que soit le type de conversation.
+- **Portée réelle aujourd'hui, tracée en détail** : aucun chemin de production ne combine
+  `isAnonymous=true` avec `conversationType∈{direct,group}` — `bubble-stream-page.tsx:613` (le seul
+  site qui passe jamais `isAnonymous` à `true`) force `conversationType="public"` en dur, sans
+  rapport avec le type réel de la conversation. Mais cette protection est un HASARD ADJACENT, pas
+  une garantie du composant : un invité anonyme de lien partagé PEUT être membre d'une conversation
+  `group` (`creation.ts:145-150` ne bloque que `direct`), et rien n'empêche un futur appelant de
+  `CallSystemMessage` de transmettre le vrai type. Sans le garde, appuyer sur « Rappeler » aurait
+  déclenché une invite `getUserMedia` (micro/caméra) suivie d'un rejet `PERMISSION_DENIED` — jamais
+  un crash, mais une affordance mensongère précédée d'une demande de permission inutile.
+- **Fix** : `canCallBack` gagne `&& !isAnonymous`, alignement mécanique sur `canJoin`.
+- **Tests** (TDD, RED confirmé) : `CallSystemMessage.test.tsx` — 3 cas neufs (masqué pour un
+  anonyme en conversation directe, masqué en conversation de groupe, non-régression pour un
+  utilisateur inscrit). Suite du fichier : **17/17** verts (+3 net). Sweep web
+  `--testPathPatterns="[Cc]all"` : **54 suites / 513 tests** verts, 0 régression. `npx tsc --noEmit`
+  (apps/web) : 1768 erreurs préexistantes identiques (0 nouvelle, 0 corrigée).
+- **Reste ouvert** (reconduit, inchangé) : dead code / god-object `CallManager.swift` ; ADR `actor
+  CallEventQueue` ; toolchains iOS/Android hors d'atteinte ; missed-call de groupe non signalé pour
+  les invités n'ayant jamais répondu une fois un autre a répondu (Vague 136, fix multi-sites
+  différé) ; gaps groupe `2026-08-13-group-calls-gap-analysis.md`.

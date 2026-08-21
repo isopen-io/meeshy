@@ -60,7 +60,11 @@ export const CallSystemMessage = memo(function CallSystemMessage({
   });
   const requestJoin = useCallStore((s) => s.requestJoin);
   const conversationSupportsCalls = conversationType === 'direct' || conversationType === 'group';
-  const canCallBack = !isLive && conversationSupportsCalls;
+  // Vague 137 — mirrors canJoin's guard: the gateway refuses an anonymous
+  // caller unconditionally (denyAnonymous(), CallEventsHandler.ts), so
+  // showing this button to one would be a lying affordance (permission
+  // prompt, then a PERMISSION_DENIED toast) exactly like an unguarded canJoin.
+  const canCallBack = !isLive && conversationSupportsCalls && !isAnonymous;
   const canJoin = isLive && conversationSupportsCalls && !isAnonymous;
 
   // Unknown future outcome → neutral (indigo) tint instead of a TypeError.

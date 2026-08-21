@@ -155,6 +155,31 @@ describe('CallSystemMessage — annulé par-spectateur (missed + endedByInitiato
   });
 });
 
+describe('CallSystemMessage — Rappeler, garde anonyme (Vague 137)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  // `canCallBack` manquait le garde `!isAnonymous` que porte déjà `canJoin`
+  // (asymétrie relevée Vague 134, jamais corrigée) : aucun chemin réel n'y
+  // mène aujourd'hui (bubble-stream-page.tsx force conversationType='public'
+  // pour tout viewer anonyme, et le gateway refuse denyAnonymous()
+  // inconditionnellement), mais le bouton mentait dès que ce hardcode
+  // disparaîtrait — profondeur de défense, comme son jumeau.
+  it('masque « Rappeler » pour un utilisateur anonyme, même en conversation directe/groupe', () => {
+    renderCall(terminalMetadata(), { isAnonymous: true });
+    expect(screen.queryByRole('button', { name: 'Rappeler' })).not.toBeInTheDocument();
+  });
+
+  it('masque « Rappeler » pour un anonyme en conversation de groupe', () => {
+    renderCall(terminalMetadata(), { isAnonymous: true, conversationType: 'group' });
+    expect(screen.queryByRole('button', { name: 'Rappeler' })).not.toBeInTheDocument();
+  });
+
+  it('offre toujours « Rappeler » à un utilisateur inscrit (non-régression)', () => {
+    renderCall(terminalMetadata(), { isAnonymous: false });
+    expect(screen.getByRole('button', { name: 'Rappeler' })).toBeInTheDocument();
+  });
+});
+
 describe('CallSystemMessage — durcissement (kind/outcome inconnus)', () => {
   beforeEach(() => jest.clearAllMocks());
 
