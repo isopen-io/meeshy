@@ -160,6 +160,15 @@ final class RiverMetricsTests: XCTestCase {
             "RiverMetrics.swift ne doit jamais dupliquer laneSilenceWindowMs (garde R15) — cette constante de loi vit uniquement dans RiverLaneResolver"
         )
     }
+    /// Bornes du pince — le plancher DOIT rester sous la référence et le
+    /// plafond au-dessus, sinon le geste n'aurait aucune course.
+    func test_lane_zoomBounds_matchTokens() throws {
+        XCTAssertEqual(RiverMetrics.Lane.widthMin, try CGFloat(tokenNumber("lane", "widthMin")))
+        XCTAssertEqual(RiverMetrics.Lane.widthMax, try CGFloat(tokenNumber("lane", "widthMax")))
+        XCTAssertLessThan(RiverMetrics.Lane.widthMin, RiverMetrics.Lane.widthReference)
+        XCTAssertGreaterThan(RiverMetrics.Lane.widthMax, RiverMetrics.Lane.widthReference)
+    }
+
     // MARK: - `river.row` (retour produit 2026-08-21)
 
     /// L'écart entre deux RANGS et les tirets de la couture de continuation —

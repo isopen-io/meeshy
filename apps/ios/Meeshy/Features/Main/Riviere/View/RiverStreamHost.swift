@@ -60,6 +60,16 @@ struct RiverStreamHost: View {
     /// Largeur RÉELLE du pane, DITE par l'appelant — ce qui sépare les voix
     /// nommées de celles qui attendent hors du champ.
     var paneWidth: CGFloat = 0
+    /// Bande haute occupée par l'en-tête FLOTTANT du fil, DITE par l'appelant.
+    ///
+    /// C'est un inset de CONTENU, pas une marge du pane (retour produit
+    /// 2026-08-22 : « le header doit être transparent »). Posé en marge
+    /// extérieure, il faisait peindre au pane une DALLE PLATE derrière
+    /// l'en-tête : on ne voyait plus le fond vivant de la conversation, et
+    /// rien ne passait jamais dessous. Porté ici, dans le `safeAreaInset` du
+    /// `ScrollView`, il pousse le contenu AU REPOS sous l'en-tête tout en le
+    /// laissant DÉFILER DERRIÈRE — ce que fait déjà le fil en Bulles/Script.
+    var headerInset: CGFloat = 0
 
     @ObservedObject var navigation: RiverNavigationController
 
@@ -105,7 +115,11 @@ struct RiverStreamHost: View {
     /// repli.
     private var focusRank: Double {
         guard paneHeight > 0 else { return Double(navigation.cursor.rank) }
-        let readingLine = paneHeight * Self.readingLineRatio
+        // La ligne de lecture se compte dans la surface RÉELLEMENT LUE, sous
+        // l'en-tête : la rapporter au pane entier la ferait tomber DANS la
+        // bande de l'en-tête, et la bande de couloirs nommerait une voix qu'on
+        // ne voit pas — le défaut même corrigé la veille.
+        let readingLine = headerInset + (paneHeight - headerInset) * Self.readingLineRatio
         var best: (rank: Int, distance: CGFloat)?
         for bubble in geometry.bubbles {
             guard let frame = frames[bubble.messageId] else { continue }
@@ -195,14 +209,20 @@ struct RiverStreamHost: View {
         // rognage la borne à la largeur proposée sans rien changer à son
         // contenu ni à son offset.
         .safeAreaInset(edge: .top, spacing: 0) {
-            RiverLaneHeaderStrip(
-                headers: laneHeaders,
-                columns: columns,
-                horizontalOffset: horizontalOffset,
-                visibleWidth: paneWidth
-            )
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .clipped()
+            VStack(spacing: 0) {
+                // La place de l'en-tête du fil — vide et TRANSPARENTE : les
+                // bulles la traversent au défilement, l'en-tête de verre les
+                // laisse voir.
+                Color.clear.frame(height: headerInset)
+                RiverLaneHeaderStrip(
+                    headers: laneHeaders,
+                    columns: columns,
+                    horizontalOffset: horizontalOffset,
+                    visibleWidth: paneWidth
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
+            }
         }
         .simultaneousGesture(swipeGesture)
         .accessibilityElement(children: .contain)

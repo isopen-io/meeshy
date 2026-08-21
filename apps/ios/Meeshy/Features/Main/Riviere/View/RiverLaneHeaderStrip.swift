@@ -37,6 +37,21 @@ struct RiverLaneHeaderStrip: View {
             // `ForEach`.
             ForEach(Array(headers.enumerated()), id: \.offset) { _, header in
                 headerLabel(header)
+                    // **Borné à SA colonne, aligné sur SA bulle.**
+                    //
+                    // `.position` place le CENTRE de la vue : un `HStack` non
+                    // borné débordait donc SYMÉTRIQUEMENT sur les couloirs
+                    // voisins dès que le nom s'allongeait, et venait recouvrir
+                    // les badges de hors-champ (retour produit 2026-08-22 :
+                    // « les noms sur les côtés pour annoncer un écrivain ne
+                    // sont pas parfaitement calibrés »). Le cadre le tient
+                    // désormais dans la largeur EXACTE de la bulle qu'il
+                    // annonce, et l'aligne sur son bord gauche — le nom
+                    // commence à l'aplomb de l'en-tête d'identité de la bulle,
+                    // là où l'œil le cherche. La boîte reste centrée sur le
+                    // rail : c'est le CONTENU qui s'aligne, pas la colonne qui
+                    // se décale.
+                    .frame(width: columns.bubbleContentWidth, alignment: .leading)
                     .position(x: columns.railX(header.laneIndex), y: RiverMetrics.LaneHeader.height / 2)
                     .opacity(header.alpha)
             }
@@ -141,11 +156,16 @@ struct RiverLaneHeaderStrip: View {
             : header.colorSeed
 
         return HStack(spacing: 6) {
+            // La pastille ne se comprime JAMAIS : c'est elle qui porte la
+            // couleur, donc l'appartenance à la colonne. C'est le NOM qui
+            // s'élide, comme dans la bulle (§7ter A.5).
             Circle().fill(color).frame(width: 7, height: 7)
             Text(name.uppercased())
                 .font(MeeshyFont.relative(11.5, weight: .semibold))
                 .foregroundColor(color)
                 .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
         }
     }
 }

@@ -51,6 +51,14 @@ nonisolated public enum RiverMetrics {
     /// reste un paramètre d'entrée de la loi, indépendant de cette largeur.
     nonisolated public enum Lane {
         public static let widthReference: CGFloat = 300
+        /// Bornes du PINCE (retour produit 2026-08-22). Le plancher garde une
+        /// bulle lisible — §7ter interdit de tronquer le texte pour gagner une
+        /// colonne, et c'est bien la LARGEUR DE COULOIR qu'on fait varier, pas
+        /// une échelle appliquée au rendu : un `scaleEffect` aurait rapetissé
+        /// le TEXTE lui-même, et faussé au passage les cadres mesurés dont le
+        /// canvas et la ligne de lecture dépendent.
+        public static let widthMin: CGFloat = 210
+        public static let widthMax: CGFloat = 540
         public static let gutter: CGFloat = 28
     }
 

@@ -526,7 +526,15 @@ struct ConversationListView: View {
         // Section Content — always visible when no categories, otherwise animated expand/collapse
         if isSectionContentVisible(group.section.id) {
             sectionConversations(group.conversations, passContext: passContext, trackedSectionId: trackedSectionId)
-                .padding(.horizontal, 16)
+                // **Le jeton, jamais un littéral** (retour produit 2026-08-22 :
+                // « la liste de conversation semble décalée »). Ce `16` en dur
+                // mettait les rangées à 16 pt du bord quand la cote de design
+                // dit 8 (`list.row.marginHorizontal`,
+                // `LentilleMetrics.Row.marginHorizontal`) — celle que lisent
+                // la carte de focus qui les magnifie et le rail. Les rangées
+                // étaient donc décalées de 8 pt par rapport à tout ce qui les
+                // encadre : c'est ce décalage-là que l'œil voyait.
+                .padding(.horizontal, LentilleMetrics.Row.marginHorizontal)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
                     removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top))

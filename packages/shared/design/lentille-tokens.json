@@ -173,8 +173,10 @@
     },
     "lane": {
       "widthReference": 300,
+      "widthMin": 210,
+      "widthMax": 540,
       "gutter": 28,
-      "$note": "widthReference = largeur de couloir de référence (§7ter, ~300px pour qu'une bulle rende tout son texte) ; gutter = écart de chaque côté de la bulle dans son couloir, où la ligne passe. maxLanes reste un PARAMÈTRE d'entrée de la loi (RiverLaneResolver.maxLanes) — une peau étroite peut le baisser, jamais tronquer le texte pour gagner une colonne."
+      "$note": "widthMin/widthMax = bornes du PINCE (retour produit 2026-08-22 : « le zoom et dézoom en pinch out/in doit être possible ») — le plancher 210 garde une bulle lisible (§7ter : jamais tronquer le texte pour gagner une colonne), le plafond 540 laisse une voix seule respirer ; widthReference = largeur de couloir de référence (§7ter, ~300px pour qu'une bulle rende tout son texte) ; gutter = écart de chaque côté de la bulle dans son couloir, où la ligne passe. maxLanes reste un PARAMÈTRE d'entrée de la loi (RiverLaneResolver.maxLanes) — une peau étroite peut le baisser, jamais tronquer le texte pour gagner une colonne."
     },
     "bubble": {
       "detourRadius": 14,
