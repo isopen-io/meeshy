@@ -1,5 +1,7 @@
 {
   "components": {
+    "mute": "Couper le son",
+    "unmute": "Activer le son",
     "affiliate": {
       "shareApp": "Partager l'application",
       "createToken": "Créer un jeton",

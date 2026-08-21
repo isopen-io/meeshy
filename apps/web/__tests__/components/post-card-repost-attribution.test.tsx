@@ -5,6 +5,14 @@
  * `accessibilityElement(children: .ignore)` + label complet) : le glyphe
  * `↻` remplace le verbe À L'ÉCRAN, la phrase complète existante
  * (`post.repostedFrom`) reste portée par l'accessibilité seule.
+ *
+ * Constat 16 (F7c, rattrapage revue Opus) — l'`aria-label` posé sur le `<div>`
+ * générique de la ligne d'attribution ne nommait RIEN : un `div` sans `role`
+ * porte le rôle `generic`, qui INTERDIT le nommage par auteur (ARIA in HTML
+ * AAM). Le lecteur d'écran ignorait l'attribut et lisait le contenu
+ * `aria-hidden` — donc rien. La phrase complète vit désormais dans un span
+ * `.sr-only` (visible de l'arbre d'accessibilité, invisible à l'écran) ; le
+ * glyphe et le handle restent `aria-hidden`.
  */
 import { render, screen } from '@testing-library/react';
 import { PostCard } from '@/components/v2/PostCard';
@@ -60,14 +68,21 @@ describe('PostCard — repost attribution (F4, icon is the verb)', () => {
     expect(screen.getByText('@bob')).toBeInTheDocument();
   });
 
-  it('does NOT render "Reposted from" on screen — the icon is the verb', () => {
+  it('does NOT render "Reposted from" as plain visible text — the only occurrence lives in the visually-hidden accessible node', () => {
     render(<PostCard {...baseProps} repostOf={repostOf} />);
-    expect(screen.queryByText(/Reposted from/i)).not.toBeInTheDocument();
+    const matches = screen.getAllByText(/Reposted from/i);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toHaveClass('sr-only');
   });
 
-  it('keeps the full sentence for accessibility — the icon is mute to the screen reader', () => {
+  it('keeps the full sentence for accessibility via a visually-hidden node — a generic <div> cannot be named by aria-label (constat 16)', () => {
     render(<PostCard {...baseProps} repostOf={repostOf} />);
-    expect(screen.getByLabelText('Reposted from @bob')).toBeInTheDocument();
+    const block = screen.getByTestId('post-card-repost-block');
+    expect(block).not.toHaveAttribute('aria-label');
+    expect(block.querySelector('[aria-label]')).toBeNull();
+    const srNode = block.querySelector('.sr-only');
+    expect(srNode).toHaveTextContent('Reposted from @bob');
+    expect(srNode).not.toHaveAttribute('aria-hidden');
   });
 
   it('handles a repost with no known handle without throwing', () => {

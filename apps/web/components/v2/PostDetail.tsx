@@ -12,8 +12,10 @@ import { TranslationToggle } from './TranslationToggle';
 import { CommentList } from './CommentList';
 import { PostContentText } from './PostContentText';
 import { ReferenceNoteRow } from './ReferenceNoteRow';
+import { BackgroundSoundBadge, type BackgroundSoundMeta } from './BackgroundSoundBadge';
 import type { TranslationItem } from './TranslationToggle';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
+import type { BackgroundSoundV3 } from '@meeshy/shared/types/canvas-v3';
 import { getLanguageName } from './flags';
 import { formatCompactNumber } from '@/utils/format-number';
 
@@ -140,6 +142,17 @@ export interface PostDetailProps {
   currentUserId?: string | null;
   currentUser?: { username: string; avatar?: string | null } | null;
   userLanguage?: string;
+  /**
+   * L'annonce du fond + bouton 🔇 (B3.3-6) — n'existe (n'est rendue) QUE si
+   * une piste `sound` v3 existe (B3.5). Mêmes props que `PostCard` (constat 2,
+   * F7c) : le détail est la 2e des 3 surfaces requises (carte, détail, plein
+   * écran), jamais alimentée avant ce correctif.
+   */
+  backgroundSound?: BackgroundSoundV3 | null;
+  backgroundSoundMeta?: BackgroundSoundMeta;
+  /** État muet du lecteur LOCAL que le bouton 🔇 bascule. */
+  backgroundSoundMuted?: boolean;
+  onToggleBackgroundSoundMute?: () => void;
   isLiked?: boolean;
   isBookmarked?: boolean;
   userReaction?: string;
@@ -186,6 +199,10 @@ function PostDetail({
   currentUserId,
   currentUser,
   userLanguage,
+  backgroundSound,
+  backgroundSoundMeta,
+  backgroundSoundMuted = true,
+  onToggleBackgroundSoundMute,
   isLiked = false,
   isBookmarked = false,
   userReaction,
@@ -296,6 +313,21 @@ function PostDetail({
               <span className="text-sm text-[var(--gp-text-muted)]">{formatTime(post.createdAt)}</span>
             </div>
 
+            {/* Constat 2 (F7c) — l'annonce du fond + bouton 🔇 (B3.3-6), 2e
+                des 3 surfaces (B3.6 : carte, détail, plein écran) : n'existe
+                que si `backgroundSound` existe (B3.5), sinon rend rien. */}
+            <BackgroundSoundBadge
+              sound={backgroundSound}
+              title={backgroundSoundMeta?.title}
+              username={backgroundSoundMeta?.username}
+              durationSeconds={backgroundSoundMeta?.durationSeconds}
+              muted={backgroundSoundMuted}
+              onToggleMute={onToggleBackgroundSoundMute}
+              muteLabel={t('mute', 'Mute')}
+              unmuteLabel={t('unmute', 'Unmute')}
+              className="text-[var(--gp-text-muted)]"
+            />
+
             {isAuthor && (
               <div className="flex gap-1">
                 {onEdit && (
@@ -401,8 +433,14 @@ function PostDetail({
               {...repostClickableProps}
             >
               <div className="flex items-center gap-1.5 mb-3 text-xs text-[var(--gp-text-muted)]">
-                <Repeat2 className="w-3.5 h-3.5 shrink-0" />
-                <span>{t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}</span>
+                {/* Constat 17 — B3.2 (« l'icône est le verbe ») n'était appliquée
+                    QUE sur la carte (F4) ; le détail affichait toujours l'icône
+                    ET le verbe. La phrase complète pour l'accessibilité vit
+                    désormais dans ce span visuellement masqué — jamais un
+                    `aria-label` sur un `<div>` générique (constat 16). */}
+                <span className="sr-only">{t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}</span>
+                <Repeat2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                <span aria-hidden="true">@{repostOf.author?.username ?? ''}</span>
               </div>
 
               <div className="flex items-center gap-2 mb-2">

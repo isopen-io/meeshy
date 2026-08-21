@@ -2,7 +2,7 @@
  * Extended tests for story-transforms.ts covering branches not covered by story-transforms.test.ts
  */
 
-import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, computeStoryDurationMs, timeRemaining, backgroundSoundCredit } from '@/lib/story-transforms';
+import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, computeStoryDurationMs, timeRemaining, backgroundSoundCredit, postBackgroundSound } from '@/lib/story-transforms';
 import type { Post } from '@meeshy/shared/types/post';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 
@@ -629,6 +629,60 @@ describe('backgroundSoundCredit (constat 3)', () => {
     }];
 
     expect(backgroundSoundCredit(scenes)).toEqual({});
+  });
+});
+
+// Constat 2 (F7c) — le badge de fond (B3.3-6) n'était alimenté par AUCUN
+// appelant réel de `PostCard`/`PostDetail` : ces surfaces ne passent jamais
+// par `postToStoryData` (elles gardent la forme `Post` telle quelle). Ce
+// résolveur PUR réutilise la MÊME garde `v >= 3` (constat 12) et le MÊME
+// `backgroundSoundCredit` que `StoryViewer` — un seul extracteur de crédit,
+// jamais deux implémentations qui pourraient diverger.
+describe('postBackgroundSound (constat 2, F7c — badge monté sur carte/détail)', () => {
+  function audioObject(payload: Record<string, unknown>): NonNullable<CanvasV3['scenes']>[number]['objects'][number] {
+    return {
+      id: 'a1',
+      kind: 'audio',
+      anchor: { t: 'free', x: 0.5, y: 0.5 },
+      plane: 'content',
+      z: 0,
+      transform: { scale: 1, rotation: 0, opacity: 1 },
+      payload,
+    };
+  }
+
+  it('returns no sound and an empty credit when the post has no storyEffects', () => {
+    const post = createPost({ storyEffects: undefined });
+    expect(postBackgroundSound(post)).toEqual({ sound: undefined, meta: {} });
+  });
+
+  it('ignores a legacy (non-v3) blob even if it carries a sound-shaped field', () => {
+    const post = createPost({ storyEffects: { sound: { source: { t: 'original' }, volume: 1 } } });
+    expect(postBackgroundSound(post)).toEqual({ sound: undefined, meta: {} });
+  });
+
+  it('extracts the sound AND the library credit from a v3 blob — same extractor as StoryViewer', () => {
+    const post = createPost({
+      storyEffects: {
+        v: 3,
+        sound: { source: { t: 'library', soundId: 'snd1' }, volume: 0.5 },
+        scenes: [{ id: 's1', objects: [audioObject({ isBackground: true, name: 'Chill Beat', soundAuthorUsername: 'dj_zoe', duration: 42 })] }],
+      },
+    });
+    expect(postBackgroundSound(post)).toEqual({
+      sound: { source: { t: 'library', soundId: 'snd1' }, volume: 0.5 },
+      meta: { title: 'Chill Beat', username: 'dj_zoe', durationSeconds: 42 },
+    });
+  });
+
+  it('extracts an ORIGINAL sound with an empty credit when no background audio object exists', () => {
+    const post = createPost({
+      storyEffects: { v: 3, sound: { source: { t: 'original' }, volume: 1 }, scenes: [] },
+    });
+    expect(postBackgroundSound(post)).toEqual({
+      sound: { source: { t: 'original' }, volume: 1 },
+      meta: {},
+    });
   });
 });
 

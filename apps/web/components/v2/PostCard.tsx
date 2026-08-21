@@ -490,10 +490,14 @@ function PostCard({
             )}
             {...repostClickableProps}
           >
-            <div
-              className="flex items-center gap-1.5 mb-2 text-xs text-[var(--gp-text-muted)]"
-              aria-label={t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}
-            >
+            <div className="flex items-center gap-1.5 mb-2 text-xs text-[var(--gp-text-muted)]">
+              {/* Constat 16 — un `<div>` sans `role` porte le rôle `generic`,
+                  qui INTERDIT le nommage par `aria-label` (ARIA in HTML AAM) :
+                  le lecteur d'écran ignorait l'attribut et lisait le contenu
+                  `aria-hidden` juste en dessous, donc rien. La phrase complète
+                  vit ici dans un span visuellement masqué mais présent dans
+                  l'arbre d'accessibilité. */}
+              <span className="sr-only">{t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}</span>
               <span aria-hidden="true" className="shrink-0">↻</span>
               <span aria-hidden="true">@{repostOf.author?.username ?? ''}</span>
             </div>

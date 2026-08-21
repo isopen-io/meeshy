@@ -26,6 +26,7 @@ import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sy
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
+import { postBackgroundSound } from '@/lib/story-transforms';
 import { PostDetail } from '@/components/v2/PostDetail';
 import { PostEditor } from '@/components/v2/PostEditor';
 import { RepostModal } from '@/components/v2/RepostModal';
@@ -94,6 +95,12 @@ export default function PostDetailPage() {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [repostModalOpen, setRepostModalOpen] = useState(false);
+  // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6 (le détail
+  // ne possède aucun lecteur : ce bouton reste cosmétique tant que la
+  // résolution d'URL de son web n'existe pas — dette explicite, plan F3).
+  // Démarre MUTED, comme `StoryViewer` (`isBackgroundSoundMuted`).
+  const [backgroundSoundMuted, setBackgroundSoundMuted] = useState(true);
+  const toggleBackgroundSoundMute = useCallback(() => setBackgroundSoundMuted((m) => !m), []);
 
   // Fire-and-forget view increment on first mount.
   // Failures are intentionally silent: an unreachable counter must not
@@ -142,6 +149,10 @@ export default function PostDetailPage() {
 
   const post = postQuery.data;
   const isAuthor = post.authorId === currentUser?.id;
+  // Constat 2 (F7c) — même extracteur PUR que `StoryViewer` (`postBackgroundSound`,
+  // `lib/story-transforms.ts`) : un seul résolveur de crédit, jamais deux
+  // implémentations qui pourraient diverger.
+  const { sound: backgroundSound, meta: backgroundSoundMeta } = postBackgroundSound(post);
 
   const handleShare = async () => {
     const localUrl = `${window.location.origin}/feeds/post/${post.id}`;
@@ -226,6 +237,10 @@ export default function PostDetailPage() {
           <PostDetail
             post={post}
             comments={comments}
+            backgroundSound={backgroundSound}
+            backgroundSoundMeta={backgroundSoundMeta}
+            backgroundSoundMuted={backgroundSoundMuted}
+            onToggleBackgroundSoundMute={toggleBackgroundSoundMute}
             currentUserId={currentUser?.id}
             currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
             userLanguage={userLanguage}

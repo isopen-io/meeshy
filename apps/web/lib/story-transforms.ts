@@ -290,6 +290,28 @@ export function backgroundSoundCredit(scenes: CanvasV3['scenes']): BackgroundSou
   return { title, username, durationSeconds };
 }
 
+// Constat 2 (F7c) — la carte (`PostCard`) et le détail (`PostDetail`) ne
+// passent jamais par `postToStoryData` (elles gardent la forme `Post` telle
+// quelle) : sans ce résolveur, aucun appelant de ces deux surfaces n'avait
+// où lire `sound`/le crédit, et le badge B3.3-6 restait câblé à des props
+// mortes. Même garde `v >= 3` (constat 12) que `postToStoryData`, même
+// `backgroundSoundCredit` que `StoryViewer` — un seul extracteur de crédit
+// partagé par les 3 surfaces (carte, détail, plein écran), jamais deux
+// implémentations qui pourraient diverger.
+export function postBackgroundSound(post: Post): { sound?: CanvasV3['sound']; meta: BackgroundSoundCredit } {
+  const effects = (post.storyEffects && typeof post.storyEffects === 'object')
+    ? post.storyEffects as Record<string, unknown>
+    : undefined;
+  const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
+  const sound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
+    ? (effects.sound as CanvasV3['sound'])
+    : undefined;
+  const scenes = isV3Shaped && Array.isArray(effects.scenes)
+    ? (effects.scenes as CanvasV3['scenes'])
+    : [];
+  return { sound, meta: backgroundSoundCredit(scenes) };
+}
+
 export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
   // Constat 12 — `v >= 3` (spec §D, storyEffectsV3.ts:401, rattrapage B8c),
   // jamais `v === 3` : un futur `v:4` que le gateway sert TEL QUEL à un client
