@@ -71,6 +71,53 @@ struct CanvasV3MigrationTests {
     }
 
     // ------------------------------------------------------------------
+    // Rattrapage F7e (addendum rév. 2, arbitrage 11, constat 25) — `bounds`
+    // ne s'émet QUE comme un intervalle complet et valide, miroir du
+    // convertisseur gateway durci (`storyEffectsV3.ts:234-250`). Une seule
+    // borne, ou un intervalle inversé, dégrade en « pas de trim » (bounds
+    // nil = clip entier), jamais en `{start, end: 0}` refusé par
+    // `BOUNDS_END_BEFORE_START` (`canvas-v3.ts:76-79`).
+    // ------------------------------------------------------------------
+
+    @Test func boundsWithOnlyAStart_omitsBoundsRatherThanFabricatingAnInvertedEnd() throws {
+        var fx = StoryEffects()
+        fx.backgroundAudioId = "snd_x"
+        fx.backgroundAudioStart = 3
+        #expect(CanvasV3(migrating: fx).sound?.bounds == nil)
+    }
+
+    @Test func boundsWithOnlyAnEnd_omitsBounds() throws {
+        var fx = StoryEffects()
+        fx.backgroundAudioId = "snd_x"
+        fx.backgroundAudioEnd = 9
+        #expect(CanvasV3(migrating: fx).sound?.bounds == nil)
+    }
+
+    @Test func boundsInverted_endBeforeStart_omitsBounds() throws {
+        var fx = StoryEffects()
+        fx.backgroundAudioId = "snd_x"
+        fx.backgroundAudioStart = 9
+        fx.backgroundAudioEnd = 3
+        #expect(CanvasV3(migrating: fx).sound?.bounds == nil)
+    }
+
+    @Test func boundsWithBothEndsAndEndAfterStart_stillEmitsBounds() throws {
+        var fx = StoryEffects()
+        fx.backgroundAudioId = "snd_x"
+        fx.backgroundAudioStart = 2
+        fx.backgroundAudioEnd = 9
+        #expect(CanvasV3(migrating: fx).sound?.bounds == BackgroundSoundV3.Bounds(start: 2, end: 9))
+    }
+
+    @Test func boundsWithBothEndsEqual_isAValidZeroLengthIntervalAndIsEmitted() throws {
+        var fx = StoryEffects()
+        fx.backgroundAudioId = "snd_x"
+        fx.backgroundAudioStart = 5
+        fx.backgroundAudioEnd = 5
+        #expect(CanvasV3(migrating: fx).sound?.bounds == BackgroundSoundV3.Bounds(start: 5, end: 5))
+    }
+
+    // ------------------------------------------------------------------
     // Rattrapage B8b (addendum rév. 3) — le pont LOGE tout ce que le
     // runtime porte. Second juge partagé avec le convertisseur gateway :
     // `v1-legacy-rich.json` → `v1-legacy-rich.v3.json`, les DEUX
@@ -327,5 +374,21 @@ struct CanvasV3MigrationTests {
         let document = CanvasV3(migrating: effects)
         #expect(object(document, "t1")?.z == 7)
         #expect(object(document, "m1")?.z == 9)
+    }
+
+    @Test func thumbHashAlone_keepsItsScene_throughTheRoundTrip() throws {
+        var effects = StoryEffects()
+        effects.thumbHash = "1QcSHQRnh493V4dIh4eXh0h4kJUI"
+        let document = CanvasV3(migrating: effects)
+        #expect(document.scenes.count == 1)
+        #expect(document.scenes.first?.objects.isEmpty == true)
+        #expect(document.scenes.first?.thumbHash == "1QcSHQRnh493V4dIh4eXh0h4kJUI")
+        let back = StoryEffects(rendering: document, sceneIndex: 0)
+        #expect(back.thumbHash == "1QcSHQRnh493V4dIh4eXh0h4kJUI")
+    }
+
+    @Test func trulyEmptyCanvas_emitsNoScene() throws {
+        let document = CanvasV3(migrating: StoryEffects())
+        #expect(document.scenes.isEmpty)
     }
 }

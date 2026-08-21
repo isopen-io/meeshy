@@ -1,5 +1,6 @@
 import { apiService } from './api.service';
 import { buildApiUrl } from '@/lib/config';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 import type {
   Post,
   PostComment,
@@ -172,6 +173,46 @@ function unwrap<T>(response: { data?: T }): T {
   return response.data as T;
 }
 
+interface OriginalLanguageCreateInput {
+  readonly originalLanguage?: string;
+  readonly storyEffects?: Record<string, unknown>;
+  readonly content?: string;
+}
+
+/**
+ * F5 — `originalLanguage` corrigé pour les créations à `storyEffects`
+ * (composer story), affiné par F7d (constat 20/21, arbitrage 8, addendum
+ * rév. 2) : `PostsFeedScreen.handleStoryPublish` envoyait déjà le champ,
+ * mais avec la langue de LECTURE préférée du LECTEUR (`userLanguage`) — un
+ * concept différent de la langue du CONTENU publié. Résolu ici depuis la
+ * locale d'INTERFACE active de l'AUTEUR (`getCurrentInterfaceLocale` — le
+ * mécanisme de langue UI existant du web, PAS `resolveUserLanguage`, qui
+ * résout la langue de LECTURE préférée).
+ *
+ * Elle ne part QUE pour une story SANS texte : dès qu'un `content` est
+ * présent, le serveur détecte la langue depuis le texte lui-même
+ * (`detectLanguage`), plus fiable qu'une locale d'interface qui peut
+ * diverger de la langue effectivement écrite (un francophone d'interface
+ * peut écrire en anglais). Un `originalLanguage` déjà fourni par l'appelant
+ * (ex. langue détectée par la transcription audio) n'est jamais écrasé.
+ * Sans `storyEffects`, ou sans langue connue, le champ reste absent : la
+ * détection serveur reste le repli — ne jamais envoyer une langue devinée
+ * fausse qui la court-circuiterait.
+ *
+ * Exportée : `story.service.ts#createStory` est le VRAI point de
+ * publication du composer story web (`postsService.createPost` n'a aucun
+ * appelant `storyEffects` en production — le composer publie via
+ * `PostsFeedScreen.handleStoryPublish` → `useCreateStoryMutation` →
+ * `storyService.createStory`) ; les deux funnels partagent ce résolveur
+ * unique plutôt que de dupliquer la règle.
+ */
+export function resolveOriginalLanguageForCreate(data: OriginalLanguageCreateInput): string | undefined {
+  if (data.originalLanguage) return data.originalLanguage;
+  if (!data.storyEffects) return undefined;
+  if (data.content?.trim()) return undefined;
+  return getCurrentInterfaceLocale() || undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -243,7 +284,9 @@ export const postsService = {
   // ── CRUD ────────────────────────────────────────────────────────────────
 
   async createPost(data: CreatePostRequest): Promise<{ success: boolean; data: Post }> {
-    const response = await apiService.post<{ success: boolean; data: Post }>('/posts', data);
+    const originalLanguage = resolveOriginalLanguageForCreate(data);
+    const body = originalLanguage ? { ...data, originalLanguage } : data;
+    const response = await apiService.post<{ success: boolean; data: Post }>('/posts', body);
     return unwrap(response);
   },
 

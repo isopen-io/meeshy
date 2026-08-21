@@ -1,6 +1,14 @@
+/**
+ * Les médias du composer story, jugés sur la forme ÉMISE — depuis F5b, un
+ * document `CanvasV3` : le porteur visuel est un objet `media` de plan
+ * `content`, l'audio un objet `audio` du même plan. Les règles gardées ici
+ * sont inchangées (un seul média par catégorie, durées en SECONDES, tout id
+ * référencé claimé par `mediaIds`) — seule leur forme a changé.
+ */
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
+import { CanvasV3Schema, type CanvasV3, type ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 import { StoryComposer, StoryComposerProps } from '@/components/v2/StoryComposer';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
@@ -30,28 +38,6 @@ jest.mock('@/hooks/composer/useAttachmentUpload', () => ({
 }));
 
 type PublishPayload = Parameters<StoryComposerProps['onPublish']>[0];
-
-type MediaObjectPayload = {
-  id: string;
-  postMediaId: string;
-  mediaType: 'image' | 'video';
-  x: number;
-  y: number;
-  isBackground: boolean;
-  duration?: number;
-};
-
-type AudioObjectPayload = {
-  id: string;
-  postMediaId: string;
-  x: number;
-  y: number;
-  isBackground: boolean;
-  placement: string;
-  volume: number;
-  waveformSamples: number[];
-  duration?: number;
-};
 
 function createAttachment(overrides: Partial<UploadedAttachmentResponse> = {}): UploadedAttachmentResponse {
   return {
@@ -92,31 +78,46 @@ function clickPublish(): void {
   fireEvent.click(screen.getByText('publish'));
 }
 
+function canvas(effects: Record<string, unknown>): CanvasV3 {
+  return CanvasV3Schema.parse(effects);
+}
+
+function objectsOf(effects: Record<string, unknown>): ObjectV3[] {
+  return canvas(effects).scenes?.[0]?.objects ?? [];
+}
+
+function carriers(effects: Record<string, unknown>): ObjectV3[] {
+  return objectsOf(effects).filter((o) => o.kind === 'media' && o.plane === 'content');
+}
+
+function audios(effects: Record<string, unknown>): ObjectV3[] {
+  return objectsOf(effects).filter((o) => o.kind === 'audio');
+}
+
 describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
   beforeEach(() => {
     mockSelectedFiles = [new File(['x'], 'placeholder.jpg', { type: 'image/jpeg' })];
     mockUploadedAttachments = [];
   });
 
-  it('adds a background mediaObject for the first uploaded image', () => {
+  it('adds a background carrier object for the first uploaded image', () => {
     mockUploadedAttachments = [createAttachment({ id: 'media-img', mimeType: 'image/jpeg' })];
     const { published } = renderComposer();
     clickPublish();
 
     const payload = published();
     expect(payload.mediaIds).toEqual(['media-img']);
-    const mediaObjects = payload.storyEffects.mediaObjects as MediaObjectPayload[];
-    expect(mediaObjects).toHaveLength(1);
-    expect(mediaObjects[0]).toMatchObject({
+    const media = carriers(payload.storyEffects);
+    expect(media).toHaveLength(1);
+    expect(media[0].payload).toMatchObject({
       postMediaId: 'media-img',
       mediaType: 'image',
-      x: 0.5,
-      y: 0.5,
       isBackground: true,
     });
-    expect(typeof mediaObjects[0].id).toBe('string');
-    expect(mediaObjects[0].id.length).toBeGreaterThan(0);
-    expect('duration' in mediaObjects[0]).toBe(false);
+    expect(media[0].anchor).toEqual({ t: 'free', x: 0.5, y: 0.5 });
+    expect(typeof media[0].id).toBe('string');
+    expect(media[0].id.length).toBeGreaterThan(0);
+    expect('duration' in media[0].payload).toBe(false);
   });
 
   it('marks the media as video and copies duration in seconds when known', () => {
@@ -126,12 +127,12 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
     const { published } = renderComposer();
     clickPublish();
 
-    const mediaObjects = published().storyEffects.mediaObjects as MediaObjectPayload[];
-    expect(mediaObjects[0].mediaType).toBe('video');
-    expect(mediaObjects[0].duration).toBe(14);
+    const media = carriers(published().storyEffects);
+    expect(media[0].payload.mediaType).toBe('video');
+    expect(media[0].payload.duration).toBe(14);
   });
 
-  it('populates audioPlayerObjects for the first uploaded audio', () => {
+  it('populates an audio object for the first uploaded audio', () => {
     mockUploadedAttachments = [
       createAttachment({ id: 'media-audio', mimeType: 'audio/mpeg', duration: 9000 }),
     ];
@@ -139,27 +140,27 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
     clickPublish();
 
     const payload = published();
-    expect(payload.storyEffects.mediaObjects).toBeUndefined();
-    const audioObjects = payload.storyEffects.audioPlayerObjects as AudioObjectPayload[];
-    expect(audioObjects).toHaveLength(1);
-    expect(audioObjects[0]).toMatchObject({
+    expect(carriers(payload.storyEffects)).toHaveLength(0);
+    const audio = audios(payload.storyEffects);
+    expect(audio).toHaveLength(1);
+    expect(audio[0].plane).toBe('content');
+    expect(audio[0].anchor).toEqual({ t: 'free', x: 0.5, y: 0.85 });
+    expect(audio[0].payload).toMatchObject({
       postMediaId: 'media-audio',
-      x: 0.5,
-      y: 0.85,
       isBackground: true,
       duration: 9,
     });
   });
 
-  it('fills the iOS-required non-optional audio decoder fields (placement/volume/waveformSamples)', () => {
+  it('emits the placement, and neither the default volume nor the composition waveform', () => {
     mockUploadedAttachments = [createAttachment({ id: 'media-audio', mimeType: 'audio/mpeg' })];
     const { published } = renderComposer();
     clickPublish();
 
-    const audioObjects = published().storyEffects.audioPlayerObjects as AudioObjectPayload[];
-    expect(audioObjects[0].placement).toBe('overlay');
-    expect(audioObjects[0].volume).toBe(1);
-    expect(audioObjects[0].waveformSamples).toEqual([]);
+    const audio = audios(published().storyEffects);
+    expect(audio[0].payload.placement).toBe('overlay');
+    expect('volume' in audio[0].payload).toBe(false);
+    expect('waveformSamples' in audio[0].payload).toBe(false);
   });
 
   it('omits duration entirely when unknown, never as undefined', () => {
@@ -167,28 +168,29 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
     const { published } = renderComposer();
     clickPublish();
 
-    const mediaObjects = published().storyEffects.mediaObjects as MediaObjectPayload[];
-    expect(Object.keys(mediaObjects[0])).not.toContain('duration');
+    expect(Object.keys(carriers(published().storyEffects)[0].payload)).not.toContain('duration');
   });
 
-  it('preserves existing storyEffects keys untouched', () => {
+  it('keeps the background object next to the media carrier', () => {
     mockUploadedAttachments = [createAttachment({ id: 'media-img3' })];
     const { published } = renderComposer();
     clickPublish();
 
-    const effects = published().storyEffects;
-    expect(typeof effects.backgroundColor).toBe('string');
-    expect(effects.textStyle).toBe('bold');
+    const objects = objectsOf(published().storyEffects);
+    const background = objects.find((o) => o.plane === 'bg');
+    expect(background?.kind).toBe('media');
+    expect(typeof background?.payload.background).toBe('string');
+    expect(carriers(published().storyEffects)).toHaveLength(1);
   });
 
-  it('emits neither mediaObjects nor audioPlayerObjects when no media was uploaded', () => {
+  it('emits neither carrier nor audio object when no media was uploaded', () => {
     mockUploadedAttachments = [];
     const { published } = renderComposer();
     clickPublish();
 
     const effects = published().storyEffects;
-    expect(effects.mediaObjects).toBeUndefined();
-    expect(effects.audioPlayerObjects).toBeUndefined();
+    expect(carriers(effects)).toHaveLength(0);
+    expect(audios(effects)).toHaveLength(0);
   });
 
   it('picks only the first media per category and keeps every id in mediaIds', () => {
@@ -202,15 +204,15 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
 
     const payload = published();
     expect(payload.mediaIds).toEqual(['media-audio', 'media-img', 'media-img-2']);
-    const mediaObjects = payload.storyEffects.mediaObjects as MediaObjectPayload[];
-    const audioObjects = payload.storyEffects.audioPlayerObjects as AudioObjectPayload[];
-    expect(mediaObjects).toHaveLength(1);
-    expect(mediaObjects[0].postMediaId).toBe('media-img');
-    expect(audioObjects).toHaveLength(1);
-    expect(audioObjects[0].postMediaId).toBe('media-audio');
+    const media = carriers(payload.storyEffects);
+    const audio = audios(payload.storyEffects);
+    expect(media).toHaveLength(1);
+    expect(media[0].payload.postMediaId).toBe('media-img');
+    expect(audio).toHaveLength(1);
+    expect(audio[0].payload.postMediaId).toBe('media-audio');
   });
 
-  it('every mediaObjects/audioPlayerObjects postMediaId is strictly one of the top-level mediaIds', () => {
+  it('every canvas postMediaId is strictly one of the top-level mediaIds', () => {
     mockUploadedAttachments = [
       createAttachment({ id: 'media-vid', mimeType: 'video/mp4' }),
       createAttachment({ id: 'media-audio', mimeType: 'audio/wav' }),
@@ -219,9 +221,7 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
     clickPublish();
 
     const payload = published();
-    const mediaObjects = payload.storyEffects.mediaObjects as MediaObjectPayload[];
-    const audioObjects = payload.storyEffects.audioPlayerObjects as AudioObjectPayload[];
-    expect(payload.mediaIds).toContain(mediaObjects[0].postMediaId);
-    expect(payload.mediaIds).toContain(audioObjects[0].postMediaId);
+    expect(payload.mediaIds).toContain(carriers(payload.storyEffects)[0].payload.postMediaId);
+    expect(payload.mediaIds).toContain(audios(payload.storyEffects)[0].payload.postMediaId);
   });
 });

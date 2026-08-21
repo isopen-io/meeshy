@@ -1,19 +1,23 @@
 /**
- * Tests for HashtagPage's repost wiring (Task 2, point 4).
- * Full integration through the real PostCard (only Avatar/LanguageOrb/flags/
- * i18n mocked, like page.test.tsx) — a repost renders its nested original
- * card and the banner navigates to the original's detail page.
+ * Constat 2 (F7c, rattrapage revue Opus, BLOQUANT) — `HashtagPage` ne passait
+ * JAMAIS `backgroundSound`/`backgroundSoundMeta`/`backgroundSoundMuted`/
+ * `onToggleBackgroundSoundMute` à `PostCard` : le badge B3.3-6, bien que
+ * déclaré par le composant, n'était alimenté par aucun appelant réel — la
+ * carte (1re des 3 surfaces B3.6) n'existait pas.
+ *
+ * Full integration through the real `PostCard` (only Avatar/LanguageOrb/flags/
+ * i18n mocked, like `page.repost.test.tsx`) — proves the ANNOUNCEMENT text
+ * actually reaches the screen, not just a prop capture.
  */
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import React from 'react';
 import HashtagPage from '@/app/hashtag/[tag]/page';
 import type { Post } from '@meeshy/shared/types/post';
 
-const mockPush = jest.fn();
 jest.mock('next/navigation', () => ({
   useParams: () => ({ tag: 'paris' }),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 const mockGetPostsByHashtag = jest.fn();
@@ -94,23 +98,28 @@ function renderPage() {
   );
 }
 
-describe('HashtagPage — repost wiring', () => {
+describe('HashtagPage — background sound wiring (constat 2)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGetTrendingHashtags.mockResolvedValue([]);
   });
 
-  it("renders the repost banner and the original's content", async () => {
+  it('renders the library credit announcement on the card', async () => {
     mockGetPostsByHashtag.mockResolvedValue({
       success: true,
       data: [
         makePost({
-          repostOf: {
-            id: 'original-1',
-            author: { id: 'user-2', username: 'bob', displayName: 'Bob' },
-            content: 'Vue de #paris depuis le ciel',
-            likeCount: 5,
-            commentCount: 2,
+          storyEffects: {
+            v: 3,
+            sound: { source: { t: 'library', soundId: 'snd1' }, volume: 0.5 },
+            scenes: [{
+              id: 's1',
+              objects: [{
+                id: 'a1', kind: 'audio', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 0,
+                transform: { scale: 1, rotation: 0, opacity: 1 },
+                payload: { isBackground: true, name: 'Chill Beat', soundAuthorUsername: 'dj_zoe', duration: 42 },
+              }],
+            }],
           },
         }),
       ],
@@ -118,53 +127,37 @@ describe('HashtagPage — repost wiring', () => {
     });
     renderPage();
 
-    await waitFor(() => expect(screen.getByText('↻')).toBeInTheDocument());
-    expect(screen.getByText('@bob')).toBeInTheDocument();
-    expect(screen.getByText('Bob')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('background-sound-announcement')).toBeInTheDocument());
+    expect(screen.getByTestId('background-sound-announcement')).toHaveTextContent('Chill Beat · @dj_zoe · 0:42');
   });
 
-  it("quote repost: outer bar keeps the quote's OWN counts (isQuote wired through)", async () => {
+  it('mounts NO badge for a post without a background sound', async () => {
+    mockGetPostsByHashtag.mockResolvedValue({
+      success: true,
+      data: [makePost()],
+      meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
+    });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByTestId('avatar')).toBeInTheDocument());
+    expect(screen.queryByTestId('background-sound-badge')).toBeNull();
+  });
+
+  it('starts muted and toggles the LOCAL state on click', async () => {
     mockGetPostsByHashtag.mockResolvedValue({
       success: true,
       data: [
         makePost({
-          content: 'My take on this',
-          isQuote: true,
-          likeCount: 3,
-          commentCount: 1,
-          repostOf: {
-            id: 'original-1',
-            author: { id: 'user-2', username: 'bob', displayName: 'Bob' },
-            content: 'Original content',
-            likeCount: 5,
-            commentCount: 2,
-          },
+          storyEffects: { v: 3, sound: { source: { t: 'original' }, volume: 1 }, scenes: [] },
         }),
       ],
       meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
     });
     renderPage();
 
-    await waitFor(() => expect(screen.getByTestId('post-card-repost-block')).toBeInTheDocument());
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.getByTestId('repost-like-count')).toHaveTextContent('5');
-  });
-
-  it('navigates to the original post detail page when the repost banner is tapped', async () => {
-    mockGetPostsByHashtag.mockResolvedValue({
-      success: true,
-      data: [
-        makePost({
-          repostOf: { id: 'original-1', author: { id: 'user-2', username: 'bob' }, content: 'Original', likeCount: 0, commentCount: 0 },
-        }),
-      ],
-      meta: { pagination: { total: 1, offset: 0, limit: 20, hasMore: false }, nextCursor: null },
-    });
-    renderPage();
-
-    await waitFor(() => expect(screen.getByTestId('post-card-repost-block')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('post-card-repost-block'));
-    expect(mockPush).toHaveBeenCalledWith('/feeds/post/original-1');
+    await waitFor(() => expect(screen.getByTestId('background-sound-mute-toggle')).toBeInTheDocument());
+    expect(screen.getByTestId('background-sound-mute-toggle')).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByTestId('background-sound-mute-toggle'));
+    expect(screen.getByTestId('background-sound-mute-toggle')).toHaveAttribute('aria-pressed', 'false');
   });
 });

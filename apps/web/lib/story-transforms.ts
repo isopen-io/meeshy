@@ -1,8 +1,10 @@
 import type { Post, PostAuthor } from '@meeshy/shared/types/post';
+import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
+import type { CanvasV3MediaResolution } from '@/components/v2/CanvasV3Scene';
 
 // Résolution du bloc auteur affiché d'une story — SOURCE UNIQUE.
 // Délègue le nom à `getUserDisplayName` (displayName non-vide > username >
@@ -231,15 +233,131 @@ function asObjectArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? (value.filter((v) => v && typeof v === 'object') as Record<string, unknown>[]) : [];
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+// Projection v1 d'une scène v3 : les trois termes de la durée (fenêtre la plus
+// longue, temps de lecture, boucle du fond) sont les MÊMES — seule la FORME du
+// blob change. Sans elle, une story v3 (donc toute story servie à un client qui
+// annonce `X-Canvas-Caps: 3`) ne présente plus aucune famille v1 et retombe sur
+// les 6 s par défaut : une vidéo de 14 s se coupe au tiers.
+function v1ViewOfScene(scene: Record<string, unknown>): Record<string, unknown> {
+  const objects = asObjectArray(scene.objects);
+  const family = (kind: string): Record<string, unknown>[] =>
+    objects
+      .filter((o) => o.kind === kind)
+      .map((o) => {
+        const timing = asObject(o.timing);
+        const payload = asObject(o.payload);
+        return { ...payload, ...(typeof timing.start === 'number' ? { startTime: timing.start } : {}) };
+      });
+  return {
+    ...(typeof scene.timelineDuration === 'number' ? { timelineDuration: scene.timelineDuration } : {}),
+    mediaObjects: family('media'),
+    audioPlayerObjects: family('audio'),
+    textObjects: family('text'),
+  };
+}
+
+// Constat 3 — l'annonce du fond (B3.4) dégradait TOUJOURS une piste de
+// bibliothèque en `♫ —` : le viewer ne lisait jamais le crédit qui voyage
+// pourtant sur l'objet `kind:audio` de FOND de la scène (`name`,
+// `soundAuthorUsername`, `duration` — services/gateway/src/services/posts/
+// storyEffectsV3.ts:168-172, miroir CanvasV3Migration.swift:400-407). Extrait
+// PUR, partagé entre `StoryViewer` (carte plein écran) et les futures
+// surfaces carte/détail (F7c).
+export interface BackgroundSoundCredit {
+  title?: string;
+  username?: string;
+  durationSeconds?: number;
+}
+
+// Constat 4 (BLOQUANT, rejet DoD de F7d) — le composer web n'a AUCUN
+// sélecteur de langue explicite pour l'auteur (contre iOS,
+// `StoryComposerViewModel+Elements.swift:674`) : il ne peut donc jamais
+// poser une `locale` HONNÊTE sur le texte racine à l'ÉMISSION — deviner
+// depuis la locale d'interface rouvre la règle 3 du Prisme (arbitrage 4 vs
+// 8). Sans repli, `CanvasV3Scene.resolveText` (`sameLanguage(language,
+// o.locale)`) ne peut jamais faire concourir l'origine à son rang : un
+// texte anglais sans `locale`, prisme `['en','fr']`, traduction `fr`
+// disponible, sert « Bonjour » à un lecteur anglais-primaire.
+//
+// Le serveur, lui, détecte déjà la VRAIE langue à la création
+// (`PostService.ts` `detectLanguage(data.content)`, jamais devinée) et la
+// persiste sur `post.originalLanguage`. On la reporte donc ICI, à la
+// LECTURE — l'entonnoir UNIQUE vers le viewer — sur tout objet texte
+// dépourvu de sa propre `locale`. iOS pose une `locale` PAR OBJET
+// (`CanvasV3Migration.swift:189`) : ce repli ne la retouche jamais.
+function withOriginLocale(
+  scenes: NonNullable<CanvasV3['scenes']>,
+  originalLanguage: string | undefined,
+): NonNullable<CanvasV3['scenes']> {
+  if (!originalLanguage) return scenes;
+  return scenes.map((scene) => ({
+    ...scene,
+    objects: scene.objects.map((object) =>
+      object.kind === 'text' && !object.locale
+        ? { ...object, locale: originalLanguage }
+        : object
+    ),
+  }));
+}
+
+export function backgroundSoundCredit(scenes: CanvasV3['scenes']): BackgroundSoundCredit {
+  const audioObject = (scenes ?? [])
+    .flatMap((scene) => scene.objects)
+    .find((o) => o.kind === 'audio' && o.payload.isBackground === true);
+  if (!audioObject) return {};
+
+  const { payload } = audioObject;
+  const title = typeof payload.name === 'string' && payload.name.length > 0 ? payload.name : undefined;
+  const username = typeof payload.soundAuthorUsername === 'string' && payload.soundAuthorUsername.length > 0
+    ? payload.soundAuthorUsername
+    : undefined;
+  const durationSeconds = typeof payload.duration === 'number' && Number.isFinite(payload.duration)
+    ? payload.duration
+    : undefined;
+  return { title, username, durationSeconds };
+}
+
+// Constat 2 (F7c) — la carte (`PostCard`) et le détail (`PostDetail`) ne
+// passent jamais par `postToStoryData` (elles gardent la forme `Post` telle
+// quelle) : sans ce résolveur, aucun appelant de ces deux surfaces n'avait
+// où lire `sound`/le crédit, et le badge B3.3-6 restait câblé à des props
+// mortes. Même garde `v >= 3` (constat 12) que `postToStoryData`, même
+// `backgroundSoundCredit` que `StoryViewer` — un seul extracteur de crédit
+// partagé par les 3 surfaces (carte, détail, plein écran), jamais deux
+// implémentations qui pourraient diverger.
+export function postBackgroundSound(post: Post): { sound?: CanvasV3['sound']; meta: BackgroundSoundCredit } {
+  const effects = (post.storyEffects && typeof post.storyEffects === 'object')
+    ? post.storyEffects as Record<string, unknown>
+    : undefined;
+  const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
+  const sound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
+    ? (effects.sound as CanvasV3['sound'])
+    : undefined;
+  const scenes = isV3Shaped && Array.isArray(effects.scenes)
+    ? (effects.scenes as CanvasV3['scenes'])
+    : [];
+  return { sound, meta: backgroundSoundCredit(scenes) };
+}
+
 export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
+  // Constat 12 — `v >= 3` (spec §D, storyEffectsV3.ts:401, rattrapage B8c),
+  // jamais `v === 3` : un futur `v:4` que le gateway sert TEL QUEL à un client
+  // caps-3 doit rester lu en v3, jamais retomber vide sur la projection v1.
+  const v3Scene = typeof effects?.v === 'number' && effects.v >= 3 ? asObjectArray(effects.scenes)[0] : undefined;
+  const source = v3Scene ? v1ViewOfScene(v3Scene) : effects;
+
   // Priority 0 — author-pinned timeline duration is authoritative (the timeline
   // IS the story). `nil` for everything existing → falls back to content.
-  const pinned = positiveNumber(effects?.timelineDuration);
+  const pinned = positiveNumber(source?.timelineDuration);
   if (pinned !== undefined) return Math.round(pinned * 1000);
 
-  const mediaObjects = asObjectArray(effects?.mediaObjects);
-  const audioObjects = asObjectArray(effects?.audioPlayerObjects);
-  const textObjects = asObjectArray(effects?.textObjects);
+  const mediaObjects = asObjectArray(source?.mediaObjects);
+  const audioObjects = asObjectArray(source?.audioPlayerObjects);
+  const textObjects = asObjectArray(source?.textObjects);
 
   // Component 1 — background video/audio of natural duration.
   const bgVideoDur = positiveNumber(
@@ -313,9 +431,22 @@ export function postToStoryData(post: Post): StoryData {
 
   // Resolve a `postMediaId -> { url, mimeType }` lookup for the foreground media
   // / audio renderers — they store only the id, not the URL.
-  const mediaById = new Map<string, { url: string; mimeType: string }>();
+  // Constat 9 — le letterbox v3 (`CanvasV3Scene` : le porteur garde SON ratio)
+  // a besoin d'un `aspectRatio` que la production ne fournissait jamais.
+  // `PostMedia.width`/`height` (packages/shared/types/post.ts:67-68) le
+  // dérivent quand les deux sont posés ; absent, `CanvasV3Scene` retombe sur
+  // `payload.aspectRatio` puis sur l'absence de contrainte (plein cadre).
+  const mediaById = new Map<string, CanvasV3MediaResolution>();
   for (const m of post.media ?? []) {
-    if (m.id && m.fileUrl) mediaById.set(m.id, { url: m.fileUrl, mimeType: m.mimeType ?? '' });
+    if (!m.id || !m.fileUrl) continue;
+    const aspectRatio = typeof m.width === 'number' && typeof m.height === 'number' && m.height > 0
+      ? m.width / m.height
+      : undefined;
+    mediaById.set(m.id, {
+      url: m.fileUrl,
+      mimeType: m.mimeType ?? '',
+      ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+    });
   }
 
   // Pass the post-level `translations` straight through. Previously this was
@@ -335,6 +466,21 @@ export function postToStoryData(post: Post): StoryData {
         .filter((t): t is { languageCode: string; languageName: string; content: string } => t !== null)
     : undefined;
 
+  // Un blob v3 traverse le funnel INTACT. Reconstruit à clés FIXES, il perdait
+  // `v`, `scenes` et `sound` : la garde `v === 3` de `StoryViewer` restait
+  // fausse, `CanvasV3Scene` ne se montait jamais et la story revenait au fond
+  // par défaut — sans son texte, sans son audio, sans son annonce de fond.
+  // `postToStoryData` est l'entonnoir UNIQUE vers le viewer : ce qu'il jette
+  // n'existe plus. Le contrat est validé à l'ÉCRITURE (gateway) ; la lecture
+  // reste tolérante objet par objet.
+  const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
+  const canvasScenes = isV3Shaped && Array.isArray(effects.scenes)
+    ? withOriginLocale(effects.scenes as NonNullable<CanvasV3['scenes']>, post.originalLanguage ?? undefined)
+    : undefined;
+  const backgroundSound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
+    ? (effects.sound as CanvasV3['sound'])
+    : undefined;
+
   const textObjects = effects ? parseTextObjects(effects.textObjects) : undefined;
   const mediaObjects = effects ? parseMediaObjects(effects.mediaObjects) : undefined;
   const audioObjects = effects ? parseAudioObjects(effects.audioPlayerObjects) : undefined;
@@ -350,6 +496,9 @@ export function postToStoryData(post: Post): StoryData {
     originalLanguage: post.originalLanguage ?? undefined,
     translations: translations && translations.length > 0 ? translations : undefined,
     storyEffects: effects ? {
+      v: typeof effects.v === 'number' ? effects.v : undefined,
+      scenes: canvasScenes,
+      sound: backgroundSound,
       // Canonical key is `background` (iOS composer + gateway StoryEffectsSchema);
       // `backgroundColor` is a legacy alias kept as a fallback for old payloads.
       background: typeof effects.background === 'string'

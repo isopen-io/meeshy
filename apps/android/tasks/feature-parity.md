@@ -2208,8 +2208,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       outgoing send-side glyph through it; `MessageBubble` renders `Icons.Filled.HourglassEmpty` +
       `bubble_status_queued` (EN/FR/ES/PT). `ChatViewModel` injects `NetworkConditionMonitor` and folds
       `condition == OFFLINE` (distinct) into the message-stream combine so going offline re-paints the glyph
-      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Pending:** the finer 8-state
-      send-lifecycle glyphs (slow/invisible pre-200ms debounce), tap-checks → read-status sheet
+      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Sub-200ms clock debounce done**
+      (`chat-send-clock-reveal-debounce` 2026-08-21): port of iOS
+      `BubbleDeliveryCheck.SendingClockGlyph.shouldRevealImmediately` (`revealDelay = 0.2`) — a send that
+      round-trips under 200ms never flashes the online in-flight clock the user has no time to perceive.
+      New pure `SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis, nowMillis)` +
+      `SENDING_REVEAL_DELAY_MILLIS = 200L` (null start → reveal now; `>=` inclusive boundary; negative
+      elapsed from clock skew stays hidden). Compose glue `rememberSendingGlyphRevealed` (`produceState` +
+      one-shot `delay`, same shape as `rememberBubbleRenderKind`) gates ONLY the `DeliveryStatus.Pending`
+      clock at the `MessageBubble` render site off `content.createdAtIso`; the offline hourglass and every
+      settled tier render immediately. +8 resolver tests, mutation-proven (`>=`→`>` fails exactly the
+      exactly-200ms boundary test). **Pending:** the finer `slow`/retry glyph tier, tap-checks → read-status sheet
 - [~] Edited / pinned / forwarded indicators; edit-history viewer
       **Edited ✅** (`bubble_edited` badge), **pinned ✅** (`chat-pinned-banner`), **forwarded ✅**
       (slice `chat-forwarded-indicator`, 2026-07-08, +5 tests): `BubbleContent.isForwarded` derived in

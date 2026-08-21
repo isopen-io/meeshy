@@ -112,6 +112,7 @@ class ApiService {
 
     const headers: Record<string, string> = {
       ...this.config.headers,
+      'X-Canvas-Caps': '3',
       ...getDeviceLocaleHeaders(),
       ...getGeolocationHeaders(),
       ...customHeaders,
