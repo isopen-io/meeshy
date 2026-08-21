@@ -59,6 +59,33 @@ public struct MessageHiddenForMeEvent: Decodable, Sendable {
     }
 }
 
+/// `message:restored-for-me` — l'INVERSE de `message:hidden-for-me` : un
+/// message que CE lecteur avait retiré de sa vue redevient visible, depuis un
+/// autre de ses appareils (`POST /api/messages/:id/restore-for-me`).
+///
+/// La charge utile ne porte VOLONTAIREMENT aucun contenu, et c'est la propriété
+/// qui décide de l'écriture locale. Une APPARITION ne peut pas s'écrire comme
+/// une tombstone inversée : le masquage a PURGÉ la ligne (cf.
+/// `MessageHiddenForMeEvent`), l'appareil ne détient donc plus rien à
+/// ressusciter. La seule instruction honnête que porte cet événement est une
+/// ADRESSE — « va rechercher ce message » — et le consommateur doit refaire un
+/// aller-retour serveur. Contrat serveur :
+/// `services/gateway/src/services/personalMessageVisibilitySync.ts`.
+public struct MessageRestoredForMeEvent: Decodable, Sendable {
+    public let userId: String
+    public let messages: [PersonalMessageVisibilityRef]
+    /// Instant ISO-8601 du retour en vue. Optionnel pour la même raison que
+    /// `hiddenAt` : il n'arbitre rien, et un serveur plus ancien pourrait ne
+    /// pas le porter — son absence ne doit pas faire perdre le retour.
+    public let restoredAt: String?
+
+    public init(userId: String, messages: [PersonalMessageVisibilityRef], restoredAt: String? = nil) {
+        self.userId = userId
+        self.messages = messages
+        self.restoredAt = restoredAt
+    }
+}
+
 public struct MessagePinnedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -1599,6 +1626,10 @@ public protocol MessageSocketProviding: Sendable {
     /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageHiddenForMe: PassthroughSubject<MessageHiddenForMeEvent, Never> { get }
+    /// `message:restored-for-me` — le canal jumeau, en sens inverse. Dans le
+    /// protocole pour la même raison que son jumeau : le consommateur
+    /// (`ConversationSocketHandler`) ne détient qu'un `MessageSocketProviding`.
+    var messageRestoredForMe: PassthroughSubject<MessageRestoredForMeEvent, Never> { get }
     var messagePinned: PassthroughSubject<MessagePinnedEvent, Never> { get }
     var messageUnpinned: PassthroughSubject<MessageUnpinnedEvent, Never> { get }
     var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
@@ -1845,6 +1876,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
+    public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
     public let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
 
@@ -3280,6 +3312,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(MessageHiddenForMeEvent.self, from: data) { [weak self] event in
                 self?.messageHiddenForMe.send(event)
+            }
+        }
+
+        // Le retour en vue. Même room (celle de l'UTILISATEUR), donc l'appareil
+        // qui a émis la requête le reçoit aussi — et c'est sans conséquence : la
+        // relecture qu'il déclenche est idempotente.
+        socket.on("message:restored-for-me") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageRestoredForMeEvent.self, from: data) { [weak self] event in
+                self?.messageRestoredForMe.send(event)
             }
         }
 

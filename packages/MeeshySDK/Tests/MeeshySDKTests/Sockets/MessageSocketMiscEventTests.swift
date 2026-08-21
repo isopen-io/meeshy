@@ -775,4 +775,65 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertNil(event.hiddenAt)
         XCTAssertEqual(event.messages.first?.messageId, "m1")
     }
+
+    // MARK: - MessageRestoredForMeEvent
+
+    /// Le jumeau inverse. Même forme de lot que le masquage — un seul gabarit à
+    /// traiter côté client, dans les deux sens.
+    func test_messageRestoredForMeEvent_decodesBatchAcrossConversations() throws {
+        let json = """
+        {
+            "userId": "u1",
+            "messages": [
+                {"messageId": "m1", "conversationId": "c1"},
+                {"messageId": "m2", "conversationId": "c2"}
+            ],
+            "restoredAt": "2026-08-21T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageRestoredForMeEvent.self, from: json)
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.messages, [
+            PersonalMessageVisibilityRef(messageId: "m1", conversationId: "c1"),
+            PersonalMessageVisibilityRef(messageId: "m2", conversationId: "c2"),
+        ])
+        XCTAssertEqual(event.restoredAt, "2026-08-21T10:00:00.000Z")
+    }
+
+    /// La route unitaire de restauration (`POST /api/messages/:id/restore-for-me`)
+    /// n'en rend qu'un — et l'émet quand même comme une liste d'UN élément.
+    func test_messageRestoredForMeEvent_singleMessageIsStillAList() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1"}], "restoredAt": "2026-08-21T10:00:00.000Z"}
+        """.data(using: .utf8)!
+
+        XCTAssertEqual(try decoder.decode(MessageRestoredForMeEvent.self, from: json).messages.count, 1)
+    }
+
+    /// `restoredAt` n'arbitre rien, exactement comme `hiddenAt` : son absence
+    /// ne doit pas faire échouer le décodage et perdre le RETOUR d'un message —
+    /// une perte qu'aucun rechargement ne rattraperait, puisque le serveur ne
+    /// ré-émettra jamais cet événement.
+    func test_messageRestoredForMeEvent_absentRestoredAt_decodesAsNil() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1"}]}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(MessageRestoredForMeEvent.self, from: json)
+        XCTAssertNil(event.restoredAt)
+        XCTAssertEqual(event.messages.first?.messageId, "m1")
+    }
+
+    /// La charge utile ne porte AUCUN contenu, et c'est structurel : un client
+    /// qui croirait pouvoir ré-afficher depuis l'événement seul n'aurait jamais
+    /// de texte à poser. Le contrat se lit ici, pas dans un commentaire.
+    func test_messageRestoredForMeEvent_carriesAddressesOnly_noContent() throws {
+        let json = """
+        {"userId": "u1", "messages": [{"messageId": "m1", "conversationId": "c1", "content": "ignoré"}]}
+        """.data(using: .utf8)!
+
+        let ref = try decoder.decode(MessageRestoredForMeEvent.self, from: json).messages.first
+        XCTAssertEqual(ref, PersonalMessageVisibilityRef(messageId: "m1", conversationId: "c1"))
+    }
 }

@@ -1,251 +1,256 @@
-# Cycle 76 — Android écoutait deux canaux que personne ne prononce
+# Cycle 76 — un message rendu à ma vue ne revenait que sur iOS, et par hasard
 
 **Date** : 2026-08-21
-**Branche** : `claude/keen-hamilton-od92vt`
+**Branche** : `claude/keen-hamilton-rhm97u`
 **Périmètre** :
-- android (`sdk-core/.../socket/MessageSocketManager.kt`,
-  `core/model/.../SocketEvents.kt`, `feature/chat/.../ChatViewModel.kt`)
-- shared (`__tests__/ci/socket-event-name-gate.test.ts` — garde neuve)
+- SDK (`Sockets/MessageSocketManager.swift` — type d'événement, publisher,
+  abonnement)
+- iOS app (`ViewModels/ConversationSocketHandler.swift` — récepteur neuf ;
+  `ViewModels/ConversationViewModel.swift` — la relecture)
+- tests (SDK `MessageSocketMiscEventTests`, app `ConversationSocketHandlerTests`,
+  deux mocks)
 
-**Clients touchés** : Android seul. Aucun nom d'événement neuf, aucune charge
-utile modifiée, aucune ligne de passerelle. Deux abonnements Android sont
-reconnectés au nom que la passerelle émet DÉJÀ, et un modèle de charge utile est
-réaligné sur la forme qu'elle envoie DÉJÀ.
+**Clients touchés** : aucun nom d'événement neuf, aucune charge utile modifiée,
+**aucune ligne de serveur**. Un événement DÉJÀ émis par le gateway et DÉJÀ
+consommé par le web reçoit le récepteur qui manquait à iOS.
 
 ---
 
 ## 1. D'où vient ce cycle
 
-Le cycle 75 s'est terminé sur une leçon déposée mot pour mot :
+Le cycle 75 s'est clos sur une leçon écrite en toutes lettres dans
+`tasks/lessons.md` :
 
-> Pour tout événement serveur→client du contrat partagé, la question « qui
+> **pour tout événement serveur→client du contrat partagé, la question « qui
 > l'ÉMET ? » se pose séparément de « qui l'écoute ? », et un `grep` du nom
-> d'événement dans les services répond en dix secondes.
+> d'événement dans les services répond en dix secondes.**
 
-Ce cycle a commencé par exécuter cette phrase mécaniquement : pour chacun des
-124 événements serveur du contrat, compter les sites d'émission dans la
-passerelle et les sites d'écoute chez les trois clients. La matrice a rendu son
-verdict en une passe — mais pas celui qu'on cherchait.
+Le cycle 75 avait trouvé le cas *émetteur manquant* : `call:force-leave`,
+déclaré, testé, entièrement implémenté côté iOS — et jamais émis.
 
-Le cycle 75 avait trouvé **un récepteur sans émetteur**. Le cycle 76 a trouvé le
-défaut **symétrique**, et deux exemplaires : **un récepteur branché sur un nom
-que rien n'émet parce que ce nom n'existe pas.**
+Ce cycle exploite **l'autre moitié de la même question**, celle que la leçon
+pose sans l'avoir encore instrumentée : un événement bel et bien ÉMIS, et un
+client qui ne l'écoute pas. La leçon disait qu'un `grep` suffit ; ce cycle a
+commencé par écrire ce `grep` une fois pour toutes.
+
+### L'instrument (§ 5) et ce qu'il a sorti
+
+Une matrice `SERVER_EVENTS` × {gateway, web, iOS, Android}, construite en
+cherchant CHAQUE événement sous ses deux formes — le littéral
+(`'message:restored-for-me'`) **et** la clé de constante
+(`MESSAGE_RESTORED_FOR_ME`). Les deux formes sont indispensables : une première
+passe ne cherchant que le littéral a rendu 40 « trous » dont la grande majorité
+étaient faux (le web s'abonne via `SERVER_EVENTS.X`, jamais via la chaîne).
+Une matrice qui sur-signale ne vaut pas mieux qu'aucune matrice.
+
+Sur les 124 événements du contrat, un couple a sauté aux yeux :
+
+| événement | gateway | web | iOS | Android |
+|---|---|---|---|---|
+| `message:hidden-for-me` | émet | écoute | **écoute** | absent |
+| `message:restored-for-me` | émet | écoute | **RIEN** | absent |
+
+Un verbe et son inverse, séparés par le même mur, sur le même client. C'est
+l'asymétrie qui est le défaut : personne n'implémente à moitié une paire
+volontairement.
 
 ---
 
 ## 2. Le défaut
 
-### 2.1 Deux chaînes de caractères
+### 2.1 Le masquage PURGE — c'est ce qui rend le retour non trivial
 
-```kotlin
-// apps/android/sdk-core/.../MessageSocketManager.kt, fun attach()
-listen("message:updated", _messageUpdated)
-listen("transcription:ready", _transcriptionReady)
+`message:hidden-for-me` est honoré par iOS depuis un cycle antérieur, et son
+écriture locale est délibérément une **purge**, pas une pierre tombale :
+
+```swift
+try await persistence.purgeMessages(ids: hiddenIds)
 ```
 
-| Android s'abonnait à | la passerelle émet | ce qui n'arrivait jamais |
-|---|---|---|
-| `message:updated` | `message:edited` | **l'édition d'un message** |
-| `transcription:ready` | `audio:transcription-ready` | **la transcription d'une note vocale** |
+Le commentaire en place explique pourquoi : le message reste vivant pour les
+autres participants, et une tombstone « ce message a été supprimé » resterait
+affichée à vie puisque le serveur ne renverra plus jamais ce message à ce
+lecteur.
 
-Ni `message:updated` ni `transcription:ready` n'existent **nulle part ailleurs
-dans le dépôt** — vérifié, pas déduit : un `grep` de chaque nom sur `apps/`,
-`services/` et `packages/`, toutes extensions, ne rend QUE ces deux lignes.
-Absents du contrat partagé, absents de la passerelle, absents de iOS, absents du
-web.
+**Conséquence directe et non évidente : après un masquage, l'appareil ne
+détient plus RIEN.** Ni contenu, ni ligne GRDB, ni entrée de cache.
 
-### 2.2 Pourquoi personne ne pouvait s'en apercevoir
+### 2.2 La charge utile ne porte qu'une adresse, et c'est délibéré
 
-**Un abonnement Socket.IO à un nom que personne ne prononce ne rend aucune
-erreur.** Il ne lève pas, ne journalise pas, ne se plaint pas au branchement :
-il se tait pour toujours. C'est la même forme de silence que le cycle 75 — un
-contrat sans émetteur — vue depuis l'autre bout du fil.
+Le contrat partagé l'écrit lui-même :
 
-Et tout le reste de la chaîne était JUSTE. Le flow existe, le collecteur du
-`ChatViewModel` l'écoute, le dépôt applique la mise à jour :
+> The payload deliberately carries no message body. An APPEARANCE cannot be
+> expressed as a tombstone: a client that dropped the bubble no longer holds
+> the content, so the only honest instruction is "refetch this conversation".
 
-```kotlin
-messageSocketManager.messageUpdated.collect { event ->
-    if (event.conversationId == conversationId) messageRepository.refresh(conversationId)
-}
+`MessageRestoredForMeEventData` ne porte donc que `{ messageId, conversationId }`.
+
+Les deux faits se combinent en une contrainte : **le retour en vue ne peut pas
+s'écrire localement.** Il exige un aller-retour serveur. C'est très
+probablement la raison pour laquelle le récepteur iOS n'a jamais été écrit —
+son jumeau était un one-liner de purge, celui-ci ne l'est pas.
+
+### 2.3 Ce que ça coûtait
+
+Le web restaure (c'est la seule surface qui expose le geste : **iOS n'a aucun
+appelant de `restore-for-me`**, vérifié — le défaut est purement en réception).
+Sur l'iPhone du même utilisateur, au même instant : rien.
+
+Et la récupération était laissée au hasard :
+
+| moment | le message revient-il ? |
+|---|---|
+| fil ouvert, en direct | **non** — c'est précisément ce que l'événement existe pour faire |
+| réouverture du fil | seulement s'il tombe dans la page la plus récente |
+| défilement arrière | oui, si le lecteur repasse par cette région (le REST `listBefore` re-couvre la page et l'upsert le repose) |
+| fil qu'on ne remonte jamais | **jamais** |
+
+Ce n'est donc pas « perdu à vie » — c'est pire à décrire et aussi mauvais à
+vivre : **un retour dont la date dépend d'un geste de défilement sans rapport.**
+Un message masqué l'a été quelque part dans l'historique ; la région où il
+dort est arbitrairement loin. L'événement existe exactement pour que ce retour
+ne soit pas remis au hasard.
+
+### 2.4 Le piège qui attendait la correction naïve
+
+`ConversationSocketDelegate` expose déjà un verbe qui *ressemble* à la solution :
+
+```swift
+func syncMissedMessages() async
 ```
 
-C'est exactement l'indice trompeur que la leçon du cycle 75 nommait : *« un
-récepteur soigné est un indice trompeur : il donne toutes les apparences d'une
-fonction livrée. »* Ici il y avait le flow, le collecteur, le merge, et même le
-type de charge utile. Tout, sauf le nom du canal.
+Il est faux ici, et silencieusement :
 
-### 2.3 Ce qu'un test d'unité ne peut pas voir
-
-`MessageSocketManagerNotificationTest` — le seul test existant du gestionnaire —
-injecte son événement en **cherchant le gestionnaire sous le nom que le
-gestionnaire a lui-même enregistré** :
-
-```kotlin
-handlers.getValue("notification:new").invoke(...)
+```swift
+guard let newestLocal = SyncWatermark.newest(among: messages) else { return }
+let response = try await messageService.listAfter(conversationId:, after: cursor, …)
 ```
 
-Ce test est vert **quel que soit** ce nom. Il prouve le décodage ; il ne peut
-structurellement rien prouver du NOM. Tout test unitaire d'événement entrant
-partage cet angle mort — c'est pourquoi les quatre tests iOS de
-`call:force-leave` étaient verts au cycle 75 sur une fonction que la passerelle
-n'avait jamais implémentée. **Le nom du canal est la seule chose qu'un test qui
-injecte l'événement lui-même ne pourra jamais vérifier.**
-
-### 2.4 Le deuxième silence, empilé sous le premier
-
-Corriger le nom de `transcription:ready` n'aurait PAS suffi. Le modèle Android
-était plat là où le fil est imbriqué :
-
-```kotlin
-data class TranscriptionReadyEvent(   // AVANT
-    val messageId: String,
-    val text: String,                 // ← jamais présent sur le fil
-    val language: String? = null,
-    ...
-)
-```
-
-La passerelle envoie la forme partagée `TranscriptionReadyEventData`
-(`MeeshySocketIOManager`, littéral `transcriptionData`) : le transcript
-**imbrique** sous `transcription`, seuls les identifiants et `processingTimeMs`
-restent au premier niveau. iOS le modélise ainsi (`TranscriptionReadyEvent
-.transcription: TranscriptionData`).
-
-`text` étant non-nul **sans valeur par défaut**, chaque trame aurait levé au
-décodage — dans le `runCatching` de `listen`, qui journalise et jette. Deux
-silences empilés : l'événement n'arrivait pas, et s'il était arrivé il aurait
-été avalé.
-
-**Et ce défaut-là a déjà été corrigé une fois, sur la classe voisine.**
-`AudioTranslationEventTest` existe et s'ouvre sur : *« the gateway emits the
-shared `AudioTranslationEventData` shape … so a flat model silently drops every
-frame at decode time. »* Même fichier, même pipeline audio, la classe juste
-au-dessus — et son jumeau est resté plat.
+C'est un backfill **strictement en avant**. Un message rendu est presque
+toujours **plus VIEUX** que le dernier message détenu. Le router par là aurait
+produit un no-op parfaitement vert : aucune erreur, aucun log, aucun test rouge
+— et aucun message rendu. C'est la raison pour laquelle le nouveau verbe est
+distinct, et pourquoi sa docstring commence par dire ce qu'il n'est PAS.
 
 ---
 
 ## 3. Le remède
 
-### 3.1 Les deux noms, et le flow qui portait le faux
+### 3.1 SDK — le canal jumeau
 
-```kotlin
-listen("message:edited", _messageEdited)
-listen("audio:transcription-ready", _transcriptionReady)
-```
+`MessageRestoredForMeEvent` (miroir exact de `MessageHiddenForMeEvent`,
+`restoredAt` optionnel pour la même raison : il n'arbitre rien, et son absence
+ne doit pas faire perdre le retour), le publisher au protocole
+`MessageSocketProviding`, et l'abonnement `socket.on("message:restored-for-me")`.
 
-Le flow `messageUpdated` est renommé `messageEdited` (et son collecteur avec).
-Ce n'est pas de la cosmétique : **un flow nommé d'après un événement fantôme est
-la façon dont la dérive s'est cachée.** Tant que le symbole disait `updated`,
-rien dans le code ne contredisait la chaîne fautive.
+La room est celle de l'UTILISATEUR : l'appareil émetteur reçoit l'événement lui
+aussi. Sans conséquence — la relecture est idempotente.
 
-### 3.2 La charge utile, alignée sur son jumeau
+### 3.2 App — la relecture, et ses trois refus
 
-`TranscriptionReadyEvent` reçoit la même forme que `AudioTranslationEvent` :
-imbrication explicite dans un `TranscriptionPayload`, défauts indulgents (texte
-vide, langue nulle) pour qu'une trame malformée tombe sur le no-op du merge au
-lieu de lever.
+`ConversationSocketHandler` filtre le lot sur SA conversation (même découpage
+que le masquage : un lot peut nommer plusieurs fils) et remet les adresses au
+délégué. `ConversationViewModel.restoreMessagesForMe(ids:)` relit.
 
-Le site d'appel lit désormais `event.transcription.text` — **pas** d'accesseurs
-dérivés qui rapatrieraient les champs à plat. Le voisin `AudioTranslationEvent`
-expose `event.translatedAudio` de la même façon : le site d'appel montre la
-forme réelle du fil, au lieu de la masquer derrière une commodité.
+Trois décisions, chacune un refus d'une option plus simple :
 
-### 3.3 La garde, et pourquoi elle vit dans `packages/shared`
+| refus | pourquoi |
+|---|---|
+| **pas d'écriture locale** | le masquage a purgé ; il n'y a rien à ressusciter, et l'événement ne porte pas de contenu |
+| **`listAround`, pas `listAfter`** | § 2.4 — le watermark ne remonte jamais le temps |
+| **pas de `loadWindow`** | le geste vient d'un AUTRE appareil : il ne doit pas déplacer le regard de celui-ci |
 
-`packages/shared/__tests__/ci/socket-event-name-gate.test.ts` :
+Ce dernier point est la raison pour laquelle la correction n'appelle pas
+`jumpToQuotedMessage`, qui fait par ailleurs exactement le bon aller-retour :
+il **recentre la fenêtre** sur sa cible. Légitime pour un tap volontaire sur
+une citation ; une régression pour un événement distant, qui arracherait le
+lecteur à l'endroit où il lit.
 
-> Tout nom d'événement Socket.IO épelé EN CLAIR par iOS ou Android — abonnement
-> comme émission — doit être une valeur déclarée de `SERVER_EVENTS`,
-> `CLIENT_EVENTS` ou `CALL_EVENTS`.
+L'upsert suffit, et c'est une propriété du store, pas une chance : chaque
+écriture de `MessagePersistenceActor` poste `.messageStoreShouldRefresh`, et
+`MessageStore` relit sa fenêtre courante. Si le message rendu y tombe, la bulle
+réapparaît à sa place chronologique ; sinon elle attend en cache, sans
+aller-retour de plus, que le lecteur remonte jusqu'à elle.
 
-Quatre décisions de conception valent d'être écrites :
+### 3.3 Le lot se replie sur lui-même
 
-**Les objets sont IMPORTÉS, jamais relus au motif.** Le jeu déclaré est
-littéralement l'ensemble des valeurs à l'exécution. Une lecture textuelle du
-fichier de contrat ferait passer pour « déclaré » un nom qui n'y figure qu'en
-PROSE — et `message:updated` aurait très bien pu être cité dans un commentaire.
-La garde aurait alors béni le défaut qu'elle est écrite pour interdire.
+La route unitaire n'émet aujourd'hui qu'UNE adresse (vérifié :
+`restoreMessageForUser` construit `messages: [{…}]`, et la route de
+restauration de CONVERSATION restaure des préférences, pas des messages — elle
+n'émet pas cet événement). Mais le gabarit est une liste, comme pour le
+masquage dont la route en lot en accepte cent.
 
-**iOS et Android seulement, pas le web.** Le web importe les constantes
-(`socket.on(SERVER_EVENTS.MESSAGE_EDITED, …)`) : un nom faux n'y compile pas,
-le typage tient déjà la garantie. Swift et Kotlin recopient la chaîne à la
-main ; c'est cette recopie, et elle seule, que la garde surveille.
+`listAround` ramenant une FENÊTRE et non un message isolé, une adresse déjà
+couverte par une fenêtre précédente n'a rien à redemander. Le lot se replie sur
+le nombre de fenêtres réellement distinctes — au lieu de facturer un
+aller-retour par id si une restauration en lot voit le jour.
 
-**Le seuil de couverture se pose PAR PLATEFORME.** iOS pèse ~110 littéraux,
-Android ~47. Un seuil global aurait laissé un scan Android muet passer inaperçu
-derrière iOS. Sans ces témoins, un chemin déplacé ou une aide renommée rendrait
-la garde verte en ne trouvant plus rien à vérifier — l'échec silencieux qu'on
-vient de corriger, rejoué dans son propre garde-fou.
-
-**Les chemins de test sont exclus.** Un test injecte l'événement lui-même : le
-nom qu'il épelle est une donnée d'entrée, pas un abonnement vivant. L'y
-soumettre interdirait d'écrire le témoin de régression sur un nom fautif — celui
-qui, ci-dessous, prouve la correction.
-
-**Placement** : même raison que ses deux voisins de dossier
-(`ios-pr-compile-gate`, `lentille-tokens-consumption-gate`) — `packages/shared`
-tourne sur CHAQUE PR (`ci.yml`, matrice `test`), c'est donc le seul point
-d'observation commun aux deux plateformes. La suite Android, elle, ne tourne que
-dans son propre workflow, et ne pourrait de toute façon pas lire un contrat
-TypeScript.
+Chaque adresse reste traitée indépendamment : une relecture qui échoue (réseau,
+message devenu inaccessible) n'emporte pas ses voisines.
 
 ---
 
 ## 4. Ce que ce cycle NE change PAS
 
-- **Aucune ligne de passerelle.** Les deux événements étaient émis correctement
-  depuis toujours.
-- **Aucun nom d'événement, aucune charge utile, aucun contrat.** Le contrat
-  avait raison ; c'est le client qui en avait dévié.
-- **iOS et web** : intacts, et vérifiés conformes par la garde neuve (zéro
-  écart sur 110 + 47 littéraux).
+- **Aucune ligne de serveur.** Le gateway émettait déjà correctement, dans le
+  bon ordre (la ligne `UserMessageDeletion` est supprimée AVANT la diffusion —
+  la relecture déclenchée par l'événement ne peut donc pas être re-filtrée).
+- **Aucune ligne de web.** Il honorait déjà les deux sens.
+- **Android reste hors du sujet, et c'est un constat, pas un oubli** : il n'a
+  NI `hidden-for-me` NI `restored-for-me`. Tout le canal de visibilité
+  personnelle y est absent. Y ajouter le retour seul n'aurait aucun sens —
+  il n'y a rien qui masque. Déposé en § 6.
 
 ---
 
-## 5. Preuves
+## 5. L'instrument, réutilisable
 
-| gate | résultat |
-|---|---|
-| `socket-event-name-gate` AVANT correction | **ROUGE**, sur exactement les deux noms et rien d'autre |
-| `socket-event-name-gate` APRÈS correction | vert (3/3) |
-| `packages/shared` — suite complète | **97 fichiers / 2351 tests verts** |
-| `tsc --noEmit` shared | vert |
-| android — `TranscriptionReadyEventTest` (neuf, 2 cas) | via CI `Android` |
-| android — `MessageSocketManagerChannelNamesTest` (neuf, 2 cas) | via CI `Android` |
-| android — `ChatViewModelTest` (adapté à la forme imbriquée) | via CI `Android` |
+La matrice de couverture du contrat, telle qu'exécutée (Python + `rg`) :
 
-Le témoin ROUGE est la preuve qui compte : la garde a été écrite AVANT la
-correction, et elle a listé les deux défauts réels sans un seul faux positif sur
-157 littéraux scannés.
+1. extraire les paires `(CLÉ, littéral)` du bloc `SERVER_EVENTS` de
+   `packages/shared/types/socketio-events.ts` ;
+2. pour chaque événement, chercher **le littéral ET la clé** dans chacun des
+   quatre corpus (`services/gateway/src`, `apps/web`,
+   `apps/ios/Meeshy` + `packages/MeeshySDK/Sources`, `apps/android`), en
+   excluant les répertoires de tests (sinon un test qui cite le nom fait
+   passer un client pour abonné) ;
+3. signaler `gw == 0` (personne n'émet — le cas du cycle 75) et
+   `client == 0` avec `gw > 0` (personne n'écoute — le cas de ce cycle).
 
-**Kotlin non compilable en conteneur** : `dl.google.com` est refusé par la
-politique de sortie, `sdkmanager` ne peut pas s'amorcer — c'est l'en-tête de
-`.github/workflows/android.yml` qui documente cette contrainte et qui existe
-précisément pour la contourner. `assembleDebug` + `testDebugUnitTest` tournent
-sur runner GitHub.
+**Les deux formes de recherche sont obligatoires.** Le web s'abonne
+exclusivement par la constante ; ne chercher que le littéral l'a fait passer
+pour muet sur des événements qu'il honore parfaitement, y compris celui-ci.
+
+**Un `0` n'est pas un défaut, c'est une question.** Beaucoup sont légitimes
+(fonction absente d'une plateforme, `heartbeat:ack` que le web n'a pas besoin
+d'écouter). Ce qui fait un défaut, c'est ce qu'a montré la ligne retenue : **un
+verbe présent et son inverse absent, sur le même client.** L'asymétrie est le
+signal ; le zéro seul ne l'est pas.
 
 ---
 
 ## 6. Pistes laissées ouvertes
 
-1. **La garde SYMÉTRIQUE n'est pas écrite : « tout événement déclaré au contrat
-   a-t-il un émetteur ? »** C'est la classe du cycle 75, et la matrice de la §1
-   a déjà nommé ses candidats — `message:translated` (écouté par les TROIS
-   clients, émis par personne ; inoffensif parce que `message:translation`
-   porte réellement la traduction), `system:message`,
-   `conversation:online-stats`, `post:reaction-sync`, `comment:reaction-sync`
-   (iOS seul). Chacun demande un arbitrage — implémenter l'émetteur ou retirer
-   l'entrée du contrat et ses récepteurs — donc un cycle à lui, pas une garde
-   qu'on rend verte à la hâte.
-
-2. **Les 26 autres événements de `MessageSocketManager` n'ont toujours aucun
-   test de comportement.** Son unique fichier de test le disait déjà en
-   toutes lettres (« intentionally does not attempt to backfill them »). La
-   garde neuve couvre désormais leur NOM ; leur décodage reste non prouvé, et
-   c'est exactement le trou par lequel `TranscriptionReadyEvent` est resté plat.
-
-3. **Défense en profondeur sur le relais `call:signal`** — piste 1 du cycle 75,
-   toujours ouverte, et toujours arbitrée de la même façon : une relecture
-   d'appartenance par signal coûterait une lecture DB sur le chemin le plus
-   chaud du produit.
+1. **Android n'a aucun canal de visibilité personnelle** — ni masquage, ni
+   retour. C'est le chantier entier, pas ce correctif : le masquage d'abord
+   (avec sa purge locale), le retour ensuite. À déposer comme cycle propre.
+2. **`attachment:reaction-added` / `attachment:reaction-removed` : émis par le
+   gateway, honorés par iOS, aucun récepteur web.** Même forme de défaut que
+   celui-ci, sur une paire cette fois entièrement absente d'un client — à
+   qualifier (le web expose-t-il seulement les réactions par pièce jointe ?)
+   avant de conclure.
+3. **`SDK Tests` était rouge sur `main` depuis le 2026-08-20**
+   (`StoryTextStyle.allCases` passé à 18, garde restée à 11). **Déjà corrigé
+   sur `main`** ; la suite n'avait simplement pas été rejouée, faute de commit
+   touchant `packages/MeeshySDK/**`. Ce cycle en touche — le rouge doit donc
+   tomber de lui-même sur cette PR. Aucune action prise ; à vérifier sur le
+   run, et à traiter s'il persistait.
+4. **Le relais `call:signal` ne relit toujours pas l'appartenance au fil**
+   (piste 1 du cycle 75). Vérifié en passant : la formulation de cette piste
+   était trop large — `call:join` VÉRIFIE bien l'appartenance
+   (`resolveParticipantIdFromCall` → `isActive: true`). Ce qui reste ouvert est
+   plus étroit : la défense en profondeur sur le RELAIS lui-même, qui
+   s'autorise sur `CallParticipant.leftAt` seul. Le cycle 75 a fermé le chemin
+   par lequel un exclu y restait ; la garde de second rideau reste à poser, et
+   elle coûterait une lecture d'appartenance sur un hot-path délibérément
+   caché (rafales ICE). À arbitrer, pas à appliquer par réflexe.
