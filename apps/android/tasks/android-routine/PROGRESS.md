@@ -2,6 +2,78 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Manual composer-language draft persistence shipped** (slice `chat-draft-language-persistence`,
+> the last open piece of feature-parity's Chat "Draft auto-save/restore" line — now `[x]`).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 8 open PRs at branch time
+> (#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none android-routine. Prior
+> android iteration (#3252, chat-draft-effects-persistence) already merged. Branched off freshly-fetched
+> `origin/main` (`f2a2e404`, which includes #3252).
+>
+> **SDK bootstrap (see NOTES 2026-08-21 later):** the "newer cmdline-tools fix the platform metadata" claim
+> did NOT hold this run — `platforms/android-37.0/source.properties` again came out malformed (`Platform 17`,
+> `ApiLevel=37.0`), so AGP's `compileSdk 37`→`android-37` hash found no match. Fixed by a real `cp -r
+> android-37.0 android-37` + `sed` on `source.properties` (ApiLevel→37). `assembleDebug testDebugUnitTest`
+> green after across all modules. This container **reaches `dl.google.com`** (curl → 200) so the full local
+> gate ran here.
+>
+> **The gap**: iOS's app-side `MessageDraft` persists `selectedLanguage` (the composer language pick)
+> alongside text/reply/effects, restored in `ConversationView.onAppear` (`if let lang = draft.selectedLanguage
+> { composerState.selectedLanguage = lang }`) and re-persisted on `.adaptiveOnChange(of: selectedLanguage)`.
+> Android's `ConversationDraft` carried text+reply+effects but not the language — a deliberate language
+> override armed but not sent was lost on navigation.
+>
+> **The key design call — a language is NOT content (faithful iOS port)**: iOS `MessageDraft.isEffectivelyEmpty`
+> (persistence) and `hasDraftText` (list badge) BOTH ignore `selectedLanguage`. So on Android I left
+> `ConversationDraft.isMeaningful` AND `isWorthPersisting` **unchanged** — a language-only composer neither
+> floats/badges a conversation row nor is persisted on its own; the language rides along an otherwise
+> worth-persisting draft (text/reply/effects present) and is dropped with it. This is the cleanest match to
+> iOS and needed NO new predicate (unlike the effects slice, which added `isWorthPersisting`).
+>
+> **Manual override only**: Android's `ComposerLanguageState` splits `detected` (auto) from `manualOverride`
+> (deliberate pick). Only `manualOverride` is persisted — live detection is redundant (re-derives from the
+> restored text). Restore re-applies it via `withManualPick` (wins over detection of the restored text, locks
+> analysis) — exactly iOS's override-wins semantics.
+>
+> **Pure core (`:core:model`)**: `ConversationDraft` gains `selectedLanguage: String? = null` (defaulted →
+> legacy blob decodes to no language, back-compat covered by a decode test). `isMeaningful`/`isWorthPersisting`
+> untouched.
+>
+> **Pure reducer (`:feature:chat`)**: `DraftAutosave.resolve` gains `selectedLanguage: String? = null`
+> (normalised trim/blank→null; folded into the idempotence clause so a language change on a worth-persisting
+> draft → `Save`, identical text+lang → `None`; the blank-guard is untouched so a language on an empty composer
+> → `None`, never rescuing it). `DraftRestore` gains `selectedLanguage`; `restore` returns the normalised
+> stored language.
+>
+> **Trivial VM wiring**: `ChatViewModel.persistDraft` reads `_state.value.composerLanguage.manualOverride`;
+> `onComposerLanguagePicked` now calls `persistDraft` (iOS `.adaptiveOnChange` parity); the open-time restore
+> applies `restored.selectedLanguage?.let { withManualPick(it) }`. Send/clear paths reset `composerLanguage =
+> ComposerLanguageState()` before their existing `persistDraft("", null)` → manualOverride null → language
+> cleared with the draft (no change needed there).
+>
+> **Tests**: **+17** — `ConversationDraftTest` +4 (a language pick alone is neither meaningful nor worth
+> persisting; a pick riding a real draft leaves both predicates on the content; legacy blob missing
+> `selectedLanguage` decodes to null), `DraftAutosaveTest` +10 (7 resolve: language on empty composer → None;
+> language-only over no prior → None; text+lang saved; only-the-language-changing → Save; identical text+lang →
+> None; trim/blank→null; clearing language while text remains → Save without lang — + 3 restore: returns / trims
+> & drops / a text-only draft restores with no language), `ChatViewModelTest` +3 round-trip (picking a
+> language persists it alongside the typed draft; a pick on an empty composer persists nothing; a stored
+> text+language draft re-applies the manual override on open). **Mutation (RED proof)**: drop the resolve
+> `previous.selectedLanguage == language` idempotence clause → **exactly** `only_the_language_pick_changing_on_a_text_draft_still_saves`
+> fails while `identical_text_and_language_writes_nothing` stays green (proving the clause is the tested
+> behaviour, not a tautology). Restored after.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) — **BUILD SUCCESSFUL**
+> across every module locally in this run; touched modules also ran explicitly green (`ConversationDraftTest`,
+> `DraftAutosaveTest`, `ChatViewModelTest`). Reviewer PASS. Diff is `apps/android` only.
+>
+> **Next**: the Chat "Draft auto-save/restore" line is now fully `[x]`. Remaining Chat `[◐]`/`[~]` boxes:
+> finer send-lifecycle `Slow` tier (needs outbox retry-attempt state plumbed into `BubbleContent`) and the
+> edit-history viewer (blocked — needs a gateway endpoint, not apps/android-only). With Chat drafts closed,
+> the next high-value area per build-order (`… → Chat → Feed → Stories → Calls`) is the top unchecked Chat
+> box that stays apps/android-only, else advance to Feed. Re-scout read-only before committing — parity notes
+> are hypotheses.
+
 > On 2026-08-21 **Composer draft effects persistence shipped** (slice `chat-draft-effects-persistence`,
 > feature-parity's Chat `[◐]` "Draft auto-save/restore" line — the `effects`/`blur`/`ephemeral` fields its
 > **Pending** clause called out, now unblocked because the composer effects picker / ephemeral duration /

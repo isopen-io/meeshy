@@ -448,6 +448,9 @@ class ChatViewModel @Inject constructor(
                         draft = restored.text,
                         replyingToMessageId = restored.replyToId,
                         pendingEffects = restored.effects,
+                        composerLanguage = restored.selectedLanguage
+                            ?.let { current.composerLanguage.withManualPick(it) }
+                            ?: current.composerLanguage,
                     )
                 } else {
                     current
@@ -888,6 +891,7 @@ class ChatViewModel @Inject constructor(
      */
     fun onComposerLanguagePicked(code: String) {
         _state.update { it.copy(composerLanguage = it.composerLanguage.withManualPick(code)) }
+        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
     }
 
     /**
@@ -900,7 +904,11 @@ class ChatViewModel @Inject constructor(
      * (iOS app-side `DraftStore` reply-reference parity); the currently-armed
      * [ChatUiState.pendingEffects] are read from state and persisted too, so a self-destruct
      * duration or a confetti effect armed but not yet sent survives navigation (iOS
-     * `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` parity).
+     * `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` parity). The manual
+     * composer-language pick ([ComposerLanguageState.manualOverride]) is likewise read from state
+     * and persisted, so a deliberate language override rides along the draft (iOS
+     * `MessageDraft.selectedLanguage` parity) — live detection is not persisted, it re-derives from
+     * the restored text.
      */
     private fun persistDraft(rawText: String, replyToId: String?) {
         if (_state.value.isEditing) return
@@ -911,6 +919,7 @@ class ChatViewModel @Inject constructor(
             nowIso = java.time.Instant.ofEpochMilli(clock.nowMillis()).toString(),
             previous = lastPersistedDraft,
             effects = _state.value.pendingEffects,
+            selectedLanguage = _state.value.composerLanguage.manualOverride,
         )
         lastPersistedDraft = when (decision) {
             is DraftPersist.Save -> decision.draft

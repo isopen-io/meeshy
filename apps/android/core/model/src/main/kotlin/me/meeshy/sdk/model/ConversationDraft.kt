@@ -16,6 +16,13 @@ import kotlinx.serialization.Serializable
  * (iOS `MessageDraft.effectFlags` / `isBlurEnabled` / `ephemeralDurationRawValue`, folded here
  * into the single [MessageEffects] SSOT). Defaulted so legacy persisted blobs written before this
  * field existed decode to an empty selection.
+ *
+ * [selectedLanguage] carries a deliberate manual language pick from the composer's language picker
+ * (iOS `MessageDraft.selectedLanguage`), so a language the user overrode but has not yet sent
+ * survives navigation. Only the manual override is persisted — live detection re-derives itself
+ * from the restored text — and, like iOS's `isEffectivelyEmpty`, a language pick never counts as
+ * content: it rides along an otherwise worth-persisting draft and never rescues an empty one.
+ * Defaulted so legacy persisted blobs written before this field existed decode to no language.
  */
 @Serializable
 data class ConversationDraft(
@@ -24,6 +31,7 @@ data class ConversationDraft(
     val updatedAt: String? = null,
     val replyToId: String? = null,
     val effects: MessageEffects = MessageEffects(),
+    val selectedLanguage: String? = null,
 )
 
 /**

@@ -18,14 +18,16 @@ sealed interface DraftPersist {
 
 /**
  * The composer snapshot to seed when a conversation opens: the [text] to place, the
- * [replyToId] reply to re-arm (`null` = a plain draft with no reply) and the [effects] to
- * re-arm on the composer (empty = no armed effect). Produced by [DraftAutosave.restore] only
+ * [replyToId] reply to re-arm (`null` = a plain draft with no reply), the [effects] to
+ * re-arm on the composer (empty = no armed effect) and the [selectedLanguage] manual pick to
+ * re-apply (`null` = leave language on live detection). Produced by [DraftAutosave.restore] only
  * when the composer is idle; `null` from `restore` means "leave the composer untouched".
  */
 data class DraftRestore(
     val text: String,
     val replyToId: String?,
     val effects: MessageEffects = MessageEffects(),
+    val selectedLanguage: String? = null,
 )
 
 /**
@@ -52,8 +54,13 @@ object DraftAutosave {
      * - No text, no reply and no effects, over nothing/an empty draft → [DraftPersist.None].
      * - A composer (text, reply and/or effects) identical to the stored one → [DraftPersist.None].
      * - A composer that differs → [DraftPersist.Save] (raw text preserved so a restore
-     *   returns exactly what the user typed, timestamped with [nowIso]). [replyToId]
-     *   is normalised (trimmed, blank → `null`); [effects] is stored verbatim.
+     *   returns exactly what the user typed, timestamped with [nowIso]). [replyToId] and
+     *   [selectedLanguage] are normalised (trimmed, blank → `null`); [effects] is stored verbatim.
+     *
+     * [selectedLanguage] is the manual composer-language pick. It never counts as content — a
+     * language on an otherwise-blank composer stays inert (iOS `isEffectivelyEmpty` ignores it) —
+     * but a change to it on a draft that IS worth persisting is a save, so re-picking the language
+     * of a half-typed message is durably kept.
      */
     fun resolve(
         conversationId: String,
@@ -62,13 +69,19 @@ object DraftAutosave {
         nowIso: String,
         previous: ConversationDraft?,
         effects: MessageEffects = MessageEffects(),
+        selectedLanguage: String? = null,
     ): DraftPersist {
         val reply = replyToId?.trim()?.takeIf { it.isNotEmpty() }
+        val language = selectedLanguage?.trim()?.takeIf { it.isNotEmpty() }
         if (rawText.isBlank() && reply == null && !effects.hasAnyEffect) {
             val hadDraft = previous != null && previous.isWorthPersisting
             return if (hadDraft) DraftPersist.Clear(conversationId) else DraftPersist.None
         }
-        if (previous?.text == rawText && previous.replyToId == reply && previous.effects == effects) {
+        if (previous?.text == rawText &&
+            previous.replyToId == reply &&
+            previous.effects == effects &&
+            previous.selectedLanguage == language
+        ) {
             return DraftPersist.None
         }
         return DraftPersist.Save(
@@ -78,6 +91,7 @@ object DraftAutosave {
                 updatedAt = nowIso,
                 replyToId = reply,
                 effects = effects,
+                selectedLanguage = language,
             ),
         )
     }
@@ -89,13 +103,20 @@ object DraftAutosave {
      * text the user has already begun typing (the load is asynchronous and may resolve
      * after the first keystroke). A stored draft that holds neither text, an armed reply nor
      * any armed effect is ignored; a reply-only or effects-only draft restores empty text with
-     * the reply / effects re-armed. The stored [ConversationDraft.replyToId] is normalised
-     * (trimmed, blank → `null`); the stored [ConversationDraft.effects] are returned verbatim.
+     * the reply / effects re-armed. The stored [ConversationDraft.replyToId] and
+     * [ConversationDraft.selectedLanguage] are normalised (trimmed, blank → `null`); the stored
+     * [ConversationDraft.effects] are returned verbatim.
      */
     fun restore(stored: ConversationDraft?, currentDraft: String, isEditing: Boolean): DraftRestore? {
         if (isEditing || currentDraft.isNotBlank()) return null
         if (stored == null || !stored.isWorthPersisting) return null
         val reply = stored.replyToId?.trim()?.takeIf { it.isNotEmpty() }
-        return DraftRestore(text = stored.text, replyToId = reply, effects = stored.effects)
+        val language = stored.selectedLanguage?.trim()?.takeIf { it.isNotEmpty() }
+        return DraftRestore(
+            text = stored.text,
+            replyToId = reply,
+            effects = stored.effects,
+            selectedLanguage = language,
+        )
     }
 }
