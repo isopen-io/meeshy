@@ -130,6 +130,30 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "La création ET l'édition d'une transition existante doivent rester atteignables (badges existants réutilisés, pas réinventés)")
     }
 
+    // MARK: - Guard 2e — TransitionChromeLane partage le MÊME repère que la
+    // règle/tête de lecture/plan, pas une TimelineGeometry indépendante
+    //
+    // `TransitionChromeLane.badgeWidth` dérive du `geometry` reçu pour
+    // convertir les 1,2s fixes (`StoryRenderer.slideTransitionDuration`) en
+    // largeur de pixels. Si ce `geometry` n'est pas le MÊME
+    // `Plan2DView.equivalentGeometry` que RulerView/PlayheadView reçoivent,
+    // la largeur des badges d'ouverture/fermeture ne représente pas 1,2s sur
+    // l'axe temporel du plan — exactement la désynchronisation de repère que
+    // `equivalentGeometry` a été créée pour supprimer.
+
+    func test_storyTimelineHost_transitionChromeLaneSharesThePlansEquivalentGeometry() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        guard let range = source.range(of: "TransitionChromeLane(") else {
+            return XCTFail("StoryTimelineHost doit construire TransitionChromeLane")
+        }
+        let body = String(source[range.upperBound...].prefix(400))
+        XCTAssertTrue(body.contains("geometry: equivalentGeometry"),
+                     "TransitionChromeLane doit recevoir la MÊME géométrie que RulerView/PlayheadView — "
+                     + "sinon la largeur de ses badges ne représente pas la même échelle temporelle que le reste du plan")
+        XCTAssertFalse(body.contains("geometry: TimelineGeometry(zoomScale:"),
+                      "TransitionChromeLane ne doit plus recevoir une TimelineGeometry brute, indépendante du repère du plan")
+    }
+
     /// Contrôle positif : la garde doit réellement détecter l'ABSENCE de la règle.
     func test_guardDetectsAMissingRulerView() {
         let sample = "struct Fake { var body: some View { Plan2DView(...) } }"

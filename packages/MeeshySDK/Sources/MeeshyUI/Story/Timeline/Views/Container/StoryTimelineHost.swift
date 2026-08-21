@@ -9,22 +9,35 @@ import MeeshySDK
 /// n'est PLUS le point d'entrée de production — grep `StoryTimelineView(`
 /// hors ce fichier ne renvoie aucun site de production — mais il reste dans
 /// l'arbre : ses PROPRES tests le montent (`StoryTimelineViewSnapshotTests`,
-/// `StoryTimelineViewTests`, `StoryTimelineViewHoistOrderTests`) et plusieurs
-/// bancs de comportement transverses continuent de le monter comme scène
-/// entièrement câblée pour exercer d'autres composants
-/// (`TransportBarTests`, `ClipInspector_StateSyncTests`,
-/// `TimelineInspectorHostRoutingTests`, `..._IsMutedReactiveTests`,
-/// `AudioTextDragDriftTests`) — sa suppression romprait ces 6+ bancs pour un
-/// gain de ~900 lignes ; son sort définitif (portage de ces bancs vers
-/// `StoryTimelineHost`, ou suppression assumée) reste un chantier séparé, pas
-/// silencieux : DIT ici plutôt que reformulé en fausse réutilisation
-/// production.
+/// `StoryTimelineViewTests`, `StoryTimelineViewHoistOrderTests`) et TROIS
+/// bancs transverses le montent réellement comme scène câblée pour exercer
+/// d'autres composants — vérifié par `grep -n "StoryTimelineView("`, pas
+/// seulement par le nom du fichier — (`StoryTimelineView_IsMutedReactiveTests`,
+/// `TimelineInspectorHostRoutingTests`, `TimelineInspectorHost_IsMutedReactiveTests`).
+/// `TransportBarTests`, `ClipInspector_StateSyncTests` et
+/// `AudioTextDragDriftTests` ne font que le CITER dans un commentaire de
+/// documentation — ils ne l'instancient pas et sa suppression ne les
+/// casserait pas ; l'énoncé précédent de ce commentaire les comptait à tort
+/// parmi les bancs cassés, corrigé ici. Son sort définitif (portage des 3
+/// bancs réels vers `StoryTimelineHost`, ou suppression assumée) reste un
+/// chantier séparé, pas silencieux : DIT ici plutôt que reformulé en fausse
+/// réutilisation production.
 ///
 /// La bascule compact/déployé de l'ancien conteneur (3 pistes visibles, un
 /// bouton « déployer » pour le reste) N'A PAS d'équivalent ICI — le plan
 /// affiche TOUJOURS l'intégralité des pistes, empilées par plan (c'est son
 /// principe même : « l'ordre des pistes EST l'ordre à l'écran », D1) ;
 /// scroller y substitue tronquer. Simplification ASSUMÉE, pas un oubli.
+///
+/// Le pinch-to-zoom et l'auto-scroll qui suit la tête de lecture pendant la
+/// lecture (tous deux portés par `TimelineScrubArea` dans l'ancien
+/// conteneur) N'ONT PAS non plus d'équivalent ICI — seuls les boutons +/−
+/// du transport pilotent le zoom (cf. `transport`, mêmes bornes que
+/// `TimelineScrubArea.zoomRange`, gestes non repris). Régression CONNUE,
+/// disclosed, pas un oubli silencieux ; corollaire : au-delà d'un
+/// `zoomScale` de 1.0, ces boutons ne changent plus le palier affiché
+/// (`plan2DZoom` est binaire `.fit`/`.detail`), alors qu'ils continuent de
+/// faire varier `zoomScale` en continu de 0,05 à 8,0.
 ///
 /// State (`selectedClipId`, `currentTime`, `zoomScale`) lives in
 /// `TimelineViewModel`.
@@ -124,9 +137,16 @@ public struct StoryTimelineHost: View {
             isSnapEnabled: nil,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
-            // Bornes partagées avec le pinch (`TimelineScrubArea.zoomRange`,
-            // 5 % – 800 %) — le zoom pilote aussi lequel des deux paliers
-            // (`.fit` / `.detail`) le plan dessine, cf. `plan2DRegion`.
+            // Bornes reprises de `TimelineScrubArea.zoomRange` (5 % – 800 %)
+            // pour rester la MÊME plage que l'ancien conteneur — le zoom
+            // pilote aussi lequel des deux paliers (`.fit` / `.detail`) le
+            // plan dessine, cf. `plan2DRegion`. `TimelineScrubArea` elle-même
+            // n'est PAS montée ici : ses gestes (pinch via
+            // `MagnificationGesture`, auto-scroll qui suit la tête de
+            // lecture pendant la lecture via `proxy.scrollTo`) restent
+            // NON restaurés dans ce conteneur — seuls les boutons +/− du
+            // transport pilotent le zoom. Régression connue et disclosed
+            // (pas d'équivalent construit pour l'instant), pas un oubli.
             onZoomIn: { viewModel.zoomScale = min(
                 TimelineScrubArea<AnyView>.zoomRange.upperBound,
                 viewModel.zoomScale * 1.25) },
@@ -162,29 +182,35 @@ public struct StoryTimelineHost: View {
                 .padding(.vertical, 28)
                 .padding(.horizontal, 16)
         } else {
-            VStack(spacing: 0) {
-                // Chrome d'ouverture/fermeture (fondu/zoom/glissement/révélation
-                // configurés par `OpeningEffectChips`, hors timeline) — vivait
-                // hors du scroller horizontal dans l'ancien conteneur, reste
-                // hors de lui ici (même composant, réutilisé tel quel).
-                TransitionChromeLane(
-                    openingEffect: viewModel.project.openingEffect,
-                    closingEffect: viewModel.project.closingEffect,
-                    slideDuration: viewModel.project.slideDuration,
-                    geometry: TimelineGeometry(zoomScale: viewModel.zoomScale),
-                    isDark: colorScheme == .dark
-                )
-                GeometryReader { proxy in
-                    let laneWidth = max(0, proxy.size.width - Plan2DView.labelColumnWidth)
-                    let slideDuration = Double(viewModel.project.slideDuration)
-                    let zoom = plan2DZoom
-                    // Conversion PURE qui fait coïncider EXACTEMENT le repère
-                    // continu de RulerView/PlayheadView avec celui, à deux
-                    // paliers, que `Plan2DLayout.x` fait autorité sur les
-                    // barres/losanges du plan — sans elle, règle et barres
-                    // désynchroniseraient.
-                    let equivalentGeometry = Plan2DView.equivalentGeometry(
-                        laneWidth: laneWidth, zoom: zoom, slideDuration: slideDuration)
+            GeometryReader { proxy in
+                let laneWidth = max(0, proxy.size.width - Plan2DView.labelColumnWidth)
+                let slideDuration = Double(viewModel.project.slideDuration)
+                let zoom = plan2DZoom
+                // Conversion PURE qui fait coïncider EXACTEMENT le repère
+                // continu de RulerView/PlayheadView avec celui, à deux
+                // paliers, que `Plan2DLayout.x` fait autorité sur les
+                // barres/losanges du plan — sans elle, règle et barres
+                // désynchroniseraient. Calculée UNE fois ici (plutôt que
+                // dans un `GeometryReader` séparé, plus bas) pour que
+                // `TransitionChromeLane`, hors du scroller horizontal,
+                // partage EXACTEMENT le même repère qu'elles — sinon la
+                // largeur de ses badges (1,2s fixes) ne représenterait pas
+                // la même échelle temporelle que le reste du plan
+                // (désynchronisation constatée, corrigée ici).
+                let equivalentGeometry = Plan2DView.equivalentGeometry(
+                    laneWidth: laneWidth, zoom: zoom, slideDuration: slideDuration)
+                VStack(spacing: 0) {
+                    // Chrome d'ouverture/fermeture (fondu/zoom/glissement/révélation
+                    // configurés par `OpeningEffectChips`, hors timeline) — vivait
+                    // hors du scroller horizontal dans l'ancien conteneur, reste
+                    // hors de lui ici (même composant, réutilisé tel quel).
+                    TransitionChromeLane(
+                        openingEffect: viewModel.project.openingEffect,
+                        closingEffect: viewModel.project.closingEffect,
+                        slideDuration: viewModel.project.slideDuration,
+                        geometry: equivalentGeometry,
+                        isDark: colorScheme == .dark
+                    )
                     ScrollView([.horizontal, .vertical], showsIndicators: true) {
                         VStack(alignment: .leading, spacing: 0) {
                             // Règle graduée + scrub (drag ET tap) — RÉUTILISE
@@ -248,9 +274,10 @@ public struct StoryTimelineHost: View {
                             playheadOverlay(geometry: equivalentGeometry, slideDuration: slideDuration)
                         }
                     }
+                    .frame(maxHeight: .infinity)
                 }
-                .frame(maxHeight: .infinity)
             }
+            .frame(maxHeight: .infinity)
         }
     }
 
