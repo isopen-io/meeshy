@@ -499,7 +499,7 @@ public struct StoryTimelineView: View {
                     tintHex: tint(for: track.kind),
                     isDark: colorScheme == .dark,
                     laneWidth: laneWidth,
-                    laneHeight: 52,
+                    laneHeight: TimelineMetrics.laneHeight,
                     iconName: Self.iconName(for: track.kind),
                     isBackgroundSection: track.kind.isBackgroundSection,
                     labelColumnWidth: TimelineScrubArea<AnyView>.laneLabelWidth,
@@ -508,14 +508,14 @@ public struct StoryTimelineView: View {
                 ) {
                     ZStack(alignment: .leading) {
                         ForEach(track.clipIds, id: \.self) { clipId in
-                            clipBar(for: clipId, geometry: geometry, laneHeight: 52)
+                            clipBar(for: clipId, geometry: geometry, laneHeight: TimelineMetrics.laneHeight)
                         }
                         LaneKeyframeOverlays(
                             markers: KeyframeMarkerResolver.markers(
                                 for: track.clipIds, in: hoistedKeyframeMarkers),
                             selectedId: viewModel.selection.selectedClipId,
                             geometry: geometry,
-                            laneHeight: 52,
+                            laneHeight: TimelineMetrics.laneHeight,
                             // Un marqueur fait 12–16 pt : exiger un double tap
                             // sur une cible aussi petite serait une régression.
                             // Il ouvre donc sa fiche au tap simple, contrairement
@@ -528,7 +528,7 @@ public struct StoryTimelineView: View {
                             selectedId: viewModel.selection.selectedClipId,
                             isDark: colorScheme == .dark,
                             geometry: geometry,
-                            laneHeight: 52,
+                            laneHeight: TimelineMetrics.laneHeight,
                             onSelect: { viewModel.inspectClip(id: $0) },
                             onCreate: { junction in
                                 if let id = viewModel.addTransition(
