@@ -147,7 +147,7 @@ struct ConversationListQuickActions: View, Equatable {
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
+                Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .opacity(0.8)
             }

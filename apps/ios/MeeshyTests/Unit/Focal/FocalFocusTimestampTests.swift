@@ -14,7 +14,7 @@ final class FocalFocusTimestampTests: XCTestCase {
     }
     private let locale = Locale(identifier: "fr_FR")
 
-    /// Samedi 21 août 2026, 15:00 UTC.
+    /// Vendredi 21 août 2026, 15:00 UTC.
     private var now: Date { date(2026, 8, 21, 15, 0) }
 
     private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int = 12, _ min: Int = 0) -> Date {
@@ -38,8 +38,10 @@ final class FocalFocusTimestampTests: XCTestCase {
     }
 
     func test_withinTheWeek_isTheWeekdayNamePlusTime() {
-        // Mercredi 18 août 2026 — 3 jours avant le samedi 21.
-        XCTAssertEqual(label(date(2026, 8, 18, 23, 40), time: "23:40"), "Mercredi 23:40")
+        // Mardi 18 août 2026, 23:40 UTC — 3 jours avant le vendredi 21. Le nom
+        // du jour est formaté dans le fuseau du CALENDRIER (UTC) : « Mardi »
+        // partout, pas « Mercredi » sur une machine à Paris (01:40 le 19).
+        XCTAssertEqual(label(date(2026, 8, 18, 23, 40), time: "23:40"), "Mardi 23:40")
         // Samedi 15 août — 6 jours : encore le nom du jour.
         XCTAssertEqual(label(date(2026, 8, 15)), "Samedi 12:45")
     }
@@ -87,7 +89,7 @@ final class FocalFocusTimestampTests: XCTestCase {
     func test_listLabel_joinsWithTheAtWord_onEveryBranch() {
         XCTAssertEqual(listLabel(date(2026, 8, 21, 5, 49), time: "5:49"), "Aujourd'hui à 5:49")
         XCTAssertEqual(listLabel(date(2026, 8, 20, 22, 12), time: "22:12"), "Hier à 22:12")
-        XCTAssertEqual(listLabel(date(2026, 8, 18, 23, 50), time: "23:50"), "Mercredi à 23:50")
+        XCTAssertEqual(listLabel(date(2026, 8, 18, 23, 50), time: "23:50"), "Mardi à 23:50")
         // Au-delà d'une semaine : la date ET l'heure, jointes par « à » (plus de « · »).
         XCTAssertEqual(listLabel(date(2025, 10, 3, 14, 41), time: "14:41"), "Ven. 3 oct. 2025 à 14:41")
     }
