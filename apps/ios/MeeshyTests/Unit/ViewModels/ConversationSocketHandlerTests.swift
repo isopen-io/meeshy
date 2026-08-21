@@ -60,6 +60,14 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         syncMissedCalled = true
     }
 
+    /// Les lots d'ids passés à `restoreMessagesForMe`, dans l'ordre. Une LISTE
+    /// de lots et non un ensemble aplati : le découpage par conversation fait
+    /// partie du contrat testé, et un lot vide ne doit jamais être remis.
+    var restoredForMeBatches: [[String]] = []
+    func restoreMessagesForMe(ids: [String]) async {
+        restoredForMeBatches.append(ids)
+    }
+
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
         // no-op in tests
     }
@@ -1551,6 +1559,76 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         let fetched = try await db.read { db in try MessageRecord.fetchOne(db, key: "other_conv_msg") }
         XCTAssertNotNil(fetched, "une référence hors du fil courant n'est pas l'affaire de ce handler")
+    }
+
+    // MARK: - messageRestoredForMe (retour en vue PERSONNEL, multi-appareil)
+
+    /// Le jumeau inverse du masquage. Le masquage ayant PURGÉ la ligne, il n'y
+    /// a rien à ressusciter localement : le handler doit demander une
+    /// RELECTURE au délégué, seule façon honnête d'honorer une charge utile
+    /// qui ne porte qu'une adresse.
+    func test_messageRestoredForMe_asksDelegateToRefetch() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.simulateMessageRestoredForMe(
+            MessageRestoredForMeEvent(
+                userId: currentUserId,
+                messages: [PersonalMessageVisibilityRef(messageId: "restored_msg", conversationId: conversationId)],
+                restoredAt: "2026-08-21T10:00:00.000Z"
+            )
+        )
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(
+            delegate.restoredForMeBatches, [["restored_msg"]],
+            "un retour en vue doit déclencher la relecture de l'adresse rendue"
+        )
+    }
+
+    /// Même découpage que le masquage : le lot peut nommer plusieurs fils, ce
+    /// handler ne parle que du sien — et ne doit pas facturer un aller-retour
+    /// serveur pour le fil du voisin.
+    func test_messageRestoredForMe_ignoresRefsFromAnotherConversation() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.simulateMessageRestoredForMe(
+            MessageRestoredForMeEvent(
+                userId: currentUserId,
+                messages: [PersonalMessageVisibilityRef(messageId: "elsewhere", conversationId: "000000000000000000000077")],
+                restoredAt: nil
+            )
+        )
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertTrue(
+            delegate.restoredForMeBatches.isEmpty,
+            "une référence hors du fil courant ne déclenche aucune relecture ici"
+        )
+    }
+
+    /// Un lot mixte ne doit remettre au délégué QUE les adresses de ce fil :
+    /// relire un id étranger dans `conversationId` renverrait une fenêtre vide
+    /// (ou pire, celle d'un autre fil) pour rien.
+    func test_messageRestoredForMe_batchIsNarrowedToThisConversation() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.simulateMessageRestoredForMe(
+            MessageRestoredForMeEvent(
+                userId: currentUserId,
+                messages: [
+                    PersonalMessageVisibilityRef(messageId: "mine_1", conversationId: conversationId),
+                    PersonalMessageVisibilityRef(messageId: "theirs", conversationId: "000000000000000000000077"),
+                    PersonalMessageVisibilityRef(messageId: "mine_2", conversationId: conversationId),
+                ],
+                restoredAt: nil
+            )
+        )
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertEqual(delegate.restoredForMeBatches, [["mine_1", "mine_2"]])
     }
 
     private func makeStoredRecord(
