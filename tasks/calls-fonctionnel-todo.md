@@ -10132,3 +10132,59 @@ brut, non traduit, dans un toast.
   d'infrastructure groupe (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct, décision d'équipe requise).
+
+
+## Vague 150 — `createPeerConnection()` fermait la fuite de RTCPeerConnection qu'il documentait depuis deux vagues (web) (2026-08-21)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en « Non fait volontairement » par la Vague 148 : « le défaut sous-jacent
+dans `createPeerConnection` lui-même reste ouvert pour tout autre chemin qui pourrait le
+déclencher ».
+
+- **Root cause** : `createPeerConnection(participantId)` (`webrtc-service.ts:348`) réinitialise l'état
+  de perfect-negotiation puis assigne inconditionnellement `this.peerConnection = new
+  RTCPeerConnection(...)`. Un `WebRTCService` peut être réutilisé à travers un cycle
+  participant-quitte→rejoint SANS `close()` intermédiaire — c'est le cache de service
+  par-participant de `use-webrtc-p2p.ts`, et c'est exactement pourquoi le bloc juste au-dessus
+  réinitialise déjà `autoNegotiate`/`makingOffer`/etc. Mais si une `RTCPeerConnection` PRÉCÉDENTE
+  pend encore sur l'instance (rejoin après un échec géré ailleurs que par `close()` — dont, depuis
+  la Vague 148, `handleAnswer` sur échec), elle est purement et simplement écrasée : jamais fermée,
+  jamais désenregistrée. Elle reste vivante côté navigateur (transports ICE/DTLS ouverts) pour la
+  durée de l'onglet — une `RTCPeerConnection` orpheline par cycle rejoin, sur un chemin déjà identifié
+  comme emprunté deux vagues de suite (Vague 146 : historique d'appel + lien partagé ; Vague 148 :
+  reprise après `handleAnswer` en échec).
+- **Précédent existant dans le même fichier** : `close()` (ligne ~1287, teardown complet) ferme
+  déjà `this.peerConnection` avant de le mettre à `null` — le même geste, absent uniquement du
+  chemin de réutilisation partielle.
+- **Fix** : un `if (this.peerConnection) { this.peerConnection.close(); }` ajouté juste avant la
+  construction de la nouvelle instance, symétrique au geste de `close()`. Aucun changement de
+  signature, aucun impact sur le premier appel d'un cycle de vie (`this.peerConnection` est `null`
+  à ce moment, la garde est un no-op).
+- **Tests** (TDD, RED confirmé — `pc.close` reçu 0 fois avant le fix) : 1 cas neuf dans
+  `webrtc-service.coverage.test.ts`, describe « createPeerConnection — reused without close
+  (participant rejoin) » (déjà porteur du test Vague 148/pré-existant qui ne couvrait que la remise
+  à zéro des drapeaux, jamais la fermeture) — « closes the previous RTCPeerConnection before
+  overwriting it with a new one » : deux appels successifs à `createPeerConnection` sur la même
+  instance, assertion que la PREMIÈRE connexion est fermée (`close` appelé une fois) et que la
+  SECONDE ne l'est pas. Sweep web `--testPathPatterns="[Cc]all|webrtc"` : **58 suites / 782 tests**
+  verts (+1 net vs Vague 149, 0 régression). `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** —
+  1278 erreurs `error TS` préexistantes, aucune sur `webrtc-service.ts` (les 23 erreurs listées sur
+  `webrtc-service.coverage.test.ts` sont un défaut de typage de mocks préexistant, sur des lignes
+  distinctes du test ajouté). `eslint` non exécuté : même échec environnemental documenté en Vague
+  146/147/148/149 (`react/display-name` : `contextOrFilename.getFilename is not a function`,
+  reproductible sur TOUT fichier du dépôt), délégué au gate CI `Quality (bun)`.
+- **Non fait volontairement** : `close()` (teardown complet, ligne ~1287) reste un site de code
+  dupliqué avec le nouveau garde-fou — les deux ferment `this.peerConnection` par des chemins
+  distincts (l'un vide aussi `localStream`/état complet, l'autre prépare une réutilisation) ; les
+  fusionner en un seul point d'ancrage `closePeerConnection()` privé serait un refactor propre mais
+  hors périmètre d'un fix single-concern. Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; jumeau iOS de
+  Vague 146 (`BubbleCallNoticeView.swift`/`CallSummaryDetailSheet`, toolchain iOS hors d'atteinte
+  dans ce sandbox — confirmé à nouveau, ni `xcodebuild` ni `swift` disponibles) ;
+  `mergeEntries`/`upsertRemoteSegment` sans filtre `targetLanguage` explicite côté client (racine
+  déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure groupe
+  (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ;
+  fuite i18n `error.message` brut restante dans `use-webrtc-p2p.ts` (Vague 149) ; kick modérateur
+  sans vérification du rôle de la cible (`calls.ts`/`participants.ts`, question de politique produit,
+  Vague 147/149) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143,
+  non corrigée — chantier distinct, décision d'équipe requise).
