@@ -2,6 +2,67 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Conversation stats dashboard shipped** (slice `conversation-stats-core`,
+> feature-parity §Chat — "Conversation stats rings + activity-over-time + content-type breakdown").
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 18 open PRs at branch
+> time — #3282/#3281/#3280/#3279/#3275/#3270/#3266/#3263/#3262/#3259/#3257/#3255/#3253/#3250/#3249/#3247/
+> #3245/#3243/#3242 — are all web/shared/gateway/ios/sdk, none android-routine). Prior android iteration
+> (`story-viewer-translation-request`, #3278) already merged into main. Branched off freshly-fetched
+> `origin/main` (`1def3504`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (200). One gotcha: `compileSdk = 37` resolves to
+> platform hash `android-37`, but the platform AGP 8.13.0 accepts is `android-37.0` (Android 17,
+> `AndroidVersion.ApiLevel=37.0`). The first run failed (`Failed to find target … 'android-37'`) because it
+> raced the mid-install auto-download; once `android-37.0` finished installing, `compileDebugKotlin`
+> resolved it cleanly. Ran the full `assembleDebug testDebugUnitTest` locally this run.
+>
+> **The gap (read-only recon over iOS + Android)**: iOS reaches a full `ConversationDashboardView`
+> (`ConversationMessageStatsResponse` via `GET /conversations/{id}/stats` + `ConversationAnalysis` via
+> `/analysis`). On Android the DTOs shipped **orphaned** — `AgentAnalysis.kt` defines
+> `ConversationMessageStatsResponse`/`ContentTypeCounts`/`DailyActivityEntry`/… but nothing consumed them
+> (confirmed by grep: zero references outside the model file). This slice turns the STATS half real; the
+> AI-analysis (sentiment/health/persona) half stays a separate, still-open box.
+>
+> **`:core:model` `ConversationStatsProjection`** (new, pure SSOT): `contentTypeBreakdown` (server
+> `ContentTypeCounts` → non-zero shares, count-desc, canonical tie-break, empty on zero total — **SOTA over
+> iOS**, which re-counts the loaded message page and under-counts un-paged content), `activitySeries`
+> (trailing-window filter with an **injected `today`** — deterministic, unlike iOS's wall-clock view getter;
+> drops unparseable dates, ALL keeps everything, oldest-first), `participantShares`/`languageShares`
+> (fraction + stable ordering, zero-total safe), `hourlyBuckets` (fixed 24-slot histogram; ignores
+> non-numeric/out-of-range keys, clamps negatives, accumulates dupes).
+>
+> **`:sdk-core` `ConversationStatsRepository`**: thin dependency-light sibling of `ConversationRepository`
+> (only the API — stats is an ephemeral drill-down that neither reads nor writes Room), `fetchStats(id)` →
+> `NetworkResult` via `apiCall`. New `ConversationApi.stats(id)` (`@GET conversations/{id}/stats`).
+>
+> **`:feature:chat` `ConversationStatsViewModel`** (`StateFlow<ConversationStatsUiState>`,
+> Loading/Loaded/Empty/Error): fetches once, projects the time-independent sections at load, and exposes the
+> activity series as a pure `activity(today)` getter so a **period switch re-derives locally, no refetch**
+> (the "pass time in" doctrine the chat header already uses for presence). `load` is idempotent (re-tries only
+> a prior Error); `retry()` re-fetches; `selectPeriod` inert on no-op. **`ConversationStatsSheet`** + a new
+> header `Insights` action (any member) render it: total pills, content-type bars, an accent activity
+> mini-chart with a 7d/30d/All picker, busiest-participant list, language breakdown. Strings en/fr/es/pt.
+>
+> **Tests: +30** — `ConversationStatsProjectionTest` +20 (content: drop-zero/fractions/order/tie/empty;
+> hourly: 24-span/invalid+range/negative-clamp/padded-key; activity: window/cutoff-inclusive/ALL/sort/
+> bad-date/empty; participant: fraction/zero-total/order/name-then-id tie/empty; language:
+> fraction/order+tie/drop-zero/empty), `ConversationStatsRepositoryTest` +3 (success forwards id / envelope
+> failure / transport failure), `ConversationStatsViewModelTest` +7 (loaded projection / empty / error /
+> period re-derives without refetch / idempotent load / retry after failure / inert period). **Mutation
+> (RED proof) ×2**: (a) drop the `count > 0` filter in `contentTypeBreakdown` → 3 content tests fail
+> (zero-count/order/tie); (b) drop the activity cutoff (`date.isBefore(cutoff)`) → **exactly** `activity week
+> keeps only points within the trailing window` fails (1 of 24). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally this run.
+> Reviewer PASS. Diff is `apps/android` only (4 code + 3 test + ChatScreen/Api wiring + strings + tracking docs).
+>
+> **Next**: the **AI conversation analysis** arm (`GET /conversations/{id}/analysis` → `ConversationAnalysis`
+> health score / summary / tone / emotions) — the other half of this dashboard and its own parity box — or
+> the **AI participant persona profiles + trait bars** box (same endpoint, `ParticipantProfile`/
+> `ParticipantTraits`). Both consume the same still-orphaned `AgentAnalysis.kt` models. Re-scout read-only
+> before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Story on-demand translation shipped** (slice `story-viewer-translation-request`,
 > feature-parity's Feed §F Prisme line — the **per-story timeline flag strip** arm, the LAST item on the
 > `request-missing-languages` follow-up. The whole follow-up (feed card / post-detail / comments / story) is
