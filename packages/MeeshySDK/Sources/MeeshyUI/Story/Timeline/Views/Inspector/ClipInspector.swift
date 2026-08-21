@@ -44,6 +44,13 @@ public struct ClipInspector: View {
         /// La slide porte un audio de fond. Sans lui, rien n'est atténué : la
         /// bascule d'atténuation serait un contrôle sans effet.
         public let slideHasBackgroundAudio: Bool
+        /// `true` quand `timing == nil` au modèle (O4 — le clip est un
+        /// FANTÔME, sa fenêtre suit la durée de la slide). `false` = une
+        /// fenêtre explicite a été posée (un bord tiré, typiquement) — c'est
+        /// alors que « Suivre la slide » (D3, revue totale U9) redevient
+        /// pertinente : la sortie de l'état doit être aussi évidente que son
+        /// entrée.
+        public let isFollowingSlide: Bool
 
         /// Un point de la courbe de volume, tel que la fiche l'affiche.
         ///
@@ -71,7 +78,8 @@ public struct ClipInspector: View {
                     transform: ClipTransform = .identity,
                     volumeKeyframes: [VolumePoint] = [],
                     isDuckingDisabled: Bool = false,
-                    slideHasBackgroundAudio: Bool = false) {
+                    slideHasBackgroundAudio: Bool = false,
+                    isFollowingSlide: Bool = true) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
@@ -82,6 +90,7 @@ public struct ClipInspector: View {
             self.volumeKeyframes = volumeKeyframes
             self.isDuckingDisabled = isDuckingDisabled
             self.slideHasBackgroundAudio = slideHasBackgroundAudio
+            self.isFollowingSlide = isFollowingSlide
         }
     }
 
@@ -170,6 +179,10 @@ public struct ClipInspector: View {
     public let onBackgroundToggled: (Bool) -> Void
     public let onAddKeyframe: () -> Void
     public let onDelete: () -> Void
+    /// « Suivre la slide » (D3, revue totale U9) : remet `timing` à `nil` —
+    /// symétrique du bord tiré, qui convertit implicitement un fantôme en
+    /// durée explicite.
+    public let onFollowSlide: () -> Void
     /// Découpe le clip à la tête de lecture. Cette action était le DOUBLE TAP
     /// sur la barre vidéo : trancher un média n'est pas ce qu'on attend d'un
     /// geste d'ouverture, et elle n'était même câblée que sur la vidéo.
@@ -307,6 +320,7 @@ public struct ClipInspector: View {
                 onBackgroundToggled: @escaping (Bool) -> Void,
                 onAddKeyframe: @escaping () -> Void,
                 onDelete: @escaping () -> Void,
+                onFollowSlide: @escaping () -> Void = {},
                 onSplit: @escaping () -> Void = {},
                 onClose: @escaping () -> Void = {},
                 onStartAdjusted: @escaping (Float) -> Void = { _ in },
@@ -332,6 +346,7 @@ public struct ClipInspector: View {
         self.onBackgroundToggled = onBackgroundToggled
         self.onAddKeyframe = onAddKeyframe
         self.onDelete = onDelete
+        self.onFollowSlide = onFollowSlide
         self.onSplit = onSplit
         self.onClose = onClose
         self.onStartAdjusted = onStartAdjusted
@@ -1019,16 +1034,42 @@ public struct ClipInspector: View {
         AdaptiveGlassContainer(spacing: 12) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
+                    if !clip.isFollowingSlide { followSlideButton }
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
                 VStack(alignment: .leading, spacing: 10) {
+                    if !clip.isFollowingSlide { followSlideButton }
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// « Suivre la slide » (D3, revue totale U9) — n'apparaît que quand une
+    /// fenêtre EXPLICITE a été posée (`!clip.isFollowingSlide`) : un fantôme
+    /// n'a rien à relâcher, l'afficher pour lui serait un contrôle mort.
+    private var followSlideButton: some View {
+        Button(action: onFollowSlide) {
+            Label(String(localized: "story.timeline.inspector.followSlide",
+                         defaultValue: "Suivre la slide", bundle: .module),
+                  systemImage: "arrow.uturn.backward")
+                .font(.footnote.weight(.semibold))
+                .fixedSize(horizontal: true, vertical: false)
+                .glassControlForeground()
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
+                .contentShape(Rectangle().inset(by: -4))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.timeline.inspector.followSlide",
+                                   defaultValue: "Suivre la slide", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.followSlide.hint",
+                                  defaultValue: "Remet la fenêtre du clip à zéro : il suit de nouveau la durée de la slide",
+                                  bundle: .module))
     }
 
     private var splitButton: some View {

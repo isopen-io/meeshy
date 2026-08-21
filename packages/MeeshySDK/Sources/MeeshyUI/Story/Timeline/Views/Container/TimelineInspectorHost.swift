@@ -172,7 +172,8 @@ public struct TimelineInspectorHost: View {
                 volumeKeyframes: volumePoints(keyframes: media.keyframes,
                                               clipStart: Float(media.startTime ?? 0)),
                 isDuckingDisabled: media.isDuckingDisabled ?? false,
-                slideHasBackgroundAudio: hasBackgroundAudio(project: viewModel.project)
+                slideHasBackgroundAudio: hasBackgroundAudio(project: viewModel.project),
+                isFollowingSlide: media.startTime == nil && media.duration == nil
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
@@ -192,7 +193,8 @@ public struct TimelineInspectorHost: View {
                 isBackground: audio.isBackground ?? false,
                 name: audio.name,
                 volumeKeyframes: volumePoints(keyframes: audio.keyframes,
-                                              clipStart: audio.startTime ?? 0)
+                                              clipStart: audio.startTime ?? 0),
+                isFollowingSlide: audio.startTime == nil && audio.duration == nil
             )
         }
         // Le texte a aussi un début/durée/fondu (et un nom) éditables — sans
@@ -216,7 +218,8 @@ public struct TimelineInspectorHost: View {
                 isBackground: false,
                 name: text.name,
                 transform: ClipTransform(x: text.x, y: text.y, scale: text.scale,
-                                         rotation: text.rotation, zIndex: text.zIndex)
+                                         rotation: text.rotation, zIndex: text.zIndex),
+                isFollowingSlide: text.startTime == nil && text.duration == nil
             )
         }
         // Le sticker a une lane TAPABLE dans la timeline mais aucune branche
@@ -239,7 +242,8 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: Float(sticker.fadeOut ?? 0),
                 isLooping: false,
                 isBackground: false,
-                name: nil
+                name: nil,
+                isFollowingSlide: sticker.startTime == nil && sticker.duration == nil
             )
         }
         return nil
@@ -387,6 +391,9 @@ public struct TimelineInspectorHost: View {
             },
             onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
             onDelete: { viewModel.deleteClip(id: clipId) },
+            onFollowSlide: { [viewModel] in
+                viewModel.followSlide(id: clipId)
+            },
             // `splitSelectedAtPlayhead` lit `selectedClipId` : correct sans
             // changement, puisque `inspect(_:)` pose les deux identifiants.
             onSplit: { viewModel.splitSelectedAtPlayhead() },

@@ -422,6 +422,49 @@ extension TimelineViewModel {
         }
     }
 
+    // MARK: - « Suivre la slide » (D3, revue totale U9)
+
+    /// Remet `startTime` ET `duration` à `nil` : le clip redevient un
+    /// FANTÔME (O4 — `timing == nil` dit « suit la slide »), symétrique du
+    /// geste qui étire un bord et convertit implicitement un fantôme en
+    /// durée explicite. « La sortie de l'état doit être aussi évidente que
+    /// son entrée. »
+    ///
+    /// Mutation DIRECTE du projet — PAS de `SetClipPropertyCommand` : ni
+    /// `SetClipPropertyCommand.ClipProperty` ni `AnyEditCommand`
+    /// (`StoryModels.swift`, hors `Timeline/**`) ne portent de variante
+    /// « timing nil » ; l'ajouter appartient au Modèle du SDK, hors ownership
+    /// de ce lot (Global Constraints — Timeline/** uniquement). Contrepartie
+    /// assumée : cette action n'est PAS annulable pour l'instant (`canUndo`
+    /// ne bouge pas) — un écart consigné, pas un oubli.
+    public func followSlide(id: String) {
+        guard let kind = clipKind(forId: id) else { return }
+        switch kind {
+        case .video, .image:
+            guard let idx = project.mediaObjects.firstIndex(where: { $0.id == id }) else { return }
+            guard project.mediaObjects[idx].startTime != nil || project.mediaObjects[idx].duration != nil else { return }
+            project.mediaObjects[idx].startTime = nil
+            project.mediaObjects[idx].duration = nil
+        case .audio:
+            guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == id }) else { return }
+            guard project.audioPlayerObjects[idx].startTime != nil || project.audioPlayerObjects[idx].duration != nil else { return }
+            project.audioPlayerObjects[idx].startTime = nil
+            project.audioPlayerObjects[idx].duration = nil
+        case .text:
+            guard let idx = project.textObjects.firstIndex(where: { $0.id == id }) else { return }
+            guard project.textObjects[idx].startTime != nil || project.textObjects[idx].duration != nil else { return }
+            project.textObjects[idx].startTime = nil
+            project.textObjects[idx].duration = nil
+        case .sticker:
+            guard let idx = project.stickerObjects.firstIndex(where: { $0.id == id }) else { return }
+            guard project.stickerObjects[idx].startTime != nil || project.stickerObjects[idx].duration != nil else { return }
+            project.stickerObjects[idx].startTime = nil
+            project.stickerObjects[idx].duration = nil
+        }
+        scheduleEngineReconfigure()
+        recomputeSlideDuration()
+    }
+
     // MARK: - Clip deletion
 
     public func deleteClip(id: String) {
