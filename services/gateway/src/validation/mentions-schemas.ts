@@ -21,9 +21,19 @@ export const MessageIdParamSchema = z.object({
 }).strict();
 
 export const MyMentionsQuerySchema = z.object({
+  // Même garde numérique + clamp 1..100 que TOUS les schémas de query paginés
+  // du gateway (GetNotificationsQuerySchema, MessageStatusDetailsQuerySchema…).
+  // Sans le clamp, `limit=-5` survivait au `limit || 50` (truthy) de
+  // routes/mentions.ts et atteignait Prisma en `take: -5` : sous
+  // `orderBy: { mentionedAt: 'desc' }`, un `take` négatif renvoie les mentions
+  // les plus ANCIENNES à l'envers au lieu des plus récentes — l'endpoint
+  // « mentions récentes » servait le contraire de son contrat. Un `limit`
+  // démesuré (`100000`) contournait de plus le plafond partagé.
   limit: z
     .string()
+    .regex(/^\d+$/, 'Limit must be a positive integer')
     .transform(Number)
+    .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
     .prefault('20')
 }).strict();
 
