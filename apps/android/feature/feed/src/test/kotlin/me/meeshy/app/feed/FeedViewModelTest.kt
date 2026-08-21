@@ -19,10 +19,13 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentDeletedData
 import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
@@ -64,6 +67,8 @@ class FeedViewModelTest {
     private val postLiked = MutableSharedFlow<SocketPostLikedData>(extraBufferCapacity = 64)
     private val postUnliked = MutableSharedFlow<SocketPostUnlikedData>(extraBufferCapacity = 64)
     private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
+    private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
+    private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -76,6 +81,8 @@ class FeedViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
+        every { socialSocket.commentAdded } returns commentAdded
+        every { socialSocket.commentDeleted } returns commentDeleted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -245,6 +252,8 @@ class FeedViewModelTest {
         every { socialSocket.postLiked } returns postLiked
         every { socialSocket.postUnliked } returns postUnliked
         every { socialSocket.postBookmarked } returns postBookmarked
+        every { socialSocket.commentAdded } returns commentAdded
+        every { socialSocket.commentDeleted } returns commentDeleted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -642,6 +651,95 @@ class FeedViewModelTest {
         vm.toggleBookmark("p1")
 
         coVerify(exactly = 1) { repository.toggleBookmark("p1") }
+    }
+
+    // --- live comment-count sync (comment:added / comment:deleted) ---
+
+    private fun commentedPost(id: String, count: Int) =
+        ApiPost(id = id, content = "Post $id", commentCount = count)
+
+    @Test
+    fun `a realtime comment-added raises the displayed comment count live`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(commentedPost("1", count = 2)), 0L)))
+
+        commentAdded.emit(
+            SocketCommentAddedData(postId = "1", comment = ApiPostComment(id = "c1"), commentCount = 3),
+        )
+
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `a realtime comment-deleted lowers the displayed comment count live`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(commentedPost("1", count = 5)), 0L)))
+
+        commentDeleted.emit(SocketCommentDeletedData(postId = "1", commentId = "c1", commentCount = 4))
+
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(4)
+    }
+
+    @Test
+    fun `a comment event for a post the feed does not hold is inert`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(commentedPost("1", count = 2)), 0L)))
+
+        commentAdded.emit(
+            SocketCommentAddedData(postId = "zzz", comment = ApiPostComment(id = "c1"), commentCount = 9),
+        )
+
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(2)
+    }
+
+    @Test
+    fun `the live comment count survives a background feed re-emission`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Stale(listOf(commentedPost("1", count = 2)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        commentAdded.emit(
+            SocketCommentAddedData(postId = "1", comment = ApiPostComment(id = "c1"), commentCount = 7),
+        )
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(7)
+
+        // A stale server re-emission still reports the old count — the live overlay holds.
+        stream.value = CacheResult.Fresh(listOf(commentedPost("1", count = 2)), 100L)
+
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(7)
+    }
+
+    @Test
+    fun `a later cache comment count is respected once the overlay is reconciled away`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(commentedPost("1", count = 2)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        commentAdded.emit(
+            SocketCommentAddedData(postId = "1", comment = ApiPostComment(id = "c1"), commentCount = 5),
+        )
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(5)
+
+        // The cache catches up to the overlay count → the overlay is released.
+        stream.value = CacheResult.Fresh(listOf(commentedPost("1", count = 5)), 100L)
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(5)
+
+        // A subsequent cache count is now authoritative — no stale overlay pins it.
+        stream.value = CacheResult.Fresh(listOf(commentedPost("1", count = 8)), 200L)
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(8)
+    }
+
+    @Test
+    fun `refresh drops a live comment overlay`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(commentedPost("1", count = 2)), 0L),
+        )
+        val vm = viewModel(me, stream)
+        commentAdded.emit(
+            SocketCommentAddedData(postId = "1", comment = ApiPostComment(id = "c1"), commentCount = 7),
+        )
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(7)
+
+        vm.refresh()
+
+        assertThat(vm.state.value.posts.single().commentCount).isEqualTo(2)
     }
 
     // --- Create post (publishPost) ---

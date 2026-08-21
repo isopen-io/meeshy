@@ -533,4 +533,119 @@ class FeedRealtimeReducerTest {
         assertThat(next.bookmarks).isEmpty()
         assertThat(next).isEqualTo(FeedRealtimeHead())
     }
+
+    // --- comment (comment:added / comment:deleted) ---
+
+    private fun commentedPost(id: String, count: Int) =
+        ApiPost(id = id, content = "Post $id", commentCount = count)
+
+    @Test
+    fun `comment records the gateway's absolute count as an overlay`() {
+        val next = FeedRealtimeReducer.comment(FeedRealtimeHead(), postId = "a", commentCount = 7)
+
+        assertThat(next.comments).containsExactly("a", 7)
+    }
+
+    @Test
+    fun `comment of a blank id is inert`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.comment(state, postId = "   ", commentCount = 3)
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `comment with a repeated identical overlay is inert`() {
+        val once = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val twice = FeedRealtimeReducer.comment(once, "a", commentCount = 5)
+
+        assertThat(twice).isSameInstanceAs(once)
+    }
+
+    @Test
+    fun `comment addition raises the absolute count on a fresh broadcast`() {
+        val once = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val next = FeedRealtimeReducer.comment(once, "a", commentCount = 6)
+
+        assertThat(next.comments["a"]).isEqualTo(6)
+    }
+
+    @Test
+    fun `comment deletion lowers the absolute count`() {
+        val once = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val next = FeedRealtimeReducer.comment(once, "a", commentCount = 4)
+
+        assertThat(next.comments["a"]).isEqualTo(4)
+    }
+
+    @Test
+    fun `comment clamps a negative absolute count to zero`() {
+        val next = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = -3)
+
+        assertThat(next.comments["a"]).isEqualTo(0)
+    }
+
+    // --- reconcileComments ---
+
+    @Test
+    fun `reconcileComments on an empty overlay map is inert`() {
+        val state = FeedRealtimeHead()
+        val next = FeedRealtimeReducer.reconcileComments(state, cachePosts = listOf(commentedPost("a", 5)))
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `reconcileComments releases an overlay the cache has caught up to`() {
+        val state = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val next = FeedRealtimeReducer.reconcileComments(state, listOf(commentedPost("a", count = 5)))
+
+        assertThat(next.comments).isEmpty()
+    }
+
+    @Test
+    fun `reconcileComments keeps an overlay whose count the cache has not caught up to`() {
+        val state = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val next = FeedRealtimeReducer.reconcileComments(state, listOf(commentedPost("a", count = 3)))
+
+        assertThat(next).isSameInstanceAs(state)
+        assertThat(next.comments["a"]).isEqualTo(5)
+    }
+
+    @Test
+    fun `reconcileComments keeps an overlay for a post still absent from the cache`() {
+        val state = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val next = FeedRealtimeReducer.reconcileComments(state, cachePosts = emptyList())
+
+        assertThat(next).isSameInstanceAs(state)
+    }
+
+    @Test
+    fun `reconcileComments treats a null cache count as zero`() {
+        val state = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 0)
+        val next = FeedRealtimeReducer.reconcileComments(state, listOf(ApiPost(id = "a", content = "Post a")))
+
+        assertThat(next.comments).isEmpty()
+    }
+
+    @Test
+    fun `reconcileComments releases only the overlays the cache has caught up to`() {
+        val a = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val ab = FeedRealtimeReducer.comment(a, "b", commentCount = 9)
+        val next = FeedRealtimeReducer.reconcileComments(
+            ab,
+            listOf(commentedPost("a", count = 5), commentedPost("b", count = 2)),
+        )
+
+        assertThat(next.comments.keys).containsExactly("b")
+    }
+
+    @Test
+    fun `clear also drops every live comment overlay`() {
+        val overlaid = FeedRealtimeReducer.comment(FeedRealtimeHead(), "a", commentCount = 5)
+        val next = FeedRealtimeReducer.clear(overlaid)
+
+        assertThat(next.comments).isEmpty()
+        assertThat(next).isEqualTo(FeedRealtimeHead())
+    }
 }

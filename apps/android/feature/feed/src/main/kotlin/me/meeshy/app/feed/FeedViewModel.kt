@@ -123,7 +123,8 @@ class FeedViewModel @Inject constructor(
                     // keeps buffered posts from double-rendering.
                     val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
                     val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
-                    val reconciled = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+                    val reconciledBookmarks = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+                    val reconciled = FeedRealtimeReducer.reconcileComments(reconciledBookmarks, cachePosts)
                     if (reconciled !== head) realtimeHead.value = reconciled
 
                     // Tombstoned posts (live `post:deleted`) are hidden from both the head and
@@ -133,14 +134,17 @@ class FeedViewModel @Inject constructor(
                     val removed = reconciled.removedIds
                     val likes = reconciled.likes
                     val bookmarks = reconciled.bookmarks
+                    val comments = reconciled.comments
                     val visibleCache = cachePosts
                         .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
                         .withLikeOverlays(likes)
                         .withBookmarkOverlays(bookmarks)
+                        .withCommentOverlays(comments)
                     val visibleRealtime = reconciled.posts
                         .filterNot { it.id in cacheIds || it.id in removed }
                         .withLikeOverlays(likes)
                         .withBookmarkOverlays(bookmarks)
+                        .withCommentOverlays(comments)
                     latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
@@ -183,6 +187,16 @@ class FeedViewModel @Inject constructor(
                 realtimeHead.update {
                     FeedRealtimeReducer.bookmark(it, payload.postId, payload.bookmarkCount, payload.bookmarked)
                 }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentAdded.collect { payload ->
+                realtimeHead.update { FeedRealtimeReducer.comment(it, payload.postId, payload.commentCount) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentDeleted.collect { payload ->
+                realtimeHead.update { FeedRealtimeReducer.comment(it, payload.postId, payload.commentCount) }
             }
         }
     }
@@ -480,6 +494,19 @@ private fun List<ApiPost>.withBookmarkOverlays(bookmarks: Map<String, BookmarkOv
             bookmarkCount = overlay.count,
             isBookmarkedByMe = overlay.mine,
         )
+    }
+}
+
+/**
+ * Overlay each post's live comment count (absolute) when a `comment:added`/`comment:deleted`
+ * overlay targets it. An absent overlay leaves the post untouched. There is no viewer-own
+ * dimension — a comment count is public. Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withCommentOverlays(comments: Map<String, Int>): List<ApiPost> {
+    if (comments.isEmpty()) return this
+    return map { post ->
+        val overlay = comments[post.id] ?: return@map post
+        post.copy(commentCount = overlay)
     }
 }
 

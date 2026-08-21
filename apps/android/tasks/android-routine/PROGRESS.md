@@ -2,6 +2,54 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Live feed comment-count sync shipped** (slice `feed-realtime-comment-count`,
+> feature-parity's Feed §F social-feed realtime block — extends the created/deleted/liked/bookmarked
+> overlay family with `comment:added`/`comment:deleted`).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 10 open PRs at branch
+> time (#3259/#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3257/#3250 iOS) are none
+> android-routine. Prior android iteration (#3258, conversation-lock-unlock-all) already merged into main
+> (`bfd152fe`). Branched off freshly-fetched `origin/main` (`bfd152fe`).
+>
+> **SDK bootstrap:** dl.google.com reachable in this container (curl → 200). Used the NOTES 2026-08-21
+> recipe that finally works cleanly: install a **pristine** `platforms;android-37.0` via
+> `sdkmanager --channel=3` and let AGP 8.13 auto-map `compileSdk 37` → `android-37.0` (NO hand-patched
+> `android-37` dir, no sed, no symlink). `assembleDebug testDebugUnitTest` green after. Capture gradle
+> output to a file and grep for `BUILD FAILED` (a piped `| tail` swallows the exit code).
+>
+> **The gap (iOS-parity scouted)**: iOS `FeedViewModel` live-updates each feed card's comment count on
+> `comment:added`/`comment:deleted` by setting `posts[index].commentCount = data.commentCount` (ABSOLUTE,
+> `FeedViewModel.swift:1246`/`:1256`). Android's `FeedViewModel` consumed `commentAdded` only in the
+> post-detail/comments VMs — the **feed list card's** comment count was static, never bumped live.
+>
+> **Pure reducer (`:feature:feed` `FeedRealtimeReducer`)**: new `FeedRealtimeHead.comments: Map<String, Int>`
+> overlay + `comment(state, postId, commentCount)` (blank-id inert; `coerceAtLeast(0)` clamp; same-count
+> dedup → same instance) + `reconcileComments(state, cachePosts)` (releases overlays the cache has caught
+> up to, `null` cache count reads as 0; keeps overlays for posts absent from cache; same-instance when
+> unchanged). `clear` auto-resets via `FeedRealtimeHead()`. No viewer-own dimension — a comment count is
+> public (unlike like/bookmark).
+>
+> **Wiring**: `FeedViewModel` collects `commentAdded`/`commentDeleted` → `FeedRealtimeReducer.comment`;
+> the projection adds `reconcileComments` to the reconcile chain and `.withCommentOverlays(comments)` to
+> both the cache and realtime-head projections (new private helper mirroring `withLikeOverlays`).
+>
+> **Tests**: **+18** — `FeedRealtimeReducerTest` +12 (records absolute count; blank-id inert; idempotent
+> dedup; addition raises / deletion lowers; negative clamp; reconcile release/keep-behind/keep-absent/
+> null-cache-as-zero/partial-release; clear drops overlay), `FeedViewModelTest` +6 (comment-added raises /
+> comment-deleted lowers the card count live; event for an unknown post inert; overlay survives a stale
+> re-emission; a later cache count is respected once reconciled away; refresh drops the overlay — all on the
+> real reducer + a mockk `SocialSocketManager`). **Mutation (RED proof)**: removing `coerceAtLeast(0)` fails
+> exactly `comment clamps a negative absolute count to zero` (1 of 70, no collateral). Restored.
+>
+> **Verified**: `:feature:feed:testDebugUnitTest` green (FeedRealtimeReducerTest 70/70, FeedViewModelTest
+> 67/67); full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is `apps/android`
+> only (4 files: FeedRealtimeHead.kt, FeedViewModel.kt + the two test files, plus tracking docs).
+>
+> **Next**: the Feed §F remaining apps/android-only boxes — the per-post **flag strip / request-missing-
+> languages** on the feed Prisme line (needs an on-demand post-translation request path), or the Feed
+> **repost/quote embed cell** polish (`[~]` line ~4357). Otherwise the Chat `slow`/retry glyph tier still
+> waits on outbox retry-state plumbing. Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Conversation lock "unlock-all" shipped** (slice `conversation-lock-unlock-all`,
 > feature-parity's Conversations `[~]` "Pinned/muted/archived/locked" line — the `unlock-all` sub-gap of
 > its "Remaining lock sub-gaps" note, now done; only Settings master-PIN change/remove + swipe-to-lock remain).

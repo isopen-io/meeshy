@@ -5,7 +5,28 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
-## 2026-08-21 (latest) — SDK bootstrap: patching `source.properties` alone is NOT enough — patch `package.xml` too, and delete the malformed `android-37.0` dir
+## 2026-08-21 (latest) — Feed realtime = a family of `FeedRealtimeHead` overlays; add the next event as one more overlay, don't invent a mechanism
+
+Slice `feed-realtime-comment-count`. The feed's live-sync surface is now a coherent **overlay family** on
+`FeedRealtimeHead`: `posts`+`newPostsCount` (created), `removedIds` (deleted), `likes: LikeOverlay` (like),
+`bookmarks: BookmarkOverlay` (bookmark), and now `comments: Map<String, Int>` (comment count). Each has the
+identical shape: a pure `FeedRealtimeReducer.<verb>(state, id, …)` arm (blank-id inert, same-value dedup →
+same instance) + a `reconcile<Verb>s(state, cachePosts)` that releases overlays the cache has caught up to +
+a `with<Verb>Overlays` projection helper in `FeedViewModel`, all applied to BOTH the cache-projected and
+realtime-head lists, and `clear()` auto-resets everything via `FeedRealtimeHead()`. **When a new feed socket
+event needs live UI, add one more overlay to this family — don't reach for a new pattern.** The only design
+choice is whether the event has a viewer-own dimension: like has `mine: Boolean?` (only flips on the viewer's
+own userId — another user moves the count only); bookmark is personal so `mine: Boolean` is always
+authoritative; comment count is public so a bare `Int` suffices (no `mine`). Absolute count from the gateway
+always wins over the cache; clamp negatives (`coerceAtLeast(0)`) so a malformed payload never renders a
+negative badge. iOS mutates its in-memory array directly (`posts[i].commentCount = data.commentCount`) — the
+Android overlay is the pure, unit-testable, race-proof form of the same law.
+
+**SDK bootstrap got easier this run:** `sdkmanager --channel=3 "platforms;android-37.0"` (pristine, no
+hand-patching) + AGP 8.13 auto-mapping `compileSdk 37` → `android-37.0` just works. Prefer this over the
+`cp`/`sed`/`package.xml`-patch dance below whenever the container reaches `dl.google.com` (curl → 200 here).
+
+## 2026-08-21 — SDK bootstrap: patching `source.properties` alone is NOT enough — patch `package.xml` too, and delete the malformed `android-37.0` dir
 
 Slice `conversation-lock-unlock-all`. Used the ROUTINE-pinned `commandlinetools-linux-11076708`. The platform
 came out malformed as usual (`android-37.0/source.properties` → `Pkg.Desc=Android SDK Platform 17`,
