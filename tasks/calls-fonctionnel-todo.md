@@ -10200,3 +10200,52 @@ qu'aucun n'a laissé un frère non corrigé — motif dominant de cette routine 
   `use-webrtc-p2p.ts` portant plusieurs `toast.error(error.message)` sur du texte anglais codé en
   dur, jamais traduit (Vague 149) ; kick modérateur sans vérification du rôle CONVERSATION de la
   cible (`calls.ts`/`participants.ts`, Vague 149 — décision produit, hors périmètre).
+
+## Vague 151 — l'aggrégation de connexion/ICE toastait DEUX fois la même panne, une seule traduite (web) (2026-08-21)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend un
+gap explicitement laissé ouvert par la Vague 149 ("le reste de `use-webrtc-p2p.ts` porte encore
+plusieurs `toast.error(error.message)` sur du texte anglais codé en dur, jamais traduit").
+
+- **Root cause** : les deux branches d'agrégation call-wide de `use-webrtc-p2p.ts`
+  (`onConnectionStateChange` → `aggregated === 'failed'`, ligne ~348 ; `onIceConnectionStateChange`
+  → agrégat ICE `'failed'`, ligne ~421) font DEUX choses pour le même événement : (1) un
+  `toast.error(<texte anglais codé en dur>)` direct dans le hook, ET (2) `onError?.(new
+  Error('PEER_CONNECTION_FAILED' | 'ICE_CONNECTION_FAILED'))`. Le seul consommateur de `onError`
+  (`VideoCallInterface.tsx`, `handleWebRTCError`, ajouté Vague 149) affiche DÉJÀ un toast traduit
+  pour ces deux codes précis — et son texte anglais (`locales/en/calls.json`
+  `toasts.peerConnectionFailed`/`toasts.iceConnectionFailed`) est un **doublon octet-pour-octet**
+  des deux chaînes codées en dur du hook. Résultat pour tout utilisateur non anglophone : DEUX
+  toasts empilés pour la même panne — un correctement traduit, un TOUJOURS en anglais quelle que
+  soit la locale.
+- **Fix** : suppression des deux `toast.error()` directs dans le hook (`aggregated === 'failed'` et
+  agrégat ICE `'failed'`) — `setError()` (état interne, jamais affiché à l'utilisateur, vérifié par
+  grep : aucun `{error}`/`store.error` rendu dans `VideoCallInterface.tsx`/`CallManager.tsx`) et
+  `onError?.()` restent inchangés. Le toast unique, traduit, continue de s'afficher via
+  `VideoCallInterface.handleWebRTCError`. Aucun changement de comportement utilisateur hors la
+  disparition du second toast anglais.
+- **Tests** (TDD, RED confirmé avant le fix — les deux tests ciblés attendaient encore le texte
+  anglais codé en dur) : `use-webrtc-p2p.test.tsx`, les deux tests du describe « Multi-peer
+  connection state aggregation (W4) » qui assertaient `toast.error).toHaveBeenCalledWith('Connection
+  failed. Please try again.'/'...Retrying...')` réécrits pour asserter `toast.error` NON appelé et
+  `onError` appelé avec le bon code. 72/72 verts sur le fichier ciblé (0 régression). Sweep web
+  `--testPathPatterns="[Cc]all|webrtc"` : **59 suites / 787 tests** verts sous jest ET sous bun
+  (parité CI), 0 régression. `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** — 1276 erreurs
+  préexistantes, compte identique avant/après (`git stash`). `eslint` non exécuté cette vague :
+  même échec environnemental que documenté en Vague 146/147/149/150
+  (`react/display-name: contextOrFilename.getFilename is not a function`).
+- **Non fait volontairement** : `toast.success('Connected!')` (même fichier, branche jumelle de
+  succès) reste un texte anglais codé en dur — PAS un doublon (aucun toast de succès équivalent
+  côté `VideoCallInterface`), donc une dette i18n différente de celle fixée ici, hors périmètre
+  d'un fix à une seule préoccupation. Les six autres `toast.error(message)` du fichier
+  (initializeLocalStream/createOffer/handleOffer/handleAnswer/renégociation×2) restent un mélange
+  de vrais messages d'erreur navigateur/WebRTC et de replis anglais codés en dur — dette i18n plus
+  large, repérée par l'audit de cette vague, nécessitant un traitement au cas par cas (pas de
+  doublon de toast identifié dessus). Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~6234 lignes, toolchain iOS hors d'atteinte — a grossi depuis la dernière
+  mesure) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer côté groupe (chantier le
+  plus important selon `2026-08-13-group-calls-gap-analysis.md`, hors portée d'une session sans
+  toolchain iOS) ; `canCallBack`/`BubbleCallNoticeView` anonyme jamais audité côté iOS (Vague 146) ;
+  fuite `createPeerConnection()` (web, `webrtc-service.ts:369`) au-delà du seul site déjà patché
+  (Vague 148) — repéré par l'audit de cette vague comme candidat pour une prochaine vague ; kick
+  modérateur sans vérification du rôle CONVERSATION de la cible (Vague 149, décision produit).
