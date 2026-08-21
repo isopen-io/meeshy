@@ -108,6 +108,12 @@ struct ThemedFeedOverlay: View {
     @FocusState private var isComposerFocused: Bool
     @State private var showStatusComposer = false
     @State private var showFullComposer = false
+
+    private func consumePendingComposerRequest() {
+        guard router.pendingOpenFeedComposer else { return }
+        router.pendingOpenFeedComposer = false
+        showFullComposer = true
+    }
     /// Carte des posts géolocalisés — entrée permanente du header, à droite du
     /// bouton Réels (directive user 2026-08-13). Parité avec `FeedView`.
     @State private var showPostsMap = false
@@ -720,6 +726,12 @@ struct ThemedFeedOverlay: View {
             // pour que le contenu glisse dessous au scroll et que la trail compacte
             // se révèle dans le slot accessory.
             feedHeader
+        }
+        // Drapeau `Router.pendingOpenFeedComposer` (accès rapide « Publier un
+        // post », 2026-08-21) : consommé à l'apparition ET quand il se lève
+        // pendant que le flux est déjà là.
+        .adaptiveOnChange(of: router.pendingOpenFeedComposer, initial: true) { _, _ in
+            consumePendingComposerRequest()
         }
         .task {
             if viewModel.posts.isEmpty {

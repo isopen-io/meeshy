@@ -276,6 +276,25 @@ sticker qui passe dessous (dégradé 0.75 → 0, design) ; la pilule de section 
 sticker épinglé sur la même ligne (design I-063, à trancher) ; mesure Instruments après lot D non
 rejouée ; `meeshy.sh test` complet non rejoué (25 suites ciblées seulement).
 
+## Review — session 3 du 21/08 (directives « magnificence au défilement »)
+
+**Livré** (vérifié au simulateur, modes clair ET sombre) :
+- Fil : perspective SEULEMENT sur geste utilisateur, aplatissement animé 2 s après la pose, ligne de
+  focus au centre (bord bas au repos sur le dernier message), compaction symétrique, sur-réserve
+  des deux côtés, plancher d'opacité (plus d'« arrivée/sortie » par fondu), entrée animée.
+- Liste : carte de focus et perspective des rangées SEULEMENT pendant le défilement (scène
+  `LentilleSceneActivity`), bande au centre qui remonte vers la première conversation au repos en
+  haut, accès rapides en queue (et état vide) — nouveau message, story, mood, post, invitation
+  (parrainage), lien raccourci — hauteur d'une demi-région visible.
+- Texte blanc en mode clair (rangée plate « Toi ») corrigé à la racine ; chip de mode lisible.
+- « Publier un post » réparé aussi pour le tableau de bord (drapeau `Router.pendingOpenFeedComposer`).
+
+**Évalué, non modifié** : loi partagée `FOCUS_CURVE_CONSTANTS` (règles de consommation iOS à la
+place) ; détails du message en focus (toujours à la pose, rendus à l'aplatissement).
+
+**Restes** : mesure Instruments (CPU main thread, frames distinctes/s) sur la nouvelle scène ;
+`meeshy.sh test` complet ; déploiement device du résultat final.
+
 ## Lot E — clôture
 - [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé, 24 classes, simulateur dédié) puis `meeshy.sh test`
 - [ ] `tasks/lessons.md` si correction user ; revue finale ; commits par lot

@@ -159,6 +159,20 @@ nonisolated public enum FocalMetrics {
     /// partie avec le pass — restent les DEUX cotes de gabarit devenues la
     /// règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
     /// retrait de texte ne varient jamais, la liste ne saute donc jamais.
+    /// Tempo de la SCÈNE Focal (2026-08-21, directive user) : la perspective
+    /// n'existe que pendant le défilement ; au repos, tout redevient Script.
+    nonisolated public enum Scene {
+        /// Repos sans geste avant que la scène s'aplatisse (« au bout de
+        /// quelques secondes sans scroller »).
+        public static let restDelay: TimeInterval = 2.0
+        /// Durée de l'aplatissement (transform + opacité + carte).
+        public static let flattenDuration: TimeInterval = 0.45
+        /// Durée de l'entrée en perspective au premier tick d'un geste —
+        /// les ticks de cette fenêtre animent depuis la valeur présentée,
+        /// jamais un saut.
+        public static let enterDuration: TimeInterval = 0.25
+    }
+
     nonisolated public enum Focus {
         /// Plafond de caractères du texte du message EN FOCUS (2026-08-21) :
         /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.

@@ -49,8 +49,10 @@ final class FocusCardElectionTests: XCTestCase {
     /// Bas de la région visible du défilement, en coordonnées globales.
     private static let viewportBottom: CGFloat = 812
 
+    /// Bande au CENTRE de la région visible (2026-08-21) — décor : liste
+    /// déjà défilée d'une demi-hauteur (la remontée vers le haut ne joue plus).
     private var band: CGFloat {
-        LentilleFocusBand.centerY(viewportBottom: Self.viewportBottom)
+        LentilleFocusBand.centerY(viewportTop: 0, viewportBottom: Self.viewportBottom, offsetFromTop: Self.viewportBottom)
     }
 
     /// Pas vertical entre deux rangs — la cote du contrat (`LentilleMetrics`),
@@ -60,7 +62,9 @@ final class FocusCardElectionTests: XCTestCase {
     private func elect(_ candidates: [FocalFocusCurve.RowCandidate], current: String?) -> String? {
         LentilleFocusElectionHost.elect(
             candidates: candidates,
+            viewportTop: 0,
             viewportBottom: Self.viewportBottom,
+            offsetFromTop: Self.viewportBottom,
             currentId: current
         )
     }
@@ -96,20 +100,25 @@ final class FocusCardElectionTests: XCTestCase {
     func test_election_followsTheViewportBottom_neverAFixedScreenPosition() {
         let candidates = [
             FocalFocusCurve.RowCandidate(id: "a", midY: band),
-            FocalFocusCurve.RowCandidate(id: "b", midY: band - 3 * rowPitch)
+            // Bande au CENTRE (2026-08-21) : raccourcir la région visible de 3
+            // pas la fait remonter de 1,5 pas — « b », à 2 pas au-dessus, passe
+            // devant « a » (0,5 contre 1,5), là où « a » gagnait à pleine hauteur.
+            FocalFocusCurve.RowCandidate(id: "b", midY: band - 2 * rowPitch)
         ]
 
         let shortViewport = Self.viewportBottom - 3 * rowPitch
         let winner = LentilleFocusElectionHost.elect(
             candidates: candidates,
+            viewportTop: 0,
             viewportBottom: shortViewport,
+            offsetFromTop: shortViewport,
             currentId: nil
         )
 
         XCTAssertEqual(
             winner, "b",
-            "Sur une région visible plus courte, la bande remonte d'autant et c'est le " +
-            "rang du dessus qui l'occupe. Un gagnant inchangé signalerait une bande " +
+            "Sur une région visible plus courte, la bande (au centre) remonte de la moitié " +
+            "du raccourci et c'est le rang du dessus qui l'occupe. Un gagnant inchangé signalerait une bande " +
             "constante — le défaut exact que le split view iPad et le clavier révèlent " +
             "en production, jamais sur un simulateur au repos."
         )
@@ -480,7 +489,7 @@ final class FocusCardElectionTests: XCTestCase {
             "nombre choisi ici."
         )
         XCTAssertTrue(
-            hostCode.contains("focusY: LentilleFocusBand.centerY(viewportBottom: viewportBottom)"),
+            hostCode.contains("focusY: LentilleFocusBand.centerY(viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: offsetFromTop)"),
             "La bande de l'élection doit être CELLE de la perspective (I-069) : un seul " +
             "`LentilleFocusBand`, sinon la carte s'élit là où la perspective ne pique pas."
         )

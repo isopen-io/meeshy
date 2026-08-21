@@ -335,6 +335,10 @@ struct LentilleFocusCardHost: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    /// Niveau de scène : la carte n'existe que pendant le défilement et
+    /// `restDelay` après (directive user 2026-08-21) — son opacité EST le
+    /// niveau, animé par `LentilleSceneActivity`.
+    @EnvironmentObject private var scene: LentilleSceneActivity
     @State private var preference: ReadingModeOrchestrator.ReadingModePreference = .auto
     @State private var unsubscribe: (() -> Void)?
     @State private var elected: Conversation?
@@ -382,6 +386,8 @@ struct LentilleFocusCardHost: View {
                     height: LentilleMetrics.FocusCard.height
                 )
                 .position(x: geo.size.width / 2, y: y)
+                .opacity(scene.level)
+                .allowsHitTesting(scene.level > 0)
             }
         }
         .adaptiveOnChange(of: election.electedId, initial: true) { _, newId in

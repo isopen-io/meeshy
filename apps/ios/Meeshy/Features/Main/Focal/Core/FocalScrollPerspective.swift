@@ -1,28 +1,32 @@
 import UIKit
 import QuartzCore
 
-/// Focal — perspective MINIMALE au défilement (2026-08-21).
+/// Focal — perspective MINIMALE, et SEULEMENT pendant le défilement
+/// (2026-08-21, directive user : « le cadre apparaît quand on scrolle, au
+/// repos il disparaît ; au bout de quelques secondes sans scroller, la vue
+/// redevient Script, tout se ré-aplatit naturellement »).
 ///
-/// Le mode Focal revient sans la machinerie retirée le 2026-08-18 (pass par
-/// frame avec élection, atterrissages, carte, loupe, typographie à l'arrêt —
-/// `docs/focal-retrait-ios-2026-08-18.md`). Il ne reste que ce que la loi
-/// partagée décrit : pour chaque cellule VISIBLE, une échelle et une opacité
-/// fonction de sa distance à la ligne de focus
-/// (`FocalFocusCurve.focusCurve(distance:variant: .thread)`), appliquées au
-/// CALayer de son `contentView`. Transform + opacity, jamais une hauteur ni
-/// une police : le layout de la collection ne bouge pas (zéro relayout, zéro
-/// invalidation), donc rien de ce qui faisait boguer l'ancien pass.
+/// Pour chaque cellule VISIBLE, une échelle et une opacité fonction de sa
+/// distance à la ligne de focus (`FocalFocusCurve.focusCurve(variant:
+/// .thread)`), appliquées au CALayer de son `contentView` ; une COMPACTION
+/// symétrique tire chaque rangée vers la ligne de focus de la hauteur perdue
+/// par celles qui l'en séparent (plus d'interstices) ; la ligne de focus est
+/// le CENTRE de la région visible, qui descend jusqu'au bord bas au repos en
+/// bas du fil (le dernier message doit pouvoir être en focus). Transform +
+/// opacity, jamais une hauteur ni une police : le layout ne bouge pas.
 ///
-/// Repère : le fil est une `UICollectionView` renversée (`scaleY: -1`) ; la
-/// cellule et son `contentView` vivent dans ce repère renversé (le contenu
-/// SwiftUI se renverse à nouveau). Le pivot de la spec — visuellement
-/// (16 %, bas de rangée), `anchorPoint (0.16, 1.0)` — est donc le point
-/// (0.16·w, 0) du layer. On compose la mise à l'échelle autour de ce point
-/// sans toucher `anchorPoint` (qui déplacerait le layer).
+/// Repère : le fil est une `UICollectionView` renversée (`scaleY: -1`) ; le
+/// layer d'une cellule vit dans ce repère renversé (y = 0 au bas VISUEL).
 nonisolated enum FocalScrollPerspective {
 
-    /// Pivot VISUEL de la spec (§5) : 16 % de la largeur, bas de la rangée.
+    /// Pivot VISUEL horizontal de la spec (§5) : 16 % de la largeur.
     static let visualPivotX: CGFloat = FocalFocusCurve.threadHorizontalPivot
+
+    /// Plancher d'opacité — règle de CONSOMMATION iOS (la loi partagée reste
+    /// intacte) : une rangée lointaine reste LISIBLE, elle fait partie de la
+    /// scène avant d'être proche — plus d'« arrivée » ni de « sortie » par
+    /// fondu aux bords (directive user 2026-08-21).
+    static let alphaFloor: CGFloat = 0.62
 
     struct Pose: Equatable {
         let scale: CGFloat
@@ -30,34 +34,40 @@ nonisolated enum FocalScrollPerspective {
         static let identity = Pose(scale: 1, alpha: 1)
     }
 
-    /// La loi, et rien d'autre : `distance` = ligne de focus − milieu visuel
-    /// de la rangée (positive au-dessus de la bande). Reduce Motion ⇒ identité.
+    /// La loi, plafonnée par le plancher d'opacité. Reduce Motion ⇒ identité.
     static func pose(distance: CGFloat, reduceMotion: Bool) -> Pose {
         guard !reduceMotion else { return .identity }
-        let result = FocalFocusCurve.focusCurve(distance: distance, variant: .thread)
-        return Pose(scale: result.scale, alpha: result.alpha)
+        let result = FocalFocusCurve.focusCurve(distance: abs(distance), variant: .thread)
+        return Pose(scale: result.scale, alpha: max(alphaFloor, result.alpha))
     }
 
-    /// Ordonnée VISUELLE de la ligne de focus : bas de la zone visible (le
-    /// chrome du composeur est `bottomInset`) moins l'offset de bande du fil.
-    static func focusY(visibleBottom: CGFloat, bottomInset: CGFloat) -> CGFloat {
-        visibleBottom - bottomInset - FocalFocusCurve.threadFocusBandOffset
+    /// Ordonnée VISUELLE de la ligne de focus : le centre de la région
+    /// visible (entre chrome haut et composeur) — sauf près du bas du fil :
+    /// à `offsetFromBottom == 0` (au repos sur le dernier message) la ligne
+    /// est au bord bas, et elle remonte linéairement jusqu'au centre sur la
+    /// première demi-hauteur de défilement.
+    static func focusY(visibleTop: CGFloat, visibleBottom: CGFloat, offsetFromBottom: CGFloat) -> CGFloat {
+        let center = (visibleTop + visibleBottom) / 2
+        let travel = visibleBottom - center
+        guard travel > 0 else { return center }
+        let t = min(1, max(0, offsetFromBottom / travel))
+        return visibleBottom - travel * t
     }
 
-    /// Transform 3D qui met à l'échelle un layer de taille `size` autour du
-    /// pivot de la spec, exprimé dans le repère RENVERSÉ du layer, puis le
-    /// TIRE de `pull` points vers la ligne de focus (visuellement vers le bas
-    /// = −y dans le repère renversé).
-    static func transform(scale: CGFloat, pull: CGFloat = 0, size: CGSize) -> CATransform3D {
+    /// Transform 3D : mise à l'échelle autour du pivot (x : 16 % de la
+    /// largeur ; y : `anchorY` en repère RENVERSÉ — 0 = bas visuel, 1 = haut
+    /// visuel), puis translation de `pull` points vers la ligne de focus
+    /// (`pull` > 0 = vers le bas visuel = −y dans le repère renversé).
+    static func transform(scale: CGFloat, pull: CGFloat = 0, anchorY: CGFloat = 0, size: CGSize) -> CATransform3D {
         guard scale != 1 || pull != 0 else { return CATransform3DIdentity }
         let pivotX = (visualPivotX - 0.5) * size.width
-        let pivotY = (0 - 0.5) * size.height
+        let pivotY = (anchorY - 0.5) * size.height
         var t = CATransform3DMakeTranslation(pivotX, pivotY - pull, 0)
         t = CATransform3DScale(t, scale, scale, 1)
         return CATransform3DTranslate(t, -pivotX, -pivotY, 0)
     }
 
-    // MARK: - Compaction (proportions conservées)
+    // MARK: - Compaction symétrique (proportions conservées, zéro interstice)
 
     /// Une cellule visible, en repère VISUEL (celui de la vue hôte).
     struct CellGeometry: Equatable {
@@ -65,8 +75,7 @@ nonisolated enum FocalScrollPerspective {
         let visualMidY: CGFloat
         let height: CGFloat
         /// Pilules de jour, frappe, marqueur : elles s'estompent mais ne
-        /// changent pas d'échelle (une pilule rétrécie sous la pilule collante
-        /// lisait double) — et ne concourent pas au focus.
+        /// changent pas d'échelle et ne concourent pas au focus.
         let isMessage: Bool
     }
 
@@ -74,33 +83,41 @@ nonisolated enum FocalScrollPerspective {
         let id: String
         let scale: CGFloat
         let alpha: CGFloat
-        /// Translation VISUELLE vers le bas (vers la ligne de focus) : la
-        /// hauteur perdue par toutes les rangées rétrécies situées ENTRE cette
-        /// cellule et la ligne de focus. Sans elle, chaque rangée rétrécissait
-        /// dans sa case et les interstices grandissaient (retour user
-        /// 2026-08-21 : « garder les mêmes proportions d'espace »).
+        /// Translation VISUELLE signée vers la ligne de focus : > 0 vers le
+        /// bas (rangées AU-DESSUS de la ligne), < 0 vers le haut (rangées
+        /// EN DESSOUS) — la hauteur perdue par toutes les rangées rétrécies
+        /// situées ENTRE cette cellule et la ligne.
         let pull: CGFloat
+        /// Pivot vertical de l'échelle en repère renversé : 0 = bas visuel
+        /// (rangées au-dessus de la ligne rétrécissent vers leur bas), 1 =
+        /// haut visuel (rangées en dessous rétrécissent vers leur haut).
+        let anchorY: CGFloat
     }
 
-    /// Poses de TOUTES les cellules visibles pour une frame : la loi par
-    /// distance (sur la position ORIGINALE, donc déterministe par offset),
-    /// puis la compaction cumulée de bas en haut. Au-dessus de la ligne de
-    /// focus seulement — en dessous, tout reste en place.
+    /// Poses de TOUTES les cellules visibles pour une frame : loi par
+    /// distance (sur la position ORIGINALE, déterministe par offset), puis
+    /// compaction cumulée de chaque côté de la ligne, de la plus proche à la
+    /// plus lointaine.
     static func poses(cells: [CellGeometry], focusY: CGFloat, reduceMotion: Bool) -> [CellPose] {
-        let ordered = cells.sorted { $0.visualMidY > $1.visualMidY }
-        var pull: CGFloat = 0
         var result: [CellPose] = []
-        result.reserveCapacity(ordered.count)
-        for cell in ordered {
-            let distance = focusY - cell.visualMidY
-            let law = pose(distance: distance, reduceMotion: reduceMotion)
+        result.reserveCapacity(cells.count)
+
+        let above = cells.filter { $0.visualMidY <= focusY }.sorted { $0.visualMidY > $1.visualMidY }
+        var pullDown: CGFloat = 0
+        for cell in above {
+            let law = pose(distance: focusY - cell.visualMidY, reduceMotion: reduceMotion)
             let scale = cell.isMessage ? law.scale : 1
-            guard distance > 0 else {
-                result.append(CellPose(id: cell.id, scale: 1, alpha: 1, pull: 0))
-                continue
-            }
-            result.append(CellPose(id: cell.id, scale: scale, alpha: law.alpha, pull: pull))
-            pull += (1 - scale) * cell.height
+            result.append(CellPose(id: cell.id, scale: scale, alpha: law.alpha, pull: pullDown, anchorY: 0))
+            pullDown += (1 - scale) * cell.height
+        }
+
+        let below = cells.filter { $0.visualMidY > focusY }.sorted { $0.visualMidY < $1.visualMidY }
+        var pullUp: CGFloat = 0
+        for cell in below {
+            let law = pose(distance: cell.visualMidY - focusY, reduceMotion: reduceMotion)
+            let scale = cell.isMessage ? law.scale : 1
+            result.append(CellPose(id: cell.id, scale: scale, alpha: law.alpha, pull: -pullUp, anchorY: 1))
+            pullUp += (1 - scale) * cell.height
         }
         return result
     }
@@ -120,23 +137,18 @@ nonisolated enum FocalScrollPerspective {
         }?.id
     }
 
-    /// Sur-réserve de cellules au-dessus de l'écran : la compaction tire les
-    /// rangées du haut vers le bas d'autant que les rangées rétrécies ont
-    /// perdu ; des cellules encore « hors écran » pour UIKit doivent déjà
-    /// exister pour occuper la place libérée. Fraction de la hauteur visible.
+    /// Sur-réserve de cellules de CHAQUE côté de l'écran : la compaction tire
+    /// les rangées vers la ligne de focus d'autant que les rangées rétrécies
+    /// ont perdu ; des cellules encore « hors écran » pour UIKit doivent déjà
+    /// exister pour occuper la place libérée — les messages font partie de
+    /// la scène AVANT d'être visibles. Fraction de la hauteur visible.
     static let overscanFraction: CGFloat = 0.6
 
-    /// Applique la pose au layer — sans animation implicite (l'appelant est
-    /// dans `scrollViewDidScroll` : une transaction par frame, désactivée).
-    @MainActor
-    static func apply(_ pose: Pose, to layer: CALayer) {
-        layer.transform = transform(scale: pose.scale, size: layer.bounds.size)
-        layer.opacity = Float(pose.alpha)
-    }
+    // MARK: - Application au layer
 
     @MainActor
     static func apply(_ pose: CellPose, to layer: CALayer) {
-        layer.transform = transform(scale: pose.scale, pull: pose.pull, size: layer.bounds.size)
+        layer.transform = transform(scale: pose.scale, pull: pose.pull, anchorY: pose.anchorY, size: layer.bounds.size)
         layer.opacity = Float(pose.alpha)
     }
 
@@ -146,11 +158,9 @@ nonisolated enum FocalScrollPerspective {
     static let focusCardInsets = UIEdgeInsets(top: 2, left: 6, bottom: 2, right: 6)
 
     /// Fond teinté du message en focus — une `UIView` à masque d'auto-
-    /// redimensionnement, insérée SOUS le contenu SwiftUI de la cellule : elle
-    /// suit les bounds de la cellule à chaque layout (reconfiguration,
-    /// self-sizing) sans attendre un tick de défilement — un `CALayer` posé
-    /// pendant l'apply gardait les bounds ESTIMÉES et débordait à droite.
-    /// Purement décorative : aucun hit-test, aucune contrainte.
+    /// redimensionnement, insérée SOUS le contenu SwiftUI de la cellule :
+    /// elle suit les bounds de la cellule à chaque layout sans attendre un
+    /// tick. Purement décorative : aucun hit-test, aucune contrainte.
     @MainActor
     final class FocusCardView: UIView {
         override init(frame: CGRect) {
@@ -165,20 +175,26 @@ nonisolated enum FocalScrollPerspective {
     }
 
     @MainActor
+    static func focusCard(in contentView: UIView) -> FocusCardView? {
+        contentView.subviews.first { $0 is FocusCardView } as? FocusCardView
+    }
+
+    @MainActor
     static func showFocusCard(in contentView: UIView, accent: UIColor, isDark: Bool) {
-        let card = (contentView.subviews.first { $0 is FocusCardView } as? FocusCardView) ?? {
+        let card = focusCard(in: contentView) ?? {
             let view = FocusCardView(frame: contentView.bounds.inset(by: focusCardInsets))
             contentView.insertSubview(view, at: 0)
             return view
         }()
         card.frame = contentView.bounds.inset(by: focusCardInsets)
+        card.alpha = 1
         card.backgroundColor = accent.withAlphaComponent(isDark ? 0.16 : 0.10)
         card.layer.borderColor = accent.withAlphaComponent(isDark ? 0.55 : 0.40).cgColor
     }
 
     @MainActor
     static func hideFocusCard(in contentView: UIView) {
-        contentView.subviews.first { $0 is FocusCardView }?.removeFromSuperview()
+        focusCard(in: contentView)?.removeFromSuperview()
     }
 
     @MainActor

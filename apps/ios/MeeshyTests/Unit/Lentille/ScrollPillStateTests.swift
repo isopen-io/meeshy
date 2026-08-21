@@ -561,9 +561,10 @@ final class ScrollPillStateTests: XCTestCase {
             "Le composeur de story passe par le cover monté aux racines, comme depuis S5."
         )
         XCTAssertEqual(
-            occurrences(of: "showStatusComposer = true", in: code), 2,
+            occurrences(of: "showStatusComposer = true", in: code), 3,
             "L'ajout de statut ouvre la sheet que CETTE vue héberge déjà — un site pour le " +
-            "rail (drapeau ON), un pour le tray (OFF), et pas une sheet de plus."
+            "rail (drapeau ON), un pour le tray (OFF), un pour l'accès rapide « Poser un mood » " +
+            "de la queue de liste (2026-08-21), et pas une sheet de plus."
         )
     }
 

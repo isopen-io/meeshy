@@ -235,8 +235,11 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
 
     override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
         guard focalOverscan > 0 else { return super.layoutAttributesForElements(in: rect) }
-        var extended = rect
-        extended.size.height += focalOverscan
+        // Des DEUX côtés (2026-08-21) : la compaction est symétrique autour
+        // de la ligne de focus — les rangées du bas comme celles du haut sont
+        // tirées vers elle, et la place libérée aux deux bords doit déjà être
+        // occupée par des cellules réalisées.
+        let extended = rect.insetBy(dx: 0, dy: -focalOverscan)
         return super.layoutAttributesForElements(in: extended)
     }
 

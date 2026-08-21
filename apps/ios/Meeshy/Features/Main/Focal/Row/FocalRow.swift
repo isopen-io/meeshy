@@ -440,7 +440,10 @@ struct FocalRow: View {
             // user 2026-08-18) — commun au texte et à l'audio traduit.
             BubbleExpandableText(
                 content: effectiveText,
-                isMe: content.isMe,
+                // La rangée plate n'a AUCUN fond teinté : `isMe` ferait passer
+                // le texte en blanc (règle de la bulle « sur ma bulle
+                // accent ») — illisible en mode clair (capture 2026-08-21).
+                isMe: false,
                 mentionDisplayNames: input.mentionDisplayNames,
                 highlightTerm: input.highlightSearchTerm,
                 mentionTint: MeeshyColors.mentionColor(isDark: input.isDark),

@@ -146,6 +146,10 @@ struct ConversationListView: View {
 
     // Status
     @State private var showStatusComposer = false
+    /// Accès rapides (queue de liste / état vide, 2026-08-21) : les feuilles
+    /// de création EXISTANTES, réutilisées telles quelles.
+    @State private var showCreateAffiliate = false
+    @State private var showCreateTrackingLink = false
 
     // Search and Filters
     @FocusState var isSearching: Bool
@@ -181,6 +185,9 @@ struct ConversationListView: View {
     // part dans ce fichier : la liste monte un hôte, c'est tout.
     @State private var focusCandidateRegistry = LentilleFocusCandidateRegistry()
     @State private var focusElection = LentilleFocusElection()
+    /// Activité de la SCÈNE (2026-08-21) : perspective et carte de focus
+    /// pendant le défilement seulement, à plat `restDelay` après la pose.
+    @State private var sceneActivity = LentilleSceneActivity()
 
     // MARK: - Pilule de section (LWS-6, drapeau Lentille)
     //
@@ -1008,6 +1015,14 @@ struct ConversationListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showCreateAffiliate) {
+            AffiliateCreateView { _ in }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCreateTrackingLink) {
+            CreateTrackingLinkView { _ in }
+        }
     }
 
     /// `AnyView` à la DÉCLARATION (2026-08-19). Chaîne `body → mainContent →
@@ -1334,6 +1349,51 @@ struct ConversationListView: View {
                 isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
                 preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
             )
+            // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
+            // niveau d'activité lu par les rangées et par la carte.
+            LentilleSceneActivityHost(relay: scrollOffsetRelay, scene: sceneActivity)
+        }
+    }
+
+    // MARK: - Accès rapides (queue de liste / état vide, 2026-08-21)
+
+    /// Vue PURE routée vers les portes EXISTANTES : nouveau message
+    /// (`onNewConversation`), story (`StoryViewModel.showStoryComposer`),
+    /// mood (`StatusComposerView`, déjà hébergé ici), post (drapeau `Router
+    /// .pendingOpenFeedComposer`, consommé par le flux), invitation
+    /// (`AffiliateCreateView`, lien de parrainage), lien raccourci
+    /// (`CreateTrackingLinkView`, `/l/<token>`).
+    private func quickActions(isEmptyState: Bool, minHeight: CGFloat = 0) -> some View {
+        ConversationListQuickActions(
+            isDark: theme.mode.isDark,
+            isEmptyState: isEmptyState,
+            minHeight: minHeight,
+            onAction: { action in
+                switch action {
+                case .newMessage: onNewConversation?()
+                case .story: storyViewModel.showStoryComposer = true
+                case .mood: showStatusComposer = true
+                case .post: router.pendingOpenFeedComposer = true
+                case .invite: showCreateAffiliate = true
+                case .shortcutLink: showCreateTrackingLink = true
+                }
+            }
+        )
+        .equatable()
+    }
+
+    /// Hauteur de queue : une DEMI-région visible, pour que la dernière
+    /// rangée puisse rejoindre la bande de focus au centre.
+    private var listTailMinHeight: CGFloat {
+        DeviceLayout.windowSize.height / 2
+    }
+
+    @ViewBuilder
+    private var listTail: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            quickActions(isEmptyState: false, minHeight: listTailMinHeight)
+        } else {
+            Color.clear.frame(height: 60)
         }
     }
 
@@ -1522,16 +1582,10 @@ struct ConversationListView: View {
                         case .createFirstConversation:
                             Group {
                                 if LentilleFeatureFlag.isLentilleListEnabled {
-                                    EmptyStateView(
-                                        icon: "bubble.left.and.bubble.right",
-                                        title: String(localized: "conversations.empty.title"),
-                                        subtitle: String(localized: "conversations.empty.subtitle"),
-                                        actionLabel: String(localized: "conversations.empty.action"),
-                                        compact: true,
-                                        onAction: {
-                                            onNewConversation?()
-                                        }
-                                    )
+                                    // État vide = les MÊMES accès rapides que la
+                                    // queue de liste (2026-08-21) : tout commence
+                                    // ici — message, story, mood, post, invitation.
+                                    quickActions(isEmptyState: true)
                                 } else {
                                     EmptyStateView(
                                         icon: "bubble.left.and.bubble.right",
@@ -1575,11 +1629,12 @@ struct ConversationListView: View {
                         ConversationPaginationFooter()
                     }
 
-                    // Queue de liste : juste de quoi passer sous la barre de
-                    // recherche et amener la dernière rangée jusqu'à la bande
-                    // de focus — 400 pt (280 + 120) laissaient un demi-écran
-                    // de vide sous la dernière conversation (2026-08-21).
-                    Color.clear.frame(height: 60)
+                    // Queue de liste (2026-08-21) : les accès rapides, hauts
+                    // d'une DEMI-région visible — de quoi amener la dernière
+                    // conversation jusqu'à la bande de focus au centre de
+                    // l'écran (sans cette queue, la magnificence ne touchait
+                    // jamais la fin de la liste). Drapeau OFF : queue neutre.
+                    listTail
                         .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -1678,6 +1733,7 @@ struct ConversationListView: View {
         .overlay(alignment: .top) {
             sectionScrollPillOverlay
         }
+        .environmentObject(sceneActivity)
         .sheet(isPresented: $showShareLinkSheet) {
             ShareLinkPickerSheet(
                 conversations: conversationViewModel.conversations.filter { canCreateShareLink(for: $0) },
