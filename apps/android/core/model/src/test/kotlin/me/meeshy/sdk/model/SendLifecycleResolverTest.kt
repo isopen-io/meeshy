@@ -55,4 +55,69 @@ class SendLifecycleResolverTest {
             SendLifecycleResolver.resolve(isPending = false, isFailed = true, isOffline = false),
         ).isEqualTo(SendLifecycle.Failed)
     }
+
+    // MARK: - shouldRevealSendingGlyph (online in-flight clock debounce)
+    // Port of iOS `BubbleDeliveryCheck.SendingClockGlyph.shouldRevealImmediately`
+    // (revealDelay = 0.2s): a send that round-trips under 200ms never flashes a
+    // clock icon, but a send that genuinely lingers past the threshold reveals it.
+
+    @Test
+    fun `with no send-start time the sending clock reveals immediately`() {
+        // A row scrolled into view with no known start (e.g. a restored draft
+        // send) has nothing to debounce against — show the glyph, never hide it.
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = null, nowMillis = 10_000L),
+        ).isTrue()
+    }
+
+    @Test
+    fun `a send that just started keeps the clock hidden`() {
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = 10_000L, nowMillis = 10_000L),
+        ).isFalse()
+    }
+
+    @Test
+    fun `a send elapsed 100ms keeps the clock hidden`() {
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = 10_000L, nowMillis = 10_100L),
+        ).isFalse()
+    }
+
+    @Test
+    fun `a send elapsed 199ms still keeps the clock hidden`() {
+        // Exclusive lower edge: one millisecond under the threshold is still hidden.
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = 10_000L, nowMillis = 10_199L),
+        ).isFalse()
+    }
+
+    @Test
+    fun `a send elapsed exactly 200ms reveals the clock`() {
+        // Inclusive boundary — mirrors iOS `>= revealDelay`.
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = 10_000L, nowMillis = 10_200L),
+        ).isTrue()
+    }
+
+    @Test
+    fun `a send lingering 5 seconds reveals the clock`() {
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = 10_000L, nowMillis = 15_000L),
+        ).isTrue()
+    }
+
+    @Test
+    fun `a start time in the future from clock skew keeps the clock hidden`() {
+        // Negative elapsed (device clock skew) is under the threshold — stay hidden
+        // rather than flash a glyph for a message that has barely started.
+        assertThat(
+            SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis = 10_500L, nowMillis = 10_000L),
+        ).isFalse()
+    }
+
+    @Test
+    fun `the reveal delay is 200 milliseconds`() {
+        assertThat(SendLifecycleResolver.SENDING_REVEAL_DELAY_MILLIS).isEqualTo(200L)
+    }
 }

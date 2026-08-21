@@ -2,6 +2,67 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Sub-200ms sending-clock debounce shipped** (slice `chat-send-clock-reveal-debounce`,
+> feature-parity's Chat `[~]` "Delivery status" line — the `invisible pre-200ms debounce` half of its
+> **Pending** 8-state clause, now shipped; only the finer `slow`/retry glyph tier remains).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 9 open PRs at branch
+> time (#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none
+> android-routine. Prior android iteration (#3254, chat-draft-language-persistence) already merged.
+> Branched off freshly-fetched `origin/main` (`c138ffe4`, which includes #3254).
+>
+> **SDK bootstrap — the platform-metadata fight, finally understood (see NOTES 2026-08-21):** since the
+> Android *minor* SDK releases (36.1, **37.0**, 37.1…) an API level is no longer published under a bare
+> `android-37` name — only `android-37.0`. The prior recipe (`cp -r android-37.0 android-37` + sed
+> `source.properties`) is now HARMFUL: the copy keeps `package.xml` (`path="platforms;android-37.0"`,
+> `<api-level>37.0</api-level>`), so AGP sees a package claiming to be `android-37.0` living in the
+> `android-37` dir → "Observed package id … in inconsistent location" → the whole SDK scan aborts →
+> "Failed to find target with hash string 'android-37'". **The fix is to do NOTHING by hand**: install a
+> pristine `platforms;android-37.0` via `sdkmanager --channel=3` and let **AGP auto-map `compileSdk 37` →
+> `android-37.0`** itself (exactly what CI's setup-android does — `android.yml` even documents this). No
+> `android-37` dir, no sed, no symlink, auto-download left ON. `assembleDebug testDebugUnitTest` green
+> after. This container **reaches `dl.google.com`** (curl → 200), so the full local gate ran here.
+>
+> **The gap (re-proved by reading source)**: iOS's `BubbleDeliveryCheck.SendingClockGlyph` debounces the
+> **online in-flight clock**: `shouldRevealImmediately(sendStartedAt, now)` keeps the clock hidden for the
+> first `revealDelay = 0.2s` of a send, revealed via a self-cancelling `.task`, so a send that round-trips
+> in under 200ms never flashes an icon the user has no time to perceive. Android showed the `Schedule`
+> clock immediately for a `DeliveryStatus.Pending` bubble — no debounce. The offline hourglass
+> (`QueuedOffline`) and settled tiers are NOT debounced on iOS, and stay immediate here.
+>
+> **Pure core (`:core:model` `SendLifecycleResolver`)**: new
+> `shouldRevealSendingGlyph(sendStartedAtMillis: Long?, nowMillis: Long): Boolean` +
+> `SENDING_REVEAL_DELAY_MILLIS = 200L` — faithful port: `null` start → `true` (reveal now, nothing to
+> debounce); elapsed `>= 200ms` → `true` (iOS's `>=` inclusive boundary); under the window (incl. a
+> negative elapsed from device clock skew) → `false`. `resolve()` untouched.
+>
+> **Wiring (Compose glue, coverage-exempt)**: new `SendingClockRevealPresenter.rememberSendingGlyphRevealed`
+> (`produceState` initialised from the pure decision + one-shot `delay(remaining)` then flip to revealed —
+> the SAME shape as `rememberBubbleRenderKind`'s tick loop). `MessageBubble` gates ONLY the
+> `DeliveryStatus.Pending` clock behind it, reading the send-start from the existing
+> `content.createdAtIso` (an optimistic pending bubble's `createdAt` IS its send-start — no new
+> `BubbleContent` field, no builder/VM param, no wire change). Every other status renders immediately as
+> before.
+>
+> **Tests**: **+8 `SendLifecycleResolverTest`** — no start → reveal; just-started/100ms/199ms hidden;
+> exactly-200ms/5s revealed; future start (clock skew) hidden; the 200ms constant. Mirrors the iOS twin
+> `BubbleDeliveryCheckSendingRevealTests` exactly, plus the 199ms exclusive-lower-edge + skew arms.
+> **Mutation (RED proof)**: `>=`→`>` fails **exactly** `a send elapsed exactly 200ms reveals the clock`
+> (15 run, 1 failed, no collateral). Restored. The `produceState`/`delay` presenter is thin Compose glue,
+> exempt per TDD-COVERAGE.
+>
+> **Verified**: `:core:model:testDebugUnitTest` (SendLifecycleResolverTest) green; `:sdk-ui`
+> `compileDebugKotlin` green; full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS.
+> Diff is `apps/android` only.
+>
+> **Next**: the last piece of the Delivery-status line is the finer `slow`/retry glyph tier (iOS
+> `DeliveryStatus.slow` — a warning-tinted clock for a message still in automatic outbox retry after its
+> first attempt failed but before the budget is exhausted). That needs the outbox retry-attempt count
+> plumbed into the send state → `BubbleContent`, so it is a bigger slice than this one (not a pure
+> resolver alone). Otherwise the Chat area's remaining apps/android-only boxes are thin; if the retry-state
+> plumbing looks heavy, advance to **Feed (§F)** per build-order. Re-scout read-only before committing —
+> parity notes are hypotheses.
+
 > On 2026-08-21 **Manual composer-language draft persistence shipped** (slice `chat-draft-language-persistence`,
 > the last open piece of feature-parity's Chat "Draft auto-save/restore" line — now `[x]`).
 >
