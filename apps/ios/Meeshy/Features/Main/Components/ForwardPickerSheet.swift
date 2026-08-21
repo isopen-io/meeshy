@@ -246,9 +246,6 @@ struct ForwardPickerSheet: View {
             accentHex: accentColor,
             isDark: isDark,
             state: sendState.state(of: target.id),
-            a11yName: target.title.isEmpty
-                ? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)
-                : target.title,
             onTap: {
                 // Tap de LIGNE = sélection (no-op sur une cible servie/en cours).
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -394,9 +391,6 @@ struct ForwardPickerRow: View, Equatable {
     let accentHex: String
     let isDark: Bool
     let state: ForwardPickerModel.TargetState
-    /// Nom prononcé par VoiceOver dans « Transférer à … » — déjà replié sur
-    /// son libellé de repli par le parent.
-    let a11yName: String
     let onTap: () -> Void
     let onSend: () -> Void
     let onMoodTap: ((CGPoint) -> Void)?
@@ -415,7 +409,50 @@ struct ForwardPickerRow: View, Equatable {
             && lhs.accentHex == rhs.accentHex
             && lhs.isDark == rhs.isDark
             && lhs.state == rhs.state
-            && lhs.a11yName == rhs.a11yName
+    }
+
+    /// Le nom PRONONCÉ est celui qui est AFFICHÉ (`name`), jamais une autre
+    /// source : c'est le contrat « Label in Name » (WCAG 2.5.3), qui fait de
+    /// « Transférer à Maman » une commande Voice Control valide.
+    ///
+    /// Ces deux libellés se composaient auparavant depuis une entrée distincte
+    /// repliée sur « cette conversation ». Toutes les conversations directes —
+    /// l'essentiel d'un picker de transfert — y tombaient : leurs boutons
+    /// d'envoi annonçaient TOUS la même chose, et VoiceOver ne permettait plus
+    /// de distinguer la cible qu'on s'apprêtait à servir.
+    static func sendAccessibilityLabel(name: String) -> String {
+        String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), name)
+    }
+
+    static func retrySendAccessibilityLabel(name: String) -> String {
+        String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), name)
+    }
+
+    /// Compteur pluralisé « • N membres » — le pluriel est choisi par le
+    /// catalogue (`variations.plural`), pas gravé dans la chaîne. La ligne
+    /// n'affichait le compteur qu'à `memberCount > 0`, or le français range
+    /// N = 1 dans le SINGULIER : sans variation, une conversation à un seul
+    /// membre lisait « • 1 membres ». Défaut mineur en apparence, mais lu par
+    /// VoiceOver sur chaque ligne du picker (élément combiné) — c'est-à-dire
+    /// répété autant de fois qu'il y a de cibles.
+    ///
+    /// `bundle` et `locale` vont par PAIRE (idiome `PostStatAccessibility`) :
+    /// le bundle choisit la TABLE (`fr.lproj` / `en.lproj`), le locale choisit
+    /// la RÈGLE plurielle. Fixer l'un sans l'autre rendrait le test vert en
+    /// local (simu français) et rouge en CI (simu anglais).
+    static func membersCountLabel(_ count: Int,
+                                  bundle: Bundle = .main,
+                                  locale: Locale = .current) -> String {
+        String(
+            format: String(
+                localized: "forward.members-count",
+                defaultValue: "\u{2022} %d membres",
+                bundle: bundle,
+                locale: locale
+            ),
+            locale: locale,
+            count
+        )
     }
 
     var body: some View {
@@ -444,7 +481,7 @@ struct ForwardPickerRow: View, Equatable {
                             .foregroundColor(theme.textMuted)
 
                         if memberCount > 0 {
-                            Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), memberCount))
+                            Text(Self.membersCountLabel(memberCount))
                                 .font(MeeshyFont.relative(12))
                                 .foregroundColor(theme.textMuted)
                         }
@@ -504,14 +541,14 @@ struct ForwardPickerRow: View, Equatable {
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(MeeshyColors.error)
             }
-            .accessibilityLabel(String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), a11yName))
+            .accessibilityLabel(Self.retrySendAccessibilityLabel(name: name))
         case .idle, .selected:
             Button(action: onSend) {
                 Image(systemName: "paperplane.circle.fill")
                     .font(MeeshyFont.relative(24))
                     .foregroundColor(Color(hex: accentHex))
             }
-            .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), a11yName))
+            .accessibilityLabel(Self.sendAccessibilityLabel(name: name))
         }
     }
 }

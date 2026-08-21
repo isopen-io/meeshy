@@ -48,6 +48,11 @@ const mockSendInternalError = jest.fn<any>((reply: any, msg: any) => {
   reply._body = { success: false, error: msg };
   return reply;
 });
+const mockSendConflict = jest.fn<any>((reply: any, msg: any, opts?: any) => {
+  reply.statusCode = 409;
+  reply._body = { success: false, error: msg, code: opts?.code };
+  return reply;
+});
 
 const mockNotifyReactionAdded = jest.fn<any>().mockResolvedValue(undefined);
 const mockNotifyReactionRemoved = jest.fn<any>().mockResolvedValue(undefined);
@@ -84,6 +89,7 @@ jest.mock('../../../utils/response', () => ({
   sendForbidden: (...args: any[]) => mockSendForbidden(...args),
   sendNotFound: (...args: any[]) => mockSendNotFound(...args),
   sendInternalError: (...args: any[]) => mockSendInternalError(...args),
+  sendConflict: (...args: any[]) => mockSendConflict(...args),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -106,6 +112,8 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
 // ─── Import SUT after mocks ────────────────────────────────────────────────────
 
 import reactionRoutes from '../../../routes/reactions';
+import { ConflictError } from '../../../errors/custom-errors';
+import { REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -389,6 +397,25 @@ describe('reactionRoutes', () => {
 
       expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
       expect(reply.statusCode).toBe(404);
+    });
+
+    it('returns 409 with the reaction-limit message when service throws ConflictError (cap reached)', async () => {
+      const { fastify, reply } = setup();
+      const handler = getHandler(fastify, 'POST', '/reactions');
+
+      mockAddReaction.mockRejectedValue(
+        new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED')
+      );
+
+      const req = makeRequest({ body: { messageId: MESSAGE_ID, emoji: '🎉' } });
+      await handler(req, reply);
+
+      expect(mockSendConflict).toHaveBeenCalledWith(
+        reply,
+        REACTION_LIMIT_REACHED_MESSAGE,
+        { code: 'REACTION_LIMIT_REACHED' }
+      );
+      expect(reply.statusCode).toBe(409);
     });
 
     it('returns 403 when service throws "not a member of..." error', async () => {

@@ -1,5 +1,272 @@
 # @meeshy/gateway
 
+## 1.30.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - message-summary-kind on row preview (#3238)
+  - CanvasV3 refuse un intervalle temporel qui finit avant de commencer
+  - composer attachment-ladder tray groups 6 tiles (parity iOS carouselTiles)
+  - la clé « • %d membres » du picker de transfert gravait sa règle de pluriel
+  - les suites ForwardPickerSpokenName et SystemNoticeEngravedTime entrent au bundle de tests
+  - (beta) tout message systeme se grave — heure en tete centree, replis Bulles/Script sans combine telephone
+  - (beta) l'avis d'arrivee survit au fil rouvert, se grave heure en tete, et l'anonyme retrouve nom + @pseudo
+  - l'origine servie par l'extension de partage livre enfin ses copies
+  - retenter une fois l'upload direct tus après un refus d'authentification
+  - le téléversement TUS retente une fois après un refus d'authentification
+  - retenter une fois l'upload tus après un refus d'authentification
+  - retenter une fois l'upload de pièce jointe après un refus d'authentification
+  - narrow conversation infinite-cache page type to drop dead delta envelope fields (iteration 235)
+  - conversation-row activity-heat gradient (parity iOS) (#3234)
+  - l'avis d'arrivee survit au cache, perd son combine et gagne pseudo, nom donne et regles du lien
+  - POST /refresh ne rattrape plus une signature invalide par une session
+  - retire le rattrapage inter-formes du chemin de téléversement TUS
+  - retire le rattrapage inter-formes et la règle d'application du round 5
+  - conversation-row tag chips with "+N" overflow (#3232)
+  - (beta) la liste affiche 199+ quand l'effectif est plafonne par le serveur
+  - la liste affiche 199+ quand l'effectif est plafonne par le serveur
+  - un petit partage est deja parti quand la feuille se referme
+  - l'extension sait televerser un petit fichier elle-meme
+  - lecteur de stories — ouverture instantanee, interlude 500ms inter-groupes, tap = barre de reactions
+  - un partage en cours de composition n'est plus balayé comme orphelin
+  - le bouton Aa saute de nouveau des bulles directement à Script
+  - un partage jamais repris finit par rendre son disque
+  - la bulle devient le mode de lecture par defaut
+  - les droits du lien atteignent le composer en booléens
+  - la borne d'attente du fan-out se mesure depuis l'entrée réelle en file
+  - le composer porte lui-même le droit de joindre un fichier
+  - ToolbarButtons sait ce qui est permis
+  - fan-out de partage — ordre de départ explicite et garde 501 sur le chemin socket
+  - une ligne qui attend son origine de partage n'épuise plus son budget de tentatives
+  - keep conversation infinite cache pages ↔ pageParams parallel (iteration 233) (#3231)
+  - conversation-list rows show who is typing (#3230)
+  - forwarded badge names its source conversation (#3228)
+  - le filet de citation Focal porte la couleur de l'auteur, et la méta nomme la langue vraiment servie
+  - les liens de partage crees pointent sur /chat — /join n'est plus qu'une 308 legacy
+  - le filtre de commentaires de l'extension de partage reconnaît enfin un littéral
+  - les destinataires suivants recoivent une copie, jamais un transfert
+  - la garde de commentaire commentaire du bouton Annuler filtre les commentaires
+  - la garde d'idempotence du partage se verrouille par construction
+  - la conversation partagee /chat devient un fil — recent en bas, Lentille, composer fige
+  - composer language pill + picker override with a 10-word detection lock (#3226)
+  - une fiche de reprise sans cible adressable est écartée, jamais indexée
+  - le bouton Annuler ne redevient plus actif après un envoi tenté
+  - une reprise sert chaque destinataire, et le dernier seul rend les octets
+  - l'extension de partage n'abandonne plus de médias orphelins et rend le texte à l'aperçu
+  - l'identifiant d'un destinataire se génère et se garde, il ne se déduit plus d'un index
+  - l'enfilage media devient atteignable par contrat, sans antidater ni voler les octets
+  - un envoi peut COPIER les pieces jointes d'un autre message, sans le transferer
+  - l'écran de partage passe en sélection multiple et extrait les fichiers reçus
+  - le corps d'envoi ShareSender diffuse par cible sans jamais marquer un transfert
+  - live sentiment emoji in the chat composer (#3224)
+  - l'issue d'un envoi devient primitive pour traverser la frontiere d'extension
+  - l'app relit une fiche qui sait dire QUELLE cible reste a servir
+  - la fiche de reprise porte enfin l'etat de CHAQUE destinataire
+  - un fichier partage se copie par flux, sous controle d'espace et de portee
+  - l'extension de partage s'annonce enfin pour les images, videos et fichiers
+  - le picker de transfert prononçait « cette conversation » à la place du nom de la cible
+  - le sélecteur de transfert filtre sur le drapeau serveur, pas sur cinq participants
+  - le sélecteur de transfert lit le drapeau serveur, plus un tableau tronqué
+  - la famille de styles de texte passe de 11 a 18
+  - les participants de la recherche ne sortent que pour un membre, qui se déclare
+  - un nom d'appelant avec un `$` fuitait la sentinelle {name} dans les alertes d'appel
+  - gate opening a locked conversation behind its PIN code (#3221)
+  - fusionner les correspondances locales pendant la recherche du selecteur de transfert
+  - borner la pagination des amis face a un hasMore qui ne retombe jamais
+  - verrou de conversation par code PIN, extrait en réducteur pur (#3219)
+  - le sélecteur de transfert atteint tous les amis, pas la première page
+  - la garde anti-boucle du sélecteur conserve la page qu'elle protège
+  - le sélecteur de transfert n'offre plus un salon public dont on n'est pas membre
+  - le nouvel écran de conversation lit la même liste d'amis que les contacts
+  - effacer la recherche du sélecteur de transfert rend enfin la liste
+  - un contact neuf hors ligne échoue proprement, le toast succès ouvre sa conversation créée
+  - transférer à un contact même sans conversation, sans en créer une à la sélection
+  - la recherche du sélecteur de transfert filtre enfin ses amis et rejette ses réponses périmées
+  - un @handle du texte cite d'un repost etait un lien mort
+  - une story qui nomme quelqu'un en NOTE le montre enfin
+  - le sélecteur de transfert pagine et cherche au-delà de sa première page
+  - la garde anti-réponse-périmée du transfert invalide aussi la requête redescendue sous 2 caractères
+  - l'attribution d'un repost se reduit a l'icone et a l'auteur d'origine
+  - les outils de pose du composer deviennent des icones, en gros
+  - le sélecteur de transfert atteint toutes les conversations et les contacts
+  - diffuser un média a plusieurs sans le faire passer pour un transfert
+  - une cible de transfert, qu'elle vienne d'une conversation ou d'un contact
+  - lire le second niveau d'enveloppe HTTP du carnet d'adresses
+  - l'ecran d'appel s'arretait aux bords de la safe area, laissant voir le fond du cover
+  - lire le carnet d'adresses synchronisé, avec sa recherche serveur
+  - accepter ou retirer un contact met a jour connected sans attendre le reseau
+  - les relations acceptées dans les deux sens entrent dans les contacts
+  - une relation acceptée dont je suis le receveur entre enfin dans mes contacts
+  - un fil affichait en direct ce que sa propre lecture lui refuse
+  - un son emprunte publie depuis le composer jetait les references qu on venait d y nommer
+  - activer les sous-titres ne faisait de vous qu'un emetteur
+  - editer une story aurait revoque toutes ses references silencieuses
+  - l'edition d'une story declare enfin ses references, ou se tait
+  - referencer quelqu'un devient possible depuis le composer que les auteurs ouvrent
+  - la regle des modes quitte le composer de repost pour le type qui la porte
+  - retirer les references du composer de repost, ou elles etaient injoignables
+  - l'edition d'un post peut enfin declarer ses references, en tri-etat
+  - UpdatePostRequest n'avait aucun ecrivain pour le tri-etat des references
+  - une story expiree affichee grace au droit de reference n'enregistrait jamais sa vue
+  - un second transfert voulu part vraiment, la confirmation succès se voit, la règle transférable se nomme une fois
+  - l'aperçu de transfert atteint enfin le client, le socket accepte un média sans texte, une source disparue ne crée plus de bulle vide
+  - le transfert nomme ses destinataires, survit au temps réel et ne double plus au retry
+  - une story expirée s'ouvre quand le serveur l'autorise
+  - un badge retouche survivait a son propre retrait
+  - une reference illisible emportait tout le lot de stories
+  - upsertReference lowercase l'ajout — divergence avec le jumeau Swift
+  - resolve APIPost mentions parameter and PostReferenceDisplay UI extension
+  - la publication déclare les modes au lieu de deviner les pseudos
+  - fix MeeshyFont.relative calls and modernize iOS SDK components
+  - modernize date formatting, concurrency, and design tokens
+  - un post reference restait muet — la mention ne quittait jamais le composer
+  - transfert multi-cibles depuis le menu message, badge nommant le groupe source
+  - le composer de post gagne les deux entrées de référence
+  - le composer story pose les quatre modes, badge compris
+  - la feuille de mention pilote l'ensemble, et ne se ferme plus au tap
+  - une reference dans un post etait un tap muet sur iPad
+  - le badge transféré nomme le groupe source, jamais un tête-à-tête
+  - un handle inexistant devenait un lien mort, et un tiret le tronquait
+  - un seul chemin de transfert multi-cibles, raisons d'échec et aperçu média
+  - la vue unique n'offre plus un transfert que le serveur refuse
+  - les composers referencent des personnes hors du texte
+  - un selecteur de reference a modes, partage par les composers
+  - Plus… rouvre la grille complète, les accès directs gardent leur saut
+  - une story expirée s'ouvre quand le serveur l'autorise, le clic d'une référence route par postType
+  - la rangée « Avec … » montre ceux que le texte ne nomme pas
+  - un badge de référence survivait jamais au trajet JSON
+  - un @handle inexistant devenait un lien vers un profil qui n'existe pas
+  - un menu de mode et une rangée d'état, partagés par tous les composers
+  - le client sait lire comment une référence se montre (beta)
+  - la notification dit dans QUOI la personne a été référencée
+  - les trois formes de partage manquaient à l'appel sur une story non publique (beta)
+  - republier une story ouvre enfin le composeur, avec son audience plafonnée (beta)
+  - une story se republie à audience égale ou plus restreinte, jamais plus large (beta)
+  - references de posts — charge utile d'exposition et audience de repost
+  - « Activer les bêta » allume enfin la liste Lentille, pas seulement les modes de lecture (beta)
+  - quatre modes d'exposition pour une référence de post
+  - l'app mourait au lancement — le type d'un body dépassait la pile du device (beta)
+  - la relation Prisma s'appelle postMentions, pas mentions
+  - la route hashtag n'avait aucun layout — useToast levait, les reels restaient vides
+  - un invité de lien ne pouvait joindre aucun média — le client lui refusait ce que le serveur lui accorde
+  - `POST /posts` accepte enfin des mentions — nommer quelqu'un n'oblige plus à l'écrire dans la légende
+  - un visiteur entré par lien ne pouvait rien charger — le client ne parlait qu'un seul protocole d'identité
+  - un lien de story expirée ouvrait une page blanche — l'écran de détail n'avait aucun état « contenu indisparu »
+  - le titre cédé lâchait la vue, pas le geste — les premiers anneaux de la trail étaient inertes
+  - mentionner quelqu'un dans une story ou un post — la liste qui n'apparaissait pas, et l'étiquette qui ne s'écrit pas
+  - trois liens morts — le /l/ qui rejoint une conversation, la trail bornée aux boutons, l'appel rogné par son propre clip
+  - le drapeau-toggle pilote la piste audio, coche unique cote heure, lectures auteur comptees (beta)
+  - l'inscription échouait à la dernière étape — trois longueurs pour un seul mot de passe
+  - sortir d'un fil VIVANT n'éteignait pas ce qu'on y tenait de vivant — la position en direct [cycle 74] (#3216)
+  - un seul anonyme par conversation — l'index unique le plafonnait
+  - drapeau de langue sur la ligne des réactions, header déplié épuré, fix bouton dernier message (beta)
+  - le drapeau de langue devient un toggle original ⇄ langue du profil (beta)
+  - drapeau de langue d'origine à la place du chip translate (beta)
+  - la garde behaviour-matrix ne balaie plus les worktrees imbriques sous .claude
+  - rouleau sans ressort, gestes reply/forward uniformes, citations riches (profil + miniature + lecture)
+  - translate PEER_CONNECTION_FAILED/ICE_CONNECTION_FAILED instead of leaking the raw code [Vague 149] (#3214)
+  - fermer une conversation n'éteignait pas ce qu'elle portait de vivant — la position en direct [cycle 73]
+  - handleAnswer closes the orphaned peer connection when setRemoteDescription fails [Vague 148]
+  - migration de nettoyage des usernames à espace, dry-run par défaut
+  - mail de rappel d'identifiant, sans un mot sur une quelconque modification
+  - l'espace n'est plus saisissable dans le pseudo, le charset devient ASCII comme le serveur
+  - l'espace n'est plus saisissable dans le pseudo, et le champ dit enfin pourquoi il refuse
+  - « no one can write » n'était appliqué qu'à UN verbe — réagir et éditer écrivaient dans un fil CLOS [cycle 71]
+  - les temoins de notification sociale pinnaient le corps d'avant #3203
+  - kicking an anonymous group-call guest failed unconditionally [Vague 145] (#3203)
+  - a single peer exhausting ICE restart attempts no longer escalates to a call-wide error [Vague 147]
+  - reconfigure CIBLÉ du snapshot — la scène ne re-héberge plus toutes ses cellules à chaque mutation du store
+  - une seule phrase, l'auteur dedans, et le corps montre la cible
+  - canCallBack gains the !isAnonymous guard canJoin already had [Vague 146] (#3206)
+  - la suppression se committait en deux écritures sur les deux routes REST [cycle 68-bis] (#3204)
+  - essai visuel bande centrée + lot 3 — cartes lieu/fichier réelles, préview iOS 26 plate, date du premier message
+  - défilement réancré sur la spec §5 « Focal Grandeur Nature » — courbe 380/0.40/0.82, fondu rétabli, loupe retirée, crash long fling corrigé
+  - la bannière push dit l'action et montre l'avatar de l'auteur
+  - [A-158] D-18 soldée — l'heure de la rangée Lentille passe AA, le tint indigo assombri au cran minimal, témoin de ratio posé
+  - [A-157] R5-6 soldée — le magasin de mode de lecture a une identité, la route G-121 est branchée
+  - la clôture committait avant ce qui la rend cohérente [cycle 69] (#3205)
+  - le double Prisma des réactions de PJ modélisait encore la clé à 2 champs [cycle 68]
+  - [A-152] Q142-c tranchée — l'encoche et le LensSwitcher disent le défaut Bulles provisoire
+  - [A-155] D-12 soldée — l'heure relative de la liste vit, un seul tick partagé de 60 s
+  - les temoins des deux vagues multi-reactions rattrapent le contrat livre (#3201)
+  - [A-151] Q142-a tranchée — le gris des métadonnées de la focus card passe AA en thème clair
+  - [P0-150] retrait de la cascade bêta I-075 — reading_modes OFF par défaut, opt-in explicite préservé (décision produit 2026-08-18)
+  - main était ROUGE — 7 témoins gelaient le swap supprimé [cycle 68]
+  - supprimer le hook de réactions mort — la cause racine du cycle 68
+  - multi-reactions sur TOUT contenu a reaction — pieces jointes, posts, commentaires
+  - les multi-réactions étaient livrées sur le hook que rien ne rend [cycle 68]
+  - un message entrant vaut trois trames — une seule relecture [cycle 61] (#3180)
+  - multi-reactions — un participant empile plusieurs emojis par message
+  - scope ICE-restart backoff/rate-limit per peer [Vague 144] (#3197)
+  - le quatrième écrivain de clôture n'enregistrait pas la clôture [cycle 67] (#3199)
+  - un segment de transcription live ne peut finir avant de commencer
+  - le refus au plafond de réactions remonte enfin à l'utilisateur
+  - plafonner à cinq réactions par personne sur post et commentaire
+  - plafonner à cinq réactions par personne sur message et pièce jointe
+  - le pipeline de traduction des objets texte parle v3 (A7b, revue C6) - persistance scenes[].objects[] ciblee par id, trigger et index de recherche enumerent les textes v3, chemin v1 inchange pour l'archive
+  - claim des stickers poses O8 - un objet sticker/media du canvas v3 referencant un media par id doit appartenir a body.mediaIds sinon 400 MEDIA_NOT_CLAIMED, la propriete reste jugee par claimableMediaWhere, sous CANVAS_V3_WRITE_STRICT donc merge inerte
+  - plancher X-App-Version sur les creations a scene - en-tete present sous plancher arme = 426, ABSENCE passe (web exempt R6), plancher vide desarme, GET /app/min-version pour le bootstrap de la porte cliente
+  - ecriture stricte storyEffects sous CANVAS_V3_WRITE_STRICT - 426 UPGRADE_REQUIRED pour le blob du passe (storeUrl par X-App-Platform), 400 CANVAS_INVALID pour le v3 casse, defaut OFF donc merge inerte
+  - negociation de forme a la lecture O17 - sentinelle v1 localisee pour les blobs v3-natifs servis sans caps, lecteur X-Canvas-Caps threade des routes aux services, broadcast tel quel (F3), garde de source sur withMentions
+  - lecture v3 branchee sur withMentions sous CANVAS_V3_READ - racine et repost imbrique, early-return couvert, defaut OFF donc merge inerte
+  - la famille mediaObjects v1 est enfin convertie - le porteur media atterrit en plane content avec volume et muted, hors remap U20, cible vivante du filtre racine
+  - convertisseur v1 vers v3 a la lecture - tolerant, golden gele, clot le gel et ouvre le lot B
+  - l'avis d'arrivee porte pseudo, nom donne et regles du lien — et atteint enfin le visiteur anonyme
+  - le repli de session de confiance ignorait l'application d'origine
+  - l'effectif se plafonne a 199+ et le listing des membres au top-99 des plus actifs
+  - TUS ne masque plus une panne de magasin en laissez-passer
+  - le plafond de upload-text comptait des caractères, pas des octets
+  - POST /attachments/upload-text gagne une garde anonyme et un plafond
+  - TUS retrouve son repli de session et gagne un garde-fou de propriétaire
+  - un jeton dont la signature échoue est refusé, jamais décodé sans vérification
+  - TUS ignorait le droit du lien, la signature ne verrouillait qu'un préfixe
+  - l'exemption audio anonyme se mérite par les octets, pas par la déclaration
+  - la voix anonyme suit le droit d'écrire, pas le droit d'envoyer des fichiers
+  - audio ZMQ dedup consumed the at-least-once slot before validating messageId
+  - un fichier partagé par plusieurs copies ne meurt qu'avec la dernière ligne
+  - la troisieme porte de l'exemption de contenu vide s'ouvre enfin sur le socket
+  - un nom d'ami avec un `$` fuitait la sentinelle du gabarit dans l'email
+  - la copie diffusee compare des identites, pas des lignes Participant
+  - la recherche de conversations nomme enfin ses interlocuteurs
+  - reposter une story fabriquait une story — elle partait dans le tray, jamais dans le fil demande
+  - les demandes d'amis disent enfin s'il reste des pages, et savent filtrer par statut
+  - un post publié jurait n'avoir référencé personne — sa charge utile était lue avant l'écriture
+  - une référence retirée laissait sa notification vivante sur l'appareil du référencé
+  - un droit de référence consommé ouvrait encore le fil et la room, et « moi seul » ne refermait rien
+  - une référence déclarée par userId n'était validée nulle part — un seul id fantôme fermait le post à tous ses lecteurs
+  - un transfert de média sans texte est non-vide, une référence illisible ne casse plus l'envoi
+  - quatre sorties servaient encore la relation Prisma sous son nom
+  - la notification d'une référence menait à un 404 — le détail ne connaissait que l'audience
+  - changer le mode d'une référence ne changeait rien — l'écriture ne savait que créer
+  - le droit de voir un contenu expiré se déclare, il ne se déduit pas
+  - un statut référencé survit au balayeur tant qu'un droit vit
+  - le rejeu d'un like ne parlait plus la même forme que son écriture
+  - le droit de voir un contenu expiré se dépense à la vue, pas à la lecture
+  - être nommé dans un contenu l'ouvre, même expiré
+  - une référence silencieuse se montre à deux personnes, pas à trois
+  - le surlignage d'un post se devinait au lieu de se lire
+  - une référence retirée laissait sa notification pointer vers un accès révoqué
+  - l'auteur choisit comment une référence se montre
+  - un @handle tapé sur le canevas d'une story ne nommait personne
+  - un refus de schéma disait « erreur inattendue » au lieu du champ fautif
+  - le body Ajv de changement d'username porte enfin le pattern, normalizeUsername compile depuis la source
+  - « no one can write » ignorait le canal qui écrit ET qui réveille — l'APPEL [cycle 72]
+  - une conversation close n'admet plus personne — les quatre portes posent enfin la question [cycle 70]
+  - la règle des cinq réactions se déclare une seule fois
+  - fixtures canvas-v3 - le gel inter-lots, six documents + l'entree v1 du convertisseur
+  - CanvasV3 dans types/ - inclus au build, exporte, mappe ; kinds reserves refuses
+  - un segment de transcription ne peut finir avant de commencer
+  - indexer les chemins de fichier — le comptage de références balayait la collection à chaque suppression
+  - la règle des références, jumelle exacte de son homologue Swift
+  - usernamePatternSource devient la source unique, Ajv et Zod rendent enfin le même verdict
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.13.0
+
 ## 1.29.0
 
 ### Minor Changes

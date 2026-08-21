@@ -228,7 +228,7 @@ struct ThemedMessageBubble: View {
                 // résumés d'appel.
                 BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, timeString: content.meta.timeString)
             } else {
-                BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
+                BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
             }
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)

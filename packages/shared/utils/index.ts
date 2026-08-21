@@ -21,6 +21,7 @@ export * from './calendar-date.js';
 export * from './presence-visibility.js';
 export * from './participant-helpers.js';
 export * from './member-visibility.js';
+export * from './reaction-limit.js';
 export * from './reel-composition.js';
 export * from './anonymous-username.js';
 export * from './join-notice.js';

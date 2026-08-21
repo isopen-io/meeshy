@@ -31,6 +31,10 @@ const mockSendError = jest.fn<any>((reply: any, status: any, msg: any) => {
   reply._body = { success: false, status, error: msg };
   return reply;
 });
+const mockSendConflict = jest.fn<any>((reply: any, msg: any, opts?: any) => {
+  reply._body = { success: false, status: 409, error: msg, code: opts?.code };
+  return reply;
+});
 
 const mockProcessExplicitLinksInContent = jest.fn<any>().mockResolvedValue({
   processedContent: 'processed content',
@@ -101,6 +105,7 @@ jest.mock('../../../utils/response', () => ({
   sendNotFound: (...args: any[]) => mockSendNotFound(...args),
   sendInternalError: (...args: any[]) => mockSendInternalError(...args),
   sendError: (...args: any[]) => mockSendError(...args),
+  sendConflict: (...args: any[]) => mockSendConflict(...args),
 }));
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -167,6 +172,8 @@ jest.mock('@meeshy/shared/utils/validation', () => {
 import { registerMessagesAdvancedRoutes } from '../../../routes/conversations/messages-advanced';
 import { MessageReadStatusService } from '../../../services/MessageReadStatusService';
 import { clearPrivacyPreferencesCache } from '../../../services/preferences/privacy-cache';
+import { ConflictError } from '../../../errors/custom-errors';
+import { REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -2678,6 +2685,32 @@ describe('registerMessagesAdvancedRoutes', () => {
       await getAddReactionHandler(fastify)(req, reply);
 
       expect(mockSendInternalError).toHaveBeenCalled();
+    });
+
+    it('returns 409 with the reaction-limit message when addReaction rejects with ConflictError (cap reached)', async () => {
+      // Plafond des cinq réactions par personne et par message
+      // (`ReactionService.reactionLimit.test.ts`) : un refus légitime, pas
+      // une panne — cette route est un second chemin REST vers le même
+      // service que `routes/reactions.ts` (la primaire pour iOS).
+      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
+      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
+      mockAddReaction.mockRejectedValue(
+        new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED')
+      );
+
+      const req = makeRequest({
+        params: { id: CONV_ID, messageId: MSG_ID },
+        body: { emoji: '🎉' },
+      });
+      const reply = makeReply();
+
+      await getAddReactionHandler(fastify)(req, reply);
+
+      expect(mockSendConflict).toHaveBeenCalledWith(
+        reply,
+        REACTION_LIMIT_REACHED_MESSAGE,
+        { code: 'REACTION_LIMIT_REACHED' }
+      );
     });
 
     it('returns success and broadcasts reaction on happy path', async () => {

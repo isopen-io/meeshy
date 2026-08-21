@@ -1602,8 +1602,46 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       SSOT dans `:sdk-core/theme` expose la `ColorPalette` complète (primary+secondary+accent) —
       `accentHex()` en devient le shortcut `primary` — et la ligne mémorise la palette une fois
       via `remember(conversation)`, alimentant le brush `primary → secondary` de fond avec les
-      alphas calculés + l'`accent` de l'avatar + les deux labels teintés) ;
-      ephemeral/expired/hidden/view-once, presence/story-ring/mood pending
+      alphas calculés + l'`accent` de l'avatar + les deux labels teintés) ; **message-summary-kind
+      done** (slice `conversation-row-message-summary-kind`, 2026-08-20 : port iOS
+      `LastMessageSummaryKind` — pur `:feature:conversations` `MessageSummaryKind.of(message,
+      nowMillis)` classifie 5 kinds `{ STANDARD, HIDDEN, VIEW_ONCE, EPHEMERAL_ACTIVE, EXPIRED }`
+      dans l'ordre iOS EXACT — expired `<=` inclusif au bord > blurred > view-once > future
+      expiresAt > standard ; `messageSummaryLine` compose la ligne kind-aware avec le préfixe
+      sender pour HIDDEN/VIEW_ONCE mais label seul pour EXPIRED (parité iOS `.expired` arm) ;
+      `ApiConversationLastMessage` widen additif `isBlurred`/`isViewOnce`/`expiresAt` — le
+      gateway les répandait déjà via `...msgRest` (`services/gateway/src/routes/conversations/
+      core.ts:971`) donc pas de contrat wire à renégocier ; `RowPreview.kind` défaulté et
+      overload `conversationRowPreview(SummaryLine)` propage le kind au Compose ;
+      `ConversationRowPreviewLine` composable pique (icône, teinte, italic) par kind —
+      HourglassEmpty/textMuted/italic pour EXPIRED, VisibilityOff/textSecondary/italic pour
+      HIDDEN, LocalFireDepartment/accent/italic pour VIEW_ONCE, Timer/standardColor pour
+      EPHEMERAL_ACTIVE ; 7 strings × 4 locales portées de `Localizable.xcstrings` iOS —
+      partial-locale fallback via labels defaultés à `""` retombant sur le body standard) ;
+      **story-ring done** (slice `conversation-row-story-ring`, 2026-08-20 : port iOS
+      `StoryViewModel.storyRingState(forUserId:)` + `ConversationListView.storyRingState(for:)`
+      — pur `:feature:conversations` `ConversationStoryRing.ringFor(userId, groups, now)`
+      applique 3 arms first-match : (1) userId absent OU groupe absent OU
+      `StoryGroup.isFullyExpired(now)` → `StoryRingState.None`, (2) `StoryGroup.hasUnviewed()`
+      → `Unread`, (3) sinon → `Read` ; overload `ringFor(conversation, currentUserId, groups,
+      now)` ajoute le direct-only gate via `otherParticipantUserId` (groupe/communauté/channel/bot
+      → jamais d'anneau) ; `ConversationListUiState.storyGroups` observe le cache-first
+      `StoryRepository.storiesStream()` via `toStoryGroups` — un sync-error laisse les groupes
+      précédents en place, jamais un wipe ; `storyRingFor(conversation, now)` délègue au pur
+      résolveur ; la ligne `MeeshyAvatar(..., storyRing = state.storyRingFor(...))` remplace le
+      `StoryRingState.None` codé en dur, le peer d'un DM affiche maintenant l'anneau non-vu/vu
+      exactement comme sur iOS) ; **mood done** (slice `conversation-row-mood`, 2026-08-20 :
+      port iOS `ConversationListView.conversationMoodStatus(for:)` +
+      `statusViewModel.statusForUser(userId:)?.moodEmoji` — pur `:feature:conversations`
+      `ConversationMoodStatus.moodEmojiFor(conversation, currentUserId, statuses)` : direct-only
+      gate via `otherParticipantUserId` (groupe/communauté/channel/bot → jamais de badge), lookup
+      `statusForUser(peerId)` SSOT, `moodEmoji.takeIf { isNotBlank() }` (jamais un badge vide, jamais
+      soi) ; `ConversationListUiState.moodStatuses` peint une fois depuis le `StatusBarCache` FRIENDS
+      partagé (`valueOrNull`, best-effort décoratif, aucun fetch propre — miroir EXACT de
+      `ContactsListViewModel.paintMoodStatusesFromCache`) ; `moodEmojiFor(conversation)` délègue au pur
+      résolveur ; la ligne `MeeshyAvatar(..., moodEmoji = state.moodEmojiFor(...))` remplace le `null`
+      codé en dur — le badge emoji du peer d'un DM remplace la pastille de présence comme sur iOS) ;
+      presence pending
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
@@ -2519,9 +2557,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `MimeTypeResolver` SSOT (iOS `MimeTypeResolver.swift` port — declared type first, filename extension as
       fallback), typed via pure `AttachmentMessageType.forMime` (reusing `MediaKindClassifier`), and sent through
       the **same** durable upload→graft→send chain the clipboard path uses (`ChatViewModel.sendFileAttachment`).
-      Any composer text rides along as the body and clears. **Pending:** in-app camera capture, an emoji-ladder
-      tray grouping the entries, voice (socket audio pipeline), and per-pick upload-progress. **Location** ships
-      separately (see live-location rows).
+      Any composer text rides along as the body and clears. **Ladder tray grouping done** (slice
+      `chat-composer-attachment-ladder`, 2026-08-20): the lone `AttachFile` button becomes an "Add" toggle
+      opening a horizontal `ComposerAttachmentTray` (circular gradient discs + labels) above the composer Row.
+      Pure `:feature:chat` `ComposerAttachmentLadder.tiles(...)` ports iOS `UniversalComposerBar+Attachments`'s
+      `carouselTiles` — the fixed order Photo → Camera → File → Location → Voice → Emoji, each gated on the
+      participant's `ComposerAffordances` (permission) AND a host-capability `show*` flag (product policy; iOS
+      gates via `on* != nil`). Photo/Camera ride the *capture* capability (`canSendImages || canSendVideos`);
+      Photo suppressed under a recent-media strip (iOS `onRecentMediaSelected == nil`, Android has none yet →
+      defaulted off, branch kept). Each tile carries its iOS gradient hex. Live handlers today: Photo →
+      `filePicker.launch("image/*")`, File → `*/*`, Voice → `requestVoiceRecording()`; Camera/Location/Emoji
+      host flags off (no handler yet → never a dead-end tile). +14 tests (capture-OR arms, per-kind permission
+      and host gates, recent-strip suppression, read-only keeps attachments, fully-denied empty, order
+      preservation, live posture, colour parity). Strings ×7 EN/FR/ES/PT. **Pending:** in-app camera capture,
+      a send-location action, an emoji-into-text handler (each flips its host flag on), and per-pick
+      upload-progress. **Location** ships separately (see live-location rows).
 - [x] Large-paste detection → clipboard-content attachment — **detection + preview + send done**
       (slice `chat-clipboard-content-send`, 2026-07-16): the captured paste is now delivered as a real
       `text/plain` attachment through the durable upload→graft→send chain (see "Send with attachments"

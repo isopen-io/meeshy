@@ -25,6 +25,13 @@
     <string name="conversations_preview_typing">%1$s écrit…</string>
     <string name="conversations_preview_sender_format">%1$s : %2$s</string>
     <string name="conversations_preview_loading">Chargement…</string>
+    <string name="conversations_preview_expired">Message expiré</string>
+    <string name="conversations_preview_hidden">Message masqué</string>
+    <string name="conversations_preview_view_once">Message vue unique</string>
+    <string name="conversations_preview_expired_content_description">dernier message expiré</string>
+    <string name="conversations_preview_hidden_content_description">dernier message masqué</string>
+    <string name="conversations_preview_view_once_content_description">dernier message : vue unique</string>
+    <string name="conversations_preview_ephemeral_content_description">message éphémère</string>
     <string name="conversations_search">Rechercher</string>
     <string name="conversations_search_hint">Rechercher des conversations</string>
     <string name="conversations_search_close">Fermer la recherche</string>

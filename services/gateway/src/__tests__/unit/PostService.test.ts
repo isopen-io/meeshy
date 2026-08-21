@@ -50,6 +50,12 @@ function createMockPrisma() {
       upsert: jest.fn(),
       deleteMany: jest.fn(),
       groupBy: jest.fn(),
+      // Plafond des cinq réactions (2026-08-20) : `PostCommentService.likeComment`
+      // consulte `findFirst` (l'émoji est-il déjà posé ?) puis, si non, `count`
+      // (place encore disponible ?) AVANT toute purge/upsert. Défauts « personne
+      // n'a encore réagi » : ces tests veulent une création normale.
+      findFirst: jest.fn().mockResolvedValue(null),
+      count: jest.fn().mockResolvedValue(0),
     },
     postBookmark: {
       upsert: jest.fn(),

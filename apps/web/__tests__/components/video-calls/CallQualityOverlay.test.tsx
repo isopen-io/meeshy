@@ -4,7 +4,16 @@ jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
     // The remoteAlerts labels carry a {name} placeholder in the real catalog —
     // mirror it so the interpolation test below actually proves substitution.
-    t: (k: string) => (k.startsWith('remoteAlerts.') ? `${k} {name}` : k),
+    // Mirror the real `t(key, params)` function-replacer (hooks/use-i18n.ts):
+    // values are inserted via a function replacer, so `$`-sequences in a
+    // user-controlled name are NEVER re-interpreted by String.prototype.replace.
+    t: (k: string, params?: Record<string, unknown>) => {
+      const template = k.startsWith('remoteAlerts.') ? `${k} {name}` : k;
+      if (!params) return template;
+      return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+        params[key] != null ? String(params[key]) : match,
+      );
+    },
     isLoading: false,
   }),
 }));
@@ -75,6 +84,28 @@ describe('CallQualityOverlay', () => {
     expect(indicator.getAttribute('aria-label')).toContain('Alice');
     expect(indicator.getAttribute('aria-label')).not.toContain('{name}');
     expect(screen.getByTestId('screen-capture-pill').textContent).toContain('Alice');
+    expect(screen.getByTestId('screen-capture-pill').textContent).not.toContain('{name}');
+  });
+
+  it('inserts a participant name containing $-sequences verbatim without leaking the {name} sentinel', () => {
+    // A display name is user-controlled. `String.prototype.replace(needle, value)`
+    // interprets `$&`/`$$`/`` $` ``/`$'` inside the *replacement value* — so a name
+    // like `A$&B` would re-inject the matched `{name}` placeholder into the alert.
+    // Routing through `t(key, { name })` (a function replacer) inserts it verbatim.
+    const trickyName = "A$&B $$ C$'D";
+    render(
+      <CallQualityOverlay
+        stats={null}
+        remoteQualityDegraded
+        remoteScreenCapturing
+        qualityDegradedParticipantName={trickyName}
+        screenCapturingParticipantName={trickyName}
+      />,
+    );
+    const indicator = screen.getByTestId('remote-quality-indicator');
+    expect(indicator.getAttribute('aria-label')).toContain(trickyName);
+    expect(indicator.getAttribute('aria-label')).not.toContain('{name}');
+    expect(screen.getByTestId('screen-capture-pill').textContent).toContain(trickyName);
     expect(screen.getByTestId('screen-capture-pill').textContent).not.toContain('{name}');
   });
 

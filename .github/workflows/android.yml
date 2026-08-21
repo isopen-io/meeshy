@@ -79,7 +79,7 @@ jobs:
           java-version: '21'
 
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # Derived from app/build.gradle.kts rather than hardcoded: a compileSdk
       # bump must not require editing this workflow in lockstep and silently
@@ -129,7 +129,7 @@ jobs:
             | grep -oE "platforms;android-${compile_sdk}[^ |]*" | sort -u
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       # Split from the test step on purpose: a failure here is a compile break,
       # a failure below is a behavioural regression, and the routine's run log

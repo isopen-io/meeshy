@@ -64,7 +64,12 @@ beforeEach(() => {
     } as unknown as PrismaClient['postComment'],
     commentReaction: {
       findMany: mockCommentReactionFindMany,
-      findFirst: jest.fn(),
+      // Plafond des cinq réactions (2026-08-20) : `likeComment` consulte
+      // `findFirst` (l'émoji est-il déjà posé ?) puis, si non, `count` (place
+      // encore disponible ?) AVANT toute purge/upsert. Défauts « personne n'a
+      // encore réagi » : les tests existants qui ne les redéfinissent pas
+      // veulent une création normale, jamais un refus au plafond.
+      findFirst: jest.fn().mockResolvedValue(null),
       findUnique: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
@@ -72,7 +77,7 @@ beforeEach(() => {
       upsert: jest.fn(),
       aggregate: jest.fn(),
       groupBy: jest.fn(),
-      count: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
       createMany: jest.fn(),
       updateMany: jest.fn(),
       deleteMany: jest.fn(),

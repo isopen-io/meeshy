@@ -34,6 +34,7 @@ function makePrisma() {
     },
     reaction: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      count: jest.fn<any>().mockResolvedValue(0),
       upsert: jest.fn<any>().mockImplementation(({ create }: any) =>
         Promise.resolve({
           id: 'r2',

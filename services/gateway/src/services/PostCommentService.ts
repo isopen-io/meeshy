@@ -11,6 +11,8 @@ import { getSharedNotificationService } from './notifications/notification-servi
 import type { RetractedNotificationAnnouncer } from './notifications/retractedNotifications';
 import { retractCommentNotifications } from './posts/retractCommentNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
+import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../errors/custom-errors';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -563,6 +565,34 @@ export class PostCommentService {
       select: { id: true },
     });
     if (!comment) return null;
+
+    // Plafond des cinq réactions (2026-08-20) : règle déclarée UNE SEULE FOIS
+    // dans `packages/shared/utils/reaction-limit.ts`. SECOND chemin de
+    // création des réactions de commentaire (le premier est
+    // `CommentReactionService.addReaction`, emprunté par le socket) — sans ce
+    // garde ici aussi, ce fallback REST contournerait silencieusement le
+    // plafond que le socket applique. Skip le comptage quand CET emoji précis
+    // est déjà posé : la purge+upsert qui suit ne fait alors que le
+    // CONFIRMER, sans consommer de place neuve — exactement comme sur les
+    // trois autres chemins de création (message, pièce jointe, post,
+    // commentaire/socket). Refuser AVANT la purge est ce qui empêche un appel
+    // REST au plafond de silencieusement remplacer les cinq réactions
+    // existantes par une seule au lieu d'être refusé.
+    const alreadyHasThisEmoji = await this.prisma.commentReaction.findFirst({
+      where: { commentId, userId, emoji },
+      select: { id: true },
+    });
+    if (!alreadyHasThisEmoji) {
+      const existingReactionCount = await this.prisma.commentReaction.count({
+        where: { commentId, userId },
+      });
+      if (!isReactionAllowed(existingReactionCount)) {
+        // `ConflictError` : la route REST (POST /posts/:postId/comments/:commentId/like)
+        // trie sur `instanceof ConflictError` pour répondre 409, comme
+        // `CommentReactionService` (premier chemin, socket).
+        throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
+      }
+    }
 
     // Source de vérité = table `CommentReaction` (comme le chemin socket).
     // Invariant « max 1 réaction par user » (identique à `CommentReactionService`

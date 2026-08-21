@@ -60,6 +60,8 @@ jest.mock('../../../../utils/sanitize.js', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCommentRoutes } from '../../../../routes/posts/comments';
+import { ConflictError } from '../../../../errors/custom-errors';
+import { REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -151,6 +153,25 @@ describe('POST /posts/:postId/comments/:commentId/like (authenticated)', () => {
       payload: {},
     });
     expect(res.statusCode).toBe(500);
+  });
+
+  it('returns 409 with the reaction-limit message when likeComment rejects with ConflictError (cap reached)', async () => {
+    // `likeComment` (fallback REST — second chemin de création, cf.
+    // PostCommentService.reactionLimit.test.ts) refuse la 6e réaction
+    // distincte via un `ConflictError` — un refus légitime, pas une panne.
+    mockLikeComment.mockRejectedValueOnce(
+      new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED')
+    );
+    const res = await app.inject({
+      method: 'POST',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toBe(REACTION_LIMIT_REACHED_MESSAGE);
+    expect(body.code).toBe('REACTION_LIMIT_REACHED');
   });
 });
 

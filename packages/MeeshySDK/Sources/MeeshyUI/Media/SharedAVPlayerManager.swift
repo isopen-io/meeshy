@@ -315,7 +315,7 @@ public final class SharedAVPlayerManager: ObservableObject {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if isPipEngaged { return true }
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            try? await Task.sleep(for: .milliseconds(50))
         }
         return isPipEngaged
     }

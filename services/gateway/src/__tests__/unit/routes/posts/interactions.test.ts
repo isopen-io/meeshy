@@ -76,6 +76,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 import { ConflictError } from '../../../../errors/custom-errors';
+import { REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -203,6 +204,24 @@ describe('POST /posts/:id/like — service error', () => {
 });
 
 describe('POST /posts/:id/like — reaction limit reached', () => {
+  it('returns 409 with the reaction-limit message when likePost rejects with ConflictError', async () => {
+    // `likePost` → `PostReactionService.addReaction` refuse la 6e réaction
+    // distincte d'une personne sur le même post (ou la même story/statut,
+    // même service — cf. PostReactionService.reactionLimit.test.ts) en levant
+    // un `ConflictError`. La route le reconnaît déjà via `instanceof` : ce
+    // test prouve qu'il ne retombe PAS sur le 500 générique.
+    mockLikePost.mockRejectedValueOnce(
+      new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED')
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/like`, payload: {} });
+    expect(res.statusCode).toBe(409);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.error).toBe(REACTION_LIMIT_REACHED_MESSAGE);
+    expect(body.code).toBe('REACTION_LIMIT_REACHED');
+    await app.close();
+  });
 });
 
 describe('POST /posts/:id/like — with social events (POST type)', () => {

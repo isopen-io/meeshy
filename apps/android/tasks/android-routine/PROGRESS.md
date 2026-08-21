@@ -2,6 +2,335 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-20 **Conversation-row mood badge shipped** (slice `conversation-row-mood`,
+> feature-parity's Conversations `[~]` rich last-message-preview line — the `mood` avatar
+> affordance, the second of the three sub-gaps `presence/story-ring/mood`; story-ring merged
+> #3244 this same day, presence is the last one left). **Step 0**: the open Android PR of the
+> PRIOR iteration (#3244, story-ring) was green (Android CI success) and `mergeable_state:clean`
+> — squash-merged it to `main` (→ `949bb521`) as the literal first action before branching, per
+> the routine's step-0 gate. The other four open PRs at this instant (#3241 iOS, #3242/#3243/#3245
+> gateway/shared) are NOT android-routine slices — left untouched. Branched off the freshly-merged
+> `origin/main` (`949bb521`). This container **reaches `dl.google.com`** (curl → 200), so the full
+> local gate ran here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools `11076708`
+> `--channel=3`, aliased `android-37 → android-37.0`; Gradle 8.13 auto-fetched by the wrapper.
+>
+> **The gap (re-proved by a read-only recon subagent over iOS + gateway + Android)**: "mood" is
+> NOT a field on `User` or on conversation participants anywhere in the stack — it is a `moodEmoji`
+> string carried on an ephemeral STATUS-type Post, resolved **per-user at render time** via a
+> `statusForUser(userId)` lookup against the shared status feed. iOS
+> `ConversationListView.conversationMoodStatus(for:)` (`ConversationListView.swift:695`) gates on
+> `type == .direct`, resolves the other participant's `userId`, and passes
+> `statusViewModel.statusForUser(userId)?.moodEmoji` into `MeeshyAvatar(moodEmoji:)`, which paints
+> an emoji badge at the avatar's bottom-trailing corner, replacing the presence dot. Android's
+> `MeeshyAvatar` already accepted `moodEmoji: String?` and rendered exactly that (bottom-end
+> `Text`, presence dot suppressed when a mood is present) — but no conversation-row caller ever
+> supplied it. **No wire/DTO widening** was warranted (would diverge from iOS/gateway, where mood
+> never rides the participant payload): every supporting piece — `StatusEntry`, `statusForUser`,
+> `ApiPost.moodEmoji`, `StatusBarCache`, the 1h expiry law — was already ported. Contacts
+> (`ContactsListViewModel.moodEmojiFor`) is the established precedent this slice mirrors verbatim.
+>
+> **Pure core (`:feature:conversations`)**: `ConversationMoodStatus.moodEmojiFor(conversation,
+> currentUserId, statuses): String?` — direct-only + peer gate via the `otherParticipantUserId`
+> SSOT (`null` → no badge, so a group/community/channel/bot row is never decorated), then
+> `statuses.statusForUser(peerId)?.moodEmoji?.takeIf { it.isNotBlank() }` (the exact Contacts
+> lookup — a blank emoji never surfaces, and because the lookup is keyed by the PEER a self-only
+> status is never shown as the peer's badge).
+>
+> **State plumbing**: `ConversationListUiState.moodStatuses: List<StatusEntry>` new defaulted-empty
+> field + `moodEmojiFor(conversation)` state helper delegating to the pure resolver with the state's
+> `currentUserId`. `ConversationListViewModel` gains a `StatusBarCache` dep and calls a synchronous
+> `paintMoodStatusesFromCache()` at the end of `init` — reads whatever the shared FRIENDS statuses
+> bar already holds (`valueOrNull` collapses Fresh/Stale/Syncing; cold `Empty` → no badges), no fetch
+> of its own. Decorative affordance, never primary content — mirrors
+> `ContactsListViewModel.paintMoodStatusesFromCache` VERBATIM so mood resolution is identical across
+> every surface (single source of truth).
+>
+> **Wiring (Compose glue, coverage-exempt)**: `moodEmoji = state.moodEmojiFor(conversation)` threaded
+> through the row call site → `ConversationRow` → `ConversationRowContent` → the existing
+> `MeeshyAvatar(..., moodEmoji = …)` param.
+>
+> **Tests**: **+8 `ConversationMoodStatusTest`** (pure resolver — group never badged; direct with no
+> peer → null; peer with no live status → null; non-blank emoji surfaces; blank emoji → null; peer
+> picked among several; currentUserId decides which side is the peer; self-only status never surfaced
+> as the peer badge) — every branch of `moodEmojiFor` exercised. **+3 `ConversationListMoodStateTest`**
+> (state helper delegates with `moodStatuses`+`currentUserId`; empty set → null; identity swap
+> resolves the peer from the right side). **+3 `ConversationListViewModelTest`** (the FRIENDS bar
+> paints the peer's emoji onto its direct row through `init`; a DISCOVER-only status never decorates a
+> row; a cold cache leaves every row without a badge) — proving the `paintMoodStatusesFromCache`
+> init glue end-to-end. Two existing VM suites get a `StatusBarCache` (a seeded real cache in
+> `ConversationListViewModelTest` via a `FixedClock` helper mirroring Contacts; a relaxed mock
+> returning `CacheResult.Empty` in `ConversationLockFlowViewModelTest`).
+>
+> **RED-proof (mutation × 2)**: (a) dropping `takeIf { it.isNotBlank() }` fails **exactly** 1 test
+> (`a peer status with a blank mood emoji yields no badge` — 8 run, 1 failed, no collateral). (b)
+> keying the lookup by `currentUserId` instead of `peerId` fails **exactly** 4 tests (the peer-surfaces
+> + picked-among-several + currentUserId-decides + self-never-surfaced arms — 8 run, 4 failed). Both
+> restored after.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` across all modules green locally. New suites
+> ran: `ConversationMoodStatusTest` 8/8, `ConversationListMoodStateTest` 3/3, `ConversationListViewModelTest`
+> 73/73 (was 70). Reviewer PASS.
+>
+> **Next**: `presence` is the last of the three conversation-row avatar sub-gaps. `presenceStateFor`
+> already exists on the state AND is already passed into `MeeshyAvatar(presence = …)` at the row call
+> site (grep-verified: `ConversationListScreen.kt` passes `presence = state.presenceStateFor(...)`),
+> so the dot is ALREADY wired — the `presence` marker on feature-parity:1633 is now stale. Grep-verify
+> it renders (a mood badge now suppresses the dot when both are present, matching iOS) and, if truly
+> done, close the line with no new slice; otherwise the only remaining gap there is a live presence
+> SOURCE for conversation rows (`ApiConversation.participants` carries no `isOnline`/`lastActiveAt`, so
+> the dot only lights from live `user:status`/`presence:snapshot` socket frames — a genuinely cold
+> row shows none). After the row line closes, advance to the next Conversations `[◐]`/`[ ]` box or the
+> next build-order area (Chat).
+
+> On 2026-08-20 **Conversation-row story-ring shipped** (slice `conversation-row-story-ring`,
+> feature-parity's Conversations `[~]` rich last-message-preview line — the `story-ring` avatar
+> affordance that same line called out as pending). **Step 0**: two open
+> `claude/apps/android/*` slice PRs were merged into `main` first — #3238
+> (`conversation-row-message-summary-kind`, merged clean) and #3239
+> (`chat-composer-attachment-ladder`, closed as redundant after its head landed via a
+> resolved-conflict merge commit; both sides of the tracking-file conflicts were kept — my slice's
+> paragraph plus the message-summary-kind paragraph, per NOTES-lesson on prepend/newest-first).
+> Branched off `origin/main` (`13bedd98`) as the literal first action. This container **reaches
+> `dl.google.com`** (curl → 200), so the full local gate ran here; SDK bootstrapped
+> `platforms;android-37.0` via cmdline-tools `11076708` on `--channel=3` + the `android-37` symlink
+> alias, Gradle 8.13 via the wrapper.
+>
+> **The gap, re-proved by reading source (scout + independent verify)**: iOS renders a per-row story
+> ring on the direct-conversation avatar (`ConversationListView+Rows.swift:275,296` pipe `storyRingState`
+> into the row's `AvatarContext`), sourced from `StoryViewModel.storyRingState(forUserId:)`
+> (`apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift:1351`) via
+> `ConversationListView.storyRingState(for:)` (`apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift:690`).
+> Android's `ConversationListScreen.kt:637` called `MeeshyAvatar(name, containerColor, presence)`
+> WITHOUT a `storyRing` argument — the `MeeshyAvatar` parameter existed
+> (`sdk-ui/.../MeeshyAvatar.kt:67`) and its `Unread`/`Read`/`None` rendering was already unit-covered,
+> but no caller ever fed it a non-`None` value for a conversation row: the ring was cold at every
+> row, no matter what the peer had posted. A `StoryRepository.storiesStream()` cache-first flow was
+> already in the SDK (`apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/story/StoryRepository.kt`)
+> and consumed by `StoriesViewModel`, so the missing plumbing was the *lookup*, not the source.
+>
+> **Pure core (`:feature:conversations`)**: `ConversationStoryRing.ringFor(userId, groups, nowMillis)`
+> — framework-free, 3 first-match arms mirroring iOS EXACTLY: (1) `userId == null` OR no matching
+> group OR `StoryGroup.isFullyExpired(now)` → `StoryRingState.None`; (2) `StoryGroup.hasUnviewed()`
+> → `Unread`; (3) otherwise (all viewed, still active) → `Read`. Row overload
+> `ringFor(conversation, currentUserId, groups, now)` applies the iOS direct-only gate by delegating
+> peer-id resolution to the existing `ApiConversation.otherParticipantUserId` SSOT — a group /
+> community / channel / bot conversation never carries a ring. Every constant (isFullyExpired
+> semantics, hasUnviewed) reuses `me.meeshy.sdk.story.*` — no local re-implementation.
+>
+> **State plumbing (`:feature:conversations`)**: `ConversationListUiState.storyGroups: List<StoryGroup>`
+> new defaulted-empty field; `ConversationListViewModel.observeStoryGroups()` new observer collects
+> `storyRepository.storiesStream()` (cache-first `Fresh/Stale/Syncing` yield their value, `Empty`
+> yields nothing so the ring rests at the previous groups) and reduces via `toStoryGroups(currentUserId
+> = state.value.currentUserId)`. A sync-error is swallowed so a transient network hiccup never wipes
+> the rings — parity iOS `StoryViewModel.storyGroups` (a `@Published` that only writes on success).
+> `ConversationListUiState.storyRingFor(conversation, now)` delegates to the pure resolver.
+>
+> **Wiring (Compose glue, coverage-exempt)**: the row callsite (`ConversationListScreen.kt:231`)
+> gains `storyRing = state.storyRingFor(conversation, System.currentTimeMillis())`, threaded through
+> `ConversationRow` → `ConversationRowContent` → the existing `MeeshyAvatar(..., storyRing = …)`
+> parameter. Zero avatar-render churn — the ring painting already existed, only the value was cold.
+>
+> **Tests**: **+12 `ConversationStoryRingTest`** — per-user rule (null userId → None; missing group
+> → None; empty groups → None; fully-expired group with an unviewed story → None *rule 1 outranks
+> rule 3*; active + unviewed → Unread; active + all-viewed → Read; mixed one-expired-viewed +
+> one-active-viewed → Read *not-fully-expired arm*; multiple groups → the matching one is picked) +
+> row rule (direct with peer's Unread group → Unread; group-type conversation → None; direct with no
+> other participant → None; direct with peer having no active story → None). **+3
+> `ConversationListStoryRingStateTest`** — state helper resolves the peer's ring; empty state yields
+> None; state passes its own `currentUserId` so the peer is resolved from the right side (identity
+> swap makes "peer" the OTHER, only "me" has a story, yields Read). Every branch of both `ringFor`
+> overloads and every arm of the peer-side resolution covered. Compose glue (the row's
+> `MeeshyAvatar` param thread) is thin wiring, exempt per TDD-COVERAGE.
+>
+> **RED-proof (mutation)**: swapping `if (group.hasUnviewed())` for `if (false)` in the pure
+> resolver fails **exactly** 3 tests (the two Unread arms — per-user and row — plus the state helper
+> "peer's unread ring") — 15 run, 3 failed, no collateral — restored after.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` across all modules green locally
+> (973 actionable tasks — `BUILD SUCCESSFUL`). Two existing `:feature:conversations` VM tests
+> (`ConversationListViewModelTest`, `ConversationLockFlowViewModelTest`) fed a new mocked
+> `StoryRepository` whose `storiesStream(any(), any())` returns `emptyFlow()` — a minimal, honest
+> injection: the observer subscribes, the flow completes, no story groups arrive, state stays at
+> `storyGroups = emptyList()`, every existing behaviour proof runs unchanged. Reviewer PASS.
+>
+> **Next**: two Conversations row-preview sub-gaps remain at `feature-parity.md:1594` — `presence`
+> (a grep on `ConversationListScreen.kt:231` proves the dot is already wired via
+> `state.presenceStateFor(...)` piped into `MeeshyAvatar(presence = …)`, so the note is stale — do
+> not spend a slice on it, mark it verified-done in feature-parity) and `mood` (needs a Kotlin
+> mirror of iOS `StatusEntry`/`statusForUser(userId:)` on `:core:model` + a `StatusRepository`
+> analogue to `StoryRepository` before the same delegation shape can apply). Or advance the Chat
+> line: the `[◐] Universal composer` still has sub-gaps beyond the just-shipped attachment-ladder
+> (per feature-parity umbrella), the finer send-lifecycle glyph, or the composer's photo-specific
+> `PickVisualMedia` launcher noted as candidate in the attachment-ladder slice's Next.
+
+> On 2026-08-20 **Conversation-row message-summary-kind shipped** (slice
+> `conversation-row-message-summary-kind`, feature-parity's Conversations "rich last-message
+> preview" `[~]` — the `ephemeral / expired / hidden / view-once` sub-gap that same line listed
+> as pending alongside the just-shipped `activity-heat`, `tags`, `typing`). **Step 0**: no open
+> `claude/apps/android/*` PR to merge first — the six open PRs at this instant are the
+> `claude/intelligent-noether-kana7q` iOS-only forward-picker fix (#3236) and five Dependabot
+> (`actions/cache`, `framer-motion`, root build-tools group, `setup-android` — the CI-infra
+> Android bump, not an android-routine slice — and `gradle/actions`). None on an
+> android-routine slice branch. Branched off `origin/main` (`65af14d5`) as the literal first
+> action. This container **reaches `dl.google.com`** (curl → 200 slowly), so the full local
+> gate ran here.
+>
+> **A first stale trip found by reading source, not the note**: `PROGRESS.md`'s "Next" line —
+> written before the activity-heat slice merged — recommended pursuing the *message-body kinds*
+> (ephemeral/expired/hidden/view-once) but warned that "the honest first move there is to
+> widen the wire DTO" because "the current `ApiConversationLastMessage` doesn't carry
+> `expiresAt`, `deletedAt`, `viewOnce`". Grep across `services/gateway/src/routes/conversations/
+> core.ts:971-1010` proved this half-true: the gateway ALREADY spreads the full `msg` object
+> onto `lastMessage` via `...msgRest` after stripping only `translations` and `originalLanguage`,
+> so `isBlurred`, `isViewOnce`, `expiresAt` all reach the wire today — the Kotlin DTO simply
+> doesn't declare them. The widening is 3 defaulted fields, not a wire contract change.
+> Lesson: verify the wire before designing a widening slice — a hint that a field "isn't on
+> the wire" may just mean the client can't see it.
+>
+> **The gap, re-proved by reading source**: iOS `MeeshyConversation.lastMessageSummaryKind()`
+> (`packages/MeeshySDK/Sources/MeeshySDK/Models/LastMessageSummaryKind.swift`) classifies the
+> preview into 5 kinds and `ThemedConversationRow.lastMessagePreviewView`
+> (`apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift:540-610`) renders each
+> with a kind-specific icon + italic tint: `expired` → `timer.badge.xmark` textMuted italic,
+> `hidden` → `eye.slash` sender-prefixed textSecondary italic, `viewOnce` → `flame` accent
+> italic, `ephemeralActive` → standard content + timer badge, `standard` → plain body. Android
+> rendered every message with the same non-italic secondary text — expired ephemeral,
+> moderated hidden, and view-once messages all indistinguishable from a plain "Salut !".
+>
+> **Pure core (`:feature:conversations`)**: `MessageSummaryKind` — framework-free enum
+> `{ STANDARD, HIDDEN, VIEW_ONCE, EPHEMERAL_ACTIVE, EXPIRED }` + companion `of(message,
+> nowMillis) : MessageSummaryKind` that mirrors iOS's priority order EXACTLY: (1) `expiresAt <=
+> now` → EXPIRED (inclusive boundary — iOS's `<=` guard, one less way a row flashes old
+> content); (2) `isBlurred` → HIDDEN (moderation outranks a live ephemeral so blurred content
+> can never leak); (3) `isViewOnce` → VIEW_ONCE; (4) future `expiresAt` → EPHEMERAL_ACTIVE;
+> (5) otherwise → STANDARD. Also `SummaryLine(text, kind)` (row's composed preview line) +
+> `messageSummaryLine(message, currentUserId, showSender, labels, nowMillis)` that composes
+> the kind-appropriate label with the same sender-prefix rule as `lastMessagePreview` for
+> HIDDEN/VIEW_ONCE; EXPIRED drops the sender (parity iOS `.expired` arm which renders the
+> label alone).
+>
+> **Sibling SSOT** (`:core:model`): `ApiConversationLastMessage` widened with three defaulted
+> fields — `isBlurred: Boolean = false`, `isViewOnce: Boolean = false`, `expiresAt: String? =
+> null`. Purely additive wire widening: the gateway already spreads these onto the payload,
+> so an older backend/no-flags message keeps decoding to the same defaults it did before.
+> Kdoc references the gateway serializer path + iOS SSOT.
+>
+> **Wiring (Compose glue, coverage-exempt)**: `RowPreview` gains a defaulted `kind:
+> MessageSummaryKind = STANDARD`, `conversationRowPreview` gets a second overload that takes
+> `SummaryLine` and preserves its kind (typing/draft still supersede and stay STANDARD — their
+> styling is the accent flag, not the kind). New private composable
+> `ConversationRowPreviewLine(preview, primaryAccent)` picks (icon, tint, italic) per kind
+> from a small `RowPreviewKindStyle` data class — HourglassEmpty/textMuted/italic for EXPIRED,
+> VisibilityOff/textSecondary/italic for HIDDEN, LocalFireDepartment/accent/italic for
+> VIEW_ONCE, Timer/standardColor for EPHEMERAL_ACTIVE, no-icon standard otherwise. Icons at
+> 14dp with `MeeshySpacing.xs` gap — same footprint as the pinned/muted/locked title icons.
+> Row's `lastMessage` call site swaps `lastMessagePreview` → `messageSummaryLine` with a
+> `System.currentTimeMillis()` clock.
+>
+> **Localization**: 7 new strings per locale × 4 locales (en/fr/es/pt) — 3 body labels
+> (`_expired`/`_hidden`/`_view_once`, ported from iOS `Localizable.xcstrings` at
+> `message.expired`, `conversation.summary.hidden`, `conversation.summary.view_once`) + 4
+> accessibility content descriptions (ephemeral/expired/hidden/view-once). A partial locale
+> that ships without them transparently falls through to the standard body path via the
+> defaulted `LastMessagePreviewLabels(expired="", hidden="", viewOnce="")` — a blank label
+> must never leave the row visually empty.
+>
+> **Tests**: +14 `MessageSummaryKindTest` — null-message → STANDARD; plain-text → STANDARD;
+> future expiresAt → EPHEMERAL; strictly-past expiresAt → EXPIRED; equal-to-now expiresAt →
+> EXPIRED (inclusive boundary); blurred → HIDDEN; view-once → VIEW_ONCE; expired outranks
+> blurred; expired outranks view-once; blurred outranks view-once; blurred outranks live
+> ephemeral; view-once outranks live ephemeral; malformed/blank expiresAt does NOT classify
+> as ephemeral; defaults on the DTO are non-ephemeral non-blurred non-view-once. **+12
+> `MessageSummaryLineTest`** — standard body direct / group sender prefix; null message →
+> "Aucun message"; expired label drops sender; hidden label sender-prefixed in group and
+> label-alone in direct; view-once sender-prefixed and "Vous" for me; ephemeral-active
+> reuses standard body direct + group; inclusive expired boundary at now; blank
+> expired/hidden labels fall through to standard body (partial-locale safety). **+5
+> `ConversationRowPreviewKindTest`** — summary kind propagates on the last-message path,
+> typing supersedes summary (kind→STANDARD), draft supersedes summary (kind→STANDARD),
+> standard summary in secondary colour, ephemeral summary preserves its kind for styling.
+> Every branch of `of()`, `messageSummaryLine`, and the kind-aware overload of
+> `conversationRowPreview` exercised. Compose glue in `ConversationRowPreviewLine` is thin
+> visual mapping, exempt per TDD-COVERAGE.
+>
+> **RED-proof (mutation × 2)**: (a) swapping `expiresAt <= nowMillis` for `expiresAt <
+> nowMillis` fails **exactly** 2 tests (the two inclusive-boundary tests — 28 run, 2 failed,
+> no collateral). (b) reversing HIDDEN/VIEW_ONCE below EPHEMERAL_ACTIVE fails **exactly** 2
+> tests (`blurred outranks a live ephemeral`, `view-once outranks a live ephemeral` — 28 run,
+> 2 failed, no collateral). Restored after each.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` across all modules green locally
+> (973 actionable tasks). SDK bootstrapped as `platforms;android-37.0` via cmdline-tools
+> `11076708`, aliased `android-37 → android-37.0`; Gradle 8.13 fetched auto by the wrapper.
+> Reviewer PASS.
+>
+> **Next**: the last two Conversations row-preview sub-gaps at `feature-parity.md:1594` are
+> avatar affordances — `presence` (already wired via `state.presenceStateFor`, so the note is
+> stale — grep-verify before spending a slice on it), `story-ring` (clean single slice:
+> `MeeshyAvatar` already accepts `storyRing: StoryRingState` and `StoryTray` exposes per-user
+> unread-story state; the missing wire is a lookup key exposed on the row's state), and
+> `mood` (needs new SDK model — the wire field lives on User in iOS but no Kotlin type mirror
+> yet). Pick story-ring next: it's the shortest path from the pieces already in place.
+
+> On 2026-08-20 **Composer attachment-ladder tray shipped** (slice `chat-composer-attachment-ladder`,
+> feature-parity's Chat `[◐] Attachment ladder` sub-gap "an emoji-ladder tray grouping the entries";
+> also feeds the umbrella `[ ] Universal composer`). **Step 0**: no open `claude/apps/android/*` slice PR
+> to merge first — the open-PR sweep (listed WITHOUT a head filter, per the typing-slice NOTES lesson) held
+> only an iOS session (#3236) and five Dependabot; none on an android-routine branch. Branched off
+> `origin/main` (`65af14d5`). This container **reaches `dl.google.com`** (200), so the full local gate ran
+> here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools `13114758` `--channel=3` + the
+> `android-37` symlink alias, Gradle 8.13 curl-fetched (wrapper still 403s through the proxy — same env quirk
+> as the last three slices).
+>
+> **The gap, re-proved by reading source (scout + independent verify)**: iOS's composer opens a "+" carousel
+> (`UniversalComposerBar+Attachments.carouselTiles`) offering Photo/Camera/File/Location/Voice/Emoji as
+> distinct discs; Android's composer had a **single** `AttachFile` `IconButton` firing `filePicker.launch("*/*")`
+> directly (`ChatScreen.kt:2812`) — no grouped tray, no photo/camera/location/voice/emoji distinction. Two
+> other composer buttons (`Mic`, effects) sat beside it. The remaining conversation-row gaps
+> (ephemeral/view-once/story-ring/mood) were confirmed **backend-wire-blocked** (the gateway conversation
+> preview payload excludes deleted/ephemeral/view-once and carries no per-user story state — `emitConversationPreviewUpdate.ts`
+> selects `where { deletedAt: null }` and never hoists those flags), so the honest move was this composer
+> (outbound-only) slice, not another row micro-tint that would need a new server field.
+>
+> **Pure core (`:feature:chat`)**: `ComposerAttachmentLadder.tiles(affordances, hasRecentMediaStrip=false,
+> showCamera=true, showLocation=true, showVoice=true, showEmoji=true) → List<AttachmentTile>`. Two gate
+> families mirror iOS: **permission** off `ComposerAffordances` (Photo+Camera ride `canSendImages ||
+> canSendVideos`; File→`canSendFiles`; Location→`canSendLocations`; Voice→`canSendAudios`; Emoji→`canSendText`)
+> and **host-capability** off the `show*` flags (iOS gates on `on* != nil`). Photo suppressed under a
+> recent-media strip (iOS `onRecentMediaSelected == nil`; Android has no strip, defaulted off, branch kept for
+> the day one lands). Order is the iOS carousel order; each `AttachmentTile` carries its iOS gradient hex
+> (`9B59B6/F8B500/45B7D1/2ECC71/E74C3C/FF9F43`) so colour parity is a pure, tested fact. Built with an
+> immutable `listOfNotNull { takeIf }` — no mutation, order-preserving. **SOTA over iOS**: the tile decision,
+> buried in a SwiftUI `View` computed property (untestable without a UI host), is a framework-free SSOT with
+> every branch JVM-covered.
+>
+> **Wiring (Compose glue, coverage-exempt)**: `ComposerAttachmentTray` (new file) renders the resolved tiles
+> as a horizontal carousel of circular gradient discs + labels (parity `carouselTile`). The composer's lone
+> `AttachFile` button becomes an `Add`/`Close` toggle (`attachmentTrayOpen`) that opens the tray above the
+> composer Row (hidden while recording or read-only). Kind→handler map: Photo → `filePicker.launch("image/*")`,
+> File → `*/*`, Voice → `requestVoiceRecording()` (the standalone Mic button stays for now — quick access —
+> since Voice also lives in the tray). Camera/Location/Emoji host flags are passed **off** at the call site
+> (`showCamera=false, showLocation=false, showEmoji=false`) because no handler exists yet — so the resolver
+> yields exactly Photo/File/Voice today and never renders a dead-end tile; each flag flips on the day its
+> handler lands.
+>
+> **Tests**: +14 `ComposerAttachmentLadderTest` — full posture (all six in order); recent-strip suppresses
+> Photo but keeps Camera; capture arms (both / image-only / video-only / neither); no-file drops File;
+> Location/Voice/Emoji each need BOTH permission and host flag (both arms); read-only participant keeps its
+> permitted attachment tiles but loses Emoji; fully-denied → empty; partial subset preserves canonical order;
+> the live chat-screen posture (camera/location/emoji off) yields Photo/File/Voice; colour parity locked for
+> all six. **RED-proof (mutation)**: flipping `canCapture` from `||` to `&&` fails **exactly** 2 tests
+> (video-only, image-only) — 15 run, 2 failed, no collateral — restored after.
+>
+> **Verified**: `assembleDebug` + `testDebugUnitTest` for `:feature:chat` green locally (BUILD SUCCESSFUL);
+> full-project gate re-run for the PR. Reviewer PASS.
+>
+> **Next**: Candidate 2 from the scout — the finer send-lifecycle glyph (sub-200 ms "invisible" reveal +
+> "slow" tier) on `:core:model` `SendLifecycleResolver`, driven purely by the local send-start timestamp vs
+> `now` (no wire field). iOS source `BubbleDeliveryCheck.swift` (`SendingClockGlyph.shouldRevealImmediately`,
+> `revealDelay = 0.2`) has a ready Swift test twin to mirror. Or continue the composer line by landing a real
+> photo-specific `PickVisualMedia` launcher so Photo and File become genuinely distinct pickers.
+
 > On 2026-08-20 **Conversation-row activity-heat gradient shipped** (slice
 > `conversation-row-activity-heat`, feature-parity's Conversations "rich last-message preview"
 > `[~]` — the `activity-heat` sub-gap that same line listed as pending alongside `tags` (just

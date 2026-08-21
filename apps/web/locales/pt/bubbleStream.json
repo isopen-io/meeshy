@@ -160,7 +160,7 @@
     },
     "newMessagesWhileAway": "novas mensagens",
     "joinNotice": {
-      "joined": "{{name}} entrou na conversa",
+      "joined": "{name} entrou na conversa",
       "noAccount": "sem conta"
     }
   }

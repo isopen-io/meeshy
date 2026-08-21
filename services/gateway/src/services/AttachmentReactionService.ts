@@ -1,5 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import { ConflictError } from '../errors/custom-errors';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -43,6 +45,20 @@ export class AttachmentReactionService {
       select: { emoji: true },
     });
     if (previous) return { changed: false };
+
+    // Plafond des cinq réactions (2026-08-20) : règle déclarée UNE SEULE
+    // FOIS dans `packages/shared/utils/reaction-limit.ts`. Comptage effectué
+    // uniquement ici, APRÈS avoir établi (bloc ci-dessus) qu'il s'agit d'une
+    // création réelle — un upsert de confirmation (emoji déjà posé) ne
+    // consomme aucune place et ne doit jamais être bloqué par ce plafond.
+    const existingReactionCount = await this.prisma.attachmentReaction.count({
+      where: { attachmentId: o.attachmentId, participantId: o.participantId },
+    });
+    if (!isReactionAllowed(existingReactionCount)) {
+      // `ConflictError` — même mécanisme que les autres objets réagissables
+      // (messages, posts, commentaires) : un refus légitime, pas une panne.
+      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
+    }
 
     // Multi-réactions (2026-08-18, « du multiple sur tout contenu à
     // réaction ») : la clé unique DB porte le TRIPLET (attachmentId,

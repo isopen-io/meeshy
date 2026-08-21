@@ -46,6 +46,42 @@ describe('CanvasV3Schema', () => {
     doc.sound = { source: { t: 'library', soundId: 'snd1' }, volume: 0.6, bounds: { start: 2, end: 17 } };
     expect(CanvasV3Schema.parse(doc).sound?.source).toEqual({ t: 'library', soundId: 'snd1' });
   });
+
+  const withTiming = (timing: Record<string, unknown>) => {
+    const doc = structuredClone(minimal);
+    (doc.scenes[0].objects[0] as { timing?: unknown }).timing = timing;
+    return doc;
+  };
+
+  it('refuses an object timing that ends BEFORE it starts (end < start)', () => {
+    const res = CanvasV3Schema.safeParse(withTiming({ start: 4, end: 1 }));
+    expect(res.success).toBe(false);
+  });
+
+  it('accepts a zero-duration object timing (end === start)', () => {
+    expect(CanvasV3Schema.parse(withTiming({ start: 2, end: 2 })).scenes[0].objects[0].timing)
+      .toEqual({ start: 2, end: 2 });
+  });
+
+  it('accepts a partial timing that omits one bound (only start, or only end)', () => {
+    expect(CanvasV3Schema.parse(withTiming({ start: 1 })).scenes[0].objects[0].timing).toEqual({ start: 1 });
+    expect(CanvasV3Schema.parse(withTiming({ end: 3 })).scenes[0].objects[0].timing).toEqual({ end: 3 });
+  });
+
+  const withBounds = (bounds: Record<string, unknown>) => {
+    const doc = structuredClone(minimal) as Record<string, unknown>;
+    doc.sound = { source: { t: 'original' }, volume: 1, bounds };
+    return doc;
+  };
+
+  it('refuses a background-sound bounds that ends BEFORE it starts (end < start)', () => {
+    const res = CanvasV3Schema.safeParse(withBounds({ start: 17, end: 2 }));
+    expect(res.success).toBe(false);
+  });
+
+  it('accepts zero-duration background-sound bounds (end === start)', () => {
+    expect(CanvasV3Schema.parse(withBounds({ start: 5, end: 5 })).sound?.bounds).toEqual({ start: 5, end: 5 });
+  });
 });
 
 describe('CanvasV3Schema — contrat étendu (rattrapage B8a)', () => {
