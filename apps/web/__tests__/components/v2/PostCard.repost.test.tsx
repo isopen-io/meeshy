@@ -58,11 +58,12 @@ describe('PostCard — repost rendering', () => {
     expect(screen.queryByTestId('post-card-repost-block')).not.toBeInTheDocument();
   });
 
-  it('renders the "Reposted from @handle" banner, navigable to the original', () => {
+  it('renders the `↻ @handle` banner, navigable to the original', () => {
     const onTapRepost = jest.fn();
     render(<PostCard {...baseProps} repostOf={repostOf} onTapRepost={onTapRepost} />);
 
-    expect(screen.getByText('Reposted from @bob')).toBeInTheDocument();
+    expect(screen.getByText('↻')).toBeInTheDocument();
+    expect(screen.getByText('@bob')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('post-card-repost-block'));
     expect(onTapRepost).toHaveBeenCalledWith('original-1');
   });

@@ -111,3 +111,26 @@ ciblé. Pour restaurer :
    (diff inverse du commit de retrait) ;
 4. reprendre les crashs de défilement là où ce document les laisse — le
    retrait n'a PAS résolu la dette du pass, il l'a retirée de la route.
+
+## Addendum 2026-08-21 — réintroduction MINIMALE
+
+Focal est de retour sur iOS, sans la machinerie décrite plus haut. La passe
+(`apps/ios/Meeshy/Features/Main/Focal/Core/FocalScrollPerspective.swift`,
+câblée dans `MessageListViewController` — `scrollViewDidScroll`, `willDisplay`,
+fin d'`apply`, changement de mode) se limite à :
+
+- une pose par cellule visible et par frame — échelle + opacité par la loi
+  partagée (`FocalFocusCurve`, variante `.thread`), appliquées au CALayer du
+  `contentView` ; compaction des rangées rétrécies vers la ligne de focus
+  (proportions conservées) ; sur-réserve de cellules au-dessus de l'écran
+  (`MessageListLayout.focalOverscan`) ;
+- une carte teintée accent (sublayer) sur le message en focus, élu avec
+  l'hystérésis du fil ;
+- les détails du message en focus (identité, jour + heure, texte plafonné)
+  par une reconfiguration ciblée À LA POSE seulement.
+
+Ce qui reste retiré : élection-atterrissage, nudges d'offset, loupe,
+typographie à l'arrêt, carte CALayer de décoration avec réserve, bande de
+focus centrée. Le clamp `ReadingModeController.clampRetiredModes` est remplacé
+par `renderDecision` (Focal rendu tel quel ; Bulles rendu sur choix collant
+drapeau ON). Voir `apps/ios/decisions.md` (2026-08-21).

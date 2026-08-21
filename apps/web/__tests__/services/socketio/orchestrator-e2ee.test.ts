@@ -120,7 +120,6 @@ jest.mock('@/services/socketio/presence.service', () => ({
     cleanup: jest.fn(),
     onUserStatus: jest.fn().mockReturnValue(() => {}),
     onConversationStats: jest.fn().mockReturnValue(() => {}),
-    onConversationOnlineStats: jest.fn().mockReturnValue(() => {}),
     onReactionAdded: jest.fn().mockReturnValue(() => {}),
     onReactionRemoved: jest.fn().mockReturnValue(() => {}),
     onConversationJoined: jest.fn().mockReturnValue(() => {}),

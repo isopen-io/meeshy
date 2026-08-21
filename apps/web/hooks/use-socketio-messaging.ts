@@ -25,7 +25,6 @@ export interface UseSocketIOMessagingOptions {
   onTranslation?: (messageId: string, translations: any[]) => void;
   onTranslationFailed?: (data: TranslationFailedEventData) => void;
   onConversationStats?: (data: any) => void;
-  onConversationOnlineStats?: (data: any) => void;
 }
 
 /**
@@ -42,8 +41,7 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     onUserStatus,
     onTranslation,
     onTranslationFailed,
-    onConversationStats,
-    onConversationOnlineStats
+    onConversationStats
   } = options;
 
   // CORRECTION: Utiliser un état complet pour le statut de connexion
@@ -164,15 +162,11 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
       unsubscribers.push(unsub);
     }
 
-    if (onConversationOnlineStats) {
-      const unsub = meeshySocketIOService.onConversationOnlineStats(onConversationOnlineStats);
-      unsubscribers.push(unsub);
-    }
     
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
-  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onTranslationFailed, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
+  }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onTranslationFailed, onUserTyping, onUserStatus, onConversationStats]);
 
   // ÉTAPE 4: Surveiller l'état de connexion (event-driven, plus de polling)
   useEffect(() => {

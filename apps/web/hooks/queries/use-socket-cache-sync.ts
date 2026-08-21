@@ -1099,6 +1099,54 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(conversationId) });
     };
 
+    // Le geste INVERSE, et la même phrase par l'autre bout : « cette
+    // conversation est (re)devenue mienne ». Une seule LECTURE BORNÉE
+    // (`GET /conversations/:id`), jamais un rejeu de pages — la route de liste
+    // pagine par OFFSET sur un tri `lastMessageAt` décroissant, et la rejouer
+    // duplique une ligne à chaque frontière en en perdant une autre.
+    //
+    // Idempotent par construction : une ligne déjà en cache sort avant la
+    // requête, et le second test à la résolution ferme la fenêtre où un
+    // `conversation:new` et une levée de bannissement nommeraient la même
+    // conversation à quelques millisecondes d'écart.
+    //
+    // Deux entrées y mènent — `conversation:new` et la levée d'un bannissement
+    // qui me réintègre. Elles diffèrent par ce qu'elles savent, pas par ce
+    // qu'elles ont à faire.
+    const fetchConversationIntoCache = (conversationId: string) => {
+      if (!conversationId || !/^[a-f\d]{24}$/i.test(conversationId)) return;
+      if (typeof window === 'undefined' || window.location.pathname === '/login') return;
+
+      let alreadyInCache = false;
+      updateInfiniteConversationCache(queryClient, (convs) => {
+        if (convs.some((c) => c.id === conversationId)) {
+          alreadyInCache = true;
+        }
+        return convs;
+      });
+      if (alreadyInCache) return;
+
+      apiService.get<Conversation>(`/conversations/${conversationId}`)
+        .then((response) => {
+          const fetched = response?.data;
+          if (!fetched) return;
+          updateInfiniteConversationCache(queryClient, (convs) => {
+            if (convs.some((c) => c.id === conversationId)) return convs;
+            return [fetched, ...convs];
+          });
+        })
+        .catch(() => {
+          // DERNIER RECOURS, délibérément conservé. C'est la seule des quatre
+          // invalidations de ce préfixe qui reste, et la seule qui se justifie :
+          // la lecture BORNÉE d'une ligne vient d'échouer, et sans elle la
+          // conversation n'apparaît pas du tout. Rejouer les pages coûte cher et
+          // peut dupliquer une frontière — mais une ligne manquante à vie coûte
+          // plus. Ce chemin ne s'ouvre que sur un échec réseau, jamais sur le
+          // cours normal des choses.
+          queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
+        });
+    };
+
     // Handler for participant-left (room broadcast) — another member was removed/left
     //
     // Sauf quand ce membre est MOI : l'événement ne dit alors pas « l'effectif
@@ -1157,6 +1205,39 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // re-admitting anyone — the person had left on their own before being
     // banned, so there is no ban-time decrement to undo here either.
     const handleConversationParticipantUnbanned = (data: { conversationId: string; userId: string; membershipRestored?: boolean; memberCount?: number; memberCountCapped?: boolean }) => {
+      // La levée qui RESTAURE l'appartenance est l'inverse exact du
+      // bannissement, et le bannissement de MOI ne touche pas un compteur : il
+      // retire la LIGNE (`handleConversationParticipantBanned` ci-dessus). Le
+      // pendant devait donc la remettre, et ne le faisait pas — `applyMemberCount`
+      // mappait sur une liste où la conversation n'était plus, un no-op muet.
+      //
+      // Rien d'autre ne rattrapait la ligne : le delta `updatedSince=` est
+      // upsert-only sur `Conversation.updatedAt`, que la levée ne touche pas
+      // (elle écrit une ligne `Participant`), et `staleTime: Infinity` ne relit
+      // jamais de lui-même. La conversation restait invisible jusqu'à la
+      // réconciliation complète, bornée et rare — réintégré côté serveur,
+      // rejoint à la room, recevant les messages, sans ligne où les lire.
+      //
+      // Le gateway adresse pourtant bien l'événement à ma room personnelle : dès
+      // l'appartenance restaurée je figure dans les participants actifs qu'il
+      // énumère, et son commentaire dit en toutes lettres que c'est ainsi que la
+      // cible « apprend son retour sur sa propre ligne de liste »
+      // (`routes/conversations/ban.ts`, chemin `unban`). L'émetteur tenait sa
+      // part.
+      //
+      // `membershipRestored === false` dit que la levée n'a réadmis personne —
+      // j'étais parti de moi-même avant d'être banni : aucune ligne à remettre.
+      // Un serveur antérieur au champ ne l'envoie pas, et une levée y restaurait
+      // TOUJOURS l'appartenance : l'absence se lit donc comme un retour, d'où
+      // `!== false` et jamais `=== true`. Même lecture que le bannissement, qui
+      // traite `membershipEnded` absent comme un retrait.
+      //
+      // Pas de `return` : la relecture est bornée et ASYNCHRONE, et l'effectif
+      // comme l'invalidation du roster ci-dessous restent utiles — la première
+      // no-ope sur une ligne absente, la seconde vaut dans les deux cas.
+      if (data.userId === useAuthStore.getState().user?.id && data.membershipRestored !== false) {
+        fetchConversationIntoCache(data.conversationId);
+      }
       if (typeof data.memberCount !== 'number' && data.membershipRestored === false) {
         queryClient.invalidateQueries({
           queryKey: queryKeys.conversations.participants(data.conversationId),
@@ -1499,40 +1580,9 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     };
 
     // Handler for conversation:new — a group was created or the user was added to one.
-    // The event carries only partial data, so fetch the full conversation and prepend it.
+    // The event carries only partial data, so the full conversation is read back.
     const handleConversationNew = (data: { conversationId: string }) => {
-      const { conversationId: newConvId } = data;
-      if (!newConvId || !/^[a-f\d]{24}$/i.test(newConvId)) return;
-      if (typeof window === 'undefined' || window.location.pathname === '/login') return;
-
-      let alreadyInCache = false;
-      updateInfiniteConversationCache(queryClient, (convs) => {
-        if (convs.some((c) => c.id === newConvId)) {
-          alreadyInCache = true;
-        }
-        return convs;
-      });
-      if (alreadyInCache) return;
-
-      apiService.get<Conversation>(`/conversations/${newConvId}`)
-        .then((response) => {
-          const fetched = response?.data;
-          if (!fetched) return;
-          updateInfiniteConversationCache(queryClient, (convs) => {
-            if (convs.some((c) => c.id === newConvId)) return convs;
-            return [fetched, ...convs];
-          });
-        })
-        .catch(() => {
-          // DERNIER RECOURS, délibérément conservé. C'est la seule des quatre
-          // invalidations de ce préfixe qui reste, et la seule qui se justifie :
-          // la lecture BORNÉE d'une ligne vient d'échouer, et sans elle la
-          // conversation n'apparaît pas du tout. Rejouer les pages coûte cher et
-          // peut dupliquer une frontière — mais une ligne manquante à vie coûte
-          // plus. Ce chemin ne s'ouvre que sur un échec réseau, jamais sur le
-          // cours normal des choses.
-          queryClient.invalidateQueries({ queryKey: queryKeys.conversations.all });
-        });
+      fetchConversationIntoCache(data.conversationId);
     };
 
     // Register listeners

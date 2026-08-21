@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/v2/Skeleton';
 // Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
-import { postToStoryData, groupStoriesByAuthor, groupToStoryItem } from '@/lib/story-transforms';
+import { postToStoryData, groupStoriesByAuthor, groupToStoryItem, postBackgroundSound } from '@/lib/story-transforms';
 import { useStoryPreferences } from '@/stores/user-preferences-store';
 
 // Statuses / moods (real API — STATUS posts, real-time via usePostSocketCacheSync)
@@ -173,6 +173,20 @@ export function PostsFeedScreen() {
   const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
+  // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
+  // (la carte ne possède aucun lecteur : ce bouton reste cosmétique tant que
+  // la résolution d'URL de son web n'existe pas — dette explicite, plan F3).
+  // Démarre MUTED, comme `StoryViewer` (`isBackgroundSoundMuted`).
+  const [unmutedBackgroundSoundPostIds, setUnmutedBackgroundSoundPostIds] = useState<Set<string>>(new Set());
+  const toggleBackgroundSoundMute = useCallback((postId: string) => {
+    setUnmutedBackgroundSoundPostIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+  }, []);
+
   // New posts banner
   const [newPostsCount, setNewPostsCount] = useState(0);
   const prevPostsLengthRef = useRef(posts.length);
@@ -285,7 +299,11 @@ export function PostsFeedScreen() {
           visibility: story.visibility,
           visibilityUserIds: story.visibilityUserIds,
           mediaIds: story.mediaIds,
-          originalLanguage: userLanguage,
+          // F5 correction — `originalLanguage` is NOT `userLanguage` (the
+          // reader's preferred READ language, `usePreferredLanguage()`):
+          // that's the wrong concept for the language the author just wrote
+          // the story in. `storyService.createStory` resolves the right
+          // value itself, from the active UI locale.
           ...(story.mentions ? { mentions: story.mentions } : {}),
         },
         {
@@ -300,7 +318,7 @@ export function PostsFeedScreen() {
         },
       );
     },
-    [createStoryMutation, userLanguage, showToast, t],
+    [createStoryMutation, showToast, t],
   );
 
   const handleStoryView = useCallback(
@@ -780,6 +798,9 @@ export function PostsFeedScreen() {
               const isLiked = postReactions.includes('❤️') || (post.isLikedByMe ?? false);
               const isBookmarked = !!post.bookmarkedAt;
               const userReaction = postReactions[0];
+              // Constat 2 (F7c) — même extracteur PUR que `StoryViewer`
+              // (`postBackgroundSound`) : un seul résolveur de crédit.
+              const { sound: backgroundSound, meta: backgroundSoundMeta } = postBackgroundSound(post);
               return (
                 <article
                   key={post.id}
@@ -809,6 +830,10 @@ export function PostsFeedScreen() {
                     viewerId={currentUserId}
                     repostOf={post.repostOf}
                     isQuote={post.isQuote}
+                    backgroundSound={backgroundSound}
+                    backgroundSoundMeta={backgroundSoundMeta}
+                    backgroundSoundMuted={!unmutedBackgroundSoundPostIds.has(post.id)}
+                    onToggleBackgroundSoundMute={() => toggleBackgroundSoundMute(post.id)}
                     onLike={() => handleLike(post.id, isLiked)}
                     onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
                     onComment={() => handleComment(post.id)}

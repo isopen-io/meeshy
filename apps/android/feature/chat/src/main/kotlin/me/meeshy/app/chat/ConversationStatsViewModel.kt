@@ -1,0 +1,118 @@
+package me.meeshy.app.chat
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import me.meeshy.sdk.conversation.ConversationStatsRepository
+import me.meeshy.sdk.model.ActivityPeriod
+import me.meeshy.sdk.model.ActivityPoint
+import me.meeshy.sdk.model.ContentTypeShare
+import me.meeshy.sdk.model.ConversationMessageStatsResponse
+import me.meeshy.sdk.model.ConversationStatsProjection
+import me.meeshy.sdk.model.DailyActivityEntry
+import me.meeshy.sdk.model.LanguageShare
+import me.meeshy.sdk.model.ParticipantShare
+import me.meeshy.sdk.net.NetworkResult
+import java.time.LocalDate
+import javax.inject.Inject
+
+/** Load lifecycle of the conversation stats drill-down. */
+enum class StatsPhase { Loading, Loaded, Empty, Error }
+
+/**
+ * Fully-projected, immutable snapshot of the stats sheet. Every time-independent
+ * projection is pre-computed once at load; the activity series stays a pure
+ * function of an injected `today` so the caller (Composable) supplies the clock —
+ * the same "pass time in" doctrine the chat header already uses for presence.
+ */
+data class ConversationStatsUiState(
+    val conversationId: String? = null,
+    val phase: StatsPhase = StatsPhase.Loading,
+    val period: ActivityPeriod = ActivityPeriod.WEEK,
+    val totalMessages: Int = 0,
+    val totalWords: Int = 0,
+    val totalCharacters: Int = 0,
+    val contentTypes: List<ContentTypeShare> = emptyList(),
+    val participants: List<ParticipantShare> = emptyList(),
+    val languages: List<LanguageShare> = emptyList(),
+    val hourly: List<Int> = emptyList(),
+    val dailyActivity: List<DailyActivityEntry> = emptyList(),
+) {
+    val isLoading: Boolean get() = phase == StatsPhase.Loading
+    val hasError: Boolean get() = phase == StatsPhase.Error
+
+    /** The activity points for the selected [period] as of [today]; recomputed on period switch, no refetch. */
+    fun activity(today: LocalDate): List<ActivityPoint> =
+        ConversationStatsProjection.activitySeries(dailyActivity, period, today)
+}
+
+/**
+ * Drives the conversation stats dashboard (feature-parity §Chat — "Conversation
+ * stats rings + activity-over-time + content-type breakdown"). Stays a thin caller
+ * over the pure [ConversationStatsProjection]: it fetches once, projects the
+ * response into an immutable [ConversationStatsUiState], and lets a period switch
+ * re-derive the activity window locally rather than round-tripping the network.
+ */
+@HiltViewModel
+class ConversationStatsViewModel @Inject constructor(
+    private val repository: ConversationStatsRepository,
+) : ViewModel() {
+
+    private val _state = MutableStateFlow(ConversationStatsUiState())
+    val state: StateFlow<ConversationStatsUiState> = _state.asStateFlow()
+
+    /**
+     * Bind to a conversation and load its stats. Idempotent for an id already
+     * loaded (or in flight); a prior [StatsPhase.Error] for the same id re-tries.
+     */
+    fun load(conversationId: String) {
+        val current = _state.value
+        if (current.conversationId == conversationId && current.phase != StatsPhase.Error) return
+        fetch(conversationId)
+    }
+
+    /** Re-fetch the current conversation after a failure. */
+    fun retry() {
+        _state.value.conversationId?.let(::fetch)
+    }
+
+    /** Switch the activity window. Pure — no refetch, the [ConversationStatsUiState.activity] getter reflects it. */
+    fun selectPeriod(period: ActivityPeriod) {
+        if (_state.value.period == period) return
+        _state.update { it.copy(period = period) }
+    }
+
+    private fun fetch(conversationId: String) {
+        _state.value = ConversationStatsUiState(
+            conversationId = conversationId,
+            phase = StatsPhase.Loading,
+            period = _state.value.period,
+        )
+        viewModelScope.launch {
+            when (val result = repository.fetchStats(conversationId)) {
+                is NetworkResult.Success -> _state.update { project(it, result.data) }
+                is NetworkResult.Failure -> _state.update { it.copy(phase = StatsPhase.Error) }
+            }
+        }
+    }
+
+    private fun project(
+        base: ConversationStatsUiState,
+        data: ConversationMessageStatsResponse,
+    ): ConversationStatsUiState = base.copy(
+        phase = if (data.totalMessages <= 0) StatsPhase.Empty else StatsPhase.Loaded,
+        totalMessages = data.totalMessages,
+        totalWords = data.totalWords,
+        totalCharacters = data.totalCharacters,
+        contentTypes = ConversationStatsProjection.contentTypeBreakdown(data.contentTypes),
+        participants = ConversationStatsProjection.participantShares(data.participantStats, data.totalMessages),
+        languages = ConversationStatsProjection.languageShares(data.languageDistribution),
+        hourly = ConversationStatsProjection.hourlyBuckets(data.hourlyDistribution),
+        dailyActivity = data.dailyActivity,
+    )
+}

@@ -41,6 +41,13 @@ data class FeedUiState(
     /** L'id de l'utilisateur connecte — decide quel menu d'options porte chaque card. */
     val currentUserId: String? = null,
     /**
+     * On-demand post translations in flight, keyed `postId|language`. Guards a
+     * double-tap on a translatable flag chip from firing two requests, and lets the
+     * card surface a spinner on the pending chip. Mirrors the chat composer's
+     * [me.meeshy.app.chat.ChatUiState.translatingLanguages].
+     */
+    val translatingLanguages: Set<String> = emptySet(),
+    /**
      * The fullscreen media gallery currently open (a tap on a post's image tile),
      * or `null` when the lightbox is dismissed. Ephemeral view state kept in the
      * flow so a background re-emit never tears the open viewer down.
@@ -123,7 +130,8 @@ class FeedViewModel @Inject constructor(
                     // keeps buffered posts from double-rendering.
                     val prunedHead = FeedRealtimeReducer.reconcile(head, cacheIds)
                     val reconciledLikes = FeedRealtimeReducer.reconcileLikes(prunedHead, cachePosts)
-                    val reconciled = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+                    val reconciledBookmarks = FeedRealtimeReducer.reconcileBookmarks(reconciledLikes, cachePosts)
+                    val reconciled = FeedRealtimeReducer.reconcileComments(reconciledBookmarks, cachePosts)
                     if (reconciled !== head) realtimeHead.value = reconciled
 
                     // Tombstoned posts (live `post:deleted`) are hidden from both the head and
@@ -133,14 +141,17 @@ class FeedViewModel @Inject constructor(
                     val removed = reconciled.removedIds
                     val likes = reconciled.likes
                     val bookmarks = reconciled.bookmarks
+                    val comments = reconciled.comments
                     val visibleCache = cachePosts
                         .let { if (removed.isEmpty()) it else it.filterNot { p -> p.id in removed } }
                         .withLikeOverlays(likes)
                         .withBookmarkOverlays(bookmarks)
+                        .withCommentOverlays(comments)
                     val visibleRealtime = reconciled.posts
                         .filterNot { it.id in cacheIds || it.id in removed }
                         .withLikeOverlays(likes)
                         .withBookmarkOverlays(bookmarks)
+                        .withCommentOverlays(comments)
                     latestPosts = visibleRealtime + visibleCache
                     _state.update {
                         it.project(
@@ -185,6 +196,16 @@ class FeedViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            socialSocket.commentAdded.collect { payload ->
+                realtimeHead.update { FeedRealtimeReducer.comment(it, payload.postId, payload.commentCount) }
+            }
+        }
+        viewModelScope.launch {
+            socialSocket.commentDeleted.collect { payload ->
+                realtimeHead.update { FeedRealtimeReducer.comment(it, payload.postId, payload.commentCount) }
+            }
+        }
     }
 
     /**
@@ -206,9 +227,9 @@ class FeedViewModel @Inject constructor(
      * Tap on a post's Prisme language-flag chip: switch the post's displayed
      * language, or revert to the default resolution when the chip is already active.
      * The pure [LanguageFlagTapResolver] owns the decision (SSOT with chat); here we
-     * only apply it to the per-post override map. A read-only content strip never
-     * surfaces a content-less language, so [LanguageFlagTapResolver.Result.RequestTranslation]
-     * is inert until an on-demand post-translation path lands.
+     * only apply it to the per-post override map. Tapping a configured-but-absent
+     * language ([LanguageFlagTapResolver.Result.RequestTranslation]) translates it on
+     * demand and switches to it once it lands — the same flow as a chat bubble.
      */
     fun onPostFlagTap(postId: String, code: String) {
         val post = latestPosts.firstOrNull { it.id == postId } ?: return
@@ -224,8 +245,38 @@ class FeedViewModel @Inject constructor(
                 activeLanguageOverride.update { it + (postId to result.code) }
             LanguageFlagTapResolver.Result.Revert ->
                 activeLanguageOverride.update { it - postId }
-            is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestOnDemandTranslation(postId, result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * The viewer tapped a configured language the post has no content for yet:
+     * translate it on demand, then switch the card to it. The merged translation
+     * arrives through the cache stream (so the strip's translatable chip becomes a
+     * live content chip), and the active override points the card at it. A failed or
+     * inert translation leaves the translatable chip in place to retry; a second tap
+     * while the request is in flight is ignored. Mirrors the chat bubble's
+     * `requestOnDemandTranslation`, keyed per post rather than per message.
+     */
+    private fun requestOnDemandTranslation(postId: String, targetLanguage: String) {
+        val key = "$postId|$targetLanguage"
+        if (key in _state.value.translatingLanguages) return
+        _state.update { it.copy(translatingLanguages = it.translatingLanguages + key) }
+        viewModelScope.launch {
+            try {
+                val stored = postRepository.requestOnDemandTranslation(postId, targetLanguage)
+                if (stored) {
+                    activeLanguageOverride.update { it + (postId to targetLanguage) }
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: Exception) {
+                _state.update { it.copy(errorMessage = error.message) }
+            } finally {
+                _state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
+            }
         }
     }
 
@@ -480,6 +531,19 @@ private fun List<ApiPost>.withBookmarkOverlays(bookmarks: Map<String, BookmarkOv
             bookmarkCount = overlay.count,
             isBookmarkedByMe = overlay.mine,
         )
+    }
+}
+
+/**
+ * Overlay each post's live comment count (absolute) when a `comment:added`/`comment:deleted`
+ * overlay targets it. An absent overlay leaves the post untouched. There is no viewer-own
+ * dimension — a comment count is public. Returns the same list when no overlay applies.
+ */
+private fun List<ApiPost>.withCommentOverlays(comments: Map<String, Int>): List<ApiPost> {
+    if (comments.isEmpty()) return this
+    return map { post ->
+        val overlay = comments[post.id] ?: return@map post
+        post.copy(commentCount = overlay)
     }
 }
 

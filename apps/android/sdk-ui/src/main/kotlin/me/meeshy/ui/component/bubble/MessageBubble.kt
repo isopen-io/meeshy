@@ -94,6 +94,15 @@ public fun MessageBubble(
     trackedLinks: Map<String, String>? = null,
     effects: MessageEffects? = null,
     hasPlayedAppearance: Boolean = false,
+    /**
+     * A pre-composed single spoken label for the whole bubble (see
+     * [MessageBubbleAccessibilityLabel]). When non-null the bubble collapses its content into
+     * one accessibility node reading exactly this string — only safe at NON-interactive render
+     * sites (e.g. the long-press overlay hero), since it clears descendant semantics including
+     * any touch targets. The default null leaves the interactive list bubble's per-element
+     * semantics untouched.
+     */
+    accessibilityLabel: String? = null,
 ) {
     // Combine the server deletion flag, the view-once consume count and the ephemeral
     // self-destruct countdown. A deleted message keeps its "Message deleted" tombstone
@@ -149,6 +158,10 @@ public fun MessageBubble(
         Column(
             modifier = Modifier
                 .widthIn(max = 300.dp)
+                .let { base ->
+                    if (accessibilityLabel == null) base
+                    else base.clearAndSetSemantics { contentDescription = accessibilityLabel }
+                }
                 .messageEffects(
                     // Drive the visual-treatment modifier from the resolved bubble
                     // content by default (so received messages actually glow / pulse);
@@ -369,10 +382,23 @@ public fun MessageBubble(
                 }
 
                 if (content.isOutgoing) {
-                    DeliveryStatusIcon(
-                        status = content.deliveryStatus,
-                        onColor = onColor,
-                    )
+                    // The online in-flight clock is debounced: a send that
+                    // round-trips under 200ms never flashes it (parity iOS
+                    // `SendingClockGlyph`). The offline hourglass and every
+                    // settled tier render immediately.
+                    if (content.deliveryStatus == DeliveryStatus.Pending) {
+                        if (rememberSendingGlyphRevealed(content.createdAtIso)) {
+                            DeliveryStatusIcon(
+                                status = content.deliveryStatus,
+                                onColor = onColor,
+                            )
+                        }
+                    } else {
+                        DeliveryStatusIcon(
+                            status = content.deliveryStatus,
+                            onColor = onColor,
+                        )
+                    }
                 }
             }
         }

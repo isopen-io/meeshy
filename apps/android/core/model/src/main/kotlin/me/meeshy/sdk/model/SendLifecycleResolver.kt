@@ -37,6 +37,14 @@ enum class SendLifecycle {
  */
 object SendLifecycleResolver {
 
+    /**
+     * Debounce window for the online in-flight clock glyph — port of iOS
+     * `BubbleDeliveryCheck.SendingClockGlyph.revealDelay` (0.2s). A send that
+     * round-trips faster than this never flashes a clock icon the user has no
+     * time to perceive.
+     */
+    const val SENDING_REVEAL_DELAY_MILLIS: Long = 200L
+
     fun resolve(isPending: Boolean, isFailed: Boolean, isOffline: Boolean): SendLifecycle =
         when {
             isFailed -> SendLifecycle.Failed
@@ -44,4 +52,24 @@ object SendLifecycleResolver {
             isPending -> SendLifecycle.InFlight
             else -> SendLifecycle.Settled
         }
+
+    /**
+     * Decides whether the **online in-flight** clock glyph ([SendLifecycle.InFlight])
+     * should be shown yet — port of iOS
+     * `BubbleDeliveryCheck.SendingClockGlyph.shouldRevealImmediately`.
+     *
+     * Returns `true` (reveal now) when there is no known send-start time, or when
+     * the send has genuinely lingered past [SENDING_REVEAL_DELAY_MILLIS]. Returns
+     * `false` (stay hidden) while still inside the debounce window — including a
+     * negative elapsed from device clock skew, which is treated as "barely started".
+     *
+     * Applies ONLY to the online clock: the offline outbox hourglass
+     * ([SendLifecycle.QueuedOffline]) and every settled tier show immediately.
+     *
+     * Stateless and pure.
+     */
+    fun shouldRevealSendingGlyph(sendStartedAtMillis: Long?, nowMillis: Long): Boolean {
+        if (sendStartedAtMillis == null) return true
+        return nowMillis - sendStartedAtMillis >= SENDING_REVEAL_DELAY_MILLIS
+    }
 }

@@ -11,6 +11,7 @@ const bubble = {
   isViewer: false,
   replyToMessageId: null,
   isFirstInGroup: true,
+  isSystem: false,
 } as const;
 
 function makeContent(overrides: Partial<RiverBubbleContent> = {}): RiverBubbleContent {

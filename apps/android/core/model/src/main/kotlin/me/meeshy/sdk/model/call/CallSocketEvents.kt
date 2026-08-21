@@ -96,6 +96,23 @@ data class CallMissedPayload(
     val callerName: String? = null,
 )
 
+/**
+ * `call:force-leave` — the server removes THIS recipient from the call, which
+ * carries on for everyone else. Emitted to the recipient's personal room by an
+ * end of conversation membership (left, banned, removed by a moderator, thread
+ * deleted for oneself): the gateway has already stamped their `leftAt` and
+ * evicted their sockets from the call room, so this frame is the only way they
+ * learn of it.
+ *
+ * Distinct from [CallParticipantLeftPayload], which speaks of a PEER. Only the
+ * call id is load-bearing — `reason` is diagnostic.
+ */
+@Serializable
+data class CallForceLeavePayload(
+    val callId: String,
+    val reason: String? = null,
+)
+
 /** `call:media-toggled` — the remote peer muted/unmuted their mic or camera. */
 @Serializable
 data class CallMediaTogglePayload(

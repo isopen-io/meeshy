@@ -486,7 +486,7 @@ struct ConversationInfoSheet: View {
 
             // Member count
             HStack {
-                Text(String(format: String(localized: "conversation.info.members-count", defaultValue: "%d membre%@", bundle: .main), participants.count, participants.count > 1 ? "s" : ""))
+                Text(MembersCountLabel.text(participants.count))
                     .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                 Spacer()

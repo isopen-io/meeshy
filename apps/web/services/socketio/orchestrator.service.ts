@@ -764,10 +764,6 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationStats(listener);
   }
 
-  onConversationOnlineStats(listener: (data: any) => void): UnsubscribeFn {
-    return this.presenceService.onConversationOnlineStats(listener);
-  }
-
   onReactionAdded(listener: (data: any) => void): UnsubscribeFn {
     return this.presenceService.onReactionAdded(listener);
   }

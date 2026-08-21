@@ -1529,8 +1529,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       straight through — it opens a `LockPinMode.OPEN_CONVERSATION` sheet that verifies the
       4-digit code then navigates via a one-shot `openConversation` event, leaving the lock
       in place (parity iOS `ConversationLockSheet.Mode.openConversation`; a new
-      `LockPinEffect.OpenConversation` distinct from `RemoveLock`). Remaining lock sub-gaps
-      (Settings master-PIN change/remove/unlock-all, swipe-to-lock) tracked below.
+      `LockPinEffect.OpenConversation` distinct from `RemoveLock`). **Unlock-all done** (slice
+      `conversation-lock-unlock-all`, 2026-08-21): a global "unlock everything" affordance —
+      pure `LockPinMode.UNLOCK_ALL` reducer arm (verify the 6-digit master PIN once → new
+      `LockPinEffect.RemoveAllLocks`, else `MASTER_PIN_INCORRECT`; master PIN left in place,
+      parity iOS `ConversationLockSheet.Mode.unlockAll` which calls `removeAllLocks()` only) →
+      `ConversationListViewModel.onUnlockAll` (inert unless a lock exists, guarded on the
+      authoritative store) drops every per-conversation lock at once via the already-present
+      `ConversationLockStore.removeAllLocks()`. Surfaced as a top-bar `LockOpen` action that
+      appears ONLY while `ConversationListUiState.canUnlockAll` (≥1 locked conversation) — iOS
+      buries it in Settings, Android surfaces it contextually and hides it when irrelevant.
+      +4 reducer + 4 VM-flow tests, mutation-proven (flipping the master-PIN guard fails exactly
+      the wrong-PIN arm). EN/FR/ES/PT strings. Remaining lock sub-gaps (Settings master-PIN
+      change/remove, swipe-to-lock) tracked below.
 - [~] Swipe actions done (leading = pin/unpin, trailing = archive/unarchive ;
       `SwipeToDismissBox` non-destructif qui snap-back, le résultat visible est
       la re-dérivation du filtre) ; mute/lock/mark-unread/block/hide pending
@@ -1641,7 +1652,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ContactsListViewModel.paintMoodStatusesFromCache`) ; `moodEmojiFor(conversation)` délègue au pur
       résolveur ; la ligne `MeeshyAvatar(..., moodEmoji = state.moodEmojiFor(...))` remplace le `null`
       codé en dur — le badge emoji du peer d'un DM remplace la pastille de présence comme sur iOS) ;
-      presence pending
+      **presence done** (vérifié 2026-08-21 : le dot de présence était déjà câblé — `ConversationListScreen.kt`
+      passe `presence = state.presenceStateFor(conversation, System.currentTimeMillis())` jusqu'au
+      `MeeshyAvatar(..., presence = …)` de la rangée, aux côtés de `storyRing` et `moodEmoji` ; les trois
+      affordances d'avatar coexistent comme sur iOS, un badge mood supprimant le dot quand les deux sont
+      présents). La ligne rangée « rich last-message preview » est désormais complète.
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
@@ -2121,6 +2136,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
       gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
       `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
+- [~] Message-bubble VoiceOver/TalkBack composed label — **pure composer done** (slice
+      `chat-bubble-a11y-label`, 2026-08-21 : port iOS `MessageAccessibilityLabelComposer.compose`
+      (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`).
+      Pur `:sdk-ui` `MessageBubbleAccessibilityLabel.compose(content, strings, locale, timeText?)` :
+      un unique libellé parlé dans l'ordre gelé iOS — sender → reply → text → images → audios →
+      location/files → time → delivery → edited → pinned → ephemeral → reactions — joint par `, `.
+      Chaînes injectées via `BubbleAccessibilityStrings` (motif `RelativeTimeFormat`, zéro dépendance
+      Android, JVM-testable). Court-circuit supprimé (sender + « message supprimé »). Écarts assumés
+      vs iOS documentés : pas de distinction image/vidéo (un seul compteur « images »), pas de « vous »
+      pour l'auteur de la réponse (modèle Android sans `isMe`), pas d'horloge dans la meta-row (⇒
+      `timeText` fourni seulement là où une heure est visible). **+20 tests** mutation-prouvés (casser
+      le court-circuit supprimé → 1 échec exact ; effondrer l'arm excerpt de réponse → 2 échecs exacts).
+      **Câblage sûr, non destructif** : `MessageBubble` gagne un param opt-in `accessibilityLabel:
+      String? = null` appliqué via `clearAndSetSemantics` — branché UNIQUEMENT au héros de l'overlay
+      long-press (`MessageOverlayPreviewHero`, non-interactif « never intercepts input »), où
+      effondrer l'arbre sémantique est prouvablement sûr. La bulle interactive de la liste garde
+      `null` → ses cibles tactiles par-élément (réactions, images, long-press) intactes. Le libellé
+      composé de la liste attend un test instrumenté TalkBack (hors du gate JVM). Strings EN/FR/ES/PT.
+      **Reste** : câbler le libellé composé sur la bulle de liste derrière une vérif TalkBack instrumentée.
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
@@ -2185,8 +2219,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       outgoing send-side glyph through it; `MessageBubble` renders `Icons.Filled.HourglassEmpty` +
       `bubble_status_queued` (EN/FR/ES/PT). `ChatViewModel` injects `NetworkConditionMonitor` and folds
       `condition == OFFLINE` (distinct) into the message-stream combine so going offline re-paints the glyph
-      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Pending:** the finer 8-state
-      send-lifecycle glyphs (slow/invisible pre-200ms debounce), tap-checks → read-status sheet
+      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Sub-200ms clock debounce done**
+      (`chat-send-clock-reveal-debounce` 2026-08-21): port of iOS
+      `BubbleDeliveryCheck.SendingClockGlyph.shouldRevealImmediately` (`revealDelay = 0.2`) — a send that
+      round-trips under 200ms never flashes the online in-flight clock the user has no time to perceive.
+      New pure `SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis, nowMillis)` +
+      `SENDING_REVEAL_DELAY_MILLIS = 200L` (null start → reveal now; `>=` inclusive boundary; negative
+      elapsed from clock skew stays hidden). Compose glue `rememberSendingGlyphRevealed` (`produceState` +
+      one-shot `delay`, same shape as `rememberBubbleRenderKind`) gates ONLY the `DeliveryStatus.Pending`
+      clock at the `MessageBubble` render site off `content.createdAtIso`; the offline hourglass and every
+      settled tier render immediately. +8 resolver tests, mutation-proven (`>=`→`>` fails exactly the
+      exactly-200ms boundary test). **Pending:** the finer `slow`/retry glyph tier, tap-checks → read-status sheet
 - [~] Edited / pinned / forwarded indicators; edit-history viewer
       **Edited ✅** (`bubble_edited` badge), **pinned ✅** (`chat-pinned-banner`), **forwarded ✅**
       (slice `chat-forwarded-indicator`, 2026-07-08, +5 tests): `BubbleContent.isForwarded` derived in
@@ -2648,7 +2691,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
       renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
       backend `/mentions` API merge over the local roster (online enrichment).
-- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
+- [x] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
       (slice `chat-draft-autosave`, 2026-07-07): pure `:feature:chat` `DraftAutosave` SSOT (blank composer
       purges, non-blank saves raw, unchanged writes nothing → `Save`/`Clear`/`None`; restore seeds an idle empty
       composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
@@ -2661,8 +2704,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reference (trim/blank→null); `DraftAutosave.restore` returns a `DraftRestore(text, replyToId)` snapshot that
       re-arms a reply-only or half-typed reply draft. `ChatViewModel` persists on `startReply`/`cancelReply`/
       `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
-      tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
-      Android — no state to persist).
+      tests. **Effects/blur/ephemeral persistence done** (slice `chat-draft-effects-persistence`, 2026-08-21):
+      `ConversationDraft` gained an `effects: MessageEffects` field (defaulted → legacy blobs decode to an empty
+      selection) folding iOS `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` into the single
+      `MessageEffects` SSOT. A NEW `ConversationDraft.isWorthPersisting` (`isMeaningful || effects.hasAnyEffect`)
+      mirrors iOS's split between the text-only list rule (`hasDraftText`) and the persistence rule
+      (`isEffectivelyEmpty`, which weighs effects): `DraftAutosave` switched to it (an effect armed on an empty
+      composer persists and survives navigation; clearing the last effect on an empty composer purges), while the
+      four conversation-list surfaces keep the text/reply-only `isMeaningful` — so an effects-only draft never
+      floats or badges a row, exactly like iOS. `DraftAutosave.resolve` gained an `effects` param (armed effects →
+      `Save`; a change in effects alone → `Save`; identical text+reply+effects → `None`); `DraftRestore` carries the
+      effects; `ChatViewModel.persistDraft` reads `pendingEffects` from state and `toggleEffect`/`selectEphemeralDuration`/
+      `clearEffects` now persist, restore re-arms `pendingEffects` on open. +19 tests (7 `ConversationDraftTest`
+      incl. back-compat decode, 8 `DraftAutosaveTest`, 4 VM round-trip), mutation-proven ×3 (drop the
+      `isWorthPersisting` effects clause → 1 fail; drop the resolve idempotence effects clause → 1 fail; drop the
+      empty-guard `!effects.hasAnyEffect` → 1 fail). **Manual composer-language persistence done** (slice
+      `chat-draft-language-persistence`, 2026-08-21): `ConversationDraft` gained `selectedLanguage: String?`
+      (defaulted → legacy blobs decode to no language) porting iOS `MessageDraft.selectedLanguage`. Per iOS
+      `isEffectivelyEmpty`/`hasDraftText` (both ignore `selectedLanguage`), a language pick is **not content**:
+      `isMeaningful` and `isWorthPersisting` are BOTH left unchanged, so a language-only composer neither floats/
+      badges a row nor is persisted — the language rides along an otherwise worth-persisting draft. Only the
+      deliberate **manual** override (`ComposerLanguageState.manualOverride`) is persisted; live detection is not
+      (it re-derives from the restored text). `DraftAutosave.resolve` gained a `selectedLanguage` param
+      (normalised trim/blank→null; a change to it on a worth-persisting draft → `Save`; identical text+lang →
+      `None`; language alone on an empty composer → `None`); `DraftRestore` carries `selectedLanguage`; `restore`
+      re-applies it via `withManualPick` (a restored pick wins over detection of the restored text and freezes
+      analysis). `ChatViewModel.persistDraft` reads `manualOverride` from state and `onComposerLanguagePicked`
+      now persists (iOS `.adaptiveOnChange(of: selectedLanguage)` parity); open-time restore applies the pick.
+      +17 tests (4 `ConversationDraftTest` incl. back-compat decode + not-content proofs, 10 `DraftAutosaveTest`
+      = 7 resolve + 3 restore, 3 VM round-trip), mutation-proven (drop the resolve `selectedLanguage` idempotence
+      clause → exactly the `only_the_language_pick_changing` test fails, `identical_text_and_language` stays green).
 - [◐] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress —
       **REST attachment chain + first real path (clipboard content) done** (slice `chat-clipboard-content-send`,
       2026-07-16). The durable upload→send chain now carries message attachments, mirroring the proven story
@@ -2958,7 +3029,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
 - [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
-- [ ] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown
+- [~] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown —
+      **stats dashboard shipped 2026-08-21** (slice `conversation-stats-core`). The
+      `ConversationMessageStatsResponse` model shipped orphaned (no consumer); this slice turns it
+      real. Pure `ConversationStatsProjection` (`:core:model`, SSOT) derives the content-type
+      breakdown from the server `ContentTypeCounts` (SOTA over iOS's client-side message re-count),
+      the trailing-window activity series (`today` injected — deterministic, unlike iOS's
+      wall-clock view getter), per-participant + per-language shares, and a 24-slot hourly
+      histogram. `ConversationStatsRepository` (`:sdk-core`) fetches `GET /conversations/{id}/stats`;
+      `ConversationStatsViewModel` + `ConversationStatsSheet` (`:feature:chat`) render it behind a
+      new header `Insights` action (any member; period picker re-derives locally, no refetch).
+      **Still open — sentiment / AI analysis** (`GET /conversations/{id}/analysis`,
+      `ConversationAnalysis` health score / persona profiles / emotions): that is the separate
+      `AI conversation analysis` + `AI participant persona` boxes below and a distinct endpoint.
+      Box stays `[~]` until the sentiment/analysis arm lands.
 - [ ] AI participant persona profiles + per-participant activity breakdown + trait bars
 
 ## D. Translation — Prisme Linguistique
@@ -3066,8 +3150,67 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       refresh/re-emit — instant-app) + `onPostFlagTap`. +19 tests (+8 `FeedPostBuilderTest`, +5
       `FeedViewModelTest`, 10 relocated `LanguageFlagTapResolverTest` still green). `:sdk-ui` + `:feature:feed`
       + `:feature:chat` `testDebugUnitTest` + `:app:assembleDebug` → BUILD SUCCESSFUL.
-      **Follow-up:** the interactive `includeTranslatable` arm (tap a configured-but-absent language on a
-      post to request it on demand — needs a post on-demand translation path), and the per-story timeline strip.
+      **On-demand request arm shipped** (slice `feed-post-translation-request`, 2026-08-21): the feed strip
+      now passes `includeTranslatable = true`, so a configured-but-absent content language surfaces as a
+      translatable chip (only when the post already carries a preferred translation — `MessageLanguageStrip`
+      returns empty for an untranslated post regardless). Tapping it drives `FeedViewModel.onPostFlagTap`'s
+      `LanguageFlagTapResolver.Result.RequestTranslation` arm (was a dead `Unit`) →
+      `PostRepository.requestOnDemandTranslation(postId, target): Boolean` — the map-keyed sibling of
+      `MessageRepository.requestTranslation`: blocking-translates the post's original text via `TranslationApi`
+      and upserts the result into the in-memory feed cache through the new pure `PostTranslationMerge`
+      (`:core:model`), so the card switches live off the cache stream + the `activeLanguageOverride` activates
+      it. A failed/blank/idempotent translation leaves the chip in place to retry; a second tap while in
+      flight is ignored (`FeedUiState.translatingLanguages`, keyed `postId|lang`, mirrors chat). +20 tests
+      (+8 `PostTranslationMergeTest`, +8 `PostRepositoryTest`, +3 `FeedViewModelTest`, +1 `FeedPostBuilderTest`;
+      mutation-proved ×2). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL.
+      **Post-detail request arm shipped** (slice `feed-post-detail-translation-request`, 2026-08-21):
+      the full-screen post opened from the feed reused `FeedPostBuilder.build` (so its strip already passed
+      `includeTranslatable = true`), but `PostDetailViewModel.onFlagTap` carried the dead `RequestTranslation
+      -> Unit` arm — a translatable chip surfaced yet did nothing. That arm now calls a per-post
+      `requestOnDemandTranslation` (in-flight guard via new `PostDetailUiState.translatingLanguages` /
+      `PostDetailStatus.translating`): it blocking-translates through the new stateless
+      `PostRepository.translatePost(post, target): ApiPost?` and — because the detail VM owns its post in
+      `rawPost` outside the feed cache — swaps the freshly-merged post into `rawPost` + points `activeCode` at
+      the new language, so the strip's translatable chip becomes a live content chip and the reader lands on
+      it. `translatePost` and the cache-mutating `requestOnDemandTranslation` now share the single
+      translate-then-`PostTranslationMerge` law (`translateAndMerge`); a failed/blank/idempotent translation
+      leaves the strip untouched to retry; a second in-flight tap is ignored. +10 tests (+7 `PostRepositoryTest`
+      for `translatePost`, +3 `PostDetailViewModelTest`; mutation-proved ×2 — in-flight guard, active-language
+      switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
+      **Comments request arm shipped** (slice `feed-comment-translation-request`, 2026-08-21): the comment
+      strip now passes `includeTranslatable = true` (`CommentProjection.build` — it previously surfaced no
+      request chip), and `PostCommentsViewModel.onCommentFlagTap`'s dead `RequestTranslation -> Unit` arm now
+      calls a per-comment `requestCommentTranslation` (in-flight guard via new
+      `PostCommentsUiState.translatingLanguages`, keyed `commentId|lang`, folded through the projection). It
+      blocking-translates through the new stateless `PostRepository.translateComment(comment, target):
+      ApiPostComment?` (the comment-keyed sibling of `translatePost` — both now share one `translateSource`
+      network law + a `PostTranslationMerge.mergeTranslation(comment, …)` overload sharing the upsert law with
+      the post one) and folds only the merged translations onto the live row via new
+      `CommentThreadState.retranslated` / `CommentRepliesState.retranslated` (translations-only, so a concurrent
+      realtime `replyCount` bump is never clobbered) — covering both top-level comments and loaded replies —
+      then points `activeLanguages[commentId]` at the new language. Failed/blank/idempotent leaves the strip to
+      retry; a second in-flight tap is ignored. +21 tests (+6 `PostTranslationMergeTest`, +7 `PostRepositoryTest`,
+      +3 `CommentThreadStateTest`/`CommentRepliesStateTest`, +1 `CommentProjectionTest`, +4 `PostCommentsViewModelTest`;
+      1 obsolete dead-arm test rewritten to the new contract; mutation-proved ×2 — in-flight guard, active-language
+      switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
+      **Story request arm shipped** (slice `story-viewer-translation-request`, 2026-08-21): the story viewer's
+      language quick bar (`StoryViewerViewModel.availableLanguagesFor`) previously listed only present
+      `StoryItem.translations`, so a configured-but-absent language was never requestable. It now appends each
+      configured content language (`LanguageResolver.preferredContentLanguages`) absent from the present set as a
+      translatable chip — gated on the story already carrying ≥1 translation (a pure-original story never dumps
+      every preferred language) and on a real logged-in viewer. `StoryLanguageOption`/`LanguageQuickOption` gain
+      `isTranslatable`/`isTranslating` (dimmed flag + "+" affordance, "…" in flight); `StoryViewerScreen` routes a
+      translatable tap to the new `requestStoryTranslation(code)` (in-flight guard via `translatingLanguages` keyed
+      `storyId|lang`), which blocking-translates through the new stateless `StoryRepository.translateStory(item,
+      target): StoryItem?` (story-shaped sibling of `translatePost`; `TranslationApi` now injected) and folds via
+      the new `:core:model` `StoryTranslationMerge` (list-keyed sibling of `PostTranslationMerge` — upsert into
+      `List<StoryTranslation>`, blank/idempotent guards, in-place-or-append), then switches the Exploration
+      `languageOverride` to the target so the slide re-renders even when a higher-priority language is already
+      present. Failed/blank/idempotent leaves the strip to retry; a second in-flight tap is ignored. +21 tests
+      (+8 `StoryTranslationMergeTest`, +7 `StoryRepositoryTest`, +6 `StoryViewerViewModelTest`; mutation-proved ×2 —
+      in-flight guard, override switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL
+      (local, SDK 37 bootstrapped). **The `request-missing-languages` follow-up is now COMPLETE on every surface
+      (feed card / post-detail / comments / story).**
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
@@ -3572,6 +3715,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS `FeedSocketHandler` bug where *any* user's like flips the viewer's own `isLikedByMe` (Android
       gates it on userId in one place). +23 tests (15 reducer, 8 VM). Mutation-proof: dropping the prior-`mine`
       preservation fails exactly the discriminating "another user preserves a prior viewer-own like" test.
+      **Live `comment:added`/`comment:deleted` count sync done** (slice `feed-realtime-comment-count`,
+      2026-08-21): the `SocialSocketManager.commentAdded`/`commentDeleted` streams — previously consumed only
+      by the post-detail/comments VMs, never by the feed list — now fold through a pure
+      `FeedRealtimeReducer.comment` into a `FeedRealtimeHead.comments` *overlay* (`Map<String, Int>`): the
+      gateway's ABSOLUTE `commentCount` overrides the (possibly stale) cache count, clamped at zero so a
+      malformed negative payload never renders a negative badge; no viewer-own dimension (a comment count is
+      public). `reconcileComments` releases an overlay once a refresh's cache count catches up (a `null` cache
+      count reads as 0), never reverting a live count to a stale cache value; `clear` (pull-to-refresh) drops
+      all overlays. Faithful to iOS FeedViewModel's `post.commentCount = data.commentCount` on both streams —
+      but pure and unit-testable. `FeedViewModel` collects both streams, projects the overlay through a new
+      `withCommentOverlays` helper alongside the like/bookmark overlays. +18 tests (12 reducer, 6 VM).
+      Mutation-proof: dropping the negative clamp (`coerceAtLeast(0)`) fails exactly the discriminating
+      "comment clamps a negative absolute count to zero" test (1 of 70, no collateral).
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
@@ -3585,7 +3741,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
 - [~] Prisme Linguistique on the feed: post content rendered in the viewer's preferred
       language with a discreet « Traduit » indicator (`ApiPost.displayContent`/`isTranslated`
       port of the message Prisme rules — Map-keyed translations, Rule 1 honoured) ;
-      per-post flag strip / request-missing-languages pending
+      per-post flag strip **shipped** + request-missing-languages **shipped** (slice
+      `feed-post-translation-request`, 2026-08-21 — tap a configured-but-absent language chip to translate
+      the post on demand and switch to it, via `PostRepository.requestOnDemandTranslation` + `PostTranslationMerge`)
 - [x] Feed card stats row: like (filled when own) + comment count + repost count,
       mood emoji on the author line, pure `FeedPostPresentation` builder (8 builder
       tests + 1 model Prisme test + 3 repository optimistic/rollback tests, all green)

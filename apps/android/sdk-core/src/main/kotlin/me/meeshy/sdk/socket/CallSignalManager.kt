@@ -478,9 +478,22 @@ class CallSignalManager @Inject constructor(
         /** The remote peer muted/unmuted the mic or toggled the camera. */
         const val MEDIA_TOGGLED_EVENT = "call:media-toggled"
 
-        // `call:force-leave` is deliberately ABSENT: the gateway never emits it
-        // (audit appels 2026-07-11 — verified dead; subscribing would be a
-        // silent no-op inviting drift).
+        /**
+         * The server removing THIS device from a call it no longer has the
+         * right to be in — end of conversation membership (left, banned,
+         * removed by a moderator, thread deleted for oneself). The call may
+         * carry on for the others; only this side's participation ends.
+         *
+         * Was deliberately absent while the gateway never emitted it (audit
+         * appels 2026-07-11 — verified dead). The gateway emits it since cycle
+         * 75 (`CallEventsHandler.endCallParticipationForDepartedMember`), and
+         * it is the ONLY frame telling this device it was taken out: the
+         * `call:participant-left` that follows a departure names the departing
+         * peer to those who REMAIN, and our sockets have just been evicted
+         * from the call room anyway.
+         */
+        const val FORCE_LEAVE_EVENT = "call:force-leave"
+
         val INBOUND_EVENTS = listOf(
             INITIATED_EVENT,
             SIGNAL_EVENT,
@@ -493,6 +506,7 @@ class CallSignalManager @Inject constructor(
             "call:participant-joined",
             "call:ended",
             "call:missed",
+            FORCE_LEAVE_EVENT,
             "call:error",
             "call:already-answered",
         )

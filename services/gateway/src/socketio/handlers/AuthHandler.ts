@@ -558,11 +558,18 @@ export class AuthHandler {
   }
 
   // Engine-level pong (Socket.IO ping/pong, every ~25s on EVERY client
-  // platform). The applicative CLIENT_EVENTS.HEARTBEAT above only exists on
-  // web (90s) and iOS (30s) — Android emits none, so without this path a
-  // passive-connected Android user would fall past the 5min anti-stale guard
-  // of the 1/3/5 presence rule and read offline while the socket is alive.
+  // platform — `pingInterval: 25000`). C'est le SEUL chemin de rafraichissement
+  // de presence sur lequel on puisse compter pour tous les clients : Android
+  // n'a jamais emis de heartbeat applicatif, et sans ce chemin un
+  // connecte-passif tomberait au-dela de la garde anti-stale de 5 min de la
+  // regle de presence 1/3/5 — affiche hors ligne alors que sa socket est vivante.
   // Throttled 60s inside StatusService: at most one DB write + broadcast/min.
+  //
+  // `CLIENT_EVENTS.HEARTBEAT` ci-dessus ne subsiste que pour iOS (30s, AVEC
+  // `clientTime`), qui s'en sert pour le RTT rendu dans `heartbeat:ack`. Le web
+  // en emettait un a 90s, NU : aucun `latencyHintMs` calculable, aucun ecouteur
+  // pour l'ack, et un `noteHeartbeat` que ce pong-ci avait deja appele 3,6x plus
+  // souvent. Il a ete retire (cycle 78) ; la presence web ne tient plus qu'ici.
   handleEnginePong(socket: Socket): void {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;

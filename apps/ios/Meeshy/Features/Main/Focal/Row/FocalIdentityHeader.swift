@@ -38,11 +38,23 @@ struct FocalIdentityHeader: View, Equatable {
     /// Décidé par le type, jamais par le pseudo : `ano_` est un préfixe
     /// lisible, pas un espace réservé, et un compte peut le porter.
     var senderIsAnonymous: Bool = false
+    /// L'auteur, déjà résolu par `Focal/Core/`. La rangée le transmet au
+    /// présentateur sans jamais le composer — voir la garde §5.1.
+    var profileUser: ProfileSheetUser
     let timeString: String
+    /// Le message EN FOCUS (Focal, 2026-08-21) garde son horodatage en
+    /// PERMANENCE — jour + heure, défilement ou pas : il ne passe pas par le
+    /// révélé (`FocalRevealedTime`, masqué au repos). `false` = règle
+    /// commune des têtes de groupe (révélé pendant le défilement seulement).
+    var revealsTimeAlways: Bool = false
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    /// 2026-08-21 : toucher les COCHES (haut-droite, à côté de la date)
+    /// ouvre la vue « détails de lecture » du message ; la date reste
+    /// informative (pas un bouton).
+    var onShowReadStatus: (() -> Void)? = nil
     /// F-083ter (F10) — voir `editedIndicator`.
     var editedAt: Date? = nil
     var isEditSaving: Bool = false
@@ -104,13 +116,13 @@ struct FocalIdentityHeader: View, Equatable {
 
     var body: some View {
         Button {
-            onOpenProfile?(ProfileSheetUser(
-                userId: nil,
-                username: senderUsername ?? senderDisplayName,
-                displayName: senderDisplayName,
-                avatarURL: senderAvatarURL,
-                accentColor: senderColorHex
-            ))
+            // L'auteur arrive DÉJÀ résolu depuis `Focal/Core/` : cette rangée
+            // ne compose pas d'identité, elle la transmet. `Row/` n'a pas le
+            // droit de lire un signal d'identité brut (§5.1, garde
+            // `FocalNoBubbleSourceGuardTests`), et le présentateur a besoin du
+            // `participantId` pour ouvrir la fiche d'un visiteur sans compte
+            // plutôt qu'une page de profil vide.
+            onOpenProfile?(profileUser)
         } label: {
             HStack(spacing: 7) {
                 MeeshyAvatar(
@@ -162,12 +174,7 @@ struct FocalIdentityHeader: View, Equatable {
                 stamp
 
                 if isMe, let deliveryStatus {
-                    BubbleDeliveryCheck(
-                        status: deliveryStatus,
-                        isOffline: false,
-                        tint: metaTint,
-                        readTint: readTint
-                    )
+                    deliveryChecks(deliveryStatus)
                 }
             }
         }
@@ -184,12 +191,40 @@ struct FocalIdentityHeader: View, Equatable {
         FocalMetrics.Avatar.size
     }
 
+    /// Les coches : un bouton quand la rangée sait ouvrir les détails de
+    /// lecture (zone de toucher élargie, le glyphe reste au gabarit méta).
+    @ViewBuilder
+    private func deliveryChecks(_ status: Message.DeliveryStatus) -> some View {
+        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
+        if let onShowReadStatus {
+            Button(action: onShowReadStatus) {
+                check
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "message.read_status", defaultValue: "Détails de lecture", bundle: .main))
+        } else {
+            check
+        }
+    }
+
     /// L'horodatage de tête de groupe — MÊME règle que `FocalMetaRow.stamp` :
     /// révélé pendant le défilement seulement. Sans cette règle commune, une
     /// tête de groupe gardait son heure en dur pendant qu'une rangée de suite
-    /// masquait la sienne — deux règles pour la même information.
+    /// masquait la sienne — deux règles pour la même information. Seule
+    /// exception : le message EN FOCUS (`revealsTimeAlways`), dont les
+    /// détails — jour + heure compris — sont permanents.
+    @ViewBuilder
     private var stamp: some View {
-        FocalRevealedTime(timeString: timeString, tint: metaTint)
+        if revealsTimeAlways {
+            Text(timeString)
+                .font(MeeshyFont.relative(10.5))
+                .foregroundColor(metaTint)
+        } else {
+            FocalRevealedTime(timeString: timeString, tint: metaTint)
+        }
     }
 
     /// F-083ter (F10) — « un message édité affiche « modifié » en 10.5 en

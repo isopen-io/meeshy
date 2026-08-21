@@ -70,12 +70,21 @@ data class StorySlideView(
     val languageCode: String? = null,
 )
 
-/** One language chip of the story language bar. Pure data. */
+/**
+ * One language chip of the story language bar. Pure data.
+ *
+ * [isTranslatable] marks a language the viewer has configured but which the story
+ * has no content for yet — tapping it requests an on-demand translation rather than
+ * switching the display. [isTranslating] is true while that request is in flight.
+ * A present (content) chip is neither.
+ */
 @Immutable
 data class StoryLanguageOption(
     val code: String,
     val flag: String,
     val label: String,
+    val isTranslatable: Boolean = false,
+    val isTranslating: Boolean = false,
 )
 
 /**
@@ -128,6 +137,9 @@ class StoryViewerViewModel @Inject constructor(
 
     /** Ephemeral "Exploration" override, keyed to the slide it was chosen on. */
     private var languageOverride: Pair<String, String>? = null
+
+    /** In-flight on-demand translation requests, keyed `storyId|lang` (lowercased). */
+    private val translatingLanguages = mutableSetOf<String>()
 
     /**
      * Image URLs whose load has resolved (succeeded or failed) on screen. Feeds
@@ -352,19 +364,83 @@ class StoryViewerViewModel @Inject constructor(
         )
     }
 
+    /**
+     * The story's language bar: every present translation as a content chip, plus —
+     * once the story carries at least one translation — each configured content
+     * language the story has no content for yet as a translatable request chip
+     * (Prisme on-demand request arm, mirroring the feed strip). The gate keeps a
+     * pure-original story (no translations) from dumping every preferred language as
+     * a request affordance; an anonymous/logged-out viewer (no prefs) sees only the
+     * present translations.
+     */
     private fun availableLanguagesFor(storyId: String?): List<StoryLanguageOption> {
         val item = storyId?.let { rawItems[it] } ?: return emptyList()
-        return item.translations.orEmpty()
+        val present = item.translations.orEmpty()
             .filter { it.language.isNotBlank() && it.content.isNotBlank() }
             .distinctBy { it.language.lowercase() }
-            .map { translation ->
-                val info = LanguageData.info(translation.language)
-                StoryLanguageOption(
-                    code = translation.language,
-                    flag = info?.flag ?: "🌐",
-                    label = info?.nativeName ?: translation.language,
-                )
+            .map { languageOption(it.language, storyId, isTranslatable = false) }
+        if (present.isEmpty()) return emptyList()
+
+        val user = sessionRepository.currentUser.value ?: return present
+        val presentCodes = present.mapTo(mutableSetOf()) { it.code.lowercase() }
+        val translatable = LanguageResolver.preferredContentLanguages(user)
+            .distinctBy { it.lowercase() }
+            .filter { it.lowercase() !in presentCodes }
+            .map { languageOption(it, storyId, isTranslatable = true) }
+        return present + translatable
+    }
+
+    private fun languageOption(
+        code: String,
+        storyId: String,
+        isTranslatable: Boolean,
+    ): StoryLanguageOption {
+        val info = LanguageData.info(code)
+        return StoryLanguageOption(
+            code = code,
+            flag = info?.flag ?: "🌐",
+            label = info?.nativeName ?: code,
+            isTranslatable = isTranslatable,
+            isTranslating = translationKey(storyId, code) in translatingLanguages,
+        )
+    }
+
+    private fun translationKey(storyId: String, code: String): String =
+        "$storyId|${code.trim().lowercase()}"
+
+    /**
+     * On-demand translation request (Prisme pull side): the viewer tapped a configured
+     * language the current slide has no content for yet. Pulls the translation, merges it
+     * into the raw item so the language becomes a live content chip, and switches the
+     * "Exploration" override to it so the slide re-renders in the requested language the
+     * moment it lands. A failed/inert translation leaves the strip to retry; a second tap
+     * while the request is in flight is ignored. Mirror of the feed card's
+     * `requestOnDemandTranslation`, scoped to the current slide.
+     */
+    fun requestStoryTranslation(code: String) {
+        val storyId = playback.currentSlide?.id ?: return
+        val item = rawItems[storyId] ?: return
+        val target = code.trim()
+        if (target.isEmpty()) return
+        val key = translationKey(storyId, target)
+        if (!translatingLanguages.add(key)) return
+        emit()
+        viewModelScope.launch {
+            try {
+                val merged = storyRepository.translateStory(item, target)
+                if (merged != null) {
+                    rawItems[storyId] = merged
+                    languageOverride = storyId to target
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // Inert — a failed request leaves the strip untouched to retry.
+            } finally {
+                translatingLanguages.remove(key)
+                emit()
             }
+        }
     }
 
     private fun StoryGroup.toGroupSlides(): StoryGroupSlides {

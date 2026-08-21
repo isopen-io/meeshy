@@ -32,6 +32,23 @@
  * défaut de sécurité avant d'être un défaut d'affichage — l'en-tête de
  * `LocationHandler` chiffre déjà exactement cette phrase pour la mort du socket.
  *
+ * ─── Et l'APPEL en cours, qui vit dans une autre room ───────────────────────
+ *
+ * La room d'un appel (`ROOMS.call(callId)`) n'est pas celle de la conversation :
+ * sortir quelqu'un de la seconde le laissait entièrement dans la première, et
+ * rien en aval ne le rattrapait — le relais `call:signal` s'autorise sur la
+ * ligne `CallParticipant` (`!p.leftAt`), jamais sur l'appartenance au fil. Un
+ * membre banni pendant l'appel y restait donc : signalisation relayée, média
+ * P2P établi, transcriptions et traductions de tous les autres servies. Et,
+ * exactement comme pour la position, le seul verbe capable de l'en retirer —
+ * `call:force-leave` — exige `isActive: true` : la perte du droit faisait taire
+ * la commande de retrait elle-même.
+ *
+ * La CLÔTURE, elle, laisse toujours vivre les appels du fil (voir
+ * `announceConversationClosed`) : elle ne retire le droit de personne. C'est la
+ * fin d'appartenance qui inverse l'argument — on sort le partant PARCE QUE son
+ * droit d'être là vient de cesser.
+ *
  * ─── L'ORDRE, et pourquoi il n'est pas indifférent ──────────────────────────
  *
  * L'extinction précède la sortie des rooms, et le témoin la tient. `location:
@@ -84,6 +101,13 @@ export interface MembershipRoomReader {
  */
 export interface DepartedMemberEphemeralState {
   endLiveLocationForDepartedMember?(conversationId: string, userId: string): void;
+  /**
+   * Contrat : NE REJETTE JAMAIS. Les quatre appelants ont déjà commis leur
+   * écriture quand cette unité s'exécute ; un rejet ici ferait échouer une
+   * route dont le fait est durable. L'implémentation absorbe ses propres
+   * échecs (voir `CallEventsHandler.endCallParticipationForDepartedMember`).
+   */
+  endCallParticipationForDepartedMember?(conversationId: string, userId: string): Promise<void> | void;
   invalidateParticipantCache?(userId: string, conversationId: string): void;
 }
 
@@ -100,7 +124,7 @@ export interface ConversationMembershipEnd {
   readonly userId: string;
 }
 
-/** Éteint, puis sort, puis invalide. */
+/** Éteint (position, appel), puis sort, puis invalide. */
 export async function endConversationMembership(
   params: ConversationMembershipEnd
 ): Promise<void> {
@@ -110,6 +134,13 @@ export async function endConversationMembership(
   // présents : le registre des partages est un état SERVEUR, il ne se vide pas
   // parce que le partant n'a plus d'appareil connecté.
   manager?.endLiveLocationForDepartedMember?.(conversationId, userId);
+
+  // Puis l'appel en cours, qui vit dans une AUTRE room que la conversation :
+  // l'éviction ci-dessous ne l'atteint pas, et rien en aval ne le rattrape
+  // (le relais `call:signal` s'autorise sur la ligne `CallParticipant`, pas
+  // sur l'appartenance au fil). Diffuse avant d'évincer, pour la même raison
+  // que la position vive — voir l'en-tête.
+  await manager?.endCallParticipationForDepartedMember?.(conversationId, userId);
 
   if (io) {
     const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();

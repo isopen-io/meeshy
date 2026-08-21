@@ -1,5 +1,7 @@
 {
   "components": {
+    "mute": "Mute",
+    "unmute": "Unmute",
     "affiliate": {
       "shareApp": "Share the app",
       "createToken": "Create token",

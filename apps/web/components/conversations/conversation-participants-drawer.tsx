@@ -46,7 +46,7 @@ import { UserRoleEnum, MemberRole } from '@meeshy/shared/types';
 type ParticipantUser = SocketIOUser & { type?: string; sessionToken?: string; shareLinkId?: string };
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { InviteUserModal } from './invite-user-modal';
-import { ParticipantProfileDialog } from './ParticipantProfileDialog';
+import { useOpenParticipantProfile } from './participant-profile-context';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { useUserStore } from '@/stores/user-store';
 import { useManualStatusRefresh } from '@/hooks/use-manual-status-refresh';
@@ -101,10 +101,12 @@ export function ConversationParticipantsDrawer({
 
   // FALLBACK: Hook de rafraîchissement manuel si WebSocket down
   const { refresh: manualRefresh, isRefreshing } = useManualStatusRefresh(conversationId);
-  // Fiche ouverte, par `Participant.id`. Un visiteur sans compte n'a pas de page
-  // `/u/{pseudo}` : son identité vit dans la conversation, donc sa fiche s'ouvre
-  // ici plutôt que par un lien qui ne menait nulle part.
-  const [profileParticipantId, setProfileParticipantId] = useState<string | null>(null);
+  // Un visiteur sans compte n'a pas de page `/u/{pseudo}` : son identité vit
+  // dans la conversation, et sa fiche s'ouvre par `Participant.id`. Cette fiche
+  // est montée une seule fois, au niveau de la conversation
+  // (`ParticipantProfileProvider`) — le tiroir n'est qu'une des surfaces d'où on
+  // l'ouvre, il n'a pas à en porter l'état.
+  const openParticipantProfile = useOpenParticipantProfile();
 
   // Store global des utilisateurs (mis à jour en temps réel par useUserStatusRealtime)
   const storeParticipants = useUserStore(state => state.participants);
@@ -452,7 +454,7 @@ export function ConversationParticipantsDrawer({
                   className="truncate max-w-[130px] text-left text-gray-500 hover:text-purple-600 dark:hover:text-purple-400 hover:underline transition-colors"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setProfileParticipantId(participant.id ?? null);
+                    if (participant.id) openParticipantProfile?.(participant.id);
                   }}
                 >
                   @{user.username}
@@ -844,13 +846,6 @@ export function ConversationParticipantsDrawer({
         conversationId={conversationId}
         currentParticipants={participants.map(p => p.user as SocketIOUser)}
         onUserInvited={handleUserInvited}
-      />
-
-      {/* Fiche d'un participant — la seule surface de profil des visiteurs sans compte */}
-      <ParticipantProfileDialog
-        conversationId={conversationId}
-        participantId={profileParticipantId}
-        onClose={() => setProfileParticipantId(null)}
       />
     </>
   );

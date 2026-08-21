@@ -10132,3 +10132,71 @@ brut, non traduit, dans un toast.
   d'infrastructure groupe (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only
   par-pair (Vague 143) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
   (Vague 143, non corrigée — chantier distinct, décision d'équipe requise).
+
+## Vague 150 — le correctif `$name` de f2ea201c avait un frère dans le même fichier : la confirmation « retirer ce participant » (web) (2026-08-21)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit frais des
+trois commits calling posés après la Vague 149 (`ebb2f1c4`, `053f15a8`, `f2ea201c`) pour vérifier
+qu'aucun n'a laissé un frère non corrigé — motif dominant de cette routine (Vagues 137/138/146/148).
+
+- **Root cause** : `f2ea201c` (2026-08-20) a corrigé la fuite de la sentinelle `{name}` dans les
+  alertes d'appel — `t('clé').replace('{name}', nom)` où `nom` est un display name contrôlé par
+  l'utilisateur. `String.prototype.replace` interprète les motifs `$$`, `$&`, `` $` ``, `$'` dans la
+  chaîne de REMPLACEMENT (jamais dans la clé cherchée) : un nom comme `A$&B` réinjecte `{name}` dans
+  le texte affiché, `$$` est avalé, `` $` ``/`$'` tronquent la phrase. Le commit a converti trois
+  sites vers `t(clé, { name })` (replacer-fonction `$`-safe de `hooks/use-i18n.ts`, qui insère
+  `params[paramKey]` verbatim). `apps/web/components/video-calls/VideoStream.tsx` faisait partie des
+  fichiers touchés — mais SEULE la ligne `stream.participantLeft` (l'overlay « déconnecté ») a été
+  convertie. Le même fichier porte deux AUTRES sites, à 30 lignes de distance, utilisant le MÊME
+  `participantName` et le MÊME pattern non sûr : le titre et la description de la boîte de dialogue
+  de confirmation « retirer ce participant » (contrôle modérateur ajouté au W6,
+  `2026-08-13-group-calls-gap-analysis.md`), `t('stream.removeParticipantConfirmTitle').replace('{name}', …)`
+  et `t('stream.removeParticipantConfirmDescription').replace('{name}', …)` — jamais touchés par
+  `f2ea201c`, jamais couverts par un test (le mock `t` de `VideoStream.test.tsx` ne portait le
+  placeholder `{name}` QUE pour `stream.participantLeft`, donc `.replace('{name}', …)` sur les deux
+  autres clés était un no-op silencieux en test comme en prod tant que le nom ne contenait pas de
+  motif `$`).
+- **Scénario** : un modérateur de groupe ouvre la confirmation de retrait sur un participant dont le
+  nom d'affichage contient `$&` ou `$'` (nom choisi par l'utilisateur, aucune validation empêchant
+  `$`). Le titre et la description de la boîte de dialogue — texte visible ET accessible (Radix
+  `AlertDialogTitle`/`AlertDialogDescription`, lus par un lecteur d'écran) — affichent une phrase
+  mutilée avec la sentinelle interne `{name}` réinjectée, exactement le symptôme que `f2ea201c`
+  décrit pour les trois autres sites qu'il a corrigés.
+- **Fix** : les deux sites convertis vers le chemin canonique `t(clé, { name })`, identique au
+  pattern déjà posé sur la ligne `participantLeft` du même fichier et sur les deux sites de
+  `CallQualityOverlay.tsx` — aucune réimplémentation, alignement pur sur le SSOT d'interpolation.
+  Aucun changement de comportement pour un nom sans caractère `$`.
+- **Tests** (TDD, RED confirmé avant le fix) : mock `t` de `VideoStream.test.tsx` généralisé — un
+  `Set` `KEYS_WITH_NAME_PLACEHOLDER` porte désormais les trois clés à placeholder
+  (`participantLeft`, `removeParticipantConfirmTitle`, `removeParticipantConfirmDescription`) au
+  lieu du seul cas spécial `participantLeft`, pour que le mock reflète fidèlement le catalogue réel
+  (`locales/*/calls.json`, les 4 locales portent déjà `{name}` sur ces deux clés). Un cas neuf,
+  describe « moderator kick control (W6) » : nom `A$&B $$ C$'D`, RED — titre rendu
+  `stream.removeParticipantConfirmTitle A{name}B $ CD` (sentinelle réinjectée, texte tronqué) au lieu
+  du nom verbatim ; GREEN après fix, 13/13 verts sur le fichier ciblé (+1 net, 0 régression). Sweep
+  web `--testPathPatterns="[Cc]all|webrtc"` : **59 suites / 787 tests** verts, 0 régression
+  (`calls-i18n-regression.test.tsx` toujours vert — namespace `stream` non touché par ce test-là).
+  Suite `apps/web` COMPLÈTE : **743 suites / 13879 tests** verts (21 skip préexistants, 13900
+  total), 0 régression. `npx tsc --noEmit` (apps/web) : **0 erreur ajoutée** — 1869 erreurs
+  préexistantes, compte identique avant/après (`git stash`) ; 0 erreur sur
+  `VideoStream.tsx`/`VideoStream.test.tsx` avant comme après. `eslint` non exécuté cette vague :
+  même échec environnemental que documenté en Vague 146/147/149 (`react/display-name`:
+  `contextOrFilename.getFilename is not a function`).
+- **Non fait volontairement** : `CallNotification.tsx:115` porte un `.replace('{count}', …)` du même
+  style textuel, mais `groupSize` est un `number` produit côté client (jamais un texte contrôlé par
+  l'utilisateur) — pas la même classe de bug, hors périmètre d'un fix ciblé à une seule préoccupation.
+  Les trois autres commits audités (`ebb2f1c4` — retrait d'un fil coupe l'appel qui s'y tient,
+  `053f15a8` — bornes `startMs`/`endMs` d'un segment de transcription live) ont été relus mais
+  n'ont laissé aucun frère détecté : `ebb2f1c4` couvre les quatre chemins de fin d'appartenance via
+  le point de convergence unique `endConversationMembership` (aucune route dupliquée à rattraper) ;
+  `053f15a8` porte sa refine sur l'unique schéma Zod `socketTranscriptionSegmentSchema`, sans
+  variante REST parallèle à auditer (le replay `GET /calls/:callId/transcript` lit les lignes déjà
+  persistées, donc déjà validées à l'écriture). Reconduits (inchangés) : dead code / god-object
+  `CallManager.swift` (~5880 lignes, toolchain iOS hors d'atteinte) ; ADR `actor CallEventQueue` non
+  implémenté ; `mergeEntries`/`upsertRemoteSegment` sans filtre `targetLanguage` explicite côté
+  client (racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure groupe
+  (`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ; dette
+  lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143) ; reste de
+  `use-webrtc-p2p.ts` portant plusieurs `toast.error(error.message)` sur du texte anglais codé en
+  dur, jamais traduit (Vague 149) ; kick modérateur sans vérification du rôle CONVERSATION de la
+  cible (`calls.ts`/`participants.ts`, Vague 149 — décision produit, hors périmètre).

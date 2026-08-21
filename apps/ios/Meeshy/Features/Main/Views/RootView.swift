@@ -1001,6 +1001,14 @@ struct RootView: View {
                 router.handleDeepLink(url)
             }
         }
+        // La fiche d'un visiteur SANS COMPTE — son identité vit dans une
+        // conversation, pas sur un profil.
+        .sheet(item: $router.participantProfileTarget) { target in
+            ParticipantProfileSheet(
+                conversationId: target.conversationId,
+                participantId: target.participantId
+            )
+        }
         .sheet(item: $router.deepLinkProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -1061,6 +1069,15 @@ struct RootView: View {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showFeed = true
                 }
+            }
+        }
+        // Accès rapide « Publier un post » (liste de conversations, tableau de
+        // bord — 2026-08-21) : le flux se montre, et `ThemedFeedOverlay`
+        // consomme le drapeau en ouvrant son composeur.
+        .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
+            guard pending, !showFeed else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showFeed = true
             }
         }
         // `initial: true` covers the cold-launch race where a Universal

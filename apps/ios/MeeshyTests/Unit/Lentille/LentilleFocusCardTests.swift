@@ -257,8 +257,8 @@ final class LentilleFocusCardTests: XCTestCase {
     }
 
     /// Découverte DYNAMIQUE (leçon 257) — jamais une liste de noms recopiée :
-    /// un fichier ajouté demain (I-072 : `LentillePeekView.swift`, la vue
-    /// `LentilleModeMenu`) entre automatiquement dans le périmètre.
+    /// un fichier ajouté demain (la vue `LentilleModeMenu`, un sélecteur de
+    /// plus) entre automatiquement dans le périmètre.
     private func modeSources() throws -> [(name: String, code: String)] {
         let entries = try FileManager.default.contentsOfDirectory(
             at: Self.modeDirectory, includingPropertiesForKeys: nil
@@ -377,5 +377,153 @@ final class LentilleFocusCardTests: XCTestCase {
             "`ConversationListView.swift` ne doit JAMAIS lire `focusElection.electedId` : " +
             "la carte comme l'élection le lisent chacun dans LEUR hôte."
         )
+    }
+}
+
+// MARK: - Carte MAGNIFIÉE (2026-08-21) — suit la rangée, menu natif, contenu réel
+
+extension LentilleFocusCardTests {
+
+    private static var repoRoot: URL {
+        iosRoot
+            .deletingLastPathComponent()   // .../apps
+            .deletingLastPathComponent()   // repo
+    }
+
+    private func modeSource(_ file: String) throws -> String {
+        try String(contentsOf: Self.modeDirectory.appendingPathComponent(file), encoding: .utf8)
+    }
+
+    /// La hauteur de la carte vient d'un token partagé (R17) — et elle DÉBORDE
+    /// de la rangée (64) : c'est la loupe, jamais un agrandissement de la rangée.
+    @MainActor
+    func test_focusCardHeight_isTheMagnifiedToken_andExceedsTheRow() throws {
+        let tokensURL = Self.repoRoot.appendingPathComponent("packages/shared/design/lentille-tokens.json")
+        let data = try Data(contentsOf: tokensURL)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let list = try XCTUnwrap(root["list"] as? [String: Any])
+        let focusCard = try XCTUnwrap(list["focusCard"] as? [String: Any])
+        XCTAssertEqual(Double(LentilleMetrics.FocusCard.height), focusCard["height"] as? Double)
+        let avatarSize = Double(LentilleMetrics.FocusCard.avatarContext.size)
+        XCTAssertEqual(avatarSize, focusCard["avatarSize"] as? Double)
+        XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
+    }
+
+    /// L'encoche est un `Menu` SYSTÈME : un `.popover` devient une feuille
+    /// plein écran sur iPhone (retour user 2026-08-21).
+    /// 2026-08-21 : la catégorie est une encoche HAUT-GAUCHE (miroir exact de
+    /// l'encoche de mode) dont le menu déplace la conversation ; les étiquettes
+    /// sont des chips sur le bord BAS dont le menu filtre / retire le filtre /
+    /// supprime ; la date est la date COMPLÈTE du fil (« Aujourd'hui à 5:49 »),
+    /// plus jamais le relatif court ; le dernier expéditeur s'affiche pour
+    /// TOUTES les conversations.
+    func test_focusCard_hasCategoryNotchTopLeading_tagChipsBottomEdge_andTheFullTimestamp() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains(".overlay(alignment: .topLeading) {"), "encoche catégorie en haut à gauche")
+        XCTAssertTrue(code.contains("categoryNotch"))
+        XCTAssertTrue(code.contains("onMoveToSection("), "toucher la catégorie déplace la conversation")
+        XCTAssertTrue(code.contains(".overlay(alignment: .bottomLeading) {"), "chips d'étiquettes sur le bord bas")
+        XCTAssertTrue(code.contains("onFilterByTag(tag.name)"))
+        XCTAssertTrue(code.contains("onFilterByTag(nil)"), "une étiquette qui filtre propose de RETIRER le filtre")
+        XCTAssertTrue(code.contains("onRemoveTag(tag)"))
+        XCTAssertTrue(code.contains("FocalFocusTimestamp.listLabel("), "la date complète vient de la loi du fil")
+        XCTAssertFalse(code.contains("RelativeTimeFormatter.shortString"), "plus de relatif court sur la carte")
+        XCTAssertFalse(
+            code.contains("conversation.type != .direct,\n               let sender"),
+            "le dernier expéditeur s'affiche pour toutes les conversations"
+        )
+    }
+
+    /// 2026-08-22 : la carte porte la pastille de présence de la rangée plate.
+    func test_focusCard_paintsThePresenceDot_fromTheSameSourceAsTheFlatRow() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("presenceState: presenceState,"), "l'avatar de la carte reçoit la présence")
+        XCTAssertTrue(code.contains("presenceState: presenceFor(conversation)"), "l'hôte la relit pour l'élu")
+    }
+
+    /// Respiration (2026-08-22) : les voisines s'écartent de la ligne de
+    /// focus, la rangée élue ne bouge pas, jamais de saut au passage.
+    func test_breathing_pushesNeighboursAway_neverTheElectedRow_andRampsSmoothly() {
+        let full = LentilleMetrics.FocusCard.breathing
+        let far = LentilleMetrics.FocusCard.breathingRampStart + LentilleMetrics.FocusCard.breathingRampLength + 1
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: 0, level: 1, reduceMotion: false), 0)
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: 20, level: 1, reduceMotion: false), 0, "dans la demi-rangée : l'élue")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 1, reduceMotion: false), -full, "au-dessus ⇒ vers le haut")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: -far, level: 1, reduceMotion: false), full, "en dessous ⇒ vers le bas")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0.5, reduceMotion: false), -full / 2, "suit le niveau de scène")
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 1, reduceMotion: true), 0)
+        let mid = LentilleMetrics.FocusCard.breathingRampStart + LentilleMetrics.FocusCard.breathingRampLength / 2
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: -mid, level: 1, reduceMotion: false), full / 2, accuracy: 0.001)
+        XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0, reduceMotion: false), 0, "au repos, rien")
+    }
+
+    /// 2026-08-22 : effectif SUR la ligne basse à droite, avant l'icône de
+    /// synchronisation (un BOUTON : appui = synchroniser maintenant) ; nom
+    /// original centré sur la ligne du haut quand un nom personnalisé s'affiche.
+    func test_focusCard_memberCountAndSyncOnTheBottomLine_originalNameOnTheTopLine() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("Button(action: onForceSync)"), "l'icône de synchronisation est un bouton")
+        XCTAssertTrue(code.contains("Button(action: onShowParticipants)"), "l'effectif ouvre la feuille des participants")
+        XCTAssertTrue(code.contains("(senderPrefix + Text(previewText)"), "« Auteur : texte » en un seul texte sur deux lignes")
+        XCTAssertTrue(code.contains("if conversation.userState.hasPendingSync {"), "visible seulement si une synchronisation est en attente")
+        XCTAssertTrue(code.contains(".overlay(alignment: .top) {"), "nom original centré en haut")
+        XCTAssertTrue(code.contains("Self.originalName(conversation: conversation)"))
+        XCTAssertTrue(code.contains("store.flushOutbox()") == false, "la carte ne touche pas au store : la liste câble le VM")
+    }
+
+    func test_originalName_onlyWhenACustomNameHidesIt() {
+        var renamed = makeConversation()
+        renamed.userState.customName = "Mon équipe"
+        XCTAssertEqual(LentilleFocusCard.originalName(conversation: renamed), "Equipe Produit")
+        XCTAssertNil(LentilleFocusCard.originalName(conversation: makeConversation()), "sans nom personnalisé : rien")
+        var same = makeConversation()
+        same.userState.customName = "Equipe Produit"
+        XCTAssertNil(LentilleFocusCard.originalName(conversation: same), "identique au titre : rien à rappeler")
+    }
+
+    func test_categoryText_isTheCurrentCategoryUppercased_orTheFallback() {
+        XCTAssertEqual(LentilleFocusCard.categoryText(current: "Travail", fallback: "Catégorie"), "TRAVAIL")
+        XCTAssertEqual(LentilleFocusCard.categoryText(current: nil, fallback: "Catégorie"), "CATÉGORIE")
+    }
+
+    func test_notch_isANativeMenu_neverAPopover() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("Menu {"), "l'encoche doit être un `Menu` natif")
+        XCTAssertFalse(code.contains(".popover("), "plus jamais de `.popover` : feuille plein écran sur iPhone")
+    }
+
+    /// La carte peint la conversation (nom, heure, aperçu Prisme / pont ✦),
+    /// pas un cadre vide posé sur la rangée.
+    func test_focusCard_paintsTheConversation_notAnEmptyFrame() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("conversation.displayName"))
+        XCTAssertTrue(code.contains("resolvedLastMessagePreview(preferredLanguages:"))
+        XCTAssertTrue(code.contains("LentilleBridgeLine("))
+        XCTAssertTrue(code.contains("MeeshyAvatar("))
+    }
+
+    /// L'hôte suit le défilement : abonné au MÊME relais que l'élection, il
+    /// relit le `midY` vivant de l'élu à chaque tick. Sans cela la carte dérivait
+    /// jusqu'à une demi-bande (45 pt) de la rangée entre deux élections.
+    func test_cardHost_followsTheScrollRelay_andReadsTheLiveRowPosition() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("@ObservedObject var relay: ScrollOffsetRelay"))
+        XCTAssertTrue(code.contains("registry.midYById[conversation.id]"))
+    }
+
+    /// Rangée sortie de l'écran (plus dans le registre) ⇒ pas de carte : elle
+    /// ne flotte jamais dans le vide en fin de liste.
+    func test_localY_isNil_whenTheRowIsNoLongerMounted() {
+        XCTAssertNil(LentilleFocusCardHost.localY(rowMidY: nil, hostMinY: 100))
+        XCTAssertEqual(LentilleFocusCardHost.localY(rowMidY: 640, hostMinY: 100), 540)
+    }
+
+    /// Le pont ✦ ne remplace l'aperçu que s'il reste des non-lus — même règle
+    /// que la rangée plate.
+    func test_showsBridge_requiresUnreadAndABridge() {
+        let bridge = ConversationBridge(kind: .fallback, unreadCount: 3, suggestedMode: .focal)
+        XCTAssertTrue(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: bridge))
+        XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 0, bridge: bridge))
+        XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: nil))
     }
 }

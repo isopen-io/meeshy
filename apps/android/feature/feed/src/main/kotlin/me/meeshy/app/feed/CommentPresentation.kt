@@ -78,6 +78,7 @@ object CommentProjection {
                 preferences = preferences,
                 showingOriginal = isTranslated && activeIsOriginal,
                 activeCodeOverride = activeCode,
+                includeTranslatable = true,
             ),
             likeCount = likeState.displayCount(comment.id, comment.likeCount ?: 0),
             isLiked = likeState.isLiked(comment.id),

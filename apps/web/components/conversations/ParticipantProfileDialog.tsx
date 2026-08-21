@@ -3,6 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useI18n } from '@/hooks/useI18n';
 import { useParticipantProfile } from '@/hooks/queries/use-participant-profile';
+import { useUpdateParticipantRights } from '@/hooks/queries/use-update-participant-rights';
 import { ParticipantProfileCard } from './ParticipantProfileCard';
 
 interface ParticipantProfileDialogProps {
@@ -27,6 +28,7 @@ export function ParticipantProfileDialog({
 }: ParticipantProfileDialogProps) {
   const { t } = useI18n('conversations');
   const { data, isLoading, isError } = useParticipantProfile(conversationId, participantId);
+  const updateRights = useUpdateParticipantRights(conversationId, participantId);
 
   return (
     <Dialog open={!!participantId} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -45,7 +47,20 @@ export function ParticipantProfileDialog({
             {t('participantProfile.unavailable', 'Fiche indisponible')}
           </p>
         )}
-        {data && <ParticipantProfileCard profile={data} />}
+        {data && (
+          <ParticipantProfileCard
+            profile={data}
+            // `entryLink` n'est servi qu'aux administrateurs et modérateurs :
+            // sa présence EST la réponse du gateway à « ce lecteur peut-il
+            // écrire ». Le client ne refait pas cet arbitrage — un droit
+            // recalculé côté navigateur n'est pas un droit.
+            onToggleCapability={
+              data.entryLink
+                ? (capability, value) => updateRights.mutate({ [capability]: value })
+                : undefined
+            }
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

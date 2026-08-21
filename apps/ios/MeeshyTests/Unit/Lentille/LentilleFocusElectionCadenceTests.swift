@@ -143,7 +143,9 @@ final class LentilleFocusElectionCadenceTests: XCTestCase {
         let code = normalizedCode(try source(Self.trackingPath))
 
         XCTAssertTrue(
-            code.contains("onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y }"),
+            // Offset RELATIF à l'inset (2026-08-21, pull-to-refresh sous `safeAreaInset`) :
+            // 0 au repos partout — la loi de la pilule et la bande lisent ce relais.
+            code.contains("onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top }"),
             "Le chemin iOS 18+ de `trackScrollContentOffset` n'appelle plus " +
             "`onScrollGeometryChange` sur `contentOffset.y`. C'est l'API que le contrat " +
             "NOMME pour l'élection de la focus card (LWS-8 : « onScrollGeometryChange " +
@@ -296,7 +298,7 @@ final class LentilleFocusElectionCadenceTests: XCTestCase {
     private static let viewportBottom: CGFloat = 812
 
     private var focusY: CGFloat {
-        LentilleFocusBand.centerY(viewportBottom: Self.viewportBottom)
+        LentilleFocusBand.centerY(viewportTop: 0, viewportBottom: Self.viewportBottom, offsetFromTop: Self.viewportBottom)
     }
 
     /// Pas vertical entre deux rangs — cote du contrat, jamais un nombre choisi ici.
@@ -342,7 +344,9 @@ final class LentilleFocusElectionCadenceTests: XCTestCase {
             }
             elected = LentilleFocusElectionHost.elect(
                 candidates: candidates,
+                viewportTop: 0,
                 viewportBottom: Self.viewportBottom,
+                offsetFromTop: Self.viewportBottom,
                 currentId: elected
             )
             if let elected, sequence.last != elected { sequence.append(elected) }

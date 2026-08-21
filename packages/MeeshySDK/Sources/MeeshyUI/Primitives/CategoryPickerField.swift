@@ -105,6 +105,9 @@ public struct CategoryPickerField: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.words)
                 .onSubmit { submit() }
+                // Touche retour = « OK » (teintée par le système — iOS ne
+                // laisse pas une app colorer la touche elle-même).
+                .submitLabel(.done)
             if !editing.isEmpty {
                 Button {
                     editing = ""

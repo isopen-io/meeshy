@@ -25,6 +25,18 @@ import Foundation
 /// que la rivière tient dans sa largeur (§7ter : au-delà de `maxLanes` voix,
 /// les colonnes se PARTAGENT entre voix qui ne parlent jamais ensemble).
 ///
+/// ── Ce qu'un avis système n'est pas ──
+/// **Un avis système n'est la voix de personne.** « X a rejoint la
+/// conversation » porte l'ARRIVANT pour auteur
+/// (`packages/shared/utils/join-notice.ts`) : sans marque
+/// (`RiverMessageInput.isSystem`), la loi lui donnait une branche à son nom, le
+/// comptait comme une voix — au risque de déplier la rivière en couloirs sur la
+/// seule foi d'une annonce — et laissait sa première vraie bulle continuer le
+/// groupe de sa propre arrivée. Un avis descend l'axe du TEMPS avec les autres
+/// et n'entre dans aucun des deux autres axes : ni voix, ni couloir, ni
+/// connecteur, ni groupe. La peau le rend pleine largeur
+/// (`RiverBubble.isSystem`).
+///
 /// ── Combien de branches, et sinon quoi ──
 /// L'axe horizontal a une LARGEUR FINIE : `maxLanes` couloirs, et il lui faut
 /// `minVoices` voix pour valoir la peine. Hors de ces bornes, la loi rend un
@@ -83,12 +95,28 @@ nonisolated public enum RiverLaneResolver {
         public let createdAt: RiverTimestamp
         /// `nil` = message racine. Une cible hors fenêtre ne produit AUCUN connecteur.
         public let replyToMessageId: String?
+        /// Un avis SYSTÈME — « X a rejoint la conversation », résumé d'appel…
+        /// Miroir de `RiverMessageInput.isSystem` (OPTIONNEL côté TS) : le
+        /// défaut `false` tient le même contrat pour les appelants Swift qui
+        /// ne connaissent pas encore cette marque.
+        ///
+        /// Elle est INDISPENSABLE ici parce que `senderId` ne suffit pas à
+        /// trancher : l'avis d'arrivée est écrit avec l'ARRIVANT pour auteur
+        /// (`packages/shared/utils/join-notice.ts`).
+        public let isSystem: Bool
 
-        public init(id: String, senderId: String, createdAt: RiverTimestamp, replyToMessageId: String? = nil) {
+        public init(
+            id: String,
+            senderId: String,
+            createdAt: RiverTimestamp,
+            replyToMessageId: String? = nil,
+            isSystem: Bool = false
+        ) {
             self.id = id
             self.senderId = senderId
             self.createdAt = createdAt
             self.replyToMessageId = replyToMessageId
+            self.isSystem = isSystem
         }
     }
 
@@ -177,6 +205,10 @@ nonisolated public enum RiverLaneResolver {
 
     public struct RiverBubble: Sendable, Equatable {
         public let messageId: String
+        /// Le couloir qui porte la bulle — et il n'a de sens que pour une
+        /// PRISE DE PAROLE. Un avis système (`isSystem`) n'occupe la colonne
+        /// de personne : il se rend pleine largeur, et ces deux champs ne se
+        /// lisent pas pour lui.
         public let laneId: String
         public let laneIndex: Int
         public let rank: Int
@@ -189,6 +221,11 @@ nonisolated public enum RiverLaneResolver {
         /// règle qu'iOS — l'expéditeur du rang précédent change, ou le jour
         /// calendaire change (`MessageListViewController.isFirstInGroup`).
         public let isFirstInGroup: Bool
+        /// L'avis système, servi tel quel : il descend l'axe du TEMPS avec les
+        /// autres (il a son rang, il est dans `bubbles`), et la peau le rend
+        /// PLEINE LARGEUR plutôt qu'en couloir. C'est la seule marque dont
+        /// elle a besoin — la loi a déjà retiré l'avis de tout le reste.
+        public let isSystem: Bool
     }
 
     public struct RiverConnector: Sendable, Equatable {
@@ -264,6 +301,7 @@ nonisolated public enum RiverLaneResolver {
         let senderId: String
         let timeMs: Double
         let replyToMessageId: String?
+        let isSystem: Bool
         let rank: Int
     }
 
@@ -317,7 +355,13 @@ nonisolated public enum RiverLaneResolver {
     /// dessinent la MÊME rivière.
     private static func placeMessages(_ messages: [RiverMessageInput]) -> [PlacedMessage] {
         let withTimes = messages.map { message in
-            (id: message.id, senderId: message.senderId, timeMs: toEpochMs(message.createdAt), replyToMessageId: message.replyToMessageId)
+            (
+                id: message.id,
+                senderId: message.senderId,
+                timeMs: toEpochMs(message.createdAt),
+                replyToMessageId: message.replyToMessageId,
+                isSystem: message.isSystem
+            )
         }
         let sorted = withTimes
             .filter { !$0.timeMs.isNaN }
@@ -331,9 +375,27 @@ nonisolated public enum RiverLaneResolver {
                 senderId: message.senderId,
                 timeMs: message.timeMs,
                 replyToMessageId: message.replyToMessageId,
+                isSystem: message.isSystem,
                 rank: index
             )
         }
+    }
+
+    /// Les messages qui sont une PRISE DE PAROLE — miroir de `spokenOnly`.
+    ///
+    /// **Un avis système n'est la voix de personne.** Il descend l'axe du
+    /// TEMPS avec les autres — il garde son rang, il est servi dans `bubbles`,
+    /// la peau le rend pleine largeur — et il n'entre dans AUCUN des deux
+    /// autres axes : il ne fait naître aucune branche, ne prolonge celle de
+    /// personne, ne compte pour aucune voix, et n'est le bout d'aucun
+    /// connecteur.
+    ///
+    /// Sans ce filtre, l'avis d'arrivée — écrit avec l'ARRIVANT pour auteur
+    /// (`packages/shared/utils/join-notice.ts`) — donnait un couloir à
+    /// quelqu'un qui n'avait jamais parlé, et pouvait faire basculer la
+    /// rivière de `.serialized` à `.lanes` sur la seule foi d'une annonce.
+    private static func spokenOnly(_ placed: [PlacedMessage]) -> [PlacedMessage] {
+        placed.filter { !$0.isSystem }
     }
 
     // MARK: - Étape interne : interactions qui font vivre une branche (miroir de collectEngagements)
@@ -541,15 +603,30 @@ nonisolated public enum RiverLaneResolver {
         Int(floor((timeMs + offsetMinutes * 60 * 1000) / dayMs))
     }
 
+    /// Deux rangs voisins appartiennent-ils à la même suite ?
+    ///
+    /// Un message SYSTÈME n'est pas une prise de parole : il n'entre dans
+    /// aucune suite, ni comme prédécesseur ni comme successeur. Décider sur le
+    /// seul `senderId` faisait suivre la première vraie bulle d'un nouveau
+    /// venu dans le groupe de sa propre annonce d'arrivée — qui porte
+    /// l'arrivant pour auteur (`packages/shared/utils/join-notice.ts`) — et la
+    /// rangée perdait avatar, nom et heure d'un coup.
+    ///
+    /// Miroirs de cette règle : `apps/web/utils/message-grouping.ts` et
+    /// `MessageDayGrouping.isGroupHead` — toute évolution touche les trois.
+    private static func continues(_ earlier: PlacedMessage, _ later: PlacedMessage, offsetMinutes: Double) -> Bool {
+        if earlier.isSystem || later.isSystem { return false }
+        if earlier.senderId != later.senderId { return false }
+        return dayIndex(timeMs: earlier.timeMs, offsetMinutes: offsetMinutes)
+            == dayIndex(timeMs: later.timeMs, offsetMinutes: offsetMinutes)
+    }
+
     /// Tête de groupe, règle d'iOS mot pour mot : le rang PRÉCÉDENT change
-    /// d'expéditeur, ou change de jour. Le premier rang ouvre toujours un groupe.
+    /// d'expéditeur, change de jour, ou l'un des deux est un avis système. Le
+    /// premier rang ouvre toujours un groupe.
     private static func isGroupHead(placed: [PlacedMessage], index: Int, offsetMinutes: Double) -> Bool {
         guard index > 0 else { return true }
-        let previous = placed[index - 1]
-        let current = placed[index]
-        if previous.senderId != current.senderId { return true }
-        return dayIndex(timeMs: previous.timeMs, offsetMinutes: offsetMinutes)
-            != dayIndex(timeMs: current.timeMs, offsetMinutes: offsetMinutes)
+        return !continues(placed[index - 1], placed[index], offsetMinutes: offsetMinutes)
     }
 
     // MARK: - resolveRiverLanes
@@ -565,8 +642,11 @@ nonisolated public enum RiverLaneResolver {
         let effectiveDayBoundaryOffsetMinutes = input.dayBoundaryOffsetMinutes ?? 0
 
         let placed = placeMessages(input.messages)
+        let spoken = spokenOnly(placed)
+        // Les rangs restent ceux de TOUTE la fenêtre, avis compris : une
+        // branche survit à un avis qui passe, elle ne s'y coupe pas.
         let rankTimes = placed.map(\.timeMs)
-        let engagements = collectEngagements(placed)
+        let engagements = collectEngagements(spoken)
         let laneIds = orderLaneIds(engagements, viewerId: input.viewerId)
 
         var seedByParticipantId: [String: String] = [:]
@@ -582,8 +662,10 @@ nonisolated public enum RiverLaneResolver {
 
         // Une VOIX est une personne qu'on a entendue : au moins une bulle.
         // Une branche `.addressed` seule ne compte pas — sinon deux personnes
-        // qui se répondent feraient trois voix.
-        let voiceCount = Set(placed.map(\.senderId)).count
+        // qui se répondent feraient trois voix. Et une annonce ne compte pas
+        // non plus — sinon la rivière se déplierait en couloirs sur la foi
+        // d'une arrivée que personne n'a encore entendue parler.
+        let voiceCount = Set(spoken.map(\.senderId)).count
         let assignment = assignColumns(lanes: seeds, maxLanes: effectiveMaxLanes)
 
         let serializationReason: RiverSerializationReason? = assignment.overflowed
@@ -610,7 +692,7 @@ nonisolated public enum RiverLaneResolver {
         }
 
         var placedById: [String: PlacedMessage] = [:]
-        for message in placed { placedById[message.id] = message }
+        for message in spoken { placedById[message.id] = message }
 
         let bubbles: [RiverBubble] = placed.enumerated().map { index, message in
             RiverBubble(
@@ -621,13 +703,16 @@ nonisolated public enum RiverLaneResolver {
                 createdAtMs: message.timeMs,
                 isViewer: message.senderId == input.viewerId,
                 replyToMessageId: message.replyToMessageId,
-                isFirstInGroup: isGroupHead(placed: placed, index: index, offsetMinutes: effectiveDayBoundaryOffsetMinutes)
+                isFirstInGroup: isGroupHead(placed: placed, index: index, offsetMinutes: effectiveDayBoundaryOffsetMinutes),
+                isSystem: message.isSystem
             )
         }
 
         // Un connecteur ne pend JAMAIS dans le vide : une cible hors fenêtre
-        // (ou effacée) n'a ni rang ni couloir, donc pas de trait.
-        let connectors: [RiverConnector] = placed.compactMap { message in
+        // (ou effacée) n'a ni rang ni couloir, donc pas de trait. Un avis
+        // système n'est le bout d'aucun trait, ni départ ni arrivée : un
+        // connecteur relie deux couloirs, et il n'en a pas.
+        let connectors: [RiverConnector] = spoken.compactMap { message in
             guard let replyTo = message.replyToMessageId, let target = placedById[replyTo] else { return nil }
             return RiverConnector(
                 fromMessageId: message.id,
@@ -759,9 +844,13 @@ nonisolated public enum RiverLaneResolver {
 
     /// Occupations en mode sérialisé : les GROUPES de bulles consécutives
     /// d'un même auteur, tels que `isFirstInGroup` les découpe déjà.
+    ///
+    /// Un avis système n'occupe rien : nommer une colonne au rang d'une
+    /// annonce ferait parler quelqu'un qui vient seulement d'entrer,
+    /// exactement comme nommer une branche morte mentirait sur une présence.
     private static func serializedOccupancies(_ geometry: RiverGeometry) -> [Occupancy] {
         var groups: [Occupancy] = []
-        for bubble in geometry.bubbles {
+        for bubble in geometry.bubbles where !bubble.isSystem {
             if bubble.isFirstInGroup || groups.isEmpty {
                 groups.append(Occupancy(laneId: bubble.laneId, laneIndex: 0, startRank: bubble.rank, endRank: bubble.rank, isOpen: false))
             } else {

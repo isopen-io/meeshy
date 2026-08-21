@@ -151,7 +151,12 @@ export function MessageBubble({
             )}
           </div>
         );
-        return senderUsername ? (
+        // `isAnonymous` était affiché (le fantôme) sans jamais être consulté
+        // ici : l'avatar restait un lien vers `/u/{pseudo}`, page qu'un visiteur
+        // sans compte n'a pas. Ce composant reçoit des scalaires et non un
+        // participant — il ne peut pas ouvrir de fiche, mais il ne doit pas
+        // promettre une page qui n'existe pas.
+        return senderUsername && !isAnonymous ? (
           <Link href={`/u/${senderUsername}`} onClick={(e) => e.stopPropagation()}>
             {avatarContent}
           </Link>
@@ -171,7 +176,7 @@ export function MessageBubble({
         <div className={cn('flex items-center justify-between gap-2 mb-2', isSent && 'flex-row-reverse')}>
           {/* Sender name (received messages only) */}
           {sender && !isSent && (
-            senderUsername ? (
+            senderUsername && !isAnonymous ? (
               <Link
                 href={`/u/${senderUsername}`}
                 className="text-xs font-semibold text-[var(--gp-text-primary)] hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-300 cursor-pointer"

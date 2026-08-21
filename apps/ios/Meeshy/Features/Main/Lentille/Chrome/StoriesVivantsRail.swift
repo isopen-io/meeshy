@@ -128,19 +128,26 @@ public struct StoriesVivantsRail: View {
     /// Tap sur la pastille de mood de « moi » — le composeur de statut, même
     /// chemin qu'aujourd'hui.
     public var onSelfMoodTap: (() -> Void)?
+    /// Le (+) de l'entrée « moi » — ouvre le composeur de story DIRECTEMENT,
+    /// comme le bouton haut-gauche du tray historique (`MyStoryButton`). Le
+    /// tap sur l'avatar lui-même (`onSelectSelf`) ouvre le LISTING de mes
+    /// stories et brouillons (retour user 2026-08-21).
+    public var onSelfCreateStory: (() -> Void)?
 
     public init(
         selfEntry: LentilleRailSelfEntry? = nil,
         entries: [LentilleRailEntry],
         onSelect: ((String) -> Void)? = nil,
         onSelectSelf: (() -> Void)? = nil,
-        onSelfMoodTap: (() -> Void)? = nil
+        onSelfMoodTap: (() -> Void)? = nil,
+        onSelfCreateStory: (() -> Void)? = nil
     ) {
         self.selfEntry = selfEntry
         self.entries = entries
         self.onSelect = onSelect
         self.onSelectSelf = onSelectSelf
         self.onSelfMoodTap = onSelfMoodTap
+        self.onSelfCreateStory = onSelfCreateStory
     }
 
     @ViewBuilder
@@ -155,7 +162,8 @@ public struct StoriesVivantsRail: View {
                         LentilleRailSelfEntryView(
                             entry: selfEntry,
                             onSelect: onSelectSelf,
-                            onMoodTap: onSelfMoodTap
+                            onMoodTap: onSelfMoodTap,
+                            onCreateStory: onSelfCreateStory
                         )
                     }
                     ForEach(visible) { entry in
@@ -177,6 +185,7 @@ private struct LentilleRailSelfEntryView: View {
     let entry: LentilleRailSelfEntry
     var onSelect: (() -> Void)?
     var onMoodTap: (() -> Void)?
+    var onCreateStory: (() -> Void)?
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -194,6 +203,17 @@ private struct LentilleRailSelfEntryView: View {
                         .buttonStyle(.plain)
                         .contentShape(Circle())
                         .accessibilityLabel(StoryTrayCopy.changeMood)
+                }
+            }
+            // (+) haut-gauche = créer une story, comme le tray historique
+            // (`MyStoryButton`) : le badge bas-droit reste le MOOD (💭 /
+            // emoji), jamais un second « plus » ambigu.
+            .overlay(alignment: .topLeading) {
+                if let onCreateStory {
+                    Button(action: onCreateStory) { createStoryBadge }
+                        .buttonStyle(.plain)
+                        .contentShape(Circle())
+                        .accessibilityLabel(StoryTrayCopy.addStory)
                 }
             }
 
@@ -227,11 +247,25 @@ private struct LentilleRailSelfEntryView: View {
                 Text(moodEmoji)
                     .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
             } else {
-                Image(systemName: "plus")
-                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize, weight: .bold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                // Pas de mood ⇒ la bulle de pensée 💭 (« penser une idée »),
+                // même glyphe que le tray historique — le « + » disait
+                // « ajouter » sans dire quoi (retour user 2026-08-21).
+                Text("\u{1F4AD}")
+                    .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
             }
         }
+    }
+
+    private var createStoryBadge: some View {
+        Image(systemName: "plus")
+            .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize, weight: .bold))
+            .foregroundStyle(Color.white)
+            .frame(width: badgeDiameter, height: badgeDiameter)
+            .background(
+                Circle()
+                    .fill(MeeshyColors.brandGradient)
+                    .overlay(Circle().stroke(MeeshyColors.backgroundSecondary(isDark: isDark), lineWidth: 1.5))
+            )
     }
 
     /// Dérivé de l'anneau du rail, jamais une cote nouvelle (garde R15) : la

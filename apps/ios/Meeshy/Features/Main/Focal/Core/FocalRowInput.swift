@@ -95,6 +95,27 @@ struct FocalRowInput: Equatable {
     /// rangée reste Equatable et ne se réévalue que sur changement réel.
     let senderIsAnonymous: Bool
 
+    /// L'auteur, prêt à être présenté — construit ICI, dans `Focal/Core/`.
+    ///
+    /// La rangée reçoit un objet déjà résolu plutôt que de composer elle-même
+    /// l'identité : `Focal/Core/` est l'un des deux seuls endroits où un signal
+    /// d'identité brut se lit (§5.1), et `FocalNoBubbleSourceGuardTests`
+    /// vérifie qu'aucun fichier de `Row/` n'en nomme un.
+    ///
+    /// `userId` reste vide pour un visiteur sans compte — il n'en a aucun, et
+    /// c'est `participantId` qui permet d'ouvrir sa fiche.
+    var profileSheetUser: ProfileSheetUser {
+        ProfileSheetUser(
+            userId: nil,
+            username: senderUsername ?? senderDisplayName,
+            displayName: senderDisplayName,
+            avatarURL: senderAvatarURL,
+            accentColor: senderColorHex,
+            participantId: senderId,
+            isAnonymous: senderIsAnonymous
+        )
+    }
+
     // MARK: - Contexte visuel (primitifs uniquement — règle « leaf views »)
 
     let accentHex: String
@@ -128,18 +149,26 @@ struct FocalRowInput: Equatable {
     /// justification et la garantie de compatibilité du site de montage.
     let effects: MessageEffects
 
-    // MARK: - Horodatage révélé au défilement
+    // MARK: - Position dans le fil
 
-    /// Le défilement est en cours ⇒ les heures des rangées se montrent,
-    /// puis s'effacent à l'arrêt.
-    ///
-    /// Remplace la pilule flottante « jour · heure » (`ScrollTimePillOverlay`),
-    /// qui affichait UN horodatage détaché en haut d'écran pendant que chaque
-    /// rangée portait déjà le sien en permanence — trois chromes temporels
-    /// concurrents pour une seule information. La loi de fenêtre
-    /// (`ScrollTimePillLaw`, `lingerMs = 900`) est CONSERVÉE et pilote
-    /// désormais ce booléen : même tempo, autre support.
-    let revealsTimestamp: Bool
+    /// Le DERNIER message reçu de la conversation : la rangée Script/Focal y
+    /// monte le bouton (+) d'ajout rapide de réaction, comme la bulle
+    /// (`BubbleReactionsOverlay.isMounted`). Signal de position, fourni par
+    /// l'hôte (`lastReceivedMessageId` du VM) — 2026-08-21, l'écart « jamais
+    /// côté Focal » est comblé.
+    let isLastReceivedMessage: Bool
+    /// Focal (2026-08-21) : le message EN FOCUS — celui de la carte teintée.
+    /// Il porte ses détails même en continuation de groupe (avatar, présence,
+    /// mood, date ET heure d'envoi) et plafonne son texte
+    /// (`FocalMetrics.Focus.maxCharacters`) pour tenir dans une magnificence
+    /// lisible. Posé par l'hôte À LA POSE seulement (jamais par frame).
+    let isFocused: Bool
+    /// Date complète du message en focus, PRÉ-CALCULÉE à la configuration
+    /// (directive 2026-08-22 : « la date doit être pré-calculée et affichée
+    /// instantanément ») — jamais formatée dans un body.
+    let focusTimestamp: String?
+    /// Date d'envoi — affichée en clair (jour + heure) sur le message en focus.
+    let sentAt: Date?
 
     init(
         localId: String,
@@ -175,7 +204,10 @@ struct FocalRowInput: Equatable {
         allAudioItems: [ConversationViewModel.AudioItem],
         conversationName: String,
         effects: MessageEffects = .none,
-        revealsTimestamp: Bool = false
+        isLastReceivedMessage: Bool = false,
+        isFocused: Bool = false,
+        sentAt: Date? = nil,
+        focusTimestamp: String? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -210,7 +242,10 @@ struct FocalRowInput: Equatable {
         self.allAudioItems = allAudioItems
         self.conversationName = conversationName
         self.effects = effects
-        self.revealsTimestamp = revealsTimestamp
+        self.isLastReceivedMessage = isLastReceivedMessage
+        self.isFocused = isFocused
+        self.sentAt = sentAt
+        self.focusTimestamp = focusTimestamp
     }
 
     /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
@@ -253,10 +288,17 @@ struct FocalRowInput: Equatable {
             && lhs.voiceConsentMissing == rhs.voiceConsentMissing
             && lhs.transcription == rhs.transcription
             && lhs.translatedAudios == rhs.translatedAudios
-            && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
+            // Sans allocation : `map` construisait DEUX tableaux (toute la
+            // file audio de la conversation) à chaque comparaison du portillon
+            // `.equatable()` — c'est-à-dire à chaque reconfigure de cellule.
+            && lhs.allAudioItems.count == rhs.allAudioItems.count
+            && lhs.allAudioItems.lazy.map(\.id).elementsEqual(rhs.allAudioItems.lazy.map(\.id))
             && lhs.conversationName == rhs.conversationName
             && lhs.effects == rhs.effects
-            && lhs.revealsTimestamp == rhs.revealsTimestamp
+            && lhs.isLastReceivedMessage == rhs.isLastReceivedMessage
+            && lhs.isFocused == rhs.isFocused
+            && lhs.sentAt == rhs.sentAt
+            && lhs.focusTimestamp == rhs.focusTimestamp
     }
 }
 

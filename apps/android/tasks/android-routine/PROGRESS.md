@@ -2,6 +2,688 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Conversation stats dashboard shipped** (slice `conversation-stats-core`,
+> feature-parity §Chat — "Conversation stats rings + activity-over-time + content-type breakdown").
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 18 open PRs at branch
+> time — #3282/#3281/#3280/#3279/#3275/#3270/#3266/#3263/#3262/#3259/#3257/#3255/#3253/#3250/#3249/#3247/
+> #3245/#3243/#3242 — are all web/shared/gateway/ios/sdk, none android-routine). Prior android iteration
+> (`story-viewer-translation-request`, #3278) already merged into main. Branched off freshly-fetched
+> `origin/main` (`1def3504`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (200). One gotcha: `compileSdk = 37` resolves to
+> platform hash `android-37`, but the platform AGP 8.13.0 accepts is `android-37.0` (Android 17,
+> `AndroidVersion.ApiLevel=37.0`). The first run failed (`Failed to find target … 'android-37'`) because it
+> raced the mid-install auto-download; once `android-37.0` finished installing, `compileDebugKotlin`
+> resolved it cleanly. Ran the full `assembleDebug testDebugUnitTest` locally this run.
+>
+> **The gap (read-only recon over iOS + Android)**: iOS reaches a full `ConversationDashboardView`
+> (`ConversationMessageStatsResponse` via `GET /conversations/{id}/stats` + `ConversationAnalysis` via
+> `/analysis`). On Android the DTOs shipped **orphaned** — `AgentAnalysis.kt` defines
+> `ConversationMessageStatsResponse`/`ContentTypeCounts`/`DailyActivityEntry`/… but nothing consumed them
+> (confirmed by grep: zero references outside the model file). This slice turns the STATS half real; the
+> AI-analysis (sentiment/health/persona) half stays a separate, still-open box.
+>
+> **`:core:model` `ConversationStatsProjection`** (new, pure SSOT): `contentTypeBreakdown` (server
+> `ContentTypeCounts` → non-zero shares, count-desc, canonical tie-break, empty on zero total — **SOTA over
+> iOS**, which re-counts the loaded message page and under-counts un-paged content), `activitySeries`
+> (trailing-window filter with an **injected `today`** — deterministic, unlike iOS's wall-clock view getter;
+> drops unparseable dates, ALL keeps everything, oldest-first), `participantShares`/`languageShares`
+> (fraction + stable ordering, zero-total safe), `hourlyBuckets` (fixed 24-slot histogram; ignores
+> non-numeric/out-of-range keys, clamps negatives, accumulates dupes).
+>
+> **`:sdk-core` `ConversationStatsRepository`**: thin dependency-light sibling of `ConversationRepository`
+> (only the API — stats is an ephemeral drill-down that neither reads nor writes Room), `fetchStats(id)` →
+> `NetworkResult` via `apiCall`. New `ConversationApi.stats(id)` (`@GET conversations/{id}/stats`).
+>
+> **`:feature:chat` `ConversationStatsViewModel`** (`StateFlow<ConversationStatsUiState>`,
+> Loading/Loaded/Empty/Error): fetches once, projects the time-independent sections at load, and exposes the
+> activity series as a pure `activity(today)` getter so a **period switch re-derives locally, no refetch**
+> (the "pass time in" doctrine the chat header already uses for presence). `load` is idempotent (re-tries only
+> a prior Error); `retry()` re-fetches; `selectPeriod` inert on no-op. **`ConversationStatsSheet`** + a new
+> header `Insights` action (any member) render it: total pills, content-type bars, an accent activity
+> mini-chart with a 7d/30d/All picker, busiest-participant list, language breakdown. Strings en/fr/es/pt.
+>
+> **Tests: +30** — `ConversationStatsProjectionTest` +20 (content: drop-zero/fractions/order/tie/empty;
+> hourly: 24-span/invalid+range/negative-clamp/padded-key; activity: window/cutoff-inclusive/ALL/sort/
+> bad-date/empty; participant: fraction/zero-total/order/name-then-id tie/empty; language:
+> fraction/order+tie/drop-zero/empty), `ConversationStatsRepositoryTest` +3 (success forwards id / envelope
+> failure / transport failure), `ConversationStatsViewModelTest` +7 (loaded projection / empty / error /
+> period re-derives without refetch / idempotent load / retry after failure / inert period). **Mutation
+> (RED proof) ×2**: (a) drop the `count > 0` filter in `contentTypeBreakdown` → 3 content tests fail
+> (zero-count/order/tie); (b) drop the activity cutoff (`date.isBefore(cutoff)`) → **exactly** `activity week
+> keeps only points within the trailing window` fails (1 of 24). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally this run.
+> Reviewer PASS. Diff is `apps/android` only (4 code + 3 test + ChatScreen/Api wiring + strings + tracking docs).
+>
+> **Next**: the **AI conversation analysis** arm (`GET /conversations/{id}/analysis` → `ConversationAnalysis`
+> health score / summary / tone / emotions) — the other half of this dashboard and its own parity box — or
+> the **AI participant persona profiles + trait bars** box (same endpoint, `ParticipantProfile`/
+> `ParticipantTraits`). Both consume the same still-orphaned `AgentAnalysis.kt` models. Re-scout read-only
+> before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Story on-demand translation shipped** (slice `story-viewer-translation-request`,
+> feature-parity's Feed §F Prisme line — the **per-story timeline flag strip** arm, the LAST item on the
+> `request-missing-languages` follow-up. The whole follow-up (feed card / post-detail / comments / story) is
+> now done).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the open PRs at branch time are
+> all web/shared/gateway/ios/sdk — none android-routine). Prior android iteration
+> (`feed-comment-translation-request`, #3273) already merged into main. Branched off freshly-fetched
+> `origin/main` (`9233e850`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (`curl` → 200). Pristine `android-37.0` recipe worked
+> (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran the full
+> `assembleDebug testDebugUnitTest` locally.
+>
+> **The gap (read-only recon over iOS + Android)**: the story viewer's language quick bar
+> (`StoryViewerViewModel.availableLanguagesFor`) only listed languages ALREADY present in `StoryItem.translations`
+> — a configured content language the story had no translation for yet never surfaced, so a viewer could not
+> request one. iOS surfaces on-demand story translation via `StoryLanguageDetailView` (a full picker, socket-
+> completed `POST /posts/:id/translate`). Android has no story-translation socket consumer, so — exactly as the
+> feed post/comment arms did — the faithful move is **pull-translate-and-merge**, surfacing configured-but-absent
+> languages as translatable chips directly in the quick bar (no separate picker sheet needed yet).
+>
+> **`:core:model` `StoryTranslationMerge`** (new, list-keyed sibling of `PostTranslationMerge`):
+> `mergeTranslation(item: StoryItem, target, text): StoryItem?` upserts into the `List<StoryTranslation>` — blank
+> target/text guard, idempotent (same lang case-insensitive + same content → null), in-place replace preserving
+> position & original casing, else append under the trimmed target.
+>
+> **`:sdk-core` `StoryRepository`**: now injects `TranslationApi`; new stateless
+> `translateStory(item, target): StoryItem?` (story-shaped sibling of `PostRepository.translatePost`) — trims
+> target, reads `item.content` as source (empty `sourceLanguage` → translator auto-detects; stories carry no
+> `originalLanguage`), blocking-translates via `translationApi.translate`, folds via `StoryTranslationMerge`.
+> Null on blank target / no source / network failure / blank translation / idempotent.
+>
+> **`:feature:stories` `StoryViewerViewModel`**: `StoryLanguageOption` gains `isTranslatable`/`isTranslating`;
+> `availableLanguagesFor` appends each configured content language (`LanguageResolver.preferredContentLanguages`)
+> absent from the present set as a translatable chip — GATED on the story already carrying ≥1 translation (a
+> pure-original story never dumps every preferred language) and on a real logged-in viewer (an anonymous viewer
+> with no prefs sees only present translations). New `requestStoryTranslation(code)`: in-flight guard via
+> `translatingLanguages` (keyed `storyId|lang`), pull-translate-and-merge into `rawItems`, then switch the
+> "Exploration" `languageOverride` to the target so the slide re-renders in it even when a higher-priority
+> language is already present (Prisme auto-resolution would otherwise keep the primary). Cancellation-safe;
+> failure inert (strip retries); `finally` clears the key. **`:sdk-ui` `LanguageQuickStrip`**: `LanguageQuickOption`
+> gains the two flags; a translatable chip reads dimmed with a "+" affordance ("…" in flight). **`StoryViewerScreen`**
+> routes a translatable tap to `requestStoryTranslation`, a content tap to `toggleLanguageOverride`.
+>
+> **Tests: +21** — `StoryTranslationMergeTest` +8 (append no-translations / append preserving order / replace
+> in place preserving position+casing / blank target / blank text / trims target / idempotent / case-insensitive
+> replace), `StoryRepositoryTest` +7 (`translateStory`: translates+merges / forwards source & trims target /
+> inert blank target / inert no source / null on failure / null on blank / idempotent), `StoryViewerViewModelTest`
+> +6 (translatable surfaces once translated / none when no translations / present language never re-offered /
+> requests+merges+switches / failed leaves display / second in-flight no duplicate). **Mutation (RED proof) ×2**:
+> (a) drop the VM in-flight guard → **exactly** `a second in-flight request … does not fire a duplicate` fails
+> (1 of 50); (b) drop `languageOverride = storyId to target` → **exactly** `requesting a translation … switches
+> to it` fails (1 of 50) — the switch test deliberately uses a secondary language (en present, de requested) so
+> Prisme auto-resolution cannot mask the missing override. Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → BUILD SUCCESSFUL
+> locally this run. Reviewer PASS. Diff is `apps/android` only (5 code + 3 test files + tracking docs).
+>
+> **Next**: Feed §F Prisme's `request-missing-languages` follow-up is now COMPLETE across every surface. Candidates:
+> the Chat `slow`/retry glyph tier (still waits on outbox retry-state plumbing), or the next unchecked Feed/Stories
+> parity box. Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Comment on-demand translation shipped** (slice `feed-comment-translation-request`,
+> feature-parity's Feed §F Prisme line — the **comments** arm of the `request-missing-languages` follow-up.
+> Only the per-story timeline flag strip remains on that line).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 14 open PRs at branch
+> time (#3270/#3266/#3263/#3262/#3259/#3257/#3255/#3253/#3250/#3249/#3247/#3245/#3243/#3242 web/shared/
+> gateway/ios/sdk) are none android-routine. Prior android iteration (`feed-post-detail-translation-request`,
+> #3269) already merged into main. Branched off freshly-fetched `origin/main` (`8ddb8bda`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (`curl` → 200). Pristine `android-37.0` recipe
+> worked: `sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`;
+> `local.properties` → `sdk.dir=$HOME/android-sdk`; ran the full `assembleDebug testDebugUnitTest` ONLINE
+> with `-Pandroid.builder.sdkDownload=false` after the initial install → BUILD SUCCESSFUL (973 tasks).
+>
+> **The gap (read-only recon over iOS + Android)**: iOS's `FeedCommentsSheet.onRequestTranslation` routes a
+> content-less comment language tap to `PostService.requestCommentTranslation` (REST, socket-completed).
+> Android's `PostCommentsViewModel.onCommentFlagTap` carried a **dead** `RequestTranslation -> Unit` arm AND
+> `CommentProjection.build` passed no `includeTranslatable`, so a configured-but-absent language never even
+> surfaced a chip. Android has no post/comment-translation socket consumer, so the faithful move mirrors the
+> post arms: pull-translate-and-merge, NOT iOS's socket path (which would be blocked/cross-cutting).
+>
+> **`:core:model` `PostTranslationMerge`**: new `mergeTranslation(comment: ApiPostComment, …)` overload; the
+> post and comment overloads now share one private `upsert(translations, target, text)` law (blank/idempotent
+> guards + in-place-or-append). **`:sdk-core` `PostRepository`**: new stateless
+> `translateComment(comment, target): ApiPostComment?` (comment-keyed sibling of `translatePost`); both trim
+> the target and delegate to a shared `translateSource(source, sourceLanguage, target): String?` network law
+> (the cache-mutating `requestOnDemandTranslation` now delegates to `translatePost`, so all three share one
+> translate path).
+>
+> **`:feature:feed`**: `CommentProjection.build` flips `includeTranslatable = true` (SSOT strip; the tap was
+> already wired `PostCommentsSection` → `viewModel::onCommentFlagTap`). `CommentThreadState.retranslated` /
+> `CommentRepliesState.retranslated` fold ONLY the merged translations onto the live row (leaving `replyCount`
+> etc. untouched, so a concurrent realtime bump is never clobbered), inert for the other collection. The VM's
+> `requestCommentTranslation` guards in-flight via new `PostCommentsUiState.translatingLanguages`
+> (`commentId|lang`, folded through the projection via a new `ProjectionBundle`), applies both retranslate
+> transitions (covers top-level + reply), and points `activeLanguages[commentId]` at the target; cancellation-safe,
+> failure surfaces `errorMessage`, `finally` clears the key.
+>
+> **Tests: +21** — `PostTranslationMergeTest` +6 (comment overload: append / replace-in-place case-insensitive /
+> idempotent / blank target / blank text), `PostRepositoryTest` +7 (`translateComment`: translates+returns merged /
+> forwards source+langs & trims / inert blank target / inert no source / null on failure / null on blank / idempotent),
+> `CommentThreadStateTest` +3 (`retranslated`: replaces only the match / preserves replyCount / inert unknown),
+> `CommentRepliesStateTest` +2 (`retranslated`: replaces only the match / inert), `CommentProjectionTest` +1
+> (configured-absent language surfaces a translatable chip), `PostCommentsViewModelTest` +4 (translatable tap
+> requests & switches to merged / failed leaves display / second in-flight no duplicate / reply translated too);
+> 1 obsolete dead-arm test (`content-less language is inert`) rewritten to the new contract (a content-less tap now
+> requests + leaves display until it lands). **Mutation (RED proof) ×2**: (a) remove the VM in-flight guard →
+> **exactly** `a second in-flight translation tap does not fire a duplicate request` fails (1 of 99); (b) drop
+> `activeLanguages.update` → **exactly** the two `switches to the merged translation` tests fail (2 of 99). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → **BUILD SUCCESSFUL**
+> (973 tasks) locally this run. Reviewer PASS. Diff is `apps/android` only (6 code + 6 test files + tracking docs).
+>
+> **Next**: the **per-story timeline flag strip** on-demand request arm (last item on Feed §F Prisme's
+> `request-missing-languages` follow-up), or the Chat `slow`/retry glyph tier (still waits on outbox retry-state
+> plumbing). Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Post-detail on-demand translation shipped** (slice `feed-post-detail-translation-request`,
+> feature-parity's Feed §F Prisme line — the post-detail arm of the `request-missing-languages` follow-up;
+> only the **comments** arm + the per-story timeline strip remain there).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 14 open PRs at branch
+> time (#3268/#3267/#3266/#3263/#3262/#3259/#3255/#3253/#3250/#3249/#3247/#3245/#3243/#3242 web/shared/
+> gateway/ios/sdk) are none android-routine. Prior android iteration (`feed-post-translation-request`, #3265)
+> already merged into main. Branched off freshly-fetched `origin/main` (`83687db6`).
+>
+> **SDK bootstrap — `dl.google.com` was REACHABLE this run** (`curl` → 200; unlike prior containers where it
+> was 403-blocked). Pristine `android-37.0` recipe worked: `sdkmanager --channel=3 "platforms;android-37.0"
+> "build-tools;35.0.0" "platform-tools"`; `local.properties` → `sdk.dir=$HOME/android-sdk`; run online once
+> then `-Pandroid.builder.sdkDownload=false`. **Trap re-confirmed**: `--offline` fails a full `assembleDebug`
+> when only sdk-core/feature:feed deps were cached by an earlier targeted run — `:app` needs androidx.browser,
+> zxing, activity etc. that were never fetched. Run the full `assembleDebug testDebugUnitTest` ONLINE.
+>
+> **The gap (read-only recon over iOS + Android)**: the feed's flag-strip on-demand request arm (slice
+> `feed-post-translation-request`) left `PostDetailViewModel.onFlagTap`'s `RequestTranslation -> Unit` arm
+> dead. `FeedPostBuilder.build` already sets `includeTranslatable = true` universally, so the post-detail
+> strip *surfaces* a configured-but-absent language as a translatable chip — but tapping it did nothing.
+> The feed's own `PostRepository.requestOnDemandTranslation(postId, target)` mutates `_feedCache`, which the
+> detail VM does NOT observe (it owns its post in `rawPost` from an independent `getPost` fetch). So the
+> faithful move was a **stateless** repository method returning the merged post the caller swaps in.
+>
+> **Repository (`:sdk-core` `PostRepository`)**: new `translatePost(post: ApiPost, target): ApiPost?` — trims
+> target, reads source, blocking-translates via `translationApi.translate`, folds into the post via
+> `PostTranslationMerge.mergeTranslation`; returns the merged post or `null` (blank target/no source/network
+> failure/blank translation/idempotent). Extracted the shared `translateAndMerge` law and **refactored the
+> existing `requestOnDemandTranslation` to delegate to it** (behaviour identical under single-thread — its 8
+> tests stayed green), so both surfaces share one translate-then-merge path.
+>
+> **VM wiring (`:feature:feed` `PostDetailViewModel`)**: `onFlagTap`'s `RequestTranslation` arm now calls a
+> new private `requestOnDemandTranslation(target)` — in-flight guard via new `PostDetailStatus.translating`
+> (surfaced as `PostDetailUiState.translatingLanguages`, symmetric with `FeedUiState`); `viewModelScope.launch`
+> translate → on success `rawPost.value = merged` + `activeCode.value = target` so the card switches once the
+> merged post lands; cancellation-safe, failure surfaces `errorMessage`, `finally` clears the in-flight key.
+>
+> **Tests: +10** — `PostRepositoryTest` +7 (`translatePost`: translates+returns merged / forwards source+langs
+> & trims target / inert blank target / inert no source / null on translator failure / null on blank
+> translation / idempotent null), `PostDetailViewModelTest` +3 (translatable tap requests & switches to merged
+> / failed tap leaves display unchanged / second in-flight tap no duplicate). **Mutation (RED proof) ×2**:
+> (a) remove the VM in-flight guard → **exactly** `a second tap while a translation is in flight does not fire
+> a duplicate request` fails (1 of 33); (b) drop `activeCode.value = target` → **exactly** `onFlagTap on a
+> translatable language requests it and switches to the merged translation` fails (1 of 33). Both restored.
+>
+> **Verified**: targeted `:sdk-core` + `:feature:feed` `testDebugUnitTest` green; full `assembleDebug`
+> `testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → BUILD SUCCESSFUL locally this run. Reviewer PASS.
+> Diff is `apps/android` only (4 code/test files + tracking docs).
+>
+> **Next**: the **comments** on-demand request arm (`PostCommentsViewModel.onCommentFlagTap` still carries the
+> dead `RequestTranslation -> Unit` arm) — heavier: comments are `ApiPostComment` translated via their own
+> path, so it needs a comment-translation repository method (no `translatePost` reuse). Re-scout the iOS
+> comment-translation path first. Otherwise the per-story timeline flag strip, or the Chat `slow`/retry glyph
+> tier (still waits on outbox retry-state plumbing). Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Feed on-demand post-translation shipped** (slice `feed-post-translation-request`,
+> feature-parity's Feed §F Prisme line — the `request-missing-languages` sub-gap, now `[x]`; only the
+> per-story timeline strip + the post-detail/comments request arms remain there).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 12 open PRs at branch
+> time (#3263/#3262/#3259/#3255/#3253/#3249/#3247/#3245/#3243/#3242 web/shared/gateway, #3257/#3250 iOS) are
+> none android-routine. Prior android iteration (`feed-realtime-comment-count`) already merged. Branched off
+> freshly-fetched `origin/main` (`6062746b`).
+>
+> **SDK bootstrap — the pristine-`android-37.0` recipe is the ONLY one that works on this container (the
+> `cp→android-37` patch recipe FAILS here):** `sdkmanager --channel=3 "platforms;android-37.0"` still writes
+> malformed metadata (`source.properties` → `ApiLevel=37.0`, "Platform 17"), but AGP 8.13 maps `compileSdk 37`
+> → the `android-37.0` **dir** directly and BUILDS GREEN. The intervening notes' `cp -r android-37.0 android-37`
+> + sed-to-`android-37` recipe was tried first here and FAILED: AGP's error message reads "compile SDK version
+> **37.0**" and it wants the minor-versioned dir, so a hand-made `android-37` (even with perfect metadata) is
+> never matched — `Failed to find target with hash string 'android-37'`. Two more traps: (1) a first `./gradlew`
+> auto-re-downloads the pristine malformed `android-37.0` on top of your patch → keep auto-download OFF with
+> `-Pandroid.builder.sdkDownload=false` after the initial install; (2) `--offline` fails the first ever run
+> (AGP 8.13.0 plugin not yet cached) — run online once. `assembleDebug testDebugUnitTest` green after (973 tasks).
+>
+> **The gap (scout + read-only recon over iOS + Android)**: iOS's feed flag strip routes a content-less
+> language tap to a translation request (`FeedPostCard.handleFlagTap` → `PostService.requestTranslation`,
+> REST `POST /posts/:id/translate`, completed by a socket event). Android's `FeedViewModel.onPostFlagTap`
+> had a **dead** `RequestTranslation -> Unit` arm and the strip passed `includeTranslatable = false`, so a
+> configured-but-absent language never even surfaced. Chat already shipped this exact pattern
+> (`ChatViewModel.requestOnDemandTranslation` → `MessageRepository.requestTranslation` translate+merge) — the
+> faithful, apps/android-only move was to mirror it (NOT iOS's socket path — Android has no post-translation
+> socket consumer, which would be blocked/cross-cutting).
+>
+> **Pure reducer (`:core:model` `PostTranslationMerge`)**: the map-keyed sibling of `MessageTranslationMerge`
+> — `mergeTranslation(post, target, translated): ApiPost?`. Blank target/text → null; identical entry already
+> present (case-insensitive key match, same text) → null; else upsert (replace in place under the original
+> key, else append under the trimmed code). No tombstone guard (ApiPost has no `deletedAt`).
+>
+> **Repository (`:sdk-core` `PostRepository`)**: gains `translationApi: TranslationApi` (Hilt-provided, as
+> `MessageRepository`) + `requestOnDemandTranslation(postId, target): Boolean` — trims target, reads the cached
+> post's source text, blocking-translates via `translationApi.translate`, merges into `_feedCache` via
+> `PostTranslationMerge`; returns whether stored. Inert (`false`, no network) for unknown post / blank target /
+> no source / failure / blank result / idempotent. The old fire-and-forget `requestTranslation` (dead, iOS
+> socket-path parity) left untouched.
+>
+> **VM wiring (`:feature:feed`)**: `onPostFlagTap`'s `RequestTranslation` arm now calls a new
+> `requestOnDemandTranslation` (mirror of chat's, keyed per post): in-flight guard via new
+> `FeedUiState.translatingLanguages` (`postId|lang`), `viewModelScope.launch` translate → on success
+> `activeLanguageOverride += postId→target` so the card switches once the merged post arrives off the cache
+> stream; cancellation-safe, failure surfaces `errorMessage`. `FeedPostBuilder` flips `includeTranslatable = true`.
+>
+> **Tests: +20** — `PostTranslationMergeTest` +8 (append to empty / alongside existing preserving order /
+> replace in place / case-insensitive key kept / idempotent no-op / blank target / blank text / trims code),
+> `PostRepositoryTest` +8 (stores + reports success / forwards source text+langs & trims / inert unknown post /
+> inert blank target / inert no source / translator-failure false / blank-translation false / idempotent false),
+> `FeedViewModelTest` +3 (tap translatable → requests & switches to merged / failed leaves language unchanged /
+> second in-flight tap no duplicate), `FeedPostBuilderTest` +1 (configured-absent language surfaces as a
+> translatable chip). **Mutation (RED proof) ×2**: (a) neuter `PostTranslationMerge`'s idempotence clause →
+> **exactly** `is a no-op when the identical translation is already present` fails (1 of 8); (b) neuter the VM
+> in-flight guard → **exactly** `a second tap while a translation is in flight does not fire a duplicate request`
+> fails (1 of 70). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → **BUILD SUCCESSFUL**
+> (973 tasks) locally this run. New suites ran green (PostTranslationMergeTest 8/8, PostRepositoryTest 30/30,
+> FeedViewModelTest 70/70, FeedPostBuilderTest 28/28). Reviewer PASS. Diff is `apps/android` only (7 files +
+> tracking docs).
+>
+> **Next**: the same on-demand request arm on the **post-detail + comments** surfaces (`PostDetailViewModel`/
+> `PostCommentsViewModel` still carry the dead `RequestTranslation -> Unit` arm — a thin follow-up reusing
+> `PostRepository.requestOnDemandTranslation`, though comments translate via their own path — re-scout). Or the
+> per-story timeline flag strip (heavier — needs a story translation surface). Otherwise the Chat `slow`/retry
+> glyph tier still waits on outbox retry-state plumbing. Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Live feed comment-count sync shipped** (slice `feed-realtime-comment-count`,
+> feature-parity's Feed §F social-feed realtime block — extends the created/deleted/liked/bookmarked
+> overlay family with `comment:added`/`comment:deleted`).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 10 open PRs at branch
+> time (#3259/#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3257/#3250 iOS) are none
+> android-routine. Prior android iteration (#3258, conversation-lock-unlock-all) already merged into main
+> (`bfd152fe`). Branched off freshly-fetched `origin/main` (`bfd152fe`).
+>
+> **SDK bootstrap:** dl.google.com reachable in this container (curl → 200). Used the NOTES 2026-08-21
+> recipe that finally works cleanly: install a **pristine** `platforms;android-37.0` via
+> `sdkmanager --channel=3` and let AGP 8.13 auto-map `compileSdk 37` → `android-37.0` (NO hand-patched
+> `android-37` dir, no sed, no symlink). `assembleDebug testDebugUnitTest` green after. Capture gradle
+> output to a file and grep for `BUILD FAILED` (a piped `| tail` swallows the exit code).
+>
+> **The gap (iOS-parity scouted)**: iOS `FeedViewModel` live-updates each feed card's comment count on
+> `comment:added`/`comment:deleted` by setting `posts[index].commentCount = data.commentCount` (ABSOLUTE,
+> `FeedViewModel.swift:1246`/`:1256`). Android's `FeedViewModel` consumed `commentAdded` only in the
+> post-detail/comments VMs — the **feed list card's** comment count was static, never bumped live.
+>
+> **Pure reducer (`:feature:feed` `FeedRealtimeReducer`)**: new `FeedRealtimeHead.comments: Map<String, Int>`
+> overlay + `comment(state, postId, commentCount)` (blank-id inert; `coerceAtLeast(0)` clamp; same-count
+> dedup → same instance) + `reconcileComments(state, cachePosts)` (releases overlays the cache has caught
+> up to, `null` cache count reads as 0; keeps overlays for posts absent from cache; same-instance when
+> unchanged). `clear` auto-resets via `FeedRealtimeHead()`. No viewer-own dimension — a comment count is
+> public (unlike like/bookmark).
+>
+> **Wiring**: `FeedViewModel` collects `commentAdded`/`commentDeleted` → `FeedRealtimeReducer.comment`;
+> the projection adds `reconcileComments` to the reconcile chain and `.withCommentOverlays(comments)` to
+> both the cache and realtime-head projections (new private helper mirroring `withLikeOverlays`).
+>
+> **Tests**: **+18** — `FeedRealtimeReducerTest` +12 (records absolute count; blank-id inert; idempotent
+> dedup; addition raises / deletion lowers; negative clamp; reconcile release/keep-behind/keep-absent/
+> null-cache-as-zero/partial-release; clear drops overlay), `FeedViewModelTest` +6 (comment-added raises /
+> comment-deleted lowers the card count live; event for an unknown post inert; overlay survives a stale
+> re-emission; a later cache count is respected once reconciled away; refresh drops the overlay — all on the
+> real reducer + a mockk `SocialSocketManager`). **Mutation (RED proof)**: removing `coerceAtLeast(0)` fails
+> exactly `comment clamps a negative absolute count to zero` (1 of 70, no collateral). Restored.
+>
+> **Verified**: `:feature:feed:testDebugUnitTest` green (FeedRealtimeReducerTest 70/70, FeedViewModelTest
+> 67/67); full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is `apps/android`
+> only (4 files: FeedRealtimeHead.kt, FeedViewModel.kt + the two test files, plus tracking docs).
+>
+> **Next**: the Feed §F remaining apps/android-only boxes — the per-post **flag strip / request-missing-
+> languages** on the feed Prisme line (needs an on-demand post-translation request path), or the Feed
+> **repost/quote embed cell** polish (`[~]` line ~4357). Otherwise the Chat `slow`/retry glyph tier still
+> waits on outbox retry-state plumbing. Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Conversation lock "unlock-all" shipped** (slice `conversation-lock-unlock-all`,
+> feature-parity's Conversations `[~]` "Pinned/muted/archived/locked" line — the `unlock-all` sub-gap of
+> its "Remaining lock sub-gaps" note, now done; only Settings master-PIN change/remove + swipe-to-lock remain).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 10 open PRs at branch
+> time (#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none
+> android-routine. Branched off freshly-fetched `origin/main` (`7f1de533`).
+>
+> **SDK bootstrap (see NOTES 2026-08-21 latest):** used the ROUTINE-pinned `commandlinetools-linux-11076708`,
+> which STILL mis-registers the 37.x preview package (`android-37.0/source.properties` → "Platform 17",
+> `ApiLevel=37.0`). The `cp -r android-37.0 android-37` + sed on `source.properties` was NOT enough this run —
+> AGP also rejected `android-37/package.xml`'s stale `path="platforms;android-37.0"` + `<api-level>37.0</api-level>`
+> ("Failed to find target with hash string 'android-37'"). Full fix: patch BOTH `source.properties` AND
+> `package.xml` (path→android-37, api-level→37) in the copy, and remove the malformed `android-37.0` dir so its
+> unparseable `ApiLevel=37.0` cannot abort the platform scan. `assembleDebug testDebugUnitTest` green after.
+> Container reached `dl.google.com` (curl → 200). Also: `./gradlew … | tail` swallows gradle's exit code — a
+> failed build reads as exit 0; capture to a file and grep for `BUILD FAILED` instead.
+>
+> **The gap**: iOS `ConversationLockSheet.Mode.unlockAll` (Settings) verifies the 6-digit master PIN once, then
+> calls `ConversationLockManager.removeAllLocks()` — dropping every per-conversation lock while leaving the
+> master PIN set. Android's `LockPinReducer` had setup/lock/unlock/open arms but no unlock-all; the store's
+> `ConversationLockStore.removeAllLocks()` already existed but was dead code (only `resetForLogout` used it).
+>
+> **Pure reducer arm (`:feature:conversations` `LockPinReducer`)**: new `LockPinMode.UNLOCK_ALL` (6-digit
+> pinLength, `LockPinCopy.UNLOCK_ALL` header) + `LockPinEffect.RemoveAllLocks` + `completeUnlockAll` — a single
+> step: `verifyMasterPin` → `[RemoveAllLocks, Completed]`, else `verifyFailure(MASTER_PIN_INCORRECT)` (buffer
+> cleared, sheet stays open). Faithful to iOS: no new error type, master PIN untouched.
+>
+> **Wiring**: `ConversationListViewModel.onUnlockAll()` (inert unless `lockStore.lockedConversationIds` is
+> non-empty — authoritative store read, not the mirrored state, so a stale tap can't open an empty sheet) opens
+> the sheet in UNLOCK_ALL mode; `applyLockResult` maps `RemoveAllLocks → lockStore.removeAllLocks()`. New derived
+> `ConversationListUiState.canUnlockAll = lockedConversationIds.isNotEmpty()`. `ConversationLockPinSheet` maps
+> the new copy → title/subtitle strings + the LockOpen glyph. `ConversationListScreen` renders a top-bar
+> `LockOpen` action shown ONLY while `canUnlockAll` (SOTA over iOS: contextual affordance, hidden when no locks;
+> iOS buries it in Settings). EN/FR/ES/PT strings ×3.
+>
+> **Tests**: **+8** — `LockPinReducerTest` +4 (unlock-all is 6-digit; copy is UNLOCK_ALL; correct master →
+> `[RemoveAllLocks, Completed]`; wrong master → `MASTER_PIN_INCORRECT`, no effects, buffer cleared),
+> `ConversationLockFlowViewModelTest` +4 (`canUnlockAll` reactive to the lock set; correct master drops both
+> locks + closes sheet + master PIN stays; wrong master keeps both locks; inert when nothing locked, on a real
+> `InMemoryConversationLockStore`). **Mutation (RED proof)**: flipping `verifyMasterPin(state.pin)` → `true`
+> fails exactly the wrong-PIN arms (2 failed of 29), restored via `git checkout`.
+>
+> **Verified**: `:feature:conversations:testDebugUnitTest` (both suites) green; full `assembleDebug
+> testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is `apps/android` only (10 files).
+>
+> **Next**: the sibling Settings master-PIN **change/remove** arms (scout #2 — `changeMasterPin`/`removeMasterPin`,
+> store methods `setMasterPin`/`forceRemoveMasterPin` already present) is the natural follow-on, once an Android
+> Settings "Security" surface exists to host them (none today — master-PIN setup is only reachable via the
+> conversation context menu). Otherwise the Chat `slow`/retry glyph tier remains (heavier — needs the outbox
+> retry-state surfaced through `LocalSendState`). Re-scout read-only before committing.
+
+> On 2026-08-21 **Sub-200ms sending-clock debounce shipped** (slice `chat-send-clock-reveal-debounce`,
+> feature-parity's Chat `[~]` "Delivery status" line — the `invisible pre-200ms debounce` half of its
+> **Pending** 8-state clause, now shipped; only the finer `slow`/retry glyph tier remains).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 9 open PRs at branch
+> time (#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none
+> android-routine. Prior android iteration (#3254, chat-draft-language-persistence) already merged.
+> Branched off freshly-fetched `origin/main` (`c138ffe4`, which includes #3254).
+>
+> **SDK bootstrap — the platform-metadata fight, finally understood (see NOTES 2026-08-21):** since the
+> Android *minor* SDK releases (36.1, **37.0**, 37.1…) an API level is no longer published under a bare
+> `android-37` name — only `android-37.0`. The prior recipe (`cp -r android-37.0 android-37` + sed
+> `source.properties`) is now HARMFUL: the copy keeps `package.xml` (`path="platforms;android-37.0"`,
+> `<api-level>37.0</api-level>`), so AGP sees a package claiming to be `android-37.0` living in the
+> `android-37` dir → "Observed package id … in inconsistent location" → the whole SDK scan aborts →
+> "Failed to find target with hash string 'android-37'". **The fix is to do NOTHING by hand**: install a
+> pristine `platforms;android-37.0` via `sdkmanager --channel=3` and let **AGP auto-map `compileSdk 37` →
+> `android-37.0`** itself (exactly what CI's setup-android does — `android.yml` even documents this). No
+> `android-37` dir, no sed, no symlink, auto-download left ON. `assembleDebug testDebugUnitTest` green
+> after. This container **reaches `dl.google.com`** (curl → 200), so the full local gate ran here.
+>
+> **The gap (re-proved by reading source)**: iOS's `BubbleDeliveryCheck.SendingClockGlyph` debounces the
+> **online in-flight clock**: `shouldRevealImmediately(sendStartedAt, now)` keeps the clock hidden for the
+> first `revealDelay = 0.2s` of a send, revealed via a self-cancelling `.task`, so a send that round-trips
+> in under 200ms never flashes an icon the user has no time to perceive. Android showed the `Schedule`
+> clock immediately for a `DeliveryStatus.Pending` bubble — no debounce. The offline hourglass
+> (`QueuedOffline`) and settled tiers are NOT debounced on iOS, and stay immediate here.
+>
+> **Pure core (`:core:model` `SendLifecycleResolver`)**: new
+> `shouldRevealSendingGlyph(sendStartedAtMillis: Long?, nowMillis: Long): Boolean` +
+> `SENDING_REVEAL_DELAY_MILLIS = 200L` — faithful port: `null` start → `true` (reveal now, nothing to
+> debounce); elapsed `>= 200ms` → `true` (iOS's `>=` inclusive boundary); under the window (incl. a
+> negative elapsed from device clock skew) → `false`. `resolve()` untouched.
+>
+> **Wiring (Compose glue, coverage-exempt)**: new `SendingClockRevealPresenter.rememberSendingGlyphRevealed`
+> (`produceState` initialised from the pure decision + one-shot `delay(remaining)` then flip to revealed —
+> the SAME shape as `rememberBubbleRenderKind`'s tick loop). `MessageBubble` gates ONLY the
+> `DeliveryStatus.Pending` clock behind it, reading the send-start from the existing
+> `content.createdAtIso` (an optimistic pending bubble's `createdAt` IS its send-start — no new
+> `BubbleContent` field, no builder/VM param, no wire change). Every other status renders immediately as
+> before.
+>
+> **Tests**: **+8 `SendLifecycleResolverTest`** — no start → reveal; just-started/100ms/199ms hidden;
+> exactly-200ms/5s revealed; future start (clock skew) hidden; the 200ms constant. Mirrors the iOS twin
+> `BubbleDeliveryCheckSendingRevealTests` exactly, plus the 199ms exclusive-lower-edge + skew arms.
+> **Mutation (RED proof)**: `>=`→`>` fails **exactly** `a send elapsed exactly 200ms reveals the clock`
+> (15 run, 1 failed, no collateral). Restored. The `produceState`/`delay` presenter is thin Compose glue,
+> exempt per TDD-COVERAGE.
+>
+> **Verified**: `:core:model:testDebugUnitTest` (SendLifecycleResolverTest) green; `:sdk-ui`
+> `compileDebugKotlin` green; full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS.
+> Diff is `apps/android` only.
+>
+> **Next**: the last piece of the Delivery-status line is the finer `slow`/retry glyph tier (iOS
+> `DeliveryStatus.slow` — a warning-tinted clock for a message still in automatic outbox retry after its
+> first attempt failed but before the budget is exhausted). That needs the outbox retry-attempt count
+> plumbed into the send state → `BubbleContent`, so it is a bigger slice than this one (not a pure
+> resolver alone). Otherwise the Chat area's remaining apps/android-only boxes are thin; if the retry-state
+> plumbing looks heavy, advance to **Feed (§F)** per build-order. Re-scout read-only before committing —
+> parity notes are hypotheses.
+
+> On 2026-08-21 **Manual composer-language draft persistence shipped** (slice `chat-draft-language-persistence`,
+> the last open piece of feature-parity's Chat "Draft auto-save/restore" line — now `[x]`).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 8 open PRs at branch time
+> (#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none android-routine. Prior
+> android iteration (#3252, chat-draft-effects-persistence) already merged. Branched off freshly-fetched
+> `origin/main` (`f2a2e404`, which includes #3252).
+>
+> **SDK bootstrap (see NOTES 2026-08-21 later):** the "newer cmdline-tools fix the platform metadata" claim
+> did NOT hold this run — `platforms/android-37.0/source.properties` again came out malformed (`Platform 17`,
+> `ApiLevel=37.0`), so AGP's `compileSdk 37`→`android-37` hash found no match. Fixed by a real `cp -r
+> android-37.0 android-37` + `sed` on `source.properties` (ApiLevel→37). `assembleDebug testDebugUnitTest`
+> green after across all modules. This container **reaches `dl.google.com`** (curl → 200) so the full local
+> gate ran here.
+>
+> **The gap**: iOS's app-side `MessageDraft` persists `selectedLanguage` (the composer language pick)
+> alongside text/reply/effects, restored in `ConversationView.onAppear` (`if let lang = draft.selectedLanguage
+> { composerState.selectedLanguage = lang }`) and re-persisted on `.adaptiveOnChange(of: selectedLanguage)`.
+> Android's `ConversationDraft` carried text+reply+effects but not the language — a deliberate language
+> override armed but not sent was lost on navigation.
+>
+> **The key design call — a language is NOT content (faithful iOS port)**: iOS `MessageDraft.isEffectivelyEmpty`
+> (persistence) and `hasDraftText` (list badge) BOTH ignore `selectedLanguage`. So on Android I left
+> `ConversationDraft.isMeaningful` AND `isWorthPersisting` **unchanged** — a language-only composer neither
+> floats/badges a conversation row nor is persisted on its own; the language rides along an otherwise
+> worth-persisting draft (text/reply/effects present) and is dropped with it. This is the cleanest match to
+> iOS and needed NO new predicate (unlike the effects slice, which added `isWorthPersisting`).
+>
+> **Manual override only**: Android's `ComposerLanguageState` splits `detected` (auto) from `manualOverride`
+> (deliberate pick). Only `manualOverride` is persisted — live detection is redundant (re-derives from the
+> restored text). Restore re-applies it via `withManualPick` (wins over detection of the restored text, locks
+> analysis) — exactly iOS's override-wins semantics.
+>
+> **Pure core (`:core:model`)**: `ConversationDraft` gains `selectedLanguage: String? = null` (defaulted →
+> legacy blob decodes to no language, back-compat covered by a decode test). `isMeaningful`/`isWorthPersisting`
+> untouched.
+>
+> **Pure reducer (`:feature:chat`)**: `DraftAutosave.resolve` gains `selectedLanguage: String? = null`
+> (normalised trim/blank→null; folded into the idempotence clause so a language change on a worth-persisting
+> draft → `Save`, identical text+lang → `None`; the blank-guard is untouched so a language on an empty composer
+> → `None`, never rescuing it). `DraftRestore` gains `selectedLanguage`; `restore` returns the normalised
+> stored language.
+>
+> **Trivial VM wiring**: `ChatViewModel.persistDraft` reads `_state.value.composerLanguage.manualOverride`;
+> `onComposerLanguagePicked` now calls `persistDraft` (iOS `.adaptiveOnChange` parity); the open-time restore
+> applies `restored.selectedLanguage?.let { withManualPick(it) }`. Send/clear paths reset `composerLanguage =
+> ComposerLanguageState()` before their existing `persistDraft("", null)` → manualOverride null → language
+> cleared with the draft (no change needed there).
+>
+> **Tests**: **+17** — `ConversationDraftTest` +4 (a language pick alone is neither meaningful nor worth
+> persisting; a pick riding a real draft leaves both predicates on the content; legacy blob missing
+> `selectedLanguage` decodes to null), `DraftAutosaveTest` +10 (7 resolve: language on empty composer → None;
+> language-only over no prior → None; text+lang saved; only-the-language-changing → Save; identical text+lang →
+> None; trim/blank→null; clearing language while text remains → Save without lang — + 3 restore: returns / trims
+> & drops / a text-only draft restores with no language), `ChatViewModelTest` +3 round-trip (picking a
+> language persists it alongside the typed draft; a pick on an empty composer persists nothing; a stored
+> text+language draft re-applies the manual override on open). **Mutation (RED proof)**: drop the resolve
+> `previous.selectedLanguage == language` idempotence clause → **exactly** `only_the_language_pick_changing_on_a_text_draft_still_saves`
+> fails while `identical_text_and_language_writes_nothing` stays green (proving the clause is the tested
+> behaviour, not a tautology). Restored after.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) — **BUILD SUCCESSFUL**
+> across every module locally in this run; touched modules also ran explicitly green (`ConversationDraftTest`,
+> `DraftAutosaveTest`, `ChatViewModelTest`). Reviewer PASS. Diff is `apps/android` only.
+>
+> **Next**: the Chat "Draft auto-save/restore" line is now fully `[x]`. Remaining Chat `[◐]`/`[~]` boxes:
+> finer send-lifecycle `Slow` tier (needs outbox retry-attempt state plumbed into `BubbleContent`) and the
+> edit-history viewer (blocked — needs a gateway endpoint, not apps/android-only). With Chat drafts closed,
+> the next high-value area per build-order (`… → Chat → Feed → Stories → Calls`) is the top unchecked Chat
+> box that stays apps/android-only, else advance to Feed. Re-scout read-only before committing — parity notes
+> are hypotheses.
+
+> On 2026-08-21 **Composer draft effects persistence shipped** (slice `chat-draft-effects-persistence`,
+> feature-parity's Chat `[◐]` "Draft auto-save/restore" line — the `effects`/`blur`/`ephemeral` fields its
+> **Pending** clause called out, now unblocked because the composer effects picker / ephemeral duration /
+> blur / view-once all shipped in later §C slices, so there is finally state to persist).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 6 open PRs at branch
+> time (#3249 shared, #3247 web, #3245/#3242 gateway, #3243 shared/gateway, #3241 iOS) are none of them
+> android-routine. Prior android iteration (#3248, chat-bubble-a11y-label) already merged. Branched off the
+> freshly-fetched `origin/main` (`3e64afaa`, which includes #3248 and #3241). This container **reaches
+> `dl.google.com`** (curl → 200), so the full local gate ran here.
+>
+> **SDK-bootstrap correction (see NOTES 2026-08-21):** the older recipe's `android-37 → android-37.0`
+> symlink is now HARMFUL. With cmdline-tools `11076708` the platform mis-registers (metadata "Platform 17"),
+> and the symlink makes sdkmanager reject it as an "inconsistent location" → `Failed to find target with hash
+> string 'android-37'`. Fix: fetch the newer bundle `commandlinetools-linux-13114758`, `sdkmanager
+> --channel=3 "platforms;android-37.0" "build-tools;36.0.0"`, and **no symlink** — AGP 8.13 resolves
+> `compileSdk 37` → the `android-37.0` dir directly. `assembleDebug testDebugUnitTest` green after.
+>
+> **The gap (re-proved by a read-only recon subagent over iOS + Android)**: iOS's app-side `DraftStore`
+> (`MessageDraft`) persists the FULL compose state — text, reply, **and** `effectFlags`/`isBlurEnabled`/
+> `ephemeralDurationRawValue` (+ `selectedLanguage`). Android's `ConversationDraft` persisted only
+> text + `replyToId`; a self-destruct duration or a confetti effect armed on the composer was lost on
+> navigation. The recon confirmed via grep that `pendingEffects: MessageEffects` already exists on
+> `ChatUiState` (line 160) but was never fed into `DraftAutosave.resolve` nor restored on open — a genuine,
+> now-portable gap needing **no** gateway endpoint, **no** wire-DTO change (`ConversationDraft` is a local
+> DataStore value type), and **no** timer/instrumentation.
+>
+> **Faithful two-predicate port (the key design call)**: iOS splits "worth persisting" (`isEffectivelyEmpty`,
+> weighs effects/blur/ephemeral) from the conversation-list "Brouillon" badge (`hasDraftText`, text-only).
+> Android's shared `ConversationDraft.isMeaningful` already drives FOUR conversation-list surfaces
+> (`DraftAwareOrdering` float, `LastMessagePreview` "Brouillon …" line, `DraftDiscard`, `ConversationListScreen`
+> `hasDraft` badge). Extending `isMeaningful` to include effects would make an effects-only draft float and
+> badge the list — a divergence from iOS. So I added a SEPARATE `ConversationDraft.isWorthPersisting`
+> (`isMeaningful || effects.hasAnyEffect`) used ONLY by `DraftAutosave`, leaving all four list surfaces
+> byte-for-byte unchanged. An effects-only draft now persists and restores but never floats/badges a row —
+> exactly iOS.
+>
+> **Pure core (`:core:model`)**: `ConversationDraft` gains `effects: MessageEffects = MessageEffects()`
+> (defaulted so a legacy blob decodes to an empty selection — back-compat covered by a decode test) folding
+> iOS's three separate fields into the single `MessageEffects` SSOT (a set flag bit = armed). New
+> `isWorthPersisting` extension. `isMeaningful` unchanged.
+>
+> **Pure reducer (`:feature:chat`)**: `DraftAutosave.resolve` gains an `effects: MessageEffects = MessageEffects()`
+> param — empty composer + armed effect → `Save`; a change in effects alone → `Save`; identical
+> text+reply+effects → `None`; clearing the last effect on an empty composer → `Clear` (via
+> `isWorthPersisting`). `DraftRestore` gains `effects`; `restore` returns `stored.effects` and gates on
+> `isWorthPersisting` (an effects-only stored draft re-arms an idle empty composer).
+>
+> **Trivial VM wiring**: `ChatViewModel.persistDraft` reads `_state.value.pendingEffects` (every existing
+> caller already updates state before calling, so no new params on the 6 call sites); `toggleEffect` /
+> `selectEphemeralDuration` / `clearEffects` now call `persistDraft` so an armed/cleared effect is saved
+> immediately; the open-time restore applies `pendingEffects = restored.effects` and tracks
+> `lastPersistedDraft` via `isWorthPersisting`. Post-send path unchanged (state cleared before the existing
+> `persistDraft("", null)` → reads empty effects → `Clear`). **Documented edge (iOS-parity):** `restore`
+> guards on text/editing only, not on already-armed composer effects — the load runs in `init` before the
+> user can interact, and iOS's `onAppear` restore has the same shape.
+>
+> **Tests**: **+19** — `ConversationDraftTest` +7 (effects never make a draft list-meaningful;
+> `isWorthPersisting` weighs effects / stays false when empty / true for text|reply; legacy blob missing
+> `effects` decodes to `MessageEffects()`), `DraftAutosaveTest` +8 (armed effects on empty composer → Save;
+> saved draft carries effects; clearing effects → Clear; effects-alone change → Save; identical
+> text+reply+effects → None; blank+no-effects+no-prior → None; restore re-arms effects-only + effects
+> alongside text/reply), `ChatViewModelTest` +4 round-trip (arming persists to the store; clearing the last
+> effect purges; effects-only stored draft re-arms `pendingEffects` on open). **Mutation (RED proof) ×3**:
+> (a) drop `isWorthPersisting`'s `|| effects.hasAnyEffect` → **exactly 1** `ConversationDraftTest` fails
+> (the list `isMeaningful` tests stay green, proving no leak); (b) drop `resolve`'s `previous.effects ==
+> effects` idempotence clause → **exactly 1** `DraftAutosaveTest` fails; (c) drop the empty-guard
+> `!effects.hasAnyEffect` → **exactly 1** `DraftAutosaveTest` fails. All restored.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) — **BUILD SUCCESSFUL**
+> across every module locally in this run; touched modules also ran explicitly green (`ConversationDraftTest`,
+> `DraftAutosaveTest` 31, `ChatViewModelTest`). Reviewer PASS. Diff is `apps/android` only.
+>
+> **Next**: the narrower follow-up `chat-draft-language-persistence` — persist the manual composer language
+> pick (`MessageDraft.selectedLanguage` / `ComposerLanguageState.withManualPick`) on `ConversationDraft`,
+> restoring the language pill's override. Per iOS a language-only draft is NOT meaningful (so it re-applies
+> only atop an otherwise worth-persisting draft) — a clean pure sub-rule + trivial VM wiring, same shape as
+> this slice. After that, the Chat `[◐]`/`[~]` boxes still open (finer send-lifecycle `Slow` tier — needs
+> outbox retry-attempt state plumbed into `BubbleContent`; edit-history viewer — blocked on a gateway
+> endpoint, not apps/android-only). Re-scout read-only before committing; parity notes are hypotheses.
+
+> On 2026-08-21 **Message-bubble accessibility composer shipped** (slice `chat-bubble-a11y-label`).
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 5 open PRs were
+> web #3247 / gateway #3242 #3245 / shared #3243 / iOS #3241 — none android-routine). Prior iteration
+> #3246 (mood) already merged. Branched off the freshly-fetched `origin/main` (`d3686997`, which
+> includes the prior Android mood/story-ring merges). This container **reaches `dl.google.com`** (curl
+> → 200), so the full local gate ran here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools
+> `11076708` `--channel=3` + the `android-37` alias, Gradle 8.13 by the wrapper.
+>
+> **First closed a stale marker**: the conversation-row `presence` sub-gap. Grep-verified the dot is
+> already wired — `ConversationListScreen.kt:232` passes `presence = state.presenceStateFor(conversation,
+> System.currentTimeMillis())` down to the row's `MeeshyAvatar(..., presence = …)` (`:649`), alongside
+> `storyRing` and `moodEmoji`. All three avatar affordances coexist (a mood badge suppresses the dot),
+> exactly as iOS. The conversation-row "rich last-message preview" line is now **complete** — no new
+> slice was needed for presence; feature-parity updated to `presence done`.
+>
+> **The gap (re-proved by reading source)**: iOS composes ONE spoken VoiceOver label per message bubble
+> (`MessageAccessibilityLabelComposer.compose`, itself the port of `BubbleStandardLayout.messageAccessibilityLabel`)
+> in a frozen order. Android's `MessageBubble` had no composed label — it relied on default child-merge
+> with only per-icon `contentDescription`s (delivery glyphs, starred, translated). A repo-wide grep for
+> a bubble a11y composer hit only docs/contacts/auth — never chat. So the composed message label was a
+> real, categorical gap.
+>
+> **Pure core (`:sdk-ui`)**: `MessageBubbleAccessibilityLabel.compose(content, strings, locale, timeText?)`
+> — framework-free object over `BubbleContent`, emitting the joined label in the iOS-frozen order
+> (sender → reply → text → images → audios → location/files → time → delivery → edited → pinned →
+> ephemeral → reactions). Localized wording injected via `BubbleAccessibilityStrings` /
+> `BubbleDeliveryA11yStrings` (the `RelativeTimeFormat` injection pattern — zero Android deps, fully
+> JVM-testable). A deleted message short-circuits to sender + "deleted". **Assumed deviations vs iOS,
+> documented**: no image/video split (one "images" count — Android `BubbleContent` carries no video
+> distinction); no "you" reply-author phrasing (Android reply target has no `isMe`); no clock in the
+> Android bubble meta-row, so `timeText` is only supplied where a time is actually shown (null here).
+>
+> **Safe, NON-destructive wiring**: `MessageBubble` gains an opt-in `accessibilityLabel: String? = null`
+> applied via `clearAndSetSemantics` — wired ONLY at `MessageOverlayPreviewHero` (the long-press overlay
+> hero, documented "Purely decorative and non-interactive — never intercepts input"), where collapsing
+> the semantics subtree is provably safe. The interactive **list** bubble keeps the default `null`, so
+> its per-element touch targets (reaction taps, image taps, long-press) are untouched — I deliberately
+> did NOT merge/clear semantics on the interactive bubble, since collapsing its touch targets would
+> regress TalkBack and cannot be verified without an on-device/instrumented run (routine §CI-reality
+> caution). Wiring the composed label onto the list bubble is left as a future instrumented-test slice.
+> Strings added EN/FR/ES/PT.
+>
+> **Tests**: **+20 `MessageBubbleAccessibilityLabelTest`** (pure composer — every arm: received sender /
+> unknown / blank-name; outgoing never names sender; blank text skipped; reply excerpt / blank-excerpt →
+> author-only / unknown author / deleted-target author-only; images+audios counts; location-then-file
+> order; unnamed file; time appended / blank-time dropped; delivery after time; all 6 delivery arms;
+> edited+pinned+ephemeral order; reactions summary last; deleted short-circuit; bare outgoing).
+> **Mutation (RED proof) ×2**: (a) neutering the deleted short-circuit `return` fails **exactly** 1 test
+> (20 run, 1 failed); (b) collapsing the reply-excerpt arm to author-only fails **exactly** 2 tests
+> (the two excerpt cases). Both restored.
+>
+> **Verified**: `./apps/android/meeshy.sh check` — `BUILD SUCCESSFUL` (assembleDebug + every module's
+> `testDebugUnitTest`) green locally in this run. Reviewer PASS.
+>
+> **Next**: the natural follow-up is a Roborazzi/instrumented slice to wire and verify the composed
+> `accessibilityLabel` on the interactive list bubble WITHOUT regressing per-element touch targets
+> (custom accessibility actions for reactions/images under one merged node) — needs the instrumented
+> test harness, out of the JVM gate. Otherwise advance to the next Chat `[◐]`/`[~]` box: candidates are
+> the finer 8-state send-lifecycle glyphs (slow/invisible pre-200ms debounce; needs send-lifecycle
+> timing state) or the edit-history viewer (blocked on a gateway edit-history endpoint — not
+> apps/android-only). Prefer a pure-resolver + trivial-value-wiring slice as always; re-scout with a
+> read-only recon over iOS + Android before committing, since parity notes are hypotheses not facts.
+
 > On 2026-08-20 **Conversation-row mood badge shipped** (slice `conversation-row-mood`,
 > feature-parity's Conversations `[~]` rich last-message-preview line — the `mood` avatar
 > affordance, the second of the three sub-gaps `presence/story-ring/mood`; story-ring merged

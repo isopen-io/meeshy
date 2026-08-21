@@ -134,3 +134,59 @@ describe('MessageReplyPreview — marquage de l’auteur cité', () => {
     expect(container.querySelector('a[href^="/u/"]')).toBeNull();
   });
 });
+
+// ─── Le nom d'un auteur sans compte doit MENER quelque part ──────────────────
+//
+// Bloquer `/u/` était la moitié du travail : le nom devenait un texte inerte,
+// et l'identité que la personne avait fournie en entrant restait injoignable
+// depuis le fil. Sa fiche est la seule surface où elle existe — le nom doit
+// l'ouvrir.
+//
+// Le contexte est fourni directement plutôt que via `ParticipantProfileProvider` :
+// celui-ci monte le dialogue, donc React Query, dont ce témoin n'a que faire.
+
+import { ParticipantProfileContext } from '@/components/conversations/participant-profile-context';
+import { fireEvent } from '@testing-library/react';
+
+const renderRowWithProfile = (sender: Record<string, unknown>, open: (id: string) => void) =>
+  render(
+    <ParticipantProfileContext.Provider value={open}>
+      <MessageNameDate
+        message={{ createdAt: new Date('2026-08-18T10:00:00Z'), sender: sender as never }}
+        isOwnMessage={false}
+        t={t}
+      />
+    </ParticipantProfileContext.Provider>
+  );
+
+describe('MessageNameDate — la fiche s’ouvre depuis le fil', () => {
+  it('ouvre la fiche de l’auteur sans compte sur le participant, pas sur l’utilisateur', () => {
+    const open = jest.fn();
+    const { getByTestId } = renderRowWithProfile(
+      senderWith({ type: 'anonymous', id: 'participant-42' }),
+      open
+    );
+
+    fireEvent.click(getByTestId('participant-profile-trigger'));
+
+    expect(open).toHaveBeenCalledWith('participant-42');
+  });
+
+  it('CONTRE-ÉPREUVE — un compte garde son lien `/u/` et n’ouvre aucune fiche', () => {
+    const open = jest.fn();
+    const { container } = renderRowWithProfile(
+      senderWith({ type: 'user', username: 'alice', id: 'participant-7' }),
+      open
+    );
+
+    expect(container.querySelector('a[href="/u/alice"]')).not.toBeNull();
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('reste un nom lisible hors de toute conversation — pas d’écran blanc', () => {
+    const { container } = renderRow(senderWith({ type: 'anonymous' }));
+
+    expect(container.querySelector('[data-testid="participant-profile-trigger"]')).toBeNull();
+    expect(screen.getAllByText('ano_bob_sm123').length).toBeGreaterThan(0);
+  });
+});

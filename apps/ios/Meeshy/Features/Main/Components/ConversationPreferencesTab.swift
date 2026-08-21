@@ -211,7 +211,10 @@ struct ConversationPreferencesTab: View {
             Button {
                 showEmojiPicker = true
             } label: {
-                settingsRow(icon: "heart.fill", iconColor: accentColor, title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
+                // Cette « réaction » EST le favori : le filtre « Favoris » de la
+                // liste lit `userState.reaction != nil` — nommée comme telle
+                // (directive 2026-08-21).
+                settingsRow(icon: "star.fill", iconColor: accentColor, title: String(localized: "action.favorite", defaultValue: "Favori", bundle: .main)) {
                     HStack(spacing: 6) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
                             Text(r).font(MeeshyFont.relative(24))

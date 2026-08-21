@@ -39,7 +39,7 @@ let conversationParticipantJoinedCallback: ((data: { conversationId: string; use
 let conversationLeftCallback: ((data: { conversationId: string; userId: string }) => void) | null = null;
 let conversationParticipantLeftCallback: ((data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number }) => void) | null = null;
 let conversationParticipantBannedCallback: ((data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number }) => void) | null = null;
-let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean }) => void) | null = null;
+let conversationParticipantUnbannedCallback: ((data: { conversationId: string; userId: string; membershipRestored?: boolean; memberCount?: number }) => void) | null = null;
 let conversationClosedCallback: ((data: { conversationId: string; closedBy: string; closedAt: string }) => void) | null = null;
 let categoryChangedCallback: (() => void) | null = null;
 let messageAttachmentUpdatedCallback: ((data: { conversationId: string; messageId: string; attachment: unknown }) => void) | null = null;
@@ -302,6 +302,10 @@ const mockMessages = [
   createMockMessage('msg-1', 'Hello'),
   createMockMessage('msg-2', 'World'),
 ];
+
+// Les remises en cache passent par une lecture bornée `GET /conversations/:id`,
+// gardée par la forme d'un ObjectId Mongo — `conv-1` n'en est pas un.
+const RESTORED_CONV_ID = '64b7f2a1c3d4e5f6a7b8c9d0';
 
 const mockConversation = {
   id: 'conv-1',
@@ -1442,6 +1446,202 @@ describe('useSocketCacheSync', () => {
 
       const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
       expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
+
+    // Le bannissement retire la ligne de MA liste ; la levée qui restaure
+    // l'appartenance doit l'y remettre. Sans ce bras, `applyMemberCount` mappe
+    // sur une liste où la conversation n'est plus — un no-op silencieux — et la
+    // ligne ne revient qu'à la réconciliation complète (bornée, rare) : le
+    // delta `updatedSince=` est upsert-only sur `Conversation.updatedAt`, que
+    // la levée d'un bannissement ne touche pas.
+    // `createWrapperWithClient()` monte un client à `gcTime: 0` : une entrée
+    // posée par `setQueryData` sans observateur y est ramassée dès le tick
+    // suivant, donc invisible après un `await`. Les témoins ASYNCHRONES de ce
+    // bloc montent le leur, comme les témoins de rejeu de pages plus bas.
+    const createPersistentWrapper = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      return { wrapper, queryClient };
+    };
+
+    const readConversationIds = (queryClient: QueryClient): string[] => {
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as
+        | { pages: { conversations: Conversation[] }[] }
+        | undefined;
+      return (cached?.pages ?? []).flatMap((page) => page.conversations.map((c) => c.id));
+    };
+
+    it('remet la conversation dans la liste quand le débanni est MOI', async () => {
+      const { wrapper, queryClient } = createPersistentWrapper();
+      mockApiGet.mockResolvedValue({ data: { ...mockConversation, id: RESTORED_CONV_ID, memberCount: 3 } as Conversation });
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      await act(async () => {
+        conversationParticipantUnbannedCallback?.({
+          conversationId: RESTORED_CONV_ID,
+          userId: 'current-user',
+          membershipRestored: true,
+          memberCount: 3,
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiGet).toHaveBeenCalledWith(`/conversations/${RESTORED_CONV_ID}`);
+      expect(readConversationIds(queryClient)).toEqual([RESTORED_CONV_ID]);
+    });
+
+    // Un serveur antérieur au champ ne l'envoie pas, et une levée y restaurait
+    // TOUJOURS l'appartenance : l'absence se lit comme un retour, d'où
+    // `!== false` et jamais `=== true`.
+    it('remet la conversation quand le serveur n’envoie pas membershipRestored', async () => {
+      const { wrapper, queryClient } = createPersistentWrapper();
+      mockApiGet.mockResolvedValue({ data: { ...mockConversation, id: RESTORED_CONV_ID } as Conversation });
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      await act(async () => {
+        conversationParticipantUnbannedCallback?.({ conversationId: RESTORED_CONV_ID, userId: 'current-user' });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiGet).toHaveBeenCalledWith(`/conversations/${RESTORED_CONV_ID}`);
+      expect(readConversationIds(queryClient)).toEqual([RESTORED_CONV_ID]);
+    });
+
+    // Lever le bannissement de quelqu'un qui était parti de lui-même le rend
+    // libre de revenir ; ça ne le fait pas rentrer. Il n'y a donc aucune ligne
+    // à remettre dans sa liste, et la relire la ferait réapparaître à tort.
+    it('ne remet RIEN quand la levée ne restaure aucune appartenance', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantUnbannedCallback?.({
+          conversationId: RESTORED_CONV_ID,
+          userId: 'current-user',
+          membershipRestored: false,
+        });
+      });
+
+      expect(mockApiGet).not.toHaveBeenCalledWith(`/conversations/${RESTORED_CONV_ID}`);
+    });
+
+    // La levée qui concerne QUELQU'UN D'AUTRE ne dit rien de ma propre
+    // appartenance : elle ne doit ouvrir aucune requête.
+    it('ne relit rien quand le débanni est quelqu’un d’autre', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [], pagination: { total: 0, offset: 0, limit: 20, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantUnbannedCallback?.({
+          conversationId: RESTORED_CONV_ID,
+          userId: 'user-2',
+          membershipRestored: true,
+        });
+      });
+
+      expect(mockApiGet).not.toHaveBeenCalledWith(`/conversations/${RESTORED_CONV_ID}`);
+    });
+
+    // Idempotence : un bannissement raté (hors ligne) laisse la ligne en place,
+    // et la levée ne doit alors ni la dupliquer ni payer une requête.
+    it('ne relit pas une conversation déjà présente dans la liste', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{
+          conversations: [{ ...mockConversation, id: RESTORED_CONV_ID, memberCount: 2 } as Conversation],
+          pagination: { total: 1, offset: 0, limit: 20, hasMore: false },
+        }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantUnbannedCallback?.({
+          conversationId: RESTORED_CONV_ID,
+          userId: 'current-user',
+          membershipRestored: true,
+          memberCount: 3,
+        });
+      });
+
+      expect(mockApiGet).not.toHaveBeenCalledWith(`/conversations/${RESTORED_CONV_ID}`);
+      const cached = queryClient.getQueryData(['conversations', 'infinite']) as { pages: { conversations: Conversation[] }[] };
+      expect(cached.pages[0].conversations).toHaveLength(1);
+      expect((cached.pages[0].conversations[0] as any).memberCount).toBe(3);
+    });
+
+    // L'aller-retour complet, tel qu'il se produit sur un appareil resté
+    // connecté : la ligne part au bannissement et revient à la levée.
+    it('aller-retour ban → unban : la ligne part puis revient', async () => {
+      const { wrapper, queryClient } = createPersistentWrapper();
+      mockApiGet.mockResolvedValue({ data: { ...mockConversation, id: RESTORED_CONV_ID, memberCount: 3 } as Conversation });
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{
+          conversations: [{ ...mockConversation, id: RESTORED_CONV_ID, memberCount: 3 } as Conversation],
+          pagination: { total: 1, offset: 0, limit: 20, hasMore: false },
+        }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync(), { wrapper });
+
+      act(() => {
+        conversationParticipantBannedCallback?.({
+          conversationId: RESTORED_CONV_ID,
+          userId: 'current-user',
+          bannedBy: { id: 'admin-1' },
+          bannedAt: new Date().toISOString(),
+          memberCount: 2,
+        });
+      });
+
+      expect(readConversationIds(queryClient)).toEqual([]);
+
+      await act(async () => {
+        conversationParticipantUnbannedCallback?.({
+          conversationId: RESTORED_CONV_ID,
+          userId: 'current-user',
+          membershipRestored: true,
+          memberCount: 3,
+        });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(readConversationIds(queryClient)).toEqual([RESTORED_CONV_ID]);
     });
   });
 

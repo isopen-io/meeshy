@@ -66,6 +66,7 @@ import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.LiveLocationStartedEvent
 import me.meeshy.sdk.model.LiveLocationStoppedEvent
 import me.meeshy.sdk.model.LiveLocationUpdatedEvent
+import me.meeshy.sdk.model.TranscriptionPayload
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TranslatedAudioPayload
 import me.meeshy.sdk.model.TranslationEvent
@@ -128,8 +129,7 @@ class ChatViewModelTest {
     private val typingStopped = MutableSharedFlow<TypingEvent>()
     private val messagePinned = MutableSharedFlow<MessagePinnedEvent>()
     private val messageUnpinned = MutableSharedFlow<MessageUnpinnedEvent>()
-    private val translationCompleted = MutableSharedFlow<TranslationEvent>()
-    private val translationInProgress = MutableSharedFlow<TranslationEvent>()
+    private val translationReceived = MutableSharedFlow<TranslationEvent>()
     private val transcriptionReady = MutableSharedFlow<TranscriptionReadyEvent>()
     private val audioTranslationReady = MutableSharedFlow<AudioTranslationEvent>()
     private val liveLocationStarted = MutableSharedFlow<LiveLocationStartedEvent>()
@@ -142,12 +142,11 @@ class ChatViewModelTest {
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
-            every { messageUpdated } returns MutableSharedFlow()
+            every { messageEdited } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
             every { this@mockk.messagePinned } returns this@ChatViewModelTest.messagePinned
             every { this@mockk.messageUnpinned } returns this@ChatViewModelTest.messageUnpinned
-            every { this@mockk.translationCompleted } returns this@ChatViewModelTest.translationCompleted
-            every { this@mockk.translationInProgress } returns this@ChatViewModelTest.translationInProgress
+            every { this@mockk.translationReceived } returns this@ChatViewModelTest.translationReceived
             every { this@mockk.transcriptionReady } returns this@ChatViewModelTest.transcriptionReady
             every { this@mockk.audioTranslationReady } returns this@ChatViewModelTest.audioTranslationReady
             every { this@mockk.typingStarted } returns this@ChatViewModelTest.typingStarted
@@ -2053,11 +2052,11 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun a_completed_translation_event_applies_the_translation_to_the_open_conversation() = runTest(dispatcher) {
+    fun a_translation_event_applies_the_translation_to_the_open_conversation() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
-        translationCompleted.emit(
+        translationReceived.emit(
             TranslationEvent(
                 messageId = "m2",
                 conversationId = "c1",
@@ -2071,11 +2070,11 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun a_completed_translation_event_elsewhere_is_ignored() = runTest(dispatcher) {
+    fun a_translation_event_elsewhere_is_ignored() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
 
-        translationCompleted.emit(
+        translationReceived.emit(
             TranslationEvent(
                 messageId = "m2",
                 conversationId = "other",
@@ -2089,24 +2088,6 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun an_in_progress_translation_event_applies_the_translation_to_the_open_conversation() = runTest(dispatcher) {
-        val h = harness(syncedConversation(), currentUser = me)
-        advanceUntilIdle()
-
-        translationInProgress.emit(
-            TranslationEvent(
-                messageId = "m2",
-                conversationId = "c1",
-                targetLanguage = "es",
-                translatedContent = "Hola",
-            ),
-        )
-        advanceUntilIdle()
-
-        coVerify(exactly = 1) { h.repo.applyTranslation("m2", "es", "Hola") }
-    }
-
-    @Test
     fun a_transcription_ready_event_applies_the_transcription_to_the_open_conversation() = runTest(dispatcher) {
         val h = harness(syncedConversation(), currentUser = me)
         advanceUntilIdle()
@@ -2116,10 +2097,12 @@ class ChatViewModelTest {
                 messageId = "m2",
                 conversationId = "c1",
                 attachmentId = "a1",
-                text = "Hello there",
-                language = "en",
-                confidence = 0.9,
-                durationMs = 4200L,
+                transcription = TranscriptionPayload(
+                    text = "Hello there",
+                    language = "en",
+                    confidence = 0.9,
+                    durationMs = 4200L,
+                ),
             ),
         )
         advanceUntilIdle()
@@ -2137,7 +2120,7 @@ class ChatViewModelTest {
                 messageId = "m2",
                 conversationId = "other",
                 attachmentId = "a1",
-                text = "Hello there",
+                transcription = TranscriptionPayload(text = "Hello there"),
             ),
         )
         advanceUntilIdle()
@@ -3136,6 +3119,102 @@ class ChatViewModelTest {
         advanceUntilIdle()
 
         assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun arming_an_effect_on_an_empty_composer_persists_it_to_the_durable_store() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleEffect(MessageEffectFlags.CONFETTI)
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.effects?.has(MessageEffectFlags.CONFETTI)).isTrue()
+        assertThat(stored?.text).isEqualTo("")
+    }
+
+    @Test
+    fun clearing_the_last_armed_effect_on_an_empty_composer_purges_the_stored_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(
+                    conversationId = "c1",
+                    text = "",
+                    effects = MessageEffects(flags = MessageEffectFlags.GLOW),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        h.vm.clearEffects()
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun an_effects_only_stored_draft_re_arms_the_composer_effects_on_open() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(
+                    conversationId = "c1",
+                    text = "",
+                    effects = MessageEffects(flags = MessageEffectFlags.EPHEMERAL, ephemeralDuration = 300),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pendingEffects.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(h.vm.state.value.pendingEffects.ephemeralDuration).isEqualTo(300)
+        assertThat(h.vm.state.value.draft).isEqualTo("")
+    }
+
+    @Test
+    fun picking_a_composer_language_persists_it_alongside_the_typed_draft() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hola")
+        h.vm.onComposerLanguagePicked("de")
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.text).isEqualTo("hola")
+        assertThat(stored?.selectedLanguage).isEqualTo("de")
+    }
+
+    @Test
+    fun picking_a_language_on_an_empty_composer_persists_nothing() = runTest(dispatcher) {
+        // Parity with iOS: a language pick is not content, so it never creates a draft on its own.
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onComposerLanguagePicked("de")
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun a_stored_draft_re_applies_its_manual_language_on_open() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(conversationId = "c1", text = "hola", selectedLanguage = "de"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("hola")
+        // The restored manual pick wins over live detection of the restored Spanish text.
+        assertThat(h.vm.state.value.composerLanguageCode).isEqualTo("de")
     }
 
     @Test

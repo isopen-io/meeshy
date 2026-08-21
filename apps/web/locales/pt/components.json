@@ -1,5 +1,7 @@
 {
   "components": {
+    "mute": "Silenciar",
+    "unmute": "Ativar som",
     "affiliate": {
       "shareApp": "Compartilhar aplicativo",
       "createToken": "Criar token",

@@ -185,16 +185,14 @@ export function VideoStream({
                 <AlertDialogContent onClick={(e) => e.stopPropagation()}>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      {t('stream.removeParticipantConfirmTitle').replace(
-                        '{name}',
-                        participantName || t('stream.participant')
-                      )}
+                      {t('stream.removeParticipantConfirmTitle', {
+                        name: participantName || t('stream.participant'),
+                      })}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      {t('stream.removeParticipantConfirmDescription').replace(
-                        '{name}',
-                        participantName || t('stream.participant')
-                      )}
+                      {t('stream.removeParticipantConfirmDescription', {
+                        name: participantName || t('stream.participant'),
+                      })}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>

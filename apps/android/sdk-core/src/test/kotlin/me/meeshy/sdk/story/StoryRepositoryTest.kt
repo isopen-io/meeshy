@@ -4,7 +4,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import me.meeshy.core.database.MeeshyDatabase
@@ -13,12 +15,17 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryTranslation
 import me.meeshy.sdk.model.StoryViewerWire
 import me.meeshy.sdk.model.StoryViewersResponse
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.StoryApi
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslateResponse
+import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.outbox.OutboxDependencyKey
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -36,6 +43,7 @@ import java.io.IOException
 class StoryRepositoryTest {
 
     private val api: StoryApi = mockk(relaxed = true)
+    private val translationApi: TranslationApi = mockk(relaxed = true)
     private lateinit var db: MeeshyDatabase
 
     @Before
@@ -54,7 +62,10 @@ class StoryRepositoryTest {
     private fun outbox() = OutboxRepository(db, db.outboxDao())
 
     private fun repository(outbox: OutboxRepository = outbox()) =
-        StoryRepository(api, db, db.storyDao(), db.syncMetaDao(), outbox)
+        StoryRepository(api, db, db.storyDao(), db.syncMetaDao(), outbox, translationApi)
+
+    private fun translated(text: String) =
+        ApiResponse(success = true, data = TranslateResponse(translatedText = text))
 
     private fun stubList(vararg posts: ApiPost) {
         coEvery { api.list(any(), any()) } returns ApiResponse(success = true, data = posts.toList())
@@ -481,5 +492,78 @@ class StoryRepositoryTest {
 
         assertThat(repo.failedPublishes().first()).isEmpty()
         assertThat(repo.pendingPublishes().first()).isEmpty()
+    }
+
+    // --- On-demand story translation for a caller-held slide (translateStory) ---
+
+    @Test
+    fun `translateStory translates the source and returns the merged story`() = runTest {
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repository().translateStory(StoryItem(id = "s9", content = "Bonjour"), "es")
+
+        assertThat(merged?.translations)
+            .containsExactly(StoryTranslation(language = "es", content = "Hola"))
+    }
+
+    @Test
+    fun `translateStory forwards the source text and trims the target`() = runTest {
+        val slot = slot<TranslateRequest>()
+        coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
+
+        repository().translateStory(StoryItem(id = "s9", content = "Bonjour"), "  es  ")
+
+        assertThat(slot.captured.text).isEqualTo("Bonjour")
+        assertThat(slot.captured.targetLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun `translateStory is inert for a blank target`() = runTest {
+        val merged = repository().translateStory(StoryItem(id = "s9", content = "Bonjour"), "   ")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun `translateStory is inert when the story has no source text`() = runTest {
+        val merged = repository().translateStory(StoryItem(id = "s9", content = "   "), "es")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun `translateStory returns null when the translator fails`() = runTest {
+        coEvery { translationApi.translate(any()) } throws IOException("offline")
+
+        val merged = repository().translateStory(StoryItem(id = "s9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun `translateStory returns null for a blank translation`() = runTest {
+        coEvery { translationApi.translate(any()) } returns translated("   ")
+
+        val merged = repository().translateStory(StoryItem(id = "s9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun `translateStory is idempotent when the translation already matches`() = runTest {
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repository().translateStory(
+            StoryItem(
+                id = "s9",
+                content = "Bonjour",
+                translations = listOf(StoryTranslation(language = "es", content = "Hola")),
+            ),
+            "es",
+        )
+
+        assertThat(merged).isNull()
     }
 }

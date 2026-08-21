@@ -979,6 +979,33 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Sort un membre des appels EN COURS du fil dont il vient de perdre
+   * l'appartenance.
+   *
+   * Unique appelant : `endConversationMembership`, le point de convergence des
+   * quatre chemins de fin d'appartenance — c'est là qu'est écrit POURQUOI
+   * l'extinction précède l'éviction des rooms. Le raisonnement propre à
+   * l'appel (room distincte, autorisation lue sur `CallParticipant`, verbe de
+   * retrait muselé par la perte du droit) vit dans
+   * `CallEventsHandler.endCallParticipationForDepartedMember` ; le
+   * gestionnaire n'en est que le porteur, comme pour la position vive.
+   *
+   * Ne rejette jamais : sans serveur Socket.IO il n'y a par construction
+   * aucune room d'appel à défaire, et le handler absorbe ses propres échecs.
+   */
+  public async endCallParticipationForDepartedMember(
+    conversationId: string,
+    userId: string
+  ): Promise<void> {
+    if (!this.io) return;
+    await this.callEventsHandler.endCallParticipationForDepartedMember({
+      io: this.io as SocketIOServer,
+      conversationId,
+      userId
+    });
+  }
+
+  /**
    * Expose SocialEventsHandler for use in routes (broadcast social events)
    */
   public getSocialEventsHandler(): SocialEventsHandler {

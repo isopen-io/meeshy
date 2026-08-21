@@ -10,8 +10,15 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         lhs.bannerURL == rhs.bannerURL
     }
 
-    public var id: String { userId ?? username }
+    public var id: String { userId ?? participantId ?? username }
     public let userId: String?
+    /// `Participant.id` — la ligne de participation, distincte du compte.
+    /// Présent pour un visiteur sans compte, seule clé avec laquelle sa fiche
+    /// peut être demandée (`GET …/participants/:participantId/profile`).
+    public let participantId: String?
+    /// La personne n'a pas de compte : il n'existe aucune page de profil pour
+    /// elle, seulement une fiche de participation dans la conversation.
+    public let isAnonymous: Bool
     public let username: String
     public let displayName: String?
     public let avatarURL: String?
@@ -41,9 +48,12 @@ public struct ProfileSheetUser: Identifiable, Equatable {
         timezone: String? = nil, registrationCountry: String? = nil,
         profileCompletionRate: Int? = nil, hasE2EE: Bool = false,
         voicePublic: Bool? = nil, voiceSampleUrl: String? = nil,
-        voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil
+        voiceSampleDurationMs: Int? = nil, voiceQuality: Double? = nil,
+        participantId: String? = nil, isAnonymous: Bool = false
     ) {
         self.userId = userId
+        self.participantId = participantId
+        self.isAnonymous = isAnonymous
         self.username = username
         self.displayName = displayName
         self.avatarURL = avatarURL
@@ -82,13 +92,27 @@ extension ProfileSheetUser {
         return ProfileSheetUser(username: value)
     }
 
+    /// L'auteur d'un message, tel qu'une fiche peut le présenter.
+    ///
+    /// Le repli `senderUserId ?? senderId` ne vaut QUE pour un compte : chez un
+    /// visiteur sans compte, `senderUserId` est nul et `senderId` porte un
+    /// `Participant.id`. Le recopier dans `userId` faisait passer une identité
+    /// de participation pour une identité de compte, et la feuille de profil
+    /// partait chercher un utilisateur qui n'existe pas.
+    ///
+    /// Les deux identités voyagent désormais séparément : `userId` reste vide
+    /// pour un anonyme, `participantId` porte sa ligne de participation — seule
+    /// clé avec laquelle sa fiche peut être demandée.
     public static func from(message: MeeshyMessage) -> ProfileSheetUser {
-        ProfileSheetUser(
-            userId: message.senderUserId ?? message.senderId,
+        let isAnonymous = message.senderIsAnonymous
+        return ProfileSheetUser(
+            userId: isAnonymous ? nil : (message.senderUserId ?? message.senderId),
             username: message.senderUsername ?? message.senderName ?? "?",
             displayName: message.senderName,
             avatarURL: message.senderAvatarURL,
-            accentColor: message.senderColor ?? ""
+            accentColor: message.senderColor ?? "",
+            participantId: message.senderId,
+            isAnonymous: isAnonymous
         )
     }
 

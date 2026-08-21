@@ -51,6 +51,10 @@
   /* list.focusCard */
   --lentille-list-focus-card-ring-size: 1.5px;
   --lentille-list-focus-card-radius: 16px;
+  --lentille-list-focus-card-height: 104px;
+  --lentille-list-focus-card-padding-vertical: 14px;
+  --lentille-list-focus-card-avatar-size: 52px;
+  --lentille-list-focus-card-name-size: 17px;
 
   /* list.modeNotch */
   --lentille-list-mode-notch-size: 9.5px;

@@ -117,10 +117,11 @@ extension ConversationListView {
         }
 
         // Mode de lecture (contrat LWS-8/I-072) — sous-menu APRÈS « Marquer
-        // lu », deuxième des trois points d'entrée d'UNE préférence (encoche
-        // de la focus card I-071, ce sous-menu, l'aperçu `LentillePeekView`
-        // ci-dessous). Drapeau OFF ⇒ rien de plus ici : bit-à-bit identique
-        // au menu d'aujourd'hui, comme partout ailleurs dans la Lentille.
+        // lu », l'une des DEUX portes d'UNE préférence (encoche de la focus
+        // card I-071, ce sous-menu — l'aperçu-menu `LentillePeekView` a été
+        // supprimé le 2026-08-21 : l'aperçu montre les derniers messages).
+        // Drapeau OFF ⇒ rien de plus ici : bit-à-bit identique au menu
+        // d'aujourd'hui, comme partout ailleurs dans la Lentille.
         if LentilleFeatureFlag.isLentilleListEnabled {
             LentilleReadingModeSubmenu(
                 conversation: conversation,
@@ -456,66 +457,45 @@ extension ConversationListView {
                     .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
 
                 VStack(spacing: 16) {
-                    // Aperçu — troisième point d'entrée du menu de mode
-                    // (contrat LWS-8/I-072), UNIQUEMENT sur ce chemin
-                    // (< iOS 26, custom, possédé par LWS-8) : le chemin natif
-                    // iOS 26+ (`ConversationListView+Rows.swift`, `preview:`
-                    // du `.contextMenu`) n'est pas un fichier ouvert à cette
-                    // tâche, et sa preview est de toute façon STATIQUE — non
-                    // interactive quelle que soit la vue qui la remplit (voir
-                    // le commentaire d'en-tête de `LentillePeekView`). Drapeau
-                    // OFF ⇒ `ConversationPreviewView` inchangée. `Group` fait
-                    // du `if/else` UNE expression, pour que le chaînage de
-                    // modificateurs ci-dessous s'applique aux DEUX branches.
-                    Group {
-                        if LentilleFeatureFlag.isLentilleListEnabled {
-                            LentillePeekView(
-                                conversation: conversation,
-                                isDark: theme.mode.isDark,
-                                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
-                                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
-                                presenceState: conversation.type == .direct
-                                    ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
-                                    : nil,
-                                storyState: storyRingState(for: conversation),
-                                moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
-                                onSelectMode: { _ in dismissContextMenu() }
-                            )
-                        } else {
-                            ConversationPreviewView(
-                                conversation: conversation,
-                                cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
-                                bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
-                                avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                                storyState: storyRingState(for: conversation),
-                                moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
-                                presenceState: conversation.type == .direct
-                                    ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
-                                    : nil,
-                                isDirect: conversation.type == .direct,
-                                onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
-                                    dismissContextMenu()
-                                    if let uid = conversation.participantUserId {
-                                        Task {
-                                            await CallManager.shared.requestPermissionsThenStartCall(
-                                                conversationId: conversation.id,
-                                                userId: uid,
-                                                displayName: conversation.name,
-                                                isVideo: false
-                                            )
-                                        }
-                                    }
-                                } : nil,
-                                onSearch: {
-                                    dismissContextMenu()
-                                    router.pendingOpenSearch = true
-                                    onSelect(conversation)
-                                },
-                                onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
-                                onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
-                            )
-                        }
-                    }
+                    // Aperçu d'appui long = la carte des DERNIERS MESSAGES
+                    // (bannière, avatar/logo, titre, icônes d'en-tête, fil
+                    // récent) — drapeau Lentille ON comme OFF (décision user
+                    // 2026-08-21 : le menu des modes n'a rien à faire dans
+                    // l'aperçu ; le choix de mode garde ses deux portes,
+                    // l'encoche de la carte de focus et le sous-menu « Mode
+                    // de lecture », monté plus haut dans ce fichier).
+                    ConversationPreviewView(
+                        conversation: conversation,
+                        cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
+                        bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner).flatMap { MeeshyConfig.resolveMediaURL($0) },
+                        avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                        storyState: storyRingState(for: conversation),
+                        moodEmoji: conversationMoodStatus(for: conversation)?.moodEmoji,
+                        presenceState: conversation.type == .direct
+                            ? PresenceManager.shared.presenceState(for: conversation.participantUserId ?? "")
+                            : nil,
+                        isDirect: conversation.type == .direct,
+                        onCall: (conversation.type == .direct && conversation.participantUserId != nil) ? {
+                            dismissContextMenu()
+                            if let uid = conversation.participantUserId {
+                                Task {
+                                    await CallManager.shared.requestPermissionsThenStartCall(
+                                        conversationId: conversation.id,
+                                        userId: uid,
+                                        displayName: conversation.name,
+                                        isVideo: false
+                                    )
+                                }
+                            }
+                        } : nil,
+                        onSearch: {
+                            dismissContextMenu()
+                            router.pendingOpenSearch = true
+                            onSelect(conversation)
+                        },
+                        onInfo: { dismissContextMenu(); conversationInfoConversation = conversation },
+                        onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
+                    )
                     // Preview STATIQUE (parité `.contextMenu` natif) : le
                     // ScrollView interne des messages interceptait le pan et
                     // volait le drag du geste de repli/morph ci-dessous — le

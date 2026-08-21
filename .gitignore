@@ -184,6 +184,9 @@ post-*
 !packages/shared/types/post-reference.ts
 !packages/shared/fixtures/canvas-v3/post-carousel-sound-library.json
 !packages/shared/fixtures/canvas-v3/post-sound-original.json
+!apps/web/__tests__/components/post-card-repost-attribution.test.tsx
+!apps/web/__tests__/components/post-detail-repost-attribution.test.tsx
+!apps/web/__tests__/components/post-detail-background-sound.test.tsx
 
 # Development runtime (dev.sh)
 .pids/

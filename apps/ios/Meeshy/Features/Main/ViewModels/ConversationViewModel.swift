@@ -3897,6 +3897,59 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// `message:restored-for-me` — un message que ce lecteur avait masqué pour
+    /// lui-même redevient visible, depuis un autre de ses appareils.
+    ///
+    /// **Pourquoi une relecture serveur et pas une écriture locale.** Le
+    /// masquage a purgé la ligne de GRDB (`purgeMessages`) : le contenu n'est
+    /// plus ici, et l'événement n'en porte pas. Il ne reste qu'une adresse.
+    ///
+    /// **Pourquoi `listAround` et pas `listAfter`.** Le message rendu est
+    /// presque toujours ANTÉRIEUR au dernier message détenu — il a été masqué
+    /// quelque part dans l'historique. Une fenêtre centrée sur lui le ramène
+    /// avec ses voisins ; un backfill par watermark ne le verrait jamais.
+    ///
+    /// **Pourquoi aucun `loadWindow`.** Le geste vient d'un AUTRE appareil : il
+    /// ne doit pas déplacer le regard de celui-ci. L'upsert suffit — chaque
+    /// écriture de `MessagePersistenceActor` poste `.messageStoreShouldRefresh`,
+    /// et le store relit sa fenêtre courante. Si le message rendu y tombe, la
+    /// bulle réapparaît à sa place chronologique ; sinon il attend en cache que
+    /// le lecteur remonte jusqu'à lui, sans qu'aucun aller-retour de plus soit
+    /// nécessaire.
+    ///
+    /// Chaque adresse est traitée indépendamment : une relecture qui échoue
+    /// (message devenu inaccessible, réseau) ne doit pas emporter ses voisines.
+    ///
+    /// La route unitaire (`restoreMessageForUser`) n'émet aujourd'hui qu'UNE
+    /// adresse par événement, mais le gabarit est une liste — comme pour le
+    /// masquage, dont la route en lot en accepte cent. `listAround` ramenant
+    /// une FENÊTRE et non un message isolé, une adresse déjà couverte par une
+    /// fenêtre précédente n'a rien à redemander : le lot se replie de lui-même
+    /// sur le nombre de fenêtres réellement distinctes, au lieu de facturer un
+    /// aller-retour par id si une restauration en lot voit le jour.
+    func restoreMessagesForMe(ids: [String]) async {
+        var covered: Set<String> = []
+
+        for messageId in ids where !covered.contains(messageId) {
+            do {
+                let response = try await messageService.listAround(
+                    conversationId: conversationId, around: messageId, limit: limit,
+                    includeReplies: true, includeTranslations: true, languages: nil
+                )
+                guard !response.data.isEmpty else { continue }
+
+                try? await messagePersistence.upsertFromAPIMessages(response.data)
+                extractAttachmentTranscriptions(from: response.data)
+                extractTextTranslations(from: response.data)
+                covered.formUnion(response.data.map(\.id))
+            } catch {
+                Logger.socket.error(
+                    "Failed to restore hidden message \(messageId): \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
     // MARK: - Search Messages (delegated to ConversationSearchHandler)
 
     /// First-page search. Delegates to `searchHandler`, then mirrors the

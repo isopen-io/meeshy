@@ -43,6 +43,19 @@ const message = (
   replyToMessageId: string | null = null,
 ): RiverMessageInput => ({ id, senderId, createdAt: at(minutes), replyToMessageId });
 
+/**
+ * Un avis SYSTÈME — « X a rejoint la conversation ». Il porte l'ARRIVANT pour
+ * auteur (`packages/shared/utils/join-notice.ts`) : c'est précisément ce qui
+ * rendait la loi aveugle.
+ */
+const notice = (id: string, senderId: string, minutes: number): RiverMessageInput => ({
+  id,
+  senderId,
+  createdAt: at(minutes),
+  replyToMessageId: null,
+  isSystem: true,
+});
+
 const input = (
   messages: readonly RiverMessageInput[],
   overrides: Partial<ResolveRiverLanesInput> = {},
@@ -622,6 +635,116 @@ describe('resolveRiverLanes — la tête de groupe porte l’identité, à l’i
     );
 
     expect(geometry.bubbles.map((bubble) => bubble.isFirstInGroup)).toEqual([true, false]);
+  });
+});
+
+/**
+ * Un avis d'arrivée n'est la voix de personne (miroir Rivière de la règle déjà
+ * tenue par `apps/web/utils/message-grouping.ts` et
+ * `MessageDayGrouping.isGroupHead`) — il descend l'axe du TEMPS avec les
+ * autres, et n'entre dans aucun des deux autres axes de la loi : ni la voix,
+ * ni le couloir.
+ */
+describe('resolveRiverLanes — un avis système n’est la voix de personne', () => {
+  it('ne laisse pas la première vraie bulle de l’arrivant continuer le groupe de sa propre annonce', () => {
+    const geometry = resolveRiverLanes(
+      input([notice('j', 'lena', 0), message('a', 'lena', 1), message('b', 'lena', 2)]),
+    );
+
+    expect(geometry.bubbles.map((bubble) => bubble.isFirstInGroup)).toEqual([true, true, false]);
+  });
+
+  it('ne continue le groupe d’aucun voisin — ni comme prédécesseur, ni comme successeur', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), notice('j', 'mia', 1), message('b', 'mia', 2)]),
+    );
+
+    expect(geometry.bubbles.map((bubble) => bubble.isFirstInGroup)).toEqual([true, true, true]);
+  });
+
+  it('ne compte pas l’annonce comme une VOIX — deux voix restent deux voix, et la rivière se sérialise', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'sarah', 1), notice('j', 'lena', 2)]),
+    );
+
+    expect(geometry.voiceCount).toBe(2);
+    expect(geometry.layout).toBe('serialized');
+    expect(geometry.serializationReason).toBe('belowMinimum');
+  });
+
+  it('ne donne AUCUN couloir à qui n’a fait qu’arriver', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), message('b', 'sarah', 1), notice('j', 'lena', 2)]),
+    );
+
+    expect(geometry.lanes.map((lane) => lane.laneId)).toEqual(['mia', 'sarah']);
+  });
+
+  it('fait naître la branche de l’arrivant à sa première PAROLE, jamais à son annonce', () => {
+    const geometry = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'sarah', 1),
+        notice('j', 'lena', 2),
+        message('c', 'lena', 3),
+      ]),
+    );
+
+    expect(geometry.voiceCount).toBe(3);
+    expect(laneOf(geometry, 'lena').spans).toEqual([
+      { startRank: 3, endRank: 3, isOpen: true, nodes: [{ rank: 3, kind: 'bubble', messageId: 'c' }] },
+    ]);
+  });
+
+  it('n’ajoute aucun nœud à la branche de celui que l’annonce concerne', () => {
+    const geometry = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        message('b', 'sarah', 1),
+        message('c', 'tom', 2),
+        notice('j', 'mia', 3),
+      ]),
+    );
+
+    expect(laneOf(geometry, 'mia').spans[0].nodes).toEqual([
+      { rank: 0, kind: 'bubble', messageId: 'a' },
+    ]);
+  });
+
+  it('ne fait reparaître personne quand on répond à une annonce, et ne trace aucun connecteur vers elle', () => {
+    const geometry = resolveRiverLanes(
+      input([
+        message('a', 'mia', 0),
+        notice('j', 'lena', 1),
+        message('b', 'sarah', 2, 'j'),
+        message('c', 'tom', 3),
+      ]),
+    );
+
+    expect(geometry.lanes.map((lane) => lane.laneId)).toEqual(['mia', 'sarah', 'tom']);
+    expect(geometry.connectors).toEqual([]);
+  });
+
+  it('descend malgré tout l’axe du TEMPS — l’avis garde son rang, et se dit avis', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), notice('j', 'lena', 1), message('b', 'sarah', 2)]),
+    );
+
+    expect(geometry.rankCount).toBe(3);
+    expect(geometry.bubbles.map((bubble) => [bubble.messageId, bubble.isSystem])).toEqual([
+      ['a', false],
+      ['j', true],
+      ['b', false],
+    ]);
+  });
+
+  it('ne nomme aucune colonne au rang d’une annonce — elle n’occupe la colonne de personne', () => {
+    const geometry = resolveRiverLanes(
+      input([message('a', 'mia', 0), notice('j', 'lena', 1), message('b', 'lena', 2)]),
+    );
+
+    expect(geometry.layout).toBe('serialized');
+    expect(resolveRiverLaneHeaders({ geometry, focusRank: 1 })).toEqual([]);
   });
 });
 

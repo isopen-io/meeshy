@@ -46,6 +46,23 @@ nonisolated enum FocalMediaGridLayout {
     /// Miroir de `BubbleStandardLayout.gridSpacing` (`:170`).
     static let gridSpacing: CGFloat = 2
 
+    /// Plafond de hauteur d'une vidéo solo, en multiple de la largeur — la
+    /// MÊME loi que la bulle (`MeeshyMessageAttachment.videoHeight(forWidth:
+    /// maxRatio:)`, 1.6) : une vidéo portrait 9:16 tient en 480 pt de haut sur
+    /// 270 de large, sans bandes noires ; une 16:9 reste 300 × 169.
+    static let soloVideoMaxHeightRatio: CGFloat = 1.6
+
+    /// Emplacement d'une vidéo SOLO : la largeur se déduit de la hauteur et du
+    /// format réel de la vidéo au lieu d'un 300 × 240 fixe qui letterboxait
+    /// toute vidéo portrait dans une carte paysage (retour user 2026-08-21,
+    /// image 2). Sans métadonnées de taille : 16:9.
+    static func soloVideoSlot(aspectRatio: CGFloat?) -> FocalMediaSlot {
+        let ratio = (aspectRatio ?? 0) > 0 ? aspectRatio! : 16.0 / 9.0
+        let height = min(gridMaxWidth / ratio, gridMaxWidth * soloVideoMaxHeightRatio)
+        let width = min(gridMaxWidth, height * ratio)
+        return FocalMediaSlot(width: width.rounded(), height: height.rounded())
+    }
+
     static func slots(for count: Int) -> [FocalMediaSlot] {
         guard count > 0 else { return [] }
         let halfW = (gridMaxWidth - gridSpacing) / 2
@@ -365,7 +382,11 @@ struct FocalAttachmentBlock: View, Equatable {
     private func gridBody(visibleItems: [MessageAttachment]) -> some View {
         switch visibleItems.count {
         case 1:
-            cell(visibleItems[0], slots[0])
+            if visibleItems[0].type == .video {
+                cell(visibleItems[0], FocalMediaGridLayout.soloVideoSlot(aspectRatio: visibleItems[0].videoAspectRatio))
+            } else {
+                cell(visibleItems[0], slots[0])
+            }
         case 2:
             HStack(spacing: FocalMediaGridLayout.gridSpacing) {
                 cell(visibleItems[0], slots[0])

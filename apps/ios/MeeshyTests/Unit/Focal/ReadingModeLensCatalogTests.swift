@@ -32,7 +32,23 @@ final class ReadingModeLensCatalogTests: XCTestCase {
 
     // MARK: - Ordre d'affichage
 
-    func test_displayOrder_neverIncludesBubbles() {
+    func test_displayOrder_includesBubbles_asARenderChoice() {
+        XCTAssertTrue(ReadingModeLensCatalog.displayOrder.contains(.bubbles),
+                      "2026-08-21 : Bulles est l'une des trois vues du fil, sélectionnable depuis le chip.")
+    }
+
+    func test_cycleOrder_isTheThreeThreadViews() {
+        XCTAssertEqual(ReadingModeLensCatalog.cycleOrder, [.focal, .script, .bubbles])
+    }
+
+    func test_rows_listBubblesAsAvailable_whateverTheCapabilities() {
+        let caps = capabilities(availableModes: [.focal, .script, .summary], riverEligible: false, current: 3)
+        let row = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal).first { $0.mode == .bubbles }
+        XCTAssertEqual(row?.isAvailable, true)
+    }
+
+    func test_displayOrder_legacy_neverIncludesBubbles_RETIRED() throws {
+        throw XCTSkip("Remplacé par test_displayOrder_includesBubbles_asARenderChoice (2026-08-21).")
         XCTAssertFalse(
             ReadingModeLensCatalog.displayOrder.contains(.bubbles),
             "`.bubbles` est le mode de repli drapeau OFF — il ne doit JAMAIS apparaître dans le catalogue sélectionnable de la feuille Lentille."
@@ -41,7 +57,12 @@ final class ReadingModeLensCatalogTests: XCTestCase {
 
     /// RETRAIT FOCAL iOS (2026-08-18) : Focal sort du catalogue sélectionnable
     /// — Script (même rangée plate, sans perspective) est le mode nominal.
-    func test_displayOrder_containsExactlyThreeSelectableModes() {
+    func test_displayOrder_containsTheFiveModes_focalScriptBubblesSummaryRiver() {
+        XCTAssertEqual(ReadingModeLensCatalog.displayOrder, [.focal, .script, .bubbles, .summary, .river])
+    }
+
+    func test_displayOrder_containsExactlyThreeSelectableModes_RETIRED() throws {
+        throw XCTSkip("Focal et Bulles sont de retour au catalogue (2026-08-21).")
         XCTAssertEqual(
             ReadingModeLensCatalog.displayOrder,
             [.script, .summary, .river],
@@ -54,7 +75,7 @@ final class ReadingModeLensCatalogTests: XCTestCase {
     func test_river_alwaysPresentInRows_evenWhenIneligible() {
         let caps = capabilities(availableModes: [.focal, .script, .summary], riverEligible: false, current: 3)
         let rows = ReadingModeLensCatalog.rows(capabilities: caps, currentMode: .focal)
-        XCTAssertEqual(rows.count, 3, "Les 3 lignes doivent apparaître même si la Rivière n'est pas ouverte — jamais retirée de la liste.")
+        XCTAssertEqual(rows.count, ReadingModeLensCatalog.displayOrder.count, "Toutes les lignes du catalogue (Focal, Script, Bulles, Résumé, Rivière — 2026-08-21) doivent apparaître même si la Rivière n'est pas ouverte — jamais retirée de la liste.")
         guard let riverRow = rows.last else {
             XCTFail("La ligne Rivière est introuvable en fin de catalogue.")
             return

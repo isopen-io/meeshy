@@ -530,7 +530,7 @@ export function registerMessagesRoutes(
       const currentParticipant = !isAnonymousUser && userId
         ? await prisma.participant.findFirst({
             where: { userId, conversationId, isActive: true },
-            select: { id: true, joinedAt: true, shareLinkId: true }
+            select: { id: true, joinedAt: true, shareLinkId: true, permissions: true, anonymousSession: true }
           })
         : null;
 
@@ -538,7 +538,7 @@ export function registerMessagesRoutes(
       const anonymousParticipant = isAnonymousUser && authRequest.authContext.participantId
         ? await prisma.participant.findFirst({
             where: { id: authRequest.authContext.participantId },
-            select: { id: true, joinedAt: true, shareLinkId: true }
+            select: { id: true, joinedAt: true, shareLinkId: true, permissions: true, anonymousSession: true }
           })
         : null;
 

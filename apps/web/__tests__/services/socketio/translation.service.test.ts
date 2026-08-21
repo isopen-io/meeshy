@@ -15,7 +15,6 @@ jest.mock('@/utils/logger', () => ({
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     MESSAGE_TRANSLATION: 'message:translation',
-    MESSAGE_TRANSLATED: 'message:translated',
     AUDIO_TRANSLATION_READY: 'audio:translation-ready',
     AUDIO_TRANSLATIONS_PROGRESSIVE: 'audio:translations-progressive',
     AUDIO_TRANSLATIONS_COMPLETED: 'audio:translations-completed',
@@ -65,7 +64,6 @@ describe('TranslationService', () => {
       service.setupEventListeners(socket as any);
       const expectedEvents = [
         'message:translation',
-        'message:translated',
         'audio:translation-ready',
         'audio:translations-progressive',
         'audio:translations-completed',
@@ -132,17 +130,6 @@ describe('TranslationService', () => {
       socket._trigger('message:translation', event);
       socket._trigger('message:translation', event); // duplicate
 
-      expect(listener).toHaveBeenCalledTimes(1);
-    });
-
-    it('forwards message:translated events through the same deduplication path', () => {
-      const socket = makeSocket();
-      service.setupEventListeners(socket as any);
-      const listener = jest.fn();
-      service.onTranslation(listener);
-
-      const event = makeTranslationEvent({ messageId: 'msg-2' });
-      socket._trigger('message:translated', event);
       expect(listener).toHaveBeenCalledTimes(1);
     });
 

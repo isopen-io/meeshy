@@ -13,9 +13,9 @@
  * sélection…). iOS a son `TimelineView(.periodic(by: 60))` ; le web n'avait
  * aucun équivalent — c'est l'écart L14 de la matrice, signalé par Q-140.
  *
- * Scénario RED-GREEN : montage à H = 2026-08-16T23:59:30.000Z (message
+ * Scénario RED-GREEN : montage à H = 16/08/2026 23:59:30 heure LOCALE (message
  * envoyé à l'instant, donc « aujourd'hui », libellé = heure nue "23:59").
- * On avance l'horloge de 61 s ⇒ H+61s = 2026-08-17T00:00:31.000Z : le
+ * On avance l'horloge de 61 s ⇒ H+61s tombe le 17/08 à 00:00:31 locales : le
  * message est maintenant « hier » (`calendarDayDiff` bascule 0 → 1,
  * `packages/shared/utils/calendar-date.ts`) — le libellé DOIT devenir
  * « Hier 23:59 ». Sur le code d'AVANT ce correctif, le rang ne se re-rend
@@ -78,7 +78,21 @@ const t = (key: string, params?: Record<string, unknown> | string) => {
   return key;
 };
 
-const H = new Date('2026-08-16T23:59:30.000Z');
+/**
+ * 23:59:30 en heure LOCALE, et non en UTC.
+ *
+ * Ce que le témoin observe est un basculement de JOUR CIVIL — « 23:59 » puis
+ * « Hier 23:59 » — et le jour civil est une notion locale : `formatConversationDate`
+ * rend l'heure du fuseau de la machine. Un repère écrit `…T23:59:30.000Z` ne vaut
+ * donc 23:59 qu'à Greenwich ; en UTC+2 il s'affiche « 01:59 », le montage tombe
+ * une minute après minuit au lieu d'une minute avant, et le test échoue sans que
+ * rien n'ait changé dans le code testé.
+ *
+ * Le construire en local le rend vrai partout : le passage à minuit reste à 30 s
+ * du montage, quel que soit le fuseau. La CI tourne en UTC, ce qui rendait le
+ * défaut invisible là-bas et fatal partout ailleurs.
+ */
+const H = new Date(2026, 7, 16, 23, 59, 30, 0);
 
 const makeConversation = (): Conversation =>
   ({
@@ -114,7 +128,7 @@ describe('LentilleRow — D-12, l’heure relative vit (tick mutualisé 60s)', (
     jest.useRealTimers();
   });
 
-  it('monté à H "aujourd’hui" (23:59:30 UTC), avancer de 61s fait basculer le libellé sur "Hier" (RED sur le code d’avant, GREEN après)', () => {
+  it('monté à H "aujourd’hui" (23:59:30 heure locale), avancer de 61s fait basculer le libellé sur "Hier" (RED sur le code d’avant, GREEN après)', () => {
     render(
       <LentilleRow
         conversation={makeConversation()}

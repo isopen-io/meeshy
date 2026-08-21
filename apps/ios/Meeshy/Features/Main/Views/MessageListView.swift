@@ -117,14 +117,12 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
                 .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
                 .accessibilityAction(named: String(localized: "a11y.message.actions.long_press", bundle: .main)) { onLongPress() }
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: MessageFramePreferenceKey.self,
-                            value: [messageId: proxy.frame(in: .global)]
-                        )
-                    }
-                )
+                // Plus de `GeometryReader` + préférence par cellule : hébergée
+                // dans une `UIHostingConfiguration`, la préférence ne franchit
+                // jamais la frontière UIKit jusqu'à `ConversationView` — la
+                // frame du menu flottant vient de `cellFrameInWindow` (UIKit).
+                // C'était une vue et une écriture de préférence par cellule et
+                // par layout, pour rien (audit fluidité 2026-08-21).
                 .opacity(isHiddenForOverlay ? 0 : 1)
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }

@@ -1,13 +1,19 @@
 import { act } from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
 
+// Keys that carry a {name} placeholder in the real catalog (locales/*/calls.json)
+// — mirrored here (with the real `t(key, params)` function-replacer semantics) so
+// the interpolation tests below actually exercise substitution rather than a no-op.
+const KEYS_WITH_NAME_PLACEHOLDER = new Set([
+  'stream.participantLeft',
+  'stream.removeParticipantConfirmTitle',
+  'stream.removeParticipantConfirmDescription',
+]);
+
 jest.mock('@/hooks/useI18n', () => ({
   useI18n: () => ({
-    // `stream.participantLeft` carries a {name} placeholder in the real catalog;
-    // mirror it (and the real `t(key, params)` function-replacer semantics) so the
-    // interpolation test below actually exercises substitution.
     t: (k: string, params?: Record<string, unknown>) => {
-      const template = k === 'stream.participantLeft' ? `${k} {name}` : k;
+      const template = KEYS_WITH_NAME_PLACEHOLDER.has(k) ? `${k} {name}` : k;
       if (!params) return template;
       return template.replace(/\{(\w+)\}/g, (match, key: string) =>
         params[key] != null ? String(params[key]) : match,
@@ -161,6 +167,31 @@ describe('VideoStream — moderator kick control (W6)', () => {
     render(<VideoStream stream={null} participantName="Alice" onKickParticipant={onKickParticipant} />);
     fireEvent.click(screen.getByTestId('alert-dialog-cancel'));
     expect(onKickParticipant).not.toHaveBeenCalled();
+  });
+
+  it('inserts a participant name containing $-sequences verbatim into the remove-participant confirm title and description', () => {
+    // Same bug class as the participant-left line (Vague/commit f2ea201c):
+    // `t(key).replace('{name}', name)` re-injects the {name} sentinel and
+    // mutilates the phrase when `name` contains `$&`, `$$`, `` $` ``, `$'`.
+    const trickyName = "A$&B $$ C$'D";
+    render(
+      <VideoStream
+        stream={null}
+        participantName={trickyName}
+        onKickParticipant={jest.fn()}
+      />
+    );
+
+    const title = screen.getByText((content) =>
+      content.includes('stream.removeParticipantConfirmTitle') && content.includes(trickyName)
+    );
+    expect(title.textContent).not.toContain('{name}');
+
+    const description = screen.getByText((content) =>
+      content.includes('stream.removeParticipantConfirmDescription') &&
+      content.includes(trickyName)
+    );
+    expect(description.textContent).not.toContain('{name}');
   });
 
   it('stops the trigger click from bubbling to an ancestor fullscreen toggle', () => {

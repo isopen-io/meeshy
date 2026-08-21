@@ -2,6 +2,8 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import org.junit.Test
 
 /**
@@ -162,7 +164,164 @@ class DraftAutosaveTest {
         )
     }
 
+    // ---- resolve(): armed-effects behaviour (iOS `MessageDraft.isEffectivelyEmpty` weighs effects) ----
+
+    private val confetti = MessageEffects(flags = MessageEffectFlags.CONFETTI)
+    private val glow = MessageEffects(flags = MessageEffectFlags.GLOW)
+
+    @Test
+    fun armed_effects_on_an_empty_composer_are_persisted() {
+        val decision = DraftAutosave.resolve("c1", "", replyToId = null, now, previous = null, effects = confetti)
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(
+                ConversationDraft(conversationId = "c1", text = "", updatedAt = now, effects = confetti),
+            ),
+        )
+    }
+
+    @Test
+    fun the_saved_draft_carries_the_armed_effects_alongside_text() {
+        val decision = DraftAutosave.resolve("c1", "boom", replyToId = null, now, previous = null, effects = confetti)
+
+        assertThat((decision as DraftPersist.Save).draft.effects).isEqualTo(confetti)
+    }
+
+    @Test
+    fun clearing_effects_on_an_empty_composer_clears_an_effects_only_draft() {
+        val previous = ConversationDraft(conversationId = "c1", text = "", updatedAt = "old", effects = confetti)
+
+        val decision = DraftAutosave.resolve("c1", "", replyToId = null, now, previous, effects = MessageEffects())
+
+        assertThat(decision).isEqualTo(DraftPersist.Clear("c1"))
+    }
+
+    @Test
+    fun only_the_armed_effects_changing_still_saves() {
+        val previous = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = "old", effects = confetti)
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous, effects = glow)
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(ConversationDraft(conversationId = "c1", text = "hi", updatedAt = now, effects = glow)),
+        )
+    }
+
+    @Test
+    fun identical_text_reply_and_effects_writes_nothing() {
+        val previous = ConversationDraft(
+            conversationId = "c1", text = "hi", updatedAt = "old", replyToId = "m1", effects = confetti,
+        )
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = "m1", now, previous, effects = confetti)
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
+    @Test
+    fun blank_composer_with_no_effects_and_no_stored_draft_writes_nothing() {
+        val decision =
+            DraftAutosave.resolve("c1", "  ", replyToId = null, now, previous = null, effects = MessageEffects())
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
+    // ---- resolve(): manual composer-language behaviour ----
+    // iOS persists `MessageDraft.selectedLanguage` but `isEffectivelyEmpty` ignores it — a language
+    // pick rides along a real draft and never rescues an otherwise-empty composer. Android persists
+    // only the deliberate manual pick (`ComposerLanguageState.manualOverride`), not live detection.
+
+    @Test
+    fun a_language_pick_on_an_empty_composer_is_not_persisted() {
+        val decision = DraftAutosave.resolve("c1", "", replyToId = null, now, previous = null, selectedLanguage = "fr")
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
+    @Test
+    fun clearing_the_composer_leaves_a_language_only_draft_unpersisted() {
+        // A language pick alone was never worth persisting, so an empty composer over no prior
+        // draft writes nothing even when a language is armed (parity with iOS: language is not
+        // content). There is nothing to clear.
+        val decision = DraftAutosave.resolve("c1", "   ", replyToId = null, now, previous = null, selectedLanguage = "de")
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
+    @Test
+    fun text_typed_with_a_manual_language_carries_the_language() {
+        val decision = DraftAutosave.resolve("c1", "hola", replyToId = null, now, previous = null, selectedLanguage = "es")
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(
+                ConversationDraft(conversationId = "c1", text = "hola", updatedAt = now, selectedLanguage = "es"),
+            ),
+        )
+    }
+
+    @Test
+    fun only_the_language_pick_changing_on_a_text_draft_still_saves() {
+        val previous = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = "old", selectedLanguage = "en")
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous, selectedLanguage = "de")
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(
+                ConversationDraft(conversationId = "c1", text = "hi", updatedAt = now, selectedLanguage = "de"),
+            ),
+        )
+    }
+
+    @Test
+    fun identical_text_and_language_writes_nothing() {
+        val previous = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = "old", selectedLanguage = "de")
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous, selectedLanguage = "de")
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
+    @Test
+    fun the_language_reference_is_trimmed_and_a_blank_one_is_dropped() {
+        val trimmed = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous = null, selectedLanguage = " de ")
+        assertThat((trimmed as DraftPersist.Save).draft.selectedLanguage).isEqualTo("de")
+
+        val blank = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous = null, selectedLanguage = "   ")
+        assertThat((blank as DraftPersist.Save).draft.selectedLanguage).isNull()
+    }
+
+    @Test
+    fun clearing_the_language_while_text_remains_saves_the_text_without_a_language() {
+        val previous = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = "old", selectedLanguage = "de")
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous, selectedLanguage = null)
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(
+                ConversationDraft(conversationId = "c1", text = "hi", updatedAt = now, selectedLanguage = null),
+            ),
+        )
+    }
+
     // ---- restore() ----
+
+    @Test
+    fun restore_re_arms_an_effects_only_draft_with_empty_text_and_the_effects() {
+        val stored = ConversationDraft(conversationId = "c1", text = "", updatedAt = now, effects = confetti)
+
+        assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = false))
+            .isEqualTo(DraftRestore(text = "", replyToId = null, effects = confetti))
+    }
+
+    @Test
+    fun restore_returns_the_stored_effects_alongside_text_and_reply() {
+        val stored = ConversationDraft(
+            conversationId = "c1", text = "re: salut", updatedAt = now, replyToId = "m1", effects = glow,
+        )
+
+        assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = false))
+            .isEqualTo(DraftRestore(text = "re: salut", replyToId = "m1", effects = glow))
+    }
 
     @Test
     fun restore_returns_the_stored_text_into_an_idle_empty_composer() {
@@ -221,5 +380,29 @@ class DraftAutosaveTest {
         val stored = ConversationDraft(conversationId = "c1", text = "unsent", updatedAt = now)
 
         assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = true)).isNull()
+    }
+
+    @Test
+    fun restore_returns_the_stored_manual_language_alongside_text() {
+        val stored = ConversationDraft(conversationId = "c1", text = "hola", updatedAt = now, selectedLanguage = "es")
+
+        assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = false))
+            .isEqualTo(DraftRestore(text = "hola", replyToId = null, selectedLanguage = "es"))
+    }
+
+    @Test
+    fun restore_trims_a_padded_stored_language_and_drops_a_blank_one() {
+        val padded = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = now, selectedLanguage = " de ")
+        assertThat(DraftAutosave.restore(padded, currentDraft = "", isEditing = false)?.selectedLanguage).isEqualTo("de")
+
+        val blank = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = now, selectedLanguage = "   ")
+        assertThat(DraftAutosave.restore(blank, currentDraft = "", isEditing = false)?.selectedLanguage).isNull()
+    }
+
+    @Test
+    fun a_text_draft_without_a_language_restores_with_no_language() {
+        val stored = ConversationDraft(conversationId = "c1", text = "unsent", updatedAt = now)
+
+        assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = false)?.selectedLanguage).isNull()
     }
 }

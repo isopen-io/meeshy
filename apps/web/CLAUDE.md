@@ -220,6 +220,71 @@ porte la clé, donc il EFFACE. Sur le fil la question ne se pose pas (Socket.IO 
 garde, enveloppe présente = écrit, `undefined` compris). Jumeau iOS :
 `ConversationSyncEngine.handleUnreadUpdated` — toute évolution touche les deux.
 
+### Appartenance à une conversation — une grille CLOSE, montantes et descendantes appariées
+Cinq transitions déplacent la LIGNE de la liste, et elles se traitent par paires. Toutes vivent dans
+`use-socket-cache-sync.ts` :
+
+| transition | événement (moi) | geste |
+|---|---|---|
+| on m'ajoute | `conversation:new` | `fetchConversationIntoCache` |
+| je pars / on me retire | `conversation:participant-left` | `dropConversationFromCache` |
+| on me bannit | `conversation:participant-banned` | `dropConversationFromCache` |
+| **on me débannit** | `conversation:participant-unbanned` + `membershipRestored !== false` | `fetchConversationIntoCache` |
+
+`fetchConversationIntoCache` et `dropConversationFromCache` sont les DEUX seuls gestes, et ils sont
+exactement inverses : n'en écrire un troisième nulle part. La remise en liste est une **lecture
+bornée** `GET /conversations/:id`, jamais un rejeu de pages (cf. la règle sur les préfixes de query
+infinite paginée par OFFSET ci-dessus), et elle est idempotente aux deux bouts — avant la requête et
+à sa résolution.
+
+Le tri-état `membershipRestored` / `membershipEnded` se lit **par la NÉGATIVE** : `false` seul dit
+« aucune appartenance n'a bougé » ; l'ABSENCE dit « elle a bougé », parce qu'un serveur antérieur au
+champ ne l'envoyait pas et bougeait toujours. Donc `!== false`, jamais `=== true`. Jumeau iOS :
+`didRestoreMembership = membershipRestored ?? true` (`ParticipantUnbannedEvent`, MeeshySDK).
+
+Piège de forme : un handler dont tout le corps réécrit un CHAMP sur une ligne de liste (un effectif,
+un aperçu) est un no-op muet dès qu'un handler voisin sait retirer cette ligne. Le `map` ne trouve
+rien, le cache ressort identique, aucune erreur n'est levée — et `staleTime: Infinity` plus un delta
+upsert-only sur `Conversation.updatedAt` ne rattrapent rien avant la réconciliation complète (24 h).
+
+### Un état local de REJET retient une identité, jamais un booléen
+Un `useState(false)` qu'un seul `set…(true)` fait basculer et que **rien** ne remet à `false` est une
+transition descendante sans sa montante — la forme sœur, côté composant, de la grille close
+ci-dessus. Il se corrige en retenant l'**identité de ce qui a été rejeté**, pas un drapeau :
+
+```ts
+const [dismissedMessageId, setDismissedMessageId] = useState<string | null>(null);
+if (!pinned || dismissedMessageId === pinned.id) return null;
+```
+
+Les identifiants du dépôt sont des ObjectId, donc **globalement uniques** : un seul champ réarme à la
+fois sur un nouveau sujet ET sur un changement d'entité parente — ni clé composée, ni `useEffect` de
+remise à zéro.
+
+Le piège qui rend ça non évident : **un composant paramétré par une entité mais monté SANS `key`**
+(`<PinnedMessageBanner conversationId={conversation.id} />`, `ConversationView.tsx`) n'est jamais
+remonté quand l'entité change. React réconcilie par position et par type : la query est re-clée et
+refetche, l'état local NON. Un rejet fait dans une conversation masquait ainsi la bannière de toutes
+les autres, jusqu'à un rechargement de page — aucun filet ne rattrape un `useState`.
+
+Toujours écrire le témoin négatif avec : **le même sujet re-servi reste rejeté**. Sans lui, un
+correctif qui réarme à chaque refetch passe, et le bouton de fermeture ne ferme plus rien.
+
+### Un abonnement socket dans un composant se BORNE à son entité
+La passerelle diffuse dans la room de sa conversation (`to(ROOMS.conversation(id))`) et le web est
+joint à **toutes** les rooms de ses conversations : un composant qui écoute `message:pinned` sans
+regarder la charge utile refetche sur l'activité de n'importe quelle autre conversation, pour un
+résultat identique par construction.
+
+Le filtre se lit **par la NÉGATIVE**, comme le tri-état `membershipRestored` : on ne saute que sur une
+entité **nommée et différente**. Une charge utile qui ne nomme rien ne prouve pas que l'événement est
+ailleurs — elle rafraîchit.
+
+```ts
+const named = (payload as { conversationId?: string } | null)?.conversationId;
+if (typeof named === 'string' && named !== conversationId) return;
+```
+
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
 et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST

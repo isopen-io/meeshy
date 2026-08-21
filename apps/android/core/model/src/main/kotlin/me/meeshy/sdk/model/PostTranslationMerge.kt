@@ -1,0 +1,84 @@
+package me.meeshy.sdk.model
+
+/**
+ * Prisme Linguistique — progressive translation merge for posts (read side).
+ *
+ * The map-keyed sibling of [MessageTranslationMerge]. A post reaches the client in
+ * its original language; an on-demand translation (the viewer tapped a configured
+ * language the post has no content for yet) finishes later. This upserts that
+ * translation into a cached [ApiPost.translations] map so the open feed card
+ * re-renders in the requested language the instant it lands — no refetch, no reload.
+ *
+ * Faithful to Rule 1 of the Prisme: only non-blank translations are ever stored (an
+ * empty one would make the card claim a translation exists when it does not — see
+ * [LanguageResolver] and [me.meeshy.ui.component.bubble.LanguageFlagTapResolver],
+ * whose `hasContent` guard treats a blank entry as no content).
+ */
+public object PostTranslationMerge {
+
+    /**
+     * Merge one translation into [post], or return `null` when it is a no-op
+     * (nothing to persist):
+     *  - a blank [targetLanguage] or blank [translatedText] — the Prisme never
+     *    stores an empty translation;
+     *  - an identical translation already present (same language, same text).
+     *
+     * Otherwise the returned copy has its [ApiPost.translations] upserted: an
+     * existing entry for [targetLanguage] (matched case-insensitively) is replaced
+     * in place under its original key, order preserved; otherwise a new
+     * [ApiPostTranslationEntry] is appended under the trimmed [targetLanguage].
+     */
+    public fun mergeTranslation(
+        post: ApiPost,
+        targetLanguage: String,
+        translatedText: String,
+    ): ApiPost? {
+        val merged = upsert(post.translations, targetLanguage, translatedText) ?: return null
+        return post.copy(translations = merged)
+    }
+
+    /**
+     * The comment-keyed sibling of the post overload above: merge one translation into
+     * [comment], or return `null` on the same no-op cases (blank [targetLanguage] or
+     * blank [translatedText], or an identical translation already present). Comments
+     * carry the same [ApiPostComment.translations] map shape as posts, so both share the
+     * one upsert law — a comment translated on demand (the reader tapped a configured
+     * language the comment has no content for yet) re-renders the moment it lands.
+     */
+    public fun mergeTranslation(
+        comment: ApiPostComment,
+        targetLanguage: String,
+        translatedText: String,
+    ): ApiPostComment? {
+        val merged = upsert(comment.translations, targetLanguage, translatedText) ?: return null
+        return comment.copy(translations = merged)
+    }
+
+    /**
+     * The shared upsert law over a translations map: trims [targetLanguage], rejects a
+     * blank target or [translatedText] and an idempotent match (same language matched
+     * case-insensitively, same text) as `null`; otherwise returns the map with the entry
+     * replaced in place under its original key (order preserved) or appended under the
+     * trimmed target.
+     */
+    private fun upsert(
+        translations: Map<String, ApiPostTranslationEntry>?,
+        targetLanguage: String,
+        translatedText: String,
+    ): Map<String, ApiPostTranslationEntry>? {
+        val language = targetLanguage.trim()
+        if (language.isEmpty()) return null
+        if (translatedText.isBlank()) return null
+
+        val existing = translations.orEmpty()
+        val matchKey = existing.keys.firstOrNull { it.equals(language, ignoreCase = true) }
+        if (matchKey != null && existing[matchKey]?.text == translatedText) return null
+
+        val entry = ApiPostTranslationEntry(text = translatedText)
+        return if (matchKey != null) {
+            existing.mapValues { (key, value) -> if (key == matchKey) entry else value }
+        } else {
+            existing + (language to entry)
+        }
+    }
+}

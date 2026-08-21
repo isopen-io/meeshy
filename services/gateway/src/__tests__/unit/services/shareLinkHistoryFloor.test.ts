@@ -167,3 +167,90 @@ describe('historyFloorFor', () => {
     expect(historyFloorFor(participation(), { allowViewHistory: false })).toEqual(floors.get('c1'));
   });
 });
+
+// ─── Le droit FIGÉ au join prime sur le lien ─────────────────────────────────
+//
+// On entre sous les conditions du MOMENT. Un hôte qui décoche `allowViewHistory`
+// après coup ne referme pas l'historique à qui est déjà là — son levier sur les
+// personnes déjà entrées est la surcharge par participant, pas le lien.
+//
+// Le repli n'est pas une précaution de style : toute participation créée avant
+// ce champ l'a ABSENT, et sur le connecteur MongoDB un champ absent ne matche ni
+// `null` ni `NOT null`. L'absence doit donc se lire « non figé », jamais
+// « faux » — sinon la migration fermerait l'historique à toute la population
+// existante d'un coup, sans qu'aucune requête ne le signale.
+
+describe('historyFloorFor — le droit figé prime, le lien est le repli', () => {
+  it('ouvre l’historique quand le droit figé l’accorde, MÊME si le lien le ferme', () => {
+    const floor = historyFloorFor(
+      { joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: true } },
+      { allowViewHistory: false },
+    );
+
+    expect(floor).toBeNull();
+  });
+
+  it('ferme l’historique quand le droit figé le refuse, MÊME si le lien l’ouvre', () => {
+    const floor = historyFloorFor(
+      { joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false } },
+      { allowViewHistory: true },
+    );
+
+    expect(floor).toEqual(JOINED);
+  });
+
+  it('retombe sur le lien quand le droit figé est ABSENT — participation d’avant le champ', () => {
+    const floor = historyFloorFor(
+      { joinedAt: JOINED, shareLinkId: 'sl-1', permissions: {} },
+      { allowViewHistory: false },
+    );
+
+    expect(floor).toEqual(JOINED);
+  });
+
+  it('retombe sur le lien quand `permissions` manque entièrement', () => {
+    const floor = historyFloorFor(
+      { joinedAt: JOINED, shareLinkId: 'sl-1' },
+      { allowViewHistory: true },
+    );
+
+    expect(floor).toBeNull();
+  });
+
+  it('laisse la SURCHARGE de l’hôte primer sur le droit figé', () => {
+    const floor = historyFloorFor(
+      {
+        joinedAt: JOINED,
+        shareLinkId: 'sl-1',
+        permissions: { canViewHistory: true },
+        anonymousSession: { rights: { canViewHistory: false } },
+      },
+      { allowViewHistory: true },
+    );
+
+    expect(floor).toEqual(JOINED);
+  });
+
+  it('ignore une surcharge qui ne nomme PAS l’historique', () => {
+    const floor = historyFloorFor(
+      {
+        joinedAt: JOINED,
+        shareLinkId: 'sl-1',
+        permissions: { canViewHistory: false },
+        anonymousSession: { rights: { canSendFiles: true } },
+      },
+      { allowViewHistory: true },
+    );
+
+    expect(floor).toEqual(JOINED);
+  });
+
+  it('ne borne toujours RIEN sans lien, quoi que dise le droit figé', () => {
+    const floor = historyFloorFor(
+      { joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } },
+      null,
+    );
+
+    expect(floor).toBeNull();
+  });
+});

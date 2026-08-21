@@ -42,6 +42,13 @@ struct ReadingModeChipModel: Equatable {
 }
 
 struct ReadingModeChip: View {
+    /// Mode clair : du blanc sur une capsule teintée à 28 % était illisible
+    /// (capture 2026-08-21) — le libellé prend la couleur de texte du thème.
+    @Environment(\.colorScheme) private var colorScheme
+    private var labelColor: Color {
+        colorScheme == .dark ? .white : MeeshyColors.textPrimary(isDark: false)
+    }
+
     let model: ReadingModeChipModel
     /// Lignes du menu d'appui long — bâties par l'appelant depuis le
     /// catalogue et les capacités STOCKÉES (jamais une seconde résolution).
@@ -56,12 +63,12 @@ struct ReadingModeChip: View {
                 if model.isAuto {
                     Text(String(localized: "reading_mode.chip.auto_prefix", defaultValue: "AUTO", bundle: .main))
                         .font(MeeshyFont.relative(9, weight: .heavy))
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundColor(labelColor.opacity(0.65))
                         .fixedSize()
                 }
                 Text(model.label)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(labelColor)
                     .lineLimit(1)
                     .fixedSize()
             }

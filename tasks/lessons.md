@@ -11367,3 +11367,382 @@ actor-isolated conformance ... cannot be used in nonisolated context`).
 **Tout type qui n'est qu'une règle s'écrit `nonisolated enum` du premier coup.**
 Même correctif que `StoryRepostAudience` huit heures plus tôt dans la même
 session — l'avoir déjà vécu n'a pas suffi à l'éviter.
+
+---
+
+## 2026-08-21 — Une garde d'autorisation qui protège aussi le verbe de RETRAIT : le motif s'est répété TROIS fois
+
+Cycle 75. Le défaut trouvé est le troisième exemplaire d'un même motif, et
+c'est cette répétition qui est la leçon — pas le défaut.
+
+| cycle | verbe muselé | ce qui survivait |
+|---|---|---|
+| 74 | `handleLiveLocationStop` | une épingle de position figée, ≤ 8 h |
+| 75 | `call:force-leave` (sens client) | un micro ouvert dans un appel en cours |
+
+Les deux commencent par résoudre l'appartenance avec `isActive: true`. Les deux
+sont le SEUL verbe capable de retirer l'état qu'ils gardent. Conséquence
+mécanique : **au moment précis où quelqu'un perd le droit d'être là, il perd
+aussi le pouvoir de retirer ce qu'il y a laissé.** L'état ne se fige pas par
+accident — il se fige PARCE QUE la garde a fait son travail.
+
+La règle à appliquer devant toute garde d'autorisation :
+
+> Lister les verbes qu'elle protège, et les séparer en deux colonnes : ceux qui
+> AJOUTENT ou MODIFIENT un état, et ceux qui le RETIRENT. La garde n'a de sens
+> que sur la première colonne. Sur la seconde, elle transforme une révocation de
+> droit en fuite d'état.
+
+Corollaire opérationnel : quand la garde doit rester (le sortant ne doit pas non
+plus pouvoir agir), **c'est au SERVEUR de faire le retrait à sa place**, au
+moment où il révoque le droit — jamais de laisser l'état pendre en espérant un
+verbe qu'on vient de rendre inaccessible.
+
+### Deux corollaires trouvés en chemin
+
+**1. Deux rooms ne se rejoignent pas toutes seules.** Sortir quelqu'un de
+`ROOMS.conversation(id)` ne le sortait pas de `ROOMS.call(callId)`. Avant
+d'écrire « untel est sorti », énumérer TOUTES les rooms où il se trouve, et
+vérifier ce que chaque canal aval lit RÉELLEMENT pour autoriser : le relais
+`call:signal` s'autorise sur `CallParticipant.leftAt`, jamais sur
+l'appartenance au fil. **Une éviction de room n'est une autorisation que si
+quelqu'un en aval lit la room.**
+
+**2. Un contrat écrit + un récepteur complet ≠ une fonction qui existe.**
+`SERVER_EVENTS.CALL_FORCE_LEAVE` était déclaré, documenté, et iOS
+l'implémentait ENTIÈREMENT — démontage WebRTC, clôture CallKit, quatre tests
+verts. Le gateway ne l'émettait jamais. Les tests iOS passaient parce qu'ils
+injectaient l'événement eux-mêmes ; rien dans aucune suite ne pouvait
+s'apercevoir qu'aucun producteur n'existait.
+
+Android l'avait pourtant CONSTATÉ, en toutes lettres : « `call:force-leave` is
+deliberately ABSENT: the gateway never emits it (verified dead) ». La preuve
+était écrite dans le dépôt depuis un mois, dans un commentaire que personne ne
+relierait jamais à la fonctionnalité manquante côté serveur.
+
+À retenir : **pour tout événement serveur→client du contrat partagé, la
+question « qui l'ÉMET ? » se pose séparément de « qui l'écoute ? », et un
+`grep` du nom d'événement dans les services répond en dix secondes.** Un
+récepteur soigné est un indice trompeur : il donne toutes les apparences d'une
+fonction livrée. Et quand un client note « verified dead », ce n'est pas un
+constat à archiver — c'est un défaut serveur non déposé.
+
+---
+
+## 2026-08-21 — La question du cycle 75 avait DEUX moitiés ; je n'en avais instrumenté qu'une
+
+Cycle 76. Le cycle 75 s'était clos sur une règle juste :
+
+> pour tout événement serveur→client du contrat partagé, la question « qui
+> l'ÉMET ? » se pose séparément de « qui l'écoute ? »
+
+J'avais retenu le cas qu'elle venait d'illustrer — *personne n'émet* — et pas
+sa moitié symétrique : *quelqu'un émet, un client n'écoute pas*. Écrire la
+matrice complète (124 événements × 4 corpus) a pris dix minutes et a sorti le
+défaut du jour immédiatement.
+
+**La leçon n'est pas « faire la matrice ». C'est : quand une règle se formule
+comme deux questions indépendantes, les DEUX se posent, et une règle qu'on
+n'applique que du côté où on l'a apprise n'est appliquée qu'à moitié.**
+
+### Trois pièges de l'instrument lui-même
+
+**1. Chercher les deux formes, littéral ET constante.** Ma première passe ne
+cherchait que `'message:restored-for-me'`. Elle a rendu 40 « trous » dont la
+plupart étaient faux : le web s'abonne via `SERVER_EVENTS.X`, jamais via la
+chaîne. J'ai failli ouvrir un défaut sur `participant:rights-updated`, que le
+web honore parfaitement. **Un instrument qui sur-signale ne vaut pas mieux que
+pas d'instrument — il coûte la confiance qu'on lui accorde au signal suivant.**
+
+**2. Exclure les tests des corpus.** Un test qui cite le nom d'un événement
+fait passer un client pour abonné.
+
+**3. Un `0` est une question, pas un défaut.** Beaucoup sont légitimes
+(fonction absente d'une plateforme). Le signal exploitable n'est pas le zéro :
+c'est **un verbe présent et son INVERSE absent, sur le même client**. Personne
+n'implémente à moitié une paire volontairement — l'asymétrie dénonce l'oubli
+là où le zéro seul ne prouve rien.
+
+### Le corollaire qui a failli me faire écrire un no-op vert
+
+Le délégué exposait déjà un verbe qui ressemblait à la solution :
+`syncMissedMessages()`. Il est **strictement en avant** (`listAfter(after:
+newestLocal)`), alors qu'un message rendu est presque toujours PLUS VIEUX que
+le dernier détenu.
+
+Le brancher là aurait produit un correctif parfaitement vert : aucune erreur,
+aucun log, aucun test rouge — et aucun message rendu.
+
+> **Avant de réutiliser un verbe de synchronisation existant, lire sa DIRECTION
+> et son ANCRE, pas son nom.** « Sync », « refresh », « reload » ne disent rien
+> de la région de l'historique réellement couverte. Un backfill par watermark
+> ne remonte JAMAIS le temps, et son no-op est silencieux par construction —
+> c'est exactement le genre de correctif qui passe la revue et ne corrige rien.
+
+### Et un rappel sur la description d'un défaut
+
+J'allais écrire « le message ne revient jamais ». Faux : il revient si le
+lecteur repasse par cette région de l'historique (le REST `listBefore` la
+re-couvre). Le vrai reproche est plus embarrassant à formuler et tout aussi
+grave : **le retour a lieu à une date qui dépend d'un geste de défilement sans
+rapport.** Ne pas durcir un symptôme pour le rendre vendable — l'événement
+existe pour que le retour ne soit pas remis au hasard, et c'est déjà tout le
+défaut.
+
+---
+
+## 2026-08-21 — Le NOM du canal est la seule chose qu'un test d'événement entrant ne peut pas prouver
+
+Cycle 76-bis, le lendemain du cycle 75 et sa symétrie exacte.
+
+| cycle | ce qui manquait | comment ça se taisait |
+|---|---|---|
+| 75 | un ÉMETTEUR pour un contrat écrit et un récepteur iOS complet | le récepteur n'est jamais appelé |
+| 76-bis | un NOM juste pour deux récepteurs Android complets | le récepteur n'est jamais appelé |
+
+Les deux produisent le même silence, par les deux bouts du fil. **Un abonnement
+Socket.IO à un nom que personne ne prononce ne lève pas, ne journalise pas, ne
+se plaint pas : il se tait pour toujours.**
+
+Android s'abonnait à `message:updated` (la passerelle émet `message:edited`) et
+à `transcription:ready` (elle émet `audio:transcription-ready`). Aucun des deux
+noms n'existait ailleurs dans le dépôt. En aval, TOUT était juste — le flow, le
+collecteur du ViewModel, le merge du dépôt, le type de charge utile. Seule la
+chaîne de caractères était fausse. Une édition de message et une transcription
+de note vocale ne sont jamais arrivées en direct sur Android.
+
+### La leçon principale
+
+Le seul test du gestionnaire injecte son événement ainsi :
+
+```kotlin
+handlers.getValue("notification:new").invoke(...)
+```
+
+Il cherche le gestionnaire **sous le nom que le gestionnaire a lui-même
+enregistré**. Il est donc vert QUEL QUE SOIT ce nom. Il prouve le décodage ; il
+ne peut structurellement rien prouver du nom. C'est le même angle mort qui
+rendait verts les quatre tests iOS de `call:force-leave` au cycle 75.
+
+> **Tout test qui injecte lui-même l'événement qu'il vérifie ne teste pas le
+> canal, seulement la charge utile.** Le nom se prouve ailleurs : contre le
+> contrat, par une garde qui LIT le code d'abonnement au lieu de l'exécuter.
+
+### Le corollaire du symbole menteur
+
+Le flow s'appelait `messageUpdated`. Tant que le symbole reprenait le nom
+fantôme, rien dans le code ne contredisait la chaîne fautive — le mensonge était
+cohérent avec lui-même de bout en bout. **Renommer le symbole d'après
+l'événement RÉEL fait partie du correctif, pas de la cosmétique.**
+
+### Et le défaut déjà corrigé sur la classe voisine
+
+`TranscriptionReadyEvent` était plat là où le fil imbrique. Son jumeau
+`AudioTranslationEvent`, dans le MÊME fichier, une classe plus haut, avait déjà
+été corrigé pour exactement cette raison — son test s'ouvre sur « a flat model
+silently drops every frame at decode time ». **Quand on corrige une forme de
+charge utile, relire les classes voisines du même pipeline dans la foulée : la
+trame qui les alimente vient du même émetteur et porte la même forme.**
+
+### La garde déposée
+
+`packages/shared/__tests__/ci/socket-event-name-gate.test.ts` — tout nom épelé
+en clair par iOS ou Android doit être une valeur déclarée du contrat. Deux
+détails qui font la différence entre une garde et un décor :
+
+1. **Importer les objets du contrat, jamais les relire au motif d'expression
+   régulière.** Une lecture textuelle ferait passer pour « déclaré » un nom
+   présent seulement en PROSE — la garde bénirait le défaut qu'elle interdit.
+2. **Poser le seuil de couverture PAR PLATEFORME.** iOS pèse ~110 littéraux,
+   Android ~47 : un seuil global laisse un scan Android muet passer inaperçu
+   derrière iOS. Une garde dont le scan peut devenir vide sans rougir rejoue
+   dans son propre garde-fou l'échec silencieux qu'elle traque.
+
+## 2026-08-21 — Une exemption écrite en COMMENTAIRE ne peut pas rougir, donc elle pourrit (cycle 77)
+
+Le contrat portait un bloc de prose intitulé « Call events RESERVED (no emitter
+yet) », qui énumérait les canaux d'appel déclarés avant leur émetteur. Il
+nommait encore six événements — `call:missed`, `call:quality-alert`,
+`call:translated-segment`, `call:transcription-active`,
+`call:already-answered`, `call:screen-capture-alert` — dont la passerelle avait
+entre-temps implémenté l'émission. Personne n'était venu corriger la phrase,
+parce que rien ne pouvait la contredire.
+
+> **Une exemption que rien n'exécute survit à sa raison d'être, et finit par
+> couvrir un vrai défaut.** Si une liste d'exceptions mérite d'exister, elle
+> mérite d'être une VALEUR que le code importe — et vérifiée dans les DEUX sens :
+> ce qui y figure doit encore avoir besoin d'y figurer.
+
+La réservation vit donc désormais dans `RESERVED_SERVER_EVENTS`, exportée par le
+contrat, et la garde rougit aussi bien sur un nom orphelin non réservé que sur
+un nom réservé dont l'émetteur a atterri.
+
+### Corollaire — où placer la table d'exceptions
+
+Pas dans la garde. Une table d'exceptions cachée au fond d'un fichier de test
+est un endroit où l'on dépose ce qu'on ne veut pas traiter, et que personne ne
+relit. Placée à côté des noms qu'elle qualifie, dans le fichier qu'on ouvre de
+toute façon pour déclarer l'événement, réserver un canal redevient un acte
+VISIBLE en revue.
+
+### La prose piège les gardes AUX DEUX BOUTS
+
+La garde du cycle 76 importait les objets du contrat plutôt que de les relire au
+motif, précisément pour qu'un nom cité en PROSE ne passe pas pour déclaré. Elle
+scannait pourtant le code client sans retirer les commentaires — et elle a rougi
+sur `// NOTE: there is no socket.on("post:reaction-sync")`, une phrase qui
+documente une absence d'abonnement, lue comme un abonnement.
+
+> **Un commentaire n'est ni une déclaration ni un abonnement.** Toute garde qui
+> LIT du code doit dépouiller les commentaires avant de chercher — la précaution
+> vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
+> l'autre moitié du piège en place.
+
+### Et le frère oublié, TROISIÈME occurrence
+
+`reaction:sync` avait été retiré du contrat pour cause d'absence d'émetteur — le
+commentaire de retrait raconte même qu'un client s'y était abonné et versait
+l'instantané dans le seau incrémental de `reaction:added`, donc un vrai bug. Ses
+deux frères du même pipeline, `post:reaction-sync` et `comment:reaction-sync`,
+sont restés déclarés. C'est le même motif qu'au cycle 76
+(`TranscriptionReadyEvent` plat quand son jumeau voisin avait déjà été corrigé),
+et c'est la troisième fois.
+
+> **Une correction de contrat ou de charge utile se termine par un `grep` des
+> FRÈRES**, pas du seul symbole corrigé. Les canaux d'un même pipeline
+> (`*:reaction-sync`, `*:translation-*`) partagent l'émetteur, donc le défaut.
+
+### Cycle 77-bis — Retirer un canal mort découvre parfois un gestionnaire vide
+
+Le retrait de `conversation:online-stats` classait ce canal « inoffensif :
+aucun consommateur d'interface, nulle part ». C'était vrai sur iOS, faux sur le
+web : au bout de sa chaîne de six niveaux, un handler de quarante lignes
+alimentait la liste des présents de la vue stream. Il était bien mort. Mais la
+question qu'il posait — **qui tient cette liste à jour, alors ?** — n'a pas été
+posée, et la réponse dormait quarante lignes plus haut dans le même fichier :
+
+```ts
+const handleUserStatus = useCallback((userId, username, isOnline) => {
+  // Géré par les événements socket - peut être étendu si nécessaire
+}, []);
+```
+
+Résultat à l'écran : liste semée à l'ouverture, puis figée. Qui arrive après
+vous n'apparaît jamais ; qui part reste affiché.
+
+> **Les deux moitiés d'un défaut se protègent l'une l'autre.** Le gestionnaire
+> vide paraissait couvert par le canal riche à côté de lui ; le canal riche
+> paraissait dispensé d'émetteur par la présence d'un récepteur complet. Lue
+> seule, chacune ressemble à une décision — « c'est géré ailleurs ».
+
+Et le corollaire opératoire, qu'aucune garde ne peut porter — une garde de
+contrat raisonne sur des NOMS de canaux, jamais sur ce que les gestionnaires
+écrivent :
+
+> **Avant de retirer du code mort, demander ce qu'il ALIMENTAIT, et qui l'écrit
+> encore une fois qu'il est parti.** Un récepteur mort qui était le seul
+> écrivain apparent d'un état d'interface laisse cet état sans personne.
+
+Enfin, le commentaire du gestionnaire vide DISAIT le défaut : « géré par les
+événements socket - peut être étendu si nécessaire ».
+
+> Un corps de gestionnaire vide portant un commentaire d'intention (« géré
+> ailleurs », « à étendre si besoin ») est un aveu, pas une note : c'est
+> l'endroit exact où quelqu'un s'est arrêté. Aller vérifier qui fait le travail
+> à sa place — souvent personne.
+
+---
+
+## Cycle 78 — Un écrivain sans lecteur, et les commentaires qui datent
+
+La leçon du 77-bis prise par l'autre bout. Là-bas : un état d'interface avec un
+lecteur et aucun écrivain. Ici : un producteur soigneusement alimenté dont
+**personne ne lit la sortie**.
+
+Le web battait `heartbeat` toutes les 90 s pour tenir la présence dans Redis.
+Cette charge avait migré vers le serveur (`handleEnginePong`, pong ENGINE toutes
+les 25 s, tous clients) — les deux chemins appelant la MÊME méthode étranglée à
+60 s. Le battement web ne pouvait donc rien produire de neuf, et il partait NU
+(sans `clientTime`), donc sans même obtenir le RTT qui est la seule chose que le
+canal applicatif offre en plus. L'ack repartait vers un client sans écouteur.
+
+> **Symétrique de la leçon 77-bis : demander d'un producteur QUI LE LIT.** Un
+> `Subject`/émetteur alimenté, typé, mocké dans les tests et abonné nulle part
+> coûte le même travail qu'un vrai — sans jamais rien rendre. Le grep utile n'est
+> pas « qui écrit ça ? » mais « qui s'y abonne ? », et il se termine souvent sur
+> les seuls mocks.
+
+Et la cause de fond, qui n'est pas dans le code :
+
+> **Un commentaire qui nomme des FAITS devient faux en silence quand les faits
+> bougent.** L'en-tête du hook web affirmait encore sa raison d'être (« maintenir
+> la presence dans Redis ») des mois après que le serveur l'eut reprise ; le
+> commentaire serveur, lui, énumérait ses émetteurs applicatifs (« web (90s) and
+> iOS (30s) »). Aucun test ne les tenait. Quand un correctif déplace une
+> responsabilité, chercher les phrases qui la décrivaient — elles ne sont pas de
+> la décoration, ce sont elles qu'on lira au prochain audit pour décider si le
+> code sert encore.
+
+Enfin, sur la forme d'un inventaire :
+
+> **Toute matrice ne devient pas une garde.** Le croisement « contrat × clients
+> qui écoutent » a trois classes de sortie — légitime, écart produit, défaut —
+> que seul un jugement sépare. Rendue verte à la hâte, elle serait devenue une
+> table d'exemptions. Certaines vérifications valent comme PASSE à refaire, pas
+> comme gate.
+
+---
+
+## Cycle 79 — Un lecteur branché dont l'écriture ne porte sur rien
+
+Troisième forme de la famille ouverte au 77-bis, et la seule des trois qu'aucun
+`grep` ne trouve.
+
+| cycle | forme | comment on la voit |
+|---|---|---|
+| 77-bis | un état d'interface avec un lecteur et **aucun écrivain** | `grep` « qui écrit ça ? » |
+| 78 | un producteur alimenté et **aucun lecteur** | `grep` « qui s'y abonne ? » |
+| **79** | un lecteur branché, qui s'exécute, **et dont l'écriture ne porte sur rien** | aucun `grep` |
+
+Le web recevait `conversation:participant-unbanned`, le handler existait, il
+s'exécutait, et son corps entier se résumait à réécrire un effectif de membres
+sur une ligne de liste — celle que le bannissement venait d'en retirer. Le `map`
+ne trouvait rien, le cache ressortait identique, aucune erreur n'était levée.
+
+> **Un abonnement qui s'exécute n'est pas un abonnement qui agit.** Les deux
+> bouts sont là, le fil est complet, et seule la coïncidence entre ce que le
+> handler ÉCRIT et ce que le cache CONTIENT à cet instant décide s'il se passe
+> quelque chose. Un handler dont tout le corps est un `map`/`update` sur une
+> collection qu'un handler VOISIN sait vider est un no-op en puissance.
+
+Et le corollaire opératoire, qui est la vraie sortie du cycle :
+
+> **Prendre les transitions d'un même domaine et vérifier qu'elles forment une
+> grille CLOSE — montantes et descendantes appariées.** « On m'ajoute / je pars /
+> on me retire / on me bannit / on me débannit » : les quatre premières
+> retiraient ou posaient la ligne, la cinquième ne faisait rien. La grille se
+> lit en trente secondes et se relit à chaque ajout de transition ; c'est le
+> geste qui manquait, pas une garde.
+
+Trois raisons rendaient le défaut durable, et ce sont trois propriétés de
+CONCEPTION, pas des accidents :
+
+1. `staleTime: Infinity` — le cache ne relit jamais de lui-même ;
+2. le delta borné est **upsert-only sur `Conversation.updatedAt`**, et une levée
+   de bannissement écrit une ligne `Participant` : elle ne fait bouger aucun
+   watermark, donc elle n'apparaît dans aucune réponse `updatedSince=` ;
+3. la réconciliation complète tourne une fois par 24 h.
+
+> **Quand la source de vérité est le temps réel, un événement raté n'est pas un
+> retard : c'est un état faux qui tient jusqu'au prochain filet.** Avant de
+> juger un no-op bénin, chercher QUI le rattrape et EN COMBIEN DE TEMPS. Ici :
+> personne, et 24 heures.
+
+Enfin, la note qui a coûté le plus de temps sur ce cycle, et qui n'est pas dans
+la production :
+
+> **Un QueryClient de test à `gcTime: 0` ramasse une entrée posée par
+> `setQueryData` dès le tick suivant** — elle est donc `undefined` après le
+> moindre `await`, et le témoin échoue pour la mauvaise raison (« cannot read
+> properties of undefined »), ce qui ressemble à un défaut de production. Un
+> témoin ASYNCHRONE qui lit le cache monte son propre client.

@@ -10,6 +10,14 @@ jest.mock('@/services/api.service', () => ({
   },
 }));
 
+// F5 correction — `createStory` resolves `originalLanguage` from the active
+// UI locale (never `usePreferredLanguage()`'s READ language, a caller
+// concern) when the caller doesn't already provide one.
+const mockGetCurrentInterfaceLocale = jest.fn();
+jest.mock('@/stores/language-store', () => ({
+  getCurrentInterfaceLocale: () => mockGetCurrentInterfaceLocale(),
+}));
+
 const mockApi = apiService as jest.Mocked<typeof apiService>;
 
 function makePost(overrides: Partial<Post> = {}): Post {
@@ -175,6 +183,72 @@ describe('storyService', () => {
       await expect(storyService.createStory({ content: 'Story' })).rejects.toThrow(
         'Failed to create story',
       );
+    });
+
+    // F7d correction (constat 20, arbitrage 8) — une story qui PORTE du
+    // texte laisse le champ absent : le serveur détecte la langue depuis le
+    // contenu lui-même (`detectLanguage`), plus fiable que la locale
+    // d'interface de l'auteur.
+    it('does not resolve originalLanguage from the UI locale when the story carries text - server text detection wins', async () => {
+      mockGetCurrentInterfaceLocale.mockReturnValue('es');
+      mockApi.post.mockResolvedValue({ success: true, data: makePost() });
+
+      await storyService.createStory({
+        content: 'Story',
+        storyEffects: { backgroundColor: '#000000', textStyle: 'bold' },
+      });
+
+      const [, body] = mockApi.post.mock.calls[0];
+      expect(body).not.toHaveProperty('originalLanguage');
+    });
+
+    // F5 correction — `originalLanguage` used to be whatever the caller
+    // handed in verbatim (`PostsFeedScreen.handleStoryPublish` was passing
+    // the reader's READ language). The real point of publication now
+    // resolves it itself, from the active UI locale, exactly like
+    // `postsService.createPost` already does for other `storyEffects`
+    // creates — the two funnels share one resolver. Only reached for a
+    // story WITHOUT text (constat 20) — a media-only story here.
+    it('resolves originalLanguage from the active UI locale for a text-less story', async () => {
+      mockGetCurrentInterfaceLocale.mockReturnValue('es');
+      mockApi.post.mockResolvedValue({ success: true, data: makePost() });
+
+      await storyService.createStory({
+        storyEffects: { backgroundColor: '#000000', textStyle: 'bold' },
+      });
+
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/posts',
+        expect.objectContaining({ originalLanguage: 'es' }),
+      );
+    });
+
+    it('keeps a caller-provided originalLanguage untouched (e.g. audio transcription language)', async () => {
+      mockGetCurrentInterfaceLocale.mockReturnValue('es');
+      mockApi.post.mockResolvedValue({ success: true, data: makePost() });
+
+      await storyService.createStory({
+        content: 'Story',
+        storyEffects: { backgroundColor: '#000000', textStyle: 'bold' },
+        originalLanguage: 'ja',
+      });
+
+      expect(mockApi.post).toHaveBeenCalledWith(
+        '/posts',
+        expect.objectContaining({ originalLanguage: 'ja' }),
+      );
+    });
+
+    it('omits originalLanguage when the active UI locale is unknown — never a guessed language', async () => {
+      mockGetCurrentInterfaceLocale.mockReturnValue('');
+      mockApi.post.mockResolvedValue({ success: true, data: makePost() });
+
+      await storyService.createStory({
+        storyEffects: { backgroundColor: '#000000', textStyle: 'bold' },
+      });
+
+      const [, body] = mockApi.post.mock.calls[0];
+      expect(body).not.toHaveProperty('originalLanguage');
     });
 
     // `createStory` hand-picks the fields it forwards to `apiService.post` —
