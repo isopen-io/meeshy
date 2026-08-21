@@ -69,4 +69,14 @@
     <string name="time_relative_long_days">il y a %1$d j</string>
     <string name="time_relative_long_weeks">il y a %1$d sem</string>
     <string name="time_relative_long_months">il y a %1$d mois</string>
+    <string name="bubble_a11y_unknown_sender">Expéditeur inconnu</string>
+    <string name="bubble_a11y_reply_to">Réponse à %1$s</string>
+    <string name="bubble_a11y_reply_to_excerpt">Réponse à %1$s : %2$s</string>
+    <string name="bubble_a11y_images">%1$d images</string>
+    <string name="bubble_a11y_audios">%1$d messages vocaux</string>
+    <string name="bubble_a11y_location">Position partagée</string>
+    <string name="bubble_a11y_file">Fichier %1$s</string>
+    <string name="bubble_a11y_pinned">Épinglé</string>
+    <string name="bubble_a11y_ephemeral">Message éphémère</string>
+    <string name="bubble_a11y_reactions">Réactions : %1$s</string>
 </resources>

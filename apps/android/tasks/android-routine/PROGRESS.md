@@ -2,6 +2,69 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Message-bubble accessibility composer shipped** (slice `chat-bubble-a11y-label`).
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 5 open PRs were
+> web #3247 / gateway #3242 #3245 / shared #3243 / iOS #3241 — none android-routine). Prior iteration
+> #3246 (mood) already merged. Branched off the freshly-fetched `origin/main` (`d3686997`, which
+> includes the prior Android mood/story-ring merges). This container **reaches `dl.google.com`** (curl
+> → 200), so the full local gate ran here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools
+> `11076708` `--channel=3` + the `android-37` alias, Gradle 8.13 by the wrapper.
+>
+> **First closed a stale marker**: the conversation-row `presence` sub-gap. Grep-verified the dot is
+> already wired — `ConversationListScreen.kt:232` passes `presence = state.presenceStateFor(conversation,
+> System.currentTimeMillis())` down to the row's `MeeshyAvatar(..., presence = …)` (`:649`), alongside
+> `storyRing` and `moodEmoji`. All three avatar affordances coexist (a mood badge suppresses the dot),
+> exactly as iOS. The conversation-row "rich last-message preview" line is now **complete** — no new
+> slice was needed for presence; feature-parity updated to `presence done`.
+>
+> **The gap (re-proved by reading source)**: iOS composes ONE spoken VoiceOver label per message bubble
+> (`MessageAccessibilityLabelComposer.compose`, itself the port of `BubbleStandardLayout.messageAccessibilityLabel`)
+> in a frozen order. Android's `MessageBubble` had no composed label — it relied on default child-merge
+> with only per-icon `contentDescription`s (delivery glyphs, starred, translated). A repo-wide grep for
+> a bubble a11y composer hit only docs/contacts/auth — never chat. So the composed message label was a
+> real, categorical gap.
+>
+> **Pure core (`:sdk-ui`)**: `MessageBubbleAccessibilityLabel.compose(content, strings, locale, timeText?)`
+> — framework-free object over `BubbleContent`, emitting the joined label in the iOS-frozen order
+> (sender → reply → text → images → audios → location/files → time → delivery → edited → pinned →
+> ephemeral → reactions). Localized wording injected via `BubbleAccessibilityStrings` /
+> `BubbleDeliveryA11yStrings` (the `RelativeTimeFormat` injection pattern — zero Android deps, fully
+> JVM-testable). A deleted message short-circuits to sender + "deleted". **Assumed deviations vs iOS,
+> documented**: no image/video split (one "images" count — Android `BubbleContent` carries no video
+> distinction); no "you" reply-author phrasing (Android reply target has no `isMe`); no clock in the
+> Android bubble meta-row, so `timeText` is only supplied where a time is actually shown (null here).
+>
+> **Safe, NON-destructive wiring**: `MessageBubble` gains an opt-in `accessibilityLabel: String? = null`
+> applied via `clearAndSetSemantics` — wired ONLY at `MessageOverlayPreviewHero` (the long-press overlay
+> hero, documented "Purely decorative and non-interactive — never intercepts input"), where collapsing
+> the semantics subtree is provably safe. The interactive **list** bubble keeps the default `null`, so
+> its per-element touch targets (reaction taps, image taps, long-press) are untouched — I deliberately
+> did NOT merge/clear semantics on the interactive bubble, since collapsing its touch targets would
+> regress TalkBack and cannot be verified without an on-device/instrumented run (routine §CI-reality
+> caution). Wiring the composed label onto the list bubble is left as a future instrumented-test slice.
+> Strings added EN/FR/ES/PT.
+>
+> **Tests**: **+20 `MessageBubbleAccessibilityLabelTest`** (pure composer — every arm: received sender /
+> unknown / blank-name; outgoing never names sender; blank text skipped; reply excerpt / blank-excerpt →
+> author-only / unknown author / deleted-target author-only; images+audios counts; location-then-file
+> order; unnamed file; time appended / blank-time dropped; delivery after time; all 6 delivery arms;
+> edited+pinned+ephemeral order; reactions summary last; deleted short-circuit; bare outgoing).
+> **Mutation (RED proof) ×2**: (a) neutering the deleted short-circuit `return` fails **exactly** 1 test
+> (20 run, 1 failed); (b) collapsing the reply-excerpt arm to author-only fails **exactly** 2 tests
+> (the two excerpt cases). Both restored.
+>
+> **Verified**: `./apps/android/meeshy.sh check` — `BUILD SUCCESSFUL` (assembleDebug + every module's
+> `testDebugUnitTest`) green locally in this run. Reviewer PASS.
+>
+> **Next**: the natural follow-up is a Roborazzi/instrumented slice to wire and verify the composed
+> `accessibilityLabel` on the interactive list bubble WITHOUT regressing per-element touch targets
+> (custom accessibility actions for reactions/images under one merged node) — needs the instrumented
+> test harness, out of the JVM gate. Otherwise advance to the next Chat `[◐]`/`[~]` box: candidates are
+> the finer 8-state send-lifecycle glyphs (slow/invisible pre-200ms debounce; needs send-lifecycle
+> timing state) or the edit-history viewer (blocked on a gateway edit-history endpoint — not
+> apps/android-only). Prefer a pure-resolver + trivial-value-wiring slice as always; re-scout with a
+> read-only recon over iOS + Android before committing, since parity notes are hypotheses not facts.
+
 > On 2026-08-20 **Conversation-row mood badge shipped** (slice `conversation-row-mood`,
 > feature-parity's Conversations `[~]` rich last-message-preview line — the `mood` avatar
 > affordance, the second of the three sub-gaps `presence/story-ring/mood`; story-ring merged
