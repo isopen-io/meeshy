@@ -267,6 +267,91 @@ final class Plan2DViewGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Guard 4h — POSITION TEMPORELLE des losanges : l'axe du plan est
+    // ABSOLU (`Plan2DLayout.x` mappe un temps de TIMELINE), alors que
+    // `StoryKeyframe.time` est RELATIF à son clip. Un losange posé sur le
+    // temps relatif dérive du début de son clip — il se dessine hors de sa
+    // propre barre et le tap tombe sur le mauvais keyframe (constat critique
+    // de la revue DoD). Ces bancs branchent `Plan2DLayout` sur `Plan2DView` :
+    // l'un projette, l'autre dessine et teste le tap — un décalage entre les
+    // deux ne peut plus passer.
+
+    func test_diamondsAreDrawnAtTheAbsoluteTimeOfAnOffsetClip() {
+        // Texte à start 1 s, keyframes RELATIFS 1 s et 2 s, slide de 10 s
+        // dessinée sur 300 pt ⇒ 30 pt/s. Les losanges se posent à t=2 et t=3,
+        // donc à 60 et 90 pt après l'origine des barres.
+        let effects = StoryEffects(
+            textObjects: [
+                StoryTextObject(id: "txt", text: "A", startTime: 1, duration: 3,
+                                keyframes: [StoryKeyframe(id: "kf-1", time: 1),
+                                            StoryKeyframe(id: "kf-2", time: 2)])
+            ],
+            timelineDuration: 10
+        )
+        guard let track = Plan2DLayout.tracks(from: effects, slideDuration: 10).first else {
+            return XCTFail("Le texte doit produire une piste")
+        }
+        let xs = track.keyframeTimes.map {
+            Plan2DLayout.x(forTime: $0, zoom: .fit, laneWidth: 300, slideDuration: 10)
+        }
+        XCTAssertEqual(xs, [60, 90],
+                       "Un losange se dessine au temps ABSOLU (début du clip + temps relatif), pas au temps relatif")
+    }
+
+    func test_aTapAtTheDrawnPositionHitsThatKeyframe_notItsRelativeNeighbour() {
+        let effects = StoryEffects(
+            textObjects: [
+                StoryTextObject(id: "txt", text: "A", startTime: 1, duration: 3,
+                                keyframes: [StoryKeyframe(id: "kf-1", time: 1),
+                                            StoryKeyframe(id: "kf-2", time: 2)])
+            ],
+            timelineDuration: 10
+        )
+        guard let track = Plan2DLayout.tracks(from: effects, slideDuration: 10).first else {
+            return XCTFail("Le texte doit produire une piste")
+        }
+        // t=2 (absolu) : le PREMIER losange. Sur un axe relatif, ce même point
+        // porterait le SECOND (kf-2, relatif 2 s) — le tap ouvrirait la
+        // mauvaise fiche.
+        let xAtTwoSeconds = Plan2DView.labelColumnWidth
+            + Plan2DLayout.x(forTime: 2, zoom: .fit, laneWidth: 300, slideDuration: 10)
+        XCTAssertEqual(
+            Plan2DView.keyframeHit(touchX: xAtTwoSeconds, track: track,
+                                   zoom: .fit, laneWidth: 300, slideDuration: 10),
+            "kf-1"
+        )
+        let xAtThreeSeconds = Plan2DView.labelColumnWidth
+            + Plan2DLayout.x(forTime: 3, zoom: .fit, laneWidth: 300, slideDuration: 10)
+        XCTAssertEqual(
+            Plan2DView.keyframeHit(touchX: xAtThreeSeconds, track: track,
+                                   zoom: .fit, laneWidth: 300, slideDuration: 10),
+            "kf-2"
+        )
+    }
+
+    func test_everyDiamondFallsInsideItsOwnBar() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "clip", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 3, duration: 3,
+                                 keyframes: [StoryKeyframe(id: "kf-1", time: 1),
+                                             StoryKeyframe(id: "kf-2", time: 2)])
+            ],
+            timelineDuration: 10
+        )
+        guard let track = Plan2DLayout.tracks(from: effects, slideDuration: 10).first,
+              case let .timed(start, end) = track.bar else {
+            return XCTFail("Le clip média doit produire une barre à durée choisie")
+        }
+        let barStartX = Plan2DLayout.x(forTime: start, zoom: .fit, laneWidth: 300, slideDuration: 10)
+        let barEndX = Plan2DLayout.x(forTime: end, zoom: .fit, laneWidth: 300, slideDuration: 10)
+        for time in track.keyframeTimes {
+            let x = Plan2DLayout.x(forTime: time, zoom: .fit, laneWidth: 300, slideDuration: 10)
+            XCTAssertTrue(x >= barStartX && x <= barEndX,
+                          "Un losange dessiné hors de la barre de son clip trahit un temps relatif posé sur l'axe absolu")
+        }
+    }
+
     func test_keyframeHit_trackWithoutKeyframes_returnsNil() {
         let track = Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0, bar: .timed(start: 0, end: 10))
         XCTAssertNil(

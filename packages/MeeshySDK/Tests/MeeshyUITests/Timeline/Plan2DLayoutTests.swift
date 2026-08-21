@@ -59,11 +59,11 @@ struct Plan2DLayoutTests {
 
     // MARK: - Durée choisie
 
-    @Test("Un texte à start 1 / durée 3 occupe [1, 4] et porte ses deux losanges")
+    @Test("Un texte à start 1 / durée 3 occupe [1, 4] et pose ses losanges en temps ABSOLU")
     func text_barSpansStartPlusDuration_andCarriesItsKeyframeTimes() {
         let text = tracks(composedSlide()).first { $0.id == "txt" }
         #expect(text?.bar == .timed(start: 1, end: 4))
-        #expect(text?.keyframeTimes == [1, 2])
+        #expect(text?.keyframeTimes == [2, 3])
         #expect(text?.label == "Aa \"Salut\"")
     }
 
@@ -79,8 +79,67 @@ struct Plan2DLayoutTests {
         )
         let text = tracks(effects).first
         #expect(text?.keyframes.map(\.id) == ["kf-early", "kf-late"])
-        #expect(text?.keyframes.map(\.time) == [1, 2])
-        #expect(text?.keyframeTimes == [1, 2])
+        #expect(text?.keyframes.map(\.time) == [2, 3])
+        #expect(text?.keyframeTimes == [2, 3])
+    }
+
+    // MARK: - Position temporelle des losanges — l'axe du plan est ABSOLU
+
+    @Test("Le temps d'un keyframe est RELATIF au clip au modèle ; sur le plan il se pose en ABSOLU (début du clip + temps relatif) — même repère que KeyframeMarkerResolver et que l'en-tête du KeyframeInspector")
+    func keyframes_areProjectedOntoTheAbsoluteAxis_notTheClipRelativeOne() {
+        let effects = StoryEffects(
+            textObjects: [
+                StoryTextObject(id: "txt", text: "A", startTime: 1, duration: 3,
+                                keyframes: [StoryKeyframe(id: "kf-1", time: 1),
+                                            StoryKeyframe(id: "kf-2", time: 2)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        #expect(tracks(effects).first?.keyframeTimes == [2, 3])
+    }
+
+    @Test("Un losange tombe TOUJOURS dans la barre de son clip — un temps relatif posé sur l'axe absolu le ferait dériver hors de sa propre barre")
+    func keyframes_alwaysLandInsideTheirOwnBar() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "clip", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 3, duration: 3,
+                                 keyframes: [StoryKeyframe(id: "kf-1", time: 1),
+                                             StoryKeyframe(id: "kf-2", time: 2)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        guard let track = tracks(effects).first,
+              case let .timed(start, end) = track.bar else {
+            Issue.record("Le clip média doit produire une barre à durée choisie")
+            return
+        }
+        #expect(track.keyframeTimes == [4, 5])
+        #expect(track.keyframeTimes.allSatisfy { $0 >= start && $0 <= end })
+    }
+
+    @Test("Un chip audio décalé projette lui aussi ses losanges en absolu")
+    func audioKeyframes_areProjectedOntoTheAbsoluteAxis() {
+        let effects = StoryEffects(
+            audioPlayerObjects: [
+                StoryAudioPlayerObject(id: "aud", postMediaId: "pm-1", startTime: 2, duration: 4,
+                                       keyframes: [StoryKeyframe(id: "kf-1", time: 0.5)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        #expect(tracks(effects).first?.keyframeTimes == [2.5])
+    }
+
+    @Test("Un clip SANS début explicite pose ses losanges là où son temps relatif les met — l'origine du clip est 0")
+    func keyframes_withoutAnExplicitStart_stayAtTheirRelativeTime() {
+        let effects = StoryEffects(
+            textObjects: [
+                StoryTextObject(id: "txt", text: "A", duration: 4,
+                                keyframes: [StoryKeyframe(id: "kf-1", time: 1)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        #expect(tracks(effects).first?.keyframeTimes == [1])
     }
 
     @Test("Un début SANS durée court jusqu'au bout de la slide — c'est un choix, pas un fantôme")

@@ -23,6 +23,9 @@ public nonisolated enum TrackBar: Equatable, Sendable {
 /// plan). Porte l'IDENTITÉ du `StoryKeyframe` d'origine — sans elle, un tap
 /// sur le losange ne pourrait router vers AUCUN `KeyframeInspector` (le bus
 /// de sélection route par id, `TimelineInspectorHost.resolveKeyframeSnapshot`).
+///
+/// `time` est ABSOLU (temps de timeline), pas relatif à son clip comme
+/// `StoryKeyframe.time` : l'axe du plan est celui de la slide entière.
 public nonisolated struct Plan2DKeyframe: Equatable, Sendable {
     public let id: String
     public let time: Double
@@ -140,7 +143,7 @@ public nonisolated enum Plan2DLayout {
                         z: text.zIndex,
                         bar: bar(start: text.startTime, duration: text.duration,
                                  slideDuration: slideDuration),
-                        keyframes: markers(of: text.keyframes))
+                        keyframes: markers(of: text.keyframes, clipStart: text.startTime))
         }
     }
 
@@ -188,7 +191,7 @@ public nonisolated enum Plan2DLayout {
                         z: media.zIndex,
                         bar: bar(start: media.startTime, duration: media.duration,
                                  slideDuration: slideDuration),
-                        keyframes: markers(of: media.keyframes))
+                        keyframes: markers(of: media.keyframes, clipStart: media.startTime))
         }
     }
 
@@ -203,7 +206,7 @@ public nonisolated enum Plan2DLayout {
                         bar: bar(start: audio.startTime.map(Double.init),
                                  duration: audio.duration.map(Double.init),
                                  slideDuration: slideDuration),
-                        keyframes: markers(of: audio.keyframes))
+                        keyframes: markers(of: audio.keyframes, clipStart: audio.startTime.map(Double.init)))
         }
     }
 
@@ -250,9 +253,18 @@ public nonisolated enum Plan2DLayout {
     /// Losanges AFFICHÉS d'un clip, triés par temps — identité comprise
     /// (`Plan2DKeyframe.id`), pour que le tap (D2/D3) puisse router vers le
     /// `KeyframeInspector` DU keyframe touché, pas un temps anonyme.
-    private static func markers(of keyframes: [StoryKeyframe]?) -> [Plan2DKeyframe] {
-        (keyframes ?? [])
-            .map { Plan2DKeyframe(id: $0.id, time: Double($0.time)) }
+    ///
+    /// `StoryKeyframe.time` est RELATIF au début de son clip ; l'axe du plan,
+    /// lui, est ABSOLU (`x(forTime:)` mappe un temps de timeline). Le début du
+    /// clip s'ajoute donc ICI — même projection que `KeyframeMarkerResolver`
+    /// (`absoluteTime = start + kf.time`) et que l'en-tête du
+    /// `KeyframeInspector` (`TimelineInspectorHost.resolveKeyframeSnapshot`).
+    /// Sans elle, un losange dérive du début de son clip : il se dessine hors
+    /// de sa propre barre et le tap tombe sur le mauvais keyframe.
+    private static func markers(of keyframes: [StoryKeyframe]?, clipStart: Double?) -> [Plan2DKeyframe] {
+        let origin = max(0, clipStart ?? 0)
+        return (keyframes ?? [])
+            .map { Plan2DKeyframe(id: $0.id, time: origin + Double($0.time)) }
             .sorted { $0.time < $1.time }
     }
 
