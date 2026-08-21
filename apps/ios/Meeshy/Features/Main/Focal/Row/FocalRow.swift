@@ -122,6 +122,9 @@ struct FocalRow: View {
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
                     senderIsAnonymous: input.senderIsAnonymous,
+                    // `senderId` EST le `Participant.id` — la fiche d'un
+                    // visiteur sans compte ne se demande pas autrement.
+                    senderParticipantId: input.senderId,
                     timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,

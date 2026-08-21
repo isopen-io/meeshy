@@ -808,8 +808,8 @@
       "noRestriction": "Sin restricciones",
       "denied": {
         "canViewHistory": "No ve los mensajes anteriores a su llegada",
-        "canSendMessages": "No puede escribir",
-        "canSendImages": "No puede enviar imágenes",
+        "canSendMessages": "No puede escribir mensajes",
+        "canSendImages": "No puede enviar fotos",
         "canSendFiles": "No puede enviar archivos",
         "canSendVideos": "No puede enviar vídeos",
         "canSendAudios": "No puede enviar audio",

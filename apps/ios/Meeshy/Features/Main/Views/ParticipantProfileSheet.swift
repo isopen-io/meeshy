@@ -13,6 +13,18 @@ struct IdentifiedString: Identifiable {
     init(_ value: String) { self.value = value }
 }
 
+/// Le couple qui désigne une participation — et non un compte.
+///
+/// Une fiche de participant n'existe que DANS une conversation : un visiteur
+/// entré par lien n'a pas d'identité hors d'elle. Les deux identifiants voyagent
+/// donc ensemble, `Identifiable` pour être présentés par `.sheet(item:)`.
+struct ParticipantProfileTarget: Identifiable, Equatable {
+    let conversationId: String
+    let participantId: String
+
+    var id: String { "\(conversationId)/\(participantId)" }
+}
+
 /// Fiche d'un participant — écrite d'abord pour ceux qui n'ont PAS de compte.
 ///
 /// Un visiteur entré par lien a rempli un formulaire pour passer la porte, et

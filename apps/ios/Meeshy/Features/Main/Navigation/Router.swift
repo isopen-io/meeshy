@@ -121,6 +121,17 @@ final class Router: ObservableObject {
         }
     }
     @Published var deepLinkProfileUser: ProfileSheetUser?
+
+    /// La fiche d'un participant SANS COMPTE, à ouvrir.
+    ///
+    /// Séparée de `deepLinkProfileUser` parce que ce n'est pas la même chose :
+    /// celle-là présente un COMPTE (bio, bannière, voix, langues) et se demande
+    /// par `User.id`. Un visiteur entré par lien n'a rien de tout cela — son
+    /// identité vit dans UNE conversation et se demande par le couple
+    /// `(conversationId, participantId)`. Les faire transiter par le même canal
+    /// obligeait à donner un `userId` à qui n'en a pas.
+    @Published var participantProfileTarget: ParticipantProfileTarget?
+
     @Published var pendingShareContent: SharedContentType? = nil
 
     /// Reply context awaiting consumption by the next ConversationView that

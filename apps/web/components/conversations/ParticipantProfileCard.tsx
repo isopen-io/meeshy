@@ -31,10 +31,16 @@ const CAPABILITY_ORDER: readonly (keyof ParticipantEntryCapabilities)[] = [
   'canSendLocations',
 ];
 
+/**
+ * Vocabulaire ALIGNÉ sur `bubble.joinNotice.rule.*`, qui énonce déjà les mêmes
+ * règles dans l'avis d'arrivée — « messages », « photos », « fichiers ». Deux
+ * formulations concurrentes pour une seule règle se liraient comme deux règles.
+ * Jumeau iOS : `ParticipantProfileSheet.deniedLabel`.
+ */
 const CAPABILITY_DENIED_FALLBACK: Record<keyof ParticipantEntryCapabilities, string> = {
   canViewHistory: 'Ne voit pas les messages antérieurs à son arrivée',
-  canSendMessages: 'Ne peut pas écrire',
-  canSendImages: 'Ne peut pas envoyer d’images',
+  canSendMessages: 'Ne peut pas écrire de messages',
+  canSendImages: 'Ne peut pas envoyer de photos',
   canSendFiles: 'Ne peut pas envoyer de fichiers',
   canSendVideos: 'Ne peut pas envoyer de vidéos',
   canSendAudios: 'Ne peut pas envoyer d’audio',

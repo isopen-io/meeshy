@@ -806,8 +806,8 @@
       "noRestriction": "No restrictions",
       "denied": {
         "canViewHistory": "Cannot see messages sent before they joined",
-        "canSendMessages": "Cannot write",
-        "canSendImages": "Cannot send images",
+        "canSendMessages": "Cannot write messages",
+        "canSendImages": "Cannot send photos",
         "canSendFiles": "Cannot send files",
         "canSendVideos": "Cannot send videos",
         "canSendAudios": "Cannot send audio",
