@@ -164,8 +164,10 @@ nonisolated public enum FocalMetrics {
     /// n'existe que pendant le défilement ; au repos, tout redevient Script.
     nonisolated public enum Scene {
         /// Repos sans geste avant que la scène s'aplatisse (« au bout de
-        /// quelques secondes sans scroller »).
-        public static let restDelay: TimeInterval = 2.0
+        /// quelques secondes sans scroller ») — 2,0 → 4,5 s le 2026-08-22
+        /// (directive « passe à < 5 s ») : avec `flattenDuration`, la
+        /// magnificence a disparu en 4,95 s. Liste et fil lisent ce token.
+        public static let restDelay: TimeInterval = 4.5
         /// Durée de l'aplatissement (transform + opacité + carte).
         public static let flattenDuration: TimeInterval = 0.45
         /// Durée de l'entrée en perspective au premier tick d'un geste —

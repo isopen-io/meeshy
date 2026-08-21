@@ -433,3 +433,9 @@ Le body d'une bulle a lien heberge un `LinkPreviewCard` dont le `.frame(minHeigh
 2. **Bulles en focus (fil)** : chips généralisées à TOUTES les bulles — haut-gauche avatar + auteur (toucher = profil), haut-droite date complète + coche d'état de réception (toucher = détails de lecture), bas : traduction, drapeaux, (+), réactions — **une seule coquille** (`focusChip`, capsule opaque, contour accent, pleine quand active / à moi). L'en-tête inséré des têtes de groupe garde sa place et s'efface en focus (hauteur stable, instantané). Inset des chips = 14 pt du bord de la carte, comme l'encoche de la liste.
 
 **Alternatives rejetées**: retirer l'en-tête de tête de groupe en focus (changement de hauteur pendant le défilement) ; garder des cercles pour les icônes du bas (directive « exactement comme ces chips »).
+
+## 2026-08-22 (quinquies) : la scène se désarme en moins de 5 s
+
+**Statut**: Accepté (directive utilisateur)
+
+**Décision**: `FocalMetrics.Scene.restDelay` 2,0 → 4,5 s (+ `flattenDuration` 0,45 s = 4,95 s) — un seul token, lu par la liste (`LentilleSceneActivity`) et par le fil (`scheduleFocalFlatten`). Les boutons de la carte restent actifs pendant tout ce temps : c'est voulu (la magnificence est un état de lecture, pas un flash).
