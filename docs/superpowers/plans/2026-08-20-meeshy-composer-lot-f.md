@@ -169,10 +169,15 @@ comportements que le legacy garantissait (autoplay, scrim, 65 %, animation).
    catalogues components (4 locales, cliquet accents respecté).
 3. **La clé du FIL fait foi** (5) : `fontSize` (émise par iOS et le convertisseur)
    alimente l'échelle cqw ; `fontSizeDesign` reste un alias interne du funnel v1.
-4. **Prisme complet** (4, 15) : le texte racine émis porte `locale` (résolue
-   comme `originalLanguage`) ; `preferredLanguages` = la chaîne ORDONNÉE de
+4. **Prisme complet** (4, 15) : `preferredLanguages` = la chaîne ORDONNÉE de
    `getUserLanguagePreferences(user)` (source de vérité existante), jamais une
-   seule langue.
+   seule langue. **RÉVISÉ PAR F7d (validé par le DoD)** : le texte racine émis
+   ne porte JAMAIS de `locale` devinée — le composer web n'a pas de sélecteur
+   de langue, une locale devinée deviendrait `sourceLanguage` serveur et
+   COURT-CIRCUITERAIT la détection par texte, plus fiable. La règle 3 du Prisme
+   se ferme à la LECTURE : `postToStoryData` → `withOriginLocale`
+   (`lib/story-transforms.ts`) rétro-remplit `locale` depuis
+   `post.originalLanguage` DÉTECTÉ par le serveur.
 5. **Résilience par objet** (10) : chaque objet rendu est wrappé (try/catch +
    défauts sur transform/payload) — un objet malformé est sauté, la scène survit.
 6. **`v >= 3`** (12) aux quatre sites (`StoryViewer`, `story-transforms` ×3).
@@ -209,7 +214,7 @@ Mute passé à la scène ; **`playheadSec` passé à la scène** (le ticker lega
 ### Task F7c — Surfaces : badge monté + B3.2 partout + aria (constats 2,16,17,22 ; arbitrages 2,7)
 **Files:** `apps/web/components/v2/PostCard.tsx` + ses appelants réels (les trouver : grep `<PostCard`), `apps/web/components/v2/PostDetail.tsx`, `apps/web/components/feed/ReelPlayer.tsx`, catalogues i18n components (4 locales), tests.
 
-### Task F7d — Émission : locale, id bg, garde langue (constats 4,20,21,23 ; arbitrages 4,8,9)
+### Task F7d — Émission : id bg, garde langue, Prisme fermé à la lecture (constats 4,20,21,23 ; arbitrages 4 révisé,8,9)
 **Files:** `apps/web/components/v2/StoryComposer.tsx`, `apps/web/services/posts.service.ts`, tests.
 
 ### Task F7e — SDK : bounds cohérents (constat 25 ; arbitrage 11)

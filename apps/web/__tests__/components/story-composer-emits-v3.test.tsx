@@ -10,6 +10,8 @@
  * schéma partagé et gelé du lot A.
  */
 import React from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { render, screen, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { CanvasV3Schema, type CanvasV3, type ObjectV3 } from '@meeshy/shared/types/canvas-v3';
@@ -17,6 +19,12 @@ import { StoryComposer, StoryComposerProps } from '@/components/v2/StoryComposer
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
 global.URL.createObjectURL = jest.fn().mockReturnValue('blob:mock-story-v3');
+
+const FIXTURES = join(__dirname, '../../../../packages/shared/fixtures/canvas-v3');
+
+function fixture(name: string): CanvasV3 {
+  return CanvasV3Schema.parse(JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), 'utf8')));
+}
 
 jest.mock('@/hooks/use-i18n', () => ({
   useI18n: () => ({ t: (key: string) => key }),
@@ -148,6 +156,10 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(text?.plane).toBe('fg');
     expect(text?.anchor).toEqual({ t: 'free', x: 0.5, y: 0.5 });
     expect(text?.payload).toMatchObject({ text: 'Bonjour', textStyle: 'neon' });
+
+    const reference = objectsOf(fixture('minimal-text'))[0];
+    const referenceKeys = Object.keys(reference).filter((k) => k !== 'locale').sort();
+    expect(Object.keys(text ?? {}).sort()).toEqual(referenceKeys);
   });
 
   it('never guesses a locale on the root text object - DoD rejection of F7d (constat 4 BLOQUANT) : a client-guessed `locale` becomes `sourceLanguage` server-side and is PREFERRED over text detection, and short-circuits the reader Prisme (`CanvasV3Scene.tsx` `sameLanguage(language, o.locale)`) - a wrong guess mistranslates AND mis-ranks. The web composer has no explicit language picker (unlike iOS), so it can never emit an HONEST `locale` here - closing the Prisme rule 3 gap is done at READ time instead (`postToStoryData`, `withOriginLocale`, `lib/story-transforms.ts`), backfilling from the server-DETECTED `post.originalLanguage`, never guessed client-side', () => {
