@@ -9,12 +9,16 @@ import SwiftUI
 /// portant chacune 6 keyframes, aux deux zooms.
 ///
 /// Le seuil `provisionalRegressionBudgetSeconds` est un GARDE-FOU DE
-/// RÉGRESSION PROVISOIRE ET NON-SPEC (revue Fable n°11 : aucun chiffre p50
-/// n'existe dans la spec) — il attrape une régression flagrante sur
-/// simulateur, rien de plus. LA MESURE QUI COMPTE est la mesure DEVICE
-/// (Step 2 de D4, chronométrée hors XCTest, chiffres consignés au commit) :
-/// c'est elle, et elle seule, qui recale ce seuil ou déclenche le STOP de
-/// lot documenté en Step 3 si le budget d'usage casse au scrub.
+/// RÉGRESSION, NON-SPEC (revue Fable n°11 : aucun chiffre p50 n'existe dans
+/// la spec) — il attrape une régression flagrante sur simulateur, rien de
+/// plus, et ne prétend JAMAIS être le budget d'usage produit. Recalé
+/// (revue DoD, 2026-08-21) sur le coût mesuré (~1-2,5 ms simulateur et
+/// device confondus) avec une marge ×4-6, contre ×30-50 avant. LA MESURE
+/// D'USAGE reste la mesure DEVICE (Step 2 de D4) : celle obtenue à ce jour
+/// (iPhone 16 Pro Max, A18 Pro) est un appareil PLAFOND, pas le plancher A11
+/// exigé par la spec — le budget d'usage plancher n'est donc PAS validé ;
+/// voir la ligne P0 D4 (`2026-08-19-meeshy-composer-views.html`) pour
+/// l'extrapolation plancher et le verdict STOP (Step 2) qui en découle.
 @MainActor
 final class Plan2DRenderMeasureTests: XCTestCase {
 
@@ -80,14 +84,16 @@ final class Plan2DRenderMeasureTests: XCTestCase {
         }
     }
 
-    // MARK: - Garde-fou de régression PROVISOIRE (recalé sur la mesure device, Step 2)
+    // MARK: - Garde-fou de régression (recalé sur simulateur+device, revue DoD 2026-08-21)
 
-    /// 50 ms — large à dessein (mesure simulateur observée : ~1 à 1,5 ms sur
-    /// iPhone 16 Pro/iOS 18.2 pour les 30 pistes, aux deux zooms — marge
-    /// ×30-50). Ce nombre n'a AUCUNE valeur de spec, il n'existe que pour
-    /// attraper une régression flagrante avant que la mesure device
-    /// (Step 2) ne fasse foi. Ne JAMAIS le lire comme un budget produit.
-    private static let provisionalRegressionBudgetSeconds: Double = 0.05
+    /// 10 ms — recalé (revue DoD, 2026-08-21) sur le coût mesuré : ~1 à 2,5 ms
+    /// sur simulateur (RSD jusqu'à ~17 %) et 1,62-2,53 ms sur device (iPhone
+    /// 16 Pro Max, A18 Pro — un appareil PLAFOND). Marge ×4-6 sur le pic
+    /// observé, assez pour attraper une régression flagrante sans flakiness
+    /// de bruit machine. Ce nombre n'a TOUJOURS AUCUNE valeur de budget
+    /// produit — c'est une garde de RÉGRESSION, pas un budget d'usage : le
+    /// budget d'usage au plancher A11 reste NON validé (voir la ligne P0 D4).
+    private static let provisionalRegressionBudgetSeconds: Double = 0.01
 
     func test_render_thirtyTracks_bothZooms_staysUnderProvisionalBudget() {
         for zoom in Plan2DZoom.allCases {
@@ -96,9 +102,9 @@ final class Plan2DRenderMeasureTests: XCTestCase {
             let elapsed = CFAbsoluteTimeGetCurrent() - start
             XCTAssertLessThan(
                 elapsed, Self.provisionalRegressionBudgetSeconds,
-                "Rendu \(zoom) à \(elapsed)s — au-delà du garde-fou provisoire de "
-                    + "\(Self.provisionalRegressionBudgetSeconds)s (non-spec, RECALÉ par la mesure "
-                    + "device, Step 2 de D4)"
+                "Rendu \(zoom) à \(elapsed)s — au-delà du garde-fou de régression de "
+                    + "\(Self.provisionalRegressionBudgetSeconds)s (non-spec ; le budget d'usage "
+                    + "plancher A11 reste distinct, voir la ligne P0 D4)"
             )
         }
     }
