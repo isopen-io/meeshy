@@ -39,6 +39,15 @@ Branche : `feat/anonymous-participant-constraints`
 - Le figeage et son levier de remplacement (`PATCH …/rights`) sont livrés ensemble : à aucun moment l'hôte n'est sans contrôle.
 - Vocabulaire des refus aligné sur `bubble.joinNotice.rule.*`, déjà au catalogue.
 
-**Gates** : gateway 804/804 suites · web 721/722 (le seul échec, `LentilleRow.live-time`, suppose un fuseau UTC — il attend `"23:59"` et reçoit `"01:59"` sur une machine en UTC+2 ; aucun import commun avec ce lot) · iOS build vert.
+**Gates, sur l'état FUSIONNÉ avec `origin/main` (7f1de533f, lots B + F inclus)** :
+- gateway : 804/804 suites, 18797/18797 tests
+- web : 741/742 suites, 13876/13898 tests
+- iOS : les 4 phases vertes (3685 SDK · 3148 UI · 3005 isolées · 4169 contenu)
+
+Unique rouge, étranger à ce lot : `LentilleRow.live-time` suppose que la machine tourne en UTC — il attend `"23:59"` et reçoit `"01:59"` en UTC+2. **Prouvé** : `TZ=UTC bun run test -- --testPathPatterns=LentilleRow.live-time` passe. Invisible en CI, qui tourne en UTC. Correctif suggéré (hors périmètre) : figer le fuseau dans le test.
+
+**Deux régressions introduites puis corrigées ici**, l'une et l'autre invisibles au build :
+- `MessageSocketProviding` étendu ⇒ les deux `MockMessageSocket` ne conformaient plus. Le build de l'app restait VERT ; seul le bundle de tests ne compilait pas (exit 65).
+- `FocalNoBubbleSourceGuardTests` (§5.1) interdit tout signal d'identité brut hors du résolveur et de `Focal/Core/` ; construire le `ProfileSheetUser` dans `Row/` y introduisait le jeton `isAnonymous`. Vérifié par simulation de la garde : verte sur `main`, rouge avec le diff, 33 fichiers balayés. La construction est descendue dans `FocalRowInput` (Core), la rangée ne fait plus que transmettre.
 
 **Reste ouvert** : le handle de l'avis d'arrivée (`bubble-join-notice-handle`) a son propre rendu, hors chaîne d'identité — il n'ouvre pas la fiche. Signalé par la session 6240 ; à câbler si la surface est jugée nécessaire.
