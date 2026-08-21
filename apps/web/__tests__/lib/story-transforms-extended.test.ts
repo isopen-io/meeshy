@@ -2,8 +2,9 @@
  * Extended tests for story-transforms.ts covering branches not covered by story-transforms.test.ts
  */
 
-import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, computeStoryDurationMs, timeRemaining } from '@/lib/story-transforms';
+import { postToStoryItem, postToStoryData, groupStoriesByAuthor, groupToStoryItem, computeStoryDurationMs, timeRemaining, backgroundSoundCredit } from '@/lib/story-transforms';
 import type { Post } from '@meeshy/shared/types/post';
+import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 
 function createPost(overrides: Partial<Post> = {}): Post {
   return {
@@ -512,6 +513,122 @@ describe('postToStoryData - mediaById lookup', () => {
     });
     const result = postToStoryData(post);
     expect(result.mediaType).toBeUndefined();
+  });
+
+  // Constat 9 — le letterbox v3 (`CanvasV3Scene` `media.aspectRatio`) n'était
+  // prouvé que par un `aspectRatio` FABRIQUÉ dans le test du composant : la
+  // production ne le fournissait jamais. `PostMedia.width`/`height` existent
+  // (packages/shared/types/post.ts:67-68) mais n'étaient jamais dérivés.
+  it('derives aspectRatio from PostMedia width/height when both are present', () => {
+    const post = createPost({
+      media: [{ id: 'pm-1', mimeType: 'video/mp4', fileUrl: 'https://a.mp4', order: 0, width: 1920, height: 1080 }],
+    });
+    const result = postToStoryData(post);
+    expect(result.mediaById?.get('pm-1')?.aspectRatio).toBeCloseTo(16 / 9, 4);
+  });
+
+  it('omits aspectRatio when width or height is missing — the letterbox falls back to the payload/default', () => {
+    const withoutHeight = postToStoryData(createPost({
+      media: [{ id: 'pm-1', mimeType: 'image/jpeg', fileUrl: 'https://a.jpg', order: 0, width: 1920 }],
+    }));
+    expect(withoutHeight.mediaById?.get('pm-1')?.aspectRatio).toBeUndefined();
+
+    const withoutEither = postToStoryData(createPost({
+      media: [{ id: 'pm-2', mimeType: 'image/jpeg', fileUrl: 'https://b.jpg', order: 0 }],
+    }));
+    expect(withoutEither.mediaById?.get('pm-2')?.aspectRatio).toBeUndefined();
+  });
+});
+
+// Constat 12 — la sentinelle v3 doit tolérer `v >= 3` (spec, storyEffectsV3.ts,
+// rattrapage B8c), pas seulement `v === 3` : un futur blob `v:4` que le
+// gateway sert TEL QUEL à un client caps-3 doit rester lisible best-effort,
+// jamais retomber sur le chemin legacy (qui n'a plus aucune famille v1 dans
+// un blob v3-shaped) et rendre une story VIDE.
+describe('postToStoryData - v >= 3 tolerance (constat 12)', () => {
+  it('treats v:4 storyEffects as v3-shaped — scenes and sound survive the funnel', () => {
+    const scenes: CanvasV3['scenes'] = [{
+      id: 's1',
+      objects: [{
+        id: 't1',
+        kind: 'text',
+        anchor: { t: 'free', x: 0.5, y: 0.5 },
+        plane: 'fg',
+        z: 0,
+        transform: { scale: 1, rotation: 0, opacity: 1 },
+        payload: { text: 'Bonjour' },
+      }],
+    }];
+    const post = createPost({
+      storyEffects: {
+        v: 4,
+        scenes,
+        sound: { source: { t: 'original' }, volume: 1 },
+      } as unknown as Post['storyEffects'],
+    });
+
+    const result = postToStoryData(post);
+
+    expect(result.storyEffects?.scenes?.[0]?.objects[0]?.id).toBe('t1');
+    expect(result.storyEffects?.sound?.source.t).toBe('original');
+  });
+});
+
+describe('computeStoryDurationMs - v >= 3 tolerance (constat 12)', () => {
+  it('reads a v:4 scene through the v3 projection instead of falling back to the 6s default', () => {
+    const result = computeStoryDurationMs({
+      v: 4,
+      scenes: [{
+        id: 's1',
+        objects: [{
+          id: 'm1',
+          kind: 'media',
+          payload: { isBackground: true, mediaType: 'video', duration: 14 },
+        }],
+      }],
+    });
+    expect(result).toBe(14000);
+  });
+});
+
+// Constat 3 — le crédit de bibliothèque (`titre · @pseudo · M:SS`) voyage sur
+// l'objet `kind:audio` de fond de la scène (soundAuthorUsername, name,
+// duration — services/gateway/src/services/posts/storyEffectsV3.ts:168-172,
+// miroir CanvasV3Migration.swift:400-407), jamais dégradé en `♫ —` par défaut.
+describe('backgroundSoundCredit (constat 3)', () => {
+  function audioObject(payload: Record<string, unknown>): NonNullable<CanvasV3['scenes']>[number]['objects'][number] {
+    return {
+      id: 'a1',
+      kind: 'audio',
+      anchor: { t: 'free', x: 0.5, y: 0.5 },
+      plane: 'content',
+      z: 0,
+      transform: { scale: 1, rotation: 0, opacity: 1 },
+      payload,
+    };
+  }
+
+  it('extracts title, username and duration from the BACKGROUND kind:audio object', () => {
+    const scenes: CanvasV3['scenes'] = [{
+      id: 's1',
+      objects: [audioObject({ isBackground: true, name: 'Chill Beat', soundAuthorUsername: 'dj_zoe', duration: 42 })],
+    }];
+
+    expect(backgroundSoundCredit(scenes)).toEqual({ title: 'Chill Beat', username: 'dj_zoe', durationSeconds: 42 });
+  });
+
+  it('returns an empty credit when no background audio object exists', () => {
+    expect(backgroundSoundCredit(undefined)).toEqual({});
+    expect(backgroundSoundCredit([{ id: 's1', objects: [] }])).toEqual({});
+  });
+
+  it('ignores a non-background audio object — a posed clip is not the story soundtrack', () => {
+    const scenes: CanvasV3['scenes'] = [{
+      id: 's1',
+      objects: [audioObject({ name: 'Voice memo', soundAuthorUsername: 'someone' })],
+    }];
+
+    expect(backgroundSoundCredit(scenes)).toEqual({});
   });
 });
 

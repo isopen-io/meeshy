@@ -128,4 +128,97 @@ describe('StoryViewer — le v3 monte CanvasV3Scene, le legacy devient le repli 
     expect(screen.queryByTestId('canvas-v3-scene')).toBeNull();
     expect(screen.getByText('Legende historique')).toBeInTheDocument();
   });
+
+  // Constat 12 — un futur `v:4` (le gateway le sert TEL QUEL à un client
+  // caps-3) reste lisible best-effort, jamais rejeté vers le chemin legacy vide.
+  it('renders CanvasV3Scene for a forward-compatible v:4 blob (v >= 3, not v === 3)', () => {
+    render(
+      <StoryViewer
+        stories={[baseStory({
+          storyEffects: {
+            v: 4,
+            scenes: [{
+              id: 's1',
+              objects: [{
+                id: 't1',
+                kind: 'text',
+                anchor: { t: 'free', x: 0.5, y: 0.5 },
+                plane: 'fg',
+                z: 0,
+                transform: { scale: 1, rotation: 0, opacity: 1 },
+                payload: { text: 'Bonjour' },
+              }],
+            }],
+          } as unknown as StoryData['storyEffects'],
+        })]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('canvas-v3-scene')).toBeInTheDocument();
+  });
+
+  // Constat 19 — le voile de lisibilité legacy (StoryViewer.tsx:915-916)
+  // n'avait pas d'équivalent sur le chemin v3 : un texte blanc posé sur une
+  // photo claire perdait son scrim (CLAUDE.md « NE PAS retirer effets visuels »).
+  it('keeps the readability scrim over the v3 background', () => {
+    render(
+      <StoryViewer
+        stories={[baseStory({ storyEffects: v3Fixture('minimal-text') as StoryData['storyEffects'] })]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('story-readability-scrim')).toBeInTheDocument();
+  });
+
+  // Constat 3 — le crédit de bibliothèque voyage sur l'objet `kind:audio` de
+  // fond de la scène (name, soundAuthorUsername, duration), jamais dégradé en
+  // `♫ —` par défaut alors que la métadonnée est SUR LE FIL.
+  it('shows the library credit on the badge — the metadata rides the background kind:audio object', () => {
+    render(
+      <StoryViewer
+        stories={[baseStory({
+          storyEffects: {
+            v: 3,
+            sound: { source: { t: 'library', soundId: 'snd-1' }, volume: 1 },
+            scenes: [{
+              id: 's1',
+              objects: [
+                {
+                  id: 't1',
+                  kind: 'text',
+                  anchor: { t: 'free', x: 0.5, y: 0.5 },
+                  plane: 'fg',
+                  z: 0,
+                  transform: { scale: 1, rotation: 0, opacity: 1 },
+                  payload: { text: 'Bonjour' },
+                },
+                {
+                  id: 'a1',
+                  kind: 'audio',
+                  anchor: { t: 'free', x: 0.5, y: 0.5 },
+                  plane: 'content',
+                  z: 0,
+                  transform: { scale: 1, rotation: 0, opacity: 1 },
+                  payload: { isBackground: true, name: 'Chill Beat', soundAuthorUsername: 'dj_zoe', duration: 42 },
+                },
+              ],
+            }],
+          } as unknown as StoryData['storyEffects'],
+        })]}
+        initialIndex={0}
+        onClose={jest.fn()}
+        onReply={jest.fn()}
+      />,
+    );
+
+    const announcement = screen.getByTestId('background-sound-announcement');
+    expect(announcement).toHaveTextContent('Chill Beat');
+    expect(announcement).toHaveTextContent('@dj_zoe');
+  });
 });

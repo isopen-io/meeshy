@@ -4,6 +4,7 @@ import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import type { StoryItem } from '@/components/v2/StoryTray';
 import type { StoryData, StoryTextObjectData, StoryMediaObjectData, StoryAudioObjectData } from '@/components/v2/StoryViewer';
+import type { CanvasV3MediaResolution } from '@/components/v2/CanvasV3Scene';
 
 // Résolution du bloc auteur affiché d'une story — SOURCE UNIQUE.
 // Délègue le nom à `getUserDisplayName` (displayName non-vide > username >
@@ -259,8 +260,41 @@ function v1ViewOfScene(scene: Record<string, unknown>): Record<string, unknown> 
   };
 }
 
+// Constat 3 — l'annonce du fond (B3.4) dégradait TOUJOURS une piste de
+// bibliothèque en `♫ —` : le viewer ne lisait jamais le crédit qui voyage
+// pourtant sur l'objet `kind:audio` de FOND de la scène (`name`,
+// `soundAuthorUsername`, `duration` — services/gateway/src/services/posts/
+// storyEffectsV3.ts:168-172, miroir CanvasV3Migration.swift:400-407). Extrait
+// PUR, partagé entre `StoryViewer` (carte plein écran) et les futures
+// surfaces carte/détail (F7c).
+export interface BackgroundSoundCredit {
+  title?: string;
+  username?: string;
+  durationSeconds?: number;
+}
+
+export function backgroundSoundCredit(scenes: CanvasV3['scenes']): BackgroundSoundCredit {
+  const audioObject = (scenes ?? [])
+    .flatMap((scene) => scene.objects)
+    .find((o) => o.kind === 'audio' && o.payload.isBackground === true);
+  if (!audioObject) return {};
+
+  const { payload } = audioObject;
+  const title = typeof payload.name === 'string' && payload.name.length > 0 ? payload.name : undefined;
+  const username = typeof payload.soundAuthorUsername === 'string' && payload.soundAuthorUsername.length > 0
+    ? payload.soundAuthorUsername
+    : undefined;
+  const durationSeconds = typeof payload.duration === 'number' && Number.isFinite(payload.duration)
+    ? payload.duration
+    : undefined;
+  return { title, username, durationSeconds };
+}
+
 export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
-  const v3Scene = effects?.v === 3 ? asObjectArray(effects.scenes)[0] : undefined;
+  // Constat 12 — `v >= 3` (spec §D, storyEffectsV3.ts:401, rattrapage B8c),
+  // jamais `v === 3` : un futur `v:4` que le gateway sert TEL QUEL à un client
+  // caps-3 doit rester lu en v3, jamais retomber vide sur la projection v1.
+  const v3Scene = typeof effects?.v === 'number' && effects.v >= 3 ? asObjectArray(effects.scenes)[0] : undefined;
   const source = v3Scene ? v1ViewOfScene(v3Scene) : effects;
 
   // Priority 0 — author-pinned timeline duration is authoritative (the timeline
@@ -344,9 +378,22 @@ export function postToStoryData(post: Post): StoryData {
 
   // Resolve a `postMediaId -> { url, mimeType }` lookup for the foreground media
   // / audio renderers — they store only the id, not the URL.
-  const mediaById = new Map<string, { url: string; mimeType: string }>();
+  // Constat 9 — le letterbox v3 (`CanvasV3Scene` : le porteur garde SON ratio)
+  // a besoin d'un `aspectRatio` que la production ne fournissait jamais.
+  // `PostMedia.width`/`height` (packages/shared/types/post.ts:67-68) le
+  // dérivent quand les deux sont posés ; absent, `CanvasV3Scene` retombe sur
+  // `payload.aspectRatio` puis sur l'absence de contrainte (plein cadre).
+  const mediaById = new Map<string, CanvasV3MediaResolution>();
   for (const m of post.media ?? []) {
-    if (m.id && m.fileUrl) mediaById.set(m.id, { url: m.fileUrl, mimeType: m.mimeType ?? '' });
+    if (!m.id || !m.fileUrl) continue;
+    const aspectRatio = typeof m.width === 'number' && typeof m.height === 'number' && m.height > 0
+      ? m.width / m.height
+      : undefined;
+    mediaById.set(m.id, {
+      url: m.fileUrl,
+      mimeType: m.mimeType ?? '',
+      ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+    });
   }
 
   // Pass the post-level `translations` straight through. Previously this was
@@ -373,10 +420,11 @@ export function postToStoryData(post: Post): StoryData {
   // `postToStoryData` est l'entonnoir UNIQUE vers le viewer : ce qu'il jette
   // n'existe plus. Le contrat est validé à l'ÉCRITURE (gateway) ; la lecture
   // reste tolérante objet par objet.
-  const canvasScenes = effects?.v === 3 && Array.isArray(effects.scenes)
+  const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
+  const canvasScenes = isV3Shaped && Array.isArray(effects.scenes)
     ? (effects.scenes as CanvasV3['scenes'])
     : undefined;
-  const backgroundSound = effects?.v === 3 && effects.sound !== null && typeof effects.sound === 'object'
+  const backgroundSound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
     ? (effects.sound as CanvasV3['sound'])
     : undefined;
 
