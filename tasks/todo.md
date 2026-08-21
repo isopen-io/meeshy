@@ -323,6 +323,10 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
       plein si j'ai réagi) ; carte de liste : effectif + sync (bouton → `flushOutbox`) sur la ligne basse à
       droite, nom original centré en haut si nom personnalisé (non vus : aucune conversation renommée /
       groupe non élu pendant la capture).
+- [x] Lot 8 (retour capture 22/08) : carte du focus = FOND SwiftUI de la rangée (fini la dérive carte UIKit /
+      chips avant la pose) — chips et identité consolidées sur les lignes, vérifié en mouvement et au posé ;
+      crash `APPLYING_SNAPSHOTS_REENTRANTLY` corrigé (sync différée + coalescée, un apply en vol) — stress
+      6 balayages sans crash ; méta-rangée = heure seule.
 - [ ] Rivière lots 2–5 inchangés (ci-dessous).
 
 ## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`

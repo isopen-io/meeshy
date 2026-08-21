@@ -50,10 +50,19 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
     func test_focusDetails_areInstant_noHeightChange_precomputedDate() throws {
         let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
         XCTAssertTrue(row.contains(".opacity(input.isFocused ? 0 : 1)"), "la ligne drapeau+réactions garde sa place, elle s'efface")
+        // La carte est le FOND du bloc (même repère que ses chips) — plus une
+        // vue UIKit bornée à la cellule qui dérivait avant la pose.
+        XCTAssertTrue(row.contains(".background { if input.isFocused { focusCardBackground } }"), "carte = fond SwiftUI du contenu")
+        XCTAssertTrue(row.contains(".padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)"), "mêmes cotes que focusCardInsets")
         XCTAssertTrue(row.contains("if !input.isFirstInGroup { FocalMetaRow("), "la méta-rangée reste, focus ou pas")
         XCTAssertTrue(row.contains("if let precomputed = input.focusTimestamp { return precomputed }"), "date pré-calculée")
         let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains("if electionChanged { syncFocalFocusDetails() }"), "détails synchronisés au tick d'élection")
+        // Jamais un `apply` imbriqué (crash UIKit « APPLYING_SNAPSHOTS_REENTRANTLY »,
+        // payé au simulateur) : la reconfiguration est différée et coalescée.
+        XCTAssertTrue(controller.contains("guard !focalDetailsSyncScheduled else { return }"), "coalescée")
+        XCTAssertTrue(controller.contains("focalDetailsSyncScheduled = true DispatchQueue.main.async"), "différée au prochain tour")
+        XCTAssertTrue(controller.contains("if focalReconfigureInFlight { focalDetailsPendingAfterApply = true return }"), "un seul apply en vol")
         XCTAssertTrue(controller.contains("focusTimestamp: self.focalDetailedLocalId == localId ? self.focalFocusTimestamp(for: message.createdAt) : nil"))
         let input = try normalized("Meeshy/Features/Main/Focal/Core/FocalRowInput.swift")
         XCTAssertTrue(input.contains("let focusTimestamp: String?"))

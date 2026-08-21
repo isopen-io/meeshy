@@ -192,7 +192,7 @@ struct FocalRow: View {
             if !input.isFirstInGroup {
                 FocalMetaRow(
                     isMe: content.isMe,
-                    timeString: headerTimeString,
+                    timeString: content.meta.timeString,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
                     indent: indent,
@@ -204,10 +204,17 @@ struct FocalRow: View {
             }
 
         }
-        // Focus (2026-08-22) : identité sur la ligne du HAUT (hors tête de
-        // groupe, qui a déjà la sienne) et bande sur la ligne BASSE — des
-        // superpositions, aucune hauteur réservée : elles apparaissent AVEC
-        // la carte, au tick d'élection.
+        // Focus (2026-08-22) : la CARTE est le fond de ce bloc — même repère
+        // que ses chips, toujours consolidés quelle que soit la hauteur
+        // (estimée ou posée) de la cellule ; identité sur la ligne du HAUT
+        // (hors tête de groupe, qui a déjà la sienne) et bande sur la ligne
+        // BASSE — des superpositions, aucune hauteur réservée : tout apparaît
+        // AVEC la carte, au tick d'élection.
+        .background {
+            if input.isFocused {
+                focusCardBackground
+            }
+        }
         .overlay(alignment: .topLeading) {
             if input.isFocused && !input.isFirstInGroup {
                 focusIdentityChip
@@ -723,6 +730,22 @@ struct FocalRow: View {
             actions.onShowReactions?(content.messageId)
         })
         .accessibilityLabel("\(reaction.emoji) \(reaction.count)")
+    }
+
+    /// La carte du message en focus, dessinée dans le repère du CONTENU
+    /// (la carte UIKit bornée à la cellule dérivait de ses chips tant que la
+    /// cellule n'était pas posée). Mêmes cotes que `focusCardInsets` : elle
+    /// dépasse le bloc de `focusCardInnerMargin` en haut et en bas, et
+    /// s'arrête à `focusCardHorizontalInset` du bord de la cellule.
+    private var focusCardBackground: some View {
+        RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
+            .fill(focusAccent.opacity(input.isDark ? 0.16 : 0.10))
+            .overlay(
+                RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
+                    .strokeBorder(focusAccent.opacity(input.isDark ? 0.55 : 0.40), lineWidth: 1)
+            )
+            .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
+            .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }
 
     /// Identité (avatar + nom + date complète) SUR la ligne du HAUT de la

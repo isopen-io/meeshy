@@ -276,6 +276,11 @@ final class MessageListViewController: UIViewController {
     /// change en plein momentum est exactement ce qui faisait boguer l'ancien
     /// pass.
     var focalDetailedLocalId: String?
+    /// Reconfiguration des détails du focus : différée et coalescée (voir
+    /// `syncFocalFocusDetails`).
+    private var focalDetailsSyncScheduled = false
+    private var focalReconfigureInFlight = false
+    private var focalDetailsPendingAfterApply = false
     /// La SCÈNE Focal est active — perspective posée — seulement pendant un
     /// geste utilisateur et `FocalMetrics.Scene.restDelay` après la pose ;
     /// au repos, tout est Script (directive user 2026-08-21).
@@ -2933,21 +2938,16 @@ extension MessageListViewController {
         // posé (directive 2026-08-22) : la reconfiguration ne change aucune
         // hauteur (chips et identité sont des superpositions sur les lignes
         // de la carte), elle ne coûte qu'un rendu de deux cellules.
-        if electionChanged { syncFocalFocusDetails() }
-        let accent = UIColor(Color(hex: accentColor))
-        let isDark = self.isDark
+        if electionChanged { syncFocalFocusDetails() }  // différé + coalescé, jamais réentrant
         let body = {
             for pose in poses {
                 guard let cell = cellById[pose.id] else { continue }
                 FocalScrollPerspective.apply(pose, to: cell.contentView.layer)
-                if pose.id == focused {
-                    FocalScrollPerspective.showFocusCard(
-                        in: cell.contentView, accent: accent, isDark: isDark,
-                        isFirstInGroup: cell.tag == FocalScrollPerspective.groupHeadCellTag
-                    )
-                } else {
-                    FocalScrollPerspective.hideFocusCard(in: cell.contentView)
-                }
+                // La carte est désormais le FOND de la rangée en focus
+                // (`FocalRow.focusCardBackground`, posée à la reconfiguration
+                // du tick d'élection) : plus de carte UIKit bornée à la
+                // cellule — elle dérivait de ses chips avant la pose.
+                FocalScrollPerspective.hideFocusCard(in: cell.contentView)
             }
         }
         if CACurrentMediaTime() - focalSceneEnteredAt < FocalMetrics.Scene.enterDuration {
@@ -2979,8 +2979,30 @@ extension MessageListViewController {
         )
     }
 
+    /// JAMAIS un `apply` synchrone : cette méthode est appelée depuis des
+    /// complétions d'`apply` (pose, aplatissement) et, depuis le 2026-08-22,
+    /// depuis le tick d'élection — qui peut lui-même tourner dans la
+    /// complétion d'un `apply` de reconfiguration. Un `apply` imbriqué fait
+    /// abandonner UIKit (`BUG_IN_CLIENT_OF_DIFFABLE_DATA_SOURCE_…_REENTRANTLY`,
+    /// crash payé au simulateur). La reconfiguration est donc DIFFÉRÉE au
+    /// prochain tour de la boucle principale et COALESCÉE (un seul apply en
+    /// vol ; une élection qui change pendant l'apply est reprise à sa fin).
     func syncFocalFocusDetails() {
+        guard !focalDetailsSyncScheduled else { return }
+        focalDetailsSyncScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.focalDetailsSyncScheduled = false
+            self.reconfigureFocalDetailsNow()
+        }
+    }
+
+    private func reconfigureFocalDetailsNow() {
         guard let dataSource else { return }
+        if focalReconfigureInFlight {
+            focalDetailsPendingAfterApply = true
+            return
+        }
         let target = (readingMode == .focal && focalSceneActive) ? focalFocusedLocalId : nil
         guard focalDetailedLocalId != target else { return }
         let previous = focalDetailedLocalId
@@ -2994,8 +3016,15 @@ extension MessageListViewController {
         let items = localIds.map { MessageListItem.message(localId: $0) }.filter { present.contains($0) }
         guard !items.isEmpty else { return }
         snapshot.reconfigureItems(items)
+        focalReconfigureInFlight = true
         dataSource.apply(snapshot, animatingDifferences: false) { [weak self] in
-            self?.applyFocalPerspectiveToVisibleCells()
+            guard let self else { return }
+            self.focalReconfigureInFlight = false
+            self.applyFocalPerspectiveToVisibleCells()
+            if self.focalDetailsPendingAfterApply {
+                self.focalDetailsPendingAfterApply = false
+                self.syncFocalFocusDetails()
+            }
         }
     }
 

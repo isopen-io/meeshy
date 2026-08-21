@@ -217,19 +217,18 @@ nonisolated public enum FocalMetrics {
     nonisolated public enum FocusStrip {
         public static let chipSize: CGFloat = 32
         /// Débord sous le bas du contenu pour que le CENTRE des chips tombe
-        /// sur la ligne de la carte : la carte s'arrête à
-        /// `Row.paddingVertical − focusCardInnerMargin` (5 − 4 = 1 pt) du
-        /// bas de la cellule, soit 4 pt sous le contenu ⇒ 16 + 4.
-        public static let overhang: CGFloat = chipSize / 2 + 4
+        /// sur la ligne de la carte : la carte (fond SwiftUI de la rangée,
+        /// même repère que les chips) dépasse le bloc de contenu de
+        /// `focusCardInnerMargin` — un demi-chip plus cette marge.
+        public static let overhang: CGFloat = chipSize / 2 + FocalScrollPerspective.focusCardInnerMargin
         /// Chip d'identité (avatar + nom + date) posée sur la ligne du HAUT
         /// pour un message en focus qui n'est pas tête de groupe — une
         /// superposition, jamais une hauteur de rangée (instantané, zéro
         /// relayout).
         public static let identityAvatarSize: CGFloat = 18
         public static let identityChipHeight: CGFloat = 24
-        /// La carte s'arrête à `Row.paddingVertical − focusCardInnerMargin`
-        /// (1 pt) du haut de la cellule ⇒ 4 pt au-dessus du contenu.
-        public static let identityOverhang: CGFloat = identityChipHeight / 2 + 4
+        /// Même cote en haut : un demi-chip plus la marge de la carte.
+        public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
     }
 
     nonisolated public enum HiddenChrome {
