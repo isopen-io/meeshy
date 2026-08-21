@@ -1,11 +1,12 @@
 /**
- * F1 — `CanvasV3Scene`, le rendu v3 du web : un composant PUR, statique.
+ * F1 — `CanvasV3Scene`, le rendu v3 du web : un composant PUR.
  *
- * Les timings ne sont pas joués (dette explicite du plan lot F) : un objet
- * timé est simplement VISIBLE. Ce qui est jugé ici, c'est la fidélité de la
- * scène — ancres, bandes, ratio du porteur, table des 18 styles, ordre des
- * plans — et la TOLÉRANCE de lecture : un kind réservé n'a jamais le droit
- * de casser le rendu.
+ * Ce qui est jugé ici, c'est la fidélité de la scène à sa POSE — ancres,
+ * bandes, ratio du porteur, table des 18 styles, ordre des plans — et la
+ * TOLÉRANCE de lecture : un kind réservé n'a jamais le droit de casser le
+ * rendu. La pose animée (keyframes, transitions de clip) et la parité des
+ * lecteurs sont jugées par les suites F7a voisines
+ * (`canvas-v3-scene-animation`, `canvas-v3-scene-parity`).
  */
 import { render, screen } from '@testing-library/react';
 import React from 'react';
