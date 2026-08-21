@@ -105,3 +105,73 @@ public enum Plan2DLayout {
 ## Hors périmètre (dit une fois)
 
 Édition des keyframes DANS le plan (S4 — l'Inspector garde ce rôle) · scrub audio synchronisé · `preferredFrameRateRange` 120 Hz (opportuniste post-v1) · toute modification de `Engine/Logic/Model/ViewModel` au-delà de l'ajout `Plan2DLayout`.
+
+---
+
+# Addendum rév. 2 — Rattrapage revue Opus (2026-08-21), tâches D6a–D6d
+
+**Contexte.** Revue finale : `tasks/composer-lot-d-revue-opus.md` — 19 constats
+(0 bloquant, 7 MAJEURS, 12 mineurs), 15 axes blanchis. Constats 1/2/3/4 reconfirmés
+sur pièces par l'orchestrateur. Le lot NE MERGE PAS avant fermeture des majeurs.
+Le STOP budget D4 (plafond A18 mesuré, plancher A11 extrapolé ×2,1-2,65 de marge)
+reste une DÉCISION PRODUIT séparée — aucune tâche D6 ne le lève.
+
+**Arbitrages tranchés :**
+1. **Verrou d'axe du geste armé** (constats 2, 5) : le drag armé choisit son axe à
+   la DOMINANTE (|Δx| vs |Δy| au premier dépassement d'une zone morte réelle
+   ~8 pt) — un réordonnancement vertical n'émet JAMAIS de MoveClip ; l'offset
+   des 24 pt de slop pré-armement est soustrait du premier delta horizontal.
+   Grammaire alignée sur les notes du module (VideoClipBar:178-183) :
+   highPriorityGesture + minimumDistance 4 pour le trim de bord ; l'armement
+   du réordonnancement tolère « poser, hésiter, glisser » (le dépassement du
+   slop N'ANNULE PAS l'armement s'il précède 0,45 s — il arme immédiatement
+   en mode déplacement) ; l'haptique ne prétend pas signaler un instant qu'elle
+   ne peut pas observer.
+2. **Sélection rendue + verrou restauré** (constats 3, 4) : Plan2DView reçoit
+   `selectedTrackId` (entrée de son ==) et surligne la barre ; `Plan2DTrack`
+   gagne `isLocked` (fond/synthétique — projeté par l'adaptateur), une barre
+   verrouillée n'a NI poignées NI déplacement, porte le badge cadenas et
+   l'annonce a11y « (verrouillée) » ; le trim exige la sélection préalable
+   (parité ClipTrimHandles.shouldShow).
+3. **Keyframes audio routés** (constat 1) : un tap sur un losange AUDIO ouvre
+   l'inspecteur du CLIP audio (section volume/courbe existante) — jamais un
+   cul-de-sac ; la sélection n'est posée que si un inspecteur va s'ouvrir.
+   Mineur 15 : les losanges hors fenêtre du clip (clip rogné) sont écrêtés au
+   fenêtrage. Mineur 19 : un losange à t=0 ne vole pas le tap du bord si le
+   clip n'a pas d'inspecteur de keyframe pour lui.
+4. **Aimantation sur l'échelle du plan** (constat 6) : la tolérance du
+   SnapEngine dérive de equivalentGeometry (la même que règle/playhead/chrome),
+   plus jamais du zoomScale continu du transport.
+5. **Hygiène** (mineurs 8, 9, 11, 12, 13, 16, 17, 18) : zoom — désaveu documenté
+   couvrant les DEUX moitiés ou mapping continu ; icône U9 = celle de la table
+   des symboles (arrow.uturn.backward.circle) ; garde-manifeste complétée des
+   3 fichiers manquants + balayage étendu à Sources/MeeshySDK ; chiffres P0
+   réconciliés (une seule vérité par suite) + note d'exception camembert dans
+   la planche ; libellés de piste écrêtés à la colonne ; échos de boucle
+   alignés verticalement sur les barres ; une barre < 22 pt garde une poignée
+   de FIN atteignable (partage à la moitié).
+6. **Dettes VISIBLES, pas de sur-périmètre** (constats 7, 10, 14) : les 4
+   familles injoignables (place/drawing/fond visuel/son hérité — TimelineProject
+   ne les porte pas) = ligne P0 dédiée « lot futur », PAS d'extension de
+   TimelineProject ici ; le snap étiqueté U9 = ajouté au « Hors v1 » de la
+   spec ; le banc D4 documente warm-up à froid vs seuil à chaud (dissociation
+   ou commentaire, pas de recalibrage hasardeux).
+
+### Task D6a — Gestes & géométrie (opus) : arbitrages 1, 4 + mineurs 18/19 côté hit.
+**Files:** `Plan2DView.swift`, `StoryTimelineHost.swift`, `TimelineViewModel.swift`
+(échelle snap), tests `Plan2DViewGuardTests` + `Plan2DRestoredCapabilitiesTests`
+(cas RÉELS : drag vertical avec Δx=9 pt ; poser-hésiter-glisser ; tolérance snap
+aux deux densités extrêmes).
+### Task D6b — Sélection & verrou (sonnet) : arbitrage 2.
+**Files:** `Plan2DLayout.swift` (+`isLocked`), `Plan2DProjectAdapter.swift`,
+`Plan2DView.swift`, `StoryTimelineHost.swift`, tests.
+### Task D6c — Keyframes audio + écrêtage (sonnet) : arbitrage 3.
+**Files:** `TimelineInspectorHost.swift` (routage), `Plan2DLayout.swift`
+(écrêtage fenêtre), `Plan2DView.swift` (préséance tap), tests.
+### Task D6d — Hygiène + P0 + gate final (sonnet) : arbitrages 5, 6.
+Gate : scheme MeeshySDK-Package COMPLET + build app ; P0 cohérente (chiffres
+réconciliés, dettes visibles, note d'exception camembert) ; spec « Hors v1 »
+amendée (snap étiqueté U9).
+
+**Ordre : D6a → D6b → D6c → D6d.** TDD strict, DoD opus par tâche, P0 touchée
+par D6d seulement (les autres citent l'addendum).
