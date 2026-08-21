@@ -1342,8 +1342,13 @@ describe('useWebRTCP2P', () => {
 
       act(() => peer1.onConnectionStateChange('failed'));
       expect(result.current.connectionState).toBe('failed');
-      expect(toast.error).toHaveBeenCalledWith('Connection failed. Please try again.');
+      // No toast.error here (Vague 151) — the hook forwards
+      // PEER_CONNECTION_FAILED to onError and leaves the (translated) user
+      // toast entirely to the consumer; toasting a second, always-English
+      // copy in the hook itself was the bug this wave fixed.
+      expect(toast.error).not.toHaveBeenCalled();
       expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'PEER_CONNECTION_FAILED' }));
 
       // A second, already-failed peer must not re-fire the same global
       // error a second time — the aggregate did not change.
@@ -1409,11 +1414,13 @@ describe('useWebRTCP2P', () => {
       act(() => peer2.onIceConnectionStateChange('connected'));
 
       act(() => peer1.onIceConnectionStateChange('failed'));
-      expect(toast.error).not.toHaveBeenCalledWith('Connection failed. Retrying...');
       expect(onError).not.toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
 
       act(() => peer2.onIceConnectionStateChange('failed'));
-      expect(toast.error).toHaveBeenCalledWith('Connection failed. Retrying...');
+      // No toast.error here (Vague 151) — see the matching comment on the
+      // PEER_CONNECTION_FAILED test above; the hook forwards the error code
+      // to onError only, never toasting its own always-English copy.
+      expect(toast.error).not.toHaveBeenCalled();
       expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
     });
 

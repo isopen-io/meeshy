@@ -139,6 +139,16 @@ public struct TimelineInspectorHost: View {
     /// neither a media clip nor an audio player object.
     public static func resolveClipSnapshot(viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
         guard let id = viewModel.selection.selectedClipId else { return nil }
+        return clipSnapshot(id: id, viewModel: viewModel)
+    }
+
+    /// La MÊME résolution, pour un id QUELCONQUE — la sélection n'est qu'un id
+    /// parmi d'autres. C'est ce qui permet de demander ce qu'un tap
+    /// OUVRIRAIT avant de rien poser (`inspectIfResolvable`) : sans ce
+    /// découplage, la seule façon de le savoir serait de poser la sélection
+    /// puis de la reprendre — un état transitoire que la vue verrait passer.
+    private static func clipSnapshot(id: String,
+                                     viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
         let slideDuration = viewModel.project.slideDuration
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == id }) {
             // Media objects only carry image/video — audio lives in
@@ -172,28 +182,12 @@ public struct TimelineInspectorHost: View {
                 volumeKeyframes: volumePoints(keyframes: media.keyframes,
                                               clipStart: Float(media.startTime ?? 0)),
                 isDuckingDisabled: media.isDuckingDisabled ?? false,
-                slideHasBackgroundAudio: hasBackgroundAudio(project: viewModel.project)
+                slideHasBackgroundAudio: hasBackgroundAudio(project: viewModel.project),
+                isFollowingSlide: media.startTime == nil && media.duration == nil
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
-            let win = window(startTime: audio.startTime ?? 0,
-                             duration: audio.duration,
-                             slideDuration: slideDuration)
-            return ClipInspector.ClipSnapshot(
-                id: audio.id,
-                displayName: audio.postMediaId,
-                kind: .audio,
-                startTime: win.start,
-                duration: win.duration,
-                volume: audio.volume,
-                fadeInDuration: audio.fadeIn ?? 0,
-                fadeOutDuration: audio.fadeOut ?? 0,
-                isLooping: audio.loop ?? false,
-                isBackground: audio.isBackground ?? false,
-                name: audio.name,
-                volumeKeyframes: volumePoints(keyframes: audio.keyframes,
-                                              clipStart: audio.startTime ?? 0)
-            )
+            return audioClipSnapshot(audio, slideDuration: slideDuration)
         }
         // Le texte a aussi un début/durée/fondu (et un nom) éditables — sans
         // cette branche, un long-press sur un TEXTE n'ouvrirait aucun inspecteur.
@@ -216,7 +210,8 @@ public struct TimelineInspectorHost: View {
                 isBackground: false,
                 name: text.name,
                 transform: ClipTransform(x: text.x, y: text.y, scale: text.scale,
-                                         rotation: text.rotation, zIndex: text.zIndex)
+                                         rotation: text.rotation, zIndex: text.zIndex),
+                isFollowingSlide: text.startTime == nil && text.duration == nil
             )
         }
         // Le sticker a une lane TAPABLE dans la timeline mais aucune branche
@@ -239,21 +234,97 @@ public struct TimelineInspectorHost: View {
                 fadeOutDuration: Float(sticker.fadeOut ?? 0),
                 isLooping: false,
                 isBackground: false,
-                name: nil
+                name: nil,
+                isFollowingSlide: sticker.startTime == nil && sticker.duration == nil
             )
         }
         return nil
     }
 
+    /// Construit la `ClipSnapshot` d'un objet audio — extrait de
+    /// `resolveClipSnapshot` pour être RÉUTILISÉ par
+    /// `audioKeyframeOwnerSnapshot` ci-dessous : les deux chemins
+    /// doivent produire EXACTEMENT la même fiche, qu'on tape le CLIP ou l'un
+    /// de ses losanges de volume.
+    private static func audioClipSnapshot(_ audio: StoryAudioPlayerObject,
+                                          slideDuration: Float) -> ClipInspector.ClipSnapshot {
+        let win = window(startTime: audio.startTime ?? 0,
+                         duration: audio.duration,
+                         slideDuration: slideDuration)
+        return ClipInspector.ClipSnapshot(
+            id: audio.id,
+            displayName: audio.postMediaId,
+            kind: .audio,
+            startTime: win.start,
+            duration: win.duration,
+            volume: audio.volume,
+            fadeInDuration: audio.fadeIn ?? 0,
+            fadeOutDuration: audio.fadeOut ?? 0,
+            isLooping: audio.loop ?? false,
+            isBackground: audio.isBackground ?? false,
+            name: audio.name,
+            volumeKeyframes: volumePoints(keyframes: audio.keyframes,
+                                          clipStart: audio.startTime ?? 0),
+            isFollowingSlide: audio.startTime == nil && audio.duration == nil
+        )
+    }
+
+    /// Un losange AUDIO n'a AUCUN `KeyframeInspector` à ouvrir — l'audio ne
+    /// porte qu'un canal `volume` (`StoryKeyframe.x/y/scale/opacity` restent
+    /// `nil`), déjà réglable à la courbe de la fiche CLIP existante
+    /// (`ClipSnapshot.volumeKeyframes`). Avant ce routage, taper ce losange
+    /// posait `selectedClipId` sur un id qu'aucun résolveur ne connaissait :
+    /// cul-de-sac silencieux qui empoisonnait aussi la sélection en cours
+    /// (revue Opus, constat 1 / addendum rév. 2, arbitrage 3).
+    ///
+    /// Recherché SÉPARÉMENT de `resolveKeyframeSnapshot` (media/texte) :
+    /// contrairement à eux, la cible n'est pas le keyframe lui-même mais le
+    /// clip qui le PORTE — un keyframe audio ne produit donc jamais de cas
+    /// `.keyframe(…)`, seulement `.clip(…)`.
+    ///
+    /// Deux appelants, tous deux VIVANTS et tous deux sur l'id TAPÉ, jamais
+    /// sur la sélection : `selectionKind(for:)`, qui décide si une fiche
+    /// s'ouvrirait, et `resolvedOwnerId(for:)`, qui dit ce que le bus doit
+    /// alors porter. Il n'existe volontairement pas de variante
+    /// `resolve…(viewModel:)` lisant `selection.selectedClipId` : depuis la
+    /// normalisation au bus, cette sélection ne vaut PLUS jamais l'id d'un
+    /// losange audio, et une telle variante serait morte par construction
+    /// (revue DoD de D6c, constat 2).
+    private static func audioKeyframeOwnerSnapshot(
+        id: String, viewModel: TimelineViewModel
+    ) -> ClipInspector.ClipSnapshot? {
+        guard let audio = viewModel.project.audioPlayerObjects.first(where: { audio in
+            (audio.keyframes ?? []).contains { $0.id == id }
+        }) else { return nil }
+        return audioClipSnapshot(audio, slideDuration: viewModel.project.slideDuration)
+    }
+
     /// Pure mapping from the current selection to a `KeyframeSnapshot`.
     /// A keyframe id is searched across every clip's `keyframes` collection
-    /// (media + text — audio has no keyframes). The owning clip's start time
-    /// is added to the keyframe's relative `time` to produce an absolute
-    /// timeline position so the inspector header reads correctly.
+    /// (media + text ONLY — an audio keyframe id resolves to its OWNING clip
+    /// via `audioKeyframeOwnerSnapshot` above, never to a case here).
+    /// The owning clip's start time is added to the keyframe's relative
+    /// `time` to produce an absolute timeline position so the inspector
+    /// header reads correctly.
+    ///
+    /// Ce temps absolu n'est délibérément PAS écrêté à la barre rendue,
+    /// contrairement au losange que dessine `Plan2DLayout.markers` : sur un
+    /// clip rogné plus court que son dernier keyframe, le losange se replie
+    /// au bord (affordance de dessin) pendant que cet en-tête annonce le
+    /// temps STOCKÉ, qui seul fait foi. `StoryKeyframe.time` survit au
+    /// rognage — écrêter aussi la fiche ferait mentir la seule surface qui
+    /// dit encore où se trouve réellement le keyframe (revue DoD de D6c,
+    /// constat 3 ; décision consignée en toutes lettres dans `markers`).
     public static func resolveKeyframeSnapshot(
         viewModel: TimelineViewModel
     ) -> (snapshot: KeyframeInspector.KeyframeSnapshot, clipId: String)? {
         guard let id = viewModel.selection.selectedClipId else { return nil }
+        return keyframeSnapshot(id: id, viewModel: viewModel)
+    }
+
+    private static func keyframeSnapshot(
+        id: String, viewModel: TimelineViewModel
+    ) -> (snapshot: KeyframeInspector.KeyframeSnapshot, clipId: String)? {
         for media in viewModel.project.mediaObjects {
             guard let keyframes = media.keyframes,
                   let kf = keyframes.first(where: { $0.id == id }) else { continue }
@@ -291,6 +362,12 @@ public struct TimelineInspectorHost: View {
         viewModel: TimelineViewModel
     ) -> TransitionInspector.TransitionSnapshot? {
         guard let id = viewModel.selection.selectedClipId else { return nil }
+        return transitionSnapshot(id: id, viewModel: viewModel)
+    }
+
+    private static func transitionSnapshot(
+        id: String, viewModel: TimelineViewModel
+    ) -> TransitionInspector.TransitionSnapshot? {
         guard let transition = viewModel.project.clipTransitions.first(where: { $0.id == id }) else {
             return nil
         }
@@ -326,23 +403,86 @@ public struct TimelineInspectorHost: View {
     }
 
     /// Resolves the current selection to exactly one inspector kind, applying
-    /// the clip → keyframe → transition priority. A clip lookup wins because
-    /// media/audio/text object ids are the primary handle the playback engine
-    /// reports via `onElementBecameActive`. Returns `nil` when no selection is
-    /// active or the id matches none of the three categories.
+    /// the clip → audio-keyframe-owner → keyframe → transition priority. A
+    /// clip lookup wins because media/audio/text object ids are the primary
+    /// handle the playback engine reports via `onElementBecameActive`. An
+    /// audio keyframe's OWNING clip is checked next — it resolves to `.clip`,
+    /// never `.keyframe` (arbitrage 3, D6c: audio has no per-keyframe
+    /// inspector). Returns `nil` when no selection is active or the id
+    /// matches none of the categories.
     public static func resolveSelectionKind(
         viewModel: TimelineViewModel
     ) -> SelectionKind? {
-        if let clip = resolveClipSnapshot(viewModel: viewModel) {
+        guard let id = viewModel.selection.selectedClipId else { return nil }
+        return selectionKind(for: id, viewModel: viewModel)
+    }
+
+    /// Ce qu'un id OUVRIRAIT s'il devenait la sélection — sans rien poser.
+    /// Même chaîne de priorité que `resolveSelectionKind`, dont elle EST le
+    /// corps : deux chaînes jumelles divergeraient au premier résolveur
+    /// ajouté, et la garde d'`inspectIfResolvable` promettrait alors une
+    /// fiche que la présentation ne rendrait pas.
+    public static func selectionKind(for id: String,
+                                     viewModel: TimelineViewModel) -> SelectionKind? {
+        if let clip = clipSnapshot(id: id, viewModel: viewModel) {
             return .clip(clip)
         }
-        if let keyframe = resolveKeyframeSnapshot(viewModel: viewModel) {
+        // La famille AUDIO : la cible n'est pas le losange mais le clip qui
+        // le PORTE. Cette branche répond sur l'id TAPÉ — c'est ici que la
+        // garde d'ouverture apprend qu'une fiche existe, avant que
+        // `resolvedOwnerId(for:)` ne pose le porteur sur le bus.
+        if let clip = audioKeyframeOwnerSnapshot(id: id, viewModel: viewModel) {
+            return .clip(clip)
+        }
+        if let keyframe = keyframeSnapshot(id: id, viewModel: viewModel) {
             return .keyframe(keyframe.snapshot, clipId: keyframe.clipId)
         }
-        if let transition = resolveTransitionSnapshot(viewModel: viewModel) {
+        if let transition = transitionSnapshot(id: id, viewModel: viewModel) {
             return .transition(transition)
         }
         return nil
+    }
+
+    /// Ouvre la fiche d'un id — et ne pose la sélection QUE si une fiche va
+    /// réellement s'ouvrir.
+    ///
+    /// `ClipSelectionState.inspect()` écrase `selectedClipId` SANS condition.
+    /// Router vers lui un id qu'aucun résolveur ne connaît n'ouvrait donc
+    /// aucune fiche ET emportait la sélection en cours : l'utilisateur perdait
+    /// la piste qu'il consultait sans rien recevoir en échange, et le plan ne
+    /// pouvait plus rien surligner puisque l'id ne désignait aucune piste
+    /// (revue Opus, constat 1 — second volet ; addendum rév. 2, arbitrage 3).
+    ///
+    /// Le filtre est `selectionKind(for:)`, pas `presentedSelection` : un clip
+    /// SYNTHÉTIQUE résout bien (`.clip`) et doit rester SÉLECTIONNABLE — c'est
+    /// `shouldShowClipInspector` qui lui refuse ensuite une sheet vide, et lui
+    /// refuser aussi l'anneau de sélection serait une seconde régression.
+    public static func inspectIfResolvable(id: String, viewModel: TimelineViewModel) {
+        guard selectionKind(for: id, viewModel: viewModel) != nil else { return }
+        viewModel.inspectClip(id: resolvedOwnerId(for: id, viewModel: viewModel))
+    }
+
+    /// L'id que le BUS de sélection doit porter pour un id TAPÉ — celui du
+    /// PORTEUR, jamais celui du losange qu'on rabat sur lui.
+    ///
+    /// Router le losange audio au seul niveau de la PRÉSENTATION faisait
+    /// diverger la fiche et le bus : la sheet montrait `aud-1` pendant que
+    /// `selection.selectedClipId` valait `kf-vol`. Trois surfaces, toutes
+    /// bornées par cet id, devenaient alors inertes EN SILENCE — les
+    /// commandes de la fiche (`addKeyframeAtPlayhead(volume:)`, le bouton
+    /// « Point de volume », SEULE surface d'édition de la courbe ;
+    /// `addKeyframeAtPlayhead()` ; `splitSelectedAtPlayhead()`, qui rendent
+    /// toutes `nil` sur un id de keyframe et sortent sans message),
+    /// l'anneau du plan (`Plan2DView` : `track.id == selectedTrackId`) et
+    /// les poignées de bord (`edgeHandleZones`, bornées par la même
+    /// égalité). Normaliser ICI, au bus, rend leur cible aux trois d'un seul
+    /// geste et laisse la présentation lire une sélection déjà juste
+    /// (revue DoD de D6c, constat 1).
+    ///
+    /// Un id de clip, un losange de média/texte ou une transition se rendent
+    /// eux-mêmes : seule la famille AUDIO a un porteur à désigner.
+    public static func resolvedOwnerId(for id: String, viewModel: TimelineViewModel) -> String {
+        audioKeyframeOwnerSnapshot(id: id, viewModel: viewModel)?.id ?? id
     }
 
     // MARK: - Body
@@ -387,8 +527,15 @@ public struct TimelineInspectorHost: View {
             },
             onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
             onDelete: { viewModel.deleteClip(id: clipId) },
-            // `splitSelectedAtPlayhead` lit `selectedClipId` : correct sans
-            // changement, puisque `inspect(_:)` pose les deux identifiants.
+            onFollowSlide: { [viewModel] in
+                viewModel.followSlide(id: clipId)
+            },
+            // `splitSelectedAtPlayhead` lit `selectedClipId`, comme
+            // `onAddKeyframe` et `onAddVolumePoint` ci-dessus et dessous :
+            // correct parce que `inspect(_:)` pose les deux identifiants ET
+            // que `inspectIfResolvable` y met l'id du PORTEUR
+            // (`resolvedOwnerId(for:)`). Router un losange audio à la seule
+            // PRÉSENTATION rendrait ces trois commandes inertes en silence.
             onSplit: { viewModel.splitSelectedAtPlayhead() },
             onClose: { viewModel.endInspection() },
             // Stepper de PRÉCISION, pas un geste : `dragClip` aurait fait
@@ -431,6 +578,9 @@ public struct TimelineInspectorHost: View {
             },
             onDuckingDisabledChanged: { [viewModel] isDisabled in
                 viewModel.setClipDuckingDisabled(id: clipId, isDisabled: isDisabled)
+            },
+            onToggleMute: { [viewModel] in
+                viewModel.toggleClipMute(id: clipId)
             }
         )
         .padding(presentation == .popover ? 12 : 0)

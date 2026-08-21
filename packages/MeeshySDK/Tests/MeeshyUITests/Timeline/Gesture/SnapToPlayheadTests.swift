@@ -29,7 +29,7 @@ final class SnapToPlayheadTests: XCTestCase {
         // Begin drag and move close to playhead (within 0.1s tolerance)
         sut.beginClipDrag(clipId: "clip-1")
         let playheadCandidate = SnapCandidate(kind: .playhead, time: 3.0)
-        sut.dragClipMoved(rawTime: 3.05, snapCandidates: [playheadCandidate])
+        sut.dragClipMoved(rawTime: 3.05, snapCandidates: [playheadCandidate], geometry: TimelineGeometry(zoomScale: 1.0))
 
         XCTAssertEqual(sut.selection.activeDrag?.snappedTo, .playhead,
                        "Dragging within 0.1s of playhead must arm the playhead snap")

@@ -53,6 +53,21 @@ final class TimelineLocalizationTests: XCTestCase {
         // Fiche d'édition — découpe (ex-double tap sur la barre vidéo)
         "story.timeline.inspector.split",
         "story.timeline.inspector.split.hint",
+        // Fiche d'édition — « Suivre la slide » (D3, revue totale U9)
+        "story.timeline.inspector.followSlide",
+        "story.timeline.inspector.followSlide.hint",
+        // Fiche d'édition — mute par clip (D3, revue DoD : capacité rendue)
+        "story.timeline.inspector.mute",
+        "story.timeline.inspector.unmute",
+        "story.timeline.inspector.mute.hint",
+        // Plan 2D — annonce VoiceOver d'une piste (plan + occupation)
+        "story.timeline.plan.plane.fg.a11y",
+        "story.timeline.plan.plane.content.a11y",
+        "story.timeline.track.section.bg.a11y",
+        "story.timeline.plan.track.followsSlide.a11y",
+        // Plan 2D — suffixe a11y d'une piste verrouillée (revue Opus DoD
+        // sur D6b : la chaîne était en dur, jamais dans ce catalogue)
+        "story.timeline.plan.track.locked.a11y",
         // Fiche d'édition — place de la piste dans le plan
         "story.timeline.inspector.transform",
         "story.timeline.inspector.scale",

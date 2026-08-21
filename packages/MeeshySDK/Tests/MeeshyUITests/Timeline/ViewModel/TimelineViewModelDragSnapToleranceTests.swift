@@ -46,7 +46,8 @@ final class TimelineViewModelDragSnapToleranceTests: XCTestCase {
     private func droppedStart(zoomScale: CGFloat) -> Float {
         let vm = makeViewModel(zoomScale: zoomScale)
         vm.beginClipDrag(clipId: "m1")
-        vm.dragClipMoved(rawTime: 2.0, snapCandidates: [])
+        vm.dragClipMoved(rawTime: 2.0, snapCandidates: [],
+                         geometry: TimelineGeometry(zoomScale: zoomScale))
         vm.endClipDrag()
         return vm.project.mediaObjects.first(where: { $0.id == "m1" })?.startTime.map(Float.init) ?? -1
     }
@@ -70,7 +71,8 @@ final class TimelineViewModelDragSnapToleranceTests: XCTestCase {
     func test_theMagnetStillCatchesANearbyEdge() {
         let vm = makeViewModel(zoomScale: 1.0)
         vm.beginClipDrag(clipId: "m1")
-        vm.dragClipMoved(rawTime: 1.02, snapCandidates: [])
+        vm.dragClipMoved(rawTime: 1.02, snapCandidates: [],
+                         geometry: TimelineGeometry(zoomScale: 1.0))
         vm.endClipDrag()
         let start = vm.project.mediaObjects.first(where: { $0.id == "m1" })?.startTime ?? -1
         XCTAssertEqual(Float(start), 1.0, accuracy: 0.001,

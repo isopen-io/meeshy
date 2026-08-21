@@ -309,7 +309,15 @@ public final class TimelineViewModel: ObservableObject {
         slideDurationBeforeDrag = project.slideDuration
     }
 
-    public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate]) {
+    /// `geometry` est l'échelle temps→pixels RÉELLEMENT à l'écran, et elle est
+    /// un PARAMÈTRE : c'est l'appelant qui dessine, lui seul sait à quelle
+    /// densité. La lire ici depuis `zoomScale` a survécu au plan 2D, dont les
+    /// barres suivent `Plan2DView.equivalentGeometry` — les deux échelles
+    /// n'avaient plus aucun rapport (revue Opus, constat 6) : à 350 pt pour
+    /// une slide d'une seconde, l'aimant avalait un sixième de la piste ; à
+    /// soixante secondes, il n'accrochait plus jamais visuellement.
+    public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate],
+                              geometry: TimelineGeometry) {
         guard var drag = selection.activeDrag else { return }
         let previouslySnapped = drag.snappedTo != nil
         // Aimantation : on complète les candidats fournis par les bords (début ET
@@ -317,11 +325,10 @@ public final class TimelineViewModel: ObservableObject {
         // tête de lecture — « coordinateurs entre le début et la fin des objets par
         // effet magnet quand un objet est proche de la fin d'un autre ».
         let magnetCandidates = magneticSnapCandidates(excludingClipId: drag.clipId)
-        // Tolérance adaptée au zoom (~8pt de doigt). L'engine figé à 0.06s était
-        // trop serré pour un aimant perceptible ; le magnet doit accrocher dès
-        // qu'un bord approche visuellement celui d'un autre.
-        let magnetEngine = SnapEngine(
-            toleranceSeconds: TimelineGeometry(zoomScale: zoomScale).dragSnapToleranceSeconds)
+        // Tolérance adaptée à la densité RENDUE (~8pt de doigt). L'engine figé
+        // à 0.06s était trop serré pour un aimant perceptible ; le magnet doit
+        // accrocher dès qu'un bord approche visuellement celui d'un autre.
+        let magnetEngine = SnapEngine(toleranceSeconds: geometry.dragSnapToleranceSeconds)
         let snapResult = magnetEngine.snap(rawTime: rawTime,
                                            candidates: snapCandidates + magnetCandidates,
                                            disabled: !isSnapEnabled)

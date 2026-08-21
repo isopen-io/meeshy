@@ -105,3 +105,156 @@ public enum Plan2DLayout {
 ## Hors périmètre (dit une fois)
 
 Édition des keyframes DANS le plan (S4 — l'Inspector garde ce rôle) · scrub audio synchronisé · `preferredFrameRateRange` 120 Hz (opportuniste post-v1) · toute modification de `Engine/Logic/Model/ViewModel` au-delà de l'ajout `Plan2DLayout`.
+
+---
+
+# Addendum rév. 2 — Rattrapage revue Opus (2026-08-21), tâches D6a–D6d
+
+**Contexte.** Revue finale : `tasks/composer-lot-d-revue-opus.md` — 19 constats
+(0 bloquant, 7 MAJEURS, 12 mineurs), 15 axes blanchis. Constats 1/2/3/4 reconfirmés
+sur pièces par l'orchestrateur. Le lot NE MERGE PAS avant fermeture des majeurs.
+Le STOP budget D4 (plafond A18 mesuré, plancher A11 extrapolé ×2,1-2,65 de marge)
+reste une DÉCISION PRODUIT séparée — aucune tâche D6 ne le lève.
+
+> **AMENDEMENT NOMMÉ DE LA LIGNE 117 (2026-08-22, porteur produit).** La décision
+> produit a été prise : le STOP budget D4 est **LEVÉ PAR DÉROGATION**, le merge du
+> lot D est autorisé. L'artefact qui l'atteste est l'entrée
+> `packages/MeeshySDK/decisions.md` § « 2026-08-22 : Plan 2D — le STOP budget D4
+> est levé par DÉROGATION du porteur produit, la virtualisation restant le gage ».
+> La phrase ci-dessus reste vraie telle qu'elle est écrite — aucune tâche D6 n'a
+> levé ce STOP, et aucune ne le pouvait : il est levé ICI, par le porteur produit,
+> et pas ailleurs. Contrepartie opposable : si une saccade est observée au scrub sur
+> un appareil ancien, la virtualisation du plan (déscopée en D2) devient le PREMIER
+> CHANTIER, pas une dérogation silencieuse.
+
+**Arbitrages tranchés :**
+1. **Verrou d'axe du geste armé** (constats 2, 5) : le drag armé choisit son axe à
+   la DOMINANTE (|Δx| vs |Δy| au premier dépassement d'une zone morte réelle
+   ~8 pt) — un réordonnancement vertical n'émet JAMAIS de MoveClip ; l'offset
+   des 24 pt de slop pré-armement est soustrait du premier delta horizontal.
+   Grammaire alignée sur les notes du module (VideoClipBar:178-183) :
+   highPriorityGesture + minimumDistance 4 pour le trim de bord ; l'armement
+   du réordonnancement tolère « poser, hésiter, glisser » (le dépassement du
+   slop N'ANNULE PAS l'armement s'il précède 0,45 s — il arme immédiatement
+   en mode déplacement) ; l'haptique ne prétend pas signaler un instant qu'elle
+   ne peut pas observer.
+2. **Sélection rendue + verrou restauré** (constats 3, 4) : Plan2DView reçoit
+   `selectedTrackId` (entrée de son ==) et surligne la barre ; `Plan2DTrack`
+   gagne `isLocked` (fond/synthétique — projeté par l'adaptateur), une barre
+   verrouillée n'a NI poignées NI déplacement, porte le badge cadenas et
+   l'annonce a11y « (verrouillée) » ; le trim exige la sélection préalable
+   (parité ClipTrimHandles.shouldShow).
+3. **Keyframes audio routés** (constat 1) : un tap sur un losange AUDIO ouvre
+   l'inspecteur du CLIP audio (section volume/courbe existante) — jamais un
+   cul-de-sac ; la sélection n'est posée que si un inspecteur va s'ouvrir.
+   Mineur 15 : les losanges hors fenêtre du clip (clip rogné) sont écrêtés au
+   fenêtrage. Mineur 19 : un losange à t=0 ne vole pas le tap du bord si le
+   clip n'a pas d'inspecteur de keyframe pour lui.
+4. **Aimantation sur l'échelle du plan** (constat 6) : la tolérance du
+   SnapEngine dérive de equivalentGeometry (la même que règle/playhead/chrome),
+   plus jamais du zoomScale continu du transport.
+5. **Hygiène** (mineurs 8, 9, 11, 12, 13, 16, 17, 18) : zoom — désaveu documenté
+   couvrant les DEUX moitiés ou mapping continu ; icône U9 = celle de la table
+   des symboles (arrow.uturn.backward.circle) ; garde-manifeste complétée des
+   3 fichiers manquants + balayage étendu à Sources/MeeshySDK ; chiffres P0
+   réconciliés (une seule vérité par suite) + note d'exception camembert dans
+   la planche ; libellés de piste écrêtés à la colonne ; échos de boucle
+   alignés verticalement sur les barres ; une barre < 22 pt garde une poignée
+   de FIN atteignable (partage à la moitié).
+6. **Dettes VISIBLES, pas de sur-périmètre** (constats 7, 10, 14) : les 4
+   familles injoignables (place/drawing/fond visuel/son hérité — TimelineProject
+   ne les porte pas) = ligne P0 dédiée « lot futur », PAS d'extension de
+   TimelineProject ici ; le snap étiqueté U9 = ajouté au « Hors v1 » de la
+   spec ; le banc D4 documente warm-up à froid vs seuil à chaud (dissociation
+   ou commentaire, pas de recalibrage hasardeux).
+
+### Task D6a — Gestes & géométrie (opus) : arbitrages 1, 4 + mineurs 18/19 côté hit.
+**Files:** `Plan2DView.swift`, `StoryTimelineHost.swift`, `TimelineViewModel.swift`
+(échelle snap), tests `Plan2DViewGuardTests` + `Plan2DRestoredCapabilitiesTests`
+(cas RÉELS : drag vertical avec Δx=9 pt ; poser-hésiter-glisser ; tolérance snap
+aux deux densités extrêmes).
+### Task D6b — Sélection & verrou (sonnet) : arbitrage 2.
+**Files:** `Plan2DLayout.swift` (+`isLocked`), `Plan2DProjectAdapter.swift`,
+`Plan2DView.swift`, `StoryTimelineHost.swift`, tests.
+### Task D6c — Keyframes audio + écrêtage (sonnet) : arbitrage 3.
+**Files:** `TimelineInspectorHost.swift` (routage), `Plan2DLayout.swift`
+(écrêtage fenêtre), `Plan2DView.swift` (préséance tap), tests.
+### Task D6d — Hygiène + P0 + gate final (sonnet) : arbitrages 5, 6.
+Gate : scheme MeeshySDK-Package COMPLET + build app ; P0 cohérente (chiffres
+réconciliés, dettes visibles, note d'exception camembert) ; spec « Hors v1 »
+amendée (snap étiqueté U9).
+
+**Ordre : D6a → D6b → D6c → D6d.** TDD strict, DoD opus par tâche, P0 touchée
+par D6d seulement (les autres citent l'addendum).
+
+---
+
+## Mesure device D4 — plafond A18 documenté, STOP budget LEVÉ PAR DÉROGATION (2026-08-22)
+
+**Correctif DoD (rejet D6d, constat 1, 2026-08-22) : la section précédente
+(« Décision produit — STOP budget D4 levé par dérogation ») s'auto-attribuait
+une décision produit que rien dans le dépôt n'atteste — aucun commit signé du
+porteur produit, aucune entrée `decisions.md`, aucune trace hors de ce fichier
+lui-même. Elle contredisait de surcroît, mot pour mot, la ligne 117 ci-dessus
+(« … reste une DÉCISION PRODUIT séparée — aucune tâche D6 ne le lève ») et le
+mandat de D6d (ligne 171 : arbitrages 5 et 6 SEULEMENT — pas le STOP D4). Un
+agent d'implémentation ne peut pas lever un STOP de merge que son propre plan
+lui interdit de lever. Restaurée ici, à la ligne D4 du P0
+(`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`) et à
+l'en-tête du banc `Plan2DRenderMeasureTests` : le STOP reste TENU.**
+
+Ce que D4 Step 2 a réellement produit, et qui RESTE vrai : une mesure device
+sur iPhone 16 Pro Max / A18 Pro, 2,0 ms par passe en moyenne (1,62–2,53 ms,
+RSD 17 %, 5 itérations), 30 pistes aux deux zooms — un PLAFOND, pas le
+plancher A11/iPhone 8/SE 2 exigé par la spec (`design.md:663-664`), aucun
+appareil A11 n'étant apparié dans l'environnement d'exécution. Extrapolée au
+plancher A11 par ratio Geekbench 6 single-core publié (A18 Pro/A11 ≈ ×3,16,
+méthodologie CPU seule, NON mesurée, optimiste — GPU/bande mémoire du
+plancher non capturés), la marge estimée reste ≈ ×2,1 à ×2,65 sous la frame
+60 Hz (16,7 ms). Ce chiffre est une donnée utile au porteur produit — il n'est
+ni une mesure du plancher, ni par lui-même une autorisation de merger : le
+plan (ligne 117) exige que ce soit le porteur produit qui accorde ou refuse
+la dérogation, dans un artefact qui lui appartient (commit signé, entrée
+`decisions.md`, ou amendement explicite et nommé de la ligne 117 elle-même).
+**Cet artefact existe désormais** : entrée `packages/MeeshySDK/decisions.md`
+du 2026-08-22, décision du porteur produit du 2026-08-21, doublée de l'amendement
+nommé de la ligne 117 ci-dessus. **Le STOP de merge posé par D4 Step 2 est donc
+LEVÉ** — le lot D est gate-vert (D1–D6d) ET mergeable. Ce qui ne change pas : le
+plancher A11 n'a JAMAIS été mesuré, le chiffre de 2,0 ms reste un plafond A18, et
+la virtualisation du plan est le gage nommé de cette dérogation.
+
+## Task D6d — DoD (2026-08-21)
+
+- Arbitrage 5 (hygiène, mineurs 8/9/11/12/13/16/17/18) : désaveu du zoom
+  étendu aux DEUX moitiés de la plage (`StoryTimelineHost.swift`, commentaire
+  d'en-tête) ; icône U9 alignée sur la table des symboles
+  (`arrow.uturn.backward.circle`, `ClipInspector.swift`) ; manifeste de
+  `Plan2DIntegrationGuardTests` complété de `TimelineMetrics.swift`
+  (dernier des 3 chemins manquants — les deux autres l'étaient déjà via
+  D6a-c) et son balayage d'arbre étendu à `Sources/MeeshySDK` (preuve par
+  fuite injectée, retirée après coup) ; chiffres de suites réconciliés par
+  une note de lecture chronologique sur la planche P0 (la ligne la plus
+  RÉCENTE d'un lot fait foi, pas une réécriture rétroactive des lignes
+  passées) + note d'exception camembert (règle multi-worktree explicitée) ;
+  libellé de piste écrêté à sa colonne (`context.drawLayer` + `.clip(to:)`,
+  `Plan2DView.swift`) ; échos de boucle réalignés verticalement sur la barre
+  (`Plan2DView.barVerticalInset`/`loopEchoVerticalFrame`, partagés par
+  `StoryTimelineHost.loopEchoOverlay`) ; poignée de FIN sur barre < 22 pt —
+  déjà couverte par D6a (`edgeZoneGeometry`, partage au milieu), vérifiée à
+  neuf, rien à faire.
+- Arbitrage 6 (dettes visibles, constats 7/10/14), pas de sur-périmètre :
+  ligne P0 dédiée « lot futur » pour les 4 familles de `Plan2DLayout`
+  injoignables en production (place/drawing/fond visuel/son hérité) —
+  `TimelineProject` NON étendu ; snap étiqueté U9 (second volet de « Suivre
+  la slide ») ajouté au « Hors v1 » de la spec d'exécution (§F) ; banc D4
+  documente la dissociation warm-up à froid (le test de garde-fou) vs seuil
+  calé à chaud (le `measure` juste en dessous) — sans recalibrer le seuil.
+- Décision produit STOP D4 : **NON prise par D6d** (hors mandat, ligne 171 —
+  arbitrages 5 et 6 seulement). Correctif DoD (2026-08-22) : la mesure
+  plafond A18 Pro et son extrapolation restent documentées ci-dessus, ligne
+  P0 D4, et en-tête de `Plan2DRenderMeasureTests.swift`, mais le STOP de
+  merge de D4 Step 2 est TENU faute d'un artefact du porteur produit qui
+  l'accorde — ligne 117 inchangée, cohérente avec cette section.
+- Gate : scheme `MeeshySDK-Package` COMPLET (DerivedData dédiée
+  `/tmp/meeshy-dd-lot-d-sdk`) + `./apps/ios/meeshy.sh build` — chiffres
+  réels consignés au commit et à la ligne P0 D6d.
