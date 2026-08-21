@@ -79,6 +79,21 @@ public struct Plan2DView: View, Equatable {
     public var body: some View {
         Canvas { context, size in
             let laneHeight = TimelineMetrics.laneHeight
+
+            let interval = Self.tickInterval(laneWidth: laneWidth, zoom: zoom, slideDuration: slideDuration)
+            if slideDuration > 0, interval > 0 {
+                let tickCount = max(1, Int((slideDuration / interval).rounded(.up)) + 1)
+                let gridColor: Color = isDark ? .white.opacity(0.08) : .black.opacity(0.06)
+                for i in 0..<tickCount {
+                    let t = Double(i) * interval
+                    let x = Self.x(forTime: t, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
+                    var gridLine = Path()
+                    gridLine.move(to: CGPoint(x: x, y: 0))
+                    gridLine.addLine(to: CGPoint(x: x, y: size.height))
+                    context.stroke(gridLine, with: .color(gridColor), lineWidth: 0.5)
+                }
+            }
+
             for (index, track) in tracks.enumerated() {
                 let rowY = CGFloat(index) * laneHeight
                 let planeColor = Self.color(for: track.plane, isDark: isDark)
@@ -228,6 +243,32 @@ public struct Plan2DView: View, Equatable {
         return Double(deltaX / (laneWidth * zoom.scale)) * slideDuration
     }
 
+    /// Ce que produit un relâchement de doigt — décidé sur la seule
+    /// TRANSLATION finale, jamais sur `gestureEdge`/`isReorderArmed` seuls :
+    /// une poignée de bord ARMÉE dès le touch-down (zone tappable ≥ 44 pt,
+    /// débordante sur barre étroite) redevient un TAP si le doigt n'a jamais
+    /// bougé au-delà du slop — sinon toute barre plus étroite que la zone de
+    /// poignée (le cas même que la zone débordante existe pour couvrir)
+    /// perdrait son tap-vers-Inspecteur.
+    /// `nonisolated` explicite : `MeeshyUI` bascule l'isolation par défaut sur
+    /// `MainActor` (SE-0466) et `Plan2DView` en hérite via sa conformance à
+    /// `View` — sans ce marqueur, la conformance `Equatable` synthétisée
+    /// devient elle-même main-actor-isolée et `XCTAssertEqual` (contexte non
+    /// isolé) refuse de la comparer. Même précédent que `Plan2DZoom`/
+    /// `TrackBar` (`Plan2DLayout.swift`).
+    nonisolated enum GestureOutcome: Equatable {
+        case select
+        case reorder(to: Int)
+        case none
+    }
+
+    static func gestureOutcome(translation: CGSize, gestureEdge: Edge?, isReorderArmed: Bool,
+                               startRow: Int, endRow: Int) -> GestureOutcome {
+        guard !withinSlop(translation) else { return .select }
+        guard gestureEdge == nil, isReorderArmed, endRow != startRow else { return .none }
+        return .reorder(to: endRow)
+    }
+
     private var rowGesture: some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged(handleChanged)
@@ -297,20 +338,19 @@ public struct Plan2DView: View, Equatable {
             lastTrimTranslationX = 0
         }
         guard let startRow = gestureStartRow, tracks.indices.contains(startRow) else { return }
-        guard gestureEdge == nil else { return }
-
-        guard isReorderArmed else {
-            if Self.withinSlop(value.translation) {
-                onSelectTrack(tracks[startRow].id)
-            }
-            return
-        }
 
         let endRow = Self.rowIndex(forY: value.location.y,
                                    laneHeight: TimelineMetrics.laneHeight,
                                    trackCount: tracks.count) ?? startRow
-        if endRow != startRow {
-            onReorder(tracks[startRow].id, endRow)
+
+        switch Self.gestureOutcome(translation: value.translation, gestureEdge: gestureEdge,
+                                   isReorderArmed: isReorderArmed, startRow: startRow, endRow: endRow) {
+        case .select:
+            onSelectTrack(tracks[startRow].id)
+        case .reorder(let to):
+            onReorder(tracks[startRow].id, to)
+        case .none:
+            break
         }
     }
 }

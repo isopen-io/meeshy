@@ -210,6 +210,120 @@ final class Plan2DViewGuardTests: XCTestCase {
                        "Plan2DView reste une vue de dessin pure : l'ouverture de l'Inspector est décidée par l'appelant (D3), pas ici")
     }
 
+    // MARK: - Guard 4e — un tap qui TOMBE dans une zone de poignée de bord
+    // reste un tap : `gestureOutcome` décide sur la translation FINALE, pas
+    // sur `gestureEdge`/`isReorderArmed` seuls (sinon toute barre plus
+    // étroite que 44 pt — le cas même que la zone débordante existe pour
+    // couvrir — devient intappable : son Inspecteur devient inatteignable).
+
+    func test_gestureOutcome_tapInsideEdgeHandleZone_stillSelectsTrack_evenThoughEdgeWasArmed() {
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: .zero, gestureEdge: .start,
+                                      isReorderArmed: false, startRow: 0, endRow: 0),
+            .select,
+            "Touch-down à ±22 pt d'un bord arme gestureEdge ; relâché sans bouger, c'est un TAP — il doit sélectionner"
+        )
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: Plan2DView.reorderSlop, height: 0), gestureEdge: .end,
+                                      isReorderArmed: false, startRow: 2, endRow: 2),
+            .select,
+            "Micro-mouvement encore DANS le slop : toujours un tap, même avec un bord armé"
+        )
+    }
+
+    func test_gestureOutcome_realEdgeDragBeyondSlop_producesNoFurtherAction() {
+        // Le trim a déjà été streamé via onTrimStart/onTrimEnd à chaque
+        // onChanged — handleEnded n'a plus rien à déclencher lui-même.
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: Plan2DView.reorderSlop + 20, height: 0),
+                                      gestureEdge: .end, isReorderArmed: false, startRow: 1, endRow: 1),
+            .none
+        )
+    }
+
+    func test_gestureOutcome_armedReorderMovedToADifferentRow_producesReorder() {
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: 0, height: Plan2DView.reorderSlop + 60),
+                                      gestureEdge: nil, isReorderArmed: true, startRow: 0, endRow: 2),
+            .reorder(to: 2)
+        )
+    }
+
+    func test_gestureOutcome_armedReorderReleasedOnTheSameRow_producesNoAction() {
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: 0, height: Plan2DView.reorderSlop + 60),
+                                      gestureEdge: nil, isReorderArmed: true, startRow: 1, endRow: 1),
+            .none
+        )
+    }
+
+    func test_gestureOutcome_unarmedDragBeyondSlop_producesNoAction() {
+        // Drag jamais armé (relâché avant le délai, ou ayant dépassé le slop
+        // avant l'armement) — la liste défile, `Plan2DView` ne fait rien.
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: 0, height: Plan2DView.reorderSlop + 60),
+                                      gestureEdge: nil, isReorderArmed: false, startRow: 0, endRow: 2),
+            .none
+        )
+    }
+
+    func test_gestureOutcome_plainTapWithinSlop_producesSelect() {
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: .zero, gestureEdge: nil,
+                                      isReorderArmed: false, startRow: 0, endRow: 0),
+            .select
+        )
+    }
+
+    // MARK: - Guard 4f — trim de bord : conversion px→secondes (§1.4 « drag
+    // de bord ⇒ timing.start/end ») et haptique à l'ARMEMENT (jamais au
+    // franchissement, qui est déjà `.rigid`, Guard 4b)
+
+    func test_timeDelta_convertsPixelDeltaToSecondsAtCurrentZoom() {
+        // 300 pt de laneWidth pour 10 s de slide, zoom .fit (scale 1) ⇒
+        // 30 px/s ⇒ 30 pt de delta valent exactement 1 s.
+        XCTAssertEqual(
+            Plan2DView.timeDelta(forDeltaX: 30, zoom: .fit, laneWidth: 300, slideDuration: 10),
+            1.0, accuracy: 0.0001
+        )
+        // zoom .detail double l'échelle (60 px/s) : le MÊME delta de pixels
+        // vaut deux fois MOINS de secondes.
+        XCTAssertEqual(
+            Plan2DView.timeDelta(forDeltaX: 30, zoom: .detail, laneWidth: 300, slideDuration: 10),
+            0.5, accuracy: 0.0001
+        )
+        // Delta négatif (bord tiré vers la gauche) : delta de temps négatif.
+        XCTAssertEqual(
+            Plan2DView.timeDelta(forDeltaX: -15, zoom: .fit, laneWidth: 300, slideDuration: 10),
+            -0.5, accuracy: 0.0001
+        )
+    }
+
+    func test_timeDelta_zeroLaneWidth_returnsZero_neverDividesByZero() {
+        XCTAssertEqual(Plan2DView.timeDelta(forDeltaX: 30, zoom: .fit, laneWidth: 0, slideDuration: 10), 0)
+    }
+
+    func test_body_playsLightHapticImmediatelyAtArm() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        guard let armRange = source.range(of: "isReorderArmed = true") else {
+            return XCTFail("Le site d'armement (isReorderArmed = true) doit exister")
+        }
+        let afterArm = String(source[armRange.upperBound...].prefix(80))
+        XCTAssertTrue(afterArm.contains("HapticFeedback.light()"),
+                     "L'haptique .light doit jouer AU MOMENT de l'armement, immédiatement après isReorderArmed = true")
+    }
+
+    // MARK: - Guard 2b — la graduation n'est pas qu'une déclaration : le
+    // corps du Canvas l'APPELLE réellement pour dessiner (sinon
+    // RulerView.tickInterval(for:) n'est jamais exercé au rendu — code mort
+    // qu'une garde sur l'enveloppe seule ne détecterait pas)
+
+    func test_body_actuallyDrawsGraduationsUsingTickInterval() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("Self.tickInterval(laneWidth: laneWidth"),
+                     "Le corps du Canvas doit APPELER tickInterval — pas seulement le déclarer — pour dessiner ses graduations")
+    }
+
     // MARK: - Ghost = cadre pointillé pleine lane
 
     func test_body_drawsGhostAsADashedFrame() throws {
