@@ -13,6 +13,34 @@ struct ConversationInfoSheet: View {
     let accentColor: String
     let messages: [Message]
 
+    /// Compteur pluralisé « N membre(s) » de l'en-tête de fiche — le pluriel est
+    /// choisi par le catalogue (`variations.plural`), plus gravé dans la chaîne.
+    ///
+    /// L'ancienne forme `String(format: "%d membre%@", count, count > 1 ? "s" : "")`
+    /// COLLAIT un « s » latin à la racine de CHAQUE langue au-delà de 1 : correct
+    /// par coïncidence en FR/ES/PT (pluriel en « s »), mais « membros » au lieu de
+    /// « membri » en italien, « Mitglieds » au lieu de « Mitglieder » en allemand,
+    /// et un « s » latin greffé sur l'arabe (« 5 عضوs »). L'arabe distingue en
+    /// outre six formes qu'une chaîne à plat ne peut pas rendre.
+    ///
+    /// `bundle` et `locale` vont par PAIRE (idiome `PostStatAccessibility`) : le
+    /// bundle choisit la TABLE, le locale la RÈGLE plurielle. Fixer l'un sans
+    /// l'autre rendrait le test vert en local et rouge en CI (ou l'inverse).
+    static func membersCountLabel(_ count: Int,
+                                  bundle: Bundle = .main,
+                                  locale: Locale = .current) -> String {
+        String(
+            format: String(
+                localized: "conversation.info.members-count",
+                defaultValue: "%d membre",
+                bundle: bundle,
+                locale: locale
+            ),
+            locale: locale,
+            count
+        )
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -486,7 +514,7 @@ struct ConversationInfoSheet: View {
 
             // Member count
             HStack {
-                Text(String(format: String(localized: "conversation.info.members-count", defaultValue: "%d membre%@", bundle: .main), participants.count, participants.count > 1 ? "s" : ""))
+                Text(Self.membersCountLabel(participants.count))
                     .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                 Spacer()
