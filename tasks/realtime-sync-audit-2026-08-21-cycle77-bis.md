@@ -12,7 +12,7 @@ porte la garde `socket-event-emitter-gate` et le retrait des cinq canaux.
 derrière lui, et que l'audit canonique ne nomme pas.
 
 **Périmètre** : web (`hooks/use-stream-socket.ts` + sa suite). Une seule
-fonction, trois tests.
+fonction, quatre tests.
 
 ---
 
