@@ -258,10 +258,9 @@ final class DiscoverViewModel: ObservableObject {
         defer { isImportingContacts = false }
         do {
             _ = try await contactSync.syncDirectory(mode: .replace)
-            let directory = try await directoryService.list(
-                offset: 0, limit: 200, filter: .meeshy, query: nil
-            )
-            contactMatches = directory.data.compactMap(\.asContactMatch)
+            // Toutes les pages (plus de plafond à 200 — 2026-08-21).
+            let directory = try await directoryService.listAll(filter: .meeshy, query: nil)
+            contactMatches = directory.compactMap(\.asContactMatch)
             hasImportedContacts = true
             if contactMatches.isEmpty {
                 FeedbackToastManager.shared.show(String(localized: "contacts.discover.import.none", defaultValue: "Aucun de tes contacts n'est encore sur Meeshy — invite-les !", bundle: .main), type: .success)

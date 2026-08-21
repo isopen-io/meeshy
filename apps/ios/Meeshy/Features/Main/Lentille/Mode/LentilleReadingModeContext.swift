@@ -73,8 +73,8 @@ nonisolated enum LentilleReadingModeContext {
     /// `LentilleFeatureFlag.riviereMode` (R-133), au lieu du `false` en dur
     /// posé par R-133 le temps que ce lot arrive. Paramètre par défaut plutôt
     /// qu'une lecture interne à `ReadingModeOrchestrator.resolveCapabilities`
-    /// (qui reste pure) : les trois call sites (`LentilleReadingModeSubmenu`,
-    /// `LentilleFocusCard`, `LentillePeekView`) n'ont RIEN à changer — même
+    /// (qui reste pure) : les call sites (`LentilleReadingModeSubmenu`,
+    /// `LentilleFocusCard`) n'ont RIEN à changer — même
     /// patron que `isLentilleFlagEnabled`, explicite, jamais lu en douce.
     ///
     /// INERTE EN PRATIQUE aujourd'hui : `activeParticipantCount(for:)`

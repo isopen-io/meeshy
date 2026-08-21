@@ -125,41 +125,26 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
     }
 
     /// Met a jour pullPhase pendant le pull (avant que .refreshable
-    /// ne trigger). Une fois en .refreshing/.completing, on ignore les
-    /// updates de scroll pour ne pas perturber l'animation.
+    /// ne trigger). La transition elle-meme est la loi pure
+    /// `MeeshyPullPhaseLaw.next` (testee sans rendu) ; cette methode ne
+    /// fait que l'appliquer et jouer l'haptique du franchissement de seuil.
     private func updatePullingPhase(scrollOffset: CGFloat) {
-        switch pullPhase {
-        case .refreshing, .completing:
-            return
-        case .idle, .pulling, .armed:
-            break
-        }
-
         // L'overscroll au top produit un offset POSITIF (le contenu
         // descend → minY augmente). On retire le `topPadding` pour
         // matcher le seuil quel que soit le contexte d'inclusion (header
         // sticky, safe area, etc.).
         let pullDistance = max(0, scrollOffset - topPadding)
-
-        if pullDistance == 0 {
-            if pullPhase != .idle {
-                pullPhase = .idle
-            }
-            return
+        guard let next = MeeshyPullPhaseLaw.next(
+            phase: pullPhase,
+            pullDistance: pullDistance,
+            threshold: Self.pullThreshold
+        ) else { return }
+        if case .armed = next {
+            // Haptic au crossing du seuil — feedback que le geste
+            // est arme. Si l'utilisateur lache maintenant, refresh.
+            HapticFeedback.medium()
         }
-
-        let threshold = Self.pullThreshold
-        if pullDistance >= threshold {
-            if pullPhase != .armed {
-                pullPhase = .armed
-                // Haptic au crossing du seuil — feedback que le geste
-                // est arme. Si l'utilisateur lache maintenant, refresh.
-                HapticFeedback.medium()
-            }
-        } else {
-            let progress = pullDistance / threshold
-            pullPhase = .pulling(progress: progress)
-        }
+        pullPhase = next
     }
 
     /// Joue la sequence refresh : refreshing -> work -> completing -> idle,
@@ -191,5 +176,43 @@ public struct MeeshyRefreshableScroll<Content: View>: View {
         withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             pullPhase = .idle
         }
+    }
+}
+
+// MARK: - Loi de phase du pull (pure)
+
+/// Transition de `MeeshyPullPhase` pilotee par la distance de pull (pt,
+/// `0` au repos). Rend `nil` quand rien ne change — l'appelant n'ecrit
+/// alors pas son `@State`, donc pas d'invalidation pour un tick immobile.
+///
+/// - `.refreshing` / `.completing` : la sequence de rafraichissement a la
+///   main, le defilement ne la perturbe jamais.
+/// - distance `0` : retour a `.idle` (si on n'y est pas deja).
+/// - distance ≥ seuil : `.armed` (une seule fois).
+/// - sinon : `.pulling(progress:)`, progres = distance / seuil.
+nonisolated public enum MeeshyPullPhaseLaw {
+    public static func next(
+        phase: MeeshyPullPhase,
+        pullDistance: CGFloat,
+        threshold: CGFloat
+    ) -> MeeshyPullPhase? {
+        switch phase {
+        case .refreshing, .completing:
+            return nil
+        case .idle, .pulling, .armed:
+            break
+        }
+        // Filtrage par motif (pas `==`) : la conformance `Equatable` de
+        // `MeeshyPullPhase` est isolée au main actor, cette loi ne l'est pas.
+        guard pullDistance > 0 else {
+            if case .idle = phase { return nil }
+            return .idle
+        }
+        guard threshold > 0 else { return .armed }
+        if pullDistance >= threshold {
+            if case .armed = phase { return nil }
+            return .armed
+        }
+        return .pulling(progress: pullDistance / threshold)
     }
 }

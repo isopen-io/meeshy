@@ -119,11 +119,17 @@ public enum AvatarContext: Sendable {
     /// Si vrai, le badge mood pulse en continu (spring repeatForever).
     /// Idem : exclu des contextes list pour éviter N animations simultanées
     /// pendant le scroll.
+    /// Contextes où le badge de mood « respire » (`repeatForever`). Les
+    /// contextes de LISTE et d'EN-TÊTE de conversation en sont sortis le
+    /// 2026-08-21 : `.conversationHeaderCollapsed` est aussi l'avatar de la
+    /// rangée plate Lentille — un ressort infini PAR RANGÉE pendant tout le
+    /// défilement (précédent « hog device 2026-07-03 », plus bas), pour une
+    /// animation qui n'informe de rien (directive user : moins d'animations
+    /// inutiles).
     public var animatesMoodBadge: Bool {
         switch self {
         case .storyTray, .storyTrayCompact, .feedComposer, .postAuthor,
-             .profileBanner, .profileSheet,
-             .conversationHeaderExpanded, .conversationHeaderCollapsed:
+             .profileBanner, .profileSheet:
             return true
         default: return false
         }

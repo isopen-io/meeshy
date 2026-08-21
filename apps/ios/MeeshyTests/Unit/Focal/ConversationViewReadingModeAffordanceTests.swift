@@ -74,14 +74,22 @@ final class ConversationViewReadingModeAffordanceTests: XCTestCase {
 
     // MARK: - Garde drapeau (bit-à-bit identique hors Focal/Script/Résumé/Rivière)
 
-    func test_readingModeAffordanceCluster_isGuardedByModeNotBubbles() throws {
-        let code = try conversationViewSource()
+    func test_readingModeAffordanceCluster_isGuardedByTheFlagCapabilities_notByTheCurrentMode() throws {
         // `guard … else { return AnyView(EmptyView()) }` (not `if`) since
-        // 2026-08-17 — same erasure campaign, same guarantee: drapeau OFF
+        // 2026-08-17 — same erasure campaign. Depuis le 2026-08-21 (Bulles est
+        // l'un des trois rendus du fil), la garde n'est plus « mode ≠ bulles »
+        // — le chip doit exister EN Bulles, c'est depuis lui qu'on en sort —
+        // mais « le drapeau rend autre chose que des bulles » : drapeau OFF
         // (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa.
+        let code = try strippedSource("Meeshy/Features/Main/Views/ConversationView.swift")
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         XCTAssertTrue(
-            code.contains("private var readingModeAffordanceCluster: AnyView {\n        guard readingModeController.mode != .bubbles else { return AnyView(EmptyView()) }"),
-            "La grappe Aa doit être entièrement gardée par `readingModeController.mode != .bubbles` — drapeau OFF (résolu TOUJOURS `.bubbles`, §WS-1) ⇒ ni chip ni bouton Aa, bit-à-bit identique à avant ce lot."
+            code.contains("private var readingModeAffordanceCluster: AnyView { guard readingModeCapabilities.availableModes.contains(where: { $0 != .bubbles }) else { return AnyView(EmptyView()) }"),
+            "La grappe doit être gardée par les CAPACITÉS du drapeau (un mode autre que bulles est rendu), jamais par le mode courant : en Bulles (choix collant, drapeau ON) le chip reste — c'est la porte de sortie."
+        )
+        XCTAssertFalse(
+            code.contains("guard readingModeController.mode != .bubbles else"),
+            "L'ancienne garde par le mode courant cacherait le chip en Bulles."
         )
     }
 

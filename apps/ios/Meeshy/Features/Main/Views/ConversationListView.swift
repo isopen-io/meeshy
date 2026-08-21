@@ -146,6 +146,10 @@ struct ConversationListView: View {
 
     // Status
     @State private var showStatusComposer = false
+    /// Accès rapides (queue de liste / état vide, 2026-08-21) : les feuilles
+    /// de création EXISTANTES, réutilisées telles quelles.
+    @State private var showCreateAffiliate = false
+    @State private var showCreateTrackingLink = false
 
     // Search and Filters
     @FocusState var isSearching: Bool
@@ -165,6 +169,9 @@ struct ConversationListView: View {
     /// `@State CGFloat headerScrollOffset` ré-exécutait ce body ENTIER
     /// (~99 rows reconstruites + diff Equatable) à chaque tick de scroll.
     @State private var scrollOffsetRelay = ScrollOffsetRelay()
+    /// Positions des stickers de section (pilule) — boîte inerte, voir
+    /// `LentilleSectionPositionRegistry`.
+    @State private var sectionPositionRegistry = LentilleSectionPositionRegistry()
     @State private var lastScrollDirectionChange: Date = .distantPast
 
     // MARK: - Focus card (LWS-8, drapeau Lentille)
@@ -178,6 +185,9 @@ struct ConversationListView: View {
     // part dans ce fichier : la liste monte un hôte, c'est tout.
     @State private var focusCandidateRegistry = LentilleFocusCandidateRegistry()
     @State private var focusElection = LentilleFocusElection()
+    /// Activité de la SCÈNE (2026-08-21) : perspective et carte de focus
+    /// pendant le défilement seulement, à plat `restDelay` après la pose.
+    @State private var sceneActivity = LentilleSceneActivity()
 
     // MARK: - Pilule de section (LWS-6, drapeau Lentille)
     //
@@ -400,6 +410,15 @@ struct ConversationListView: View {
         // any filtered/sectioned view whose visible rows don't line up with
         // the full-account top-20 by recency (fix 2026-07-21).
         let orderedConversationIds = conversationViewModel.groupedConversations.flatMap { $0.conversations.map(\.id) }
+        // Contexte de PASSE (audit fluidité 2026-08-21, H4/H18) : les langues du
+        // lecteur (une copie de tableau par rang auparavant) et l'ensemble des
+        // ids éligibles à l'auto-chargement (un `firstIndex` O(n) par rang ⇒
+        // O(n²) par passe auparavant) sont résolus UNE fois ici.
+        let passContext = ConversationRowPassContext(
+            orderedConversationIds: orderedConversationIds,
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            autoPreviewLimit: ConversationRowMetrics.autoPreviewLoadRowLimit
+        )
         // Drapeau lu UNE fois par passe de body, jamais par rang : l'`onAppear`
         // d'un rang est un chemin chaud, et `LentilleFeatureFlag` interroge
         // `ProcessInfo.environment` à chaque appel. Le booléen descend ensuite
@@ -410,7 +429,7 @@ struct ConversationListView: View {
             ForEach(conversationViewModel.groupedConversations, id: \.section.id) { group in
                 sectionView(
                     for: group,
-                    orderedConversationIds: orderedConversationIds,
+                    passContext: passContext,
                     trackedSectionId: tracksVisibleSection ? group.section.id : nil
                 )
             }
@@ -488,11 +507,11 @@ struct ConversationListView: View {
     /// une catégorie repliée conserve son sticker.
     private func sectionView(
         for group: (section: ConversationSection, conversations: [Conversation]),
-        orderedConversationIds: [String],
+        passContext: ConversationRowPassContext,
         trackedSectionId: String?
     ) -> some View {
         Section {
-            sectionContent(for: group, orderedConversationIds: orderedConversationIds, trackedSectionId: trackedSectionId)
+            sectionContent(for: group, passContext: passContext, trackedSectionId: trackedSectionId)
         } header: {
             sectionHeader(for: group)
         }
@@ -501,12 +520,12 @@ struct ConversationListView: View {
     @ViewBuilder
     private func sectionContent(
         for group: (section: ConversationSection, conversations: [Conversation]),
-        orderedConversationIds: [String],
+        passContext: ConversationRowPassContext,
         trackedSectionId: String?
     ) -> some View {
         // Section Content — always visible when no categories, otherwise animated expand/collapse
         if isSectionContentVisible(group.section.id) {
-            sectionConversations(group.conversations, orderedConversationIds: orderedConversationIds, trackedSectionId: trackedSectionId)
+            sectionConversations(group.conversations, passContext: passContext, trackedSectionId: trackedSectionId)
                 .padding(.horizontal, 16)
                 .transition(.asymmetric(
                     insertion: .opacity.combined(with: .scale(scale: 0.95, anchor: .top)).combined(with: .offset(y: -8)),
@@ -567,6 +586,15 @@ struct ConversationListView: View {
                 isExpanded: isSectionContentVisible(group.section.id),
                 onToggle: sectionToggle(for: group.section.id)
             )
+            // Position vivante du sticker → registre inerte de la pilule (la
+            // section épinglée = le sticker le plus haut). `onGeometryChange`
+            // ne monte aucune vue de plus, contrairement à un `GeometryReader`.
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .global).minY
+            } action: { minY in
+                sectionPositionRegistry.register(id: group.section.id, minY: minY)
+            }
+            .onDisappear { sectionPositionRegistry.unregister(id: group.section.id) }
         } else {
             SectionHeaderView(
                 section: group.section,
@@ -635,7 +663,7 @@ struct ConversationListView: View {
     @ViewBuilder
     private func sectionConversations(
         _ conversations: [Conversation],
-        orderedConversationIds: [String],
+        passContext: ConversationRowPassContext,
         trackedSectionId: String? = nil
     ) -> some View {
         // rowWidth derives from the actual containing column width (iPad
@@ -662,11 +690,14 @@ struct ConversationListView: View {
         let perspectiveEnabled = LentilleFeatureFlag.isLentilleListEnabled
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
-                conversationRow(for: conversation, rowWidth: rowWidth, orderedConversationIds: orderedConversationIds)
+                conversationRow(for: conversation, rowWidth: rowWidth, passContext: passContext)
                     // Passe de compositor (§4.1) : opacité et échelle SEULES, sur la
                     // courbe `.list` du miroir gelé. Posée AU-DESSUS du portillon
                     // `.equatable()` du rang — elle ne rediffuse rien, elle repeint.
                     .lentillePerspective(isEnabled: perspectiveEnabled)
+                    // Respiration (2026-08-22) : les voisines de la rangée élue
+                    // s'écartent pendant la scène — translation seule.
+                    .lentilleFocusBreathing(isEnabled: perspectiveEnabled)
                     // Candidature à la focus card : le rang publie son milieu dans
                     // une boîte INERTE. Écrire n'élit rien — seul un tick de
                     // défilement déclenche l'élection (§4.2).
@@ -704,7 +735,7 @@ struct ConversationListView: View {
     // type-metadata instantiation crash on low-memory devices. This builder
     // only wires the row's inputs; the returned `some View` is the nominal
     // `ConversationRowItem`, which keeps the enclosing list type small.
-    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat, orderedConversationIds: [String]) -> some View {
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat, passContext: ConversationRowPassContext) -> some View {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
                   let communityId = conversation.communityId else { return nil }
@@ -726,7 +757,7 @@ struct ConversationListView: View {
             // B1 (Prisme Linguistique) — resolved once at row creation
             // time. Re-evaluates when AuthManager publishes a new currentUser
             // because the parent body re-runs on @Published changes.
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredContentLanguages: passContext.preferredContentLanguages,
             cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
             leadingActions: leadingSwipeActions(for: conversation),
             trailingActions: trailingSwipeActions(for: conversation),
@@ -748,11 +779,7 @@ struct ConversationListView: View {
             onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             },
-            enableAutoPreviewLoad: Self.shouldAutoLoadPreview(
-                conversationId: conversation.id,
-                orderedConversationIds: orderedConversationIds,
-                limit: ConversationRowMetrics.autoPreviewLoadRowLimit
-            ),
+            enableAutoPreviewLoad: passContext.autoPreviewIds.contains(conversation.id),
             onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id) }
                 // Montage au REPOS invisible (scale 1, offset 0, opacité 0) :
@@ -783,7 +810,7 @@ struct ConversationListView: View {
             // résolus UNE fois ici (valeur stable boxée — voir le doc de
             // `nativeContextMenu` dans ConversationRowItem : le builder
             // re-exécuté à chaque body pass crashait au lancement).
-            nativeContextMenu: nativeContextMenuView(for: conversation)
+            nativeContextMenu: { nativeContextMenuView(for: conversation) }
         )
         .equatable()
     }
@@ -991,6 +1018,14 @@ struct ConversationListView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showCreateAffiliate) {
+            AffiliateCreateView { _ in }
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showCreateTrackingLink) {
+            CreateTrackingLinkView { _ in }
+        }
     }
 
     /// `AnyView` à la DÉCLARATION (2026-08-19). Chaîne `body → mainContent →
@@ -1154,6 +1189,10 @@ struct ConversationListView: View {
                 onSelfMoodTap: {
                     showStatusComposer = true
                     HapticFeedback.medium()
+                },
+                onSelfCreateStory: {
+                    storyViewModel.showStoryComposer = true
+                    HapticFeedback.medium()
                 }
             )
         } else {
@@ -1182,10 +1221,9 @@ struct ConversationListView: View {
             hasActiveStory: myGroup != nil,
             // Le libellé sort de la MÊME règle que le routage ci-dessous : les
             // deux ne peuvent pas diverger (régression déjà vécue côté tray).
-            actionLabel: StoryTrayActionResolver.avatarAccessibilityLabel(
-                hasMyStory: myGroup != nil,
-                hasAnyStory: storyViewModel.hasStories(forUserId: userId)
-            )
+            // Le tap ouvre TOUJOURS le listing « Mes stories » (voir
+            // `openMyStoriesFromRail`) : l'annonce dit cette destination-là.
+            actionLabel: StoryTrayCopy.manageStories
         )
     }
 
@@ -1193,21 +1231,12 @@ struct ConversationListView: View {
     /// (règle partagée avec le tray, déjà testée), jamais à cette vue. Les deux
     /// destinations sont celles d'aujourd'hui — la liste « Mes stories » par le
     /// listener des racines, le composeur par le cover des racines.
+    /// Tap sur MON avatar du rail ⇒ TOUJOURS le listing « Mes stories »
+    /// (stories actives, brouillons, boutons créer / sélectionner) — retour
+    /// user 2026-08-21. Créer directement une story est le rôle du (+) de
+    /// l'entrée (`onSelfCreateStory`), plus celui d'un avatar sans story.
     private func openMyStoriesFromRail() {
-        let userId = AuthManager.shared.currentUser?.id ?? ""
-        let myGroup = storyViewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
-        switch StoryTrayActionResolver.avatarTap(
-            hasMyStory: myGroup != nil,
-            hasAnyStory: storyViewModel.hasStories(forUserId: userId)
-        ) {
-        case .manageStories:
-            // MÊME porte que la tuile « Stories » du profil
-            // (`ProfileUserPostsList`) : un listener unique par racine, jamais
-            // une sheet de plus montée par cet écran.
-            NotificationCenter.default.post(name: .openMyStories, object: nil)
-        case .createStory:
-            storyViewModel.showStoryComposer = true
-        }
+        NotificationCenter.default.post(name: .openMyStories, object: nil)
         HapticFeedback.medium()
     }
 
@@ -1247,8 +1276,12 @@ struct ConversationListView: View {
     /// viennent de `CollapsibleHeaderMetrics` (64 déployée / 44 repliée), la
     /// métrique que le header lui-même consomme — jamais un nombre recopié ici.
     /// `0` sous drapeau OFF : ni inset, ni décalage.
+    /// `accessoryCollapsedHeight` (60) et non `collapsedHeight` (44) : ce
+    /// header porte un `titleAccessory` (la trail compacte de stories), et
+    /// replié il mesure 60 pt — la bande de stickers épinglée à 44 passait
+    /// SOUS la trail (chevauchement « P[avatar]ANCIEN », 2026-08-21).
     private var stickyHeaderInset: CGFloat {
-        LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0
+        LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.accessoryCollapsedHeight : 0
     }
 
     /// R-a (réserve tracée Porte V1, `tasks/lentille-workshop-execution.md`
@@ -1311,10 +1344,90 @@ struct ConversationListView: View {
             )
             LentilleFocusCardHost(
                 election: focusElection,
+                relay: scrollOffsetRelay,
                 registry: focusCandidateRegistry,
-                conversations: conversationViewModel.groupedConversations.flatMap(\.conversations),
-                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true
+                // Résolu au CHANGEMENT d'élu seulement (jamais par tick, jamais
+                // un aplatissement de la liste par passe de body — H15).
+                conversationById: { id in conversationViewModel.conversations.first { $0.id == id } },
+                isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
+                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                categories: conversationViewModel.userCategories,
+                activeTagFilter: conversationViewModel.activeTagFilter,
+                onMoveToSection: { conversationId, sectionId in
+                    HapticFeedback.light()
+                    conversationViewModel.moveToSection(conversationId: conversationId, sectionId: sectionId)
+                },
+                onFilterByTag: { tag in
+                    HapticFeedback.light()
+                    conversationViewModel.activeTagFilter = tag
+                },
+                onRemoveTag: { conversation, tag in
+                    HapticFeedback.light()
+                    // Même mutation que la feuille d'infos (optimiste + rollback).
+                    ConversationOptionsViewModel(conversation: conversation).removeTag(tag.name)
+                },
+                // Même source que la rangée plate (pastille de présence).
+                presenceFor: { conversation in
+                    presenceManager.presenceState(for: conversation.participantUserId ?? "")
+                },
+                onForceSync: { _ in
+                    HapticFeedback.light()
+                    conversationViewModel.forceSync()
+                },
+                // Même feuille que l'avatar de la rangée (onglet Membres par défaut).
+                onShowParticipants: { conversation in
+                    HapticFeedback.light()
+                    handleConversationInfoView(conversation)
+                }
             )
+            // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
+            // niveau d'activité lu par les rangées et par la carte.
+            LentilleSceneActivityHost(relay: scrollOffsetRelay, scene: sceneActivity)
+        }
+    }
+
+    // MARK: - Accès rapides (queue de liste / état vide, 2026-08-21)
+
+    /// Vue PURE routée vers les portes EXISTANTES : nouveau message
+    /// (`onNewConversation`), story (`StoryViewModel.showStoryComposer`),
+    /// mood (`StatusComposerView`, déjà hébergé ici), post (drapeau `Router
+    /// .pendingOpenFeedComposer`, consommé par le flux), invitation
+    /// (`AffiliateCreateView`, lien de parrainage), lien raccourci
+    /// (`CreateTrackingLinkView`, `/l/<token>`).
+    private func quickActions(isEmptyState: Bool, minHeight: CGFloat = 0) -> some View {
+        ConversationListQuickActions(
+            isDark: theme.mode.isDark,
+            isEmptyState: isEmptyState,
+            minHeight: minHeight,
+            onAction: { action in
+                switch action {
+                case .findMembers: router.push(.peopleDiscovery(.discover))
+                case .myContacts: router.push(.contacts(.contacts))
+                case .myAffiliates: router.push(.affiliate)
+                case .newMessage: onNewConversation?()
+                case .story: storyViewModel.showStoryComposer = true
+                case .mood: showStatusComposer = true
+                case .post: router.pendingOpenFeedComposer = true
+                case .invite: showCreateAffiliate = true
+                case .shortcutLink: showCreateTrackingLink = true
+                }
+            }
+        )
+        .equatable()
+    }
+
+    /// Hauteur de queue : une DEMI-région visible, pour que la dernière
+    /// rangée puisse rejoindre la bande de focus au centre.
+    private var listTailMinHeight: CGFloat {
+        DeviceLayout.windowSize.height / 2
+    }
+
+    @ViewBuilder
+    private var listTail: some View {
+        if LentilleFeatureFlag.isLentilleListEnabled {
+            quickActions(isEmptyState: false, minHeight: listTailMinHeight)
+        } else {
+            Color.clear.frame(height: 60)
         }
     }
 
@@ -1329,7 +1442,12 @@ struct ConversationListView: View {
                 visibleSectionId: visibleSectionId,
                 sections: conversationViewModel.groupedConversations.map(\.section)
            ) {
-            SectionScrollPillHost(relay: scrollOffsetRelay, title: title)
+            SectionScrollPillHost(
+                relay: scrollOffsetRelay,
+                title: title,
+                sections: conversationViewModel.groupedConversations.map(\.section),
+                positions: sectionPositionRegistry
+            )
         }
     }
 
@@ -1498,16 +1616,10 @@ struct ConversationListView: View {
                         case .createFirstConversation:
                             Group {
                                 if LentilleFeatureFlag.isLentilleListEnabled {
-                                    EmptyStateView(
-                                        icon: "bubble.left.and.bubble.right",
-                                        title: String(localized: "conversations.empty.title"),
-                                        subtitle: String(localized: "conversations.empty.subtitle"),
-                                        actionLabel: String(localized: "conversations.empty.action"),
-                                        compact: true,
-                                        onAction: {
-                                            onNewConversation?()
-                                        }
-                                    )
+                                    // État vide = les MÊMES accès rapides que la
+                                    // queue de liste (2026-08-21) : tout commence
+                                    // ici — message, story, mood, post, invitation.
+                                    quickActions(isEmptyState: true)
                                 } else {
                                     EmptyStateView(
                                         icon: "bubble.left.and.bubble.right",
@@ -1551,7 +1663,12 @@ struct ConversationListView: View {
                         ConversationPaginationFooter()
                     }
 
-                    Color.clear.frame(height: 280)
+                    // Queue de liste (2026-08-21) : les accès rapides, hauts
+                    // d'une DEMI-région visible — de quoi amener la dernière
+                    // conversation jusqu'à la bande de focus au centre de
+                    // l'écran (sans cette queue, la magnificence ne touchait
+                    // jamais la fin de la liste). Drapeau OFF : queue neutre.
+                    listTail
                         .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -1561,7 +1678,7 @@ struct ConversationListView: View {
                         }
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 120)
+                .padding(.bottom, 80)
             }
             // LIGNE D'ÉPINGLAGE (LWS-6/I-063bis). Un `LazyVStack(pinnedViews:)`
             // épingle au bord haut de la RÉGION VISIBLE de son ScrollView. Ici
@@ -1580,6 +1697,17 @@ struct ConversationListView: View {
                 isEnabled: LentilleFeatureFlag.isLentilleListEnabled,
                 height: stickyHeaderInset
             ))
+            // Ligne d'épinglage des stickers, en coordonnées GLOBALES : bord
+            // haut de la région visible du défilement (safe area comprise)
+            // plus l'inset collant. Mesurée sur le CONTENEUR — qui ne bouge
+            // pas au défilement, donc zéro écriture par tick — et lue par la
+            // pilule pour nommer la section réellement épinglée (2026-08-21 :
+            // « le sticker le plus haut » désignait une section déjà passée).
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .global).minY + proxy.safeAreaInsets.top
+            } action: { visibleTop in
+                sectionPositionRegistry.registerPinLine(visibleTop + stickyHeaderInset)
+            }
             .scrollDismissesKeyboard(.interactively)
             // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
             // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du
@@ -1639,6 +1767,7 @@ struct ConversationListView: View {
         .overlay(alignment: .top) {
             sectionScrollPillOverlay
         }
+        .environmentObject(sceneActivity)
         .sheet(isPresented: $showShareLinkSheet) {
             ShareLinkPickerSheet(
                 conversations: conversationViewModel.conversations.filter { canCreateShareLink(for: $0) },

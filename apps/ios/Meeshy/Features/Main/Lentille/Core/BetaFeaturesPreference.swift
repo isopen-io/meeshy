@@ -70,7 +70,7 @@ nonisolated enum BetaFeaturesPreference {
     /// .isEnabled(defaults:environment:)`.
     static func isEnabled(
         defaults: UserDefaults = .standard,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessEnvironmentSnapshot.current
     ) -> Bool {
         switch environment[environmentKey] {
         case "1": return true
@@ -104,7 +104,7 @@ nonisolated enum BetaFeaturesPreference {
     /// `isEnabled`), jamais l'un pour l'autre.
     static func isExplicitlySet(
         defaults: UserDefaults = .standard,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessEnvironmentSnapshot.current
     ) -> Bool {
         switch environment[environmentKey] {
         case "1", "0": return true
@@ -117,7 +117,7 @@ nonisolated enum BetaFeaturesPreference {
     /// (résidu inter-suites, même règle que `LentilleFeatureFlag
     /// .isLentilleListEnabled`).
     static var isEnabled: Bool {
-        isEnabled(defaults: .standard, environment: ProcessInfo.processInfo.environment)
+        isEnabled(defaults: .standard, environment: ProcessEnvironmentSnapshot.current)
     }
 
     /// Écrit la préférence — toggle des réglages (`SettingsView`, section

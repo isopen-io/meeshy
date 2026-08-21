@@ -98,6 +98,29 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
+        /// Carte MAGNIFIÉE (2026-08-21, accentuée le 22 : « une marge plus
+        /// importante et un padding suffisant en haut et en bas ») : déborde
+        /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
+        /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
+        public static let height: CGFloat = 104
+        public static let paddingVertical: CGFloat = 14
+        /// Avatar de la carte = le contexte « liste » historique (52), un cran
+        /// au-dessus de la rangée plate (44) : c'est la magnification.
+        public static let avatarContext: AvatarContext = .conversationList
+        public static let nameSize: CGFloat = 17
+        @MainActor public static var nameFont: Font { MeeshyFont.relative(nameSize, weight: Name.weight) }
+        public static let shadowRadius: CGFloat = 12
+        public static let shadowY: CGFloat = 4
+        /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
+        /// rangées voisines s'écartent de la ligne de focus de ce montant
+        /// pendant la scène — translation de compositor, zéro relayout.
+        /// 18 → 30 le 2026-08-22 : les chips d'étiquettes qui débordent
+        /// sous la carte gardent une marge avec la rangée suivante.
+        public static let breathing: CGFloat = 30
+        /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
+        /// pas), pleine une rangée plus loin — jamais de saut au passage.
+        public static let breathingRampStart: CGFloat = 36
+        public static let breathingRampLength: CGFloat = 40
     }
 
     // MARK: - Encoche de mode
@@ -156,6 +179,11 @@ nonisolated public enum LentilleMetrics {
         public static let size: CGFloat = 6
         public static let maxCount: Int = 3
         public static let emojiSize: CGFloat = 11
+        /// Chips d'étiquettes de la carte de focus (2026-08-22 : « plus
+        /// petites ») — un cran sous l'encoche de mode.
+        public static let chipFontSize: CGFloat = 8
+        public static let chipPaddingHorizontal: CGFloat = 6
+        public static let chipPaddingVertical: CGFloat = 2
     }
 
     // MARK: - Sourdine

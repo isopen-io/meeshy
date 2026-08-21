@@ -142,15 +142,12 @@ final class PhonebookViewModel: ObservableObject {
 
     private func refreshFromNetwork() async {
         do {
-            let response = try await directoryService.list(
-                offset: 0,
-                limit: 200,
-                filter: .all,
-                query: nil
-            )
-            contacts = response.data
+            // Le répertoire ENTIER, page par page — plus de plafond à 200
+            // (directive 2026-08-21, « Répertoire vide » au-delà).
+            let all = try await directoryService.listAll(filter: .all, query: nil)
+            contacts = all
             loadState = .loaded
-            try? await CacheCoordinator.shared.phonebook.save(response.data, for: cacheKey)
+            try? await CacheCoordinator.shared.phonebook.save(all, for: cacheKey)
         } catch {
             // Le cache déjà affiché prime : une revalidation ratée ne doit pas
             // effacer un répertoire consultable (dégradation offline).
@@ -278,5 +275,45 @@ final class PhonebookViewModel: ObservableObject {
         let name = contact.resolvedName
         let greeting = name.isEmpty ? "Salut" : "Salut \(name)"
         return "\(greeting) ! Rejoins-moi sur Meeshy : https://meeshy.me/download"
+    }
+}
+
+// MARK: - Pagination complète du répertoire (2026-08-21)
+
+/// Règle pure : y a-t-il une page de plus ? Le serveur fait foi quand il le
+/// dit (`hasMore`) ; sinon une page PLEINE en annonce une autre, une page
+/// courte ou vide clôt la lecture.
+// `nonisolated` : consommé depuis des contextes async hors acteur (isolation
+// MainActor par défaut du module) — un défaut d'argument isolé fait tomber SILGen.
+nonisolated enum DirectoryPaging {
+    static let pageSize = 200
+    /// Filet contre un serveur qui répondrait toujours `hasMore` : 25 pages
+    /// de 200 = 5 000 contacts, au-delà du plus gros carnet d'adresses.
+    static let maxPages = 25
+
+    static func hasMore(received: Int, pageSize: Int, serverHasMore: Bool?) -> Bool {
+        guard received > 0 else { return false }
+        if let serverHasMore { return serverHasMore }
+        return received >= pageSize
+    }
+}
+
+extension ContactDirectoryServiceProviding {
+    /// Toutes les pages du répertoire, concaténées dans l'ordre du serveur.
+    nonisolated func listAll(
+        filter: DirectoryFilter,
+        query: String?,
+        pageSize: Int = DirectoryPaging.pageSize,
+        maxPages: Int = DirectoryPaging.maxPages
+    ) async throws -> [DirectoryContact] {
+        var all: [DirectoryContact] = []
+        var offset = 0
+        for _ in 0..<maxPages {
+            let page = try await list(offset: offset, limit: pageSize, filter: filter, query: query)
+            all += page.data
+            guard DirectoryPaging.hasMore(received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore) else { break }
+            offset += page.data.count
+        }
+        return all
     }
 }
