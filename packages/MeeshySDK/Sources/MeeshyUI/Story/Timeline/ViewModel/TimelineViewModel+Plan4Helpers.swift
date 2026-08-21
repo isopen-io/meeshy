@@ -16,10 +16,12 @@ extension TimelineViewModel {
 
     /// Convenience wrapper: begin + move (+ optional commit) in one call.
     /// Maps to the begin/dragClipMoved/endClipDrag API.
-    public func dragClip(id: String, deltaTimeSeconds: Float, isCommitted: Bool) {
+    public func dragClip(id: String, deltaTimeSeconds: Float, isCommitted: Bool,
+                         geometry: TimelineGeometry) {
         beginClipDrag(clipId: id)
         let originalStart = clipStartTime(id: id) ?? 0
-        dragClipMoved(rawTime: originalStart + deltaTimeSeconds, snapCandidates: [])
+        dragClipMoved(rawTime: originalStart + deltaTimeSeconds, snapCandidates: [],
+                      geometry: geometry)
         if isCommitted { endClipDrag() }
     }
 

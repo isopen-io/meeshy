@@ -215,6 +215,31 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "Et le traduire en immobilité du scroller — sinon le contenu continue de panner sous le doigt")
     }
 
+    // MARK: - Guard 2g — l'aimant lit l'échelle DU PLAN
+    //
+    // Le lot a introduit un second repère temps→pixels
+    // (`Plan2DView.equivalentGeometry`, partagé par la règle, la tête de
+    // lecture et le chrome) pendant que la tolérance d'aimantation continuait
+    // de lire le `zoomScale` continu du transport : les deux n'avaient plus
+    // aucun rapport (revue Opus, constat 6).
+
+    func test_timelineViewModel_neverDerivesItsMagnetToleranceFromTheTransportZoom() throws {
+        let source = try Self.strippedSource(of: Self.timelineViewModelURL)
+        XCTAssertFalse(source.contains("TimelineGeometry(zoomScale: zoomScale)"),
+                       "La tolérance d'aimantation ne doit plus se fabriquer une géométrie depuis le curseur du transport")
+        XCTAssertTrue(source.contains("geometry.dragSnapToleranceSeconds"),
+                     "Elle doit dériver de la géométrie que l'appelant DESSINE")
+    }
+
+    func test_storyTimelineHost_feedsTheMagnetThePlansOwnGeometry() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        guard let range = source.range(of: "viewModel.dragClipMoved(") else {
+            return XCTFail("L'hôte doit conduire le glissement par dragClipMoved")
+        }
+        XCTAssertTrue(String(source[range.upperBound...].prefix(300)).contains("geometry: equivalentGeometry"),
+                     "L'aimant doit recevoir le MÊME repère que la règle, la tête de lecture et les barres")
+    }
+
     func test_storyTimelineHost_wiresTheClipTimeDragToTheExistingDragSession() throws {
         let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
         XCTAssertTrue(source.contains("viewModel.beginClipDrag("),
@@ -262,25 +287,39 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/"
     ]
 
-    /// Le MANIFESTE : tout ce que D3 touche, du premier commit d'intégration
-    /// à celui-ci.
+    /// Le MANIFESTE : tout ce que le lot touche, du premier commit
+    /// d'intégration à celui-ci — D6a inclus (gestes, géométrie de
+    /// l'aimant : les bancs de glissement qui passent désormais la géométrie
+    /// rendue en paramètre en font partie).
     static let d3DiffPaths: [String] = [
         "docs/superpowers/specs/2026-08-19-meeshy-composer-views.html",
         "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Logic/Plan2DLayout.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/ViewModel/TimelineViewModel.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/Plan2DProjectAdapter.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/Plan2DReorderResolver.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineHost.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/StoryTimelineView.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Inspector/ClipInspector.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DIntegrationGuardTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DLayoutTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DRenderMeasureTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DRestoredCapabilitiesTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DViewGuardTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/TimelineLocalizationTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Gesture/AudioTextDragDriftTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Gesture/ClipDragGestureTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Gesture/SnapToPlayheadTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Gesture/TwoFingerDragDisablesSnapTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Offline/OfflineEditFlowTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelDragSnapToleranceTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelFollowSlideTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelNudgeStartTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelSlideDurationTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/ViewModel/TimelineViewModelTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DProjectAdapterTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DReorderResolverTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/StoryTimelineHost_ReorderTests.swift",
@@ -398,6 +437,10 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     private static var timelineViewModelPlan4HelpersURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift")
+    }
+
+    private static var timelineViewModelURL: URL {
+        sourcesRoot.appendingPathComponent("Story/Timeline/ViewModel/TimelineViewModel.swift")
     }
 
     private static var timelineInspectorHostURL: URL {

@@ -390,3 +390,67 @@ final class Plan2DDragAxisTests: XCTestCase {
         XCTAssertLessThan(Plan2DView.axisDeadZone, Plan2DView.reorderSlop)
     }
 }
+
+// MARK: - Aimantation : la tolérance suit l'échelle DU PLAN
+
+/// La tolérance d'aimantation vaut « 8 points de doigt », convertis en
+/// secondes par une échelle temps→pixels. Le plan 2D en a introduit une
+/// nouvelle (`equivalentGeometry` — celle de la règle, de la tête de lecture
+/// et du chrome), pendant que le moteur d'aimant continuait de lire le
+/// `zoomScale` continu du transport : les deux n'ont plus aucun rapport
+/// (revue Opus, constat 6).
+///
+/// Les deux densités extrêmes du plan le montrent — lane 350 pt, `zoomScale`
+/// au défaut 1.0, soit une tolérance figée à 0,16 s.
+@MainActor
+final class Plan2DSnapScaleTests: XCTestCase {
+
+    private func makeViewModel(slideDuration: Float, neighbourEnd: Float) -> TimelineViewModel {
+        let vm = TimelineViewModel(engine: MockStoryTimelineEngine(),
+                                   commandStack: CommandStack(),
+                                   snapEngine: SnapEngine(toleranceSeconds: 0.06))
+        var neighbour = StoryMediaObject(id: "v1", postMediaId: "v1", kind: .video, aspectRatio: 1.0)
+        neighbour.startTime = 0
+        neighbour.duration = Double(neighbourEnd)
+        var moved = StoryMediaObject(id: "m1", postMediaId: "m1", kind: .image, aspectRatio: 1.0)
+        moved.startTime = 0
+        moved.duration = 0.1
+        vm.bootstrap(project: TimelineProject(slideId: "s", slideDuration: slideDuration,
+                                              mediaObjects: [neighbour, moved],
+                                              audioPlayerObjects: [],
+                                              textObjects: [],
+                                              clipTransitions: []),
+                     mediaURLs: [:], images: [:])
+        return vm
+    }
+
+    private func droppedStart(vm: TimelineViewModel, rawTime: Float, laneWidth: CGFloat,
+                              slideDuration: Double) -> Float {
+        vm.beginClipDrag(clipId: "m1")
+        vm.dragClipMoved(rawTime: rawTime, snapCandidates: [],
+                         geometry: Plan2DView.equivalentGeometry(laneWidth: laneWidth, zoom: .fit,
+                                                                 slideDuration: slideDuration))
+        vm.endClipDrag()
+        return vm.project.mediaObjects.first(where: { $0.id == "m1" })?.startTime.map(Float.init) ?? -1
+    }
+
+    /// Plan DENSE — slide d'une seconde sur 350 pt : 350 px/s. Huit points de
+    /// doigt valent 0,023 s. La tolérance du transport (0,16 s) y couvre 56 pt
+    /// d'écran : l'aimant avale un sixième de la piste.
+    func test_onADensePlan_theMagnetDoesNotSwallowASixthOfTheTrack() {
+        let vm = makeViewModel(slideDuration: 1, neighbourEnd: 0.2)
+        XCTAssertEqual(droppedStart(vm: vm, rawTime: 0.3, laneWidth: 350, slideDuration: 1),
+                       0.3, accuracy: 0.005,
+                       "0,1 s = 35 pt d'écran sur ce plan : bien au-delà du doigt, l'aimant ne doit pas accrocher")
+    }
+
+    /// Plan CLAIRSEMÉ — slide de soixante secondes sur 350 pt : 5,8 px/s. La
+    /// tolérance du transport y vaut 1 pt d'écran : l'aimant n'accroche plus
+    /// jamais visuellement. Le plafond (0,25 s) devient la règle utile.
+    func test_onASparsePlan_theMagnetStillCatchesAVisiblyAdjacentEdge() {
+        let vm = makeViewModel(slideDuration: 60, neighbourEnd: 10)
+        XCTAssertEqual(droppedStart(vm: vm, rawTime: 10.2, laneWidth: 350, slideDuration: 60),
+                       10, accuracy: 0.005,
+                       "0,2 s à cette densité, c'est un pixel d'écart : l'aimant doit accrocher")
+    }
+}

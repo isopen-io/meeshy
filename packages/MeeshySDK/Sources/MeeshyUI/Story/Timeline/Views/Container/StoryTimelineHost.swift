@@ -289,7 +289,8 @@ public struct StoryTimelineHost: View {
                                     guard let drag = viewModel.selection.activeDrag else { return }
                                     viewModel.dragClipMoved(
                                         rawTime: drag.originalStartTime + Float(seconds),
-                                        snapCandidates: [])
+                                        snapCandidates: [],
+                                        geometry: equivalentGeometry)
                                 },
                                 onMoveEnded: { _ in viewModel.endClipDrag() },
                                 onScrollLockChanged: { isPlanHoldingTheGesture = $0 }

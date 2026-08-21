@@ -96,7 +96,8 @@ final class AudioTextDragDriftTests: XCTestCase {
         guard let drag = viewModel.selection.activeDrag else { return }
         viewModel.dragClipMoved(
             rawTime: drag.originalStartTime + Float(cumulativeDeltaPx) / Float(geometry.pixelsPerSecond),
-            snapCandidates: []
+            snapCandidates: [],
+            geometry: geometry
         )
     }
 

@@ -53,7 +53,7 @@ final class TimelineViewModelTests: XCTestCase {
 
         sut.beginClipDrag(clipId: "clip-1")
         for delta in stride(from: Float(0.05), through: 2.0, by: 0.05) {
-            sut.dragClipMoved(rawTime: delta, snapCandidates: [])
+            sut.dragClipMoved(rawTime: delta, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         }
         sut.endClipDrag()
 
@@ -76,7 +76,7 @@ final class TimelineViewModelTests: XCTestCase {
         await sut.awaitConfigured()
 
         sut.beginClipDrag(clipId: "clip-1")
-        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [])
+        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         sut.endClipDrag()
 
         XCTAssertEqual(sut.project.mediaObjects.first?.startTime ?? -1, 3.0, accuracy: 0.001)
@@ -93,7 +93,7 @@ final class TimelineViewModelTests: XCTestCase {
         await sut.awaitConfigured()
 
         sut.beginClipDrag(clipId: "clip-1")
-        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [])
+        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         sut.endClipDrag()
         sut.undo()
         sut.redo()
@@ -219,7 +219,7 @@ final class TimelineViewModelTests: XCTestCase {
         let (sut, _) = makeSUT(project: project)
         await sut.awaitConfigured()
         sut.beginClipDrag(clipId: "v1")
-        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [])
+        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         sut.cancelClipDrag()
         XCTAssertEqual(sut.project.mediaObjects.first?.startTime ?? -1, 1.0, accuracy: 0.001)
         XCTAssertNil(sut.selection.activeDrag)
@@ -302,7 +302,7 @@ final class TimelineViewModelTests: XCTestCase {
         let (sut1, _) = makeSUT(project: TimelineProjectFactory.projectWithVideoClip(startTime: 0))
         await sut1.awaitConfigured()
         sut1.beginClipDrag(clipId: "clip-1")
-        sut1.dragClipMoved(rawTime: 2.0, snapCandidates: [])
+        sut1.dragClipMoved(rawTime: 2.0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         sut1.endClipDrag()
         sut1.selectClip(id: "clip-1")
         sut1.scrub(to: 0.5)

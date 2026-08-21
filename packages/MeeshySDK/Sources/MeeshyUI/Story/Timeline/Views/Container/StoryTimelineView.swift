@@ -686,7 +686,8 @@ public struct StoryTimelineView: View {
                     guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
                         rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
-                        snapCandidates: []
+                        snapCandidates: [],
+                        geometry: geometry
                     )
                 },
                 onMoveEnded: {
@@ -747,7 +748,8 @@ public struct StoryTimelineView: View {
                     guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
                         rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
-                        snapCandidates: []
+                        snapCandidates: [],
+                        geometry: geometry
                     )
                 },
                 onMoveEnded: {
@@ -803,7 +805,8 @@ public struct StoryTimelineView: View {
                     guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
                         rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
-                        snapCandidates: []
+                        snapCandidates: [],
+                        geometry: geometry
                     )
                 },
                 onMoveEnded: {
@@ -847,7 +850,8 @@ public struct StoryTimelineView: View {
                     guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
                         rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
-                        snapCandidates: []
+                        snapCandidates: [],
+                        geometry: geometry
                     )
                 },
                 onMoveEnded: {
