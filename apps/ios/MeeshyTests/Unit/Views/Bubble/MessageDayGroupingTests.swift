@@ -88,4 +88,72 @@ final class MessageDayGroupingTests: XCTestCase {
         XCTAssertEqual(groups[0].indices, [0])
         XCTAssertEqual(groups[1].indices, [1])
     }
+
+    // MARK: - Tête de groupe : un message système n'est pas une prise de parole
+
+    /// L'avis d'arrivée est écrit AVEC L'ARRIVANT POUR AUTEUR
+    /// (`packages/shared/utils/join-notice.ts` : « l'arrivant est l'auteur de
+    /// son propre avis »). Une tête de groupe décidée sur le seul `senderId`
+    /// faisait donc suivre la première vraie bulle du nouveau venu dans le
+    /// groupe de sa propre annonce — et la rangée perdait ensemble son nom,
+    /// son avatar et son heure.
+
+    func test_isGroupHead_noPrevious_opensGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(
+            previous: nil,
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19))
+        ))
+    }
+
+    func test_isGroupHead_sameSenderSameDay_continuesGroup() {
+        XCTAssertFalse(MessageDayGrouping.isGroupHead(
+            previous: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 11)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    func test_isGroupHead_differentSender_opensGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(
+            previous: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            current: .init(senderId: "b", isSystem: false, createdAt: date(2026, 5, 19, 11)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    func test_isGroupHead_sameSenderNextDay_opensGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(
+            previous: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 23, 59)),
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 20, 0, 1)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    /// Le défaut signalé : l'avis d'arrivée précède la première parole de la
+    /// personne, même auteur, même jour.
+    func test_isGroupHead_afterSystemNoticeFromSameAuthor_opensGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(
+            previous: .init(senderId: "a", isSystem: true, createdAt: date(2026, 5, 19, 10)),
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10, 1)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    /// Réciproque : un message système ne continue jamais le groupe d'autrui.
+    func test_isGroupHead_systemNoticeItself_opensGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(
+            previous: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            current: .init(senderId: "a", isSystem: true, createdAt: date(2026, 5, 19, 10, 1)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    /// Deux auteurs inconnus ne sont pas la même personne.
+    func test_isGroupHead_bothSendersBlank_opensGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(
+            previous: .init(senderId: "", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            current: .init(senderId: "", isSystem: false, createdAt: date(2026, 5, 19, 11)),
+            calendar: makeCalendar()
+        ))
+    }
 }
