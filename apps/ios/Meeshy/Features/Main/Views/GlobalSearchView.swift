@@ -517,7 +517,7 @@ struct GlobalSearchView: View {
                         .foregroundColor(theme.textMuted)
 
                     if result.memberCount > 2 {
-                        Text("\(result.memberCount) " + String(localized: "unit.members", defaultValue: "membres"))
+                        Text(MembersCountLabel.text(result.memberCount))
                             .font(MeeshyFont.relative(12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -661,13 +661,12 @@ struct GlobalSearchView: View {
     }
 
     private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
-        let membersUnit = String(localized: "unit.members", defaultValue: "membres")
         let unreadUnit = String(localized: "unit.unread", defaultValue: "non lus")
         let lastMessageLabel = String(localized: "accessibility.last_message", defaultValue: "dernier message")
 
         var parts = [result.name, conversationTypeLabel(result.type)]
         if result.memberCount > 2 {
-            parts.append("\(result.memberCount) \(membersUnit)")
+            parts.append(MembersCountLabel.text(result.memberCount))
         }
         if result.unreadCount > 0 {
             parts.append("\(result.unreadCount) \(unreadUnit)")

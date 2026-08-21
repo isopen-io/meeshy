@@ -428,33 +428,6 @@ struct ForwardPickerRow: View, Equatable {
         String(format: String(localized: "forward.retry-send-a11y", defaultValue: "Réessayer le transfert à %@", bundle: .main), name)
     }
 
-    /// Compteur pluralisé « • N membres » — le pluriel est choisi par le
-    /// catalogue (`variations.plural`), pas gravé dans la chaîne. La ligne
-    /// n'affichait le compteur qu'à `memberCount > 0`, or le français range
-    /// N = 1 dans le SINGULIER : sans variation, une conversation à un seul
-    /// membre lisait « • 1 membres ». Défaut mineur en apparence, mais lu par
-    /// VoiceOver sur chaque ligne du picker (élément combiné) — c'est-à-dire
-    /// répété autant de fois qu'il y a de cibles.
-    ///
-    /// `bundle` et `locale` vont par PAIRE (idiome `PostStatAccessibility`) :
-    /// le bundle choisit la TABLE (`fr.lproj` / `en.lproj`), le locale choisit
-    /// la RÈGLE plurielle. Fixer l'un sans l'autre rendrait le test vert en
-    /// local (simu français) et rouge en CI (simu anglais).
-    static func membersCountLabel(_ count: Int,
-                                  bundle: Bundle = .main,
-                                  locale: Locale = .current) -> String {
-        String(
-            format: String(
-                localized: "forward.members-count",
-                defaultValue: "\u{2022} %d membres",
-                bundle: bundle,
-                locale: locale
-            ),
-            locale: locale,
-            count
-        )
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 12) {
@@ -475,17 +448,25 @@ struct ForwardPickerRow: View, Equatable {
                         color: theme.textPrimary
                     )
 
+                    // La puce séparatrice est de la MISE EN PAGE, pas du texte :
+                    // elle vivait gravée dans les 13 formes localisées de
+                    // `forward.members-count`, ce qui obligeait chaque traducteur
+                    // à reproduire un glyphe décoratif et empêchait la clé de
+                    // servir aux surfaces sans puce. Rendue ici et masquée à
+                    // VoiceOver (doctrine 223i), qui lit désormais « Groupe,
+                    // 3 membres » au lieu d'intercaler le nom de la puce.
                     HStack(spacing: 4) {
                         Text(typeLabel)
-                            .font(MeeshyFont.relative(12))
-                            .foregroundColor(theme.textMuted)
 
                         if memberCount > 0 {
-                            Text(Self.membersCountLabel(memberCount))
-                                .font(MeeshyFont.relative(12))
-                                .foregroundColor(theme.textMuted)
+                            Text(verbatim: "\u{2022}")
+                                .accessibilityHidden(true)
+
+                            Text(MembersCountLabel.text(memberCount))
                         }
                     }
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(theme.textMuted)
                 }
                 .accessibilityElement(children: .combine)
 
