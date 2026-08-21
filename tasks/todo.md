@@ -361,5 +361,6 @@ drapeau `riviere_mode` non câblé dans le fil.
       (`components/conversations/riviere/`), REV-5.
 
 ## Lot E — clôture
+- [x] MERGÉ dans `main` (f935f91bf + correctifs CI 4c605ce0d / 5a3c81b9b / 1def3504d) — CI, Docker, iOS, Xcode Cloud verts le 2026-08-22.
 - [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé, 24 classes, simulateur dédié) puis `meeshy.sh test`
 - [ ] `tasks/lessons.md` si correction user ; revue finale ; commits par lot
