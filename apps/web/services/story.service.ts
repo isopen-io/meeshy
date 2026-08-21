@@ -1,4 +1,5 @@
 import { apiService } from './api.service';
+import { resolveOriginalLanguageForCreate } from './posts.service';
 import type { Post, PostVisibility, PostView } from '@meeshy/shared/types/post';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
@@ -74,6 +75,14 @@ class StoryService {
   }
 
   async createStory(data: CreateStoryRequest): Promise<Post> {
+    // F5 correction — resolve `originalLanguage` here, at the real point of
+    // publication, instead of trusting whatever the caller passed through:
+    // `PostsFeedScreen.handleStoryPublish` used to force the reader's
+    // preferred (READ) language onto it. Same funnel as
+    // `postsService.createPost` — a caller-supplied value (e.g. an audio
+    // transcription language) still wins. Left absent (not sent as
+    // `undefined`) when unresolved, so server detection stays the fallback.
+    const originalLanguage = resolveOriginalLanguageForCreate(data);
     const response = await apiService.post<Post>('/posts', {
       type: 'STORY' as const,
       content: data.content,
@@ -81,7 +90,7 @@ class StoryService {
       visibilityUserIds: data.visibilityUserIds,
       storyEffects: data.storyEffects,
       mediaIds: data.mediaIds,
-      originalLanguage: data.originalLanguage,
+      ...(originalLanguage ? { originalLanguage } : {}),
       ...(data.mentions ? { mentions: data.mentions } : {}),
     });
     if (!response.data) {

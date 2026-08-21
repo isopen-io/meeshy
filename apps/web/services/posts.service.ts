@@ -173,6 +173,11 @@ function unwrap<T>(response: { data?: T }): T {
   return response.data as T;
 }
 
+interface OriginalLanguageCreateInput {
+  readonly originalLanguage?: string;
+  readonly storyEffects?: Record<string, unknown>;
+}
+
 /**
  * F5 — `originalLanguage` enfin envoyé pour les créations à `storyEffects`
  * (composer story) : le champ existait déjà sur `CreatePostRequest`, mais
@@ -184,8 +189,15 @@ function unwrap<T>(response: { data?: T }): T {
  * écrasé. Sans `storyEffects`, ou sans langue connue, le champ reste absent
  * : la détection serveur (`detectLanguage`) reste le repli — ne jamais
  * envoyer une langue devinée fausse qui la court-circuiterait.
+ *
+ * Exportée : `story.service.ts#createStory` est le VRAI point de
+ * publication du composer story web (`postsService.createPost` n'a aucun
+ * appelant `storyEffects` en production — le composer publie via
+ * `PostsFeedScreen.handleStoryPublish` → `useCreateStoryMutation` →
+ * `storyService.createStory`) ; les deux funnels partagent ce résolveur
+ * unique plutôt que de dupliquer la règle.
  */
-function resolveOriginalLanguageForCreate(data: CreatePostRequest): string | undefined {
+export function resolveOriginalLanguageForCreate(data: OriginalLanguageCreateInput): string | undefined {
   if (data.originalLanguage) return data.originalLanguage;
   if (!data.storyEffects) return undefined;
   return getCurrentInterfaceLocale() || undefined;

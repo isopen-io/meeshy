@@ -285,7 +285,11 @@ export function PostsFeedScreen() {
           visibility: story.visibility,
           visibilityUserIds: story.visibilityUserIds,
           mediaIds: story.mediaIds,
-          originalLanguage: userLanguage,
+          // F5 correction — `originalLanguage` is NOT `userLanguage` (the
+          // reader's preferred READ language, `usePreferredLanguage()`):
+          // that's the wrong concept for the language the author just wrote
+          // the story in. `storyService.createStory` resolves the right
+          // value itself, from the active UI locale.
           ...(story.mentions ? { mentions: story.mentions } : {}),
         },
         {
@@ -300,7 +304,7 @@ export function PostsFeedScreen() {
         },
       );
     },
-    [createStoryMutation, userLanguage, showToast, t],
+    [createStoryMutation, showToast, t],
   );
 
   const handleStoryView = useCallback(
