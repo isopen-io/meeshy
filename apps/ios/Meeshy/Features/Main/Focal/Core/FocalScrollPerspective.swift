@@ -142,7 +142,13 @@ nonisolated enum FocalScrollPerspective {
     /// ont perdu ; des cellules encore « hors écran » pour UIKit doivent déjà
     /// exister pour occuper la place libérée — les messages font partie de
     /// la scène AVANT d'être visibles. Fraction de la hauteur visible.
-    static let overscanFraction: CGFloat = 0.6
+    /// 0,3 (et non 0,6) : chaque cellule pré-réalisée s'auto-dimensionne et
+    /// l'entonnoir d'invalidation du layout n'en laisse passer que quatre par
+    /// transaction pendant le mouvement — au-delà, une cellule garde sa
+    /// hauteur ESTIMÉE jusqu'à la pose (citation étirée, capture 2026-08-21).
+    /// La perte cumulée d'une demi-écran de rangées rétrécies (~20 %) tient
+    /// largement dans 0,3 hauteur visible.
+    static let overscanFraction: CGFloat = 0.3
 
     // MARK: - Application au layer
 
@@ -155,12 +161,29 @@ nonisolated enum FocalScrollPerspective {
     // MARK: - Carte du message en focus (accent de la conversation)
 
     static let focusCardCornerRadius: CGFloat = 18
-    static let focusCardInsets = UIEdgeInsets(top: 2, left: 6, bottom: 2, right: 6)
+    static let focusCardHorizontalInset: CGFloat = 6
+    /// Marge VISIBLE entre le bord de la carte et le contenu, en haut comme
+    /// en bas — la rangée porte `Row.paddingVertical` de chaque côté et, en
+    /// tête de groupe, `Row.groupTopPadding` de plus en haut : la carte
+    /// mange ces rembourrages asymétriques pour encadrer le message avec
+    /// les mêmes espaces qu'en Script (directive user 2026-08-21).
+    static let focusCardInnerMargin: CGFloat = 4
+
+    static func focusCardInsets(isFirstInGroup: Bool) -> UIEdgeInsets {
+        let top = FocalMetrics.Row.paddingVertical + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0) - focusCardInnerMargin
+        let bottom = FocalMetrics.Row.paddingVertical - focusCardInnerMargin
+        return UIEdgeInsets(top: max(0, top), left: focusCardHorizontalInset, bottom: max(0, bottom), right: focusCardHorizontalInset)
+    }
 
     /// Fond teinté du message en focus — une `UIView` à masque d'auto-
     /// redimensionnement, insérée SOUS le contenu SwiftUI de la cellule :
     /// elle suit les bounds de la cellule à chaque layout sans attendre un
     /// tick. Purement décorative : aucun hit-test, aucune contrainte.
+    /// Étiquette de cellule : 1 = la rangée est en TÊTE de groupe (elle porte
+    /// `Row.groupTopPadding`), 0 sinon — écrite à la configuration, lue par la
+    /// passe pour encadrer la carte avec les bonnes marges.
+    static let groupHeadCellTag = 1
+
     @MainActor
     final class FocusCardView: UIView {
         override init(frame: CGRect) {
@@ -180,13 +203,14 @@ nonisolated enum FocalScrollPerspective {
     }
 
     @MainActor
-    static func showFocusCard(in contentView: UIView, accent: UIColor, isDark: Bool) {
+    static func showFocusCard(in contentView: UIView, accent: UIColor, isDark: Bool, isFirstInGroup: Bool) {
+        let insets = focusCardInsets(isFirstInGroup: isFirstInGroup)
         let card = focusCard(in: contentView) ?? {
-            let view = FocusCardView(frame: contentView.bounds.inset(by: focusCardInsets))
+            let view = FocusCardView(frame: contentView.bounds.inset(by: insets))
             contentView.insertSubview(view, at: 0)
             return view
         }()
-        card.frame = contentView.bounds.inset(by: focusCardInsets)
+        card.frame = contentView.bounds.inset(by: insets)
         card.alpha = 1
         card.backgroundColor = accent.withAlphaComponent(isDark ? 0.16 : 0.10)
         card.layer.borderColor = accent.withAlphaComponent(isDark ? 0.55 : 0.40).cgColor

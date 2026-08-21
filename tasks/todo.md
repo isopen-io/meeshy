@@ -295,6 +295,30 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
 **Restes** : mesure Instruments (CPU main thread, frames distinctes/s) sur la nouvelle scène ;
 `meeshy.sh test` complet ; déploiement device du résultat final.
 
+## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`
+
+État trouvé : loi miroir `RiverLaneResolver` + vecteurs (R-132 ✅), peau `RiverStreamHost`/canvas/
+en-têtes/navigation (R-133 partiel), porte `RiverModeGate`, menu de liste dégrisé par capacités (R-135
+liste ✅) — mais AUCUN point d'entrée (garde `RiverScreenNotMountedTests`, « position B ») et le
+drapeau `riviere_mode` non câblé dans le fil.
+
+- [x] Lot 1 — branchement : `RiverConversationMapping` (fil → loi, messages système EXCLUS des voix —
+      exigence produit 2026-08-20), `RiverConversationHost` (navigation possédée, géométrie recalculée
+      sur empreinte, texte Prisme injecté), `ConversationView` câble `isRiverFlagEnabled` et monte
+      l'hôte derrière `mode == .river` ; garde « non monté » basculée en garde « monté ensemble » ;
+      `RiverConversationMappingTests`.
+- [ ] Lot 2 — messages système « gravés » DANS la Rivière : rangée centrée pleine largeur, heure en
+      tête (`BubbleSystemNoticeView`/`BubbleJoinNoticeView`), entre les rangs — la grille `LazyVGrid`
+      ne sait pas étendre une cellule sur toutes les colonnes : passer `RiverStreamHost` à des rangs
+      (`VStack` de `HStack`), le canvas lit déjà les cadres mesurés.
+- [ ] Lot 3 — gestes et retours : tap sur une bulle = ouvrir le message (retour Script + atterrissage,
+      comme Résumé) ; rebond au bord (`edgeBounceToken`) ; heure en base ; vérification simulateur sur
+      une conversation ≥ 5 voix (Meeshy Global) en clair/sombre.
+- [ ] Lot 4 — éligibilité réelle : `activeParticipantCount` = voix ACTIVES (fenêtre de silence) plutôt
+      que `memberCount` ; direct jamais ; a11y (ordre VoiceOver = chronologique), reduce motion.
+- [ ] Lot 5 — recette R-136 : snapshot OFF identique, connecteur pointe le bon message, parité web
+      (`components/conversations/riviere/`), REV-5.
+
 ## Lot E — clôture
 - [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé, 24 classes, simulateur dédié) puis `meeshy.sh test`
 - [ ] `tasks/lessons.md` si correction user ; revue finale ; commits par lot

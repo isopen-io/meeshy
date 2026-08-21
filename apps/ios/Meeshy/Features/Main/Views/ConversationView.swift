@@ -570,6 +570,11 @@ struct ConversationView: View {
         let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init(
             identity: identity.readingModeIdentity,
             isFlagEnabled: isFlagEnabled,
+            // Chantier Rivière iOS, lot 1 (2026-08-21) : le drapeau `riviere_mode`
+            // rend `.river` réellement sélectionnable à l'ouverture du fil —
+            // et `RiverConversationHost` est monté dans ce même fichier (la
+            // sélection n'est plus une promesse rompue).
+            isRiverFlagEnabled: LentilleFeatureFlag.isRiviereModeEnabled,
             conversationType: Self.readingModeConversationType(for: conversation?.type),
             activeParticipantCount: conversation?.memberCount ?? 0
         ))
@@ -1327,6 +1332,23 @@ struct ConversationView: View {
             // (≤ 60) et de `previewMode` (49), en-dessous du header flottant
             // (100, toujours joignable) et de la barre d'erreur/quick-reaction
             // (97/99, sans objet en mode résumé).
+            // Chantier Rivière iOS, lot 1 (2026-08-21) — le mode `.river` route
+            // vers un HÔTE DÉDIÉ, comme `.summary` : la géométrie vient de la
+            // loi partagée (`RiverLaneResolver`), le texte du Prisme (traduction
+            // préférée ou original), les messages système ne sont la voix de
+            // personne (`RiverConversationMapping`).
+            if readingModeController.mode == .river {
+                AnyView(RiverConversationHost(
+                    messages: viewModel.messages,
+                    viewerId: viewModel.currentUserIdForView,
+                    text: { message in
+                        viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
+                    }
+                ))
+                .zIndex(80)
+                .transition(.opacity)
+            }
+
             if readingModeController.mode == .summary {
                 // AnyView : même coupe que ci-dessus (contribue au débordement
                 // de pile de `bodyContent`, 2026-08-17).
@@ -1706,10 +1728,15 @@ struct ConversationView: View {
             .zIndex(97)
             .animation(.easeInOut, value: viewModel.error)
 
-            if (!scrollState.isNearBottom || viewModel.isSearchingQuotedMessage) && !hidesComposerChromeForScroll {
+            if scrollState.isNearBottom == false || viewModel.isSearchingQuotedMessage {
+                // Bulle « retour en bas » : elle disparaît VERS LE BAS (bord le
+                // plus proche) en fondant pendant le défilement et en revient
+                // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
+                // du bas) suivent la même direction.
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
+                    .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
-                    .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
             }
@@ -1755,12 +1782,11 @@ struct ConversationView: View {
                 )
             }
             .zIndex(50)
-            // Chrome escamoté pendant le défilement Focal : pur `opacity` —
-            // le composeur garde sa hauteur mesurée (aucun inset ne bouge,
-            // donc aucun re-scaling du fil), il ne fait que s'effacer. Les
-            // touches passent au fil pendant l'escamotage.
-            .opacity(hidesComposerChromeForScroll ? 0 : 1)
-            .allowsHitTesting(!hidesComposerChromeForScroll)
+            // Chrome escamoté pendant le défilement Focal : glissement vers le
+            // bord BAS + fondu (`EdgeHiddenChrome`) — le composeur garde sa
+            // hauteur mesurée (aucun inset ne bouge, donc aucun re-scaling du
+            // fil). Les touches passent au fil pendant l'escamotage.
+            .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
@@ -1928,12 +1954,6 @@ struct ConversationView: View {
                 AnyView(anonymousHeaderBar)
             } else if isTyping {
                 AnyView(typingHeaderBar)
-            } else if hidesEntireHeaderForScroll {
-                // Focal + défilement : le header entier s'efface (loi
-                // `hidesEntireHeader`). `EmptyView` plutôt qu'une opacité
-                // nulle — un header transparent continuerait d'intercepter
-                // les touches au-dessus des messages.
-                AnyView(EmptyView())
             } else {
                 // Oubliée lors de la coupe "leçon 5cdde93c4" (commentaire
                 // ci-dessus) : seule branche de ce VStack encore renvoyée en
@@ -1946,7 +1966,11 @@ struct ConversationView: View {
                 // toujours sous `expandedHeaderBand → … →
                 // readingModeAffordanceCluster`). Même traitement que ses
                 // branches sœurs.
-                AnyView(expandedHeaderBand)
+                // Focal/Script + défilement : le header entier glisse vers le
+                // bord HAUT en fondant et en revient (loi `hidesEntireHeader`,
+                // rendu `EdgeHiddenChrome`) — plus de démontage ; les touches
+                // passent au fil pendant l'escamotage (`allowsHitTesting`).
+                AnyView(expandedHeaderBand.hiddenTowardsEdge(hidesEntireHeaderForScroll, .top))
             }
 
             if headerState.showSearch {

@@ -74,6 +74,11 @@ struct FocalRow: View {
         .padding(.top, input.isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0)
         .padding(.vertical, FocalMetrics.Row.paddingVertical)
         .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
+        // Une cellule qui porte encore une hauteur ESTIMÉE (auto-dimension-
+        // nement différé pendant le mouvement) propose plus de place que le
+        // contenu n'en prend : le contenu reste collé en HAUT, ses espaces
+        // internes intacts — jamais centré ni étiré dans le vide (2026-08-21).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         // Envoi optimiste (matrice §5) : 0,7 d'opacité tant que le gateway
         // n'a pas accusé. Depuis le RETRAIT du pass (2026-08-18), la rangée
         // possède son opacité — `cell.alpha` n'a plus d'autre écrivain.
@@ -269,6 +274,12 @@ struct FocalRow: View {
                     onQuotedAuthorTap: actions.onQuotedAuthorTap,
                     onQuotedMediaTap: actions.onQuotedMediaTap
                 )
+                // Le rail de la citation est une forme (souple en hauteur) :
+                // dans une cellule qui porte encore une hauteur ESTIMÉE, la
+                // pile lui donnait tout l'espace en trop — citation étirée,
+                // rail d'un écran (capture 2026-08-21). La citation prend sa
+                // hauteur idéale, rien de plus.
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             visualBlock
@@ -472,16 +483,20 @@ struct FocalRow: View {
 
     /// Charge de la sheet « Lire plus » — le MÊME texte effectif que la
     /// rangée (Prisme déjà résolu), jamais une seconde résolution.
-    /// En focus : jour + heure (« mar. 19 août · 14:41 ») ; sinon l'heure seule.
+    /// En focus : « Aujourd'hui 12:45 », « Hier 18:45 », « Mardi 23:40 »,
+    /// « Sam. 3 oct. 2025 · 14:41 » (`FocalFocusTimestamp`) ; sinon l'heure seule.
     private var headerTimeString: String {
         guard input.isFocused, let sentAt = input.sentAt else { return content.meta.timeString }
-        return Self.focusedTimeString(sentAt: sentAt, timeString: content.meta.timeString)
-    }
-
-    nonisolated static func focusedTimeString(sentAt: Date, timeString: String, calendar: Calendar = .current) -> String {
-        if calendar.isDateInToday(sentAt) { return timeString }
-        let day = sentAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(calendar.locale ?? .current))
-        return "\(day) · \(timeString)"
+        return FocalFocusTimestamp.label(
+            sentAt: sentAt,
+            timeString: content.meta.timeString,
+            now: Date(),
+            calendar: .current,
+            locale: .current,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui", bundle: .main),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier", bundle: .main),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier", bundle: .main)
+        )
     }
 
     private var readMorePayload: FocalReadMorePayload {

@@ -134,31 +134,39 @@ final class RiverScreenNotMountedTests: XCTestCase {
     /// monter `RiverStreamHost` (ou un hôte équivalent) — sinon la sélection
     /// deviendrait une promesse silencieusement rompue (Rivière choisie,
     /// bulles rendues).
-    func test_conversationView_stillDoesNotWireTheRiverFlag() throws {
+    /// Chantier Rivière iOS, lot 1 (2026-08-21) — POSITION B LEVÉE : le drapeau
+    /// `riviere_mode` est câblé dans `resolveCapabilities` ET un hôte de rendu
+    /// (`RiverConversationHost`) est monté dans le MÊME fichier, derrière
+    /// `mode == .river` — exactement l'exigence que l'ancienne garde énonçait.
+    func test_conversationView_wiresTheRiverFlag_andMountsTheRiverHost_together() throws {
         let url = Self.meeshyRoot.appendingPathComponent("Features/Main/Views/ConversationView.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let code = AppSourceGuard.stripComments(raw)
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
 
-        let markerRange = try XCTUnwrap(
-            code.range(of: "let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init("),
-            "Repère du site d'appel introuvable — `ConversationView.init` a bougé, cette garde " +
-            "doit être re-pointée avant tout le reste."
+        XCTAssertTrue(
+            code.contains("isFlagEnabled: isFlagEnabled, isRiverFlagEnabled: LentilleFeatureFlag.isRiviereModeEnabled, conversationType:"),
+            "`ConversationView.init` câble `isRiverFlagEnabled` depuis le drapeau `riviere_mode` — la " +
+            "sélection de Rivière à l'ouverture du fil suit désormais le drapeau ET l'éligibilité."
         )
-        // Fenêtre courte APRÈS le repère : le corps du `.init(...)` lui-même,
-        // pas le fichier entier (qui référence légitimement le NOM du
-        // paramètre ailleurs, en commentaire — cf. `RiverModeGate.swift`
-        // n'est PAS ce fichier, mais un futur commentaire ici serait
-        // légitime).
-        let windowEnd = code.index(markerRange.upperBound, offsetBy: 400, limitedBy: code.endIndex) ?? code.endIndex
-        let initBody = code[markerRange.upperBound..<windowEnd]
+        XCTAssertTrue(
+            code.contains("if readingModeController.mode == .river { AnyView(RiverConversationHost("),
+            "Un hôte de rendu est monté derrière `mode == .river` — jamais une sélection sans écran."
+        )
+        XCTAssertEqual(
+            code.components(separatedBy: "RiverConversationHost(").count - 1, 1,
+            "UN seul site de montage de l'hôte Rivière dans le fil."
+        )
+    }
 
-        XCTAssertFalse(
-            initBody.contains("isRiverFlagEnabled"),
-            "`ConversationView.init` câble maintenant `isRiverFlagEnabled` dans son propre " +
-            "`resolveCapabilities` — cela rend `.river` réellement sélectionnable À L'OUVERTURE " +
-            "DU FIL. Documenter ce changement ET vérifier qu'un hôte de rendu (`RiverStreamHost` " +
-            "ou équivalent) est monté DANS LE MÊME commit, sinon la sélection resterait une " +
-            "promesse rompue (Rivière choisie, bulles rendues) — voir la docstring de tête de " +
-            "cette suite."
-        )
+    /// Le point d'entrée vit dans `Riviere/` (`RiverConversationHost`) : `RiverStreamHost`
+    /// (la peau) reste référencé NULLE PART en dehors du dossier — le fil ne connaît
+    /// que l'hôte de conversation, qui injecte le texte Prisme et possède la navigation.
+    func test_theOnlyDoorIntoTheRiver_isTheConversationHost() throws {
+        let hits = try nonRiviereSwiftFiles().filter { url in
+            (try? String(contentsOf: url, encoding: .utf8))?.contains("RiverConversationHost(") == true
+        }
+        XCTAssertEqual(hits.map(\.lastPathComponent), ["ConversationView.swift"],
+                       "Le fil est l'unique site hors `Riviere/` qui monte l'hôte de conversation.")
     }
 }

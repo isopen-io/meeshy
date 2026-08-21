@@ -470,6 +470,8 @@ final class MessageListViewController: UIViewController {
     /// La pill de jour suit la même règle en rangée plate ; Bulles :
     /// comportement historique, la pilule suit le défilement.
     private var isChromeHiddenForScroll = false
+    /// Offset d'arrivée de la décélération en cours (`nil` hors décélération).
+    var decelerationTargetOffsetY: CGFloat?
 
     private func setChromeHiddenForScroll(_ hidden: Bool) {
         guard isChromeHiddenForScroll != hidden else { return }
@@ -989,6 +991,9 @@ final class MessageListViewController: UIViewController {
             }
             let _spState = PerfSignpost.signposter.beginInterval("cellConfig")
             defer { PerfSignpost.signposter.endInterval("cellConfig", _spState) }
+            // Étiquette « tête de groupe » (marges de la carte Focal) : remise
+            // à zéro à chaque configuration — la branche rangée plate la pose.
+            cell.tag = 0
 
             guard case .message(let localId) = item,
                   let message = self.store.domainMessage(for: localId, currentUserId: self.currentUserId) else {
@@ -1331,6 +1336,7 @@ final class MessageListViewController: UIViewController {
                         )
                     )
                 }()
+                cell.tag = isFirstInGroup ? FocalScrollPerspective.groupHeadCellTag : 0
                 let focalInput = FocalRowInput(
                     localId: localId,
                     serverId: record?.serverId,
@@ -2553,12 +2559,16 @@ extension MessageListViewController: UICollectionViewDelegate {
         let frameHeight = scrollView.frame.height
 
         setScrollingActive(scrollView.isDragging || scrollView.isDecelerating)
-        // `isTracking` (le DOIGT est posé), pas `isDragging` : UIKit garde
-        // `isDragging` à `true` pendant toute la décélération — le chrome
-        // (boutons, composeur, pilule) ne revenait qu'à l'arrêt complet,
-        // contrairement à la règle « de retour dès la levée du doigt »
-        // (retour user 18/08, vérifié au simulateur 2026-08-21).
-        setChromeHiddenForScroll(scrollView.isTracking)
+        // Chrome (boutons, composeur, bulle « retour en bas », pilule) :
+        // caché tant que le doigt est posé, puis tant que la décélération est
+        // LOIN de son offset d'arrivée ; il revient « quand on s'approche de
+        // la fin du scroll » (directive user 2026-08-21, `FocalChromeReturn`),
+        // plus à la levée du doigt.
+        setChromeHiddenForScroll(FocalChromeReturn.isHidden(
+            isTracking: scrollView.isTracking,
+            isDecelerating: scrollView.isDecelerating,
+            remainingDistance: decelerationTargetOffsetY.map { $0 - scrollView.contentOffset.y }
+        ))
 
         // Verrou de scène (rouleau) : le doigt/momentum RE-CAPTURE l'ancre à
         // chaque frame ; sans pilote et loin du bas, tout écart est annulé.
@@ -2630,17 +2640,26 @@ extension MessageListViewController: UICollectionViewDelegate {
     // it: `willDecelerate == false` means the drag ended with no momentum
     // (finger lift while already still), `scrollViewDidEndDecelerating` is
     // the end of the momentum phase otherwise.
+    /// Offset d'arrivée de la décélération qui commence — la distance qu'il
+    /// reste à parcourir décide du retour du chrome (`FocalChromeReturn`).
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        decelerationTargetOffsetY = targetContentOffset.pointee.y
+    }
+
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
-        // Levée du doigt = retour IMMÉDIAT du chrome, la liste peut encore
-        // filer (retour user 2026-08-18). Le flush des reconfigures, lui,
-        // attend le vrai arrêt.
-        setChromeHiddenForScroll(false)
+        // Sans momentum : repos immédiat, le chrome revient. Avec momentum :
+        // c'est l'approche de l'offset d'arrivée qui le fait revenir
+        // (directive user 2026-08-21), plus la levée du doigt. Le flush des
+        // reconfigures, lui, attend toujours le vrai arrêt.
         if !decelerate {
+            decelerationTargetOffsetY = nil
+            setChromeHiddenForScroll(false)
             settleAtRest()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        decelerationTargetOffsetY = nil
         settleAtRest()
     }
 
@@ -2906,7 +2925,10 @@ extension MessageListViewController {
                 guard let cell = cellById[pose.id] else { continue }
                 FocalScrollPerspective.apply(pose, to: cell.contentView.layer)
                 if pose.id == focused {
-                    FocalScrollPerspective.showFocusCard(in: cell.contentView, accent: accent, isDark: isDark)
+                    FocalScrollPerspective.showFocusCard(
+                        in: cell.contentView, accent: accent, isDark: isDark,
+                        isFirstInGroup: cell.tag == FocalScrollPerspective.groupHeadCellTag
+                    )
                 } else {
                     FocalScrollPerspective.hideFocusCard(in: cell.contentView)
                 }

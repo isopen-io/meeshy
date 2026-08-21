@@ -215,6 +215,10 @@ nonisolated public enum FocalMetrics {
         public static let translateY: CGFloat = 94
         public static let opacityEnd: Double = 0
         public static let easeOut: Double = 0.25
+        /// Course d'un composant de chrome vers SON bord quand il s'escamote
+        /// (directive user 2026-08-21 : « disparaissent avec fondu vers les
+        /// bords, réapparaissent venant du bord vers leur position »).
+        public static let edgeTravel: CGFloat = 28
     }
 
     // MARK: - Pilule de défilement

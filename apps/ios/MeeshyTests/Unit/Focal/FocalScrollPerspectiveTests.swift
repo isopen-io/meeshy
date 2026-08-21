@@ -64,6 +64,21 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         XCTAssertEqual(FocalScrollPerspective.focusY(visibleTop: 100, visibleBottom: 700, offsetFromBottom: -40), 700, "rebond élastique sous le bas : la ligne ne sort pas de l'écran")
     }
 
+    /// La carte encadre le message avec les MÊMES marges en haut et en bas
+    /// (directive user 2026-08-21) : elle mange le rembourrage vertical de la
+    /// rangée et, en tête de groupe, le rembourrage de groupe.
+    func test_focusCardInsets_leaveTheSameVisibleMargin_topAndBottom() {
+        let head = FocalScrollPerspective.focusCardInsets(isFirstInGroup: true)
+        let follow = FocalScrollPerspective.focusCardInsets(isFirstInGroup: false)
+        let margin = FocalScrollPerspective.focusCardInnerMargin
+        XCTAssertEqual(head.top, FocalMetrics.Row.paddingVertical + FocalMetrics.Row.groupTopPadding - margin)
+        XCTAssertEqual(head.bottom, FocalMetrics.Row.paddingVertical - margin)
+        XCTAssertEqual(follow.top, FocalMetrics.Row.paddingVertical - margin)
+        XCTAssertEqual(follow.bottom, follow.top, "en continuation, haut et bas sont symétriques")
+        XCTAssertEqual(head.left, FocalScrollPerspective.focusCardHorizontalInset)
+        XCTAssertGreaterThanOrEqual(follow.top, 0)
+    }
+
     func test_transform_atScaleOne_isIdentity() {
         XCTAssertTrue(CATransform3DIsIdentity(FocalScrollPerspective.transform(scale: 1, size: CGSize(width: 300, height: 100))))
     }
