@@ -1,121 +1,38 @@
-# Cycle 49 bis — un `PATCH` qui n'a jamais été partiel
+# Routine calling (audio/vidéo) — Vagues 136-137, poussées mais PAS mergées
 
-(« bis » : une autre exécution parallèle de la routine porte déjà le numéro 49
-— surfaces disjointes, motif des leçons 198 et 204, reproduit une fois de plus.)
+Branche `claude/upbeat-dirac-7r1rjt`, poussée sur `origin` (2 commits, HEAD `735cbd11`,
+base `origin/main@468e9fc1` — vérifié `git merge-base --is-ancestor` avant de commencer,
+Vague 135 déjà mergée). Détail complet dans `tasks/calls-fonctionnel-todo.md` (Vagues 136 et 137).
 
-## Constat
+## Blocage rencontré
 
-- [x] `ZodObject.partial()` ne retire pas les `default()` : un corps `PATCH`
-      VIDE écrivait 13 à 33 clés par défaut, sur les sept catégories
-- [x] La fusion `{ ...existant, ...validé }` était donc inerte — toucher un
-      interrupteur remettait tous les autres réglages à leur défaut
-- [x] Les routes `/me/preferences` ne lisaient que le document, quand les six
-      portes de diffusion lisent AUSSI le rangement hérité de janvier 2026
-- [x] Les deux se composent : le premier réglage touché posait un document
-      tout-à-`true`, qui gagne alors sur janvier — opt-out perdu DÉFINITIVEMENT
-- [x] `GET /me/preferences` rendait sept objets VIDES (`type: 'object'` sans
-      `additionalProperties` ⇒ fast-json-stringify efface tout)
+Le serveur MCP `github` de cette session n'exposait aucun outil malgré ses instructions
+chargées en tout début de session (`ToolSearch` épuisé sur une dizaine de requêtes —
+`create_pull_request`, `get_me`, `list_pull_requests`, `pull_request_review_write`, etc. —
+aucune ne résout). Pas d'accès `gh` CLI ni API directe autorisé dans cette session. Impossible
+de créer la PR, de la surveiller en CI, ou de la merger sur `main` — malgré un push réussi
+(`git push` fonctionne, c'est un accès Git normal, pas un accès à l'API GitHub).
 
-## Correctifs
+## À reprendre dès qu'un outil GitHub fonctionne
 
-- [x] `utils/partial-update.ts` — `submittedKeysOnly`, câblé sur les sept
-      catégories et sur `PATCH /admin/agent/topics/:id`
-- [x] `CategoryStorage<T>` injecté ; `resolveStoredPrivacyPreferences` sert les
-      deux `GET` et la base de fusion du `PATCH`
-- [x] `retireLegacyPrivacyRows` après chaque écriture de la catégorie
-- [x] `additionalProperties: true` sur les sept catégories du schéma de réponse
+1. Ouvrir la PR pour `claude/upbeat-dirac-7r1rjt` → `main` (les deux commits sont prêts,
+   testés localement — voir le détail des suites dans `tasks/calls-fonctionnel-todo.md`).
+2. Vérifier le CI vert.
+3. `git fetch origin main` + merger `main` dans la branche à la main (jamais l'inverse) si
+   `main` a avancé depuis `468e9fc1` — résoudre tout conflit sans écraser de travail d'autrui,
+   revalider (tsc + suites calls) après le merge.
+4. Merger la PR sur `main` (squash ou merge selon la convention déjà observée sur ce dépôt —
+   voir l'historique `git log --oneline main` pour le style dominant), fermer la branche.
 
-## Gates
+## Contenu des deux commits (déjà vert localement, voir détail Vague 136/137)
 
-- [x] 12 témoins discriminants vus rouges avant correctif
-- [x] Gardes : valeur envoyée COÏNCIDANT avec le défaut bien appliquée ; clé
-      inconnue toujours écartée ; 400 toujours rendu ; catégories non-`privacy`
-      intouchées
-- [x] `bunx tsc --noEmit` gateway : 0
-- [x] Suite gateway complète — 733 suites / 17 862 témoins
-- [x] CHANGELOG + 2 ADR + journal (cycle49) + leçon 207
+- **Vague 136** — `call:media-toggled` portait le mauvais espace d'identité (gateway +
+  web) : un pair coupé son micro/caméra en appel de groupe ne mettait jamais à jour l'icône
+  muet/caméra-coupée des autres participants. Gateway + shared + web + 2 fichiers de test.
+- **Vague 137** — `canCallBack` (`CallSystemMessage`) manquait le garde `!isAnonymous` que
+  porte déjà `canJoin`. Web + 1 fichier de test.
 
-## Revue
-
-Voir `tasks/realtime-sync-audit-2026-08-15-cycle49.md` — la table des sept
-schémas, pourquoi les deux défauts se composent en pire que leur somme, les
-quatre options écartées, le double plus simple que le réel (5e cycle), et les
-pistes du cycle 50 : la fusion profonde non traitée, et `PUT` avec un corps
-partiel que rien ne fige.
-
-# Cycle 49 — le serveur disait « il n'y a plus rien », et quatre clients entendaient « je ne parle pas de ça »
-
-Routine « amélioration continue temps réel ». Le cycle 46 bis a appris à
-l'aperçu de ligne de liste à RECULER quand le serveur déclare l'avoir recalculé,
-et a légué NOMMÉMENT le cran au-delà : le cas où il n'y a plus rien vers quoi
-reculer. C'est ce cycle-ci, avec sa question ouverte tranchée d'abord.
-
-## Constat
-
-- [x] Question léguée par le cycle 46 bis — « la ligne sait-elle rendre une
-      conversation sans dernier message, ou faut-il d'abord lui en donner la
-      forme ? » — **tranchée AVANT d'écrire : elle sait déjà.**
-      `resolvedLastMessagePreview` rend `nil`, `ThemedConversationRow` le traite
-      (`!isEmpty`), VoiceOver compris. Aucune forme nouvelle à introduire
-- [x] Le gateway dit déjà la vérité : `messagePayloadFor(null)` sert tout le
-      groupe d'aperçu à `null` quand le lecteur n'a plus aucun message visible.
-      Témoin de forme écrit, **vert d'emblée** — rien à corriger côté serveur
-- [x] Défaut livré : les `if let` du client jettent ce payload champ par champ,
-      et la ligne garde l'aperçu de ce que le lecteur vient de masquer —
-      **définitivement**, plus rien ne viendra le remplacer
-- [x] Pire que « rien ne bouge » : le seul champ déjà tri-étaté (la carte du
-      Prisme, cycle 46 bis) s'appliquait. La traduction s'effaçait, l'aperçu brut
-      restait — **« Bonjour » → « Hello »**, le masquage exposant l'original
-- [x] `Optional` ne pouvait pas trancher : un renommage n'emporte AUCUNE clé
-      `lastMessage*`, donc « `lastMessageAt == nil` ⇒ vider » effacerait toutes
-      les lignes à chaque changement de titre
-
-## Correctifs
-
-- [x] `LastMessageIdentity` (`.unchanged` / `.replaced(String?)`) remplace
-      `String?` — l'IDENTITÉ porte le fait pour tout le groupe, seule nullité qui
-      veut dire « aucun » et non « inconnu »
-- [x] `MeeshyConversation.clearLastMessage()` — geste unique, **onze** champs,
-      idempotent. Un vidage partiel laisserait « Message expiré » ou une épingle
-      décrire un message que le lecteur ne voit plus
-- [x] `lastMessageAt` délibérément intact : c'est le RANG de la ligne, donnée
-      globale qu'un masquage personnel ne change pour personne
-- [x] Quatre surfaces câblées : décodage SDK, `merging` (RAM **et** cache
-      disque), le pont, `ConversationListViewModel` (app)
-- [x] Web : la ligne rend `conversation.lastMessage` (l'objet), que rien ne
-      touchait — le patch le vide désormais, et cesse de recopier un
-      `lastMessageId` fantôme que personne ne lit
-- [x] Android indemne (`refreshSilently()` REST par événement) — noté, pas touché
-- [x] **Dernière copie du geste** refermée dans la foulée :
-      `recomputeLastMessagePreviewAfterDeletion` vidait 2 champs sur 11 à la main
-
-## Gates
-
-- [x] 3 témoins gateway de FORME (présence des clés autant que nullité), double
-      prisma complet, + contre-épreuve du lecteur non concerné
-- [x] 3 de décodage, 4 de fusion (vidage complet, rang conservé, renommage
-      neutre, idempotence), 1 de bout en bout à travers le pont
-- [x] 2 côté app, 4 côté web dont un **RED prouvé** (fix retiré → rouge)
-- [x] Contre-épreuve du renommage sur **chacune des quatre surfaces**
-- [x] `bunx tsc --noEmit` gateway : 0 ; web : aucune erreur nouvelle
-      (comparaison ensembliste, 1233 préexistantes)
-- [x] Suite gateway COMPLÈTE : **733 suites / 17 850 tests** verts
-- [x] Swift : pas de toolchain ici. `sdk-tests.yml` EXÉCUTE les 9 témoins SDK ;
-      `ios.yml` a COMPILÉ la moitié app sans l'exécuter (son check s'appelle
-      « Build app (app + cibles de test) » précisément pour le dire — la suite
-      `MeeshyTests` demande un mot-clé dans le sujet du commit). Détail et
-      analyse du résidu non joué au §5 du journal
-- [x] CHANGELOG + ADR `packages/MeeshySDK/decisions.md` + journal d'audit
-      (cycle 49) + leçon 207
-
-## Revue
-
-Voir `tasks/realtime-sync-audit-2026-08-16-cycle49.md` — pourquoi la question
-léguée se referme sans nouveau modèle, le tableau des quatre champs et de leur
-sort, pourquoi seule l'identité pouvait porter le fait, pourquoi `lastMessageAt`
-ne bouge pas, le contraste Android (immunisé par un aller-retour REST), les
-options écartées, et les deux pistes restantes : les DEUX implémentations
-divergentes du même événement côté iOS (troisième cycle consécutif à devoir
-corriger aux deux endroits), et les trois émetteurs de `conversation:updated` qui
-composent leur payload à la main sans rien pour empêcher un quatrième d'y glisser
-un `lastMessageId: null` par inadvertance.
+Gates passés localement : gateway `--testPathPatterns="[Cc]all"` 52/52 suites (1218 tests),
+`--testPathPatterns="socketio"` 90/90 suites (2078 tests), `tsc --noEmit` gateway 0. Web
+`--testPathPatterns="[Cc]all"` 54/54 suites (513 tests), `tsc --noEmit` 1768 erreurs
+préexistantes identiques avant/après (0 nouvelle).
