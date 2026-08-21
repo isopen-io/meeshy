@@ -163,3 +163,53 @@ describe('vectors: river-lanes — couverture du cycle de vie des branches', () 
     expect(heads).toEqual(new Set([true, false]));
   });
 });
+
+/**
+ * Un avis système descend l'axe du TEMPS avec les autres et n'entre dans aucun
+ * des deux autres. Les vecteurs doivent l'EXERCER : sans ces témoins, un jeu
+ * amputé de ses cas système repasserait au vert en ne prouvant plus la règle.
+ */
+describe('vectors: river-lanes — un avis système n’est la voix de personne', () => {
+  const withNotices = geometries.filter((geometry) =>
+    geometry.bubbles.some((bubble) => bubble.isSystem),
+  );
+
+  it('exerce au moins une fenêtre portant un avis système', () => {
+    expect(withNotices.length).toBeGreaterThan(0);
+  });
+
+  it('ne lui donne ni voix, ni nœud de branche — il n’a que son rang', () => {
+    withNotices.forEach((geometry) => {
+      const nodeRanks = new Set(
+        geometry.lanes
+          .flatMap((lane) => lane.spans)
+          .flatMap((span) => span.nodes)
+          .map((node) => node.rank),
+      );
+
+      geometry.bubbles
+        .filter((bubble) => bubble.isSystem)
+        .forEach((systemBubble) => {
+          expect(nodeRanks.has(systemBubble.rank)).toBe(false);
+          expect(systemBubble.isFirstInGroup).toBe(true);
+        });
+
+      const spoken = geometry.bubbles.filter((bubble) => !bubble.isSystem);
+      expect(geometry.voiceCount).toBe(new Set(spoken.map((bubble) => bubble.laneId)).size);
+    });
+  });
+
+  it('exerce l’arrivant qui parle ensuite : sa première bulle OUVRE son groupe, jamais celui de son annonce', () => {
+    const firstWords = withNotices.flatMap((geometry) =>
+      geometry.bubbles.filter((bubble, index) => {
+        const previous = geometry.bubbles[index - 1];
+        return (
+          previous?.isSystem === true && previous.laneId === bubble.laneId && !bubble.isSystem
+        );
+      }),
+    );
+
+    expect(firstWords.length).toBeGreaterThan(0);
+    firstWords.forEach((bubble) => expect(bubble.isFirstInGroup).toBe(true));
+  });
+});

@@ -88,6 +88,16 @@ describe('vectors: river-headers — couverture du fondu des noms', () => {
     });
   });
 
+  it('exerce un avis SYSTÈME : aucun nom à son rang, et le nom revient au rang de la parole qui suit', () => {
+    const withNotice = vectors.filter((vector) =>
+      vector.input.lanes.messages.some((message) => message.isSystem === true),
+    );
+
+    expect(withNotice.length).toBeGreaterThan(0);
+    expect(withNotice.some((vector) => vector.expected.length === 0)).toBe(true);
+    expect(withNotice.some((vector) => vector.expected.length > 0)).toBe(true);
+  });
+
   it('nomme la graine de couleur, jamais une couleur — la peau la calcule', () => {
     allHeaders.forEach((header) => {
       expect(header.colorSeed).not.toMatch(/^#/);

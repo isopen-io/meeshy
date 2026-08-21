@@ -941,6 +941,120 @@
         "focusRank": 0
       },
       "expected": []
+    },
+    {
+      "_label": "aucun-nom-au-rang-d-un-avis-la-colonne-n-est-occupee-par-personne",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "j",
+              "senderId": "lena",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null,
+              "isSystem": true
+            },
+            {
+              "id": "b",
+              "senderId": "lena",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 1
+      },
+      "expected": []
+    },
+    {
+      "_label": "le-nom-revient-au-rang-de-la-parole-qui-suit-l-avis",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "j",
+              "senderId": "lena",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null,
+              "isSystem": true
+            },
+            {
+              "id": "b",
+              "senderId": "lena",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "focusRank": 2
+      },
+      "expected": [
+        {
+          "laneIndex": 0,
+          "laneId": "lena",
+          "colorSeed": "Lena",
+          "isViewer": false,
+          "alpha": 0.5
+        }
+      ]
     }
   ]
 }
