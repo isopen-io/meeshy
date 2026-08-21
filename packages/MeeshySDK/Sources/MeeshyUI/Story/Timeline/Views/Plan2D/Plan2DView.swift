@@ -11,9 +11,12 @@ import UIKit
 /// cadres pointillés des fantômes (O4) et les losanges de keyframes AFFICHÉS
 /// (édités à l'Inspecteur existant, S4) sont des TRAITS, pas des sous-vues.
 ///
-/// Une fois ARMÉ (appui court puis glisser), le geste est à DEUX axes —
-/// vertical = empilement (`onReorder`), horizontal = durée (`onMove`) : la
-/// thèse même du plan. Le glissement NU, lui, appartient au scroller.
+/// Une fois ARMÉ (appui court puis glisser, ou glissement horizontal franc
+/// sur une piste), le geste sert UN axe et un seul, élu à la dominante :
+/// vertical = empilement (`onReorder`), horizontal = durée (`onMove`). Les
+/// deux axes sont ceux du plan, jamais ceux d'un même geste — un
+/// réordonnancement au doigt n'a pas à décaler le clip dans le temps. Le
+/// glissement vertical NU, lui, appartient au scroller.
 ///
 /// Pure vue de dessin + geste : elle ne connaît ni `TimelineViewModel` ni
 /// `Views/Inspector` — le tap appelle `onSelectTrack`, à l'appelant (D3)
@@ -100,6 +103,14 @@ public struct Plan2DView: View, Equatable {
     @State private var lastPlaneCrossingRow: Int?
     @State private var lastTrimTranslationX: CGFloat = 0
     @State private var isMoving: Bool = false
+    /// Axe ÉLU pour ce geste — `nil` tant que le doigt n'a pas quitté la zone
+    /// morte. Élu une fois, il tient jusqu'au relâchement.
+    @State private var lockedAxis: DragAxis?
+    /// Translation observée à l'ARMEMENT : c'est l'origine des secondes
+    /// rendues à l'appelant, jamais le touch-down.
+    @State private var moveAnchor: CGSize = .zero
+    /// Le doigt fait défiler : le plan a rendu la main et ne la reprend pas.
+    @State private var hasYieldedToScroller: Bool = false
 
     public var body: some View {
         Canvas { context, size in
@@ -279,7 +290,10 @@ public struct Plan2DView: View, Equatable {
 
     // MARK: - Gestes (rév. 2, M11)
 
-    enum Edge: Equatable { case start, end }
+    /// `nonisolated` pour la même raison que `GestureOutcome` plus bas : la
+    /// conformance `Equatable` synthétisée serait sinon isolée au `MainActor`
+    /// et ni `EdgeHandleZone` ni les bancs ne pourraient comparer deux bords.
+    nonisolated enum Edge: Equatable { case start, end }
 
     /// Même seuil que le hold du viseur de capture (P9) — 0,45 s — pour que
     /// l'appui long garde UN seul sens appris dans tout le composer.
@@ -313,18 +327,54 @@ public struct Plan2DView: View, Equatable {
         return tracks[from].plane != tracks[to].plane
     }
 
-    /// Poignée de bord touchée, si `touchX` tombe dans sa zone tappable
-    /// (≥ 44 pt, débordante hors de la barre visuelle). Une piste fantôme
-    /// n'a pas de bord à tirer — elle n'a pas de durée choisie (O4).
-    static func edgeHandle(touchX: CGFloat, track: Plan2DTrack,
-                           zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> Edge? {
-        guard case let .timed(start, end) = track.bar else { return nil }
+    /// Cible tappable d'une poignée de bord, en x de CANVAS, pour une rangée
+    /// donnée du plan. UNE seule source : le hit-test du geste et les cibles
+    /// réellement posées à l'écran la lisent au même endroit.
+    nonisolated struct EdgeHandleZone: Equatable, Identifiable {
+        public let trackId: String
+        public let edge: Edge
+        public let rowIndex: Int
+        public let minX: CGFloat
+        public let maxX: CGFloat
+
+        public var id: String { "\(trackId)#\(edge == .start ? "start" : "end")" }
+        public var width: CGFloat { maxX - minX }
+        public func contains(_ touchX: CGFloat) -> Bool { touchX >= minX && touchX <= maxX }
+    }
+
+    /// Les deux zones de poignée d'une piste — vide pour un fantôme, qui n'a
+    /// pas de bord à tirer (il n'a pas de durée choisie, O4).
+    ///
+    /// La zone vise 44 pt (HIG) et DÉBORDE hors de la barre quand celle-ci est
+    /// étroite. Elle ne déborde jamais au point d'avaler l'autre poignée : sous
+    /// la largeur de la zone, les deux se PARTAGENT la barre en son milieu.
+    /// Sans ce partage, le premier test évalué (`.start`) prenait tout contact
+    /// et la poignée de FIN d'une barre plus étroite que 22 pt devenait
+    /// inatteignable (revue Opus, mineur 18).
+    static func edgeHandleZones(for track: Plan2DTrack, rowIndex: Int, zoom: Plan2DZoom,
+                                laneWidth: CGFloat, slideDuration: Double) -> [EdgeHandleZone] {
+        guard case let .timed(start, end) = track.bar else { return [] }
         let startX = x(forTime: start, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         let endX = x(forTime: end, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         let half = edgeHandleMinHitWidth / 2
-        if abs(touchX - startX) <= half { return .start }
-        if abs(touchX - endX) <= half { return .end }
-        return nil
+        let midX = (startX + endX) / 2
+        return [
+            EdgeHandleZone(trackId: track.id, edge: .start, rowIndex: rowIndex,
+                           minX: startX - half, maxX: min(startX + half, midX)),
+            EdgeHandleZone(trackId: track.id, edge: .end, rowIndex: rowIndex,
+                           minX: max(endX - half, midX), maxX: endX + half)
+        ]
+    }
+
+    /// Poignée de bord touchée, si `touchX` tombe dans sa zone tappable. Au
+    /// milieu exact d'une barre étroite, le DÉBUT l'emporte — une frontière
+    /// doit appartenir à quelqu'un.
+    static func edgeHandle(touchX: CGFloat, track: Plan2DTrack,
+                           zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> Edge? {
+        edgeHandleZones(for: track, rowIndex: 0, zoom: zoom, laneWidth: laneWidth,
+                        slideDuration: slideDuration)
+            .first { $0.contains(touchX) }?
+            .edge
     }
 
     /// Rayon de tap d'un losange AFFICHÉ — même ordre de grandeur que la
@@ -350,6 +400,85 @@ public struct Plan2DView: View, Equatable {
             .map(\.id)
     }
 
+    /// Les deux axes du plan : horizontal = durée, vertical = empilement. Un
+    /// geste armé sert L'UN des deux, jamais les deux (revue Opus, constat 2 :
+    /// sans verrou, tout réordonnancement au doigt empilait aussi un
+    /// `MoveClipCommand`).
+    nonisolated enum DragAxis: Equatable {
+        case horizontal
+        case vertical
+    }
+
+    /// Zone morte avant qu'un axe ne soit élu. Un doigt vertical porte
+    /// toujours quelques points d'horizontal : comparer les dominantes sur une
+    /// translation nulle éliraient au bruit.
+    static let axisDeadZone: CGFloat = 8
+
+    /// L'axe dominant d'une translation, `nil` tant que la zone morte n'est pas
+    /// franchie. À égalité parfaite, le vertical l'emporte : un doute ne se
+    /// paie jamais d'un déplacement temporel non voulu.
+    static func dominantAxis(_ translation: CGSize) -> DragAxis? {
+        let dx = abs(translation.width)
+        let dy = abs(translation.height)
+        guard max(dx, dy) >= axisDeadZone else { return nil }
+        return dx > dy ? .horizontal : .vertical
+    }
+
+    /// Ce que le plan fait d'une frame de geste pas encore armé.
+    ///
+    /// `arm(axis:)` porte l'axe DÉJÀ connu quand l'armement vient d'un
+    /// glissement franc (« poser, hésiter, glisser ») ; `nil` quand il vient
+    /// d'une tenue, où l'axe reste à élire au premier vrai mouvement.
+    nonisolated enum ArmDecision: Equatable {
+        case wait
+        case arm(axis: DragAxis?)
+        case yieldToScroller
+    }
+
+    /// Qui tient le geste — le plan ou le scroller qui l'entoure.
+    ///
+    /// L'ordre des trois tests EST la correction (revue Opus, constat 5) :
+    ///
+    ///   1. la TENUE d'abord. `DragGesture.onChanged` ne se déclenche pas sur
+    ///      un doigt strictement immobile : la première frame après la tenue a
+    ///      souvent déjà quitté le slop. Tester le slop avant le délai
+    ///      condamnerait tout réordonnancement ;
+    ///   2. sous le slop, on attend — c'est encore un tap qui tremble ;
+    ///   3. au-delà, la dominante tranche : un glissement HORIZONTAL franc sur
+    ///      une piste appartient à la piste (le piège nommé
+    ///      `VideoClipBar:178-183` — un appui long sur doigt immobile ne
+    ///      s'engage jamais sur un glissement lent) ; un glissement VERTICAL
+    ///      appartient au scroller, sans quoi la liste des pistes ne défilerait
+    ///      plus nulle part.
+    static func armDecision(translation: CGSize, elapsed: TimeInterval) -> ArmDecision {
+        guard elapsed < reorderArmDuration else { return .arm(axis: nil) }
+        guard !withinSlop(translation) else { return .wait }
+        return dominantAxis(translation) == .horizontal ? .arm(axis: .horizontal) : .yieldToScroller
+    }
+
+    /// Ce qu'un tap DÉSIGNE sur une piste.
+    ///
+    /// Un losange posé au tout début de son clip se dessine EXACTEMENT sur le
+    /// bord de la barre : son rayon de tap (16 pt) tombe entier dans la zone de
+    /// poignée. Consulter les losanges en premier rendait alors la fiche du
+    /// CLIP inatteignable au tap sur ce bord (revue Opus, mineur 19) — le bord
+    /// a donc la préséance, et le losange reste la cible la plus précise
+    /// partout ailleurs sur la barre.
+    nonisolated enum TapTarget: Equatable {
+        case keyframe(String)
+        case track
+    }
+
+    static func tapTarget(touchX: CGFloat, track: Plan2DTrack,
+                          zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> TapTarget {
+        guard edgeHandle(touchX: touchX, track: track, zoom: zoom,
+                         laneWidth: laneWidth, slideDuration: slideDuration) == nil,
+              let keyframeId = keyframeHit(touchX: touchX, track: track, zoom: zoom,
+                                           laneWidth: laneWidth, slideDuration: slideDuration)
+        else { return .track }
+        return .keyframe(keyframeId)
+    }
+
     /// Delta de temps (secondes) pour un delta de pixels ANCRÉ au geste —
     /// inverse ponctuel de `Plan2DLayout.x`, gardé côté vue (D1 est gelé).
     static func timeDelta(forDeltaX deltaX: CGFloat, zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> Double {
@@ -360,22 +489,25 @@ public struct Plan2DView: View, Equatable {
     /// Déplacement TEMPOREL d'une piste, en secondes cumulées depuis le début
     /// du geste — `nil` quand aucun déplacement ne s'applique.
     ///
-    /// Le glissement horizontal NU appartient au scroller (le plan déborde de
-    /// son viewport au zoom `.detail`) : déplacer une piste dans le temps
-    /// passe donc par le MÊME armement que le réordonnancement vertical
-    /// (appui court puis drag, M11), qui est le seul canal sans conflit. Une
-    /// fois armé, le geste est vraiment à DEUX axes — vertical = empilement,
-    /// horizontal = durée — soit la thèse même du plan 2D.
+    /// Déplacer une piste dans le temps passe par le MÊME armement que le
+    /// réordonnancement vertical (M11), puis par l'ÉLECTION de l'axe
+    /// horizontal : les deux mutations du plan ne partent jamais du même
+    /// geste.
     ///
     /// Une piste FANTÔME est exclue : elle n'a pas de fenêtre à déplacer, et
     /// lui en fabriquer une au premier glissement transformerait un défaut en
     /// choix (O4) — la même raison qui prive son bord de poignée.
-    static func moveDelta(translation: CGSize, gestureEdge: Edge?, isReorderArmed: Bool,
-                          track: Plan2DTrack, zoom: Plan2DZoom, laneWidth: CGFloat,
-                          slideDuration: Double) -> Double? {
-        guard gestureEdge == nil, isReorderArmed else { return nil }
+    ///
+    /// Deux verrous, tous deux nés de la revue Opus : l'axe ÉLU doit être
+    /// l'horizontal (un réordonnancement vertical n'émet JAMAIS de
+    /// `MoveClipCommand`), et la translation est mesurée DEPUIS l'armement —
+    /// les points de slop parcourus avant lui ne se rendent pas en secondes.
+    static func moveDelta(translationSinceArm: CGSize, axis: DragAxis?, gestureEdge: Edge?,
+                          isReorderArmed: Bool, track: Plan2DTrack, zoom: Plan2DZoom,
+                          laneWidth: CGFloat, slideDuration: Double) -> Double? {
+        guard gestureEdge == nil, isReorderArmed, axis == .horizontal else { return nil }
         guard case .timed = track.bar else { return nil }
-        let seconds = timeDelta(forDeltaX: translation.width, zoom: zoom,
+        let seconds = timeDelta(forDeltaX: translationSinceArm.width, zoom: zoom,
                                 laneWidth: laneWidth, slideDuration: slideDuration)
         guard seconds != 0 else { return nil }
         return seconds
@@ -401,9 +533,10 @@ public struct Plan2DView: View, Equatable {
     }
 
     static func gestureOutcome(translation: CGSize, gestureEdge: Edge?, isReorderArmed: Bool,
-                               startRow: Int, endRow: Int) -> GestureOutcome {
+                               axis: DragAxis?, startRow: Int, endRow: Int) -> GestureOutcome {
         guard !withinSlop(translation) else { return .select }
-        guard gestureEdge == nil, isReorderArmed, endRow != startRow else { return .none }
+        guard gestureEdge == nil, isReorderArmed, axis == .vertical,
+              endRow != startRow else { return .none }
         return .reorder(to: endRow)
     }
 
@@ -424,6 +557,9 @@ public struct Plan2DView: View, Equatable {
             lastTrimTranslationX = 0
             isReorderArmed = false
             isMoving = false
+            lockedAxis = nil
+            moveAnchor = .zero
+            hasYieldedToScroller = false
             gestureEdge = row.flatMap { idx -> Edge? in
                 guard tracks.indices.contains(idx) else { return nil }
                 return Self.edgeHandle(touchX: value.startLocation.x, track: tracks[idx],
@@ -446,21 +582,40 @@ public struct Plan2DView: View, Equatable {
             return
         }
 
-        guard let startedAt = gestureStartedAt else { return }
+        guard let startedAt = gestureStartedAt, !hasYieldedToScroller else { return }
         if !isReorderArmed {
-            guard Self.withinSlop(value.translation) else { return }
-            guard Date().timeIntervalSince(startedAt) >= Self.reorderArmDuration else { return }
-            isReorderArmed = true
-            HapticFeedback.light()
+            switch Self.armDecision(translation: value.translation,
+                                    elapsed: Date().timeIntervalSince(startedAt)) {
+            case .wait:
+                return
+            case .yieldToScroller:
+                hasYieldedToScroller = true
+                return
+            // L'haptique marque le moment où le PLAN prend le geste — le seul
+            // que cette vue puisse observer. Un doigt strictement immobile
+            // n'émet aucune frame : prétendre signaler l'instant des 0,45 s
+            // demanderait une horloge que ce geste n'a pas.
+            case .arm(let axis):
+                isReorderArmed = true
+                HapticFeedback.light()
+                lockedAxis = axis
+                moveAnchor = value.translation
+            }
         }
 
-        if let seconds = Self.moveDelta(translation: value.translation, gestureEdge: gestureEdge,
+        let sinceArm = CGSize(width: value.translation.width - moveAnchor.width,
+                              height: value.translation.height - moveAnchor.height)
+        if lockedAxis == nil { lockedAxis = Self.dominantAxis(sinceArm) }
+
+        if let seconds = Self.moveDelta(translationSinceArm: sinceArm, axis: lockedAxis,
+                                        gestureEdge: gestureEdge,
                                         isReorderArmed: isReorderArmed, track: track,
                                         zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
             isMoving = true
             onMove(track.id, seconds)
         }
 
+        guard lockedAxis != .horizontal else { return }
         let currentRow = Self.rowIndex(forY: value.location.y,
                                        laneHeight: TimelineMetrics.laneHeight,
                                        trackCount: tracks.count) ?? startRow
@@ -483,6 +638,9 @@ public struct Plan2DView: View, Equatable {
             lastPlaneCrossingRow = nil
             lastTrimTranslationX = 0
             isMoving = false
+            lockedAxis = nil
+            moveAnchor = .zero
+            hasYieldedToScroller = false
         }
         guard let startRow = gestureStartRow, tracks.indices.contains(startRow) else { return }
         if isMoving { onMoveEnded(tracks[startRow].id) }
@@ -492,13 +650,13 @@ public struct Plan2DView: View, Equatable {
                                    trackCount: tracks.count) ?? startRow
 
         switch Self.gestureOutcome(translation: value.translation, gestureEdge: gestureEdge,
-                                   isReorderArmed: isReorderArmed, startRow: startRow, endRow: endRow) {
+                                   isReorderArmed: isReorderArmed, axis: lockedAxis,
+                                   startRow: startRow, endRow: endRow) {
         case .select:
-            if let keyframeId = Self.keyframeHit(touchX: value.location.x, track: tracks[startRow],
-                                                 zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
-                onSelectKeyframe(keyframeId)
-            } else {
-                onSelectTrack(tracks[startRow].id)
+            switch Self.tapTarget(touchX: value.location.x, track: tracks[startRow],
+                                  zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
+            case .keyframe(let keyframeId): onSelectKeyframe(keyframeId)
+            case .track: onSelectTrack(tracks[startRow].id)
             }
         case .reorder(let to):
             onReorder(tracks[startRow].id, to)

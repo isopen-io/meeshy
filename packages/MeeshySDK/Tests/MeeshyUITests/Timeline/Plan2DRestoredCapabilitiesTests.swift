@@ -242,9 +242,15 @@ final class Plan2DClipMoveGestureTests: XCTestCase {
                                            bar: .timed(start: 0, end: 4))
     private static let ghost = Plan2DTrack(id: "g", label: "g", plane: .fg, z: 0, bar: .ghost)
 
-    private func delta(_ translation: CGSize, edge: Plan2DView.Edge? = nil,
-                       armed: Bool = true, track: Plan2DTrack = Plan2DClipMoveGestureTests.timed) -> Double? {
-        Plan2DView.moveDelta(translation: translation, gestureEdge: edge, isReorderArmed: armed,
+    /// Simule UNE frame de geste déjà armé : l'axe est celui que la vue
+    /// élirait pour cette translation, mesurée DEPUIS l'armement.
+    private func delta(_ translationSinceArm: CGSize, edge: Plan2DView.Edge? = nil,
+                       armed: Bool = true,
+                       axis: Plan2DView.DragAxis? = nil,
+                       track: Plan2DTrack = Plan2DClipMoveGestureTests.timed) -> Double? {
+        Plan2DView.moveDelta(translationSinceArm: translationSinceArm,
+                             axis: axis ?? Plan2DView.dominantAxis(translationSinceArm),
+                             gestureEdge: edge, isReorderArmed: armed,
                              track: track, zoom: .fit, laneWidth: 300, slideDuration: 10)
     }
 
@@ -280,5 +286,107 @@ final class Plan2DClipMoveGestureTests: XCTestCase {
     func test_aPurelyVerticalDrag_producesNoTimeMove() {
         XCTAssertNil(delta(CGSize(width: 0, height: 120)),
                      "Réordonner verticalement ne doit pas décaler la piste dans le temps")
+    }
+
+    /// Le cas RÉEL : aucun doigt ne descend sur une verticale mathématique.
+    /// Un réordonnancement vertical porte toujours quelques points
+    /// d'horizontal — s'ils suffisent à ouvrir une session de déplacement, tout
+    /// réordonnancement au doigt empile un `MoveClipCommand` et décale le clip.
+    func test_aVerticalDragCarryingTheUsualHorizontalWobble_neverMovesTheTrackInTime() {
+        XCTAssertNil(delta(CGSize(width: 9, height: 120)),
+                     "9 pt d'horizontal pour 120 pt de vertical : c'est un réordonnancement, pas un déplacement temporel")
+    }
+
+    /// L'axe est ÉLU une fois, pas réévalué à chaque frame : un déplacement
+    /// temporel qui dérive de deux centimètres vers le bas reste un
+    /// déplacement temporel.
+    func test_anAxisLockedHorizontally_keepsMoving_evenWhenTheFingerDriftsDown() {
+        XCTAssertEqual(delta(CGSize(width: 60, height: 200), axis: .horizontal) ?? .nan,
+                       2, accuracy: 0.0001)
+    }
+
+    /// Réciproque : une fois l'axe vertical élu, aucune dérive horizontale ne
+    /// rouvre la session de déplacement.
+    func test_anAxisLockedVertically_neverMoves_evenWhenTheFingerDriftsFarSideways() {
+        XCTAssertNil(delta(CGSize(width: 200, height: 40), axis: .vertical),
+                     "L'axe élu au premier dépassement de la zone morte tient jusqu'au relâchement")
+    }
+
+    /// La zone morte : sous 8 pt, aucun axe n'est élu et rien ne part — c'est
+    /// la frontière entre un tap qui tremble et un geste.
+    func test_beforeAnyAxisIsElected_nothingMoves() {
+        XCTAssertNil(delta(CGSize(width: 5, height: 3), axis: nil))
+    }
+}
+
+// MARK: - Armement du geste (M11) : « poser, hésiter, glisser »
+
+/// L'armement décide QUI tient le geste : le plan, ou le scroller qui
+/// l'entoure. La note du module (`VideoClipBar:178-183`) nomme le piège
+/// résolu ailleurs et réintroduit ici : un appui long qui exige 0,4 s de doigt
+/// IMMOBILE ne s'engage jamais sur un glissement lent.
+final class Plan2DGestureArmingTests: XCTestCase {
+
+    func test_aStillFingerBeforeTheHold_waits() {
+        XCTAssertEqual(Plan2DView.armDecision(translation: CGSize(width: 2, height: 1), elapsed: 0.1),
+                       .wait)
+    }
+
+    func test_aStillFingerPastTheHold_arms_withNoAxisElectedYet() {
+        XCTAssertEqual(Plan2DView.armDecision(translation: CGSize(width: 3, height: 2), elapsed: 0.5),
+                       .arm(axis: nil),
+                       "Tenir puis glisser : l'axe se décide au glissement, pas à l'armement")
+    }
+
+    /// « Poser, hésiter, glisser » : le glissement lent dépasse le slop AVANT
+    /// le délai de tenue. L'ancienne garde (`withinSlop` en verrou) le laissait
+    /// mort — ni réordonnancement, ni déplacement.
+    func test_poserHesiterGlisser_armsImmediatelyInMoveMode() {
+        XCTAssertEqual(Plan2DView.armDecision(translation: CGSize(width: 40, height: 6), elapsed: 0.2),
+                       .arm(axis: .horizontal),
+                       "Un glissement horizontal franc sur une piste appartient à la piste, pas au scroller")
+    }
+
+    func test_aVerticalScrollBeforeTheHold_yieldsToTheScroller() {
+        XCTAssertEqual(Plan2DView.armDecision(translation: CGSize(width: 6, height: 40), elapsed: 0.2),
+                       .yieldToScroller,
+                       "Faire défiler la liste des pistes doit rester possible partout")
+    }
+
+    /// `DragGesture.onChanged` ne se déclenche PAS sur un doigt strictement
+    /// immobile : la première frame après la tenue peut déjà avoir quitté le
+    /// slop. Décider sur le slop d'abord condamnerait tout réordonnancement.
+    func test_theFirstFrameAfterAStillHold_armsEvenThoughItAlreadyLeftTheSlop() {
+        XCTAssertEqual(Plan2DView.armDecision(translation: CGSize(width: 2, height: 60), elapsed: 0.5),
+                       .arm(axis: nil))
+    }
+}
+
+// MARK: - Élection de l'axe
+
+final class Plan2DDragAxisTests: XCTestCase {
+
+    func test_underTheDeadZone_noAxisIsElected() {
+        XCTAssertNil(Plan2DView.dominantAxis(CGSize(width: 5, height: 6)))
+        XCTAssertNil(Plan2DView.dominantAxis(.zero))
+    }
+
+    func test_aVerticalFingerCarryingItsUsualWobble_electsVertical() {
+        XCTAssertEqual(Plan2DView.dominantAxis(CGSize(width: 9, height: 120)), .vertical)
+    }
+
+    func test_aHorizontalGlide_electsHorizontal() {
+        XCTAssertEqual(Plan2DView.dominantAxis(CGSize(width: 40, height: 9)), .horizontal)
+    }
+
+    /// Égalité parfaite : l'axe le plus prudent gagne — un doute ne doit jamais
+    /// se payer d'un `MoveClipCommand` non voulu.
+    func test_aPerfectDiagonal_electsVertical() {
+        XCTAssertEqual(Plan2DView.dominantAxis(CGSize(width: 30, height: 30)), .vertical)
+    }
+
+    func test_theDeadZoneIsAFingersWidth_notAMathematicalZero() {
+        XCTAssertGreaterThanOrEqual(Plan2DView.axisDeadZone, 4)
+        XCTAssertLessThan(Plan2DView.axisDeadZone, Plan2DView.reorderSlop)
     }
 }

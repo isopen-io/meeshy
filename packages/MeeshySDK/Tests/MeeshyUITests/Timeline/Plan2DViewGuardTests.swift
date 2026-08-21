@@ -230,6 +230,57 @@ final class Plan2DViewGuardTests: XCTestCase {
                     "Bien au-delà de la zone : aucune poignée")
     }
 
+    /// Barre de 4 pt : les deux zones de 44 pt se recouvrent entièrement. La
+    /// règle de partage est le MILIEU de la barre — sans elle, le premier test
+    /// (`.start`) avale tout contact et la poignée de FIN devient inatteignable
+    /// sur toute barre plus étroite que la moitié de la zone tappable.
+    func test_edgeHandle_aBarNarrowerThanItsHitZone_keepsItsEndHandleReachable() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 4))
+        let startX = Plan2DView.labelColumnWidth
+        let endX = Plan2DView.labelColumnWidth + 4
+        let midX = (startX + endX) / 2
+
+        XCTAssertEqual(Plan2DView.edgeHandle(touchX: midX + 2, track: track,
+                                             zoom: .fit, laneWidth: 4, slideDuration: 4), .end,
+                      "Au-delà du milieu d'une barre étroite, le contact vise la FIN")
+        XCTAssertEqual(Plan2DView.edgeHandle(touchX: midX - 2, track: track,
+                                             zoom: .fit, laneWidth: 4, slideDuration: 4), .start,
+                      "En deçà du milieu, le contact vise le DÉBUT")
+    }
+
+    /// La zone des deux poignées est UNE seule source : le hit-test et les
+    /// cibles réellement posées à l'écran la lisent au même endroit.
+    func test_edgeHandleZones_aWideBar_keepsTwoFullSizedZones() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 10))
+        let zones = Plan2DView.edgeHandleZones(for: track, rowIndex: 3, zoom: .fit,
+                                               laneWidth: 300, slideDuration: 10)
+        XCTAssertEqual(zones.map(\.edge), [.start, .end])
+        XCTAssertEqual(zones.map(\.rowIndex), [3, 3])
+        for zone in zones {
+            XCTAssertEqual(zone.width, Plan2DView.edgeHandleMinHitWidth, accuracy: 0.001,
+                           "Une barre large garde deux cibles pleines")
+        }
+    }
+
+    func test_edgeHandleZones_aNarrowBar_sharesItAtTheMidpoint() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 4))
+        let zones = Plan2DView.edgeHandleZones(for: track, rowIndex: 0, zoom: .fit,
+                                               laneWidth: 4, slideDuration: 4)
+        let midX = Plan2DView.labelColumnWidth + 2
+        XCTAssertEqual(zones.first(where: { $0.edge == .start })?.maxX ?? .nan, midX, accuracy: 0.001)
+        XCTAssertEqual(zones.first(where: { $0.edge == .end })?.minX ?? .nan, midX, accuracy: 0.001,
+                       "Les deux poignées se partagent la barre étroite au milieu — aucune n'avale l'autre")
+    }
+
+    func test_edgeHandleZones_aGhostTrackHasNoZone() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0, bar: .ghost)
+        XCTAssertTrue(Plan2DView.edgeHandleZones(for: track, rowIndex: 0, zoom: .fit,
+                                                 laneWidth: 300, slideDuration: 10).isEmpty)
+    }
+
     func test_edgeHandle_ghostTrackHasNoHandle() {
         let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0, bar: .ghost)
         XCTAssertNil(Plan2DView.edgeHandle(touchX: 100, track: track,
@@ -366,10 +417,56 @@ final class Plan2DViewGuardTests: XCTestCase {
             return XCTFail("Le corps doit décider l'outcome .select quelque part")
         }
         let afterSelect = String(source[selectRange.upperBound...].prefix(400))
-        XCTAssertTrue(afterSelect.contains("keyframeHit("),
-                     "Un tap classé .select doit d'abord tester keyframeHit — sinon aucun losange n'est jamais atteignable")
+        XCTAssertTrue(afterSelect.contains("Self.tapTarget("),
+                     "Un tap classé .select doit passer par la décision PURE tapTarget — sinon aucun losange n'est atteignable, "
+                     + "ou c'est le bord du clip qui devient inatteignable")
         XCTAssertTrue(afterSelect.contains("onSelectKeyframe("),
-                     "Un keyframeHit trouvé doit router vers onSelectKeyframe, pas onSelectTrack")
+                     "Un losange désigné doit router vers onSelectKeyframe, pas onSelectTrack")
+        XCTAssertTrue(afterSelect.contains("onSelectTrack("),
+                     "Et tout le reste de la barre ouvre la fiche du CLIP")
+    }
+
+    // MARK: - Guard 4l — préséance du BORD sur le losange qui le recouvre
+    //
+    // Un keyframe au tout début de son clip se dessine EXACTEMENT sur le bord
+    // gauche de la barre : son rayon de tap (16 pt) tombe entier dans la zone
+    // de poignée (±22 pt). Consulter les losanges en premier rendait la fiche
+    // du clip inatteignable au tap sur ce bord (revue Opus, mineur 19).
+
+    private static func barWithDiamondsAtTheEdgeAndInTheMiddle() -> Plan2DTrack {
+        Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0,
+                    bar: .timed(start: 0, end: 10),
+                    keyframes: [Plan2DKeyframe(id: "kf-edge", time: 0),
+                                Plan2DKeyframe(id: "kf-mid", time: 5)])
+    }
+
+    func test_tapTarget_onADiamondSittingOnTheBarsEdge_opensTheClip() {
+        let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
+        XCTAssertEqual(
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track,
+                                 zoom: .fit, laneWidth: 300, slideDuration: 10),
+            .track,
+            "Le doigt posé sur le bord vise le bord — le losange qui s'y superpose ne doit pas voler la fiche du clip"
+        )
+    }
+
+    func test_tapTarget_onADiamondAwayFromAnyEdge_opensThatKeyframe() {
+        let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
+        XCTAssertEqual(
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 150, track: track,
+                                 zoom: .fit, laneWidth: 300, slideDuration: 10),
+            .keyframe("kf-mid"),
+            "Partout ailleurs sur la barre, le losange reste la cible la plus précise"
+        )
+    }
+
+    func test_tapTarget_onABareStretchOfBar_opensTheClip() {
+        let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
+        XCTAssertEqual(
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 90, track: track,
+                                 zoom: .fit, laneWidth: 300, slideDuration: 10),
+            .track
+        )
     }
 
     // MARK: - Guard 4d — tap → appelle onSelectTrack (l'appel, pas la sheet)
@@ -395,13 +492,13 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_gestureOutcome_tapInsideEdgeHandleZone_stillSelectsTrack_evenThoughEdgeWasArmed() {
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: .zero, gestureEdge: .start,
-                                      isReorderArmed: false, startRow: 0, endRow: 0),
+                                      isReorderArmed: false, axis: nil, startRow: 0, endRow: 0),
             .select,
             "Touch-down à ±22 pt d'un bord arme gestureEdge ; relâché sans bouger, c'est un TAP — il doit sélectionner"
         )
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: CGSize(width: Plan2DView.reorderSlop, height: 0), gestureEdge: .end,
-                                      isReorderArmed: false, startRow: 2, endRow: 2),
+                                      isReorderArmed: false, axis: nil, startRow: 2, endRow: 2),
             .select,
             "Micro-mouvement encore DANS le slop : toujours un tap, même avec un bord armé"
         )
@@ -412,7 +509,7 @@ final class Plan2DViewGuardTests: XCTestCase {
         // onChanged — handleEnded n'a plus rien à déclencher lui-même.
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: CGSize(width: Plan2DView.reorderSlop + 20, height: 0),
-                                      gestureEdge: .end, isReorderArmed: false, startRow: 1, endRow: 1),
+                                      gestureEdge: .end, isReorderArmed: false, axis: nil, startRow: 1, endRow: 1),
             .none
         )
     }
@@ -420,7 +517,8 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_gestureOutcome_armedReorderMovedToADifferentRow_producesReorder() {
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: CGSize(width: 0, height: Plan2DView.reorderSlop + 60),
-                                      gestureEdge: nil, isReorderArmed: true, startRow: 0, endRow: 2),
+                                      gestureEdge: nil, isReorderArmed: true, axis: .vertical,
+                                      startRow: 0, endRow: 2),
             .reorder(to: 2)
         )
     }
@@ -428,7 +526,8 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_gestureOutcome_armedReorderReleasedOnTheSameRow_producesNoAction() {
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: CGSize(width: 0, height: Plan2DView.reorderSlop + 60),
-                                      gestureEdge: nil, isReorderArmed: true, startRow: 1, endRow: 1),
+                                      gestureEdge: nil, isReorderArmed: true, axis: .vertical,
+                                      startRow: 1, endRow: 1),
             .none
         )
     }
@@ -438,15 +537,39 @@ final class Plan2DViewGuardTests: XCTestCase {
         // avant l'armement) — la liste défile, `Plan2DView` ne fait rien.
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: CGSize(width: 0, height: Plan2DView.reorderSlop + 60),
-                                      gestureEdge: nil, isReorderArmed: false, startRow: 0, endRow: 2),
+                                      gestureEdge: nil, isReorderArmed: false, axis: nil,
+                                      startRow: 0, endRow: 2),
             .none
+        )
+    }
+
+    /// Verrou d'axe au relâchement : un déplacement TEMPOREL qui a dérivé
+    /// d'une rangée ne doit pas, en plus, réordonner le plan.
+    func test_gestureOutcome_anAxisLockedHorizontalDrag_neverReorders_evenAcrossRows() {
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: 120, height: 60),
+                                      gestureEdge: nil, isReorderArmed: true, axis: .horizontal,
+                                      startRow: 0, endRow: 1),
+            .none,
+            "Un geste élu horizontal déplace dans le temps — il ne réordonne jamais"
+        )
+    }
+
+    /// Et le cas RÉEL du réordonnancement : le doigt vertical porte toujours
+    /// quelques points d'horizontal.
+    func test_gestureOutcome_aVerticalDragCarryingItsWobble_stillReorders() {
+        XCTAssertEqual(
+            Plan2DView.gestureOutcome(translation: CGSize(width: 9, height: 120),
+                                      gestureEdge: nil, isReorderArmed: true, axis: .vertical,
+                                      startRow: 0, endRow: 2),
+            .reorder(to: 2)
         )
     }
 
     func test_gestureOutcome_plainTapWithinSlop_producesSelect() {
         XCTAssertEqual(
             Plan2DView.gestureOutcome(translation: .zero, gestureEdge: nil,
-                                      isReorderArmed: false, startRow: 0, endRow: 0),
+                                      isReorderArmed: false, axis: nil, startRow: 0, endRow: 0),
             .select
         )
     }
@@ -487,6 +610,40 @@ final class Plan2DViewGuardTests: XCTestCase {
         let afterArm = String(source[armRange.upperBound...].prefix(80))
         XCTAssertTrue(afterArm.contains("HapticFeedback.light()"),
                      "L'haptique .light doit jouer AU MOMENT de l'armement, immédiatement après isReorderArmed = true")
+    }
+
+    // MARK: - Guard 4k — verrou d'axe, ancrage du delta et main rendue au
+    // scroller : les trois décisions du geste armé vivent dans des fonctions
+    // PURES, et le corps les APPELLE (une algèbre juste qu'aucune frame
+    // n'exerce ne protégerait rien).
+
+    func test_body_armsThroughThePureArmDecision() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("Self.armDecision("),
+                     "L'armement doit passer par la décision PURE armDecision — jamais par un enchaînement de guards inline")
+    }
+
+    func test_body_electsTheGestureAxisOnce_andKeepsIt() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("lockedAxis"),
+                     "L'axe élu doit être MÉMORISÉ pour le geste, pas recalculé à chaque frame")
+        XCTAssertTrue(source.contains("Self.dominantAxis("),
+                     "L'élection doit passer par la dominante |Δx| vs |Δy| au-delà de la zone morte")
+    }
+
+    func test_body_measuresTheMoveFromTheArmingPoint_neverFromTheTouchDown() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("moveAnchor"),
+                     "Le delta de déplacement doit être ancré à l'ARMEMENT : sinon les points de slop parcourus avant "
+                     + "l'armement sont rendus en secondes dès la première frame")
+        XCTAssertTrue(source.contains("translationSinceArm:"),
+                     "moveDelta doit recevoir la translation DEPUIS l'armement, pas la translation depuis le touch-down")
+    }
+
+    func test_body_handsAScrollGestureToTheScroller_andNeverTakesItBack() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("hasYieldedToScroller"),
+                     "Un geste rendu au scroller ne doit jamais se réarmer en cours de route (le doigt est déjà en train de faire défiler)")
     }
 
     // MARK: - Guard 2b — la graduation n'est pas qu'une déclaration : le
