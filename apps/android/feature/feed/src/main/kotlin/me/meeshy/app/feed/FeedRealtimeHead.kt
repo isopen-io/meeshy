@@ -28,6 +28,13 @@ import me.meeshy.sdk.model.ApiPost
  * bookmark count and the viewer's own state, which win over the (possibly stale) cache until
  * a refresh catches up — at which point [FeedRealtimeReducer.reconcileBookmarks] releases the
  * overlay. Android analogue of iOS setting `post.isBookmarkedByMe`/`bookmarkCount` on the stream.
+ *
+ * [comments] are live comment-count overrides keyed by post id: a `comment:added` /
+ * `comment:deleted` broadcast carries the gateway's ABSOLUTE comment count, which wins over the
+ * (possibly stale) cache count until a background refresh catches up — at which point
+ * [FeedRealtimeReducer.reconcileComments] releases the overlay. There is no viewer-own dimension
+ * (a comment count is public, not per-viewer). Android analogue of iOS FeedViewModel setting
+ * `post.commentCount = data.commentCount` on the two socket streams — but pure and unit-testable.
  */
 data class FeedRealtimeHead(
     val posts: List<ApiPost> = emptyList(),
@@ -35,6 +42,7 @@ data class FeedRealtimeHead(
     val removedIds: Set<String> = emptySet(),
     val likes: Map<String, LikeOverlay> = emptyMap(),
     val bookmarks: Map<String, BookmarkOverlay> = emptyMap(),
+    val comments: Map<String, Int> = emptyMap(),
 ) {
     val hasNewPosts: Boolean get() = newPostsCount > 0
 }
@@ -202,6 +210,40 @@ object FeedRealtimeReducer {
         }
         if (kept.size == state.bookmarks.size) return state
         return state.copy(bookmarks = kept)
+    }
+
+    /**
+     * A `comment:added` / `comment:deleted` arrived. [commentCount] is the gateway's ABSOLUTE
+     * comment count (source of truth for the displayed count — never a delta), clamped at zero
+     * so a malformed negative payload never renders a negative badge. Inert for a blank id or
+     * when the resulting count equals the current overlay (same instance → `StateFlow` dedup).
+     */
+    fun comment(
+        state: FeedRealtimeHead,
+        postId: String,
+        commentCount: Int,
+    ): FeedRealtimeHead {
+        if (postId.isBlank()) return state
+        val count = commentCount.coerceAtLeast(0)
+        if (state.comments[postId] == count) return state
+        return state.copy(comments = state.comments + (postId to count))
+    }
+
+    /**
+     * On each cache re-emit, release comment overlays the cache has caught up to: a post the
+     * cache now carries with a matching absolute comment count (a `null` cache count reads as 0).
+     * Overlays for posts still absent from the cache (or not yet refreshed) are kept so a live
+     * count is never reverted to a stale cache value. Inert when nothing changes.
+     */
+    fun reconcileComments(state: FeedRealtimeHead, cachePosts: List<ApiPost>): FeedRealtimeHead {
+        if (state.comments.isEmpty()) return state
+        val byId = cachePosts.associateBy { it.id }
+        val kept = state.comments.filterNot { (id, count) ->
+            val post = byId[id] ?: return@filterNot false
+            (post.commentCount ?: 0) == count
+        }
+        if (kept.size == state.comments.size) return state
+        return state.copy(comments = kept)
     }
 
     /**

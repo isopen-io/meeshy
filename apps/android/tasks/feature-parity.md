@@ -3643,6 +3643,19 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       iOS `FeedSocketHandler` bug where *any* user's like flips the viewer's own `isLikedByMe` (Android
       gates it on userId in one place). +23 tests (15 reducer, 8 VM). Mutation-proof: dropping the prior-`mine`
       preservation fails exactly the discriminating "another user preserves a prior viewer-own like" test.
+      **Live `comment:added`/`comment:deleted` count sync done** (slice `feed-realtime-comment-count`,
+      2026-08-21): the `SocialSocketManager.commentAdded`/`commentDeleted` streams — previously consumed only
+      by the post-detail/comments VMs, never by the feed list — now fold through a pure
+      `FeedRealtimeReducer.comment` into a `FeedRealtimeHead.comments` *overlay* (`Map<String, Int>`): the
+      gateway's ABSOLUTE `commentCount` overrides the (possibly stale) cache count, clamped at zero so a
+      malformed negative payload never renders a negative badge; no viewer-own dimension (a comment count is
+      public). `reconcileComments` releases an overlay once a refresh's cache count catches up (a `null` cache
+      count reads as 0), never reverting a live count to a stale cache value; `clear` (pull-to-refresh) drops
+      all overlays. Faithful to iOS FeedViewModel's `post.commentCount = data.commentCount` on both streams —
+      but pure and unit-testable. `FeedViewModel` collects both streams, projects the overlay through a new
+      `withCommentOverlays` helper alongside the like/bookmark overlays. +18 tests (12 reducer, 6 VM).
+      Mutation-proof: dropping the negative clamp (`coerceAtLeast(0)`) fails exactly the discriminating
+      "comment clamps a negative absolute count to zero" test (1 of 70, no collateral).
 - [x] Post reactions (heart like) — **optimistic** toggle via `PostRepository.toggleLike`
       (flips `isLikedByMe` + count instantly, rolls back on failure). Fixes the prior
       bug where any post liked by *others* rendered as liked-by-me (`likeCount > 0`
