@@ -182,11 +182,17 @@ public struct AudioForegroundChip: View {
             // piste propre (première publication) → sinusoïde, comme toujours.
             // Le compteur ne s'arme qu'au reader (slideDuration fourni) — le
             // frame s'élargit alors juste assez pour loger « · M:SS ».
-            switch AudioChipDisplay.resolve(
-                soundId: audioObject.soundId,
-                title: audioObject.name,
-                authorUsername: audioObject.soundAuthorUsername
-            ) {
+            //
+            // Passe par le résolveur PROMU (B8f, arbitrage 9) plutôt que par
+            // `resolve` : le cache froid (métadonnées non résolues) reste
+            // dans la forme CRÉDIT, jamais la sinusoïde qui mentirait sur la
+            // provenance d'une piste empruntée (constat 9).
+            switch AudioChipDisplay.display(for: AudioChipDisplay.backgroundAnnouncement(
+                sound: AudioChipDisplay.borrowedSound(soundId: audioObject.soundId),
+                libraryTitle: audioObject.name,
+                libraryUsername: audioObject.soundAuthorUsername,
+                libraryDuration: nil
+            )) {
             case .marquee(let text):
                 AudioChipMarquee(text: text,
                                  paused: isUserMuted,

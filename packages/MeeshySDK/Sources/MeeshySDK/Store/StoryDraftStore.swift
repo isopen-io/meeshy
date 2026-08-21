@@ -418,6 +418,44 @@ public final class StoryDraftStore: @unchecked Sendable {
                         arguments: [draftId]
                     )
                 }
+                // Empreinte de la carte de brouillon. Le canvas v3 — la forme
+                // que `effects_json` persiste — n'a pas de logement pour le
+                // `thumbHash` (métadonnée de slide, pas objet de scène) : sans
+                // cette clé, la carte perdrait sa vignette dès le premier
+                // enregistrement. Absent = effacé, comme les autres méta.
+                if let thumbHash = slides.first?.effects.thumbHash {
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'thumbHash', ?)",
+                        arguments: [draftId, thumbHash]
+                    )
+                } else {
+                    try db.execute(
+                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'thumbHash'",
+                        arguments: [draftId]
+                    )
+                }
+                // Ratio de canvas — état PAR SLIDE (le composer en écrit un
+                // par slide courante, `StoryComposerViewModel+Elements.swift`
+                // :557/:656/:764, jusqu'à dix slides par brouillon). Le remap
+                // v3 CONSOMME `canvasAspectRatio` pour repositionner les
+                // ancres (le porteur garde son ratio intrinsèque, la scène
+                // letterboxe) mais ne le LOGE nulle part : légitime pour le
+                // fil, pas pour le brouillon local — sans une clé PAR SLIDE,
+                // seule la première rouvrirait dans sa forme et toute slide
+                // suivante rouvrirait en portrait dès le premier autosave.
+                // Balayage puis réécriture : une slide retirée du brouillon
+                // n'y laisse pas de méta orpheline.
+                try db.execute(
+                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key LIKE 'canvasAspectRatio:%'",
+                    arguments: [draftId]
+                )
+                for slide in slides {
+                    guard let canvasAspectRatio = slide.effects.canvasAspectRatio else { continue }
+                    try db.execute(
+                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, ?, ?)",
+                        arguments: [draftId, "canvasAspectRatio:\(slide.id)", String(canvasAspectRatio)]
+                    )
+                }
                 // `created_at` n'est posé qu'à la première écriture : le
                 // `COALESCE` sur la ligne existante évite de rajeunir un
                 // brouillon à chaque autosave.
@@ -692,6 +730,32 @@ public final class StoryDraftStore: @unchecked Sendable {
     }
     #endif
 
+    // MARK: - Decoding (shared by the two `effects_json` read sites)
+
+    /// Décodeur privé UNIQUE pour `effects_json`, partagé par `load` et
+    /// `firstSlideEffects` — les deux seuls points de lecture. Un blob `"v":3`
+    /// passe par le pont B2 (`CanvasV3` → `StoryEffects(rendering:sceneIndex:)`) ;
+    /// tout le reste décode en legacy. Sans ce partage, migrer un seul des
+    /// deux sites viderait l'autre en silence dès qu'une ligne devient v3.
+    private func decodeSlideEffects(_ json: String) -> StoryEffects? {
+        guard let data = json.data(using: .utf8) else { return nil }
+        if let probe = try? JSONDecoder().decode(CanvasVersionProbe.self, from: data), probe.v == 3 {
+            guard let document = try? JSONDecoder().decode(CanvasV3.self, from: data) else { return nil }
+            return StoryEffects(rendering: document, sceneIndex: 0)
+        }
+        return try? JSONDecoder().decode(StoryEffects.self, from: data)
+    }
+
+    private func isAlreadyV3(_ json: String) -> Bool {
+        guard let data = json.data(using: .utf8),
+              let probe = try? JSONDecoder().decode(CanvasVersionProbe.self, from: data) else { return false }
+        return probe.v == 3
+    }
+
+    private struct CanvasVersionProbe: Decodable {
+        let v: Int?
+    }
+
     // MARK: - Load
 
     public func load(draftId: String) -> (slides: [StorySlide],
@@ -709,24 +773,63 @@ public final class StoryDraftStore: @unchecked Sendable {
             }
             guard !rows.isEmpty else { return nil }
 
-            let slides: [StorySlide] = rows.compactMap { row in
+            let decoded: [(slide: StorySlide, migratedJSON: String?)] = rows.map { row in
                 let id: String = row["id"]
                 let content: String? = row["content"]
                 let mediaURL: String? = row["media_url"]
                 let duration: TimeInterval = row["duration"] ?? 5
                 let effectsJSONStr: String = row["effects_json"]
-                guard let effectsData = effectsJSONStr.data(using: .utf8),
-                      let effects = JSONDecoder().decodeOrLog(StoryEffects.self, from: effectsData,
-                                                              field: "story slide effects",
-                                                              id: id, logger: Logger.cache) else {
+                guard let effects = decodeSlideEffects(effectsJSONStr) else {
                     // Effets illisibles : les colonnes qui, elles, sont lisibles
                     // doivent survivre — les amputer perdait le média et la
                     // durée d'une slide seulement partiellement corrompue.
-                    return StorySlide(id: id, mediaURL: mediaURL, content: content,
-                                      duration: duration)
+                    // Échec de conversion = ligne laissée telle quelle,
+                    // jamais de réécriture ni de perte.
+                    return (StorySlide(id: id, mediaURL: mediaURL, content: content,
+                                       duration: duration), nil)
                 }
-                return StorySlide(id: id, mediaURL: mediaURL, content: content,
-                                  effects: effects, duration: duration)
+                let slide = StorySlide(id: id, mediaURL: mediaURL, content: content,
+                                       effects: effects, duration: duration)
+                guard !isAlreadyV3(effectsJSONStr),
+                      let migratedData = JSONEncoder().encodeOrLog(CanvasV3(migrating: effects),
+                                                                   field: "story slide effects (migration v3)",
+                                                                   id: id, logger: Logger.cache),
+                      let migratedJSON = String(data: migratedData, encoding: .utf8) else {
+                    return (slide, nil)
+                }
+                return (slide, migratedJSON)
+            }
+            var slides = decoded.map(\.slide)
+
+            // Migration one-shot : la persistance passe v3 au chargement — un
+            // brouillon déjà v3 n'est jamais réécrit (isAlreadyV3 ci-dessus).
+            let migrations = decoded.compactMap { entry -> (id: String, json: String)? in
+                guard let json = entry.migratedJSON else { return nil }
+                return (id: entry.slide.id, json: json)
+            }
+            if !migrations.isEmpty {
+                try db.write { db in
+                    for migration in migrations {
+                        try db.execute(
+                            sql: "UPDATE story_draft_slide SET effects_json = ? WHERE draft_id = ? AND id = ?",
+                            arguments: [migration.json, draftId, migration.id])
+                    }
+                    // Le remap v3 absorbe `canvasAspectRatio` sans le loger nulle
+                    // part (cf. `save()` ci-dessus) : capturé ICI, PAR SLIDE
+                    // MIGRÉE, au moment même où la migration one-shot s'apprête
+                    // à écraser la seule copie qui le porte encore — sans ça,
+                    // rien ne le restituerait avant le prochain `save()`,
+                    // potentiellement jamais pour un brouillon simplement
+                    // rouvert puis refermé sans édition. Une slide n'ayant pas
+                    // migré (déjà v3) n'a rien à capturer ici : sa méta, si
+                    // elle existe, date d'un `save()` antérieur.
+                    for entry in decoded where entry.migratedJSON != nil {
+                        guard let ratio = entry.slide.effects.canvasAspectRatio else { continue }
+                        try db.execute(
+                            sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, ?, ?)",
+                            arguments: [draftId, "canvasAspectRatio:\(entry.slide.id)", String(ratio)])
+                    }
+                }
             }
 
             let meta = try db.read { db in
@@ -736,15 +839,29 @@ public final class StoryDraftStore: @unchecked Sendable {
                 let editingPostId = try Self.metaValue(db, draftId: draftId, key: "editingPostId")
                 let pendingPublishAt = try Self.metaValue(db, draftId: draftId, key: "pendingPublishAt")
                 let lastPublishError = try Self.metaValue(db, draftId: draftId, key: "lastPublishError")
+                let canvasAspectRatios = try Self.canvasAspectRatiosBySlide(db, draftId: draftId)
                 return (visibility: visibility, idsJSON: idsJSON,
                         originalLanguage: originalLanguage, editingPostId: editingPostId,
-                        pendingPublishAt: pendingPublishAt, lastPublishError: lastPublishError)
+                        pendingPublishAt: pendingPublishAt, lastPublishError: lastPublishError,
+                        canvasAspectRatios: canvasAspectRatios)
             }
             let visibilityUserIds = meta.idsJSON
                 .flatMap { $0.data(using: .utf8) }
                 .flatMap { JSONDecoder().decodeOrLog([String].self, from: $0,
                                                      field: "story draft visibilityUserIds",
                                                      id: draftId, logger: Logger.cache) } ?? []
+
+            // Restitution du ratio de canvas, PAR SLIDE : le canvas v3 ne le
+            // loge pas (cf. écriture ci-dessus), toute slide décodée depuis un
+            // document déjà v3 revient donc toujours à `nil` sans ce recours à
+            // la méta — sans la boucle sur TOUTES les slides (et pas la seule
+            // première), un composer 16:9 en deuxième slide ou au-delà
+            // rouvrirait en portrait.
+            for index in slides.indices {
+                guard slides[index].effects.canvasAspectRatio == nil,
+                      let ratio = meta.canvasAspectRatios[slides[index].id] else { continue }
+                slides[index].effects.canvasAspectRatio = ratio
+            }
 
             return (slides: slides,
                     visibility: meta.visibility,
@@ -843,6 +960,24 @@ public final class StoryDraftStore: @unchecked Sendable {
             db,
             sql: "SELECT value FROM story_draft_meta WHERE draft_id = ? AND key = ?",
             arguments: [draftId, key])
+    }
+
+    /// Ratios de canvas PAR SLIDE, indexés `canvasAspectRatio:<slideId>` (cf.
+    /// `save()`/`load()`) — un composer peut porter jusqu'à dix slides à des
+    /// ratios indépendants ; une seule clé par brouillon ne peut pas les
+    /// représenter toutes.
+    private static func canvasAspectRatiosBySlide(_ db: Database, draftId: String) throws -> [String: Double] {
+        let rows = try Row.fetchAll(
+            db,
+            sql: "SELECT key, value FROM story_draft_meta WHERE draft_id = ? AND key LIKE 'canvasAspectRatio:%'",
+            arguments: [draftId])
+        return rows.reduce(into: [String: Double]()) { result, row in
+            let key: String = row["key"]
+            let value: String = row["value"]
+            guard let slideId = key.split(separator: ":", maxSplits: 1).last.map(String.init),
+                  let ratio = Double(value) else { return }
+            result[slideId] = ratio
+        }
     }
 
     private static func dateFromMeta(_ raw: String?) -> Date? {
@@ -953,7 +1088,8 @@ public final class StoryDraftStore: @unchecked Sendable {
                             .first(where: { !$0.isEmpty }),
                         coverFileURL: try coverFileURL(db, draftId: id),
                         backgroundHex: try firstSlideEffects(db, draftId: id)?.background,
-                        thumbHash: try firstSlideEffects(db, draftId: id)?.thumbHash,
+                        thumbHash: try Self.metaValue(db, draftId: id, key: "thumbHash")
+                            ?? firstSlideEffects(db, draftId: id)?.thumbHash,
                         pendingPublishAt: Self.dateFromMeta(
                             try Self.metaValue(db, draftId: id, key: "pendingPublishAt")),
                         lastPublishError: try Self.metaValue(db, draftId: id, key: "lastPublishError"),
@@ -973,12 +1109,7 @@ public final class StoryDraftStore: @unchecked Sendable {
             db,
             sql: "SELECT effects_json FROM story_draft_slide WHERE draft_id = ? ORDER BY order_index",
             arguments: [draftId])
-        for json in blobs {
-            guard let data = json.data(using: .utf8),
-                  let effects = try? JSONDecoder().decode(StoryEffects.self, from: data) else { continue }
-            return effects
-        }
-        return nil
+        return blobs.compactMap(decodeSlideEffects).first
     }
 
     /// Vignette du brouillon : la première image DANS L'ORDRE DES SLIDES dont

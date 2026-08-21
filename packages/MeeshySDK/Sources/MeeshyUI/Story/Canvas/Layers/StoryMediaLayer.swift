@@ -188,6 +188,15 @@ public final class StoryMediaLayer: CALayer {
     /// manipuler un élément ne fait pas sauter les vidéos qui jouent).
     private nonisolated(unsafe) var attachedURL: URL?
 
+    /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
+    /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
+    private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
+
+    /// `true` quand le player courant a été PRÊTÉ par le fournisseur : la couche
+    /// s'en détache à la fermeture, elle ne le vide jamais — l'item appartient à
+    /// la surface qui le porte.
+    private nonisolated(unsafe) var playsAProvidedPlayer = false
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -237,8 +246,10 @@ public final class StoryMediaLayer: CALayer {
                           mode: RenderMode,
                           resolver: (@Sendable (String) -> URL?)? = nil,
                           imageCache: ImageCacheReader? = nil,
+                          playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                           renderScale: CGFloat = UIScreen.main.scale) {
         self.media = media
+        self.playerProvider = playerProvider
         // Niveau de BASE repris du modèle. L'automation du canvas réécrira
         // `volume` au tick suivant si la slide en porte une ; sans cette ligne,
         // une couche fraîchement configurée jouerait à 1.0 et ignorerait le
@@ -572,6 +583,16 @@ public final class StoryMediaLayer: CALayer {
         return CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString)
     }
 
+    /// Le player que le chemin de LECTURE porte déjà pour ce média, ou `nil` —
+    /// auquel cas la couche ouvre le sien (composition, prefetch hors écran).
+    @MainActor
+    func providedCarrierPlayer() -> AVPlayer? {
+        guard let identity = media?.postMediaId, !identity.isEmpty,
+              let provided = playerProvider?.player(for: identity),
+              provided.currentItem != nil else { return nil }
+        return provided
+    }
+
     /// Attache (ou réutilise) le `AVPlayer` du layer pour l'URL fournie. Si
     /// un player existe déjà (cas du cache live qui réutilise la layer entre
     /// deux ticks), `replaceCurrentItem(with:)` swap l'asset sans recréer
@@ -602,7 +623,9 @@ public final class StoryMediaLayer: CALayer {
         if let existing = avPlayerLayer?.player {
             existing.replaceCurrentItem(with: item)
         } else {
-            let player = AVPlayer(playerItem: item)
+            let provided = providedCarrierPlayer()
+            playsAProvidedPlayer = provided != nil
+            let player = provided ?? AVPlayer(playerItem: item)
             let playerLayer = AVPlayerLayer(player: player)
             playerLayer.frame = bounds
             playerLayer.videoGravity = .resizeAspectFill
@@ -849,8 +872,11 @@ public final class StoryMediaLayer: CALayer {
         }
         if let player = avPlayerLayer?.player {
             player.pause()
-            player.replaceCurrentItem(with: nil)
+            if !playsAProvidedPlayer {
+                player.replaceCurrentItem(with: nil)
+            }
         }
+        playsAProvidedPlayer = false
         avPlayerLayer?.player = nil
         avPlayer = nil
         attachedURL = nil

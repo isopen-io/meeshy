@@ -22,10 +22,12 @@ struct StoryDecodingResilienceTests {
         return decoder
     }
 
-    /// Encodes a real `StoryEffects`, then replaces one element of the named
-    /// array with a scalar so it can no longer decode as an object.
+    /// Encodes a real `StoryEffects` dans sa forme v1 — le décodage tolérant
+    /// par élément est la garde de l'ARCHIVE legacy (un blob v3 décode ses
+    /// objets par le modèle CanvasV3) — puis remplace un élément du tableau
+    /// nommé par un scalaire pour qu'il ne décode plus comme objet.
     private func corruptingSecondElement(of key: String, in effects: StoryEffects) throws -> Data {
-        let data = try JSONEncoder().encode(effects)
+        let data = try JSONEncoder().encode(effects.runtimeSnapshot)
         var obj = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         var arr = try #require(obj[key] as? [Any])
         arr[1] = 42 // a number where an object is expected → element decode fails

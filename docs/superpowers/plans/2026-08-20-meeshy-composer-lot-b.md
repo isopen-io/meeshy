@@ -337,3 +337,118 @@ en forme crédit, jamais note+onde. n°17 : dépendances B1←A2 et B2←A3 déc
 - Cohérence de types avec le lot A : noms `CanvasV3/SceneV3/ObjectV3/BackgroundSoundV3/KeyframeV3` identiques ; golden UNIQUE partagé. ✓
 - Zéro placeholder : chaque étape code porte du code ou une instruction exécutable précise. ✓
 - Point laissé à l'exécutant SANS ambiguïté : le nom exact de l'hôte canvas (B4 Step 3) se lit dans le code au moment T — l'assertion de garde le fige ensuite. ✓
+
+---
+
+# Addendum rév. 3 — Rattrapage revue Opus (2026-08-20), tâches B8a–B8f
+
+**Contexte.** La revue finale (rapport intégral : `tasks/composer-lot-b-revue-opus.md`,
+23 constats vérifiés un à un par l'orchestrateur — n°1/2/3/7/12/18 reconfirmés sur
+pièces) a une racine : B7 encode TOUJOURS v3 alors que le pont n'a pas de logement
+pour tout ce que `StoryEffects` porte. Le gate B6 est VERT (2 cibles + build app)
+mais le lot NE MERGE PAS avant fermeture des bloquants n°1–4 et des majeurs.
+
+**Arbitrages tranchés (opposables) :**
+1. **Le payload est le logement** — `ObjectV3.payload` est permissif PAR CONTRAT
+   (`canvas-v3.ts:50`, `z.record(z.string(), z.unknown())`) : toute perte par-objet
+   se ferme en émettant/restituant les clés vivantes dans le payload. AUCUN
+   changement de schéma pour cela.
+2. **Extensions de contrat à 3 côtés** (Zod shared + convertisseur TS + Swift),
+   petites et additives : `BackgroundSound.variants?` (miroir de
+   `backgroundAudioVariants`, type calqué sur `StoryAudioVariant` réel),
+   `SceneV3.thumbHash?: string`. Fixtures NOUVELLES additives (le golden gelé
+   `v1-legacy-full.v3.json` ne bouge PAS ; le gel A2/A3 tient).
+3. **O3 réaligné** : `scenes` devient `.optional()` dans le Zod (min(1) conservé
+   quand présent) ; pont Swift ET convertisseur TS n'émettent `scenes` que s'il
+   existe au moins un objet — « jamais de cadre vide » (constat 19, mirroré).
+4. **Mémos wire par-objet** (runtime, non-encodés legacy, non persistés hors pont) :
+   `wireBandEdge` (top/bottom) et `wireTimingEnd` préservent `.band` et
+   `timing.end` à l'aller-retour d'un document servi (constats 11, 15). Réémission
+   fidèle au réencodage.
+5. **Brouillon JAMAIS lossy** (constats 4, 6) : grâce aux points 1–2 le v3 persisté
+   est complet ; `canvasAspectRatio` de composition se range en MÉTA de slide du
+   store (précédent établi par B7 pour thumbHash local). Test juge : round-trip
+   v1 → load → relecture, comparaison CHAMP À CHAMP des familles runtime.
+6. **O16 réalisé, pas déclaré** (constats 7, 8) : les layers (`StoryBackgroundLayer`,
+   `StoryMediaLayer`) acceptent un `playerProvider` opaque injecté (pureté SDK) ;
+   le chemin LECTURE (ScenePlayer/reader) fournit un provider adossé à
+   `SharedAVPlayerManager` (clé = identité du média, `carrierMediaIdentity` enfin
+   branché) ; le canvas de COMPOSITION garde ses players privés. `ScenePlayerConfig`
+   est CÂBLÉE : né-en-pause forcé à l'apparition, `loops`/`showsChrome` consommés.
+   La garde de source teste le SIGNAL (provider requis sur le chemin lecture),
+   plus seulement l'enveloppe.
+7. **Miroir TS harmonisé** (constats 12, 13, 14, 16) : branche `drawing`
+   (strokes + data base64) dans `storyEffectsV3.ts` ; côté Swift : z de repli =
+   compteur d'insertion (comme TS) pour TOUTES les familles ; sticker SANS
+   heuristique `anchorPoint` fabriquée (émettre uniquement les clés vivantes
+   réelles) ; clés média conditionnelles à la TS (muted explicite sinon dérivé
+   volume<=0, jamais émises par défaut).
+8. **Résilience v3** (constat 10) : décodage lossy PAR OBJET (un `ObjectV3`
+   malformé est sauté, la scène survit) + `do/catch` aux deux sites nus de
+   `FeedModels` (`:296`, `:714`) miroir du catch de `PostModels:290`. Prédicat
+   Swift `v >= 3` (constat 18).
+9. **Résolveur audio unique côté SDK** (constat 9) : `AudioForegroundChip`
+   (SDK MeeshyUI) passe par `backgroundAnnouncement` ; `resolve` délègue ou
+   disparaît. Les appelants APP (`StoryViewerView` ×2) restent au lot E — ligne
+   P0 dédiée pour que la dette soit visible.
+10. **Nettoyages** : `toJSON()` supprimé + les 3 suites qui l'assertaient
+    rebranchées sur l'encodage v3 réel (constat 20) ; commentaire faux de
+    `StoryDraftStoreTests` corrigé (21) ; ligne spec « precision conservée »
+    RETIRÉE (22, ligne morte des deux côtés) ; kinds réservés + plafonds Zod :
+    comportement actuel DOCUMENTÉ comme voulu (17, le serveur juge).
+11. **thumbHash au fil** (constat 23) : émis dans `SceneV3.thumbHash` par le pont
+    (depuis le runtime de slide) et par le TS (depuis le blob v1).
+
+### Task B8a — Contrat étendu + convertisseur TS harmonisé (gateway/shared)
+**Files:** `packages/shared/types/canvas-v3.ts`,
+`services/gateway/src/services/posts/storyEffectsV3.ts`,
+fixtures NOUVELLES `packages/shared/fixtures/canvas-v3/v1-legacy-rich.json` +
+`.v3.json` (drawing strokes+data, audio complet soundId/volume/waveform, média
+aspectRatio+pivot, stickers anchorPoint présent/absent, variants TTS, thumbHash),
+tests gateway existants étendus.
+Couvre les arbitrages 2, 3, 7, 11 côté TS/Zod. Gate : suites gateway bun vertes
+(`canvasV3.schema`, `canvasV3.fixtures`, `storyEffectsV3*`) + tsc. Rouge d'abord
+(nouvelle fixture + assertions), puis implémentation.
+
+### Task B8b — Pont Swift enrichi (payloads complets + mémos wire)
+**Files:** `CanvasV3.swift` (variants, thumbHash, scenes optionnel, v>=3 accepté
+au décodage du document), `CanvasV3Migration.swift`, `StoryModels.swift` (mémos),
+`CanvasV3MigrationTests.swift` + tests sur la NOUVELLE fixture riche partagée.
+Couvre 1, 2, 3, 4 (mémos), 7 côté Swift, 11. Test juge : migration Swift de
+`v1-legacy-rich.json` == golden partagé `.v3.json` (les DEUX convertisseurs sur la
+MÊME fixture) + round-trip document→runtime→document stable sur band/end/reserved.
+
+### Task B8c — Résilience v3 + prédicat
+**Files:** `CanvasV3.swift` (décodage lossy par objet), `StoryModels.swift:1746`
+(`>= 3`), `FeedModels.swift:296,714` (catch), tests
+`CanvasV3WireDecodingTests` + `StoryDecodingResilienceTests` (jumelle v3 recréée).
+Couvre 8 (arbitrage), constats 10, 18.
+
+### Task B8d — Brouillon jamais lossy
+**Files:** `StoryDraftStore.swift` (méta canvasAspectRatio), `StoryDraftStoreTests`
+(round-trip champ à champ : audio complet, drawing, variants, ratio, thumbHash).
+Couvre 5. DÉPEND de B8b.
+
+### Task B8e — O16 réalisé + config câblée
+**Files:** `StoryBackgroundLayer.swift`, `StoryMediaLayer.swift` (playerProvider
+injecté), `StoryReaderRepresentable`/hôte (transmission), `MeeshyScenePlayer.swift`
+(provider SharedAVPlayerManager, config câblée, né-en-pause forcé),
+`ScenePlayerModeTests.swift` (garde SIGNAL). Couvre 6 ; constats 7, 8.
+
+### Task B8f — Nettoyages + P0 refondu + gate complet
+`toJSON()` supprimé + 3 suites rebranchées ; commentaire B3 ; AudioForegroundChip
+promu ; spec : ligne precision retirée + arbitrages consignés (§C2) ; P0 :
+dénominateur 51→57 (6 tâches B8), lignes B8 ajoutées, en-tête lot B honnête
+(« gate vert, rattrapage revue intégré ») ; gate FINAL : scheme complet 2 cibles +
+build app + suites gateway bun. Couvre 9, 10 (arbitrages), constats 20–22.
+Ligne héritée de B8b à TRANCHER ici (constat 1, résiduel) : `waveformSamples`
+reste hors du payload audio v3 — ni `v1-legacy-full.v3.json` ni
+`v1-legacy-rich.v3.json` ne le portent et `storyEffectsV3.ts` ne le mappe pas,
+donc l'émettre côté Swift casserait les deux juges partagés. Conséquence en
+l'état : un objet audio reconstruit depuis un document v3 revient avec
+`waveformSamples == []` (défaut d'init). Soit TS + fixture riche l'émettent (le
+pont Swift suit), soit la spec acte qu'il est re-dérivable côté lecteur.
+
+**Ordre : B8a → B8b → (B8c ∥ B8d) → B8e → B8f.** Chaque tâche : TDD strict,
+DoD vérifié, P0 au même commit que son gate (les tâches B8 s'ajoutent à la planche
+dès B8f ; avant cela le commit de gate cite l'addendum).

@@ -2,9 +2,11 @@ import Testing
 import Foundation
 @testable import MeeshySDK
 
-/// `StoryEffects.canvasAspectRatio` persiste la forme du canvas choisie à la
+/// `StoryEffects.canvasAspectRatio` porte la forme du canvas choisie à la
 /// composition. Contraintes de compat : les stories antérieures (sans la clé)
-/// décodent en `nil` = portrait 9:16 par défaut ; un ratio paysage round-trip.
+/// décodent en `nil` = portrait 9:16 par défaut ; un blob v1 qui porte la clé
+/// décode en paysage. À l'ÉCRITURE le fil v3 absorbe le ratio (spec §C2, U20) :
+/// la scène letterboxe et les ancres libres sont remappées dans son rect.
 struct StoryEffectsCanvasAspectCodableTests {
 
     private func roundTrip(_ effects: StoryEffects) throws -> StoryEffects {
@@ -12,11 +14,20 @@ struct StoryEffectsCanvasAspectCodableTests {
         return try JSONDecoder().decode(StoryEffects.self, from: data)
     }
 
-    @Test func encodeDecode_landscapeRatio_roundTrips() throws {
+    @Test func encode_landscapeRatio_isAbsorbedByTheAnchorRemap() throws {
         var effects = StoryEffects()
         effects.canvasAspectRatio = 16.0 / 9.0
+        effects.textObjects = [StoryTextObject(id: "t1", text: "Salut", x: 0.5, y: 0.9)]
         let decoded = try roundTrip(effects)
-        #expect(decoded.canvasAspectRatio != nil)
+        #expect(decoded.canvasAspectRatio == nil)
+        #expect(decoded.canvasAspect == .portrait)
+        // 9:16 dans 16:9 → hauteur utile 0.31640625, bande haute 0.341796875.
+        #expect(abs((decoded.textObjects.first?.y ?? 0) - 0.6265625) < 0.000001)
+    }
+
+    @Test func decode_legacyJSONWithRatio_isLandscape() throws {
+        let legacy = Data(#"{"textObjects":[],"canvasAspectRatio":1.7777777777777777}"#.utf8)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: legacy)
         #expect(abs((decoded.canvasAspectRatio ?? 0) - 16.0 / 9.0) < 0.0001)
         #expect(decoded.canvasAspect == .landscape)
     }

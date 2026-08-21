@@ -22,6 +22,23 @@ describe('canvas-v3 fixtures (le gel inter-lots)', () => {
   });
 });
 
+describe('canvas-v3 fixtures additives (rattrapage B8a)', () => {
+  it('the rich v1 fixture does NOT parse as v3 either (it feeds the converter)', () => {
+    const raw = JSON.parse(readFileSync(join(DIR, 'v1-legacy-rich.json'), 'utf8'));
+    expect(CanvasV3Schema.safeParse(raw).success).toBe(false);
+  });
+
+  it('the additive rich golden parses strictly AND keeps its extended keys', () => {
+    const raw = JSON.parse(readFileSync(join(DIR, 'v1-legacy-rich.v3.json'), 'utf8'));
+    const res = CanvasV3Schema.safeParse(raw);
+    expect(res.success ? true : res.error.issues).toBe(true);
+    if (!res.success) return;
+    expect(res.data.scenes?.[0].thumbHash).toBe('1QcSHQRnh493V4dIh4eXh0h4kJUI');
+    expect(res.data.sound?.variants).toHaveLength(2);
+    expect(res.data.scenes?.[0].objects.find(o => o.kind === 'drawing')?.payload.data).toBe('AQIDBA==');
+  });
+});
+
 describe('convertV1ToV3 — bounds audio ne sortent jamais un intervalle corrompu', () => {
   it('preserves a complete, ordered audio trim (start <= end)', () => {
     const doc = convertV1ToV3({ backgroundAudioId: 'snd1', backgroundAudioStart: 2, backgroundAudioEnd: 17 });

@@ -119,6 +119,7 @@ public enum StoryRenderer {
                               languages: [String] = [],
                               resolver: (@Sendable (String) -> URL?)? = nil,
                               imageCache: ImageCacheReader? = nil,
+                              playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
                               mediaFrameProvider: ((StoryMediaObject, CMTime) -> CGImage?)? = nil,
@@ -164,6 +165,7 @@ public enum StoryRenderer {
                                              mode: mode,
                                              resolver: resolver,
                                              imageCache: imageCache,
+                                             playerProvider: playerProvider,
                                              renderScale: contentsScale)
                         return mediaLayer
                     }
@@ -178,6 +180,7 @@ public enum StoryRenderer {
                                languages: languages,
                                resolver: resolver,
                                imageCache: imageCache,
+                               playerProvider: playerProvider,
                                contentsScale: contentsScale)
                 }
             } else {
@@ -188,6 +191,7 @@ public enum StoryRenderer {
                                    languages: languages,
                                    resolver: resolver,
                                    imageCache: imageCache,
+                                   playerProvider: playerProvider,
                                    contentsScale: contentsScale)
             }
 
@@ -429,6 +433,7 @@ public enum StoryRenderer {
                                    languages: [String] = [],
                                    resolver: (@Sendable (String) -> URL?)? = nil,
                                    imageCache: ImageCacheReader? = nil,
+                                   playerProvider: (any StoryCarrierPlayerProviding)? = nil,
                                    contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
@@ -437,6 +442,7 @@ public enum StoryRenderer {
                             mode: mode,
                             resolver: resolver,
                             imageCache: imageCache,
+                            playerProvider: playerProvider,
                             renderScale: contentsScale)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {

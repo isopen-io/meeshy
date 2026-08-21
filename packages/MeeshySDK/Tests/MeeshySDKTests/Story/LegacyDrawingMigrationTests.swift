@@ -205,7 +205,10 @@ struct LegacyDrawingMigrationTests {
         #expect(effects.drawingStrokes == nil || effects.drawingStrokes?.isEmpty == true)
     }
 
-    @Test("StoryEffects encoding emits drawingStrokes when set")
+    /// Le fil n'accepte plus que le canvas v3 : le dessin y voyage en objet
+    /// `kind:drawing` — une story qui n'est QUE du dessin doit survivre à
+    /// l'aller-retour, sans quoi la publication effacerait son seul contenu.
+    @Test("StoryEffects encoding carries the drawing through the v3 wire")
     func storyEffects_encode_drawingStrokes() throws {
         var effects = StoryEffects()
         effects.drawingStrokes = [
@@ -220,8 +223,16 @@ struct LegacyDrawingMigrationTests {
         ]
         let data = try JSONEncoder().encode(effects)
         let json = String(data: data, encoding: .utf8) ?? ""
-        #expect(json.contains("drawingStrokes"))
         #expect(json.contains("stroke-99"))
         #expect(json.contains("FFFFFF"))
+
+        let document = try JSONDecoder().decode(CanvasV3.self, from: data)
+        #expect(document.scenes[0].objects.map(\.kind) == [.drawing])
+
+        let restored = try JSONDecoder().decode(StoryEffects.self, from: data)
+        #expect(restored.drawingStrokes?.map(\.id) == ["stroke-99"])
+        #expect(restored.drawingStrokes?.first?.colorHex == "FFFFFF")
+        #expect(restored.drawingStrokes?.first?.width == 3)
+        #expect(restored.drawingStrokes?.first?.points.map(\.x) == [1])
     }
 }

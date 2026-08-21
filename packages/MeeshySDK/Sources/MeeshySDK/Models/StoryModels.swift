@@ -669,8 +669,9 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var volume: Float               // 0.0–1.0
     /// Niveau mémorisé au moment du mute un-bouton (`toggleMute()`), pour que
     /// l'unmute RESTAURE le réglage de l'auteur au lieu de forcer 1.0.
-    /// Auteur-local : persiste dans les drafts (Codable) mais n'est jamais
-    /// publié (`StoryEffects.toJSON()` liste ses clés explicitement).
+    /// Auteur-local : persiste dans les drafts ET voyage au fil, dans le
+    /// payload v3 permissif de l'objet (`CanvasV3Migration.mediaPayload`,
+    /// arbitrage 1 — brouillon jamais lossy, constat 4).
     /// `nil` dès que `volume > 0` — l'invariant est maintenu par
     /// `setVolumePreservingMuteMemento(_:)`.
     public var mutedVolumeMemento: Float?
@@ -937,8 +938,9 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var volume: Float           // 0.0–1.0
     /// Niveau mémorisé au moment du mute un-bouton — miroir de
     /// `StoryMediaObject.mutedVolumeMemento` (mêmes invariants, cf. le
-    /// protocole `StoryVolumeCarrying`). Jamais publié : `toJSON()` liste
-    /// ses clés explicitement.
+    /// protocole `StoryVolumeCarrying`). Persiste dans le payload v3 de
+    /// l'objet audio (`CanvasV3Migration.audioPayload`), au même titre que
+    /// le média (arbitrage 1, brouillon jamais lossy).
     public var mutedVolumeMemento: Float?
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
     /// Quand true, ce player audio joue en fond (boucle infinie, pas de UI pill draggable,
@@ -1621,6 +1623,32 @@ public struct StoryEffects: Codable, Sendable {
     // Effets de transition (entrée / sortie du slide)
     public var opening: StoryTransitionEffect?
     public var closing: StoryTransitionEffect?
+    /// Forme-objet `{type: …}` du convertisseur gateway v3, préservée telle
+    /// quelle pour le pont B2 : `slideUp` et consorts n'ont pas de cas enum.
+    /// Décodée seulement — jamais ré-encodée dans le JSON v1.
+    var openingWire: [String: CanvasJSONValue]?
+    var closingWire: [String: CanvasJSONValue]?
+
+    /// Mémos WIRE par objet (clé = id de l'objet) — ce que le DOCUMENT v3
+    /// porte et qu'aucune famille runtime v1 ne sait loger. Internes comme
+    /// `openingWire` : jamais encodés en v1, jamais persistés hors du pont,
+    /// réémis fidèlement au réencodage.
+    /// - `wireBandEdge` : une ancre de BANDE n'a pas de position libre ; sans
+    ///   mémo, l'aller-retour la convertirait en position libre et détruirait
+    ///   la mise en page d'un réel à bandes.
+    /// - `wireTimingEnd` : borne de fin, absente des familles v1.
+    /// - `wireAnchorPoint` : pivot NOMMÉ tel que le v1/le document le porte —
+    ///   sans lui, le pont devrait fabriquer la clé par heuristique.
+    /// - `wireMissingZIndex` : ids dont le blob v1 ne portait AUCUN `zIndex`.
+    ///   Les familles le décodent à 0, donc l'absence y est indiscernable d'un
+    ///   0 posé par l'auteur ; sans mémo le pont ne pourrait pas offrir le
+    ///   compteur d'insertion du convertisseur gateway (`z++`) sans écraser un
+    ///   rang légitime. Vide par défaut : un runtime COMPOSÉ (jamais décodé)
+    ///   porte ses propres rangs et les garde.
+    var wireBandEdge: [String: ObjectAnchor.Edge]?
+    var wireTimingEnd: [String: Double]?
+    var wireAnchorPoint: [String: String]?
+    var wireMissingZIndex: Set<String>?
 
     // Objets canvas composites
     public var textObjects: [StoryTextObject]
@@ -1634,6 +1662,12 @@ public struct StoryEffects: Codable, Sendable {
     public var backgroundAudioVariants: [StoryAudioVariant]?
     /// ThumbHash of the composite canvas screenshot (computed client-side at publish time)
     public var thumbHash: String?
+
+    /// Document v3 tel que le FIL l'a servi — SNAPSHOT DE LECTURE, jamais une
+    /// source d'encodage : `encode(to:)` repart toujours du runtime courant,
+    /// sans quoi une story éditée réémettrait le document d'origine et
+    /// perdrait l'édition en silence. `nil` = le fil a servi du legacy v1.
+    public var canvasV3: CanvasV3?
 
     // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
     public var backgroundTransform: StoryBackgroundTransform?
@@ -1727,10 +1761,17 @@ public struct StoryEffects: Codable, Sendable {
         case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
         case canvasAspectRatio
         case musicTrackId, musicStartTime, musicEndTime
+        case v
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let mark = try c.decodeIfPresent(Int.self, forKey: .v), mark >= 3 {
+            let document = try CanvasV3(from: decoder)
+            self = StoryEffects(rendering: document, sceneIndex: 0)
+            canvasV3 = document
+            return
+        }
         background = try c.decodeIfPresent(String.self, forKey: .background)
         textStyle = try c.decodeIfPresent(String.self, forKey: .textStyle)
         textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
@@ -1761,8 +1802,12 @@ public struct StoryEffects: Codable, Sendable {
         backgroundAudioEnd = try c.decodeIfPresent(TimeInterval.self, forKey: .backgroundAudioEnd)
         voiceAttachmentId = try c.decodeIfPresent(String.self, forKey: .voiceAttachmentId)
         voiceTranscriptions = try c.decodeIfPresent([StoryVoiceTranscription].self, forKey: .voiceTranscriptions)
-        opening = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .opening)
-        closing = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .closing)
+        let openingDecoded = Self.decodeTransition(c, .opening)
+        opening = openingDecoded.effect
+        openingWire = openingDecoded.wire
+        let closingDecoded = Self.decodeTransition(c, .closing)
+        closing = closingDecoded.effect
+        closingWire = closingDecoded.wire
         // Lossy per-element decode: one malformed object (another user's story)
         // is skipped rather than dropping the whole collection (or, via the
         // APIPost do/catch above, the whole story's effects).
@@ -1777,44 +1822,120 @@ public struct StoryEffects: Codable, Sendable {
         timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
         canvasAspectRatio = try c.decodeIfPresent(Double.self, forKey: .canvasAspectRatio)
+        wireAnchorPoint = Self.stickerAnchorPoints(c)
+        wireMissingZIndex = Self.idsWithoutZIndex(c)
     }
 
+    /// Les familles v1 décodent `zIndex` à 0 quand la clé manque : seule une
+    /// lecture BRUTE distingue « rang absent » de « rang 0 ».
+    private static func idsWithoutZIndex(
+        _ c: KeyedDecodingContainer<CodingKeys>
+    ) -> Set<String>? {
+        let families: [CodingKeys] = [.textObjects, .mediaObjects, .stickerObjects,
+                                      .locationObjects, .audioPlayerObjects]
+        let ids = families.flatMap { key -> [String] in
+            guard let raw = try? c.decodeIfPresent([[String: CanvasJSONValue]].self,
+                                                   forKey: key) else { return [] }
+            return raw.compactMap { object -> String? in
+                guard case .string(let id)? = object["id"] else { return nil }
+                if case .number? = object["zIndex"] { return nil }
+                return id
+            }
+        }
+        return ids.isEmpty ? nil : Set(ids)
+    }
+
+    /// Le pivot NOMMÉ d'un sticker v1 (`anchorPoint`) n'a pas de propriété
+    /// dans `StorySticker` : sans cette lecture brute, le pont ne pourrait
+    /// que le fabriquer ou le perdre.
+    private static func stickerAnchorPoints(
+        _ c: KeyedDecodingContainer<CodingKeys>
+    ) -> [String: String]? {
+        guard let raw = try? c.decodeIfPresent([[String: CanvasJSONValue]].self,
+                                               forKey: .stickerObjects) else { return nil }
+        let pairs = raw.compactMap { object -> (String, String)? in
+            guard case .string(let id)? = object["id"],
+                  case .string(let point)? = object["anchorPoint"] else { return nil }
+            return (id, point)
+        }
+        return pairs.isEmpty ? nil : Dictionary(pairs, uniquingKeysWith: { _, last in last })
+    }
+
+    /// Une transition v1 Swift est une CHAÎNE (`"fade"`) ; celle du
+    /// convertisseur gateway est un OBJET (`{"type":"fade"}`), au vocabulaire
+    /// plus large que l'enum. Les deux formes décodent, l'inconnue vaut `nil`
+    /// (tolérance) — l'objet est conservé dans `openingWire`/`closingWire`.
+    private static func decodeTransition(
+        _ c: KeyedDecodingContainer<CodingKeys>,
+        _ key: CodingKeys
+    ) -> (effect: StoryTransitionEffect?, wire: [String: CanvasJSONValue]?) {
+        if let effect = try? c.decodeIfPresent(StoryTransitionEffect.self, forKey: key) {
+            return (effect, nil)
+        }
+        guard let wire = try? c.decodeIfPresent([String: CanvasJSONValue].self, forKey: key) else {
+            return (nil, nil)
+        }
+        guard case .string(let raw)? = wire["type"],
+              let effect = StoryTransitionEffect(rawValue: raw) else {
+            return (nil, wire)
+        }
+        return (effect, wire)
+    }
+
+    /// Le fil n'accepte plus que le canvas v3 : l'encodage part TOUJOURS du
+    /// runtime courant, jamais du `canvasV3` mémorisé — une composition neuve
+    /// (aucun document servi) et une story éditée émettent donc l'une comme
+    /// l'autre l'état réel du canvas.
     public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encodeIfPresent(background, forKey: .background)
-        try c.encodeIfPresent(textStyle, forKey: .textStyle)
-        try c.encodeIfPresent(textColor, forKey: .textColor)
-        try c.encodeIfPresent(textPosition, forKey: .textPosition)
-        try c.encodeIfPresent(filter, forKey: .filter)
-        try c.encodeIfPresent(filterIntensity, forKey: .filterIntensity)
-        try c.encodeIfPresent(stickers, forKey: .stickers)
-        try c.encodeIfPresent(textAlign, forKey: .textAlign)
-        try c.encodeIfPresent(textSize, forKey: .textSize)
-        try c.encodeIfPresent(textBg, forKey: .textBg)
-        try c.encodeIfPresent(textOffsetY, forKey: .textOffsetY)
-        try c.encodeIfPresent(stickerObjects, forKey: .stickerObjects)
-        try c.encodeIfPresent(textPositionPoint, forKey: .textPositionPoint)
-        try c.encodeIfPresent(drawingData, forKey: .drawingData)
-        try c.encodeIfPresent(drawingStrokes, forKey: .drawingStrokes)
-        try c.encodeIfPresent(backgroundAudioId, forKey: .backgroundAudioId)
-        try c.encodeIfPresent(backgroundAudioVolume, forKey: .backgroundAudioVolume)
-        try c.encodeIfPresent(backgroundAudioStart, forKey: .backgroundAudioStart)
-        try c.encodeIfPresent(backgroundAudioEnd, forKey: .backgroundAudioEnd)
-        try c.encodeIfPresent(voiceAttachmentId, forKey: .voiceAttachmentId)
-        try c.encodeIfPresent(voiceTranscriptions, forKey: .voiceTranscriptions)
-        try c.encodeIfPresent(opening, forKey: .opening)
-        try c.encodeIfPresent(closing, forKey: .closing)
-        try c.encode(textObjects, forKey: .textObjects)
-        try c.encode(locationObjects, forKey: .locationObjects)
-        try c.encodeIfPresent(mediaObjects, forKey: .mediaObjects)
-        try c.encodeIfPresent(audioPlayerObjects, forKey: .audioPlayerObjects)
-        try c.encodeIfPresent(backgroundAudioVariants, forKey: .backgroundAudioVariants)
-        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
-        try c.encodeIfPresent(backgroundTransform, forKey: .backgroundTransform)
-        try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
-        try c.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
-        try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
-        try c.encodeIfPresent(canvasAspectRatio, forKey: .canvasAspectRatio)
+        try CanvasV3(migrating: self).encode(to: encoder)
+    }
+
+    /// Forme v1 COMPLÈTE des effets — l'empreinte LOCALE dont l'écran dépend.
+    /// Le canvas v3 absorbe le ratio, le thumbHash et le stylage racine ; le
+    /// composer, lui, doit repeindre dès que l'un d'eux bouge. Jamais envoyée
+    /// au fil : `encode(to:)` reste la seule voie du réseau.
+    public var runtimeSnapshot: RuntimeSnapshot { RuntimeSnapshot(effects: self) }
+
+    public struct RuntimeSnapshot: Encodable {
+        public let effects: StoryEffects
+
+        public func encode(to encoder: Encoder) throws {
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(effects.background, forKey: .background)
+            try c.encodeIfPresent(effects.textStyle, forKey: .textStyle)
+            try c.encodeIfPresent(effects.textColor, forKey: .textColor)
+            try c.encodeIfPresent(effects.textPosition, forKey: .textPosition)
+            try c.encodeIfPresent(effects.filter, forKey: .filter)
+            try c.encodeIfPresent(effects.filterIntensity, forKey: .filterIntensity)
+            try c.encodeIfPresent(effects.stickers, forKey: .stickers)
+            try c.encodeIfPresent(effects.textAlign, forKey: .textAlign)
+            try c.encodeIfPresent(effects.textSize, forKey: .textSize)
+            try c.encodeIfPresent(effects.textBg, forKey: .textBg)
+            try c.encodeIfPresent(effects.textOffsetY, forKey: .textOffsetY)
+            try c.encodeIfPresent(effects.stickerObjects, forKey: .stickerObjects)
+            try c.encodeIfPresent(effects.textPositionPoint, forKey: .textPositionPoint)
+            try c.encodeIfPresent(effects.drawingData, forKey: .drawingData)
+            try c.encodeIfPresent(effects.drawingStrokes, forKey: .drawingStrokes)
+            try c.encodeIfPresent(effects.backgroundAudioId, forKey: .backgroundAudioId)
+            try c.encodeIfPresent(effects.backgroundAudioVolume, forKey: .backgroundAudioVolume)
+            try c.encodeIfPresent(effects.backgroundAudioStart, forKey: .backgroundAudioStart)
+            try c.encodeIfPresent(effects.backgroundAudioEnd, forKey: .backgroundAudioEnd)
+            try c.encodeIfPresent(effects.voiceAttachmentId, forKey: .voiceAttachmentId)
+            try c.encodeIfPresent(effects.voiceTranscriptions, forKey: .voiceTranscriptions)
+            try c.encodeIfPresent(effects.opening, forKey: .opening)
+            try c.encodeIfPresent(effects.closing, forKey: .closing)
+            try c.encode(effects.textObjects, forKey: .textObjects)
+            try c.encode(effects.locationObjects, forKey: .locationObjects)
+            try c.encodeIfPresent(effects.mediaObjects, forKey: .mediaObjects)
+            try c.encodeIfPresent(effects.audioPlayerObjects, forKey: .audioPlayerObjects)
+            try c.encodeIfPresent(effects.backgroundAudioVariants, forKey: .backgroundAudioVariants)
+            try c.encodeIfPresent(effects.thumbHash, forKey: .thumbHash)
+            try c.encodeIfPresent(effects.backgroundTransform, forKey: .backgroundTransform)
+            try c.encodeIfPresent(effects.slideDuration, forKey: .slideDuration)
+            try c.encodeIfPresent(effects.timelineDuration, forKey: .timelineDuration)
+            try c.encodeIfPresent(effects.clipTransitions, forKey: .clipTransitions)
+            try c.encodeIfPresent(effects.canvasAspectRatio, forKey: .canvasAspectRatio)
+        }
     }
 
     /// Forme du canvas de ce slide, dérivée de `canvasAspectRatio` (défaut portrait).
@@ -1918,102 +2039,6 @@ public struct StoryEffects: Codable, Sendable {
     /// Retourne uniquement les audios foreground (draggable pills avec UI).
     public var resolvedForegroundAudioPlayers: [StoryAudioPlayerObject] {
         (audioPlayerObjects ?? []).filter { $0.isBackground != true }
-    }
-
-    public func toJSON() -> [String: Any] {
-        var dict: [String: Any] = [:]
-        if let bg = background { dict["background"] = bg }
-        if let ts = textStyle { dict["textStyle"] = ts }
-        if let tc = textColor { dict["textColor"] = tc }
-        if let tp = textPositionPoint {
-            dict["textPosition"] = ["x": tp.x, "y": tp.y]
-        } else if let tp = textPosition {
-            dict["textPosition"] = tp
-        }
-        if let f = filter { dict["filter"] = f }
-        if let so = stickerObjects, !so.isEmpty {
-            dict["stickers"] = so.map { s in
-                ["emoji": s.emoji, "x": s.x, "y": s.y, "scale": s.scale, "rotation": s.rotation] as [String: Any]
-            }
-        } else if let st = stickers { dict["stickers"] = st }
-        if let aid = backgroundAudioId { dict["backgroundAudioId"] = aid }
-        if let vol = backgroundAudioVolume { dict["backgroundAudioVolume"] = vol }
-        if let start = backgroundAudioStart { dict["backgroundAudioStart"] = start }
-        if let end = backgroundAudioEnd { dict["backgroundAudioEnd"] = end }
-        if let vid = voiceAttachmentId { dict["voiceAttachmentId"] = vid }
-        if let op = opening { dict["opening"] = op.rawValue }
-        if let cl = closing { dict["closing"] = cl.rawValue }
-        if let objects = mediaObjects, !objects.isEmpty {
-            dict["mediaObjects"] = objects.map { o in
-                var d: [String: Any] = ["id": o.id, "postMediaId": o.postMediaId, "mediaType": o.mediaType,
-                 "placement": o.placement, "x": o.x, "y": o.y,
-                 "scale": o.scale, "rotation": o.rotation, "volume": o.volume]
-                d["isBackground"] = o.isBackground
-                if let st = o.startTime { d["startTime"] = st }
-                if let dur = o.duration { d["duration"] = dur }
-                d["loop"] = o.loop
-                if let fi = o.fadeIn { d["fadeIn"] = fi }
-                if let fo = o.fadeOut { d["fadeOut"] = fo }
-                return d
-            }
-        }
-        if let players = audioPlayerObjects, !players.isEmpty {
-            dict["audioPlayerObjects"] = players.map { p in
-                var d: [String: Any] = ["id": p.id, "postMediaId": p.postMediaId, "placement": p.placement,
-                 "x": p.x, "y": p.y, "volume": p.volume,
-                 "waveformSamples": p.waveformSamples]
-                if let bg = p.isBackground { d["isBackground"] = bg }
-                // Automation de volume : sans cette sérialisation, les points
-                // posés par l'auteur seraient perdus à la publication.
-                if let frames = p.keyframes, !frames.isEmpty {
-                    d["keyframes"] = frames.map { kf -> [String: Any] in
-                        var f: [String: Any] = ["id": kf.id, "time": kf.time]
-                        if let v = kf.volume { f["volume"] = v }
-                        if let e = kf.easing { f["easing"] = e.rawValue }
-                        return f
-                    }
-                }
-                if let variants = p.backgroundAudioVariants, !variants.isEmpty {
-                    d["backgroundAudioVariants"] = variants.map { v in
-                        ["postMediaId": v.postMediaId, "language": v.language,
-                         "isAutoGenerated": v.isAutoGenerated] as [String: Any]
-                    }
-                }
-                if let st = p.startTime { d["startTime"] = st }
-                if let dur = p.duration { d["duration"] = dur }
-                if let lp = p.loop { d["loop"] = lp }
-                if let fi = p.fadeIn { d["fadeIn"] = fi }
-                if let fo = p.fadeOut { d["fadeOut"] = fo }
-                return d
-            }
-        }
-        if let variants = backgroundAudioVariants, !variants.isEmpty {
-            dict["backgroundAudioVariants"] = variants.map { v in
-                ["postMediaId": v.postMediaId, "language": v.language,
-                 "isAutoGenerated": v.isAutoGenerated] as [String: Any]
-            }
-        }
-        if !textObjects.isEmpty {
-            dict["textObjects"] = textObjects.map { t in
-                var d: [String: Any] = ["id": t.id, "text": t.text,
-                 "x": t.x, "y": t.y, "scale": t.scale, "rotation": t.rotation,
-                 "zIndex": t.zIndex, "fontSize": t.fontSize, "fontFamily": t.fontFamily,
-                 "anchor": ["x": Double(t.anchor.x), "y": Double(t.anchor.y)]]
-                if let tr = t.translations, !tr.isEmpty { d["translations"] = tr }
-                if let ts = t.textStyle { d["textStyle"] = ts }
-                if let tc = t.textColor { d["textColor"] = tc }
-                if let ta = t.textAlign { d["textAlign"] = ta }
-                if let bg = t.textBg { d["textBg"] = bg }
-                if let st = t.startTime { d["startTime"] = st }
-                if let dur = t.duration { d["duration"] = dur }
-                if let fi = t.fadeIn { d["fadeIn"] = fi }
-                if let fo = t.fadeOut { d["fadeOut"] = fo }
-                return d
-            }
-        }
-        if let sd = slideDuration { dict["slideDuration"] = sd }
-        if let td = timelineDuration { dict["timelineDuration"] = td }
-        return dict
     }
 }
 
@@ -4055,6 +4080,25 @@ public struct StoryKeyframe: Codable, Identifiable, Sendable {
         self.opacity = opacity
         self.volume = volume
         self.easing = easing
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, time, x, y, scale, opacity, volume, easing
+    }
+
+    /// Un keyframe écrit par le convertisseur gateway (TS `Keyframe`) ne porte
+    /// pas d'`id` — fixture gelée `v1-legacy-full.json`. On en génère un
+    /// plutôt que de jeter tout l'objet porteur au décodage lossy.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        time = try c.decode(Float.self, forKey: .time)
+        x = try c.decodeIfPresent(CGFloat.self, forKey: .x)
+        y = try c.decodeIfPresent(CGFloat.self, forKey: .y)
+        scale = try c.decodeIfPresent(CGFloat.self, forKey: .scale)
+        opacity = try c.decodeIfPresent(CGFloat.self, forKey: .opacity)
+        volume = try c.decodeIfPresent(Float.self, forKey: .volume)
+        easing = try c.decodeIfPresent(StoryEasing.self, forKey: .easing)
     }
 }
 

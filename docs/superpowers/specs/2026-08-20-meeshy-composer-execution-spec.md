@@ -16,6 +16,12 @@ ligne « v3 invalide » (F5), `volume?` au payload media (F10)
 Rév. 8 (2026-08-20) : P0 tableau de bord vivant (règle de maintenance en §E) ;
 lot A EXÉCUTÉ et SUR MAIN (2026-08-20, gate c3bc02a17) — 10/10 tâches TDD,
 795 suites vertes, arrivée inerte (drapeaux OFF), sentinelle O17 active
+Rév. 9 (2026-08-21) : rattrapage revue Opus intégré au lot B (tâches
+B8a→B8f, 23 constats TOUS fermés) — §C2 : ligne `locationObjects`
+corrigée (`precision` n'existe nulle part au contrat, constat 22) ; §C2bis
+ajoutée, les onze arbitrages de l'addendum y sont consignés en dur plutôt
+que dans un seul rapport de revue ; lot B EXÉCUTÉ, gate FINAL trois volets
+(scheme SDK complet + build app + suites gateway bun)
 Design source : `./2026-08-19-meeshy-composer-design.md` (+ planches P1–P24)
 Ce document est la sortie de la revue totale : il fige les décisions, définit le
 contrat commun, et découpe l'exécution en **huit lots** (six parallélisables
@@ -185,7 +191,7 @@ Keyframe { time, x?, y?, scale?, opacity?, volume?, easing? }   // existant, inc
 | `textObjects[i]` | `ObjectV3(kind:text, plane:fg)` | styles/couleur/fond/align/size → payload inchangé ; `textPosition/textOffsetY` → `anchor.free` ; `startTime/keyframes` → `timing` ; `sourceLanguage` → `locale` ; **`translations` → `payload.translations` (conservées — l'archive garde son Prisme, C6)** |
 | `mediaObjects` / fond image-vidéo (`background`, `backgroundTransform`) | `kind:media` — porteur en `plane:content`, fond en `plane:bg` ; `volume` → `payload.volume`, muet → `payload.muted` (rév. 7, F10) | `canvasAspectRatio` DISPARAÎT : le porteur garde son ratio intrinsèque, la scène letterboxe (bandes). **Rév. 4 (U20) : les ancres `.free` des objets v1 sont REMAPPÉES dans le rect letterboxé du porteur** — les coordonnées v1 sont normalisées au canvas de ratio `canvasAspectRatio` ; converties telles quelles, un texte posé SUR le média atterrirait dans une bande. Golden : cas ratio 1.7777 avec coordonnées remappées assertées |
 | `stickerObjects` | `kind:sticker {emoji, baseSize, anchorPoint, fadeIn, fadeOut}` | **rév. 4 (U21) : les champs vivants SURVIVENT** — taille rendue = baseSize × scale (défaut 140 ; un sticker historique à baseSize 300 rendrait à moitié sans lui), pivot, fondus. La tolérance « champ inconnu ignoré » ne vaut que pour l'INCONNU, jamais pour le recensé |
-| `locationObjects` | `kind:place, plane:fg` | precision conservée |
+| `locationObjects` | `kind:place, plane:fg` | `place` (`SharedPlace` complet) → `payload.place` ; pivot (`anchor`) → `payload.anchor` quand non-centré. **Rév. 9 (constat 22) : la ligne « precision conservée » est RETIRÉE — ni `StoryLocationObject` v1 ni `SharedPlace` ne portent de champ `precision`, des deux côtés ; c'était une ligne de contrat morte, jamais implémentée ni implémentable** |
 | `audioPlayerObjects` | `kind:audio, plane:content` | chips premier plan (B3.3) |
 | `backgroundAudioId/Volume/Start/End` (+ `musicTrackId` déprécié) | `sound{source:library}` | piste propre (`voiceAttachmentId`…) → `source:original` |
 | `voiceTranscriptions` (racine) | `sound.transcriptions` | par langue, ordre conservé — le karaoké survit à la conversion ET à l'encodage neuf (règle B7, C7) |
@@ -195,6 +201,80 @@ Keyframe { time, x?, y?, scale?, opacity?, volume?, easing? }   // existant, inc
 | `textStyle`/`textColor`/`textPosition` (racine, stylage legacy du content) | `ObjectV3(kind:text)` synthétisé portant le `content` — SEULEMENT si `textObjects` est vide | **rév. 4 (G3)** : les très vieilles stories stylaient le texte racine ; un doc avec textObjects ignore ces champs (ils y sont redondants) |
 | `stickers: [String]` (racine legacy) | un `kind:sticker {emoji}` par entrée | **rév. 4 (G3)** — transform/timing neutres |
 | champ inconnu | IGNORÉ + compteur de télémétrie | tolérant par contrat : rendu dégradé, jamais d'échec |
+
+### C2bis. Arbitrages du rattrapage revue Opus (rév. 9, tâches B8a→B8f)
+
+La revue finale du lot B (`tasks/composer-lot-b-revue-opus.md`, 23 constats
+vérifiés un à un) a montré une racine commune : B7 encode TOUJOURS v3 avant
+que `CanvasV3` ait un logement pour tout ce que `StoryEffects` portait. Les
+onze arbitrages ci-dessous sont OPPOSABLES — ils ferment §C2 (au-dessus) et
+gouvernent B8a→B8f, plutôt que de rester consignés dans un seul rapport de
+revue :
+
+1. **Le payload est le logement** — `ObjectV3.payload` est permissif PAR
+   CONTRAT (`canvas-v3.ts`, `z.record(z.string(), z.unknown())`) : toute perte
+   par-objet se ferme en émettant/restituant les clés vivantes dans le
+   payload. Aucun changement de schéma pour cela.
+2. **Extensions de contrat à 3 côtés** (Zod shared + convertisseur TS +
+   Swift), petites et additives : `BackgroundSound.variants?` (miroir de
+   `backgroundAudioVariants`, type calqué sur `StoryAudioVariant`),
+   `SceneV3.thumbHash?: string`. Fixtures NOUVELLES additives — le golden gelé
+   `v1-legacy-full.v3.json` (C4) ne bouge PAS.
+3. **O3 réaligné** : `scenes` devient `.optional()` dans le Zod (`min(1)`
+   conservé quand présent) ; pont Swift ET convertisseur TS n'émettent
+   `scenes` que s'il existe au moins un objet — « jamais de cadre vide ».
+4. **Mémos wire par-objet** (runtime, non-encodés legacy, non persistés hors
+   pont) : `wireBandEdge` (top/bottom) et `wireTimingEnd` préservent `.band`
+   et `timing.end` à l'aller-retour d'un document servi.
+5. **Brouillon JAMAIS lossy** : grâce aux points 1–2 le v3 persisté est
+   complet ; `canvasAspectRatio` de composition se range en MÉTA de slide du
+   store (précédent : `thumbHash` local, B7). Test juge : round-trip
+   v1 → load → relecture, comparaison CHAMP À CHAMP des familles runtime.
+6. **O16 réalisé, pas déclaré** : les couches du canvas (`StoryBackgroundLayer`,
+   `StoryMediaLayer`) acceptent un `playerProvider` opaque injecté (pureté
+   SDK) ; le chemin LECTURE (ScenePlayer/reader) fournit un provider adossé à
+   `SharedAVPlayerManager` (clé = identité du média) ; le canvas de
+   COMPOSITION garde ses players privés. `ScenePlayerConfig` est CÂBLÉE :
+   né-en-pause forcé à l'apparition, `loops`/`showsChrome` consommés. La garde
+   de source teste le SIGNAL (provider requis sur le chemin lecture), plus
+   seulement l'enveloppe.
+7. **Miroir TS harmonisé** : branche `drawing` (strokes + data base64) dans
+   `storyEffectsV3.ts` ; côté Swift : z de repli = compteur d'insertion (comme
+   TS) pour TOUTES les familles ; sticker SANS heuristique `anchorPoint`
+   fabriquée (émettre uniquement les clés vivantes réelles) ; clés média
+   conditionnelles à la TS (muted explicite sinon dérivé `volume<=0`, jamais
+   émises par défaut).
+8. **Résilience v3** : décodage lossy PAR OBJET (un `ObjectV3` malformé est
+   sauté, la scène survit) + `do/catch` aux deux sites nus de `FeedModels`
+   (miroir du catch de `PostModels`). Prédicat Swift `v >= 3` (pas `== 3`) —
+   un champ additif v3.x ne rétrograde plus en legacy vide.
+9. **Résolveur audio unique côté SDK** : `AudioForegroundChip` (SDK MeeshyUI)
+   passe par `backgroundAnnouncement` ; `resolve` DÉLÈGUE désormais à ce même
+   résolveur (comportement cache-froid = forme crédit, jamais la sinusoïde).
+   Les appelants APP (`StoryViewerView` ×2) restent au lot E pour la
+   migration de l'appel lui-même — ligne P0 dédiée (§E) rend cette dette
+   visible ; le comportement, lui, est déjà corrigé pour ces deux sites
+   puisqu'ils passent par `resolve`.
+10. **Nettoyages** : `toJSON()` supprimé côté Swift (les trois suites qui
+    l'assertaient rebranchées sur l'encodage v3 réel, mêmes invariants de
+    contenu) ; commentaire faux de `StoryDraftStoreTests` corrigé ; ligne
+    spec « precision conservée » RETIRÉE de §C2 (ligne morte des deux côtés,
+    ci-dessus) ; kinds réservés + plafonds Zod : comportement actuel
+    DOCUMENTÉ comme voulu (le serveur juge).
+11. **thumbHash au fil** : émis dans `SceneV3.thumbHash` par le pont Swift
+    (depuis le runtime de slide) et par le convertisseur TS (depuis le blob
+    v1).
+
+Ligne héritée, tranchée en B8f : `waveformSamples` (~80 échantillons RMS posés
+à la composition) reste HORS du payload audio v3 — ni `v1-legacy-full.v3.json`
+ni `v1-legacy-rich.v3.json` ne le portent, et l'émettre casserait l'égalité
+qui juge les deux convertisseurs sur ces goldens partagés. Le lecteur n'en est
+pas privé : `AudioClipBar`/`AudioWaveform` (SDK MeeshyUI) re-dérivent déjà la
+forme d'onde par extraction RMS locale quand `waveformSamples` arrive vide
+— mécanisme préexistant, conçu précisément pour les brouillons restaurés et
+les reposts sans fichier fraîchement composé. La ligne reste ouverte
+uniquement pour le cas SANS fichier local (post distant, jamais téléchargé) :
+accepté, documenté ici plutôt que fermé par un changement de golden.
 
 ### C3. La rupture propre (O2/A′)
 

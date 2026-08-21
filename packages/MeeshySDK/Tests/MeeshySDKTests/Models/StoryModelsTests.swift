@@ -186,18 +186,33 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertNil(effects.slideDuration)
     }
 
-    func testStoryEffectsToJSONWithBackgroundAndTextStyle() {
+    /// Ex-`toJSON()`, retiré (B8f, constat 20) : la SEULE sérialisation qui
+    /// compte est le pipeline v3 réel (`encode(to:)` / `init(from:)`, B7).
+    /// `background` et `stickers` (famille racine G3) SURVIVENT à l'aller-
+    /// retour — chaque emoji racine devient un objet `kind:sticker` v3, donc
+    /// se restitue dans `stickerObjects`, jamais dans `stickers` (le pont ne
+    /// distingue pas l'origine). `textStyle`/`textColor` racine restent
+    /// ABSORBÉS : aucun logement v3 hors d'un objet texte synthétisé depuis
+    /// `content`, quand `textObjects` est vide — même comportement que
+    /// `testStoryEffectsCodableRoundtrip` ci-dessus.
+    func testStoryEffectsRealEncoding_survivesBackgroundAndRootStickers_absorbsRootTextStyling() throws {
         let effects = StoryEffects(
             background: "#FF0000", textStyle: "bold", textColor: "FFFFFF",
             stickers: ["star", "heart"]
         )
-        let dict = effects.toJSON()
-        XCTAssertEqual(dict["background"] as? String, "#FF0000")
-        XCTAssertEqual(dict["textStyle"] as? String, "bold")
-        XCTAssertEqual(dict["textColor"] as? String, "FFFFFF")
-        XCTAssertEqual(dict["stickers"] as? [String], ["star", "heart"])
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
+        XCTAssertEqual(decoded.background, "#FF0000")
+        XCTAssertNil(decoded.textStyle)
+        XCTAssertNil(decoded.textColor)
+        XCTAssertEqual(decoded.stickerObjects?.map(\.emoji), ["star", "heart"])
     }
 
+    /// Aller-retour par le fil v3. Le stylage RACINE (`textStyle`/`textColor`)
+    /// n'a de logement que dans un objet texte synthetise a partir du `content`
+    /// du post (spec §C2, G3) — que `StoryEffects` ne porte pas : il est absorbe.
+    /// Tout le reste — fond, filtre porte par le fond, stickers, transitions —
+    /// traverse.
     func testStoryEffectsCodableRoundtrip() throws {
         let sticker = StorySticker(id: "s1", emoji: "star", x: 0.3, y: 0.4, scale: 1.5, rotation: 45)
         let original = StoryEffects(
@@ -208,13 +223,23 @@ final class StoryModelsTests: XCTestCase {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
         XCTAssertEqual(decoded.background, "#000000")
-        XCTAssertEqual(decoded.textStyle, "neon")
-        XCTAssertEqual(decoded.textColor, "00FF00")
+        XCTAssertNil(decoded.textStyle)
+        XCTAssertNil(decoded.textColor)
         XCTAssertEqual(decoded.filter, "vintage")
         XCTAssertEqual(decoded.stickerObjects?.count, 1)
         XCTAssertEqual(decoded.stickerObjects?.first?.emoji, "star")
+        XCTAssertEqual(decoded.stickerObjects?.first?.scale, 1.5)
+        XCTAssertEqual(decoded.stickerObjects?.first?.rotation, 45)
         XCTAssertEqual(decoded.opening, .fade)
         XCTAssertEqual(decoded.closing, .zoom)
+    }
+
+    /// Le stylage racine reste LU tel quel : seule l'ecriture passe par le v3.
+    func testStoryEffectsLegacyRootTextStylingStillDecodes() throws {
+        let legacy = Data(#"{"textStyle":"neon","textColor":"00FF00","textObjects":[]}"#.utf8)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: legacy)
+        XCTAssertEqual(decoded.textStyle, "neon")
+        XCTAssertEqual(decoded.textColor, "00FF00")
     }
 
     func testStoryEffectsParsedTextStyle() {
