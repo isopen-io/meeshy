@@ -24,18 +24,53 @@ public nonisolated enum AudioChipDisplay: Equatable, Sendable {
     case waveform
     case marquee(text: String)
 
+    /// Résolveur UNIQUE (B8f, arbitrage 9) : DÉLÈGUE à `backgroundAnnouncement`
+    /// — la vérité de la provenance (B3.4) — plutôt que de la ré-implémenter.
+    /// `soundId` reste le discriminant emprunté/propre, au vocabulaire de
+    /// `StoryAudioPlayerObject` que cet appelant porte. Le cache froid
+    /// (`soundId` posé, aucune métadonnée résolue) rendait `.waveform` avant
+    /// B8f — une piste EMPRUNTÉE affichée comme si elle était originale
+    /// (constat 9) ; il rend désormais `display(for:)` de la forme CRÉDIT,
+    /// jamais la sinusoïde.
     public static func resolve(soundId: String?, title: String?, authorUsername: String?) -> AudioChipDisplay {
-        guard soundId != nil else { return .waveform }
+        display(for: backgroundAnnouncement(sound: borrowedSound(soundId: soundId),
+                                            libraryTitle: title,
+                                            libraryUsername: authorUsername,
+                                            libraryDuration: nil))
+    }
+
+    /// Adapte le vocabulaire `soundId` (emprunté ⇔ non-nil) en piste v3 —
+    /// SOURCE UNIQUE de cette conversion, partagée par `resolve` et par les
+    /// appelants qui interrogent directement `backgroundAnnouncement`
+    /// (`AudioForegroundChip`).
+    public static func borrowedSound(soundId: String?) -> BackgroundSoundV3? {
+        soundId.map { BackgroundSoundV3(source: .library(soundId: $0), volume: 1) }
+    }
+
+    /// Traduit l'annonce PURE (B3.4 provenance, B3.5 existence) en forme
+    /// d'affichage de la chip. `.credit` sans métadonnées (cache froid) rend
+    /// un marquee GÉNÉRIQUE « ♫ — » — jamais `.waveform`, qui mentirait sur
+    /// la provenance (B3.4, « si et seulement si »).
+    public static func display(for announcement: BackgroundAudioAnnouncement) -> AudioChipDisplay {
+        switch announcement {
+        case .none, .original:
+            return .waveform
+        case .credit(let title, let username, _):
+            return .marquee(text: creditMarqueeText(title: title, username: username))
+        }
+    }
+
+    private static func creditMarqueeText(title: String?, username: String?) -> String {
         let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let author = authorUsername?
+        let author = username?
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .drop(while: { $0 == "@" })
         let authorTag = (author?.isEmpty == false) ? "@\(author!)" : nil
         switch (cleanTitle?.isEmpty == false ? cleanTitle : nil, authorTag) {
-        case let (t?, a?): return .marquee(text: "\(t) · \(a)")
-        case let (nil, a?): return .marquee(text: a)
-        case let (t?, nil): return .marquee(text: t)
-        case (nil, nil):   return .waveform
+        case let (t?, a?): return "\(t) · \(a)"
+        case let (nil, a?): return a
+        case let (t?, nil): return t
+        case (nil, nil):   return "♫ —"
         }
     }
 

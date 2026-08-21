@@ -39,18 +39,20 @@ final class StoryVolumeKeyframeModelTests: XCTestCase {
         XCTAssertEqual(decoded.keyframes?.last?.volume, 0.2)
     }
 
-    func test_toJSON_serialisesAudioKeyframes() {
+    /// Ex-`toJSON()`, retiré (B8f, constat 20) : le juge réel est le pipeline
+    /// v3 (`encode(to:)` / `init(from:)`, B7) — les keyframes voyagent via
+    /// `timing.keyframes` de l'objet `audio`.
+    func test_effectsV3RoundTrip_serialisesAudioKeyframes() throws {
         var effects = StoryEffects()
         effects.audioPlayerObjects = [
             StoryAudioPlayerObject(postMediaId: "m1",
                                    keyframes: [StoryKeyframe(time: 2, volume: 0.5)])
         ]
-        let dict = effects.toJSON()
-        let audios = dict["audioPlayerObjects"] as? [[String: Any]]
-        let frames = audios?.first?["keyframes"] as? [[String: Any]]
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
 
-        XCTAssertEqual(frames?.count, 1)
-        XCTAssertEqual(frames?.first?["volume"] as? Float, 0.5)
+        XCTAssertEqual(decoded.audioPlayerObjects?.first?.keyframes?.count, 1)
+        XCTAssertEqual(decoded.audioPlayerObjects?.first?.keyframes?.first?.volume, 0.5)
     }
 
     /// La mutation de keyframes refusait explicitement les clips audio —

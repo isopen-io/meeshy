@@ -489,8 +489,11 @@ final class StoryDraftStoreTests: XCTestCase {
     }
 
     /// Insère une ligne de slide brute, en contournant `store.save()` — celui-ci
-    /// n'émet aujourd'hui que du legacy, or ces suites ont besoin de seeder
-    /// aussi bien du legacy que du v3 déjà migré.
+    /// émet désormais TOUJOURS du v3 (B7, `StoryEffects.encode(to:)` réencode
+    /// le runtime courant) : ces suites ont besoin de seeder du LEGACY v1 brut,
+    /// que `save()` ne produit plus, pour exercer la migration one-shot au
+    /// `load()` (constat 21, B8f — commentaire corrigé, `save()` a changé de
+    /// comportement trois commits après avoir été écrit).
     private func seedRawSlide(id: String, effectsJSON: String, orderIndex: Int = 0) throws {
         let queue = try DatabaseQueue(path: dbPath)
         try queue.write { db in

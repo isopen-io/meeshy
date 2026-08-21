@@ -47,11 +47,15 @@ final class AudioChipDisplayTests: XCTestCase {
         )
     }
 
-    func test_borrowedSound_withNothing_fallsBackToWaveform() {
+    /// `resolve` DÉLÈGUE à `backgroundAnnouncement` (B8f, arbitrage 9) : le
+    /// cache froid d'une piste EMPRUNTÉE (soundId posé, aucune métadonnée
+    /// résolue) reste dans la forme CRÉDIT — un marquee générique « ♫ — » —
+    /// jamais la sinusoïde, qui mentirait sur la provenance (constat 9,
+    /// « comportement cache-froid = forme crédit »).
+    func test_borrowedSound_withNothing_keepsCreditForm_neverFallsBackToWaveform() {
         XCTAssertEqual(
             AudioChipDisplay.resolve(soundId: "s1", title: nil, authorUsername: nil),
-            .waveform,
-            "Rien à faire défiler : mieux vaut la sinusoïde qu'une capsule vide"
+            .marquee(text: "♫ —")
         )
     }
 

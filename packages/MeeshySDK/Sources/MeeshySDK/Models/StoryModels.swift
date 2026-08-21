@@ -669,8 +669,9 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var volume: Float               // 0.0–1.0
     /// Niveau mémorisé au moment du mute un-bouton (`toggleMute()`), pour que
     /// l'unmute RESTAURE le réglage de l'auteur au lieu de forcer 1.0.
-    /// Auteur-local : persiste dans les drafts (Codable) mais n'est jamais
-    /// publié (`StoryEffects.toJSON()` liste ses clés explicitement).
+    /// Auteur-local : persiste dans les drafts ET voyage au fil, dans le
+    /// payload v3 permissif de l'objet (`CanvasV3Migration.mediaPayload`,
+    /// arbitrage 1 — brouillon jamais lossy, constat 4).
     /// `nil` dès que `volume > 0` — l'invariant est maintenu par
     /// `setVolumePreservingMuteMemento(_:)`.
     public var mutedVolumeMemento: Float?
@@ -937,8 +938,9 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     public var volume: Float           // 0.0–1.0
     /// Niveau mémorisé au moment du mute un-bouton — miroir de
     /// `StoryMediaObject.mutedVolumeMemento` (mêmes invariants, cf. le
-    /// protocole `StoryVolumeCarrying`). Jamais publié : `toJSON()` liste
-    /// ses clés explicitement.
+    /// protocole `StoryVolumeCarrying`). Persiste dans le payload v3 de
+    /// l'objet audio (`CanvasV3Migration.audioPayload`), au même titre que
+    /// le média (arbitrage 1, brouillon jamais lossy).
     public var mutedVolumeMemento: Float?
     public var waveformSamples: [Float] // ~80 samples extraits à la composition
     /// Quand true, ce player audio joue en fond (boucle infinie, pas de UI pill draggable,
@@ -2037,102 +2039,6 @@ public struct StoryEffects: Codable, Sendable {
     /// Retourne uniquement les audios foreground (draggable pills avec UI).
     public var resolvedForegroundAudioPlayers: [StoryAudioPlayerObject] {
         (audioPlayerObjects ?? []).filter { $0.isBackground != true }
-    }
-
-    public func toJSON() -> [String: Any] {
-        var dict: [String: Any] = [:]
-        if let bg = background { dict["background"] = bg }
-        if let ts = textStyle { dict["textStyle"] = ts }
-        if let tc = textColor { dict["textColor"] = tc }
-        if let tp = textPositionPoint {
-            dict["textPosition"] = ["x": tp.x, "y": tp.y]
-        } else if let tp = textPosition {
-            dict["textPosition"] = tp
-        }
-        if let f = filter { dict["filter"] = f }
-        if let so = stickerObjects, !so.isEmpty {
-            dict["stickers"] = so.map { s in
-                ["emoji": s.emoji, "x": s.x, "y": s.y, "scale": s.scale, "rotation": s.rotation] as [String: Any]
-            }
-        } else if let st = stickers { dict["stickers"] = st }
-        if let aid = backgroundAudioId { dict["backgroundAudioId"] = aid }
-        if let vol = backgroundAudioVolume { dict["backgroundAudioVolume"] = vol }
-        if let start = backgroundAudioStart { dict["backgroundAudioStart"] = start }
-        if let end = backgroundAudioEnd { dict["backgroundAudioEnd"] = end }
-        if let vid = voiceAttachmentId { dict["voiceAttachmentId"] = vid }
-        if let op = opening { dict["opening"] = op.rawValue }
-        if let cl = closing { dict["closing"] = cl.rawValue }
-        if let objects = mediaObjects, !objects.isEmpty {
-            dict["mediaObjects"] = objects.map { o in
-                var d: [String: Any] = ["id": o.id, "postMediaId": o.postMediaId, "mediaType": o.mediaType,
-                 "placement": o.placement, "x": o.x, "y": o.y,
-                 "scale": o.scale, "rotation": o.rotation, "volume": o.volume]
-                d["isBackground"] = o.isBackground
-                if let st = o.startTime { d["startTime"] = st }
-                if let dur = o.duration { d["duration"] = dur }
-                d["loop"] = o.loop
-                if let fi = o.fadeIn { d["fadeIn"] = fi }
-                if let fo = o.fadeOut { d["fadeOut"] = fo }
-                return d
-            }
-        }
-        if let players = audioPlayerObjects, !players.isEmpty {
-            dict["audioPlayerObjects"] = players.map { p in
-                var d: [String: Any] = ["id": p.id, "postMediaId": p.postMediaId, "placement": p.placement,
-                 "x": p.x, "y": p.y, "volume": p.volume,
-                 "waveformSamples": p.waveformSamples]
-                if let bg = p.isBackground { d["isBackground"] = bg }
-                // Automation de volume : sans cette sérialisation, les points
-                // posés par l'auteur seraient perdus à la publication.
-                if let frames = p.keyframes, !frames.isEmpty {
-                    d["keyframes"] = frames.map { kf -> [String: Any] in
-                        var f: [String: Any] = ["id": kf.id, "time": kf.time]
-                        if let v = kf.volume { f["volume"] = v }
-                        if let e = kf.easing { f["easing"] = e.rawValue }
-                        return f
-                    }
-                }
-                if let variants = p.backgroundAudioVariants, !variants.isEmpty {
-                    d["backgroundAudioVariants"] = variants.map { v in
-                        ["postMediaId": v.postMediaId, "language": v.language,
-                         "isAutoGenerated": v.isAutoGenerated] as [String: Any]
-                    }
-                }
-                if let st = p.startTime { d["startTime"] = st }
-                if let dur = p.duration { d["duration"] = dur }
-                if let lp = p.loop { d["loop"] = lp }
-                if let fi = p.fadeIn { d["fadeIn"] = fi }
-                if let fo = p.fadeOut { d["fadeOut"] = fo }
-                return d
-            }
-        }
-        if let variants = backgroundAudioVariants, !variants.isEmpty {
-            dict["backgroundAudioVariants"] = variants.map { v in
-                ["postMediaId": v.postMediaId, "language": v.language,
-                 "isAutoGenerated": v.isAutoGenerated] as [String: Any]
-            }
-        }
-        if !textObjects.isEmpty {
-            dict["textObjects"] = textObjects.map { t in
-                var d: [String: Any] = ["id": t.id, "text": t.text,
-                 "x": t.x, "y": t.y, "scale": t.scale, "rotation": t.rotation,
-                 "zIndex": t.zIndex, "fontSize": t.fontSize, "fontFamily": t.fontFamily,
-                 "anchor": ["x": Double(t.anchor.x), "y": Double(t.anchor.y)]]
-                if let tr = t.translations, !tr.isEmpty { d["translations"] = tr }
-                if let ts = t.textStyle { d["textStyle"] = ts }
-                if let tc = t.textColor { d["textColor"] = tc }
-                if let ta = t.textAlign { d["textAlign"] = ta }
-                if let bg = t.textBg { d["textBg"] = bg }
-                if let st = t.startTime { d["startTime"] = st }
-                if let dur = t.duration { d["duration"] = dur }
-                if let fi = t.fadeIn { d["fadeIn"] = fi }
-                if let fo = t.fadeOut { d["fadeOut"] = fo }
-                return d
-            }
-        }
-        if let sd = slideDuration { dict["slideDuration"] = sd }
-        if let td = timelineDuration { dict["timelineDuration"] = td }
-        return dict
     }
 }
 

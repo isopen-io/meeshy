@@ -104,9 +104,15 @@ final class StoryTrackMuteToggleTests: XCTestCase {
         XCTAssertFalse(json.contains("mutedVolumeMemento"))
     }
 
-    // MARK: - Publication : le mémento reste auteur-local
+    // MARK: - Publication : le mute voyage par le pipeline v3 réel (arbitrage 1, B8b)
 
-    func test_effectsToJSON_neverPublishesMemento() {
+    /// Ex-`toJSON()`, retiré (B8f, constat 20) : le juge réel de la
+    /// publication ET du brouillon est `encode(to:)` / `init(from:)` (B7).
+    /// Le volume muet (0) traverse comme avant ; le mémento, lui, n'est PLUS
+    /// strippé — le payload v3 par-objet est permissif par contrat
+    /// (arbitrage 1) et le loge désormais, ce qui ferme la perte de
+    /// brouillon du constat 4 (B8b) sans rien retirer à l'invariant de mute.
+    func test_effectsV3RoundTrip_muteStateAndMementoSurvive() throws {
         var media = StoryMediaObject(id: "m1", kind: .video, aspectRatio: 1.0, volume: 0.6)
         media.toggleMute()
         var audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pm", volume: 0.8)
@@ -115,13 +121,13 @@ final class StoryTrackMuteToggleTests: XCTestCase {
         effects.mediaObjects = [media]
         effects.audioPlayerObjects = [audio]
 
-        let json = effects.toJSON()
-        let mediaDicts = json["mediaObjects"] as? [[String: Any]] ?? []
-        let audioDicts = json["audioPlayerObjects"] as? [[String: Any]] ?? []
-        XCTAssertEqual(mediaDicts.first?["volume"] as? Float, 0)
-        XCTAssertNil(mediaDicts.first?["mutedVolumeMemento"])
-        XCTAssertEqual(audioDicts.first?["volume"] as? Float, 0)
-        XCTAssertNil(audioDicts.first?["mutedVolumeMemento"])
+        let data = try JSONEncoder().encode(effects)
+        let decoded = try JSONDecoder().decode(StoryEffects.self, from: data)
+
+        XCTAssertEqual(decoded.mediaObjects?.first?.volume, 0)
+        XCTAssertEqual(decoded.mediaObjects?.first?.mutedVolumeMemento, 0.6)
+        XCTAssertEqual(decoded.audioPlayerObjects?.first?.volume, 0)
+        XCTAssertEqual(decoded.audioPlayerObjects?.first?.mutedVolumeMemento, 0.8)
     }
 
     // MARK: - Commande timeline `.volume` : invariant du mémento sous undo/redo
