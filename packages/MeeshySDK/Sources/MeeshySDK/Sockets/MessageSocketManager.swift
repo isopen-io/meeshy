@@ -1623,6 +1623,7 @@ public protocol MessageSocketProviding: Sendable {
     var conversationJoinError: PassthroughSubject<ConversationJoinErrorEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var participantRoleUpdated: PassthroughSubject<ParticipantRoleUpdatedEvent, Never> { get }
+    var participantRightsUpdated: PassthroughSubject<ParticipantRightsUpdatedEvent, Never> { get }
     var conversationUpdated: PassthroughSubject<ConversationUpdatedEvent, Never> { get }
     /// `user:updated` — profil public d'un CONTACT. Dans le protocole parce que
     /// `ConversationSyncEngine` ne détient qu'un `MessageSocketProviding`.
@@ -1877,6 +1878,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — participant role
     public let participantRoleUpdated = PassthroughSubject<ParticipantRoleUpdatedEvent, Never>()
+    /// Un hôte a modifié les droits d'un visiteur sans compte. Distinct du
+    /// rôle : ce que la personne a le droit de FAIRE change, pas son rang.
+    public let participantRightsUpdated = PassthroughSubject<ParticipantRightsUpdatedEvent, Never>()
 
     // Combine publishers — conversation & participant lifecycle
     public let conversationUpdated = PassthroughSubject<ConversationUpdatedEvent, Never>()
@@ -3521,6 +3525,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(ParticipantRoleUpdatedEvent.self, from: data) { [weak self] event in
                 self?.participantRoleUpdated.send(event)
+            }
+        }
+
+        socket.on("participant:rights-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ParticipantRightsUpdatedEvent.self, from: data) { [weak self] event in
+                self?.participantRightsUpdated.send(event)
             }
         }
 

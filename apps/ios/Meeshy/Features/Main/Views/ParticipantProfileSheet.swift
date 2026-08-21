@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -11,6 +12,18 @@ struct IdentifiedString: Identifiable {
     var id: String { value }
 
     init(_ value: String) { self.value = value }
+}
+
+/// Le couple qui désigne une participation — et non un compte.
+///
+/// Une fiche de participant n'existe que DANS une conversation : un visiteur
+/// entré par lien n'a pas d'identité hors d'elle. Les deux identifiants voyagent
+/// donc ensemble, `Identifiable` pour être présentés par `.sheet(item:)`.
+struct ParticipantProfileTarget: Identifiable, Equatable {
+    let conversationId: String
+    let participantId: String
+
+    var id: String { "\(conversationId)/\(participantId)" }
 }
 
 /// Fiche d'un participant — écrite d'abord pour ceux qui n'ont PAS de compte.
@@ -37,12 +50,22 @@ struct ParticipantProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var profile: ConversationParticipantProfile?
     @State private var loadFailed = false
+    @State private var rightsWriteInFlight = false
+
+    /// `entryLink` n'est servi qu'aux administrateurs et modérateurs : sa
+    /// PRÉSENCE est la réponse du gateway à « ce lecteur peut-il écrire ». La
+    /// vue ne refait pas cet arbitrage — un droit recalculé côté client n'est
+    /// pas un droit.
+    private var canEditRights: Bool { profile?.entryLink != nil }
 
     var body: some View {
         NavigationStack {
             Group {
                 if let profile {
-                    content(profile)
+                    // Les deux cercles allongent la fiche autant que l'hôte a
+                    // posé de conditions : elle doit défiler, sinon un lien très
+                    // configuré tronque ses propres réglages.
+                    ScrollView { content(profile) }
                 } else if loadFailed {
                     Text(String(
                         localized: "participantProfile.unavailable",
@@ -67,7 +90,7 @@ struct ParticipantProfileSheet: View {
             ))
             .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .task {
             do {
@@ -78,6 +101,17 @@ struct ParticipantProfileSheet: View {
             } catch {
                 loadFailed = true
             }
+        }
+        // Un AUTRE hôte peut modifier ces droits pendant que cette fiche est
+        // ouverte. L'événement porte l'état résolu : on le pose, sans recharger
+        // — la charge utile est déjà la vérité.
+        .onReceive(
+            MessageSocketManager.shared.participantRightsUpdated
+                .receive(on: DispatchQueue.main)
+        ) { event in
+            guard event.participantId == participantId,
+                  event.conversationId == conversationId else { return }
+            profile?.entryCapabilities = event.rights
         }
     }
 
@@ -115,8 +149,138 @@ struct ParticipantProfileSheet: View {
             .background(theme.backgroundSecondary)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
+            if let capabilities = profile.entryCapabilities {
+                capabilitiesSection(capabilities)
+            }
+
+            if let link = profile.entryLink {
+                entryLinkSection(link)
+            }
+
             Spacer(minLength: 0)
         }
+    }
+
+    /// Ce que la personne peut faire — premier cercle, servi à tout membre.
+    ///
+    /// N'énonce que les REFUS : `denied` porte la règle côté SDK pour que la
+    /// feuille iOS et la carte web disent la même chose sans la réécrire. Une
+    /// section qui listerait huit permissions dont sept accordées noierait la
+    /// seule information utile.
+    @ViewBuilder
+    private func capabilitiesSection(_ capabilities: ParticipantEntryCapabilities) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(capabilitiesLabel)
+
+            if canEditRights {
+                // En lecture, la feuille n'énonce que les refus. En ÉDITION il
+                // faut les huit : on n'accorde pas un droit qu'on ne montre pas.
+                ForEach(ParticipantEntryCapabilities.Capability.allCases, id: \.rawValue) { capability in
+                    Toggle(isOn: Binding(
+                        get: { capabilities.isAllowed(capability) },
+                        set: { newValue in Task { await setRight(capability, to: newValue) } }
+                    )) {
+                        Text(allowedLabel(capability))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                            .foregroundColor(theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .tint(MeeshyColors.success)
+                    .disabled(rightsWriteInFlight)
+                    .accessibilityIdentifier("participant-profile-toggle-\(capability.rawValue)")
+                }
+            } else if capabilities.denied.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.system(size: 13))
+                        .foregroundColor(MeeshyColors.success)
+                        .frame(width: 18)
+                    Text(noRestrictionLabel)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                        .foregroundColor(theme.textSecondary)
+                    Spacer(minLength: 0)
+                }
+                .accessibilityIdentifier("participant-profile-no-restriction")
+            } else {
+                ForEach(capabilities.denied, id: \.rawValue) { capability in
+                    HStack(spacing: 8) {
+                        Image(systemName: "nosign")
+                            .font(.system(size: 13))
+                            .foregroundColor(MeeshyColors.warning)
+                            .frame(width: 18)
+                        Text(deniedLabel(capability))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                            .foregroundColor(theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
+                    }
+                    .accessibilityIdentifier("participant-profile-denied-\(capability.rawValue)")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("participant-profile-capabilities")
+    }
+
+    /// Les réglages du lien — second cercle. Cette section n'existe que si le
+    /// gateway a servi `entryLink`, c'est-à-dire si le lecteur est hôte. Le
+    /// client ne refait jamais cet arbitrage.
+    @ViewBuilder
+    private func entryLinkSection(_ link: ParticipantEntryLink) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionTitle(entryLinkLabel)
+
+            if !link.isActive {
+                Text(linkInactiveLabel)
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                    .foregroundColor(MeeshyColors.warning)
+                    .accessibilityIdentifier("participant-profile-entry-link-inactive")
+            }
+
+            row(
+                icon: "link",
+                label: linkUsesLabel,
+                value: link.maxUses.map { "\(link.currentUses) / \($0)" } ?? "\(link.currentUses)"
+            )
+
+            if let expiresAt = link.expiresAt {
+                row(icon: "hourglass", label: linkExpiresLabel, value: expiresAt.formatted(date: .abbreviated, time: .omitted))
+            }
+
+            // Les exigences se lisent ensemble : « pseudo · email » dit d'un
+            // regard ce que l'hôte a demandé pour laisser passer. Une ligne par
+            // exigence transformerait trois booléens en trois lignes de
+            // formulaire.
+            let requirements = [
+                link.requireNickname ? requireNicknameLabel : nil,
+                link.requireEmail ? requireEmailLabel : nil,
+                link.requireBirthday ? requireBirthdayLabel : nil
+            ].compactMap { $0 }
+            if !requirements.isEmpty {
+                row(icon: "checkmark.seal", label: linkRequiresLabel, value: requirements.joined(separator: " · "))
+            }
+
+            if !link.allowedCountries.isEmpty {
+                row(icon: "globe.europe.africa", label: linkCountriesLabel, value: link.allowedCountries.joined(separator: ", "))
+            }
+
+            if !link.allowedLanguages.isEmpty {
+                row(icon: "character.bubble", label: linkLanguagesLabel, value: link.allowedLanguages.joined(separator: ", ").uppercased())
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .strokeBorder(theme.textMuted.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+        )
+        .accessibilityIdentifier("participant-profile-entry-link")
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+            .foregroundColor(theme.textMuted)
     }
 
     private func header(_ profile: ConversationParticipantProfile) -> some View {
@@ -190,5 +354,88 @@ struct ParticipantProfileSheet: View {
             defaultValue: "fourni, réservé aux modérateurs",
             bundle: .main
         )
+    }
+
+    /// Écrit UN droit, et n'envoie que celui-là : la surcharge est un delta côté
+    /// gateway, et lui poster les huit gèlerait les sept autres à leur valeur du
+    /// moment — ils cesseraient de suivre les conditions du join.
+    ///
+    /// La réponse porte l'état RÉSOLU : on la pose telle quelle. En cas d'échec,
+    /// on ne touche à rien — l'interrupteur revient de lui-même à ce que
+    /// `profile` dit, qui est resté la vérité.
+    private func setRight(_ capability: ParticipantEntryCapabilities.Capability, to value: Bool) async {
+        guard !rightsWriteInFlight else { return }
+        rightsWriteInFlight = true
+        defer { rightsWriteInFlight = false }
+
+        do {
+            let updated = try await ConversationService.shared.updateParticipantRights(
+                conversationId: conversationId,
+                participantId: participantId,
+                rights: [capability.rawValue: value]
+            )
+            profile?.entryCapabilities = updated
+        } catch {
+            // L'échec laisse l'état serveur intact ; le rendu suivant réaligne
+            // l'interrupteur sur `profile`.
+        }
+    }
+
+    private func allowedLabel(_ capability: ParticipantEntryCapabilities.Capability) -> String {
+        switch capability {
+        case .canViewHistory:
+            return String(localized: "participantProfile.allowed.canViewHistory", defaultValue: "Voir les messages antérieurs", bundle: .main)
+        case .canSendMessages:
+            return String(localized: "participantProfile.allowed.canSendMessages", defaultValue: "Écrire des messages", bundle: .main)
+        case .canSendImages:
+            return String(localized: "participantProfile.allowed.canSendImages", defaultValue: "Envoyer des photos", bundle: .main)
+        case .canSendFiles:
+            return String(localized: "participantProfile.allowed.canSendFiles", defaultValue: "Envoyer des fichiers", bundle: .main)
+        case .canSendVideos:
+            return String(localized: "participantProfile.allowed.canSendVideos", defaultValue: "Envoyer des vidéos", bundle: .main)
+        case .canSendAudios:
+            return String(localized: "participantProfile.allowed.canSendAudios", defaultValue: "Envoyer de l’audio", bundle: .main)
+        case .canSendLinks:
+            return String(localized: "participantProfile.allowed.canSendLinks", defaultValue: "Envoyer des liens", bundle: .main)
+        case .canSendLocations:
+            return String(localized: "participantProfile.allowed.canSendLocations", defaultValue: "Partager sa position", bundle: .main)
+        }
+    }
+
+    private var capabilitiesLabel: String { String(localized: "participantProfile.capabilities", defaultValue: "Dans cette conversation", bundle: .main) }
+    private var noRestrictionLabel: String { String(localized: "participantProfile.noRestriction", defaultValue: "Aucune restriction", bundle: .main) }
+    private var entryLinkLabel: String { String(localized: "participantProfile.entryLink", defaultValue: "Réglages du lien", bundle: .main) }
+    private var linkInactiveLabel: String { String(localized: "participantProfile.linkInactive", defaultValue: "Ce lien a été désactivé", bundle: .main) }
+    private var linkUsesLabel: String { String(localized: "participantProfile.linkUses", defaultValue: "Entrées", bundle: .main) }
+    private var linkExpiresLabel: String { String(localized: "participantProfile.linkExpires", defaultValue: "Expire le", bundle: .main) }
+    private var linkRequiresLabel: String { String(localized: "participantProfile.linkRequires", defaultValue: "Exige", bundle: .main) }
+    private var linkCountriesLabel: String { String(localized: "participantProfile.linkCountries", defaultValue: "Pays admis", bundle: .main) }
+    private var linkLanguagesLabel: String { String(localized: "participantProfile.linkLanguages", defaultValue: "Langues admises", bundle: .main) }
+    private var requireNicknameLabel: String { String(localized: "participantProfile.requireNickname", defaultValue: "pseudo", bundle: .main) }
+    private var requireEmailLabel: String { String(localized: "participantProfile.requireEmail", defaultValue: "email", bundle: .main) }
+    private var requireBirthdayLabel: String { String(localized: "participantProfile.requireBirthday", defaultValue: "date de naissance", bundle: .main) }
+
+    /// Un refus, en toutes lettres. Le `switch` est exhaustif par construction :
+    /// ajouter une capacité au SDK sans lui donner son libellé ici ne compile
+    /// pas — c'est la garde qui empêche une restriction muette.
+    private func deniedLabel(_ capability: ParticipantEntryCapabilities.Capability) -> String {
+        switch capability {
+        case .canViewHistory:
+            return String(localized: "participantProfile.denied.canViewHistory", defaultValue: "Ne voit pas les messages antérieurs à son arrivée", bundle: .main)
+        case .canSendMessages:
+            return String(localized: "participantProfile.denied.canSendMessages", defaultValue: "Ne peut pas écrire", bundle: .main)
+        case .canSendImages:
+            return String(localized: "participantProfile.denied.canSendImages", defaultValue: "Ne peut pas envoyer d’images", bundle: .main)
+        case .canSendFiles:
+            return String(localized: "participantProfile.denied.canSendFiles", defaultValue: "Ne peut pas envoyer de fichiers", bundle: .main)
+        case .canSendVideos:
+            return String(localized: "participantProfile.denied.canSendVideos", defaultValue: "Ne peut pas envoyer de vidéos", bundle: .main)
+        case .canSendAudios:
+            return String(localized: "participantProfile.denied.canSendAudios", defaultValue: "Ne peut pas envoyer d’audio", bundle: .main)
+        case .canSendLinks:
+            return String(localized: "participantProfile.denied.canSendLinks", defaultValue: "Ne peut pas envoyer de liens", bundle: .main)
+        case .canSendLocations:
+            return String(localized: "participantProfile.denied.canSendLocations", defaultValue: "Ne peut pas partager sa position", bundle: .main)
+        }
     }
 }

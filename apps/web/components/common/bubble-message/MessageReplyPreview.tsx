@@ -9,6 +9,7 @@ import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
 import { formatRelativeDate } from '@/utils/date-format';
 import { cn } from '@/lib/utils';
 import { AttachmentPreviewReply } from '@/components/attachments/AttachmentPreviewReply';
+import { useOpenParticipantProfile } from '@/components/conversations/participant-profile-context';
 import type { MessageSender } from './types';
 
 interface MessageReplyPreviewProps {
@@ -39,6 +40,8 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
   // `<Ghost />` complète, jamais rendue. Citer quelqu'un sans compte effaçait
   // donc son marqueur — et lui prêtait un lien `/u/` vers une page inexistante.
   const isReplyAnonymous = isAnonymousSender(replyUser as Record<string, unknown> | null | undefined);
+  const openParticipantProfile = useOpenParticipantProfile();
+  const replyParticipantId = typeof replyTo.sender?.id === 'string' ? replyTo.sender.id : null;
 
   return (
     <motion.div
@@ -64,13 +67,33 @@ export const MessageReplyPreview = memo(function MessageReplyPreview({
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1 mb-1">
               {isReplyAnonymous ? (
-                <span className={cn(
-                  "text-xs font-semibold truncate flex items-center gap-1",
-                  isOwnMessage ? "text-white/90" : "text-gray-700 dark:text-gray-200"
-                )}>
-                  <Ghost className="h-3 w-3 text-purple-600 dark:text-purple-400" />
-                  {replyDisplayName}
-                </span>
+                // Même règle que dans `MessageNameDate` : l'auteur cité sans
+                // compte n'a pas de page `/u/`, mais il a une fiche — et citer
+                // quelqu'un sans pouvoir savoir qui il est vide la citation de
+                // son sens. `stopPropagation` protège la navigation vers le
+                // message cité, portée par le conteneur.
+                openParticipantProfile && replyParticipantId ? (
+                  <button
+                    type="button"
+                    data-testid="reply-participant-profile-trigger"
+                    onClick={(e) => { e.stopPropagation(); openParticipantProfile(replyParticipantId); }}
+                    className={cn(
+                      "text-xs font-semibold truncate flex items-center gap-1 hover:underline transition-colors",
+                      isOwnMessage ? "text-white/90 hover:text-white" : "text-gray-700 dark:text-gray-200 hover:text-indigo-500 dark:hover:text-indigo-400"
+                    )}
+                  >
+                    <Ghost className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                    {replyDisplayName}
+                  </button>
+                ) : (
+                  <span className={cn(
+                    "text-xs font-semibold truncate flex items-center gap-1",
+                    isOwnMessage ? "text-white/90" : "text-gray-700 dark:text-gray-200"
+                  )}>
+                    <Ghost className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+                    {replyDisplayName}
+                  </span>
+                )
               ) : replyUsername ? (
                 <Link
                   href={`/u/${replyUsername}`}

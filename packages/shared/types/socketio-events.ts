@@ -241,6 +241,19 @@ export const SERVER_EVENTS = {
   READ_STATUS_UPDATED: 'read-status:updated',
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
+  /**
+   * Un hôte a modifié les droits d'un visiteur SANS COMPTE dans sa conversation.
+   *
+   * Distinct de `participant:role-updated`, qui déplace quelqu'un dans la
+   * hiérarchie (membre → modérateur). Celui-ci ne touche pas au rang : il change
+   * ce qu'une personne a le droit de FAIRE, sans rien changer à ce qu'elle est.
+   *
+   * Porte les droits RÉSOLUS, jamais le delta écrit : un client affiche un état,
+   * pas une différence — et lui faire recomposer `rights ?? permissions`
+   * dupliquerait côté client une règle qui n'a qu'un seul énoncé légitime,
+   * `resolveParticipantRights`.
+   */
+  PARTICIPANT_RIGHTS_UPDATED: 'participant:rights-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
   /**
    * Emitted to the user-rooms of EVERY participant of a freshly-created
@@ -1309,6 +1322,32 @@ export interface ParticipantRoleUpdatedEventData {
 }
 
 /**
+ * Un hôte a modifié les droits d'un visiteur sans compte.
+ *
+ * `rights` porte l'état RÉSOLU (`rights ?? permissions`), pas le delta écrit.
+ * Un client affiche un état ; lui envoyer une différence l'obligerait à
+ * recomposer la résolution, donc à en tenir un second énoncé.
+ *
+ * Le participant est nommé par `participantId` et non par `userId` : le sujet de
+ * cet événement n'a précisément pas de compte.
+ */
+export interface ParticipantRightsUpdatedEventData {
+  readonly conversationId: string;
+  readonly participantId: string;
+  readonly updatedBy: string;
+  readonly rights: {
+    readonly canSendMessages: boolean;
+    readonly canSendFiles: boolean;
+    readonly canSendImages: boolean;
+    readonly canSendVideos: boolean;
+    readonly canSendAudios: boolean;
+    readonly canSendLocations: boolean;
+    readonly canSendLinks: boolean;
+    readonly canViewHistory: boolean;
+  };
+}
+
+/**
  * Données pour l'événement de mise à jour des traductions d'un textObject de story.
  * Émis après que le pipeline ZMQ a traduit un textObject de storyEffects.
  */
@@ -1830,6 +1869,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;
+  [SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED]: (data: ParticipantRightsUpdatedEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATION_READY]: (data: AudioTranslationReadyEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_PROGRESSIVE]: (data: AudioTranslationsProgressiveEventData) => void;
   [SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED]: (data: AudioTranslationsCompletedEventData) => void;

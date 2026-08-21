@@ -1010,8 +1010,24 @@ final class MessageListViewController: UIViewController {
             // controller-held Router so the bubble no longer needs the
             // `@EnvironmentObject Router` that re-rendered every visible
             // bubble on every Router publish.
+            // Deux fiches, et le discriminant est l'existence d'un COMPTE.
+            //
+            // `deepLinkProfileUser` présente un compte : bio, bannière, voix,
+            // langues — tout cela se demande par `User.id`. Un visiteur entré
+            // par lien n'en a aucun ; le lui appliquer ouvrait une feuille vide,
+            // exact pendant iOS du lien `/u/{pseudo}` mort côté web. Son
+            // identité vit dans CETTE conversation et se demande par le couple
+            // `(conversationId, participantId)`.
             let openProfileHandler: ((ProfileSheetUser) -> Void) = { [weak self] user in
-                self?.router.deepLinkProfileUser = user
+                guard let self else { return }
+                if user.isAnonymous, let participantId = user.participantId {
+                    self.router.participantProfileTarget = ParticipantProfileTarget(
+                        conversationId: message.conversationId,
+                        participantId: participantId
+                    )
+                } else {
+                    self.router.deepLinkProfileUser = user
+                }
             }
             let user = AuthManager.shared.currentUser
             let userLanguages: (regional: String?, custom: String?) = (

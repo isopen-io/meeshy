@@ -40,6 +40,47 @@ import { registerParticipantsRoutes } from '../../../routes/conversations/partic
 const CONV_ID = '507f1f77bcf86cd799439022';
 const VIEWER_ID = '507f1f77bcf86cd799439001';
 const ANON_ID = '507f1f77bcf86cd799439033';
+const REGISTERED_ID = '507f1f77bcf86cd799439044';
+
+const joinPermissions = {
+  canSendMessages: true,
+  canSendFiles: false,
+  canSendImages: true,
+  canSendVideos: false,
+  canSendAudios: false,
+  canSendLocations: false,
+  canSendLinks: false,
+};
+
+/**
+ * Relative, et non datée en dur.
+ *
+ * Cette route-ci RECOPIE `expiresAt` sans jamais le comparer à l'heure
+ * courante : une date figée n'y ferait donc tomber aucun témoin. Mais un montage
+ * daté en dur ne dit pas de lui-même s'il est comparé quelque part, et le dépôt
+ * vient de perdre une CI sur exactement ce motif — une échéance atteinte pour de
+ * vrai, sans commit fautif, donc introuvable par bissection.
+ *
+ * Le repère est donc relatif par défaut : ce qui ne peut pas expirer n'a pas
+ * besoin qu'on vérifie s'il expire.
+ */
+const A_YEAR_AHEAD = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+const shareLinkRow = {
+  id: 'link-1',
+  name: 'Invitation publique',
+  isActive: true,
+  allowViewHistory: false,
+  expiresAt: A_YEAR_AHEAD,
+  maxUses: 50,
+  currentUses: 12,
+  requireNickname: true,
+  requireEmail: true,
+  requireBirthday: false,
+  allowedCountries: ['FR', 'BE'],
+  allowedLanguages: ['fr'],
+  allowedIpRanges: ['10.0.0.0/8'],
+};
 
 const anonymousRow = {
   id: ANON_ID,
@@ -54,6 +95,7 @@ const anonymousRow = {
   isOnline: true,
   lastActiveAt: new Date('2026-08-18T10:00:00Z'),
   joinedAt: new Date('2026-08-18T09:00:00Z'),
+  permissions: joinPermissions,
   anonymousSession: {
     shareLinkId: 'link-1',
     session: { country: 'FR', connectedAt: new Date('2026-08-18T09:00:00Z') },
@@ -68,9 +110,27 @@ const anonymousRow = {
   user: null,
 };
 
+const registeredRow = {
+  id: REGISTERED_ID,
+  conversationId: CONV_ID,
+  type: 'user',
+  userId: '507f1f77bcf86cd799439055',
+  displayName: 'Alice',
+  avatar: null,
+  language: 'fr',
+  role: 'member',
+  isActive: true,
+  isOnline: true,
+  lastActiveAt: new Date('2026-08-18T10:00:00Z'),
+  joinedAt: new Date('2026-08-18T09:00:00Z'),
+  permissions: joinPermissions,
+  anonymousSession: null,
+  user: { id: '507f1f77bcf86cd799439055', username: 'alice', displayName: 'Alice' },
+};
+
 type Ctx = ReturnType<typeof setup>;
 
-function setup(viewerRole: string = 'member') {
+function setup(viewerRole: string = 'member', targetRow: any = anonymousRow) {
   const routes: { method: string; path: string; handler: any }[] = [];
   const register = (method: string) =>
     jest.fn<any>((path: string, options: any, handler: any) => {
@@ -80,7 +140,7 @@ function setup(viewerRole: string = 'member') {
   const prisma = {
     participant: {
       findFirst: jest.fn<any>(async ({ where }: any) => {
-        if (where?.id === ANON_ID) return anonymousRow;
+        if (where?.id === targetRow.id) return targetRow;
         if (where?.userId === VIEWER_ID) return { id: 'viewer-row', role: viewerRole, type: 'user' };
         return null;
       }),
@@ -90,7 +150,7 @@ function setup(viewerRole: string = 'member') {
       count: jest.fn<any>().mockResolvedValue(0),
     },
     conversationShareLink: {
-      findUnique: jest.fn<any>().mockResolvedValue({ id: 'link-1', name: 'Invitation publique' }),
+      findUnique: jest.fn<any>().mockResolvedValue(shareLinkRow),
     },
     message: { create: jest.fn<any>().mockResolvedValue({ id: 'sys' }) },
     conversation: { findUnique: jest.fn<any>() },
@@ -122,11 +182,11 @@ function routeFor(ctx: Ctx, fragment: string) {
   return found;
 }
 
-async function fetchProfile(ctx: Ctx) {
+async function fetchProfile(ctx: Ctx, participantId: string = ANON_ID) {
   const route = routeFor(ctx, 'participants/:participantId/profile');
   await route.handler(
     {
-      params: { id: CONV_ID, participantId: ANON_ID },
+      params: { id: CONV_ID, participantId },
       authContext: { userId: VIEWER_ID, isAuthenticated: true, registeredUser: { id: VIEWER_ID } },
     },
     ctx.reply
@@ -200,5 +260,92 @@ describe('GET …/profile — les coordonnées ne sont pas publiques', () => {
 
     expect(data.hasEmail).toBe(true);
     expect(data.hasBirthday).toBe(true);
+  });
+});
+
+/**
+ * Les CAPACITÉS relèvent du premier cercle : savoir qu'un visiteur ne peut pas
+ * joindre de fichier explique son silence, et cette explication n'appartient pas
+ * qu'à l'hôte. Elles disent ce qui s'applique RÉELLEMENT à la personne — soit la
+ * résolution `rights ?? permissions`, jamais la configuration courante du lien,
+ * dont l'hôte a pu changer depuis l'arrivée.
+ */
+describe('GET …/profile — ce que le visiteur peut faire', () => {
+  it('rend les capacités à un membre ordinaire', async () => {
+    const data = await fetchProfile(setup('member'));
+
+    expect(data.entryCapabilities).toMatchObject({
+      canSendMessages: true,
+      canSendFiles: false,
+      canSendImages: true,
+    });
+  });
+
+  it('reflète la surcharge posée sur ce participant, pas l’instantané du join', async () => {
+    const overridden = {
+      ...anonymousRow,
+      anonymousSession: { ...anonymousRow.anonymousSession, rights: { canSendFiles: true } },
+    };
+
+    const data = await fetchProfile(setup('member', overridden));
+
+    expect(data.entryCapabilities.canSendFiles).toBe(true);
+    expect(data.entryCapabilities.canSendImages).toBe(true);
+  });
+
+  it('énonce l’accès à l’historique', async () => {
+    const data = await fetchProfile(setup('member'));
+
+    expect(data.entryCapabilities.canViewHistory).toBe(false);
+  });
+
+  it('n’en énonce aucune pour un participant qui a un compte', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID);
+
+    expect(data.isAnonymous).toBe(false);
+    expect(data.entryCapabilities).toBeNull();
+  });
+});
+
+/**
+ * Les RÉGLAGES DU LIEN relèvent du second cercle, pour la raison qui vaut déjà
+ * pour l'email : la salle contient d'autres visiteurs venus par ce même lien.
+ * Leur montrer ses quotas, sa date d'expiration et ses conditions d'entrée
+ * reviendrait à publier la configuration de l'hôte à ceux qu'elle filtre.
+ */
+describe('GET …/profile — les réglages du lien', () => {
+  it('les cache à un membre ordinaire', async () => {
+    const data = await fetchProfile(setup('member'));
+
+    expect(data.entryLink).toBeNull();
+  });
+
+  it('les rend à un modérateur', async () => {
+    const data = await fetchProfile(setup('moderator'));
+
+    expect(data.entryLink).toMatchObject({
+      name: 'Invitation publique',
+      isActive: true,
+      maxUses: 50,
+      currentUses: 12,
+      requireEmail: true,
+      requireBirthday: false,
+      allowedCountries: ['FR', 'BE'],
+    });
+  });
+
+  // Une plage IP est une règle de pare-feu, pas un renseignement sur quelqu'un.
+  // Aucune surface ne l'affiche, et l'exposer ferait fuiter la topologie d'accès
+  // de l'hôte pour zéro usage produit.
+  it('n’expose jamais les plages IP, même à un administrateur', async () => {
+    const data = await fetchProfile(setup('admin'));
+
+    expect(data.entryLink).not.toHaveProperty('allowedIpRanges');
+  });
+
+  it('n’en rend aucun pour un participant qui a un compte', async () => {
+    const data = await fetchProfile(setup('admin', registeredRow), REGISTERED_ID);
+
+    expect(data.entryLink).toBeNull();
   });
 });

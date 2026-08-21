@@ -1,5 +1,122 @@
 import Foundation
 
+/// Ce qu'un visiteur entré par lien a le droit de faire — premier cercle de la
+/// fiche, servi à tout membre.
+///
+/// C'est la résolution EFFECTIVE côté gateway (`rights ?? permissions`), et non
+/// la configuration courante du lien : celle-ci a pu changer depuis l'arrivée,
+/// et ne régit plus qui est déjà entré.
+public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
+    public let canSendMessages: Bool
+    public let canSendFiles: Bool
+    public let canSendImages: Bool
+    public let canSendVideos: Bool
+    public let canSendAudios: Bool
+    public let canSendLocations: Bool
+    public let canSendLinks: Bool
+    /// Voit les messages écrits AVANT son arrivée.
+    public let canViewHistory: Bool
+
+    public init(
+        canSendMessages: Bool,
+        canSendFiles: Bool,
+        canSendImages: Bool,
+        canSendVideos: Bool,
+        canSendAudios: Bool,
+        canSendLocations: Bool,
+        canSendLinks: Bool,
+        canViewHistory: Bool
+    ) {
+        self.canSendMessages = canSendMessages
+        self.canSendFiles = canSendFiles
+        self.canSendImages = canSendImages
+        self.canSendVideos = canSendVideos
+        self.canSendAudios = canSendAudios
+        self.canSendLocations = canSendLocations
+        self.canSendLinks = canSendLinks
+        self.canViewHistory = canViewHistory
+    }
+
+    /// Une capacité, nommée — de quoi ranger les refus dans un ordre stable et
+    /// leur associer un libellé sans manipuler des chaînes.
+    public enum Capability: String, Sendable, CaseIterable {
+        /// En tête : c'est la restriction qui explique le plus de comportements
+        /// observables — quelqu'un qui ne réagit jamais à ce qui précède son
+        /// arrivée ne l'ignore pas, il ne l'a jamais vu.
+        case canViewHistory
+        case canSendMessages
+        case canSendImages
+        case canSendFiles
+        case canSendVideos
+        case canSendAudios
+        case canSendLinks
+        case canSendLocations
+    }
+
+    public func isAllowed(_ capability: Capability) -> Bool {
+        switch capability {
+        case .canViewHistory: return canViewHistory
+        case .canSendMessages: return canSendMessages
+        case .canSendImages: return canSendImages
+        case .canSendFiles: return canSendFiles
+        case .canSendVideos: return canSendVideos
+        case .canSendAudios: return canSendAudios
+        case .canSendLinks: return canSendLinks
+        case .canSendLocations: return canSendLocations
+        }
+    }
+
+    /// Ce qui est REFUSÉ, dans l'ordre d'affichage.
+    ///
+    /// La règle vit ici plutôt que dans chaque vue : énoncer les huit
+    /// permissions, dont sept accordées, noierait l'unique information utile, et
+    /// une fiche qui récite des autorisations se lit comme un formulaire. Web et
+    /// iOS doivent dire la même chose sans réécrire la règle chacun de son côté.
+    public var denied: [Capability] {
+        Capability.allCases.filter { !isAllowed($0) }
+    }
+}
+
+/// Ce que rend `PATCH …/participants/:participantId/rights` : l'état résolu
+/// après écriture, jamais le delta envoyé.
+public struct ParticipantRightsUpdateResult: Decodable, Sendable, Equatable {
+    public let participantId: String
+    public let conversationId: String
+    public let rights: ParticipantEntryCapabilities
+}
+
+/// Un hôte a modifié les droits d'un visiteur — charge utile de
+/// `participant:rights-updated`.
+///
+/// Le sujet est nommé par `participantId` et non par `userId` : il n'a
+/// précisément pas de compte. `rights` porte l'état RÉSOLU.
+public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let participantId: String
+    public let updatedBy: String
+    public let rights: ParticipantEntryCapabilities
+}
+
+/// Les réglages du lien emprunté — second cercle, réservé aux administrateurs
+/// et modérateurs de la conversation.
+///
+/// Même raison que pour l'email : la salle contient d'autres visiteurs venus par
+/// ce même lien, et sa configuration est celle de l'hôte, pas un renseignement
+/// sur la personne. Les plages IP n'y figurent volontairement pas — une règle de
+/// pare-feu n'a aucune surface d'affichage.
+public struct ParticipantEntryLink: Decodable, Sendable, Equatable {
+    public let name: String?
+    public let isActive: Bool
+    public let expiresAt: Date?
+    public let maxUses: Int?
+    public let currentUses: Int
+    public let requireNickname: Bool
+    public let requireEmail: Bool
+    public let requireBirthday: Bool
+    public let allowedCountries: [String]
+    public let allowedLanguages: [String]
+}
+
 /// Fiche d'un participant — pensée d'abord pour ceux qui n'ont PAS de compte.
 ///
 /// Un visiteur entré par lien a rempli un formulaire pour passer la porte, et
@@ -51,6 +168,19 @@ public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
     /// conversation — voir le second cercle ci-dessus.
     public let email: String?
     public let birthday: Date?
+
+    /// Ce que la personne peut faire dans la salle. `nil` quand elle A un
+    /// compte : elle n'est entrée par aucun lien, donc aucune condition
+    /// d'entrée ne la régit.
+    ///
+    /// `var` parce que c'est le SEUL champ que la fiche repose sans recharger :
+    /// après une écriture de l'hôte, ou à réception de `participant:rights-updated`,
+    /// le serveur rend l'état résolu et il n'y a rien d'autre à rafraîchir.
+    public var entryCapabilities: ParticipantEntryCapabilities?
+
+    /// Les réglages du lien emprunté. `nil` hors du cercle des hôtes — c'est le
+    /// gateway qui tranche, jamais la vue.
+    public let entryLink: ParticipantEntryLink?
 
     /// Nom lisible : ce que la personne a écrit en entrant, à défaut son pseudo.
     public var resolvedFullName: String {

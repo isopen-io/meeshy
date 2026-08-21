@@ -38,6 +38,9 @@ struct FocalIdentityHeader: View, Equatable {
     /// Décidé par le type, jamais par le pseudo : `ano_` est un préfixe
     /// lisible, pas un espace réservé, et un compte peut le porter.
     var senderIsAnonymous: Bool = false
+    /// L'auteur, déjà résolu par `Focal/Core/`. La rangée le transmet au
+    /// présentateur sans jamais le composer — voir la garde §5.1.
+    var profileUser: ProfileSheetUser
     let timeString: String
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
@@ -104,13 +107,13 @@ struct FocalIdentityHeader: View, Equatable {
 
     var body: some View {
         Button {
-            onOpenProfile?(ProfileSheetUser(
-                userId: nil,
-                username: senderUsername ?? senderDisplayName,
-                displayName: senderDisplayName,
-                avatarURL: senderAvatarURL,
-                accentColor: senderColorHex
-            ))
+            // L'auteur arrive DÉJÀ résolu depuis `Focal/Core/` : cette rangée
+            // ne compose pas d'identité, elle la transmet. `Row/` n'a pas le
+            // droit de lire un signal d'identité brut (§5.1, garde
+            // `FocalNoBubbleSourceGuardTests`), et le présentateur a besoin du
+            // `participantId` pour ouvrir la fiche d'un visiteur sans compte
+            // plutôt qu'une page de profil vide.
+            onOpenProfile?(profileUser)
         } label: {
             HStack(spacing: 7) {
                 MeeshyAvatar(

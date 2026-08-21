@@ -15,7 +15,7 @@
  *     visiteur qui a tout rempli d'un visiteur qui n'a rien donné.
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ParticipantProfileCard } from '../ParticipantProfileCard';
 import type { ParticipantProfile } from '@/hooks/queries/use-participant-profile';
 
@@ -47,6 +47,17 @@ const profile = (overrides: Partial<ParticipantProfile> = {}): ParticipantProfil
   hasBirthday: true,
   email: null,
   birthday: null,
+  entryCapabilities: {
+    canSendMessages: true,
+    canSendFiles: false,
+    canSendImages: true,
+    canSendVideos: false,
+    canSendAudios: false,
+    canSendLocations: false,
+    canSendLinks: false,
+    canViewHistory: false,
+  },
+  entryLink: null,
   ...overrides,
 });
 
@@ -123,5 +134,172 @@ describe('ParticipantProfileCard — coordonnées', () => {
     render(<ParticipantProfileCard profile={profile({ hasBirthday: false })} />);
 
     expect(screen.queryByTestId('participant-profile-birthday')).toBeNull();
+  });
+});
+
+/**
+ * Les CAPACITÉS expliquent un comportement visible de tous : un visiteur qui
+ * n'envoie jamais de fichier n'est pas discret, il n'en a pas le droit. Cette
+ * explication appartient donc à la salle, pas seulement à l'hôte.
+ *
+ * La carte n'énonce que ce qui est REFUSÉ. Lister les sept permissions, dont six
+ * accordées, noierait l'unique information utile — et une fiche qui récite des
+ * autorisations se lit comme un formulaire, pas comme une présentation.
+ */
+describe('ParticipantProfileCard — capacités', () => {
+  it('nomme ce qui est refusé au visiteur', () => {
+    render(<ParticipantProfileCard profile={profile()} />);
+
+    expect(screen.getByTestId('participant-profile-denied-canSendFiles')).toBeTruthy();
+  });
+
+  it('n’énumère pas ce qui est accordé', () => {
+    render(<ParticipantProfileCard profile={profile()} />);
+
+    expect(screen.queryByTestId('participant-profile-denied-canSendMessages')).toBeNull();
+    expect(screen.queryByTestId('participant-profile-denied-canSendImages')).toBeNull();
+  });
+
+  it('dit l’historique fermé', () => {
+    render(<ParticipantProfileCard profile={profile()} />);
+
+    expect(screen.getByTestId('participant-profile-denied-canViewHistory')).toBeTruthy();
+  });
+
+  it('affiche une mention d’absence de restriction quand tout est permis', () => {
+    render(<ParticipantProfileCard profile={profile({
+      entryCapabilities: {
+        canSendMessages: true,
+        canSendFiles: true,
+        canSendImages: true,
+        canSendVideos: true,
+        canSendAudios: true,
+        canSendLocations: true,
+        canSendLinks: true,
+        canViewHistory: true,
+      },
+    })} />);
+
+    expect(screen.getByTestId('participant-profile-capabilities')).toBeTruthy();
+    expect(screen.getByTestId('participant-profile-no-restriction')).toBeTruthy();
+  });
+
+  it('n’affiche aucune section pour un participant qui a un compte', () => {
+    render(<ParticipantProfileCard profile={profile({ isAnonymous: false, entryCapabilities: null })} />);
+
+    expect(screen.queryByTestId('participant-profile-capabilities')).toBeNull();
+  });
+});
+
+/**
+ * Les RÉGLAGES DU LIEN arrivent `null` hors du cercle des hôtes. La carte ne
+ * doit alors rien laisser paraître — pas même une section vide, qui signalerait
+ * l'existence de ce qu'elle cache.
+ */
+describe('ParticipantProfileCard — réglages du lien', () => {
+  const entryLink = {
+    name: 'Invitation publique',
+    isActive: true,
+    expiresAt: '2026-12-31T00:00:00Z',
+    maxUses: 50,
+    currentUses: 12,
+    requireNickname: true,
+    requireEmail: true,
+    requireBirthday: false,
+    allowedCountries: ['FR', 'BE'],
+    allowedLanguages: ['fr'],
+  };
+
+  it('reste muette pour un membre ordinaire', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink: null })} />);
+
+    expect(screen.queryByTestId('participant-profile-entry-link')).toBeNull();
+  });
+
+  it('rend les quotas à un hôte', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} />);
+
+    expect(screen.getByTestId('participant-profile-entry-link').textContent).toContain('12');
+    expect(screen.getByTestId('participant-profile-entry-link').textContent).toContain('50');
+  });
+
+  it('rend les pays admis à un hôte', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} />);
+
+    expect(screen.getByTestId('participant-profile-entry-link').textContent).toContain('FR');
+  });
+
+  it('signale un lien devenu inactif', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink: { ...entryLink, isActive: false } })} />);
+
+    expect(screen.getByTestId('participant-profile-entry-link-inactive')).toBeTruthy();
+  });
+
+  it('ne signale rien quand le lien est toujours actif', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} />);
+
+    expect(screen.queryByTestId('participant-profile-entry-link-inactive')).toBeNull();
+  });
+});
+
+/**
+ * L'ÉDITION — réservée aux hôtes, et la carte ne décide pas de ce droit.
+ *
+ * Elle rend des interrupteurs quand on lui passe de quoi écrire, du texte
+ * sinon. L'arbitrage appartient au gateway (`entryLink` servi ou non) et au
+ * conteneur qui branche le callback ; une carte qui déciderait elle-même
+ * rejouerait côté client une règle d'autorisation.
+ */
+describe('ParticipantProfileCard — édition par l’hôte', () => {
+  const entryLink = {
+    name: 'Invitation publique',
+    isActive: true,
+    expiresAt: null,
+    maxUses: null,
+    currentUses: 3,
+    requireNickname: true,
+    requireEmail: false,
+    requireBirthday: false,
+    allowedCountries: [],
+    allowedLanguages: [],
+  };
+
+  it('reste en lecture seule sans callback d’écriture', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} />);
+
+    expect(screen.queryByTestId('participant-profile-toggle-canSendFiles')).toBeNull();
+  });
+
+  it('rend un interrupteur par droit quand l’écriture est possible', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={jest.fn()} />);
+
+    expect(screen.getByTestId('participant-profile-toggle-canSendFiles')).toBeTruthy();
+    expect(screen.getByTestId('participant-profile-toggle-canViewHistory')).toBeTruthy();
+  });
+
+  // En lecture, la carte n'énonce que les refus. En ÉDITION il faut les huit :
+  // un hôte ne peut pas accorder un droit qu'on ne lui montre pas.
+  it('montre AUSSI les droits accordés — on ne retire pas ce qui est caché', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={jest.fn()} />);
+
+    expect(screen.getByTestId('participant-profile-toggle-canSendMessages')).toBeTruthy();
+  });
+
+  it('remonte le droit et sa valeur CIBLE au basculement', () => {
+    const onToggle = jest.fn();
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={onToggle} />);
+
+    fireEvent.click(screen.getByTestId('participant-profile-toggle-canSendFiles'));
+
+    expect(onToggle).toHaveBeenCalledWith('canSendFiles', true);
+  });
+
+  it('remonte `false` pour un droit actuellement accordé', () => {
+    const onToggle = jest.fn();
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={onToggle} />);
+
+    fireEvent.click(screen.getByTestId('participant-profile-toggle-canSendMessages'));
+
+    expect(onToggle).toHaveBeenCalledWith('canSendMessages', false);
   });
 });

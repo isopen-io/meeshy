@@ -8,6 +8,15 @@ extension iPadRootView {
 
     func applyingSheets(_ content: some View) -> some View {
         content
+            // La fiche d'un visiteur SANS COMPTE — même parité que RootView :
+            // les deux hôtes présentent les deux feuilles, sinon l'iPad ouvre
+            // une page de profil vide là où l'iPhone ouvre la bonne fiche.
+            .sheet(item: $router.participantProfileTarget) { target in
+                ParticipantProfileSheet(
+                    conversationId: target.conversationId,
+                    participantId: target.participantId
+                )
+            }
             .sheet(item: $router.deepLinkProfileUser) { user in
                 UserProfileSheet(
                     user: user,

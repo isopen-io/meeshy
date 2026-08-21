@@ -558,11 +558,23 @@ async function syncMessages(opts: {
   // ligne participant qui porte le plancher d'historique du lien de partage —
   // les redemander plus bas ferait un aller-retour de plus sur le chemin de
   // rattrapage.
+  //
+  // `permissions` et `anonymousSession` s'y ajoutent pour la même raison : le
+  // droit de voir l'avant-jointure est FIGÉ sur cette ligne, et la surcharge de
+  // l'hôte y vit aussi. Sans eux dans le `select`, `historyFloorFor` ne voit
+  // rien de figé et retombe sur le lien — donc /sync appliquerait une règle
+  // différente de GET messages pour le même lecteur.
   const memberships = await prisma.participant.findMany({
     where: identity.kind === 'anonymous'
       ? { id: identity.participantId, isActive: true, ...(scope ? { conversationId: scope } : {}) }
       : { userId: identity.userId, isActive: true, ...(scope ? { conversationId: scope } : {}) },
-    select: { conversationId: true, joinedAt: true, shareLinkId: true },
+    select: {
+      conversationId: true,
+      joinedAt: true,
+      shareLinkId: true,
+      permissions: true,
+      anonymousSession: true,
+    },
   });
   if (memberships.length === 0) {
     return { added: [], modified: [], deleted: [], truncated: false, nextCursor: null };

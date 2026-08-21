@@ -1,8 +1,25 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render as rtlRender, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom';
 import { ConversationView } from '../../../components/conversations/ConversationView';
 import type { Conversation, User, Message, Participant, UserRoleEnum } from '@meeshy/shared/types';
+
+/**
+ * `ConversationView` monte la fiche des visiteurs sans compte, qui lit et écrit
+ * le cache React Query — comme le fait toute l'application autour de lui. Le
+ * rendre nu était le cas artificiel : en production il n'existe aucun chemin où
+ * ce composant vive sans `QueryClientProvider`.
+ *
+ * `retry: false` pour qu'un échec de requête tombe tout de suite au lieu de
+ * rejouer en arrière-plan pendant les assertions.
+ */
+const render = (ui: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+};
 
 // Capture la fonction `resolveLanguage` passée à `useSeenMessages` pour vérifier
 // que le chemin « langue réellement affichée » suit le SSOT du Prisme (deviceLocale

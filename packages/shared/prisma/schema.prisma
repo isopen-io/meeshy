@@ -38,6 +38,18 @@ type ParticipantPermissions {
   canSendAudios    Boolean @default(false)
   canSendLocations Boolean @default(false)
   canSendLinks     Boolean @default(false)
+  /// Voit les messages écrits AVANT son arrivée.
+  ///
+  /// Figé au join depuis `ConversationShareLink.allowViewHistory`, comme les
+  /// sept autres : on entre sous les conditions du moment, et un hôte qui
+  /// modifie son lien ensuite ne retire rien à qui est déjà là. Son levier sur
+  /// les personnes déjà entrées est `AnonymousRightsOverride`.
+  ///
+  /// ABSENT sur toute participation antérieure à ce champ — et sur le
+  /// connecteur MongoDB un champ absent ne matche ni `null` ni `NOT null`. Les
+  /// lecteurs doivent donc traiter l'absence comme « non figé » et retomber sur
+  /// le lien en direct, jamais comme « faux ». Voir `historyFloorFor`.
+  canViewHistory   Boolean @default(true)
 }
 
 /// Session details for an anonymous participant
@@ -59,6 +71,12 @@ type AnonymousProfile {
 }
 
 /// Per-anonymous-session permission overrides (null = inherit from ParticipantPermissions)
+/// Le delta qu'un hôte pose sur UN participant, par-dessus l'instantané du join.
+///
+/// Chaque champ est un TROISIÈME état : `true` accorde, `false` retire, absent
+/// ne dit rien et laisse la valeur du join s'appliquer. C'est ce qui permet
+/// d'ouvrir un seul droit sans geler les sept autres à leur valeur du moment —
+/// et c'est pourquoi la résolution s'écrit `??` et jamais `||`.
 type AnonymousRightsOverride {
   canSendMessages  Boolean?
   canSendFiles     Boolean?
@@ -67,6 +85,7 @@ type AnonymousRightsOverride {
   canSendAudios    Boolean?
   canSendLocations Boolean?
   canSendLinks     Boolean?
+  canViewHistory   Boolean?
 }
 
 /// Embedded anonymous session data on a Participant

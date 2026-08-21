@@ -805,7 +805,40 @@
       "email": "Email",
       "birthday": "Naissance",
       "withheld": "fourni, réservé aux modérateurs",
-      "title": "Fiche du participant"
+      "title": "Fiche du participant",
+      "capabilities": "Dans cette conversation",
+      "noRestriction": "Aucune restriction",
+      "denied": {
+        "canViewHistory": "Ne voit pas les messages antérieurs à son arrivée",
+        "canSendMessages": "Ne peut pas écrire de messages",
+        "canSendImages": "Ne peut pas envoyer de photos",
+        "canSendFiles": "Ne peut pas envoyer de fichiers",
+        "canSendVideos": "Ne peut pas envoyer de vidéos",
+        "canSendAudios": "Ne peut pas envoyer d’audio",
+        "canSendLinks": "Ne peut pas envoyer de liens",
+        "canSendLocations": "Ne peut pas partager sa position"
+      },
+      "entryLink": "Réglages du lien",
+      "linkInactive": "Ce lien a été désactivé",
+      "linkUses": "Entrées",
+      "linkExpires": "Expire le",
+      "linkRequires": "Exige",
+      "linkCountries": "Pays admis",
+      "linkLanguages": "Langues admises",
+      "requireNickname": "pseudo",
+      "requireEmail": "email",
+      "requireBirthday": "date de naissance",
+      "allowed": {
+        "canViewHistory": "Voir les messages antérieurs",
+        "canSendMessages": "Écrire des messages",
+        "canSendImages": "Envoyer des photos",
+        "canSendFiles": "Envoyer des fichiers",
+        "canSendVideos": "Envoyer des vidéos",
+        "canSendAudios": "Envoyer de l’audio",
+        "canSendLinks": "Envoyer des liens",
+        "canSendLocations": "Partager sa position"
+      },
+      "unavailable": "Fiche indisponible"
     },
     "forward": {
       "title": "Transférer le message",

@@ -1001,6 +1001,14 @@ struct RootView: View {
                 router.handleDeepLink(url)
             }
         }
+        // La fiche d'un visiteur SANS COMPTE — son identité vit dans une
+        // conversation, pas sur un profil.
+        .sheet(item: $router.participantProfileTarget) { target in
+            ParticipantProfileSheet(
+                conversationId: target.conversationId,
+                participantId: target.participantId
+            )
+        }
         .sheet(item: $router.deepLinkProfileUser) { user in
             UserProfileSheet(
                 user: user,

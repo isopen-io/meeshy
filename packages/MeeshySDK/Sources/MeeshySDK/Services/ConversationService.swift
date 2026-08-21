@@ -218,6 +218,30 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         return response.data
     }
 
+    /// Accorder ou retirer un droit à un visiteur sans compte.
+    ///
+    /// N'envoie QUE les droits nommés : la surcharge est un delta côté gateway,
+    /// et lui poster les huit gèlerait les sept autres à leur valeur du moment —
+    /// ils cesseraient de suivre les conditions du join.
+    ///
+    /// Rend les droits RÉSOLUS après écriture. Un appelant affiche un état, pas
+    /// une différence : recomposer la résolution côté client en tiendrait un
+    /// second énoncé.
+    ///
+    /// Réservé aux administrateurs et modérateurs — le gateway le vérifie, et
+    /// c'est lui qui décide : un appel non autorisé lève, il ne se prévient pas.
+    public func updateParticipantRights(
+        conversationId: String,
+        participantId: String,
+        rights: [String: Bool]
+    ) async throws -> ParticipantEntryCapabilities {
+        let response: APIResponse<ParticipantRightsUpdateResult> = try await api.patch(
+            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
+            body: rights
+        )
+        return response.data.rights
+    }
+
     public func deleteForMe(conversationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/conversations/\(conversationId)/delete-for-me"

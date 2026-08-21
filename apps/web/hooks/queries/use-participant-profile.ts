@@ -16,6 +16,42 @@ import { queryKeys } from '@/lib/react-query/query-keys';
  *
  * Source : `GET /conversations/:id/participants/:participantId/profile`.
  */
+/**
+ * Ce que le visiteur peut RÉELLEMENT faire dans la salle — premier cercle,
+ * servi à tout membre.
+ *
+ * Ce n'est pas la configuration courante du lien : l'hôte a pu la modifier
+ * depuis, sans que cela retire quoi que ce soit à qui est déjà entré.
+ */
+export type ParticipantEntryCapabilities = {
+  readonly canSendMessages: boolean;
+  readonly canSendFiles: boolean;
+  readonly canSendImages: boolean;
+  readonly canSendVideos: boolean;
+  readonly canSendAudios: boolean;
+  readonly canSendLocations: boolean;
+  readonly canSendLinks: boolean;
+  readonly canViewHistory: boolean;
+};
+
+/**
+ * Les réglages du lien emprunté — second cercle, `null` pour un membre
+ * ordinaire. Même raison que pour l'email : la salle contient d'autres visiteurs
+ * venus par ce même lien, et sa configuration appartient à l'hôte.
+ */
+export type ParticipantEntryLink = {
+  readonly name: string | null;
+  readonly isActive: boolean;
+  readonly expiresAt: string | null;
+  readonly maxUses: number | null;
+  readonly currentUses: number;
+  readonly requireNickname: boolean;
+  readonly requireEmail: boolean;
+  readonly requireBirthday: boolean;
+  readonly allowedCountries: readonly string[];
+  readonly allowedLanguages: readonly string[];
+};
+
 export type ParticipantProfile = {
   readonly participantId: string;
   readonly conversationId: string;
@@ -37,6 +73,10 @@ export type ParticipantProfile = {
   readonly hasBirthday: boolean;
   readonly email: string | null;
   readonly birthday: string | null;
+  /** `null` quand le participant a un compte : il n'est entré par aucun lien. */
+  readonly entryCapabilities: ParticipantEntryCapabilities | null;
+  /** `null` hors du cercle des administrateurs et modérateurs. */
+  readonly entryLink: ParticipantEntryLink | null;
 };
 
 export function useParticipantProfile(

@@ -60,6 +60,7 @@ import { getUserDisplayName } from '@/utils/user-display-name';
 import { getMessageInitials } from '@/lib/avatar-utils';
 import type { Participant } from '@meeshy/shared/types/participant';
 import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
+import { useOpenParticipantProfile } from '../participant-profile-context';
 import { DeliveryIndicator } from '@/components/common/bubble-message/DeliveryIndicator';
 import { ParticipantPresenceIndicator } from '../conversation-item/ParticipantPresenceIndicator';
 import { isPlainLeftClick } from '@/lib/profile-link-click';
@@ -124,6 +125,13 @@ export function FocalIdentityHeader({
   // `profileUsername` porte le NARROWING : garder `username` dans le ternaire du
   // rendu laisserait `onOpenProfile(username)` sur un `string | undefined`.
   const profileUsername = !isAnonymous && username ? username : null;
+
+  // Symétrique pour ceux qui n'ont pas de page : la fiche s'ouvre sur le
+  // `Participant.id` que porte `sender.id`, jamais sur un `User.id` — un
+  // visiteur sans compte n'en a aucun.
+  const openParticipantProfile = useOpenParticipantProfile();
+  const senderId = (sender as { id?: string } | undefined)?.id;
+  const anonymousParticipantId = isAnonymous && senderId ? senderId : null;
 
   const avatarNode = (
     <div
@@ -202,6 +210,26 @@ export function FocalIdentityHeader({
           {avatarNode}
           {nameNode}
         </Link>
+      ) : anonymousParticipantId && openParticipantProfile ? (
+        // Un auteur sans compte n'a pas de `/u/`, mais il a une fiche — seule
+        // surface où vit l'identité qu'il a fournie en entrant. Même
+        // `stopPropagation` que la branche `<Link>` : le fil porte ses propres
+        // gestes de rangée. Pas de `isPlainLeftClick` ici, il n'y a aucune
+        // navigation native à préserver — rien à ouvrir dans un nouvel onglet.
+        <button
+          type="button"
+          data-testid="focal-identity-profile-trigger"
+          aria-label={openProfileLabel ?? displayName}
+          onClick={(event) => {
+            event.stopPropagation();
+            openParticipantProfile(anonymousParticipantId);
+          }}
+          className="flex min-w-0 items-center gap-2 hover:opacity-80 transition-opacity"
+        >
+          {avatarNode}
+          {ghostNode}
+          {nameNode}
+        </button>
       ) : (
         <>
           {avatarNode}

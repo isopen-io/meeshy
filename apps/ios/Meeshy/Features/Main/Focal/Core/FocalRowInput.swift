@@ -95,6 +95,27 @@ struct FocalRowInput: Equatable {
     /// rangée reste Equatable et ne se réévalue que sur changement réel.
     let senderIsAnonymous: Bool
 
+    /// L'auteur, prêt à être présenté — construit ICI, dans `Focal/Core/`.
+    ///
+    /// La rangée reçoit un objet déjà résolu plutôt que de composer elle-même
+    /// l'identité : `Focal/Core/` est l'un des deux seuls endroits où un signal
+    /// d'identité brut se lit (§5.1), et `FocalNoBubbleSourceGuardTests`
+    /// vérifie qu'aucun fichier de `Row/` n'en nomme un.
+    ///
+    /// `userId` reste vide pour un visiteur sans compte — il n'en a aucun, et
+    /// c'est `participantId` qui permet d'ouvrir sa fiche.
+    var profileSheetUser: ProfileSheetUser {
+        ProfileSheetUser(
+            userId: nil,
+            username: senderUsername ?? senderDisplayName,
+            displayName: senderDisplayName,
+            avatarURL: senderAvatarURL,
+            accentColor: senderColorHex,
+            participantId: senderId,
+            isAnonymous: senderIsAnonymous
+        )
+    }
+
     // MARK: - Contexte visuel (primitifs uniquement — règle « leaf views »)
 
     let accentHex: String

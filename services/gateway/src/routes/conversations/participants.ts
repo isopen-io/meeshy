@@ -17,6 +17,12 @@ import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
+import {
+  resolveParticipantRights,
+  resolveEntryRights,
+  PARTICIPANT_RIGHT_NAMES,
+  type ParticipantRightName,
+} from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
@@ -461,7 +467,39 @@ export function registerParticipantsRoutes(
                 hasEmail: { type: 'boolean', description: 'An email was supplied (value withheld from ordinary members)' },
                 hasBirthday: { type: 'boolean', description: 'A birthday was supplied (value withheld from ordinary members)' },
                 email: { type: 'string', nullable: true, description: 'Admins/moderators only' },
-                birthday: { type: 'string', format: 'date-time', nullable: true, description: 'Admins/moderators only' }
+                birthday: { type: 'string', format: 'date-time', nullable: true, description: 'Admins/moderators only' },
+                entryCapabilities: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'What this visitor may actually do (rights ?? permissions). Visible to every member; null when the participant has an account.',
+                  properties: {
+                    canSendMessages: { type: 'boolean' },
+                    canSendFiles: { type: 'boolean' },
+                    canSendImages: { type: 'boolean' },
+                    canSendVideos: { type: 'boolean' },
+                    canSendAudios: { type: 'boolean' },
+                    canSendLocations: { type: 'boolean' },
+                    canSendLinks: { type: 'boolean' },
+                    canViewHistory: { type: 'boolean' }
+                  }
+                },
+                entryLink: {
+                  type: 'object',
+                  nullable: true,
+                  description: 'Settings of the share link used to join. Admins/moderators only — the room holds other visitors who came through that same link. IP ranges are never exposed.',
+                  properties: {
+                    name: { type: 'string', nullable: true },
+                    isActive: { type: 'boolean' },
+                    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                    maxUses: { type: 'number', nullable: true },
+                    currentUses: { type: 'number' },
+                    requireNickname: { type: 'boolean' },
+                    requireEmail: { type: 'boolean' },
+                    requireBirthday: { type: 'boolean' },
+                    allowedCountries: { type: 'array', items: { type: 'string' } },
+                    allowedLanguages: { type: 'array', items: { type: 'string' } }
+                  }
+                }
               }
             }
           }
@@ -520,8 +558,50 @@ export function registerParticipantsRoutes(
       const shareLink = participant.anonymousSession?.shareLinkId
         ? await prisma.conversationShareLink.findUnique({
             where: { id: participant.anonymousSession.shareLinkId },
-            select: { name: true }
+            select: {
+              name: true,
+              isActive: true,
+              allowViewHistory: true,
+              expiresAt: true,
+              maxUses: true,
+              currentUses: true,
+              requireNickname: true,
+              requireEmail: true,
+              requireBirthday: true,
+              allowedCountries: true,
+              allowedLanguages: true
+            }
           })
+        : null;
+
+      // Ce que la personne peut faire, et non ce que le lien autorise
+      // AUJOURD'HUI : l'hôte a pu le modifier depuis, sans que cela retire quoi
+      // que ce soit à qui est déjà entré. `resolveParticipantRights` porte cette
+      // règle pour tout le service.
+      //
+      // `canViewHistory` suit la valeur FIGÉE au join, et retombe sur le lien
+      // quand rien n'est figé — même arbitrage exactement que `historyFloorFor`,
+      // qui décide de la lecture. Les énoncer différemment ferait annoncer à la
+      // fiche un droit que la lecture ne respecte pas.
+      const entryCapabilities = isAnonymous
+        ? resolveEntryRights(participant, null, shareLink?.allowViewHistory ?? true)
+        : null;
+
+      // Second cercle. `allowedIpRanges` n'est pas dans le `select` : ce qui
+      // n'est pas chargé ne peut pas fuiter par un oubli de projection.
+      const entryLink = isAnonymous && viewerHostsTheRoom && shareLink
+        ? {
+            name: shareLink.name ?? null,
+            isActive: shareLink.isActive,
+            expiresAt: shareLink.expiresAt ?? null,
+            maxUses: shareLink.maxUses ?? null,
+            currentUses: shareLink.currentUses,
+            requireNickname: shareLink.requireNickname,
+            requireEmail: shareLink.requireEmail,
+            requireBirthday: shareLink.requireBirthday,
+            allowedCountries: shareLink.allowedCountries ?? [],
+            allowedLanguages: shareLink.allowedLanguages ?? []
+          }
         : null;
 
       return sendSuccess(reply, {
@@ -544,10 +624,192 @@ export function registerParticipantsRoutes(
         hasEmail: !!profile?.email,
         hasBirthday: !!profile?.birthday,
         email: viewerHostsTheRoom ? (profile?.email ?? null) : null,
-        birthday: viewerHostsTheRoom ? (profile?.birthday ?? null) : null
+        birthday: viewerHostsTheRoom ? (profile?.birthday ?? null) : null,
+        entryCapabilities,
+        entryLink
       });
     } catch (error) {
       logger.error('Error fetching participant profile', error as Error);
+      return sendInternalError(reply, 'Internal server error');
+    }
+  });
+
+  /**
+   * Les droits d'un visiteur sans compte, pilotés par l'hôte.
+   *
+   * Figer les conditions d'entrée au join a retiré à l'hôte un levier : décocher
+   * `allowViewHistory` sur son lien ne referme plus rien à qui est déjà entré.
+   * Cette route est son remplaçant, et elle est plus fine — elle vise UNE
+   * personne, là où le lien visait tous ceux qui l'avaient emprunté.
+   *
+   * `AnonymousRightsOverride` existait dans le schéma et était lu par
+   * `middleware/auth.ts` depuis toujours, sans qu'aucun code ne l'écrive nulle
+   * part. Ceci est son premier écrivain.
+   */
+  fastify.patch<{
+    Params: { id: string; participantId: string };
+    Body: Partial<Record<ParticipantRightName, boolean>>;
+  }>('/conversations/:id/participants/:participantId/rights', {
+    schema: {
+      description: 'Grant or revoke a no-account visitor\'s rights in this conversation. Admins/moderators only. The override is a DELTA: a right the body does not name keeps following the value frozen at join time.',
+      tags: ['conversations', 'participants'],
+      summary: 'Update a visitor\'s rights',
+      params: {
+        type: 'object',
+        required: ['id', 'participantId'],
+        properties: {
+          id: { type: 'string', description: 'Conversation ID or identifier' },
+          participantId: { type: 'string', description: 'Participant ID (not a User ID)' }
+        }
+      },
+      body: {
+        type: 'object',
+        minProperties: 1,
+        additionalProperties: false,
+        properties: Object.fromEntries(
+          PARTICIPANT_RIGHT_NAMES.map((name) => [name, { type: 'boolean' }])
+        )
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: {
+                participantId: { type: 'string' },
+                conversationId: { type: 'string' },
+                rights: {
+                  type: 'object',
+                  description: 'Resolved rights after the write — an state, not the delta',
+                  properties: Object.fromEntries(
+                    PARTICIPANT_RIGHT_NAMES.map((name) => [name, { type: 'boolean' }])
+                  )
+                }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    },
+    preValidation: [requiredAuth]
+  }, async (request, reply) => {
+    try {
+      const { id, participantId } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const currentUserId = authRequest.authContext?.userId;
+
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendForbidden(reply, 'Unauthorized access to this conversation');
+      }
+
+      const canAccess = await canAccessConversation(prisma, authRequest.authContext, conversationId, id);
+      if (!canAccess) {
+        return sendForbidden(reply, 'Access denied: you are not a member of this conversation', { code: 'CONVERSATION_ACCESS_DENIED' });
+      }
+
+      // Le corps est filtré sur la liste des droits CONNUS avant tout le reste :
+      // ce qui n'y figure pas ne doit jamais atteindre `anonymousSession.rights`,
+      // où Prisma l'écrirait sans broncher — un type composite Mongo n'a pas de
+      // colonne à violer.
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const requested = PARTICIPANT_RIGHT_NAMES
+        .filter((name) => typeof body[name] === 'boolean')
+        .map((name) => [name, body[name] as boolean] as const);
+
+      if (requested.length === 0) {
+        return sendBadRequest(reply, 'No known right named in the request body');
+      }
+
+      const viewerRow = currentUserId
+        ? await prisma.participant.findFirst({
+            where: authRequest.authContext?.isAnonymous
+              ? { id: currentUserId, conversationId, isActive: true }
+              : { userId: currentUserId, conversationId, isActive: true },
+            select: { role: true }
+          })
+        : null;
+
+      const viewerRole = (viewerRow?.role ?? 'member').toLowerCase();
+      if (!['admin', 'moderator', 'creator'].includes(viewerRole)) {
+        return sendForbidden(reply, 'Only conversation admins and moderators may change a visitor\'s rights');
+      }
+
+      const target = await prisma.participant.findFirst({
+        where: { id: participantId, conversationId, isActive: true }
+      });
+
+      if (!target) {
+        return sendNotFound(reply, 'Participant not found in this conversation');
+      }
+
+      // La surcharge vit dans `anonymousSession`, qu'un participant inscrit n'a
+      // pas. Refuser explicitement vaut mieux qu'écrire une session anonyme sur
+      // quelqu'un qui a un compte.
+      if (target.type !== 'anonymous') {
+        return sendBadRequest(reply, 'Only no-account participants carry an entry-rights override', { code: 'PARTICIPANT_HAS_ACCOUNT' });
+      }
+
+      // La surcharge est un DELTA. Un droit ramené à sa valeur du join voit son
+      // entrée EFFACÉE plutôt que réécrite à l'identique : une surcharge qui
+      // recopie le join cesse de le suivre, et l'hôte perd tout moyen de revenir
+      // en arrière.
+      const priorRights = { ...(target.anonymousSession?.rights ?? {}) } as Record<string, boolean>;
+      const joinPermissions = target.permissions as unknown as Record<string, boolean | undefined>;
+
+      for (const [name, value] of requested) {
+        if (joinPermissions?.[name] === value) {
+          delete priorRights[name];
+        } else {
+          priorRights[name] = value;
+        }
+      }
+
+      const updated = await prisma.participant.update({
+        where: { id: target.id },
+        data: {
+          anonymousSession: {
+            ...target.anonymousSession,
+            rights: priorRights
+          }
+        }
+      });
+
+      const rights = resolveEntryRights(updated ?? target, priorRights);
+
+      // Deux audiences, une seule émission par room : la conversation, pour que
+      // les autres hôtes voient le changement ; et la room personnelle du
+      // participant, parce qu'un visiteur sans compte n'a pas de ligne `User` et
+      // que sa room porte son `Participant.id`. Sans elle, l'intéressé — le seul
+      // que la décision contraint — serait le dernier informé.
+      const manager = fastify.socketIOHandler?.getManager();
+      const io = manager?.getIO();
+      if (io) {
+        const payload = {
+          conversationId,
+          participantId: target.id,
+          updatedBy: currentUserId ?? '',
+          rights
+        };
+        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
+        io.to(ROOMS.user(target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
+      }
+
+      // Le middleware d'auth met en cache la ligne participant : sans
+      // invalidation, le prochain envoi de ce visiteur serait arbitré sur ses
+      // anciens droits pendant toute la durée du cache.
+      manager?.invalidateParticipantCache?.(target.id, conversationId);
+
+      return sendSuccess(reply, { participantId: target.id, conversationId, rights });
+    } catch (error) {
+      logger.error('Error updating participant rights', error as Error);
       return sendInternalError(reply, 'Internal server error');
     }
   });

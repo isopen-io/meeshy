@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
+import { resolveParticipantRights } from '../services/participantRights';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
@@ -426,17 +427,8 @@ export class AuthMiddleware {
       }
 
       const profile = participant.anonymousSession?.profile;
-      const rights = participant.anonymousSession?.rights;
 
-      const resolvedPermissions: ParticipantPermissions = {
-        canSendMessages: rights?.canSendMessages ?? participant.permissions.canSendMessages,
-        canSendFiles: rights?.canSendFiles ?? participant.permissions.canSendFiles,
-        canSendImages: rights?.canSendImages ?? participant.permissions.canSendImages,
-        canSendVideos: rights?.canSendVideos ?? participant.permissions.canSendVideos,
-        canSendAudios: rights?.canSendAudios ?? participant.permissions.canSendAudios,
-        canSendLocations: rights?.canSendLocations ?? participant.permissions.canSendLocations,
-        canSendLinks: rights?.canSendLinks ?? participant.permissions.canSendLinks,
-      };
+      const resolvedPermissions: ParticipantPermissions = resolveParticipantRights(participant);
 
       const displayName = participant.nickname
         || (profile?.firstName && profile?.lastName
