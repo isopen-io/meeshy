@@ -208,4 +208,19 @@ class CommentProjectionTest {
         val noAuthor = comment(author = null)
         assertThat(CommentProjection.build(noAuthor, Prefs(), null, currentUserId = "u1").isOwn).isFalse()
     }
+
+    @Test
+    fun build_configuredLanguageWithoutContentSurfacesAsATranslatableChip() {
+        // Comment is fr, translated to en only; a bilingual (en/es) reader sees es as a
+        // request-on-demand chip so the flag strip can trigger the on-demand translation arm.
+        val enOnly = comment(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val prefs = Prefs(systemLanguage = "en", regionalLanguage = "es")
+
+        val strip = CommentProjection.build(enOnly, prefs, null).languageStrip
+
+        val es = strip.first { it.code == "es" }
+        assertThat(es.isTranslatable).isTrue()
+        assertThat(es.isActive).isFalse()
+        assertThat(es.isOriginal).isFalse()
+    }
 }

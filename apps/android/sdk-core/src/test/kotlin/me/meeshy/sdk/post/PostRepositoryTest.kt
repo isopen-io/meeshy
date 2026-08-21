@@ -10,6 +10,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SharedPlace
@@ -538,6 +539,93 @@ class PostRepositoryTest {
         val merged = repo.translatePost(
             ApiPost(
                 id = "p9",
+                content = "Bonjour",
+                originalLanguage = "fr",
+                translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")),
+            ),
+            "es",
+        )
+
+        assertThat(merged).isNull()
+    }
+
+    // --- On-demand comment translation for a caller-held comment (translateComment) ---
+
+    @Test
+    fun translateComment_translatesTheSourceAndReturnsTheMergedComment() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translateComment(
+            ApiPostComment(id = "c9", content = "Bonjour", originalLanguage = "fr"),
+            "es",
+        )
+
+        assertThat(merged?.id).isEqualTo("c9")
+        assertThat(merged?.translations?.get("es")?.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun translateComment_forwardsTheSourceTextAndLanguages_andTrimsTheTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+        val slot = slot<TranslateRequest>()
+        coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
+
+        repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour", originalLanguage = "fr"), "  es  ")
+
+        assertThat(slot.captured.text).isEqualTo("Bonjour")
+        assertThat(slot.captured.sourceLanguage).isEqualTo("fr")
+        assertThat(slot.captured.targetLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun translateComment_isInertForABlankTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "   ")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translateComment_isInertWhenTheCommentHasNoSourceText() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "   "), "es")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translateComment_returnsNullWhenTheTranslatorFails() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } throws IOException("offline")
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translateComment_returnsNullForABlankTranslation() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("   ")
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translateComment_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translateComment(
+            ApiPostComment(
+                id = "c9",
                 content = "Bonjour",
                 originalLanguage = "fr",
                 translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")),

@@ -2,6 +2,63 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Comment on-demand translation shipped** (slice `feed-comment-translation-request`,
+> feature-parity's Feed §F Prisme line — the **comments** arm of the `request-missing-languages` follow-up.
+> Only the per-story timeline flag strip remains on that line).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 14 open PRs at branch
+> time (#3270/#3266/#3263/#3262/#3259/#3257/#3255/#3253/#3250/#3249/#3247/#3245/#3243/#3242 web/shared/
+> gateway/ios/sdk) are none android-routine. Prior android iteration (`feed-post-detail-translation-request`,
+> #3269) already merged into main. Branched off freshly-fetched `origin/main` (`8ddb8bda`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (`curl` → 200). Pristine `android-37.0` recipe
+> worked: `sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`;
+> `local.properties` → `sdk.dir=$HOME/android-sdk`; ran the full `assembleDebug testDebugUnitTest` ONLINE
+> with `-Pandroid.builder.sdkDownload=false` after the initial install → BUILD SUCCESSFUL (973 tasks).
+>
+> **The gap (read-only recon over iOS + Android)**: iOS's `FeedCommentsSheet.onRequestTranslation` routes a
+> content-less comment language tap to `PostService.requestCommentTranslation` (REST, socket-completed).
+> Android's `PostCommentsViewModel.onCommentFlagTap` carried a **dead** `RequestTranslation -> Unit` arm AND
+> `CommentProjection.build` passed no `includeTranslatable`, so a configured-but-absent language never even
+> surfaced a chip. Android has no post/comment-translation socket consumer, so the faithful move mirrors the
+> post arms: pull-translate-and-merge, NOT iOS's socket path (which would be blocked/cross-cutting).
+>
+> **`:core:model` `PostTranslationMerge`**: new `mergeTranslation(comment: ApiPostComment, …)` overload; the
+> post and comment overloads now share one private `upsert(translations, target, text)` law (blank/idempotent
+> guards + in-place-or-append). **`:sdk-core` `PostRepository`**: new stateless
+> `translateComment(comment, target): ApiPostComment?` (comment-keyed sibling of `translatePost`); both trim
+> the target and delegate to a shared `translateSource(source, sourceLanguage, target): String?` network law
+> (the cache-mutating `requestOnDemandTranslation` now delegates to `translatePost`, so all three share one
+> translate path).
+>
+> **`:feature:feed`**: `CommentProjection.build` flips `includeTranslatable = true` (SSOT strip; the tap was
+> already wired `PostCommentsSection` → `viewModel::onCommentFlagTap`). `CommentThreadState.retranslated` /
+> `CommentRepliesState.retranslated` fold ONLY the merged translations onto the live row (leaving `replyCount`
+> etc. untouched, so a concurrent realtime bump is never clobbered), inert for the other collection. The VM's
+> `requestCommentTranslation` guards in-flight via new `PostCommentsUiState.translatingLanguages`
+> (`commentId|lang`, folded through the projection via a new `ProjectionBundle`), applies both retranslate
+> transitions (covers top-level + reply), and points `activeLanguages[commentId]` at the target; cancellation-safe,
+> failure surfaces `errorMessage`, `finally` clears the key.
+>
+> **Tests: +21** — `PostTranslationMergeTest` +6 (comment overload: append / replace-in-place case-insensitive /
+> idempotent / blank target / blank text), `PostRepositoryTest` +7 (`translateComment`: translates+returns merged /
+> forwards source+langs & trims / inert blank target / inert no source / null on failure / null on blank / idempotent),
+> `CommentThreadStateTest` +3 (`retranslated`: replaces only the match / preserves replyCount / inert unknown),
+> `CommentRepliesStateTest` +2 (`retranslated`: replaces only the match / inert), `CommentProjectionTest` +1
+> (configured-absent language surfaces a translatable chip), `PostCommentsViewModelTest` +4 (translatable tap
+> requests & switches to merged / failed leaves display / second in-flight no duplicate / reply translated too);
+> 1 obsolete dead-arm test (`content-less language is inert`) rewritten to the new contract (a content-less tap now
+> requests + leaves display until it lands). **Mutation (RED proof) ×2**: (a) remove the VM in-flight guard →
+> **exactly** `a second in-flight translation tap does not fire a duplicate request` fails (1 of 99); (b) drop
+> `activeLanguages.update` → **exactly** the two `switches to the merged translation` tests fail (2 of 99). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → **BUILD SUCCESSFUL**
+> (973 tasks) locally this run. Reviewer PASS. Diff is `apps/android` only (6 code + 6 test files + tracking docs).
+>
+> **Next**: the **per-story timeline flag strip** on-demand request arm (last item on Feed §F Prisme's
+> `request-missing-languages` follow-up), or the Chat `slow`/retry glyph tier (still waits on outbox retry-state
+> plumbing). Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Post-detail on-demand translation shipped** (slice `feed-post-detail-translation-request`,
 > feature-parity's Feed §F Prisme line — the post-detail arm of the `request-missing-languages` follow-up;
 > only the **comments** arm + the per-story timeline strip remain there).

@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 
 /**
  * Immutable SSOT for the 1-level reply threads under a post's top-level comments.
@@ -131,6 +132,26 @@ data class CommentRepliesState(
         val existing = repliesFor(parentId)
         if (existing.any { it.id == reply.id }) return this
         return copy(repliesByParent = repliesByParent + (parentId to (listOf(reply) + existing)))
+    }
+
+    /**
+     * Apply a freshly-merged on-demand translation to a reply [commentId] wherever it lives:
+     * replace only its [ApiPostComment.translations] (every other field left untouched) so the
+     * reply re-renders in the newly-available language. Inert (same instance) when no loaded
+     * thread holds [commentId] (it may be a top-level comment, handled by
+     * [CommentThreadState.retranslated], or on an unloaded thread page).
+     */
+    fun retranslated(
+        commentId: String,
+        translations: Map<String, ApiPostTranslationEntry>?,
+    ): CommentRepliesState {
+        val parent = parentOfReply(commentId) ?: return this
+        return copy(
+            repliesByParent = repliesByParent +
+                (parent to repliesFor(parent).map {
+                    if (it.id == commentId) it.copy(translations = translations) else it
+                }),
+        )
     }
 
     /** The parent id whose loaded thread contains [replyId], or `null` if no thread holds it. */

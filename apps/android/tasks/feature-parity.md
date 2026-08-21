@@ -3164,9 +3164,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       leaves the strip untouched to retry; a second in-flight tap is ignored. +10 tests (+7 `PostRepositoryTest`
       for `translatePost`, +3 `PostDetailViewModelTest`; mutation-proved ×2 — in-flight guard, active-language
       switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
-      **Follow-up:** the same request arm on the **comments** surface (`PostCommentsViewModel` still carries the
-      dead `RequestTranslation -> Unit` arm — heavier: comments translate `ApiPostComment` via their own path,
-      no `PostRepository.translatePost` reuse), and the per-story timeline strip.
+      **Comments request arm shipped** (slice `feed-comment-translation-request`, 2026-08-21): the comment
+      strip now passes `includeTranslatable = true` (`CommentProjection.build` — it previously surfaced no
+      request chip), and `PostCommentsViewModel.onCommentFlagTap`'s dead `RequestTranslation -> Unit` arm now
+      calls a per-comment `requestCommentTranslation` (in-flight guard via new
+      `PostCommentsUiState.translatingLanguages`, keyed `commentId|lang`, folded through the projection). It
+      blocking-translates through the new stateless `PostRepository.translateComment(comment, target):
+      ApiPostComment?` (the comment-keyed sibling of `translatePost` — both now share one `translateSource`
+      network law + a `PostTranslationMerge.mergeTranslation(comment, …)` overload sharing the upsert law with
+      the post one) and folds only the merged translations onto the live row via new
+      `CommentThreadState.retranslated` / `CommentRepliesState.retranslated` (translations-only, so a concurrent
+      realtime `replyCount` bump is never clobbered) — covering both top-level comments and loaded replies —
+      then points `activeLanguages[commentId]` at the new language. Failed/blank/idempotent leaves the strip to
+      retry; a second in-flight tap is ignored. +21 tests (+6 `PostTranslationMergeTest`, +7 `PostRepositoryTest`,
+      +3 `CommentThreadStateTest`/`CommentRepliesStateTest`, +1 `CommentProjectionTest`, +4 `PostCommentsViewModelTest`;
+      1 obsolete dead-arm test rewritten to the new contract; mutation-proved ×2 — in-flight guard, active-language
+      switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
+      **Follow-up:** the per-story timeline strip.
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`
