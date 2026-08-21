@@ -14,6 +14,7 @@ import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
 import { useReferences } from '@/hooks/composer/useReferences';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
+import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 // ============================================================================
 // Types
@@ -147,6 +148,147 @@ function generateStoryObjectId(): string {
 }
 
 // ============================================================================
+// F5b — le composer ÉMET du v3
+// ============================================================================
+
+/// Fond canonique du fil (`#hex` | `gradient:from,to` | url) : la palette du
+/// composer parle CSS (`linear-gradient(135deg, A, B)`), forme qu'aucun
+/// lecteur — ni `CanvasV3Scene`, ni le chemin legacy, ni iOS — ne sait lire.
+const CSS_GRADIENT_STOPS = /^linear-gradient\([^,]*,(.*)\)$/;
+
+function canonicalBackground(value: string): string {
+  const stops = CSS_GRADIENT_STOPS.exec(value)?.[1];
+  if (stops === undefined) return value;
+  return `gradient:${stops.split(',').map((stop) => stop.trim()).filter(Boolean).join(',')}`;
+}
+
+const NEUTRAL_TRANSFORM: ObjectV3['transform'] = { scale: 1, rotation: 0, opacity: 1 };
+
+type UnrankedObjectV3 = Omit<ObjectV3, 'z'>;
+
+type CanvasMediaSource = {
+  postMediaId: string;
+  mediaType: 'image' | 'video';
+  x: number;
+  y: number;
+  isBackground: boolean;
+  duration?: number;
+};
+
+type CanvasAudioSource = {
+  postMediaId: string;
+  placement: string;
+  x: number;
+  y: number;
+  volume: number;
+  isBackground: boolean;
+  duration?: number;
+};
+
+type CanvasComposerState = {
+  background: string;
+  textStyle: TextStyle;
+  content?: string;
+  media?: readonly CanvasMediaSource[];
+  audio?: readonly CanvasAudioSource[];
+};
+
+/// Constat 23 — forme jumelle du convertisseur gateway
+/// (`baseObject({ id: 'bg' }, 'media', 'bg', z++)`, `storyEffectsV3.ts:73`)
+/// et d'iOS (`ObjectV3(id: "bg", …)`, `CanvasV3Migration.swift:174`) : l'objet
+/// de fond porte l'id LITTÉRAL, jamais un id généré.
+function backgroundObject(background: string): UnrankedObjectV3 {
+  return {
+    id: 'bg',
+    kind: 'media',
+    anchor: { t: 'free', x: 0.5, y: 0.5 },
+    plane: 'bg',
+    transform: NEUTRAL_TRANSFORM,
+    payload: { background: canonicalBackground(background) },
+  };
+}
+
+/// G3 — le stylage RACINE devient un objet texte seulement en l'absence
+/// d'objet texte : l'écran web n'a pas de famille `textObjects`, son contenu
+/// est donc toujours ce texte-là. Sans lui, `StoryViewer` en v3 n'affiche plus
+/// rien (le bloc legacy `story.content` ne se monte plus).
+///
+/// Constat 4 (BLOQUANT, rejet DoD de F7d, arbitrage 4 vs 8) — ce texte
+/// racine ne pose JAMAIS de `locale` ICI, et c'est définitif : le composer
+/// web n'a aucun sélecteur de langue EXPLICITE pour l'auteur (contre iOS,
+/// `StoryComposerViewModel+Elements.swift:674`), et ce texte ne porte
+/// JAMAIS un `content` vide (G3 ci-dessus) — le résolveur partagé avec
+/// `originalLanguage` (`resolveOriginalLanguageForCreate`) refuserait donc
+/// TOUJOURS de deviner ici, rendant tout appel à cet endroit une branche
+/// morte. La règle 3 du Prisme (l'origine doit concourir à SON rang) reste
+/// néanmoins honorée : le serveur détecte la vraie langue à la création
+/// (`PostService.ts` `detectLanguage(data.content)`) et la persiste sur
+/// `post.originalLanguage` ; `postToStoryData` (`lib/story-transforms.ts`,
+/// `withOriginLocale`) la reporte à la LECTURE sur tout objet texte
+/// dépourvu de sa propre `locale` — jamais devinée, jamais dupliquée ici.
+function rootTextObject(content: string, textStyle: TextStyle): UnrankedObjectV3 {
+  return {
+    id: generateStoryObjectId(),
+    kind: 'text',
+    anchor: { t: 'free', x: 0.5, y: 0.5 },
+    plane: 'fg',
+    transform: NEUTRAL_TRANSFORM,
+    payload: { text: content, textStyle },
+  };
+}
+
+function mediaObject(media: CanvasMediaSource): UnrankedObjectV3 {
+  return {
+    id: generateStoryObjectId(),
+    kind: 'media',
+    anchor: { t: 'free', x: media.x, y: media.y },
+    plane: 'content',
+    transform: NEUTRAL_TRANSFORM,
+    payload: {
+      postMediaId: media.postMediaId,
+      mediaType: media.mediaType,
+      isBackground: media.isBackground,
+      ...(media.duration !== undefined ? { duration: media.duration } : {}),
+    },
+  };
+}
+
+/// `volume` n'est émis que s'il s'écarte de 1 et `waveformSamples` reste
+/// DEHORS (spec §C2bis) : les deux côtés décodent 1 par défaut, et les golden
+/// v1→v3 ne portent pas l'échantillonnage de composition.
+function audioObject(audio: CanvasAudioSource): UnrankedObjectV3 {
+  return {
+    id: generateStoryObjectId(),
+    kind: 'audio',
+    anchor: { t: 'free', x: audio.x, y: audio.y },
+    plane: 'content',
+    transform: NEUTRAL_TRANSFORM,
+    payload: {
+      postMediaId: audio.postMediaId,
+      placement: audio.placement,
+      isBackground: audio.isBackground,
+      ...(audio.volume !== 1 ? { volume: audio.volume } : {}),
+      ...(audio.duration !== undefined ? { duration: audio.duration } : {}),
+    },
+  };
+}
+
+/// O3 — jamais de cadre vide servi au fil : la palette a toujours une valeur,
+/// le porteur de fond existe donc TOUJOURS et la scène ne peut pas être vide.
+/// `z` est le rang d'INSERTION (fond, texte racine, porteur, audio), pas un
+/// ordre par plan — le plan porte déjà l'empilement à la lecture.
+function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
+  const objects: ObjectV3[] = [
+    backgroundObject(state.background),
+    ...(state.content?.trim() ? [rootTextObject(state.content, state.textStyle)] : []),
+    ...(state.media ?? []).map(mediaObject),
+    ...(state.audio ?? []).map(audioObject),
+  ].map((object, index) => ({ ...object, z: index }));
+
+  return { v: 3, scenes: [{ id: 's1', objects }] };
+}
+
+// ============================================================================
 // StoryComposer
 // ============================================================================
 
@@ -225,36 +367,34 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     });
     const firstAudioMedia = uploadedAttachments.find((att) => getMediaCategory(att.mimeType) === 'audio');
 
-    const mediaObjects = firstVisualMedia ? [{
-      id: generateStoryObjectId(),
+    const media: CanvasMediaSource[] = firstVisualMedia ? [{
       postMediaId: firstVisualMedia.id,
       mediaType: getMediaCategory(firstVisualMedia.mimeType) === 'video' ? 'video' : 'image',
       x: 0.5,
       y: 0.5,
       isBackground: true,
       ...(typeof firstVisualMedia.duration === 'number' ? { duration: firstVisualMedia.duration / 1000 } : {}),
-    }] : undefined;
+    }] : [];
 
-    const audioPlayerObjects = firstAudioMedia ? [{
-      id: generateStoryObjectId(),
+    const audio: CanvasAudioSource[] = firstAudioMedia ? [{
       postMediaId: firstAudioMedia.id,
       placement: 'overlay',
       x: 0.5,
       y: 0.85,
       volume: 1,
-      waveformSamples: [],
       isBackground: true,
       ...(typeof firstAudioMedia.duration === 'number' ? { duration: firstAudioMedia.duration / 1000 } : {}),
-    }] : undefined;
+    }] : [];
 
     onPublish({
       content: content || undefined,
-      storyEffects: {
-        backgroundColor: selectedBg,
+      storyEffects: buildCanvasV3({
+        background: selectedBg,
         textStyle: selectedTextStyle,
-        ...(mediaObjects ? { mediaObjects } : {}),
-        ...(audioPlayerObjects ? { audioPlayerObjects } : {}),
-      },
+        content: content || undefined,
+        media,
+        audio,
+      }),
       visibility,
       visibilityUserIds: (AUDIENCE_VISIBILITIES as readonly string[]).includes(visibility) ? visibilityUserIds : undefined,
       mediaIds: mediaIds.length > 0 ? mediaIds : undefined,

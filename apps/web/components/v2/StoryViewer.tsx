@@ -6,7 +6,7 @@ import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
+import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
@@ -16,6 +16,21 @@ import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-c
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { useReactToStoryMutation } from '@/hooks/social/use-stories';
 import { useAuthStore } from '@/stores/auth-store';
+import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
+import { CanvasV3Scene, type CanvasV3MediaResolution } from './CanvasV3Scene';
+import { BackgroundSoundBadge } from './BackgroundSoundBadge';
+import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
+
+/// Voile de lisibilité — identique aux DEUX chemins (legacy et v3, constat
+/// 19). `CanvasV3Scene` reste un composant PUR : StoryViewer choisit tout
+/// seul son contenu/sa classe et lui reste propriétaire (défini ICI) — il ne
+/// fait que transiter par la prop `overlay` de la scène, seule capable de le
+/// positionner ENTRE ses plans internes (`OVERLAY_Z`, `CanvasV3Scene.tsx`) ;
+/// un frère DOM externe ne le peut plus depuis que la racine de la scène
+/// établit son propre contexte d'empilement (`containerType`, requis par le
+/// `cqw` du texte).
+const READABILITY_SCRIM_CLASS =
+  'absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none';
 
 // ============================================================================
 // Types
@@ -94,6 +109,15 @@ interface StoryData {
   originalLanguage?: string;
   translations?: Array<{ languageCode: string; languageName: string; content: string }>;
   storyEffects?: {
+    /// F2 — un blob v3 (`packages/shared/types/canvas-v3`) porte `v: 3` ;
+    /// un blob legacy ne le porte jamais. Le viewer discrimine sur ce seul
+    /// champ, sans parser le reste avec Zod (coût de bundle évité côté web).
+    v?: number;
+    /// Logement du document v3 lui-même : sans ces deux clés, l'entonnoir
+    /// `postToStoryData` n'avait nulle part où poser `scenes`/`sound` et les
+    /// jetait — la garde ci-dessus ne voyait alors JAMAIS un blob v3.
+    scenes?: CanvasV3['scenes'];
+    sound?: CanvasV3['sound'];
     background?: string; // "#hex" | "gradient:from,to" | "image_url"
     textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
     textColor?: string;
@@ -117,7 +141,7 @@ interface StoryData {
   };
   /// Lookup of `postMediaId -> { url, mimeType }` for resolving foreground
   /// `mediaObjects` / `audioObjects` URLs at render time.
-  mediaById?: Map<string, { url: string; mimeType: string }>;
+  mediaById?: Map<string, CanvasV3MediaResolution>;
   mediaUrl?: string;
   mediaType?: 'image' | 'video';
   createdAt: string;
@@ -451,6 +475,10 @@ function StoryViewer({
   const [showComments, setShowComments] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  /// B3.6 — bouton 🔇 : bascule l'état muet du lecteur LOCAL de la piste de
+  /// fond v3 (`storyEffects.sound`). Persiste à travers la navigation
+  /// carte→carte de la session, comme les lecteurs reels usuels.
+  const [isBackgroundSoundMuted, setIsBackgroundSoundMuted] = useState(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const viewedRef = useRef<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -572,16 +600,24 @@ function StoryViewer({
   // UNIQUEMENT si le slide courant porte des keyframes (les stories statiques
   // ne paient rien) ; hérite du gel W2/pause gratuitement — quand le timer est
   // gelé, startedAtRef est nul et le temps consommé cesse d'avancer.
+  // Constat 18 — un blob v3 ne porte plus `textObjects`/`mediaObjects` au
+  // premier niveau (ces familles v1 vivent dans `scenes[0].objects`) : sans ce
+  // second regard, le rAF ci-dessous ne s'armait JAMAIS pour une story v3 et
+  // `playheadSec` restait figé à 0 — l'animation câblée en F7a mourait quand
+  // même à l'exécution.
+  const v3Scene = stories[currentIndex]?.storyEffects?.scenes?.[0];
   const slideHasKeyframes = Boolean(
     stories[currentIndex]?.storyEffects?.textObjects?.some((t) => t.keyframes?.length)
     || stories[currentIndex]?.storyEffects?.mediaObjects?.some(
       (m) => !m.isBackground && m.keyframes?.length
     )
+    || v3Scene?.objects?.some((o) => o.timing?.keyframes?.length)
   );
   // W1 inc.4 — les crossfades intra-slide consomment le même playhead que
   // les keyframes (et héritent du même gel W2 pause/buffering).
   const slideNeedsPlayhead = slideHasKeyframes
-    || Boolean(stories[currentIndex]?.storyEffects?.clipTransitions?.length);
+    || Boolean(stories[currentIndex]?.storyEffects?.clipTransitions?.length)
+    || Boolean(v3Scene?.clipTransitions?.length);
   const [playheadSec, setPlayheadSec] = useState(0);
   useEffect(() => {
     setPlayheadSec(0);
@@ -823,6 +859,30 @@ function StoryViewer({
   }
 
   const effects = story.storyEffects;
+  // Constat 12 — `v >= 3`, jamais `v === 3` : un futur `v:4` (servi TEL QUEL
+  // par le gateway à un client caps-3) reste lu en v3, jamais vide sur le repli.
+  const isCanvasV3 = typeof effects?.v === 'number' && effects.v >= 3;
+  /// L'annonce du fond (B3.3-6) n'existe que pour un blob v3 — `sound` n'a
+  /// pas de logement dans la forme legacy locale de `storyEffects`.
+  const backgroundSound = isCanvasV3 ? effects?.sound : undefined;
+  /// Constat 3 — le crédit de bibliothèque voyage sur l'objet `kind:audio` de
+  /// FOND de la scène, jamais dégradé en `♫ —` alors que la métadonnée existe.
+  const backgroundSoundMeta = isCanvasV3 ? backgroundSoundCredit(effects?.scenes) : undefined;
+  /// Constat 15 — la chaîne ORDONNÉE du Prisme (`getUserLanguagePreferences`,
+  /// source de vérité unique côté web, déjà consommée par PinnedMessageBanner
+  /// / useConversationFiltering), jamais une seule langue tronquée à son rang 1.
+  /// Correction rattrapage (revue) — `/story/:id` est une route PUBLIQUE
+  /// (`middleware.ts` ne garde que `/admin`) : `authUser` vaut `null` pour un
+  /// visiteur SANS compte, alors que `userLanguage` (prop, `usePreferredLanguage()`
+  /// → language-store persistant) reste DISPONIBLE sans compte. Vider la chaîne
+  /// dans ce cas ferait retomber `resolveText()` sur l'original — régression du
+  /// Prisme pour tout visiteur anonyme. Le repli n'est engagé QUE sans compte ;
+  /// avec compte, la chaîne complète prime toujours sur la langue unique.
+  const preferredLanguages = authUser
+    ? getUserLanguagePreferences(authUser)
+    : userLanguage
+      ? [userLanguage]
+      : [];
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
@@ -859,6 +919,31 @@ function StoryViewer({
           filter: cssFilter,
         }}
       >
+        {/* F2 — un blob v3 monte la scène pure (`CanvasV3Scene`) ; le chemin
+            legacy ci-dessous (média de fond, overlays `effects.*`, stickers)
+            devient le REPLI, jamais rendu simultanément. */}
+        {isCanvasV3 ? (
+          <CanvasV3Scene
+            doc={effects as CanvasV3}
+            mediaById={story.mediaById}
+            preferredLanguages={preferredLanguages}
+            className="absolute inset-0"
+            muted={isBackgroundSoundMuted}
+            playheadSec={playheadSec}
+            videoGateHandlers={primaryVideoGateHandlers}
+            /* Constat 19 (corrigé rattrapage) — le voile doit peindre SOUS
+               les objets posés/le texte, comme sur le chemin legacy
+               ci-dessous (le média de fond principal SEUL est sous le voile,
+               :944-950). Un frère externe ne peut plus le faire : la racine
+               de la scène est un contexte d'empilement local (`container-
+               Type`), un frère APRÈS elle ne peint qu'au-dessus de la scène
+               ENTIÈRE, fg compris — d'où `overlay`, qui délègue le CONTENU du
+               voile à StoryViewer et sa POSITION dans les plans à la scène
+               (voir `OVERLAY_Z`, `CanvasV3Scene.tsx`). */
+            overlay={<div className={READABILITY_SCRIM_CLASS} data-testid="story-readability-scrim" />}
+          />
+        ) : (
+          <>
         {/* Media background */}
         {story.mediaUrl && story.mediaType === 'image' && (
           <img
@@ -881,7 +966,7 @@ function StoryViewer({
         )}
 
         {/* Gradient overlay for readability */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 pointer-events-none" />
+        <div className={READABILITY_SCRIM_CLASS} data-testid="story-readability-scrim" />
 
         {/* Foreground media objects (iOS composer outputs normalized x/y in
             0-1 — multiply by 100 for CSS %). Resolved via the postMediaId
@@ -1046,6 +1131,8 @@ function StoryViewer({
             {sticker.emoji}
           </div>
         ))}
+          </>
+        )}
 
         {/* Content layer - above background, below UI controls */}
         <div className="absolute inset-0 flex flex-col pointer-events-none">
@@ -1074,6 +1161,19 @@ function StoryViewer({
                 {timeAgo(story.createdAt)}
               </span>
             </div>
+            {/* F3 — l'annonce du fond + bouton 🔇 (B3.3-6), après les
+                détails d'auteur : n'existe que si `storyEffects.sound`
+                existe (B3.5), sinon rend rien. */}
+            <BackgroundSoundBadge
+              sound={backgroundSound}
+              title={backgroundSoundMeta?.title}
+              username={backgroundSoundMeta?.username}
+              durationSeconds={backgroundSoundMeta?.durationSeconds}
+              muted={isBackgroundSoundMuted}
+              onToggleMute={() => setIsBackgroundSoundMuted((m) => !m)}
+              muteLabel={t('mute', 'Mute')}
+              unmuteLabel={t('unmute', 'Unmute')}
+            />
             {onShare && (
               <button
                 onClick={(e) => {
@@ -1124,8 +1224,9 @@ function StoryViewer({
 
           {/* Spacer to push text to its positioned location */}
           <div className="flex-1 relative">
-            {/* Story text content */}
-            {story.content && (
+            {/* Story text content — F2: le v3 loge son propre texte dans la
+                scène (`CanvasV3Scene`), jamais dans ce bloc `textStyleClass`. */}
+            {!isCanvasV3 && story.content && (
               <div
                 className="absolute pointer-events-auto max-w-[85%]"
                 style={{

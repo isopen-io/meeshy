@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -8,6 +8,7 @@ import { PostCard } from '@/components/v2/PostCard';
 import { useToast } from '@/components/v2';
 import { useI18n } from '@/hooks/use-i18n';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { postBackgroundSound } from '@/lib/story-transforms';
 import {
   useHashtagFeedQuery,
   useFeedPosts,
@@ -76,6 +77,20 @@ export default function HashtagPage() {
   const trendingQuery = useTrendingHashtagsQuery();
   const trending = trendingQuery.data ?? [];
 
+  // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
+  // (la carte ne possède aucun lecteur : ce bouton reste cosmétique tant que
+  // la résolution d'URL de son web n'existe pas — dette explicite, plan F3).
+  // Démarre MUTED, comme `StoryViewer` (`isBackgroundSoundMuted`).
+  const [unmutedBackgroundSoundPostIds, setUnmutedBackgroundSoundPostIds] = useState<Set<string>>(new Set());
+  const toggleBackgroundSoundMute = useCallback((postId: string) => {
+    setUnmutedBackgroundSoundPostIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId);
+      else next.add(postId);
+      return next;
+    });
+  }, []);
+
   const handleReportPost = useCallback(
     (postId: string) => {
       if (!window.confirm(t('post.reportConfirm', 'Report this post?'))) return;
@@ -112,30 +127,37 @@ export default function HashtagPage() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {posts.map((post) => (
-            <PostCard
-              key={post.id}
-              author={{ name: authorName(post), avatar: post.author?.avatar ?? undefined }}
-              lang={post.originalLanguage ?? 'fr'}
-              content={post.content ?? ''}
-              translations={postToTranslations(post)}
-              userLanguage={userLanguage}
-              time={formatRelativeTime(post.createdAt, t)}
-              likes={post.likeCount}
-              comments={post.commentCount}
-              isAuthor={post.authorId === currentUserId}
-              media={post.media}
-              mentions={post.mentions}
-              viewerId={currentUserId}
-              repostOf={post.repostOf}
-              isQuote={post.isQuote}
-              onReport={() => handleReportPost(post.id)}
-              onTapRepost={(repostId) =>
-                router.push(postHref({ id: repostId, type: post.repostOf?.type ?? 'POST' }))
-              }
-              onClick={() => router.push(postHref(post))}
-            />
-          ))}
+          {posts.map((post) => {
+            const { sound: backgroundSound, meta: backgroundSoundMeta } = postBackgroundSound(post);
+            return (
+              <PostCard
+                key={post.id}
+                author={{ name: authorName(post), avatar: post.author?.avatar ?? undefined }}
+                lang={post.originalLanguage ?? 'fr'}
+                content={post.content ?? ''}
+                translations={postToTranslations(post)}
+                userLanguage={userLanguage}
+                time={formatRelativeTime(post.createdAt, t)}
+                likes={post.likeCount}
+                comments={post.commentCount}
+                isAuthor={post.authorId === currentUserId}
+                media={post.media}
+                mentions={post.mentions}
+                viewerId={currentUserId}
+                repostOf={post.repostOf}
+                isQuote={post.isQuote}
+                backgroundSound={backgroundSound}
+                backgroundSoundMeta={backgroundSoundMeta}
+                backgroundSoundMuted={!unmutedBackgroundSoundPostIds.has(post.id)}
+                onToggleBackgroundSoundMute={() => toggleBackgroundSoundMute(post.id)}
+                onReport={() => handleReportPost(post.id)}
+                onTapRepost={(repostId) =>
+                  router.push(postHref({ id: repostId, type: post.repostOf?.type ?? 'POST' }))
+                }
+                onClick={() => router.push(postHref(post))}
+              />
+            );
+          })}
         </div>
       )}
     </DashboardLayout>

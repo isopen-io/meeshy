@@ -431,8 +431,15 @@ export function ReelPlayer({
               onClick={(e) => e.stopPropagation()}
               className="mb-2 inline-flex w-fit items-center gap-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white"
             >
+              {/* Constat 17 — B3.2 (« l'icône est le verbe ») n'était appliquée
+                  QUE sur la carte (F4) ; le lecteur de reel affichait toujours
+                  l'icône ET le verbe — 3e des 3 surfaces web de republication
+                  restée incohérente. Le lien reste nommé pour l'accessibilité
+                  par ce span visuellement masqué (l'icône et le handle visible
+                  sont `aria-hidden`). */}
+              <span className="sr-only">{t('player.repostedFrom', 'Reposted from')} @{repostAuthorHandle(reel.repostOf)}</span>
               <Repeat2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{t('player.repostedFrom', 'Reposted from')} @{repostAuthorHandle(reel.repostOf)}</span>
+              <span aria-hidden="true">@{repostAuthorHandle(reel.repostOf)}</span>
             </Link>
           )}
           <div className="flex items-center gap-3">

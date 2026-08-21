@@ -118,7 +118,8 @@ describe('HashtagPage — repost wiring', () => {
     });
     renderPage();
 
-    await waitFor(() => expect(screen.getByText('Reposted from @bob')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('↻')).toBeInTheDocument());
+    expect(screen.getByText('@bob')).toBeInTheDocument();
     expect(screen.getByText('Bob')).toBeInTheDocument();
   });
 

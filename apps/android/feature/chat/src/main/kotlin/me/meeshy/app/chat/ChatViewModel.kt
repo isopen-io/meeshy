@@ -55,6 +55,7 @@ import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.call.ActiveCallSession
 import me.meeshy.sdk.model.ActiveLiveLocation
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.isWorthPersisting
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.LiveLocationEventFold
 import me.meeshy.sdk.model.LiveLocationSessions
@@ -439,11 +440,18 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             val stored = draftStore.load(conversationId)
-            lastPersistedDraft = stored?.takeIf { it.text.isNotBlank() || it.replyToId != null }
+            lastPersistedDraft = stored?.takeIf { it.isWorthPersisting }
             _state.update { current ->
                 val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
                 if (restored != null) {
-                    current.copy(draft = restored.text, replyingToMessageId = restored.replyToId)
+                    current.copy(
+                        draft = restored.text,
+                        replyingToMessageId = restored.replyToId,
+                        pendingEffects = restored.effects,
+                        composerLanguage = restored.selectedLanguage
+                            ?.let { current.composerLanguage.withManualPick(it) }
+                            ?: current.composerLanguage,
+                    )
                 } else {
                     current
                 }
@@ -883,6 +891,7 @@ class ChatViewModel @Inject constructor(
      */
     fun onComposerLanguagePicked(code: String) {
         _state.update { it.copy(composerLanguage = it.composerLanguage.withManualPick(code)) }
+        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
     }
 
     /**
@@ -892,7 +901,14 @@ class ChatViewModel @Inject constructor(
      * entirely when the store already matches ([DraftAutosave.resolve] → [DraftPersist.None]).
      * The single [draftPersistJob] coalesces rapid keystrokes to a last-write-wins.
      * [replyToId] carries the currently-armed reply so it is persisted alongside the text
-     * (iOS app-side `DraftStore` reply-reference parity).
+     * (iOS app-side `DraftStore` reply-reference parity); the currently-armed
+     * [ChatUiState.pendingEffects] are read from state and persisted too, so a self-destruct
+     * duration or a confetti effect armed but not yet sent survives navigation (iOS
+     * `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` parity). The manual
+     * composer-language pick ([ComposerLanguageState.manualOverride]) is likewise read from state
+     * and persisted, so a deliberate language override rides along the draft (iOS
+     * `MessageDraft.selectedLanguage` parity) — live detection is not persisted, it re-derives from
+     * the restored text.
      */
     private fun persistDraft(rawText: String, replyToId: String?) {
         if (_state.value.isEditing) return
@@ -902,6 +918,8 @@ class ChatViewModel @Inject constructor(
             replyToId = replyToId,
             nowIso = java.time.Instant.ofEpochMilli(clock.nowMillis()).toString(),
             previous = lastPersistedDraft,
+            effects = _state.value.pendingEffects,
+            selectedLanguage = _state.value.composerLanguage.manualOverride,
         )
         lastPersistedDraft = when (decision) {
             is DraftPersist.Save -> decision.draft
@@ -1209,10 +1227,13 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Flip an effect chip in the armed selection via the pure [MessageEffectsEditor].
-     * Toggling an already-armed effect off leaves every other bit untouched.
+     * Toggling an already-armed effect off leaves every other bit untouched. The armed
+     * effects are persisted alongside the draft so a selection survives navigation, and
+     * un-arming the last effect on an empty composer purges the stored draft.
      */
     fun toggleEffect(flag: Long) {
         _state.update { it.copy(pendingEffects = MessageEffectsEditor.toggle(it.pendingEffects, flag)) }
+        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
     }
 
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
@@ -1220,11 +1241,13 @@ class ChatViewModel @Inject constructor(
         _state.update {
             it.copy(pendingEffects = MessageEffectsEditor.withEphemeralDuration(it.pendingEffects, duration))
         }
+        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
     }
 
     /** The picker's "clear all" — reset the armed selection to no effects. */
     fun clearEffects() {
         _state.update { it.copy(pendingEffects = MessageEffectsEditor.cleared()) }
+        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
     }
 
     fun onMessageLongPress(messageId: String) {
