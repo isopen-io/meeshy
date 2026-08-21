@@ -76,6 +76,17 @@ describe('vectors: river-step — couverture des deux axes', () => {
     expect(acrossDeath.length).toBeGreaterThan(0);
   });
 
+  it('exerce un avis SYSTÈME : sérialisée, la rivière EST le fil et descend jusque SUR lui', () => {
+    const ontoNotice = vectors.filter((vector) => {
+      if (vector.expected.reason !== 'moved') return false;
+      const geometry = resolveRiverLanes(vector.input.lanes);
+      const landed = geometry.bubbles.find((bubble) => bubble.rank === vector.expected.cursor.rank);
+      return landed?.isSystem === true;
+    });
+
+    expect(ontoNotice.length).toBeGreaterThan(0);
+  });
+
   it('tient l’invariant du sur-place : `edge` et `empty` ne déplacent JAMAIS le curseur', () => {
     vectors
       .filter((vector) => vector.expected.reason !== 'moved')

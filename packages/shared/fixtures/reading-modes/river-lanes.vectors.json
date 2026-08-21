@@ -110,7 +110,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -243,7 +244,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -253,7 +255,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -263,7 +266,8 @@
             "createdAtMs": 1786957320000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -396,7 +400,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -406,7 +411,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -416,7 +422,8 @@
             "createdAtMs": 1786957320000,
             "isViewer": true,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -541,7 +548,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -551,7 +559,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -561,7 +570,8 @@
             "createdAtMs": 1786959600000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -706,7 +716,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -716,7 +727,8 @@
             "createdAtMs": 1786959300000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -726,7 +738,8 @@
             "createdAtMs": 1786959360000,
             "isViewer": false,
             "replyToMessageId": "a",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [
@@ -847,7 +860,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -857,7 +871,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": true,
             "replyToMessageId": "a",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [
@@ -973,7 +988,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -983,7 +999,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": true,
             "replyToMessageId": "m-d-avant-hier",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -1075,7 +1092,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -1085,7 +1103,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": "a",
-            "isFirstInGroup": false
+            "isFirstInGroup": false,
+            "isSystem": false
           }
         ],
         "connectors": [
@@ -1227,7 +1246,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b2",
@@ -1237,7 +1257,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -1247,7 +1268,8 @@
             "createdAtMs": 1786957440000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -1338,7 +1360,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -1348,7 +1371,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -1435,7 +1459,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -1535,7 +1560,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -1545,7 +1571,8 @@
             "createdAtMs": 1786957320000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": false
+            "isFirstInGroup": false,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -1815,7 +1842,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m2",
@@ -1825,7 +1853,8 @@
             "createdAtMs": 1786957320000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m3",
@@ -1835,7 +1864,8 @@
             "createdAtMs": 1786957380000,
             "isViewer": true,
             "replyToMessageId": "m1",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m4",
@@ -1845,7 +1875,8 @@
             "createdAtMs": 1786957500000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m5",
@@ -1855,7 +1886,8 @@
             "createdAtMs": 1786957620000,
             "isViewer": false,
             "replyToMessageId": "m4",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m6",
@@ -1865,7 +1897,8 @@
             "createdAtMs": 1786961400000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m7",
@@ -1875,7 +1908,8 @@
             "createdAtMs": 1786961520000,
             "isViewer": true,
             "replyToMessageId": "m6",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m8",
@@ -1885,7 +1919,8 @@
             "createdAtMs": 1786961700000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m9",
@@ -1895,7 +1930,8 @@
             "createdAtMs": 1786962000000,
             "isViewer": false,
             "replyToMessageId": "m2",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [
@@ -2035,7 +2071,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -2045,7 +2082,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -2168,7 +2206,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -2178,7 +2217,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": "a",
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -2188,7 +2228,8 @@
             "createdAtMs": 1786957320000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [
@@ -2442,7 +2483,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m1",
@@ -2452,7 +2494,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m2",
@@ -2462,7 +2505,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m3",
@@ -2472,7 +2516,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m4",
@@ -2482,7 +2527,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m5",
@@ -2492,7 +2538,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m6",
@@ -2502,7 +2549,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -2777,7 +2825,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m1",
@@ -2787,7 +2836,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m2",
@@ -2797,7 +2847,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m3",
@@ -2807,7 +2858,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m4",
@@ -2817,7 +2869,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m5",
@@ -2827,7 +2880,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m6",
@@ -2837,7 +2891,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m7",
@@ -2847,7 +2902,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -3182,7 +3238,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m1",
@@ -3192,7 +3249,8 @@
             "createdAtMs": 1786959300000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m2",
@@ -3202,7 +3260,8 @@
             "createdAtMs": 1786961400000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m3",
@@ -3212,7 +3271,8 @@
             "createdAtMs": 1786963500000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m4",
@@ -3222,7 +3282,8 @@
             "createdAtMs": 1786965600000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m5",
@@ -3232,7 +3293,8 @@
             "createdAtMs": 1786967700000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m6",
@@ -3242,7 +3304,8 @@
             "createdAtMs": 1786969800000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m7",
@@ -3252,7 +3315,8 @@
             "createdAtMs": 1786971900000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m8",
@@ -3262,7 +3326,8 @@
             "createdAtMs": 1786974000000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "m9",
@@ -3272,7 +3337,8 @@
             "createdAtMs": 1786976100000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -3416,7 +3482,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -3426,7 +3493,8 @@
             "createdAtMs": 1786957260000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": false
+            "isFirstInGroup": false,
+            "isSystem": false
           },
           {
             "messageId": "c",
@@ -3436,7 +3504,8 @@
             "createdAtMs": 1786957320000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "d",
@@ -3446,7 +3515,8 @@
             "createdAtMs": 1786957380000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -3540,7 +3610,8 @@
             "createdAtMs": 1786957200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": true
+            "isFirstInGroup": true,
+            "isSystem": false
           },
           {
             "messageId": "b",
@@ -3550,7 +3621,8 @@
             "createdAtMs": 1787029200000,
             "isViewer": false,
             "replyToMessageId": null,
-            "isFirstInGroup": false
+            "isFirstInGroup": false,
+            "isSystem": false
           }
         ],
         "connectors": [],
@@ -3560,6 +3632,439 @@
         "layout": "serialized",
         "serializationReason": "belowMinimum",
         "silenceWindowMs": 86400000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "avis-d-arrivee-n-est-ni-voix-ni-couloir",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "j",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null,
+            "isSystem": true
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": false
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": false
+          },
+          {
+            "messageId": "j",
+            "laneId": "lena",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": true
+          }
+        ],
+        "connectors": [],
+        "rankCount": 3,
+        "laneCount": 1,
+        "voiceCount": 2,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "avis-d-arrivee-ne-groupe-pas-avec-la-premiere-parole-de-l-arrivant",
+      "input": {
+        "messages": [
+          {
+            "id": "j",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null,
+            "isSystem": true
+          },
+          {
+            "id": "a",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "lena",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Lena",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 2,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  },
+                  {
+                    "rank": 2,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "j",
+            "laneId": "lena",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": true
+          },
+          {
+            "messageId": "a",
+            "laneId": "lena",
+            "laneIndex": 0,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": false
+          },
+          {
+            "messageId": "b",
+            "laneId": "lena",
+            "laneIndex": 0,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": false,
+            "isSystem": false
+          }
+        ],
+        "connectors": [],
+        "rankCount": 3,
+        "laneCount": 1,
+        "voiceCount": 1,
+        "layout": "serialized",
+        "serializationReason": "belowMinimum",
+        "silenceWindowMs": 1800000,
+        "maxLanes": 7,
+        "minVoices": 3
+      }
+    },
+    {
+      "_label": "la-branche-de-l-arrivant-nait-a-sa-parole-jamais-a-son-annonce",
+      "input": {
+        "messages": [
+          {
+            "id": "a",
+            "senderId": "mia",
+            "createdAt": "2026-08-17T09:00:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "b",
+            "senderId": "sarah",
+            "createdAt": "2026-08-17T09:01:00.000Z",
+            "replyToMessageId": null
+          },
+          {
+            "id": "j",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T09:02:00.000Z",
+            "replyToMessageId": null,
+            "isSystem": true
+          },
+          {
+            "id": "c",
+            "senderId": "lena",
+            "createdAt": "2026-08-17T09:03:00.000Z",
+            "replyToMessageId": null
+          }
+        ],
+        "participants": [
+          {
+            "id": "me",
+            "displayName": "Moi"
+          },
+          {
+            "id": "mia",
+            "displayName": "Mia"
+          },
+          {
+            "id": "sarah",
+            "displayName": "Sarah"
+          },
+          {
+            "id": "tom",
+            "displayName": "Tom"
+          },
+          {
+            "id": "lena",
+            "displayName": "Lena"
+          }
+        ],
+        "viewerId": "me"
+      },
+      "expected": {
+        "lanes": [
+          {
+            "laneId": "mia",
+            "laneIndex": 0,
+            "isViewer": false,
+            "colorSeed": "Mia",
+            "spans": [
+              {
+                "startRank": 0,
+                "endRank": 3,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 0,
+                    "kind": "bubble",
+                    "messageId": "a"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "isViewer": false,
+            "colorSeed": "Sarah",
+            "spans": [
+              {
+                "startRank": 1,
+                "endRank": 3,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 1,
+                    "kind": "bubble",
+                    "messageId": "b"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "laneId": "lena",
+            "laneIndex": 2,
+            "isViewer": false,
+            "colorSeed": "Lena",
+            "spans": [
+              {
+                "startRank": 3,
+                "endRank": 3,
+                "isOpen": true,
+                "nodes": [
+                  {
+                    "rank": 3,
+                    "kind": "bubble",
+                    "messageId": "c"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "bubbles": [
+          {
+            "messageId": "a",
+            "laneId": "mia",
+            "laneIndex": 0,
+            "rank": 0,
+            "createdAtMs": 1786957200000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": false
+          },
+          {
+            "messageId": "b",
+            "laneId": "sarah",
+            "laneIndex": 1,
+            "rank": 1,
+            "createdAtMs": 1786957260000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": false
+          },
+          {
+            "messageId": "j",
+            "laneId": "lena",
+            "laneIndex": 2,
+            "rank": 2,
+            "createdAtMs": 1786957320000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": true
+          },
+          {
+            "messageId": "c",
+            "laneId": "lena",
+            "laneIndex": 2,
+            "rank": 3,
+            "createdAtMs": 1786957380000,
+            "isViewer": false,
+            "replyToMessageId": null,
+            "isFirstInGroup": true,
+            "isSystem": false
+          }
+        ],
+        "connectors": [],
+        "rankCount": 4,
+        "laneCount": 3,
+        "voiceCount": 3,
+        "layout": "lanes",
+        "serializationReason": null,
+        "silenceWindowMs": 1800000,
         "maxLanes": 7,
         "minVoices": 3
       }

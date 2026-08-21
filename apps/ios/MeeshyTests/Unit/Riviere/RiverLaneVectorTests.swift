@@ -11,9 +11,9 @@ import XCTest
 /// arrivent avec lui).
 ///
 /// Ce fichier prouve la parité de `RiverLaneResolver` contre
-/// `packages/shared/utils/river-lanes.ts` — vecteur par vecteur, 53 cas
-/// (`river-lanes.vectors.json` 21, `river-step.vectors.json` 19,
-/// `river-headers.vectors.json` 13). Chaque fichier est un OBJET
+/// `packages/shared/utils/river-lanes.ts` — vecteur par vecteur, 59 cas
+/// (`river-lanes.vectors.json` 24, `river-step.vectors.json` 20,
+/// `river-headers.vectors.json` 15). Chaque fichier est un OBJET
 /// (`{ "$format": …, "vectors": […] }`), pas un tableau à la racine — comme
 /// `accent.vectors.json` (vérifié en lisant les trois fichiers avant
 /// d'écrire ce décodeur, jamais supposé par analogie avec les suites qui
@@ -52,6 +52,11 @@ final class RiverLaneVectorTests: XCTestCase {
         let senderId: String
         let createdAt: String
         let replyToMessageId: String?
+        /// OPTIONNEL, comme côté TS (`RiverMessageInput.isSystem?`) : les
+        /// vecteurs antérieurs à la règle « un avis n'est la voix de
+        /// personne » ne portent pas la clé, et décrivent une rivière de pure
+        /// parole. Absent vaut `false`.
+        let isSystem: Bool?
     }
 
     private struct VectorParticipantJSON: Decodable {
@@ -76,7 +81,8 @@ final class RiverLaneVectorTests: XCTestCase {
                     id: message.id,
                     senderId: message.senderId,
                     createdAt: .iso8601(message.createdAt),
-                    replyToMessageId: message.replyToMessageId
+                    replyToMessageId: message.replyToMessageId,
+                    isSystem: message.isSystem ?? false
                 )
             },
             participants: raw.participants.map { RiverLaneResolver.RiverParticipantInput(id: $0.id, displayName: $0.displayName) },
@@ -120,6 +126,7 @@ final class RiverLaneVectorTests: XCTestCase {
         let isViewer: Bool
         let replyToMessageId: String?
         let isFirstInGroup: Bool
+        let isSystem: Bool
     }
 
     private struct ExpectedConnectorJSON: Decodable, Equatable {
@@ -181,7 +188,8 @@ final class RiverLaneVectorTests: XCTestCase {
                     createdAtMs: bubble.createdAtMs,
                     isViewer: bubble.isViewer,
                     replyToMessageId: bubble.replyToMessageId,
-                    isFirstInGroup: bubble.isFirstInGroup
+                    isFirstInGroup: bubble.isFirstInGroup,
+                    isSystem: bubble.isSystem
                 )
             },
             connectors: geometry.connectors.map { connector in
@@ -291,7 +299,7 @@ final class RiverLaneVectorTests: XCTestCase {
         }
     }
 
-    // MARK: - Garde de harnais (leçon 257) + RE-PREUVE des comptes (21+19+13 = 53)
+    // MARK: - Garde de harnais (leçon 257) + RE-PREUVE des comptes (24+20+15 = 59)
 
     func test_vectors_allThreeFilesLoadAtLeastOneCase() {
         XCTAssertFalse((Self.loadVectors(resourceBaseName: "river-lanes.vectors") as [LanesVectorCase]).isEmpty)
@@ -299,18 +307,34 @@ final class RiverLaneVectorTests: XCTestCase {
         XCTAssertFalse((Self.loadVectors(resourceBaseName: "river-headers.vectors") as [HeadersVectorCase]).isEmpty)
     }
 
-    /// Re-preuve mécanique (règle RE-PROUVER) : 21+19+13 = 53 cas au total au
-    /// moment de l'écriture de cette suite. Un changement de l'un de ces
-    /// comptes doit être investigué avant d'ajuster ce nombre.
-    func test_vectors_totalCaseCount_isFiftyThree() {
+    /// Re-preuve mécanique (règle RE-PROUVER) : 24+20+15 = 59 cas au total.
+    /// Un changement de l'un de ces comptes doit être investigué avant
+    /// d'ajuster ce nombre. (53 jusqu'à la règle « un avis système n'est la
+    /// voix de personne », qui a ajouté 3 cas `river-lanes`, 1 `river-step` et
+    /// 2 `river-headers`.)
+    func test_vectors_totalCaseCount_isFiftyNine() {
         let lanesCount = (Self.loadVectors(resourceBaseName: "river-lanes.vectors") as [LanesVectorCase]).count
         let stepCount = (Self.loadVectors(resourceBaseName: "river-step.vectors") as [StepVectorCase]).count
         let headersCount = (Self.loadVectors(resourceBaseName: "river-headers.vectors") as [HeadersVectorCase]).count
 
-        XCTAssertEqual(lanesCount, 21, "river-lanes.vectors.json ne contient plus 21 cas.")
-        XCTAssertEqual(stepCount, 19, "river-step.vectors.json ne contient plus 19 cas.")
-        XCTAssertEqual(headersCount, 13, "river-headers.vectors.json ne contient plus 13 cas.")
-        XCTAssertEqual(lanesCount + stepCount + headersCount, 53, "53 vecteurs Rivière attendus au total.")
+        XCTAssertEqual(lanesCount, 24, "river-lanes.vectors.json ne contient plus 24 cas.")
+        XCTAssertEqual(stepCount, 20, "river-step.vectors.json ne contient plus 20 cas.")
+        XCTAssertEqual(headersCount, 15, "river-headers.vectors.json ne contient plus 15 cas.")
+        XCTAssertEqual(lanesCount + stepCount + headersCount, 59, "59 vecteurs Rivière attendus au total.")
+    }
+
+    /// Les vecteurs EXERCENT-ils la règle système ? Un jeu amputé de ses cas
+    /// système repasserait au vert en ne prouvant plus rien (leçon 257) — la
+    /// garde des comptes ci-dessus ne dit pas QUOI a disparu.
+    func test_vectors_exerciseSystemNotices() {
+        let cases: [LanesVectorCase] = Self.loadVectors(resourceBaseName: "river-lanes.vectors")
+        let withNotice = cases.filter { $0.input.messages.contains { $0.isSystem == true } }
+
+        XCTAssertFalse(withNotice.isEmpty, "aucun vecteur river-lanes ne porte d'avis système.")
+        XCTAssertTrue(
+            withNotice.contains { $0.expected.bubbles.contains { $0.isSystem } },
+            "aucun vecteur ne SERT d'avis système dans ses bulles."
+        )
     }
 
     // MARK: - Rejeu — `resolveRiverLanes` (21 vecteurs)
@@ -399,6 +423,20 @@ final class RiverLaneVectorTests: XCTestCase {
 
     private static func message(_ id: String, _ senderId: String, _ minutes: Double, replyTo: String? = nil) -> RiverLaneResolver.RiverMessageInput {
         RiverLaneResolver.RiverMessageInput(id: id, senderId: senderId, createdAt: Self.at(minutes), replyToMessageId: replyTo)
+    }
+
+    /// Miroir du helper `notice` de `river-lanes.test.ts` : un avis SYSTÈME,
+    /// qui porte l'ARRIVANT pour auteur (`join-notice.ts`).
+    private static func notice(_ id: String, _ senderId: String, _ minutes: Double) -> RiverLaneResolver.RiverMessageInput {
+        RiverLaneResolver.RiverMessageInput(id: id, senderId: senderId, createdAt: Self.at(minutes), replyToMessageId: nil, isSystem: true)
+    }
+
+    private static func geometry(_ messages: [RiverLaneResolver.RiverMessageInput]) -> RiverLaneResolver.RiverGeometry {
+        RiverLaneResolver.resolveRiverLanes(RiverLaneResolver.ResolveRiverLanesInput(
+            messages: messages,
+            participants: Self.defaultParticipants,
+            viewerId: "me"
+        ))
     }
 
     private static let defaultParticipants: [RiverLaneResolver.RiverParticipantInput] = [
@@ -510,5 +548,63 @@ final class RiverLaneVectorTests: XCTestCase {
         XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 0)?.laneId, "mia")
         XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 1)?.laneId, "sarah")
         XCTAssertNil(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 1, rank: 0))
+    }
+
+    // — Un avis système n'est la voix de personne (river-lanes.test.ts,
+    //   describe « un avis système n'est la voix de personne »).
+    //
+    //   Les vecteurs partagés couvrent déjà la voix, le couloir, le
+    //   regroupement après l'annonce et le nom d'en-tête. Les témoins
+    //   ci-dessous transposent les cas de la suite TS qu'AUCUN vecteur
+    //   n'exerce : le voisinage des deux côtés, l'absence de nœud sur la
+    //   branche de la personne concernée, et la réponse adressée à une
+    //   annonce.
+
+    func test_systemNotice_breaksTheGroupOnBothSides_neverContinuesANeighbour() {
+        let geometry = Self.geometry([
+            Self.message("a", "mia", 0),
+            Self.notice("j", "mia", 1),
+            Self.message("b", "mia", 2),
+        ])
+
+        XCTAssertEqual(geometry.bubbles.map(\.isFirstInGroup), [true, true, true])
+    }
+
+    func test_systemNotice_addsNoNode_toTheBranchOfThePersonItConcerns() throws {
+        let geometry = Self.geometry([
+            Self.message("a", "mia", 0),
+            Self.message("b", "sarah", 1),
+            Self.message("c", "tom", 2),
+            Self.notice("j", "mia", 3),
+        ])
+        let nodes = try Self.laneOf(geometry, "mia").spans.flatMap(\.nodes)
+
+        XCTAssertEqual(nodes.count, 1, "l'avis a ajouté un nœud à la branche de Mia")
+        XCTAssertEqual(nodes.first?.messageId, "a")
+        XCTAssertEqual(nodes.first?.rank, 0)
+        XCTAssertEqual(nodes.first?.kind, .bubble)
+    }
+
+    func test_replyToASystemNotice_summonsNoBranch_andDrawsNoConnector() {
+        let geometry = Self.geometry([
+            Self.message("a", "mia", 0),
+            Self.notice("j", "lena", 1),
+            Self.message("b", "sarah", 2, replyTo: "j"),
+            Self.message("c", "tom", 3),
+        ])
+
+        XCTAssertEqual(geometry.lanes.map(\.laneId), ["mia", "sarah", "tom"])
+        XCTAssertEqual(geometry.connectors, [])
+        XCTAssertEqual(geometry.voiceCount, 3)
+    }
+
+    /// `isSystem` est OPTIONNEL côté TS (`readonly isSystem?: boolean`) : le
+    /// miroir Swift tient le même contrat par un défaut `false`, sans quoi
+    /// tous les appelants existants auraient dû être réécrits.
+    func test_riverMessageInput_isSystem_defaultsToFalse() {
+        let plain = RiverLaneResolver.RiverMessageInput(id: "a", senderId: "mia", createdAt: Self.at(0))
+
+        XCTAssertFalse(plain.isSystem)
+        XCTAssertEqual(Self.geometry([plain]).bubbles.map(\.isSystem), [false])
     }
 }

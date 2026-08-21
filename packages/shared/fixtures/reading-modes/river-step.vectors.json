@@ -1409,6 +1409,69 @@
         },
         "reason": "edge"
       }
+    },
+    {
+      "_label": "serialisee-le-fil-descend-jusque-sur-l-avis-qu-il-traverse",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "a",
+              "senderId": "mia",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "j",
+              "senderId": "lena",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null,
+              "isSystem": true
+            },
+            {
+              "id": "b",
+              "senderId": "lena",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "me",
+              "displayName": "Moi"
+            },
+            {
+              "id": "mia",
+              "displayName": "Mia"
+            },
+            {
+              "id": "sarah",
+              "displayName": "Sarah"
+            },
+            {
+              "id": "tom",
+              "displayName": "Tom"
+            },
+            {
+              "id": "lena",
+              "displayName": "Lena"
+            }
+          ],
+          "viewerId": "me"
+        },
+        "cursor": {
+          "laneIndex": 0,
+          "rank": 0
+        },
+        "direction": "down"
+      },
+      "expected": {
+        "cursor": {
+          "laneIndex": 0,
+          "rank": 1
+        },
+        "reason": "moved"
+      }
     }
   ]
 }

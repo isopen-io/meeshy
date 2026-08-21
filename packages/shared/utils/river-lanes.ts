@@ -23,6 +23,16 @@
  * interlocuteurs ont leurs branches qui apparaissent et disparaissent selon
  * les interactions » (directive produit du 2026-08-17).
  *
+ * ── Ce qu'un avis système n'est pas ──
+ * **Un avis système n'est la voix de personne.** « X a rejoint la
+ * conversation » porte l'ARRIVANT pour auteur (`join-notice.ts`) : sans marque
+ * (`RiverMessageInput.isSystem`), la loi lui donnait une branche à son nom,
+ * le comptait comme une voix — au risque de déplier la rivière en couloirs sur
+ * la seule foi d'une annonce — et laissait sa première vraie bulle continuer
+ * le groupe de sa propre arrivée. Un avis descend l'axe du TEMPS avec les
+ * autres et n'entre dans aucun des deux autres axes : ni voix, ni couloir, ni
+ * connecteur, ni groupe. La peau le rend pleine largeur (`RiverBubble.isSystem`).
+ *
  * ── Combien de branches, et sinon quoi ──
  * L'axe horizontal a une LARGEUR FINIE : `RIVER_MAX_LANES` couloirs, et il
  * lui faut `RIVER_MIN_VOICES` voix pour valoir la peine. Hors de ces bornes,
@@ -44,6 +54,17 @@ export type RiverMessageInput = {
   readonly createdAt: Date | string | number;
   /** `null`/absent = message racine. Une cible hors fenêtre ne produit AUCUN connecteur. */
   readonly replyToMessageId?: string | null;
+  /**
+   * Un avis SYSTÈME — « X a rejoint la conversation », résumé d'appel… Absent
+   * vaut `false` : un appelant qui ne connaît pas encore cette marque décrit
+   * une rivière de pure parole, exactement comme avant.
+   *
+   * Elle est INDISPENSABLE ici parce que `senderId` ne suffit pas à trancher :
+   * l'avis d'arrivée est écrit avec l'ARRIVANT pour auteur
+   * (`packages/shared/utils/join-notice.ts`). Sans elle, la loi donnait un
+   * couloir et une voix à quelqu'un qui n'avait jamais parlé.
+   */
+  readonly isSystem?: boolean;
 };
 
 /**
@@ -123,6 +144,11 @@ export type RiverLane = {
 
 export type RiverBubble = {
   readonly messageId: string;
+  /**
+   * Le couloir qui porte la bulle — et il n'a de sens que pour une PRISE DE
+   * PAROLE. Un avis système (`isSystem`) n'occupe la colonne de personne : il
+   * se rend pleine largeur, et ces deux champs ne se lisent pas pour lui.
+   */
   readonly laneId: string;
   readonly laneIndex: number;
   readonly rank: number;
@@ -139,6 +165,13 @@ export type RiverBubble = {
    * garde son heure : c'est la rangée de suite (`FocalMetaRow`).
    */
   readonly isFirstInGroup: boolean;
+  /**
+   * L'avis système, servi tel quel : il descend l'axe du TEMPS avec les autres
+   * (il a son rang, il est dans `bubbles`), et la peau le rend PLEINE LARGEUR
+   * plutôt qu'en couloir. C'est la seule marque dont elle a besoin — la loi a
+   * déjà retiré l'avis de tout le reste.
+   */
+  readonly isSystem: boolean;
 };
 
 export type RiverConnector = {
@@ -232,6 +265,7 @@ type PlacedMessage = {
   readonly senderId: string;
   readonly timeMs: number;
   readonly replyToMessageId: string | null;
+  readonly isSystem: boolean;
   readonly rank: number;
 };
 
@@ -285,10 +319,28 @@ const placeMessages = (messages: readonly RiverMessageInput[]): readonly PlacedM
       senderId: message.senderId,
       timeMs: toEpochMs(message.createdAt),
       replyToMessageId: message.replyToMessageId ?? null,
+      isSystem: message.isSystem === true,
     }))
     .filter((message) => !Number.isNaN(message.timeMs))
     .sort(byTimeThenId)
     .map((message, rank) => ({ ...message, rank }));
+
+/**
+ * Les messages qui sont une PRISE DE PAROLE.
+ *
+ * **Un avis système n'est la voix de personne.** Il descend l'axe du TEMPS
+ * avec les autres — il garde son rang, il est servi dans `bubbles`, la peau le
+ * rend pleine largeur — et il n'entre dans AUCUN des deux autres axes : il ne
+ * fait naître aucune branche, ne prolonge celle de personne, ne compte pour
+ * aucune voix, et n'est le bout d'aucun connecteur.
+ *
+ * Sans ce filtre, l'avis d'arrivée — écrit avec l'ARRIVANT pour auteur
+ * (`packages/shared/utils/join-notice.ts`) — donnait un couloir à quelqu'un qui
+ * n'avait jamais parlé, et pouvait faire basculer la rivière de `serialized` à
+ * `lanes` sur la seule foi d'une annonce.
+ */
+const spokenOnly = (placed: readonly PlacedMessage[]): readonly PlacedMessage[] =>
+  placed.filter((message) => !message.isSystem);
 
 /**
  * Les interactions qui font vivre une branche : écrire (`bubble`) et se voir
@@ -504,8 +556,32 @@ const dayIndex = (timeMs: number, offsetMinutes: number): number =>
   Math.floor((timeMs + offsetMinutes * 60 * 1000) / DAY_MS);
 
 /**
+ * Deux rangs voisins appartiennent-ils à la même suite ?
+ *
+ * Un message SYSTÈME n'est pas une prise de parole : il n'entre dans aucune
+ * suite, ni comme prédécesseur ni comme successeur. Décider sur le seul
+ * `senderId` faisait suivre la première vraie bulle d'un nouveau venu dans le
+ * groupe de sa propre annonce d'arrivée — qui porte l'arrivant pour auteur
+ * (`packages/shared/utils/join-notice.ts`) — et la rangée perdait avatar, nom
+ * et heure d'un coup.
+ *
+ * Miroirs de cette règle : `apps/web/utils/message-grouping.ts` et
+ * `MessageDayGrouping.isGroupHead` (iOS) — toute évolution touche les trois.
+ */
+const continues = (
+  earlier: PlacedMessage,
+  later: PlacedMessage,
+  offsetMinutes: number,
+): boolean => {
+  if (earlier.isSystem || later.isSystem) return false;
+  if (earlier.senderId !== later.senderId) return false;
+  return dayIndex(earlier.timeMs, offsetMinutes) === dayIndex(later.timeMs, offsetMinutes);
+};
+
+/**
  * Tête de groupe, règle d'iOS mot pour mot : le rang PRÉCÉDENT change
- * d'expéditeur, ou change de jour. Le premier rang ouvre toujours un groupe.
+ * d'expéditeur, change de jour, ou l'un des deux est un avis système. Le
+ * premier rang ouvre toujours un groupe.
  */
 const isGroupHead = (
   placed: readonly PlacedMessage[],
@@ -515,8 +591,7 @@ const isGroupHead = (
   const previous = placed[index - 1];
   const current = placed[index];
   if (previous === undefined || current === undefined) return true;
-  if (previous.senderId !== current.senderId) return true;
-  return dayIndex(previous.timeMs, offsetMinutes) !== dayIndex(current.timeMs, offsetMinutes);
+  return !continues(previous, current, offsetMinutes);
 };
 
 /**
@@ -531,8 +606,11 @@ export function resolveRiverLanes(input: ResolveRiverLanesInput): RiverGeometry 
   const minVoices = input.minVoices ?? RIVER_MIN_VOICES;
   const dayBoundaryOffsetMinutes = input.dayBoundaryOffsetMinutes ?? 0;
   const placed = placeMessages(input.messages);
+  const spoken = spokenOnly(placed);
+  // Les rangs restent ceux de TOUTE la fenêtre, avis compris : une branche
+  // survit à un avis qui passe, elle ne s'y coupe pas.
   const rankTimes = placed.map((message) => message.timeMs);
-  const engagements = collectEngagements(placed);
+  const engagements = collectEngagements(spoken);
   const laneIds = orderLaneIds(engagements, input.viewerId);
 
   const seedByParticipantId = new Map(
@@ -548,9 +626,11 @@ export function resolveRiverLanes(input: ResolveRiverLanesInput): RiverGeometry 
   /**
    * Une VOIX est une personne qu'on a entendue : elle a au moins une bulle.
    * Une branche qui n'existe que pour recevoir une réponse (`addressed`) ne
-   * compte pas — sinon deux personnes qui se répondent feraient trois voix.
+   * compte pas — sinon deux personnes qui se répondent feraient trois voix. Et
+   * une annonce ne compte pas non plus — sinon la rivière se déplierait en
+   * couloirs sur la foi d'une arrivée que personne n'a encore entendue parler.
    */
-  const voiceCount = new Set(placed.map((message) => message.senderId)).size;
+  const voiceCount = new Set(spoken.map((message) => message.senderId)).size;
   const { indexByLaneId, overflowed } = assignColumns(seeds, maxLanes);
 
   const serializationReason: RiverSerializationReason | null = overflowed
@@ -579,7 +659,7 @@ export function resolveRiverLanes(input: ResolveRiverLanesInput): RiverGeometry 
     spans: seed.spans,
   }));
 
-  const placedById = new Map(placed.map((message) => [message.id, message]));
+  const placedById = new Map(spoken.map((message) => [message.id, message]));
 
   const bubbles: readonly RiverBubble[] = placed.map((message, index) => ({
     messageId: message.id,
@@ -590,15 +670,17 @@ export function resolveRiverLanes(input: ResolveRiverLanesInput): RiverGeometry 
     isViewer: message.senderId === input.viewerId,
     replyToMessageId: message.replyToMessageId,
     isFirstInGroup: isGroupHead(placed, index, dayBoundaryOffsetMinutes),
+    isSystem: message.isSystem,
   }));
 
   /**
    * Un connecteur ne pend JAMAIS dans le vide : une cible hors fenêtre (ou
    * effacée) n'a ni rang ni couloir, donc pas de trait. Une réponse à
    * soi-même en garde un — c'est une donnée vraie, la peau la boucle dans son
-   * propre couloir.
+   * propre couloir. Un avis système n'est le bout d'aucun trait, ni départ ni
+   * arrivée : un connecteur relie deux couloirs, et il n'en a pas.
    */
-  const connectors: readonly RiverConnector[] = placed.flatMap((message) => {
+  const connectors: readonly RiverConnector[] = spoken.flatMap((message) => {
     const target =
       message.replyToMessageId === null ? undefined : placedById.get(message.replyToMessageId);
     if (target === undefined) return [];
@@ -773,9 +855,15 @@ const headerAlpha = (
  * Occupations en mode sérialisé : les GROUPES de bulles consécutives d'un même
  * auteur, tels que `isFirstInGroup` les découpe déjà — la seule notion
  * d'occupation qui ait un sens quand tout le monde partage l'unique colonne.
+ *
+ * Un avis système n'occupe rien : nommer une colonne au rang d'une annonce
+ * ferait parler quelqu'un qui vient seulement d'entrer, exactement comme
+ * nommer une branche morte mentirait sur une présence.
  */
 const serializedOccupancies = (geometry: RiverGeometry): readonly Occupancy[] =>
   geometry.bubbles.reduce<readonly Occupancy[]>((groups, bubble) => {
+    if (bubble.isSystem) return groups;
+
     const current = groups[groups.length - 1];
 
     return bubble.isFirstInGroup || current === undefined
