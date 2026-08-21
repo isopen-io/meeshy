@@ -78,15 +78,36 @@ data class TranslationEvent(
     val translationModel: String? = null,
 )
 
+/**
+ * A ready voice-note transcript — the payload of `audio:transcription-ready`.
+ *
+ * Faithful to `packages/shared/types/socketio-events.ts` `TranscriptionReadyEventData`:
+ * the transcript NESTS under [transcription], with only the identifiers and
+ * [processingTimeMs] at the top level. Same nesting as its sibling
+ * [AudioTranslationEvent], and same reason for spelling it out — a flat model
+ * makes `text` a missing required field, so every frame throws at decode time and
+ * is swallowed by the `runCatching` around the socket listener.
+ *
+ * Deserialization is lenient (blank text, null language) so a malformed frame is
+ * dropped by the merge no-op rather than throwing.
+ */
 @Serializable
 data class TranscriptionReadyEvent(
     val messageId: String,
     val conversationId: String,
     val attachmentId: String? = null,
-    val text: String,
+    val transcription: TranscriptionPayload = TranscriptionPayload(),
+    val processingTimeMs: Long? = null,
+)
+
+@Serializable
+data class TranscriptionPayload(
+    val id: String? = null,
+    val text: String = "",
     val language: String? = null,
     val confidence: Double? = null,
     val durationMs: Long? = null,
+    val source: String? = null,
 )
 
 /**

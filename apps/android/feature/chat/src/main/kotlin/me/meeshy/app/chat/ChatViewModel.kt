@@ -599,7 +599,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.messageUpdated.collect { event ->
+                messageSocketManager.messageEdited.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)
                     }
@@ -647,10 +647,10 @@ class ChatViewModel @Inject constructor(
                         messageRepository.applyTranscription(
                             event.messageId,
                             event.attachmentId,
-                            event.text,
-                            event.language,
-                            event.confidence,
-                            event.durationMs,
+                            event.transcription.text,
+                            event.transcription.language,
+                            event.transcription.confidence,
+                            event.transcription.durationMs,
                         )
                     }
                 }
