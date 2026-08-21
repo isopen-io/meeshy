@@ -1,5 +1,6 @@
 import { apiService } from './api.service';
 import { buildApiUrl } from '@/lib/config';
+import { getCurrentInterfaceLocale } from '@/stores/language-store';
 import type {
   Post,
   PostComment,
@@ -172,6 +173,24 @@ function unwrap<T>(response: { data?: T }): T {
   return response.data as T;
 }
 
+/**
+ * F5 — `originalLanguage` enfin envoyé pour les créations à `storyEffects`
+ * (composer story) : le champ existait déjà sur `CreatePostRequest`, mais
+ * aucun appelant ne le renseignait. Résolu ici depuis la locale d'INTERFACE
+ * active (`getCurrentInterfaceLocale` — le mécanisme de langue UI existant
+ * du web, PAS `resolveUserLanguage`, qui résout la langue de LECTURE
+ * préférée, un concept différent). Un `originalLanguage` déjà fourni par
+ * l'appelant (ex. langue détectée par la transcription audio) n'est jamais
+ * écrasé. Sans `storyEffects`, ou sans langue connue, le champ reste absent
+ * : la détection serveur (`detectLanguage`) reste le repli — ne jamais
+ * envoyer une langue devinée fausse qui la court-circuiterait.
+ */
+function resolveOriginalLanguageForCreate(data: CreatePostRequest): string | undefined {
+  if (data.originalLanguage) return data.originalLanguage;
+  if (!data.storyEffects) return undefined;
+  return getCurrentInterfaceLocale() || undefined;
+}
+
 // ---------------------------------------------------------------------------
 // Service
 // ---------------------------------------------------------------------------
@@ -243,7 +262,9 @@ export const postsService = {
   // ── CRUD ────────────────────────────────────────────────────────────────
 
   async createPost(data: CreatePostRequest): Promise<{ success: boolean; data: Post }> {
-    const response = await apiService.post<{ success: boolean; data: Post }>('/posts', data);
+    const originalLanguage = resolveOriginalLanguageForCreate(data);
+    const body = originalLanguage ? { ...data, originalLanguage } : data;
+    const response = await apiService.post<{ success: boolean; data: Post }>('/posts', body);
     return unwrap(response);
   },
 
