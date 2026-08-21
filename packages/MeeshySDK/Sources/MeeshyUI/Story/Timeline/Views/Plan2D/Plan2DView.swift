@@ -300,9 +300,16 @@ public struct Plan2DView: View, Equatable {
     /// `TrackBarView.accessibilityComposedLabel` de l'ancien conteneur : le
     /// PRÉFIXE DE SECTION d'abord (ici le plan, la seule sémantique du plan
     /// 2D), puis le nom de la piste, puis ce qu'elle occupe dans le temps,
-    /// puis — verrouillée — le MÊME suffixe littéral que l'ancien conteneur
-    /// (`" (verrouillée)"`, revue Opus constat 3). Un `Canvas` n'est qu'un
-    /// seul élément d'accessibilité : sans cette composition rendue par
+    /// puis — verrouillée — un suffixe LOCALISÉ (revue Opus constat 3 ;
+    /// routage catalogue ajouté en revue DoD sur D6b — la première version
+    /// codait ce suffixe en dur en français, contrairement aux DEUX autres
+    /// composants de cette même fonction, déjà routés par `Bundle.module`.
+    /// L'ancien conteneur, lui, codait le même littéral en dur
+    /// (`TrackBarView.accessibilityComposedLabel:73`), mais ce chemin est
+    /// mort en production — cf. axe G de la revue —, alors que celui-ci est
+    /// le seul plan vivant : ici, la chaîne se rend réellement à
+    /// l'utilisateur). Un `Canvas` n'est qu'un seul élément
+    /// d'accessibilité : sans cette composition rendue par
     /// `accessibilityChildren`, le plan entier s'annoncerait comme un dessin
     /// muet.
     static func accessibilityLabel(for track: Plan2DTrack) -> String {
@@ -314,7 +321,10 @@ public struct Plan2DView: View, Equatable {
         case .timed(let start, let end):
             occupation = TrackBarView<AnyView>.formatTrackDuration(Float(end - start))
         }
-        let lockSuffix = track.isLocked ? " (verrouillée)" : ""
+        let lockSuffix = track.isLocked
+            ? String(localized: "story.timeline.plan.track.locked.a11y",
+                     defaultValue: " (verrouillée)", bundle: .module)
+            : ""
         return "\(planeLabel(track.plane)) — \(track.label) — \(occupation)\(lockSuffix)"
     }
 
@@ -410,7 +420,22 @@ public struct Plan2DView: View, Equatable {
     /// inatteignable (revue Opus, mineur 18).
     static func edgeHandleZones(for track: Plan2DTrack, rowIndex: Int, isSelected: Bool, zoom: Plan2DZoom,
                                 laneWidth: CGFloat, slideDuration: Double) -> [EdgeHandleZone] {
-        guard isSelected, !track.isLocked, case let .timed(start, end) = track.bar else { return [] }
+        guard isSelected, !track.isLocked else { return [] }
+        return edgeZoneGeometry(for: track, rowIndex: rowIndex, zoom: zoom, laneWidth: laneWidth,
+                                slideDuration: slideDuration)
+    }
+
+    /// Géométrie NUE des deux zones de bord d'une piste `.timed` — sans le
+    /// garde de sélection/verrou ci-dessus. `tapTarget` (mineur 19,
+    /// ci-dessous) en a besoin SANS ce garde : la préséance du bord sur un
+    /// losange qui le recouvre est une question de ce que le doigt VISE,
+    /// indépendante de la poignée étant ou non actuellement rendue (revue
+    /// Opus DoD sur D6b — coupler les deux avait rendu la fiche du clip
+    /// inatteignable au tap sur une piste non sélectionnée, la régression
+    /// même que mineur 19 corrigeait).
+    private static func edgeZoneGeometry(for track: Plan2DTrack, rowIndex: Int, zoom: Plan2DZoom,
+                                         laneWidth: CGFloat, slideDuration: Double) -> [EdgeHandleZone] {
+        guard case let .timed(start, end) = track.bar else { return [] }
         let startX = x(forTime: start, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         let endX = x(forTime: end, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         let half = edgeHandleMinHitWidth / 2
@@ -532,15 +557,29 @@ public struct Plan2DView: View, Equatable {
     /// CLIP inatteignable au tap sur ce bord (revue Opus, mineur 19) — le bord
     /// a donc la préséance, et le losange reste la cible la plus précise
     /// partout ailleurs sur la barre.
+    ///
+    /// Cette préséance est INDÉPENDANTE de `selectedTrackId` — délibérément
+    /// (revue Opus DoD sur D6b) : elle tranche ce que le doigt VISE, pas
+    /// quelle poignée est actuellement rendue. La coupler à la sélection
+    /// (arbitrage 2, D6b) avait réintroduit exactement la régression que
+    /// mineur 19 corrigeait — sur une piste NON sélectionnée, dont la barre
+    /// entière tombe sous le rayon de tap d'un losange à t=0, le tap
+    /// n'atteignait plus jamais `.track`, donc plus aucune sélection ne
+    /// pouvait naître d'un tap sur la barre. Mineur 19 appartient à D6a ;
+    /// sa reconciliation avec l'inspectabilité d'un keyframe AUDIO
+    /// (l'arbitrage 3, D6c : « un losange à t=0 ne vole pas le tap du bord
+    /// si le clip n'a pas d'inspecteur de keyframe pour lui ») reste le
+    /// périmètre de D6c — D6b ne touche pas à cette décision.
     nonisolated enum TapTarget: Equatable {
         case keyframe(String)
         case track
     }
 
-    static func tapTarget(touchX: CGFloat, track: Plan2DTrack, isSelected: Bool,
+    static func tapTarget(touchX: CGFloat, track: Plan2DTrack,
                           zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> TapTarget {
-        guard edgeHandle(touchX: touchX, track: track, isSelected: isSelected, zoom: zoom,
-                         laneWidth: laneWidth, slideDuration: slideDuration) == nil,
+        let onEdge = edgeZoneGeometry(for: track, rowIndex: 0, zoom: zoom, laneWidth: laneWidth,
+                                      slideDuration: slideDuration).contains { $0.contains(touchX) }
+        guard !onEdge,
               let keyframeId = keyframeHit(touchX: touchX, track: track, zoom: zoom,
                                            laneWidth: laneWidth, slideDuration: slideDuration)
         else { return .track }
@@ -775,7 +814,6 @@ public struct Plan2DView: View, Equatable {
                                    startRow: startRow, endRow: endRow) {
         case .select:
             switch Self.tapTarget(touchX: value.location.x, track: tracks[startRow],
-                                  isSelected: tracks[startRow].id == selectedTrackId,
                                   zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
             case .keyframe(let keyframeId): onSelectKeyframe(keyframeId)
             case .track: onSelectTrack(tracks[startRow].id)

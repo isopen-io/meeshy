@@ -250,6 +250,26 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "La session de glissement doit se refermer au relâchement")
     }
 
+    // MARK: - Guard 2h — l'hôte alimente le plan avec la SEULE source de
+    // sélection (revue Opus, constat 4 ; rejetée en revue DoD sur D6b : le
+    // câblage était corrigé mais sans garde à demeure sur l'hôte lui-même —
+    // remplacer `viewModel.selection.selectedClipId` par `nil` compilait et
+    // laissait les 14 tests de D6b au vert, exactement la forme du constat.
+    // D6a portait déjà une garde d'hôte pour CHACUN de ses câblages dans ce
+    // même fichier — `feedsTheMagnetThePlansOwnGeometry`,
+    // `wiresTheClipTimeDragToTheExistingDragSession` ci-dessus — la
+    // sélection en manquait une symétrique.
+
+    func test_storyTimelineHost_feedsThePlanTheViewModelsSelection() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        guard let range = source.range(of: "Plan2DView(") else {
+            return XCTFail("StoryTimelineHost doit construire Plan2DView")
+        }
+        let body = String(source[range.upperBound...].prefix(600))
+        XCTAssertTrue(body.contains("selectedTrackId: viewModel.selection.selectedClipId"),
+                     "Le plan doit surligner la piste que le viewModel tient déjà sélectionnée — sinon un selectedClipId changé ne redessine jamais le Canvas (constat 4)")
+    }
+
     // MARK: - Guard 3 — le diff de D3 ne déborde pas de Timeline/**
     //
     // La garde d'origine n'épinglait QU'UN fichier (`ComposerControlsLayer`)

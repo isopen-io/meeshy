@@ -65,6 +65,9 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.plan.plane.content.a11y",
         "story.timeline.track.section.bg.a11y",
         "story.timeline.plan.track.followsSlide.a11y",
+        // Plan 2D — suffixe a11y d'une piste verrouillée (revue Opus DoD
+        // sur D6b : la chaîne était en dur, jamais dans ce catalogue)
+        "story.timeline.plan.track.locked.a11y",
         // Fiche d'édition — place de la piste dans le plan
         "story.timeline.inspector.transform",
         "story.timeline.inspector.scale",

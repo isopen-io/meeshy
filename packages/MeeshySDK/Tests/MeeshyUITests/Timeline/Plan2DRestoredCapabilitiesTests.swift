@@ -233,12 +233,19 @@ final class Plan2DTrackAccessibilityTests: XCTestCase {
                       "Un fantôme n'a pas de durée : il SUIT la slide, et le dit — got: \(label)")
     }
 
-    /// Même annonce littérale que l'ancien conteneur
-    /// (`TrackBarView.accessibilityComposedLabel`, `" (verrouillée)"`) —
-    /// restaurée par la revue Opus (constat 3), en queue de libellé.
-    func test_lockedTrack_announcesVerrouillee_asTheOldContainerDid() {
+    /// Suffixe de verrou en queue de libellé (revue Opus, constat 3) —
+    /// LOCALISÉ (`story.timeline.plan.track.locked.a11y`, revue Opus DoD sur
+    /// D6b : la première version le codait en dur en français dans le
+    /// chemin de production ; contrairement à `TrackBarView
+    /// .accessibilityComposedLabel`, mort en production — cf. axe G de la
+    /// revue —, cette annonce EST rendue en vrai, donc catalogue 7 langues
+    /// obligatoire). Même technique locale-agnostique que
+    /// `test_ghostTrack_announcesThatItFollowsTheSlide` ci-dessus.
+    func test_lockedTrack_announcesALockedSuffix() {
         let locked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: true)
-        XCTAssertTrue(Plan2DView.accessibilityLabel(for: locked).contains("(verrouillée)"))
+        let unlocked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: false)
+        XCTAssertNotEqual(Plan2DView.accessibilityLabel(for: locked),
+                          Plan2DView.accessibilityLabel(for: unlocked))
     }
 }
 

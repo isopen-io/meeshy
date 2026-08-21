@@ -497,7 +497,7 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_tapTarget_onADiamondSittingOnTheBarsEdge_opensTheClip() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track, isSelected: true,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
             .track,
             "Le doigt posé sur le bord vise le bord — le losange qui s'y superpose ne doit pas voler la fiche du clip"
@@ -507,7 +507,7 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_tapTarget_onADiamondAwayFromAnyEdge_opensThatKeyframe() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 150, track: track, isSelected: true,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 150, track: track,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
             .keyframe("kf-mid"),
             "Partout ailleurs sur la barre, le losange reste la cible la plus précise"
@@ -517,21 +517,27 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_tapTarget_onABareStretchOfBar_opensTheClip() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 90, track: track, isSelected: true,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 90, track: track,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
             .track
         )
     }
 
-    /// Sur une piste NON sélectionnée, il n'existe aucune poignée de bord
-    /// active pour préempter le tap (constat 3) — le losange posé sur ce même
-    /// bord redevient la cible la plus précise.
-    func test_tapTarget_onAnUnselectedTrack_theEdgeNeverPreemptsItsKeyframe() {
+    /// La préséance du bord est INDÉPENDANTE de la sélection (revue Opus DoD
+    /// sur D6b — la version rejetée couplait les deux : sur une piste NON
+    /// sélectionnée, `tapTarget` cédait alors au losange, donc un tap sur une
+    /// barre entièrement couverte par le rayon d'un keyframe à t=0 n'ouvrait
+    /// plus JAMAIS la fiche du clip — ni sélection ni poignées de rognage ne
+    /// pouvaient plus naître d'un tap sur la barre elle-même). `isSelected`
+    /// gouverne seulement si la poignée de bord se RESTITUE/glisse
+    /// (`edgeHandleZones`, arbitrage 2) — pas ce que le doigt VISE ici.
+    func test_tapTarget_onAnUnselectedTrack_theEdgeStillPreemptsItsKeyframe() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track, isSelected: false,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
-            .keyframe("kf-edge")
+            .track,
+            "Non sélectionnée ou pas, le bord garde la préséance — sinon la barre ne peut jamais devenir sélectionnable au tap"
         )
     }
 
@@ -858,11 +864,61 @@ final class Plan2DViewGuardTests: XCTestCase {
         )
     }
 
-    func test_accessibilityLabel_lockedTrack_announcesVerrouillee() {
+    /// Locale-agnostic (revue Opus DoD sur D6b) : le suffixe verrou route
+    /// désormais par `String(localized:)`, donc son texte dépend de la
+    /// locale du run — asserter sur un littéral français figerait le test à
+    /// une seule locale (même piège que `feedback_localized_string_
+    /// assertions_depend_on_simulator_locale.md`). Le comportement testable
+    /// est structurel : le suffixe s'ajoute en QUEUE, et distingue verrouillé
+    /// de non verrouillé.
+    func test_accessibilityLabel_lockedTrack_appendsASuffixDistinctFromUnlocked() {
         let locked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: true)
         let unlocked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: false)
-        XCTAssertTrue(Plan2DView.accessibilityLabel(for: locked).contains("verrouillée"))
-        XCTAssertFalse(Plan2DView.accessibilityLabel(for: unlocked).contains("verrouillée"))
+        let lockedLabel = Plan2DView.accessibilityLabel(for: locked)
+        let unlockedLabel = Plan2DView.accessibilityLabel(for: unlocked)
+        XCTAssertTrue(lockedLabel.hasPrefix(unlockedLabel),
+                     "Le verrou s'annonce en SUFFIXE — le libellé non verrouillé reste en tête")
+        XCTAssertNotEqual(lockedLabel, unlockedLabel,
+                          "Une piste verrouillée doit s'annoncer différemment d'une piste libre")
+    }
+
+    /// Preuve que le suffixe n'est PAS un littéral français en dur (revue
+    /// Opus DoD sur D6b) : `fr.lproj` et `en.lproj`, chargés directement
+    /// (même technique que `HardcodedStringsSweepTests.localizedBundle`),
+    /// portent des valeurs DIFFÉRENTES pour la même clé — un littéral figé
+    /// dans le source Swift rendrait la MÊME chaîne quel que soit le
+    /// `.lproj` chargé.
+    func test_accessibilityLabel_lockedSuffixKey_isTranslatedNotHardcoded() throws {
+        let key = "story.timeline.plan.track.locked.a11y"
+        func value(in localeId: String) throws -> String {
+            let path = try XCTUnwrap(Bundle.module.path(forResource: localeId, ofType: "lproj"),
+                                     "Bundle.module has no '\(localeId).lproj'")
+            let bundle = try XCTUnwrap(Bundle(path: path))
+            return bundle.localizedString(forKey: key, value: key, table: nil)
+        }
+        let fr = try value(in: "fr")
+        let en = try value(in: "en")
+        XCTAssertNotEqual(fr, key, "Key '\(key)' missing from fr.lproj")
+        XCTAssertNotEqual(en, key, "Key '\(key)' missing from en.lproj")
+        XCTAssertNotEqual(fr, en,
+                          "fr and en must differ — a hardcoded French literal would render identically under any .lproj")
+    }
+
+    /// Garde de SOURCE (revue Opus DoD sur D6b) : la version rejetée
+    /// assignait `" (verrouillée)"` directement au ternaire — un littéral
+    /// français en dur dans le chemin de PRODUCTION, alors que les DEUX
+    /// autres composants de `accessibilityLabel(for:)` routaient déjà par
+    /// `String(localized:bundle:)`. Les deux tests ci-dessus prouvent le
+    /// COMPORTEMENT ; celui-ci fige la FORME du fix pour qu'un futur retour
+    /// en arrière (retirer `String(localized:)`, garder le texte comme
+    /// `defaultValue`) se voie immédiatement, plutôt que de survivre parce
+    /// que le comportement observable reste correct dans la locale du run.
+    func test_accessibilityLabel_lockSuffix_routesThroughTheCatalog() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertFalse(source.contains("isLocked ? \" (verrouillée)\" : \"\""),
+                       "Le suffixe de verrou ne doit plus être un littéral français assigné directement au ternaire")
+        XCTAssertTrue(source.contains("String(localized: \"story.timeline.plan.track.locked.a11y\""),
+                     "Il doit router par le catalogue, comme les deux autres composants de accessibilityLabel(for:)")
     }
 
     // MARK: - Helpers (garde de source)
