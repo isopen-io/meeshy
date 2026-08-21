@@ -29,7 +29,10 @@ import me.meeshy.sdk.net.api.PostImpressionsRequest
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
+import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
@@ -49,6 +52,7 @@ typealias BookmarkPage = PostPage
 @Singleton
 class PostRepository @Inject constructor(
     private val postApi: PostApi,
+    private val translationApi: TranslationApi,
     private val clock: CacheClock = SystemCacheClock,
 ) {
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
@@ -394,6 +398,55 @@ class PostRepository @Inject constructor(
 
     suspend fun requestTranslation(postId: String, targetLanguage: String): NetworkResult<Unit> =
         apiCall { postApi.requestTranslation(postId, PostTranslationRequest(targetLanguage)) }
+
+    /**
+     * On-demand translation (Prisme, pull side): the viewer tapped a configured
+     * language the post has no content for yet. Blocking-translates the post's
+     * original text into [targetLanguage] and upserts the result into the in-memory
+     * feed cache via [PostTranslationMerge] so the open card can switch to it — the
+     * map-keyed sibling of [me.meeshy.sdk.conversation.MessageRepository.requestTranslation].
+     *
+     * Returns `true` only when a non-blank translation was actually stored. Inert
+     * (`false`, nothing stored) when the post is not in the cache, has no source
+     * text, the target is blank, the network call fails, the translator returns a
+     * blank string, or the translation already matches what is cached (idempotent).
+     */
+    suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
+        val target = targetLanguage.trim()
+        if (target.isEmpty()) return false
+        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val source = post.content
+        if (source.isNullOrBlank()) return false
+
+        val translated = when (
+            val result = apiCall {
+                translationApi.translate(
+                    TranslateRequest(
+                        text = source,
+                        sourceLanguage = post.originalLanguage?.trim().orEmpty(),
+                        targetLanguage = target,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> result.data.translatedText
+            is NetworkResult.Failure -> return false
+        }
+        if (translated.isBlank()) return false
+
+        var stored = false
+        _feedCache.value = _feedCache.value?.map { current ->
+            if (current.id != postId) return@map current
+            val merged = PostTranslationMerge.mergeTranslation(current, target, translated)
+            if (merged != null) {
+                stored = true
+                merged
+            } else {
+                current
+            }
+        }
+        return stored
+    }
 
     suspend fun viewPost(postId: String, duration: Int? = null): NetworkResult<Unit> =
         apiCall { postApi.viewPost(postId, PostViewRequest(duration)) }

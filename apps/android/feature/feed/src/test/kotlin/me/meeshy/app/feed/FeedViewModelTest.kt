@@ -6,6 +6,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -310,6 +311,68 @@ class FeedViewModelTest {
         stream.value = CacheResult.Fresh(listOf(translatedPost("1")), 0L)
 
         assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    // --- On-demand post translation (tapping a configured-but-absent flag) ---
+
+    /** Translated into `en` only — a bilingual (en/es) viewer's `es` chip is translatable. */
+    private fun enOnlyPost(id: String) = ApiPost(
+        id = id,
+        content = "Bonjour",
+        originalLanguage = "fr",
+        translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")),
+    )
+
+    private fun withEs(id: String) = ApiPost(
+        id = id,
+        content = "Bonjour",
+        originalLanguage = "fr",
+        translations = mapOf(
+            "en" to ApiPostTranslationEntry(text = "Hello"),
+            "es" to ApiPostTranslationEntry(text = "Hola"),
+        ),
+    )
+
+    @Test
+    fun `tapping a translatable flag requests a translation and switches to it`() = runTest {
+        val stream = MutableStateFlow<CacheResult<List<ApiPost>>>(
+            CacheResult.Fresh(listOf(enOnlyPost("1")), 0L),
+        )
+        val vm = viewModel(bilingualUser, stream)
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+        coEvery { repository.requestOnDemandTranslation("1", "es") } coAnswers {
+            stream.value = CacheResult.Fresh(listOf(withEs("1")), 0L)
+            true
+        }
+
+        vm.onPostFlagTap("1", "es")
+
+        coVerify(exactly = 1) { repository.requestOnDemandTranslation("1", "es") }
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hola")
+    }
+
+    @Test
+    fun `a failed on-demand translation leaves the displayed language unchanged`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(enOnlyPost("1")), 0L)))
+        coEvery { repository.requestOnDemandTranslation("1", "es") } returns false
+
+        vm.onPostFlagTap("1", "es")
+
+        coVerify(exactly = 1) { repository.requestOnDemandTranslation("1", "es") }
+        assertThat(vm.state.value.posts.single().content).isEqualTo("Hello")
+    }
+
+    @Test
+    fun `a second tap while a translation is in flight does not fire a duplicate request`() = runTest {
+        val vm = viewModel(bilingualUser, flowOf(CacheResult.Fresh(listOf(enOnlyPost("1")), 0L)))
+        val gate = CompletableDeferred<Boolean>()
+        coEvery { repository.requestOnDemandTranslation("1", "es") } coAnswers { gate.await() }
+
+        vm.onPostFlagTap("1", "es")
+        vm.onPostFlagTap("1", "es")
+        gate.complete(false)
+
+        coVerify(exactly = 1) { repository.requestOnDemandTranslation("1", "es") }
     }
 
     // --- Realtime new-posts banner (post:created) ---

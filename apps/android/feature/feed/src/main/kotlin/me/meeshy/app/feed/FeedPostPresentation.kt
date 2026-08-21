@@ -110,6 +110,7 @@ object FeedPostBuilder {
                 preferences = preferences,
                 showingOriginal = isTranslated && activeIsOriginal,
                 activeCodeOverride = activeCode,
+                includeTranslatable = true,
             ),
             moodEmoji = post.moodEmoji?.takeIf { it.isNotBlank() },
             images = images,
