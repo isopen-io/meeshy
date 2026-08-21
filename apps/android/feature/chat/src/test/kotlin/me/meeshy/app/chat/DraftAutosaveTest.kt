@@ -2,6 +2,8 @@ package me.meeshy.app.chat
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.MessageEffectFlags
+import me.meeshy.sdk.model.MessageEffects
 import org.junit.Test
 
 /**
@@ -162,7 +164,87 @@ class DraftAutosaveTest {
         )
     }
 
+    // ---- resolve(): armed-effects behaviour (iOS `MessageDraft.isEffectivelyEmpty` weighs effects) ----
+
+    private val confetti = MessageEffects(flags = MessageEffectFlags.CONFETTI)
+    private val glow = MessageEffects(flags = MessageEffectFlags.GLOW)
+
+    @Test
+    fun armed_effects_on_an_empty_composer_are_persisted() {
+        val decision = DraftAutosave.resolve("c1", "", replyToId = null, now, previous = null, effects = confetti)
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(
+                ConversationDraft(conversationId = "c1", text = "", updatedAt = now, effects = confetti),
+            ),
+        )
+    }
+
+    @Test
+    fun the_saved_draft_carries_the_armed_effects_alongside_text() {
+        val decision = DraftAutosave.resolve("c1", "boom", replyToId = null, now, previous = null, effects = confetti)
+
+        assertThat((decision as DraftPersist.Save).draft.effects).isEqualTo(confetti)
+    }
+
+    @Test
+    fun clearing_effects_on_an_empty_composer_clears_an_effects_only_draft() {
+        val previous = ConversationDraft(conversationId = "c1", text = "", updatedAt = "old", effects = confetti)
+
+        val decision = DraftAutosave.resolve("c1", "", replyToId = null, now, previous, effects = MessageEffects())
+
+        assertThat(decision).isEqualTo(DraftPersist.Clear("c1"))
+    }
+
+    @Test
+    fun only_the_armed_effects_changing_still_saves() {
+        val previous = ConversationDraft(conversationId = "c1", text = "hi", updatedAt = "old", effects = confetti)
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = null, now, previous, effects = glow)
+
+        assertThat(decision).isEqualTo(
+            DraftPersist.Save(ConversationDraft(conversationId = "c1", text = "hi", updatedAt = now, effects = glow)),
+        )
+    }
+
+    @Test
+    fun identical_text_reply_and_effects_writes_nothing() {
+        val previous = ConversationDraft(
+            conversationId = "c1", text = "hi", updatedAt = "old", replyToId = "m1", effects = confetti,
+        )
+
+        val decision = DraftAutosave.resolve("c1", "hi", replyToId = "m1", now, previous, effects = confetti)
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
+    @Test
+    fun blank_composer_with_no_effects_and_no_stored_draft_writes_nothing() {
+        val decision =
+            DraftAutosave.resolve("c1", "  ", replyToId = null, now, previous = null, effects = MessageEffects())
+
+        assertThat(decision).isEqualTo(DraftPersist.None)
+    }
+
     // ---- restore() ----
+
+    @Test
+    fun restore_re_arms_an_effects_only_draft_with_empty_text_and_the_effects() {
+        val stored = ConversationDraft(conversationId = "c1", text = "", updatedAt = now, effects = confetti)
+
+        assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = false))
+            .isEqualTo(DraftRestore(text = "", replyToId = null, effects = confetti))
+    }
+
+    @Test
+    fun restore_returns_the_stored_effects_alongside_text_and_reply() {
+        val stored = ConversationDraft(
+            conversationId = "c1", text = "re: salut", updatedAt = now, replyToId = "m1", effects = glow,
+        )
+
+        assertThat(DraftAutosave.restore(stored, currentDraft = "", isEditing = false))
+            .isEqualTo(DraftRestore(text = "re: salut", replyToId = "m1", effects = glow))
+    }
 
     @Test
     fun restore_returns_the_stored_text_into_an_idle_empty_composer() {
