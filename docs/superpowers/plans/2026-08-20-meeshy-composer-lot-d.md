@@ -116,6 +116,17 @@ sur pièces par l'orchestrateur. Le lot NE MERGE PAS avant fermeture des majeurs
 Le STOP budget D4 (plafond A18 mesuré, plancher A11 extrapolé ×2,1-2,65 de marge)
 reste une DÉCISION PRODUIT séparée — aucune tâche D6 ne le lève.
 
+> **AMENDEMENT NOMMÉ DE LA LIGNE 117 (2026-08-22, porteur produit).** La décision
+> produit a été prise : le STOP budget D4 est **LEVÉ PAR DÉROGATION**, le merge du
+> lot D est autorisé. L'artefact qui l'atteste est l'entrée
+> `packages/MeeshySDK/decisions.md` § « 2026-08-22 : Plan 2D — le STOP budget D4
+> est levé par DÉROGATION du porteur produit, la virtualisation restant le gage ».
+> La phrase ci-dessus reste vraie telle qu'elle est écrite — aucune tâche D6 n'a
+> levé ce STOP, et aucune ne le pouvait : il est levé ICI, par le porteur produit,
+> et pas ailleurs. Contrepartie opposable : si une saccade est observée au scrub sur
+> un appareil ancien, la virtualisation du plan (déscopée en D2) devient le PREMIER
+> CHANTIER, pas une dérogation silencieuse.
+
 **Arbitrages tranchés :**
 1. **Verrou d'axe du geste armé** (constats 2, 5) : le drag armé choisit son axe à
    la DOMINANTE (|Δx| vs |Δy| au premier dépassement d'une zone morte réelle
@@ -178,7 +189,7 @@ par D6d seulement (les autres citent l'addendum).
 
 ---
 
-## Mesure device D4 — plafond A18 documenté, STOP budget MAINTENU (2026-08-21)
+## Mesure device D4 — plafond A18 documenté, STOP budget LEVÉ PAR DÉROGATION (2026-08-22)
 
 **Correctif DoD (rejet D6d, constat 1, 2026-08-22) : la section précédente
 (« Décision produit — STOP budget D4 levé par dérogation ») s'auto-attribuait
@@ -205,8 +216,12 @@ ni une mesure du plancher, ni par lui-même une autorisation de merger : le
 plan (ligne 117) exige que ce soit le porteur produit qui accorde ou refuse
 la dérogation, dans un artefact qui lui appartient (commit signé, entrée
 `decisions.md`, ou amendement explicite et nommé de la ligne 117 elle-même).
-Tant que cet artefact n'existe pas, **le STOP de merge posé par D4 Step 2 est
-TENU** : le lot D est gate-vert (D1–D6d) mais NE MERGE PAS.
+**Cet artefact existe désormais** : entrée `packages/MeeshySDK/decisions.md`
+du 2026-08-22, décision du porteur produit du 2026-08-21, doublée de l'amendement
+nommé de la ligne 117 ci-dessus. **Le STOP de merge posé par D4 Step 2 est donc
+LEVÉ** — le lot D est gate-vert (D1–D6d) ET mergeable. Ce qui ne change pas : le
+plancher A11 n'a JAMAIS été mesuré, le chiffre de 2,0 ms reste un plafond A18, et
+la virtualisation du plan est le gage nommé de cette dérogation.
 
 ## Task D6d — DoD (2026-08-21)
 

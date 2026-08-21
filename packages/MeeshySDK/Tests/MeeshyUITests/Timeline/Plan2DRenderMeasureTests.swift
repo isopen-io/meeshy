@@ -15,20 +15,30 @@ import SwiftUI
 /// (revue DoD, 2026-08-21) sur le coût mesuré (~1-2,5 ms simulateur et
 /// device confondus) avec une marge ×4-6, contre ×30-50 avant.
 ///
-/// **STOP budget D4 MAINTENU (correctif DoD, 2026-08-22).** La mesure
-/// device obtenue (iPhone 16 Pro Max / A18 Pro, 2,0 ms par passe en moyenne,
+/// **STOP budget D4 LEVÉ PAR DÉROGATION DU PORTEUR PRODUIT (décision du
+/// 2026-08-21, artefact consigné le 2026-08-22).** Ce que ce banc a mesuré
+/// sur appareil (iPhone 16 Pro Max / A18 Pro, 2,0 ms par passe en moyenne,
 /// 30 pistes aux deux zooms) est un PLAFOND — CE N'EST PAS, et ne doit
 /// JAMAIS se lire comme, une mesure sur le plancher A11 exigé par la spec :
 /// aucun appareil A11 n'était disponible dans cet environnement. Extrapolée
-/// au plancher A11 (méthodologie CPU, non mesurée), la marge reste ≈ ×2,1 à
-/// ×2,65 sous la frame 60 Hz (16,7 ms). Cette donnée est remontée au porteur
-/// produit — elle ne lève PAS, par elle-même, le STOP de merge posé par le
-/// plan D4 Step 2 : « Pas d'appareil disponible ⇒ STOP de lot remonté au
-/// porteur produit — le lot NE MERGE PAS sur un chiffre simulateur. » Une
-/// version antérieure de ce commentaire s'auto-attribuait une dérogation
-/// produit qu'aucun artefact du dépôt n'atteste ; corrigé (revue DoD,
-/// constat 1). Même mesure, mêmes chiffres, mêmes termes de STOP maintenu,
-/// consignés aussi à la ligne D4 du P0 (`2026-08-19-meeshy-composer-
+/// au plancher A11 (méthodologie CPU seule, NON mesurée, optimiste), la
+/// marge estimée reste ≈ ×2,1 à ×2,65 sous la frame 60 Hz (16,7 ms).
+/// Cette donnée a été remontée au porteur produit, qui a tranché : la
+/// dérogation est ACCORDÉE et le merge du lot D autorisé. L'artefact qui
+/// l'atteste est `packages/MeeshySDK/decisions.md` § « 2026-08-22 : Plan 2D
+/// — le STOP budget D4 est levé par DÉROGATION du porteur produit », doublé
+/// de l'amendement nommé de la ligne 117 de l'addendum du plan lot D.
+/// Aucune tâche d'implémentation n'a levé ce STOP et aucune ne le pouvait —
+/// une version antérieure de ce commentaire se l'attribuait sans artefact,
+/// corrigé alors (revue DoD, constat 1), et la levée vient aujourd'hui d'où
+/// elle devait venir.
+///
+/// **GAGE OPPOSABLE de cette dérogation** : si une saccade est observée au
+/// scrub sur un appareil ancien, la virtualisation du plan — déscopée en D2
+/// avec justification — devient le PREMIER CHANTIER, pas une dérogation
+/// silencieuse. Le seuil codé plus bas reste un garde-fou de RÉGRESSION ; il
+/// n'est toujours PAS une preuve de budget sur le plancher.
+/// Mêmes termes à la ligne D4 du P0 (`2026-08-19-meeshy-composer-
 /// views.html`) et dans l'addendum du plan lot D
 /// (`docs/superpowers/plans/2026-08-20-meeshy-composer-lot-d.md`).
 ///
