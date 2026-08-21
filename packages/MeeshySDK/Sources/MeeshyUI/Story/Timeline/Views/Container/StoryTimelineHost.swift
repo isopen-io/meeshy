@@ -34,10 +34,17 @@ import MeeshySDK
 /// conteneur) N'ONT PAS non plus d'équivalent ICI — seuls les boutons +/−
 /// du transport pilotent le zoom (cf. `transport`, mêmes bornes que
 /// `TimelineScrubArea.zoomRange`, gestes non repris). Régression CONNUE,
-/// disclosed, pas un oubli silencieux ; corollaire : au-delà d'un
-/// `zoomScale` de 1.0, ces boutons ne changent plus le palier affiché
-/// (`plan2DZoom` est binaire `.fit`/`.detail`), alors qu'ils continuent de
-/// faire varier `zoomScale` en continu de 0,05 à 8,0.
+/// disclosed, pas un oubli silencieux ; corollaire, désaveu COMPLET sur les
+/// DEUX moitiés de la plage (mineur 8, revue Opus — la première rédaction ne
+/// couvrait que la moitié haute) : `plan2DZoom` est BINAIRE (`.fit` à/sous
+/// 1.0, `.detail` au-delà, cf. `plan2DZoom` ci-dessous), alors que
+/// `zoomScale` varie en continu de 0,05 à 8,0. Seul le FRANCHISSEMENT du
+/// seuil 1.0 — dans un sens ou dans l'autre — fait réellement basculer le
+/// palier dessiné : zoom-arrière (bouton `−`) est un NO-OP visuel sur TOUTE
+/// la moitié basse (`0,05…1,0]`, le défaut ÉTANT 1.0) exactement comme
+/// zoom-avant l'est sur toute la moitié haute une fois `.detail` atteint —
+/// le transport, lui, continue d'afficher `zoomScale` en continu pendant que
+/// le plan ne connaît que deux états.
 ///
 /// Trois capacités que la barre de l'ancien conteneur portait sont RENDUES
 /// ici, par réutilisation des composants et méthodes existants : le mute PAR
@@ -371,6 +378,12 @@ public struct StoryTimelineHost: View {
     @ViewBuilder
     private func loopEchoOverlay(tracks: [Plan2DTrack], laneWidth: CGFloat,
                                  zoom: Plan2DZoom, geometry: TimelineGeometry) -> some View {
+        // Fenêtre verticale de la barre `.timed` que l'écho prolonge — MÊME
+        // source que le dessin de la barre elle-même (`Plan2DView.barVerticalInset`).
+        // Sans ce partage, les tuiles (alignées TOP, hauteur `laneHeight - 4`
+        // du composant) débordaient 8 pt au-dessus de la barre et
+        // s'arrêtaient 4 pt avant son bas (mineur 17, revue Opus).
+        let echoFrame = Plan2DView.loopEchoVerticalFrame(laneHeight: TimelineMetrics.laneHeight)
         ForEach(Self.loopEchoes(project: viewModel.project, tracks: tracks)) { echo in
             ZStack(alignment: .topLeading) {
                 LoopRepeatOverlay(
@@ -379,9 +392,13 @@ public struct StoryTimelineHost: View {
                     slideDuration: viewModel.project.slideDuration,
                     tint: Plan2DView.color(for: .bg, isDark: colorScheme == .dark),
                     geometry: geometry,
-                    laneHeight: TimelineMetrics.laneHeight
+                    // Le composant retranche 4 pt en interne (`laneHeight - 4`) —
+                    // lui passer `height + 4` lui fait recalculer EXACTEMENT
+                    // la hauteur de la barre.
+                    laneHeight: echoFrame.height + 4
                 )
             }
+            .padding(.top, echoFrame.topInset)
             .frame(width: laneWidth * zoom.scale, height: TimelineMetrics.laneHeight,
                    alignment: .topLeading)
             .offset(x: Plan2DView.labelColumnWidth,

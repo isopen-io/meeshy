@@ -156,11 +156,20 @@ public struct Plan2DView: View, Equatable {
                 context.fill(Path(CGRect(x: 0, y: rowY, width: size.width, height: laneHeight)),
                             with: .color(planeColor.opacity(0.06)))
 
-                context.draw(
-                    Self.labelText(for: track, isDark: isDark),
-                    at: CGPoint(x: 10, y: rowY + laneHeight / 2),
-                    anchor: .leading
-                )
+                // Écrêté à la colonne d'étiquette (mineur 16, revue Opus) —
+                // `drawLayer` scope le clip à CE dessin seul : les barres et
+                // losanges dessinés après, hors de la colonne, n'en héritent
+                // jamais (contrairement à un `context.clip(to:)` posé sur le
+                // contexte principal, qui resterait actif pour tout le reste
+                // du passe).
+                context.drawLayer { layerContext in
+                    layerContext.clip(to: Path(CGRect(x: 0, y: rowY, width: Self.labelColumnWidth, height: laneHeight)))
+                    layerContext.draw(
+                        Self.labelText(for: track, isDark: isDark),
+                        at: CGPoint(x: 10, y: rowY + laneHeight / 2),
+                        anchor: .leading
+                    )
+                }
 
                 switch track.bar {
                 case .ghost:
@@ -173,8 +182,8 @@ public struct Plan2DView: View, Equatable {
                 case .timed(let start, let end):
                     let startX = Self.x(forTime: start, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
                     let endX = Self.x(forTime: end, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
-                    let bar = CGRect(x: startX, y: rowY + 8,
-                                     width: max(2, endX - startX), height: laneHeight - 16)
+                    let bar = CGRect(x: startX, y: rowY + Self.barVerticalInset,
+                                     width: max(2, endX - startX), height: laneHeight - Self.barVerticalInset * 2)
                     context.fill(Path(roundedRect: bar, cornerRadius: 6), with: .color(planeColor))
                 }
 
@@ -260,6 +269,23 @@ public struct Plan2DView: View, Equatable {
         case .content: return isDark ? MeeshyColors.indigo500 : MeeshyColors.indigo600
         case .bg: return isDark ? MeeshyColors.indigo700 : MeeshyColors.indigo800
         }
+    }
+
+    // MARK: - Marge verticale d'une barre `.timed` — partagée avec l'écho de boucle
+
+    /// Marge haut/bas d'une barre `.timed` dans sa lane (`laneHeight`) — UNE
+    /// seule source pour le dessin de la barre elle-même (ci-dessus) et pour
+    /// `loopEchoVerticalFrame`. Sans elle, les deux dérivaient chacune de son
+    /// côté : les tuiles de `LoopRepeatOverlay` (marge 0/hauteur `laneHeight
+    /// - 4`, alignées TOP) ne tombaient plus sur la fenêtre `[rowY + 8,
+    /// rowY + 44]` de la barre qu'elles prolongent (mineur 17, revue Opus).
+    static let barVerticalInset: CGFloat = 8
+
+    /// Fenêtre verticale qu'un écho de boucle (`LoopRepeatOverlay`, posé par
+    /// `StoryTimelineHost.loopEchoOverlay`) doit occuper pour tomber
+    /// EXACTEMENT sur la barre `.timed` qu'il prolonge visuellement.
+    static func loopEchoVerticalFrame(laneHeight: CGFloat) -> (topInset: CGFloat, height: CGFloat) {
+        (barVerticalInset, laneHeight - barVerticalInset * 2)
     }
 
     // MARK: - Graduation — réutilise la dérivation par largeur de libellé de RulerView

@@ -149,6 +149,25 @@ final class Plan2DViewGuardTests: XCTestCase {
                      "Plan2DView doit dessiner à TimelineMetrics.laneHeight, pas un second littéral 52")
     }
 
+    // MARK: - Écho de boucle aligné VERTICALEMENT sur la barre (revue Opus,
+    // mineur 17) — la barre `.timed` se dessine à `y: rowY + barVerticalInset`,
+    // hauteur `laneHeight - 2×barVerticalInset` ; `loopEchoVerticalFrame` est
+    // la MÊME formule, exposée pour que `StoryTimelineHost.loopEchoOverlay`
+    // pose ses tuiles dans exactement cette fenêtre au lieu d'une paire de
+    // littéraux indépendante (`laneHeight - 4`, aligné TOP) qui dérivait.
+
+    func test_barVerticalInset_matchesTheTimedBarsOwnMargin() {
+        XCTAssertEqual(Plan2DView.barVerticalInset, 8)
+    }
+
+    func test_loopEchoVerticalFrame_matchesTheTimedBarMargins() {
+        let frame = Plan2DView.loopEchoVerticalFrame(laneHeight: TimelineMetrics.laneHeight)
+        XCTAssertEqual(frame.topInset, Plan2DView.barVerticalInset,
+                       "Le décalage vertical de l'écho doit être celui de la barre — sinon l'écho commence plus haut qu'elle")
+        XCTAssertEqual(frame.height, TimelineMetrics.laneHeight - Plan2DView.barVerticalInset * 2,
+                       "La hauteur de l'écho doit être celle de la barre — sinon l'écho dépasse en bas")
+    }
+
     // MARK: - Guard 4a — réordonnancement vertical : armé, jamais un drag nu
 
     func test_rowIndex_mapsAYToItsRow() {
@@ -804,6 +823,32 @@ final class Plan2DViewGuardTests: XCTestCase {
         let source = try Self.strippedPlan2DViewSource()
         XCTAssertTrue(source.contains("dash:"),
                      "Une piste fantôme se dessine en cadre POINTILLÉ (O4) — jamais une barre pleine")
+    }
+
+    // MARK: - Le libellé de piste est ÉCRÊTÉ à sa colonne (revue Opus,
+    // mineur 16) — un `GraphicsContext.draw(Text, at:anchor:)` n'a NI
+    // troncature NI cadre par lui-même : un texte long (ex. un texte de
+    // clip cité en entier, `Plan2DLayout.swift:141`) débordait sur les
+    // barres. `drawLayer` + `.clip(to:)`, scopé à `labelColumnWidth`, borne
+    // le dessin sans affecter le reste du passe (contrairement à un
+    // `context.clip(to:)` posé directement sur le contexte principal, qui
+    // resterait actif pour les barres/losanges dessinés APRÈS).
+
+    func test_body_clipsTheTrackLabelToItsColumn() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        guard let labelRange = source.range(of: "Self.labelText(for:") else {
+            return XCTFail("Plan2DView doit dessiner le libellé via Self.labelText(for:)")
+        }
+        let before = String(source[source.startIndex..<labelRange.lowerBound].suffix(400))
+        XCTAssertTrue(before.contains(".clip(to:"),
+                     "Le libellé doit se dessiner À L'INTÉRIEUR d'un clip borné à la colonne d'étiquette — "
+                     + "sinon un texte long déborde sur les barres (mineur 16, revue Opus)")
+    }
+
+    /// Contrôle positif : la garde doit réellement détecter l'ABSENCE de clip.
+    func test_guardDetectsALabelDrawnWithoutClip() {
+        let sample = "context.draw(Self.labelText(for: track, isDark: isDark), at: p, anchor: .leading)"
+        XCTAssertFalse(sample.contains(".clip(to:"))
     }
 
     // MARK: - Couleur par PLAN, jamais par format/kind (U15)

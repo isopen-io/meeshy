@@ -175,3 +175,59 @@ amendée (snap étiqueté U9).
 
 **Ordre : D6a → D6b → D6c → D6d.** TDD strict, DoD opus par tâche, P0 touchée
 par D6d seulement (les autres citent l'addendum).
+
+---
+
+## Décision produit — STOP budget D4 levé par dérogation (2026-08-21)
+
+**Consignée telle quelle, dans ces termes, à trois endroits : ici, la ligne
+D4 du P0 (`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`) et
+le commentaire d'en-tête du banc `Plan2DRenderMeasureTests` — elle ne doit
+plus jamais pouvoir se lire comme un chiffre A11 mesuré.**
+
+Le STOP budget D4 est LEVÉ par DÉROGATION. La mesure device obtenue est un
+PLAFOND (iPhone 16 Pro Max / A18, 2,0 ms par passe, 30 pistes aux deux
+zooms), pas le plancher A11 exigé par la spec ; aucun appareil A11 n'est
+disponible. Extrapolée au plancher A11, la marge reste de ×2,1 à ×2,65 sous
+la frame 60 Hz. Le porteur produit accorde donc la dérogation et autorise le
+merge, AVEC cette contrepartie inscrite noir sur blanc : **si une saccade est
+observée au scrub sur un appareil ancien, la virtualisation du plan
+(déscopée en D2) devient le premier chantier, pas une dérogation
+silencieuse.**
+
+Cette décision NE lève PAS la mesure elle-même au rang de mesure A11 — elle
+reste et restera un plafond A18 Pro documenté comme tel partout où elle est
+citée. Elle lève uniquement le STOP de merge posé par le plan D4 Step 2, sur
+acceptation explicite du risque extrapolé par le porteur produit.
+
+## Task D6d — DoD (2026-08-21)
+
+- Arbitrage 5 (hygiène, mineurs 8/9/11/12/13/16/17/18) : désaveu du zoom
+  étendu aux DEUX moitiés de la plage (`StoryTimelineHost.swift`, commentaire
+  d'en-tête) ; icône U9 alignée sur la table des symboles
+  (`arrow.uturn.backward.circle`, `ClipInspector.swift`) ; manifeste de
+  `Plan2DIntegrationGuardTests` complété de `TimelineMetrics.swift`
+  (dernier des 3 chemins manquants — les deux autres l'étaient déjà via
+  D6a-c) et son balayage d'arbre étendu à `Sources/MeeshySDK` (preuve par
+  fuite injectée, retirée après coup) ; chiffres de suites réconciliés par
+  une note de lecture chronologique sur la planche P0 (la ligne la plus
+  RÉCENTE d'un lot fait foi, pas une réécriture rétroactive des lignes
+  passées) + note d'exception camembert (règle multi-worktree explicitée) ;
+  libellé de piste écrêté à sa colonne (`context.drawLayer` + `.clip(to:)`,
+  `Plan2DView.swift`) ; échos de boucle réalignés verticalement sur la barre
+  (`Plan2DView.barVerticalInset`/`loopEchoVerticalFrame`, partagés par
+  `StoryTimelineHost.loopEchoOverlay`) ; poignée de FIN sur barre < 22 pt —
+  déjà couverte par D6a (`edgeZoneGeometry`, partage au milieu), vérifiée à
+  neuf, rien à faire.
+- Arbitrage 6 (dettes visibles, constats 7/10/14), pas de sur-périmètre :
+  ligne P0 dédiée « lot futur » pour les 4 familles de `Plan2DLayout`
+  injoignables en production (place/drawing/fond visuel/son hérité) —
+  `TimelineProject` NON étendu ; snap étiqueté U9 (second volet de « Suivre
+  la slide ») ajouté au « Hors v1 » de la spec d'exécution (§F) ; banc D4
+  documente la dissociation warm-up à froid (le test de garde-fou) vs seuil
+  calé à chaud (le `measure` juste en dessous) — sans recalibrer le seuil.
+- Décision produit STOP D4 : consignée ci-dessus, ligne P0 D4, et en-tête de
+  `Plan2DRenderMeasureTests.swift`.
+- Gate : scheme `MeeshySDK-Package` COMPLET (DerivedData dédiée
+  `/tmp/meeshy-dd-lot-d-sdk`) + `./apps/ios/meeshy.sh build` — chiffres
+  réels consignés au commit et à la ligne P0 D6d.

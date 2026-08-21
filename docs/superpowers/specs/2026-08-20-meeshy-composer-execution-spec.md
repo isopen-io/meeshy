@@ -539,5 +539,10 @@ composer→lecture (les players privés du canvas restent, O16 ne couvre que la
 lecture) · PiP sur le ScenePlayer `.reader` de story (le kind media porteur
 plein écran GARDE son PiP existant via MeeshyVideoPlayer) · sticker-lien
 (payload sticker `{url}` tappable — prémisse P16) · file de publication UNIQUE
-(PublishIntent, S2) · double capture avant+arrière (Dual)**. Non-buts : AR
+(PublishIntent, S2) · double capture avant+arrière (Dual) · **snap étiqueté du
+retour de bord (planche P8, `views.html:872-874` : « le bord étiré jusqu'aux
+butées propose le retour par un snap étiqueté » — second volet de l'action
+« Suivre la slide » du lot D/U9 ; le premier volet, la remise à `nil` depuis
+l'inspecteur timing, EST livré (D3) — ce second volet ne l'est pas, revue
+Opus mineur 10)**. Non-buts : AR
 visage, live, voice changer, retardateur/mains-libres.

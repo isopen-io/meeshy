@@ -13,12 +13,36 @@ import SwiftUI
 /// la spec) — il attrape une régression flagrante sur simulateur, rien de
 /// plus, et ne prétend JAMAIS être le budget d'usage produit. Recalé
 /// (revue DoD, 2026-08-21) sur le coût mesuré (~1-2,5 ms simulateur et
-/// device confondus) avec une marge ×4-6, contre ×30-50 avant. LA MESURE
-/// D'USAGE reste la mesure DEVICE (Step 2 de D4) : celle obtenue à ce jour
-/// (iPhone 16 Pro Max, A18 Pro) est un appareil PLAFOND, pas le plancher A11
-/// exigé par la spec — le budget d'usage plancher n'est donc PAS validé ;
-/// voir la ligne P0 D4 (`2026-08-19-meeshy-composer-views.html`) pour
-/// l'extrapolation plancher et le verdict STOP (Step 2) qui en découle.
+/// device confondus) avec une marge ×4-6, contre ×30-50 avant.
+///
+/// **STOP budget D4 LEVÉ PAR DÉROGATION PRODUIT (2026-08-21).** La mesure
+/// device obtenue (iPhone 16 Pro Max / A18 Pro, 2,0 ms par passe en moyenne,
+/// 30 pistes aux deux zooms) est un PLAFOND — CE N'EST PAS, et ne doit
+/// JAMAIS se lire comme, une mesure sur le plancher A11 exigé par la spec :
+/// aucun appareil A11 n'était disponible dans cet environnement. Extrapolée
+/// au plancher A11 (méthodologie CPU, non mesurée), la marge reste ≈ ×2,1 à
+/// ×2,65 sous la frame 60 Hz (16,7 ms). Le porteur produit ACCORDE la
+/// dérogation et AUTORISE LE MERGE sur ce plafond, AVEC cette contrepartie
+/// écrite noir sur blanc : **si une saccade est observée au scrub sur un
+/// appareil ancien, la virtualisation du plan (déscopée en D2) devient le
+/// PREMIER CHANTIER, pas une dérogation silencieuse.** Même décision, mêmes
+/// termes, consignée aussi à la ligne D4 du P0 (`2026-08-19-meeshy-composer-
+/// views.html`) et dans l'addendum du plan lot D
+/// (`docs/superpowers/plans/2026-08-20-meeshy-composer-lot-d.md`).
+///
+/// **Constat 14 (revue Opus) — chronologie warm-up à FROID vs seuil calé à
+/// CHAUD, dissociées ici plutôt que recalibrées à l'aveugle.**
+/// `test_render_thirtyTracks_bothZooms_staysUnderProvisionalBudget`
+/// chronomètre le PREMIER appel process à `render(zoom:)` pour chaque zoom —
+/// warm-up SwiftUI/`ImageRenderer` inclus, sans boucle d'échauffement
+/// préalable. Les chiffres ~1-2,5 ms / 1,62-2,53 ms cités ci-dessus, qui ont
+/// calé la marge ×4-6, viennent eux d'un protocole À CHAUD
+/// (`test_render_thirtyTracks_measuresRenderCost` ci-dessous, `measure`
+/// répète l'appel plusieurs fois et exclut le premier). Les deux mesures ne
+/// sont PAS la même grandeur — le seuil provisoire reste volontairement
+/// large (×4-6 sur un pic à chaud, pas ×1,5) précisément pour absorber ce
+/// warm-up à froid non quantifié séparément ; il n'a pas été recalé sur une
+/// estimation du coût de warm-up qui n'existe pas dans ce dépôt.
 @MainActor
 final class Plan2DRenderMeasureTests: XCTestCase {
 

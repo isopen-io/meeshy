@@ -59,6 +59,16 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "Le callback doit exister sur ClipInspector — l'appelant (D3) décide de la mutation")
     }
 
+    /// Revue Opus, mineur 9 : la planche P8 (`views.html:1687`) fige l'icône
+    /// du retour fantôme U9 à `arrow.uturn.backward.circle` — `ClipInspector`
+    /// dessinait `arrow.uturn.backward` (sans `.circle`), une glyphe DIFFÉRENTE.
+    func test_clipInspector_followSlideIcon_matchesTheSymbolTable() throws {
+        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        XCTAssertTrue(source.contains(#"systemImage: "arrow.uturn.backward.circle""#),
+                     "L'icône de « Suivre la slide » doit être arrow.uturn.backward.circle "
+                     + "(table des symboles, views.html:1687) — pas arrow.uturn.backward seul")
+    }
+
     func test_timelineViewModel_followSlide_resetsTimingToNil() throws {
         let source = try Self.strippedSource(of: Self.timelineViewModelPlan4HelpersURL)
         guard let range = source.range(of: "func followSlide(") else {
@@ -201,6 +211,17 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         let body = String(source[range.upperBound...].prefix(400))
         XCTAssertTrue(body.contains("geometry: geometry") || body.contains("geometry: equivalentGeometry"),
                      "Les échos doivent partager le repère du plan — sinon leurs tuiles ne tombent pas sur les mêmes secondes que les barres")
+    }
+
+    /// Revue Opus, mineur 17 : les échos doivent aussi partager la fenêtre
+    /// VERTICALE de la barre qu'ils prolongent — sinon ils tombent au bon
+    /// endroit sur l'axe du temps mais flottent au-dessus/en-deçà d'elle sur
+    /// l'axe vertical (deux marges indépendantes qui dérivaient).
+    func test_storyTimelineHost_loopEchoesShareThePlansVerticalFrame() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("Plan2DView.loopEchoVerticalFrame("),
+                     "loopEchoOverlay doit dériver sa fenêtre verticale de Plan2DView.loopEchoVerticalFrame — "
+                     + "MÊME source que la marge de la barre .timed, jamais deux littéraux indépendants")
     }
 
     /// Le plan et le scroller de l'hôte se disputaient le même doigt : le trim
@@ -361,6 +382,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Inspector/ClipInspector.swift",
         "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/TimelineMetrics.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DIntegrationGuardTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DLayoutTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Plan2DRenderMeasureTests.swift",
@@ -409,6 +431,20 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         }
     }
 
+    /// Revue Opus, mineur 11 : le manifeste avait trois chemins de retard sur
+    /// le diff réel. Deux ont été comblés en cours de D6 (`StoryTimelineView.swift`,
+    /// `Plan2DRenderMeasureTests.swift`) ; celui-ci — l'extraction D2 de
+    /// `TimelineMetrics.laneHeight` — restait absent malgré son appartenance
+    /// au diff (`git diff d36869973..HEAD`).
+    func test_d3DiffPaths_includesTimelineMetrics() {
+        XCTAssertTrue(
+            Self.d3DiffPaths.contains(
+                "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/TimelineMetrics.swift"),
+            "TimelineMetrics.swift (extraction D2 — laneHeight, cf. Guard 3 de Plan2DViewGuardTests) "
+            + "doit figurer au manifeste du diff — absent (mineur 11, revue Opus)"
+        )
+    }
+
     func test_everyFileOfTheD3Diff_staysInsideTheOwnedPerimeterOrIsADeclaredException() {
         let strays = Self.d3DiffPaths.filter { !Self.isWithinOwnership($0) }
         XCTAssertEqual(strays, [],
@@ -424,22 +460,32 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     }
 
     /// Balayage de l'ARBRE, pas du manifeste : le plan ne doit avoir fuité
-    /// dans aucun fichier hors `Story/Timeline/**`.
+    /// dans aucun fichier hors `Story/Timeline/**`. Revue Opus, mineur 11 :
+    /// l'origine ne parcourait que `Sources/MeeshyUI` — une fuite dans
+    /// `Sources/MeeshySDK` (l'autre cible du même package) y était invisible
+    /// par construction. `filesReferencingPlan2D` factorise le balayage pour
+    /// que les deux racines le partagent réellement, pas deux copies qui
+    /// pourraient diverger.
     func test_noFileOutsideTimeline_referencesThePlan() throws {
-        let root = Self.sourcesRoot
-        guard let walker = FileManager.default.enumerator(at: root,
-                                                          includingPropertiesForKeys: nil) else {
-            return XCTFail("Sources/MeeshyUI doit être parcourable")
-        }
-        var offenders: [String] = []
-        for case let url as URL in walker where url.pathExtension == "swift" {
-            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
-            guard !relative.hasPrefix("Story/Timeline/") else { continue }
-            let source = try String(contentsOf: url, encoding: .utf8)
-            if source.contains("Plan2D") { offenders.append(relative) }
-        }
+        let offenders = try Self.filesReferencingPlan2D(under: Self.sourcesRoot, excludingPrefix: "Story/Timeline/")
         XCTAssertEqual(offenders, [],
                       "Le plan 2D appartient à Timeline/** — aucune fuite hors périmètre")
+    }
+
+    /// Revue Opus, mineur 11, second volet : `Sources/MeeshySDK` — la cible
+    /// core du MÊME package, hors ownership de ce lot — n'était balayée par
+    /// personne. Preuve par injection : une fuite plantée TEMPORAIREMENT y
+    /// est bien détectée, puis retirée dans tous les cas (`defer`).
+    func test_noFileOutsideMeeshyUI_referencesThePlan_sdkTargetIncluded() throws {
+        let leakURL = Self.sdkSourcesRoot.appendingPathComponent("__Plan2DLeakProbe.swift")
+        try "struct Plan2DLeakProbe { let track: Plan2DTrack? = nil }"
+            .write(to: leakURL, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: leakURL) }
+
+        let offenders = try Self.filesReferencingPlan2D(under: Self.sdkSourcesRoot, excludingPrefix: nil)
+        XCTAssertEqual(offenders, ["__Plan2DLeakProbe.swift"],
+                      "Une fuite Plan2D dans Sources/MeeshySDK doit être détectée — "
+                      + "sans cette extension du balayage, elle passait inaperçue (mineur 11)")
     }
 
     /// Contrôle positif du balayage : le motif cherché est bien celui qui
@@ -447,6 +493,25 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
     func test_treeScanDetectsAPlanReferenceInASample() {
         XCTAssertTrue("struct Fake { let tracks: [Plan2DTrack] = [] }".contains("Plan2D"))
         XCTAssertFalse("struct Fake { let tracks: [TrackBar] = [] }".contains("Plan2D"))
+    }
+
+    /// Balayage PUR, partagé par les deux racines ci-dessus — `excludingPrefix`
+    /// exempte le périmètre possédé (`Story/Timeline/` sous `Sources/MeeshyUI`)
+    /// ; `nil` ne exempte rien (`Sources/MeeshySDK` n'a AUCUN sous-arbre possédé
+    /// par ce lot).
+    private static func filesReferencingPlan2D(under root: URL, excludingPrefix: String?) throws -> [String] {
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else {
+            throw NSError(domain: "Plan2DIntegrationGuardTests", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "\(root.path) doit être parcourable"])
+        }
+        var offenders: [String] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            if let excludingPrefix, relative.hasPrefix(excludingPrefix) { continue }
+            let source = try String(contentsOf: url, encoding: .utf8)
+            if source.contains("Plan2D") { offenders.append(relative) }
+        }
+        return offenders
     }
 
     // MARK: - Guard 3c — les deux voisins immédiats hors périmètre
@@ -483,6 +548,18 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // MeeshySDK (racine du package)
             .appendingPathComponent("Sources/MeeshyUI")
+    }
+
+    /// La cible core DU MÊME package (`packages/MeeshySDK/Sources/MeeshySDK`)
+    /// — hors ownership de ce lot, mais un balayage qui ne la couvre pas
+    /// laisse passer une fuite du plan (mineur 11, revue Opus).
+    private static var sdkSourcesRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Timeline
+            .deletingLastPathComponent()   // MeeshyUITests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // MeeshySDK (racine du package)
+            .appendingPathComponent("Sources/MeeshySDK")
     }
 
     private static var storyTimelineHostURL: URL {

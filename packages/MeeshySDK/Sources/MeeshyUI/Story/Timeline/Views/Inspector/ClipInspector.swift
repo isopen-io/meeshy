@@ -1095,7 +1095,7 @@ public struct ClipInspector: View {
         Button(action: onFollowSlide) {
             Label(String(localized: "story.timeline.inspector.followSlide",
                          defaultValue: "Suivre la slide", bundle: .module),
-                  systemImage: "arrow.uturn.backward")
+                  systemImage: "arrow.uturn.backward.circle")
                 .font(.footnote.weight(.semibold))
                 .fixedSize(horizontal: true, vertical: false)
                 .glassControlForeground()
