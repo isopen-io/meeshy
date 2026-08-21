@@ -133,6 +133,13 @@ de cette suite l'exige (« never repair the test by copying the drifted value »
 les quatre propriétés personnalisées sont ajoutées avec les valeurs du JSON, qui
 est la source de vérité déclarée. Parité rétablie 82/82.
 
+**Collision bénigne, notée pour l'honnêteté du journal** : `main` a reçu la même
+réparation en parallèle (`1def3504`, 23h57), **octet pour octet identique**. Le
+merge manuel de `main` dans cette branche l'a résolue en un seul exemplaire — pas
+de doublon de déclaration, vérifié à la main sur le fichier fusionné. La
+contribution NETTE de ce cycle sur ce fichier est donc nulle ; seul le diagnostic
+reste utile (le rouge venait bien du lot 9, pas du diff de ce cycle).
+
 ## 8. Pistes laissées ouvertes
 
 **Le site de montage reste sans `key`.** Le correctif rend la bannière correcte
