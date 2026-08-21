@@ -11,10 +11,10 @@
  * que le gateway sert TEL QUEL aux clients caps-3 — est sauté sans emporter la
  * scène ni la page.
  *
- * NB jsdom : les unités `cqw` sont REJETÉES par son moteur CSS (`style.fontSize`
- * rend `''`, l'attribut `style` ne les porte pas non plus). La taille est donc
- * jugée sur le résolveur pur exporté par le module — celui que `TextObject`
- * applique — plutôt que sur une propriété que l'environnement de test efface.
+ * NB jsdom : son moteur CSS rejette la VALEUR `cqw` (`style.fontSize` rend `''`)
+ * mais garde la propriété quand la valeur est en px. La taille est donc jugée
+ * deux fois : sur le résolveur pur exporté, et SUR L'ÉLÉMENT rendu — sans quoi
+ * le seul câblage `fontSize:` de `TextObject` pourrait disparaître à suite verte.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
@@ -46,6 +46,20 @@ function mediaObject(id: string, payload: Record<string, unknown>): Record<strin
   };
 }
 
+function textScene(payload: Record<string, unknown>): CanvasV3 {
+  return sceneOf([
+    {
+      id: 't1',
+      kind: 'text',
+      anchor: { t: 'free', x: 0.5, y: 0.5 },
+      plane: 'fg',
+      z: 0,
+      transform: { scale: 1, rotation: 0, opacity: 1 },
+      payload,
+    },
+  ]);
+}
+
 describe('CanvasV3Scene — parité legacy (F7a)', () => {
   it('scales the wire fontSize to cqw — the v1 funnel alias is not the wire key', () => {
     // iOS émet `payload.fontSize` (CanvasV3Migration.swift:428) et le
@@ -57,6 +71,22 @@ describe('CanvasV3Scene — parité legacy (F7a)', () => {
     expect(canvasV3TextFontSize({ fontSize: 108, textSize: 30 })).toBe('10.0000cqw');
     expect(canvasV3TextFontSize({ textSize: 30 })).toBe('30px');
     expect(canvasV3TextFontSize({})).toBe('24px');
+  });
+
+  // Le test ci-dessus n'interroge que le résolveur PUR : amputer `TextObject`
+  // de sa ligne `fontSize:` le laisse vert. Celui-ci juge l'ÉLÉMENT rendu, donc
+  // le câblage lui-même, et distingue les trois états possibles : fil mis à
+  // l'échelle (valeur `cqw`, effacée par jsdom mais jamais `24px`), taille v1 en
+  // px (traverse jsdom), câblage absent (propriété vide).
+  it('puts the resolved size on the rendered text element — the wire fontSize never lands as the 24px default', () => {
+    const wire = render(<CanvasV3Scene doc={textScene({ text: 'A', fontSize: 108 })} />);
+    // Constat 5 réintroduit (lecture du seul alias `fontSizeDesign`), le fil
+    // retombait sur le défaut : c'est CE `24px` qui atterrissait sur l'élément.
+    expect(screen.getByTestId('canvas-v3-object-t1').style.fontSize).not.toBe('24px');
+    wire.unmount();
+
+    render(<CanvasV3Scene doc={textScene({ text: 'A', textSize: 30 })} />);
+    expect(screen.getByTestId('canvas-v3-object-t1').style.fontSize).toBe('30px');
   });
 
   it('autoplays a posed carrier video, muted and looping — legacy never left it on frame one', () => {

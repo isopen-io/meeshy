@@ -190,13 +190,21 @@ comportements que le legacy garantissait (autoplay, scrim, 65 %, animation).
     durci) + test dans `CanvasV3MigrationTests`. Fichier SDK hors du périmètre
     du lot D (vérifier l'absence de collision avant commit).
 
-### Task F7a — CanvasV3Scene : fidélité + résilience + animation (constats 5,6,7,8,10,13,14,18,24 ; arbitrages 1,3,5)
+### Task F7a — CanvasV3Scene : fidélité + résilience + animation (constats 5,6,7,8,10,13,24 ; 14 et 18 côté composant seulement — câblage en F7b ; arbitrages 1,3,5)
 **Files:** `apps/web/components/v2/CanvasV3Scene.tsx`, `apps/web/__tests__/components/canvas-v3-scene.test.tsx` (+ suite animation dédiée si plus lisible).
 Props nouvelles : `muted?: boolean`, `playheadSec?: number`, `videoGateHandlers?`. Rouge d'abord sur CHAQUE comportement (fontSize du fil → cqw ; autoplay porteur ; overlay 65 % arrondi ; objet malformé sauté ; keyframes v3 animent opacity/position ; clipTransitions appliquées ; multi-scènes hors périmètre documenté).
 
 ### Task F7b — StoryViewer + story-transforms : câblage réel (constats 1,3,9,12,15,19 ; arbitrages 1,2,4,6)
 **Files:** `apps/web/components/v2/StoryViewer.tsx`, `apps/web/lib/story-transforms.ts`, tests associés.
-Mute passé à la scène ; scrim v3 ; `preferredLanguages` complets via `getUserLanguagePreferences` ; `aspectRatio` dérivé de `width/height` de PostMedia dans `mediaById` ; extracteur `backgroundSoundCredit(scenes)` partagé ; `v >= 3` ×4.
+Mute passé à la scène ; **`playheadSec` passé à la scène** (le ticker legacy s'arme déjà sur `clipTransitions`, `StoryViewer.tsx:599-600`) ; **`videoGateHandlers` passés à la scène** ; scrim v3 ; `preferredLanguages` complets via `getUserLanguagePreferences` ; `aspectRatio` dérivé de `width/height` de PostMedia dans `mediaById` ; extracteur `backgroundSoundCredit(scenes)` partagé ; `v >= 3` ×4.
+
+> **Les constats 14 et 18 ne se soldent QU'ICI.** F7a leur donne les props
+> (`playheadSec`, `videoGateHandlers`) et les prouve par test, mais le seul
+> appelant de production — `StoryViewer.tsx:886-891` — monte encore
+> `<CanvasV3Scene doc mediaById preferredLanguages className />`. Sans ces deux
+> props câblées par F7b, l'animation v3 et l'indicateur de mise en mémoire
+> tampon restent MORTS à l'exécution : ne compter 14 et 18 fermés au P0 (F7f)
+> qu'une fois le câblage F7b livré.
 
 ### Task F7c — Surfaces : badge monté + B3.2 partout + aria (constats 2,16,17,22 ; arbitrages 2,7)
 **Files:** `apps/web/components/v2/PostCard.tsx` + ses appelants réels (les trouver : grep `<PostCard`), `apps/web/components/v2/PostDetail.tsx`, `apps/web/components/feed/ReelPlayer.tsx`, catalogues i18n components (4 locales), tests.

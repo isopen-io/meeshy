@@ -205,7 +205,11 @@ describe('CanvasV3Scene — le fond hors du fondu de clip (F7a)', () => {
     expect(parseFloat(screen.getByTestId('canvas-v3-object-m0').style.opacity)).toBeCloseTo(1, 4);
   });
 
-  it('still fades a background carrier named by a transition — a posed clip keeps its window', () => {
+  // Frontière du correctif, dans les DEUX sens : sous une seule et même
+  // `clipTransitions`, le porteur de FOND que la transition nomme (`m1`) garde
+  // son opacité, tandis que le clip POSÉ (`m2`) fond bien dans sa fenêtre —
+  // l'exclusion du fond n'a rien sur-corrigé.
+  it('still fades the posed clip named by a transition — only the background carrier keeps its opacity', () => {
     const doc = scene(
       [
         bgObject('m1', { mediaURL: '/m/bg.mp4', mediaType: 'video', isBackground: true, duration: 2 }),
