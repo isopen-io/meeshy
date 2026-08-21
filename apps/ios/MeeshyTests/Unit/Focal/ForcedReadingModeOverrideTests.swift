@@ -64,8 +64,8 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .script, "Forcé .focal ⇒ clamp retrait 2026-08-18 rabat sur .script — jamais .bubbles : le forçage court-circuite bien le drapeau OFF.")
-        XCTAssertEqual(controller.decision.mode, .script)
+        XCTAssertEqual(controller.mode, .focal, "Forcé .focal ⇒ .focal (retour de Focal 2026-08-21) — jamais .bubbles : le forçage court-circuite bien le drapeau OFF.")
+        XCTAssertEqual(controller.decision.mode, .focal, "La décision EST le mode forcé — plus de clamp .focal → .script depuis le retour de Focal (2026-08-21).")
         XCTAssertEqual(controller.decision.reason, .default, "La raison reste celle du court-circuit forcé — pas .flagDisabled.")
     }
 
@@ -85,8 +85,8 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .script)
-        XCTAssertEqual(controller.decision.reason, .default, "Le forçage (raison .default) l'emporte sur la préférence collante (raison .sticky) — le mode .script rendu vient du CLAMP retrait, pas du store.")
+        XCTAssertEqual(controller.mode, .focal, "Le mode rendu est le mode FORCÉ, pas la préférence collante .script du store.")
+        XCTAssertEqual(controller.decision.reason, .default, "Le forçage (raison .default) l'emporte sur la préférence collante (raison .sticky).")
     }
 
     /// Non-lus au-dessus du plafond (rendrait `.summary`/`unread-over-cap`
@@ -104,7 +104,7 @@ final class ForcedReadingModeOverrideTests: XCTestCase {
             store: store
         )
 
-        XCTAssertEqual(controller.mode, .script, "Sans forçage : .summary (unread-over-cap) ; forcé .focal ⇒ clampé .script.")
+        XCTAssertEqual(controller.mode, .focal, "Sans forçage : .summary (unread-over-cap) ; forcé .focal ⇒ .focal (retour de Focal 2026-08-21).")
         XCTAssertEqual(controller.decision.reason, .default)
     }
 

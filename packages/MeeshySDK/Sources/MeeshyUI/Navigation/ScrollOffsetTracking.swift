@@ -19,9 +19,13 @@ public extension View {
     /// ```
     /// The negation matches the `minY` sign the preference path produces (negative
     /// while scrolling down), so `CollapsibleHeader`'s `progress = -scrollOffset / 60`
-    /// behaves identically across iOS versions. Requires the content to sit at
-    /// `contentOffset.y == 0` at rest (use the ZStack-overlay + `Color.clear` spacer
-    /// header pattern, NOT `.safeAreaInset`, which shifts the rest offset).
+    /// behaves identically across iOS versions. The value is taken RELATIVE to
+    /// the top content inset (`contentOffset.y + contentInsets.top`) so that the
+    /// rest position reads `0` whatever the container adds above the content —
+    /// a `.safeAreaInset(edge: .top)` (Lentille sticky sticker band) shifted the
+    /// raw offset by its height and left the pull indicator stuck at 27 % and
+    /// the collapsing header 44 pt late (2026-08-21). Containers using the
+    /// ZStack-overlay + `Color.clear` spacer pattern have no inset: unchanged.
     ///
     /// **N'Y METTEZ JAMAIS DE DEBOUNCE** (réserve R-g,
     /// `tasks/lentille-workshop-execution.md` §8). Ce point est le SOMMET de la
@@ -35,7 +39,7 @@ public extension View {
     @ViewBuilder
     func trackScrollContentOffset(_ onChange: @escaping (CGFloat) -> Void) -> some View {
         if #available(iOS 18.0, *) {
-            self.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { _, newValue in
+            self.onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y + $0.contentInsets.top } action: { _, newValue in
                 onChange(newValue)
             }
         } else {

@@ -6,6 +6,28 @@ import MeeshySDK
 @MainActor
 final class BubbleEquatableTests: XCTestCase {
 
+    // MARK: - Strip de réactions : règle de montage UNIQUE (bulle + Script/Focal)
+
+    func test_reactionsStrip_isMounted_whenThereAreReactions_whoeverSent() {
+        XCTAssertTrue(BubbleReactionsOverlay.isMounted(hasReactions: true, isMe: true, isLastReceivedMessage: false))
+        XCTAssertTrue(BubbleReactionsOverlay.isMounted(hasReactions: true, isMe: false, isLastReceivedMessage: false))
+    }
+
+    func test_reactionsStrip_isMounted_forTheQuickAddButton_onTheLastReceivedMessageOnly() {
+        XCTAssertTrue(
+            BubbleReactionsOverlay.isMounted(hasReactions: false, isMe: false, isLastReceivedMessage: true),
+            "Dernier message reçu sans réaction : le strip porte le bouton (+) d'ajout rapide."
+        )
+        XCTAssertFalse(
+            BubbleReactionsOverlay.isMounted(hasReactions: false, isMe: true, isLastReceivedMessage: true),
+            "Jamais de (+) sur mes propres messages."
+        )
+        XCTAssertFalse(
+            BubbleReactionsOverlay.isMounted(hasReactions: false, isMe: false, isLastReceivedMessage: false),
+            "Un message reçu qui n'est pas le dernier, sans réaction : rien à monter."
+        )
+    }
+
     func test_bubbleBackground_sameInputs_equal() {
         let a = BubbleBackground(isMe: true, accentHex: "FF0000", isDark: false)
         let b = BubbleBackground(isMe: true, accentHex: "FF0000", isDark: false)

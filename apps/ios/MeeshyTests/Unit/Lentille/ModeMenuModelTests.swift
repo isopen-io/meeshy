@@ -65,7 +65,7 @@ final class ModeMenuModelTests: XCTestCase {
         let model = LentilleModeMenuModel.build(capabilities: capabilities(), currentPreference: .auto)
         XCTAssertEqual(
             model.entries.map(\.id),
-            [.auto, .script, .resume, .riviere],
+            [.auto, .focal, .script, .bulles, .resume, .riviere],
             "Ordre du contrat amendé (retrait Focal) : « Auto 🪄 / Script / Résumé / Rivière »."
         )
     }

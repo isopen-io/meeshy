@@ -232,6 +232,12 @@ final class Router: ObservableObject {
     /// à false par `ConversationView` à l'ouverture.
     @Published var pendingOpenSearch: Bool = false
 
+    /// Demande d'ouverture du COMPOSEUR de post du flux depuis ailleurs (accès
+    /// rapides de la liste de conversations, tableau de bord — 2026-08-21) :
+    /// `RootView` montre le flux, `ThemedFeedOverlay` ouvre son composeur et
+    /// consomme le drapeau. Même patron que `pendingOpenSearch`.
+    @Published var pendingOpenFeedComposer: Bool = false
+
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
     /// (bêta) » du menu d'appui long de la liste (gardé par
     /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
