@@ -300,6 +300,57 @@ struct FeedPostCard: View {
         BackgroundSoundBadge.announcement(for: post.storyEffects)
     }
 
+    /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un
+    /// REPOST de story (`isStoryRepost`), qui reste rendu par
+    /// `StoryRepostEmbedCell` (hors périmètre E3). `nil` tant que le fil ne
+    /// sert que du legacy v1 : arrivée INERTE, `CANVAS_V3_WRITE_STRICT` est
+    /// OFF en prod à ce jour (spec rév. 8) — aucun écrivain n'émet encore v3.
+    private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
+
+    /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
+    /// iPad en colonne large n'étire pas la scène en mur vertical géant) —
+    /// et hauteur 9:16 dérivée UNE FOIS, jamais mesurée en layout (voir
+    /// `cardScenePlayer(document:)`).
+    private static let cardSceneMaxWidth: CGFloat = 420
+    private static let cardSceneHeight: CGFloat = (cardSceneMaxWidth * 16.0 / 9.0).rounded()
+
+    /// Scène du post en carte (Task E3) — `MeeshyScenePlayer(.card)`. Née en
+    /// PAUSE et le RESTE : `sceneIndex`/`isPlaying` sont des `.constant`
+    /// figés, jamais un `@State` qu'un futur commit pourrait faire basculer.
+    /// « La carte de POST naît en pause, le mouvement est au tap » (revue
+    /// Fable n°25) — la lecture vit dans LA DESTINATION du tap (`onTapPost`,
+    /// le plein écran EXISTANT, `PostDetailView`), jamais dans la carte :
+    /// zéro AVPlayer/décodage actif ici. `ScenePlayerConfig(mode: .card)`
+    /// verrouille déjà `isMuted`/`loops`/`startsPaused` côté SDK (B4 gelé) ;
+    /// `isPlaying: .constant(false)` garantit qu'aucune commande locale ne
+    /// lève jamais la pause.
+    ///
+    /// `.frame(height:)` EXPLICITE — jamais `.aspectRatio` seul ni un
+    /// `GeometryReader` qui reboucleraient sur le layout à chaque frame :
+    /// `MeeshyScenePlayer` enveloppe un hôte UIKit
+    /// (`StoryReaderRepresentable`), et un hôte hosted qui dérive sa propre
+    /// hauteur dans une liste défilante est exactement la famille du piège
+    /// de récursion self-sizing documenté dans ce dépôt
+    /// (`UIHostingConfiguration`/hôte UIKit imbriqué, crash SIGTRAP
+    /// `_updateVisibleCellsNow` ×7, incident `MessageListLayout.swift`
+    /// 2026-08-18) — une constante figée l'exclut par construction.
+    @ViewBuilder
+    private func cardScenePlayer(document: CanvasV3) -> some View {
+        MeeshyScenePlayer(
+            document: document,
+            mode: .card,
+            sceneIndex: .constant(0),
+            isPlaying: .constant(false),
+            accentColorHex: accentColor
+        )
+        .frame(maxWidth: Self.cardSceneMaxWidth)
+        .frame(height: Self.cardSceneHeight)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(Rectangle())
+        .onTapGesture { onTapPost?(post) }
+    }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -441,12 +492,22 @@ struct FeedPostCard: View {
                         .padding(.top, 8)
                 }
 
-                // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
-                // For this branch the gateway has snapshotted the original story media
-                // into the outer POST, but the canonical source is `post.repost` —
-                // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
-                // the in-viewer experience pixel-for-pixel.
-                if isStoryRepost {
+                // Scène du POST (Task E3) : le post porte son PROPRE canvas v3
+                // (composé, pas reposté) — la scène le remplace entièrement, elle
+                // compose déjà média + audio + texte. Priorité sur les branches
+                // repost ci-dessous : un post scène n'est ni un repost de story
+                // ni un repost de réel.
+                if let cardSceneDocument {
+                    cardScenePlayer(document: cardSceneDocument)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
+                } else if isStoryRepost {
+                    // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
+                    // For this branch the gateway has snapshotted the original story media
+                    // into the outer POST, but the canonical source is `post.repost` —
+                    // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
+                    // the in-viewer experience pixel-for-pixel.
                     StoryRepostEmbedCell(
                         post: post,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
