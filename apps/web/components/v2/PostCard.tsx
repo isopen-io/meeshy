@@ -13,8 +13,10 @@ import type { TranslationItem } from './TranslationToggle';
 import { getLanguageName } from './flags';
 import { PostContentText } from './PostContentText';
 import { ReferenceNoteRow } from './ReferenceNoteRow';
+import { BackgroundSoundBadge, type BackgroundSoundMeta } from './BackgroundSoundBadge';
 import type { Post } from '@meeshy/shared/types/post';
 import type { PostReference } from '@meeshy/shared/types/post-reference';
+import type { BackgroundSoundV3 } from '@meeshy/shared/types/canvas-v3';
 
 type PostCardMedia = {
   id: string;
@@ -49,6 +51,16 @@ export interface PostCardProps {
   repostOf?: Post['repostOf'];
   /** True for a quote-repost (reposter added their own comment). Drives which counters show where. */
   isQuote?: boolean;
+  /**
+   * L'annonce du fond + bouton 🔇 (B3.3-6) — n'existe (n'est rendue) QUE si
+   * une piste `sound` v3 existe (B3.5). `undefined`/`null` ⇒ rien dans la
+   * rangée auteur, comportement actuel inchangé.
+   */
+  backgroundSound?: BackgroundSoundV3 | null;
+  backgroundSoundMeta?: BackgroundSoundMeta;
+  /** État muet du lecteur LOCAL que le bouton 🔇 bascule. */
+  backgroundSoundMuted?: boolean;
+  onToggleBackgroundSoundMute?: () => void;
   onLike?: () => void;
   onComment?: () => void;
   onShare?: () => void;
@@ -192,6 +204,10 @@ function PostCard({
   viewerId,
   repostOf,
   isQuote = false,
+  backgroundSound,
+  backgroundSoundMeta,
+  backgroundSoundMuted = true,
+  onToggleBackgroundSoundMute,
   onLike,
   onComment,
   onShare,
@@ -335,6 +351,20 @@ function PostCard({
             </div>
             <span className="text-sm text-[var(--gp-text-muted)]">{time}</span>
           </div>
+
+          {/* F3 — l'annonce du fond + bouton 🔇 (B3.3-6), rangée auteur :
+              n'existe que si `backgroundSound` existe (B3.5), sinon rend rien. */}
+          <BackgroundSoundBadge
+            sound={backgroundSound}
+            title={backgroundSoundMeta?.title}
+            username={backgroundSoundMeta?.username}
+            durationSeconds={backgroundSoundMeta?.durationSeconds}
+            muted={backgroundSoundMuted}
+            onToggleMute={onToggleBackgroundSoundMute}
+            muteLabel={t('mute', 'Mute')}
+            unmuteLabel={t('unmute', 'Unmute')}
+            className="text-[var(--gp-text-muted)]"
+          />
 
           {/* Context menu: author gets Edit/Pin/Delete, non-author gets Report */}
           {(isAuthor || onReport) && (

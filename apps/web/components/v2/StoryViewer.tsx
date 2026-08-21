@@ -17,6 +17,7 @@ import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutat
 import { useReactToStoryMutation } from '@/hooks/social/use-stories';
 import { useAuthStore } from '@/stores/auth-store';
 import { CanvasV3Scene } from './CanvasV3Scene';
+import { BackgroundSoundBadge } from './BackgroundSoundBadge';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 
 // ============================================================================
@@ -457,6 +458,10 @@ function StoryViewer({
   const [showComments, setShowComments] = useState(false);
   const [showViewers, setShowViewers] = useState(false);
   const [showReactionPicker, setShowReactionPicker] = useState(false);
+  /// B3.6 — bouton 🔇 : bascule l'état muet du lecteur LOCAL de la piste de
+  /// fond v3 (`storyEffects.sound`). Persiste à travers la navigation
+  /// carte→carte de la session, comme les lecteurs reels usuels.
+  const [isBackgroundSoundMuted, setIsBackgroundSoundMuted] = useState(true);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const viewedRef = useRef<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -830,6 +835,9 @@ function StoryViewer({
 
   const effects = story.storyEffects;
   const isCanvasV3 = effects?.v === 3;
+  /// L'annonce du fond (B3.3-6) n'existe que pour un blob v3 — `sound` n'a
+  /// pas de logement dans la forme legacy locale de `storyEffects`.
+  const backgroundSound = isCanvasV3 ? (effects as CanvasV3).sound : undefined;
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
@@ -1095,6 +1103,16 @@ function StoryViewer({
                 {timeAgo(story.createdAt)}
               </span>
             </div>
+            {/* F3 — l'annonce du fond + bouton 🔇 (B3.3-6), après les
+                détails d'auteur : n'existe que si `storyEffects.sound`
+                existe (B3.5), sinon rend rien. */}
+            <BackgroundSoundBadge
+              sound={backgroundSound}
+              muted={isBackgroundSoundMuted}
+              onToggleMute={() => setIsBackgroundSoundMuted((m) => !m)}
+              muteLabel={t('mute', 'Mute')}
+              unmuteLabel={t('unmute', 'Unmute')}
+            />
             {onShare && (
               <button
                 onClick={(e) => {
