@@ -314,6 +314,39 @@ describe('resolveRiverLivingLanes — seules les branches vivantes sont navigabl
   it('rend un axe vide hors des rangs de la fenêtre', () => {
     expect(resolveRiverLivingLanes(geometry, 9)).toEqual([]);
   });
+
+  /**
+   * Régression : dans le layout à colonnes PARTAGÉES (plus de voix que de
+   * couloirs, mais jamais plus de `maxLanes` vivantes à la fois), `geometry.lanes`
+   * est en ordre de NAISSANCE, qui n'est PAS l'ordre de colonne dès qu'une voix
+   * tardive réutilise une colonne basse libérée. La loi doit malgré tout rendre
+   * les couloirs vivants « par colonne croissante » (son contrat) — sinon la
+   * navigation latérale (`resolveRiverStep`), qui prend le voisin le plus proche
+   * dans une direction, saute par-dessus une branche adjacente.
+   *
+   * Scénario (maxLanes 3, minVoices 2) : c@0 d@1 b@2 a@3 c@4 d@5 →
+   * lanes en ordre de naissance c:0, d:1, b:2, a:0. Au rang 3, c est morte ;
+   * vivantes = d(col 1), b(col 2), a(col 0) → ordre de naissance `[1, 2, 0]`.
+   */
+  const sharedColumns = resolveRiverLanes(
+    input(
+      [
+        message('m0', 'c', 43),
+        message('m1', 'd', 63),
+        message('m2', 'b', 68),
+        message('m3', 'a', 79),
+        message('m4', 'c', 132),
+        message('m5', 'd', 155),
+      ],
+      { maxLanes: 3, minVoices: 2 },
+    ),
+  );
+
+  it('rend les couloirs vivants en ordre de colonne croissante même quand des colonnes se partagent', () => {
+    expect(sharedColumns.layout).toBe('lanes');
+    // Sans le tri, l'ordre de naissance rendrait `[1, 2, 0]`.
+    expect(resolveRiverLivingLanes(sharedColumns, 3)).toEqual([0, 1, 2]);
+  });
 });
 
 describe('resolveRiverStep — l’axe horizontal traverse les vivants, sans quitter l’instant', () => {
@@ -405,6 +438,41 @@ describe('resolveRiverStep — l’axe horizontal traverse les vivants, sans qui
     });
 
     expect(step).toEqual({ cursor: { laneIndex: 0, rank: 0 }, reason: 'edge' });
+  });
+
+  /**
+   * Régression du layout à colonnes PARTAGÉES : un pas latéral doit atterrir sur
+   * la branche vivante la plus PROCHE dans la direction, jamais en sauter une.
+   * Ici (mêmes messages que « ordre de colonne croissante » ci-dessus) trois
+   * couloirs vivent au rang 3 — a(col 0), d(col 1), b(col 2) — mais `geometry.lanes`
+   * les liste en ordre de naissance `[1, 2, 0]`. Depuis la colonne 2 (b), « gauche »
+   * doit se poser sur la colonne 1 (d, la voisine immédiate), et NON sur la
+   * colonne 0 (a), que l'ordre de naissance non trié plaçait en tête.
+   */
+  it('se pose sur le couloir le plus proche, sans en sauter un, quand des colonnes se partagent', () => {
+    const shared = resolveRiverLanes(
+      input(
+        [
+          message('m0', 'c', 43),
+          message('m1', 'd', 63),
+          message('m2', 'b', 68),
+          message('m3', 'a', 79),
+          message('m4', 'c', 132),
+          message('m5', 'd', 155),
+        ],
+        { maxLanes: 3, minVoices: 2 },
+      ),
+    );
+
+    const step = resolveRiverStep({
+      geometry: shared,
+      cursor: { laneIndex: 2, rank: 3 },
+      direction: 'left',
+    });
+
+    // d (col 1) est la voisine immédiate à gauche ; sa seule bulle du segment
+    // vivant [1, 3] est au rang 1. Sans le tri, on atterrissait sur a (col 0).
+    expect(step).toEqual({ cursor: { laneIndex: 1, rank: 1 }, reason: 'moved' });
   });
 });
 

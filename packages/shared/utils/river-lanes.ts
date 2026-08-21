@@ -639,6 +639,17 @@ const spanCovering = (lane: RiverLane, rank: number): RiverLaneSpan | undefined 
  * que la navigation latérale traverse. Une branche morte n'est pas navigable —
  * on l'enjambe.
  *
+ * Le tri par `laneIndex` est PORTANT, pas cosmétique : dans le layout à colonnes
+ * PARTAGÉES (`packColumns`, plus de voix que de couloirs), `geometry.lanes` est
+ * en ordre de NAISSANCE, qui n'est plus l'ordre de colonne dès qu'une voix
+ * tardive réutilise une colonne basse libérée — un rang peut alors présenter
+ * ses vivantes comme `[1, 2, 0]`. `resolveRiverStep` prend le voisin le plus
+ * PROCHE dans une direction (`filter(> cursor)[0]` à droite, `filter(< cursor)`
+ * inversé à gauche) : sans cet ordre croissant, il sauterait par-dessus une
+ * branche adjacente pour se poser sur une plus lointaine. Les colonnes vivantes
+ * à un même rang sont distinctes (`packColumns` n'y installe jamais deux
+ * segments qui se croisent), donc ce tri est un ordre total déterministe.
+ *
  * Sérialisée, la rivière n'a qu'un couloir : le fil. Elle rend `[0]` sur tout
  * rang de la fenêtre, et rien en dehors.
  */
@@ -649,7 +660,8 @@ export function resolveRiverLivingLanes(geometry: RiverGeometry, rank: number): 
 
   return geometry.lanes
     .filter((lane) => spanCovering(lane, rank) !== undefined)
-    .map((lane) => lane.laneIndex);
+    .map((lane) => lane.laneIndex)
+    .sort((a, b) => a - b);
 }
 
 /**

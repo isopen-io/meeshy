@@ -474,6 +474,47 @@ final class RiverLaneVectorTests: XCTestCase {
         XCTAssertEqual(RiverLaneResolver.resolveRiverLivingLanes(thread, rank: 2), [])
     }
 
+    /// Régression du layout à colonnes PARTAGÉES (miroir de `river-lanes.test.ts`,
+    /// « ordre de colonne croissante même quand des colonnes se partagent » +
+    /// « se pose sur le couloir le plus proche »). Scénario `maxLanes 3, minVoices 2` :
+    /// c@0 d@1 b@2 a@3 c@4 d@5 → `geometry.lanes` en ordre de naissance c:0, d:1,
+    /// b:2, a:0. Au rang 3, c est morte ; vivantes = d(col 1), b(col 2), a(col 0),
+    /// que l'ordre de naissance non trié listerait `[1, 2, 0]`. La loi doit rendre
+    /// `[0, 1, 2]` — sinon un pas latéral saute par-dessus une branche adjacente.
+    func test_resolveRiverLivingLanes_sharedColumns_returnsAscendingColumnOrder() {
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverLaneResolver.ResolveRiverLanesInput(
+            messages: [
+                Self.message("m0", "c", 43),
+                Self.message("m1", "d", 63),
+                Self.message("m2", "b", 68),
+                Self.message("m3", "a", 79),
+                Self.message("m4", "c", 132),
+                Self.message("m5", "d", 155),
+            ],
+            participants: Self.defaultParticipants,
+            viewerId: "me",
+            maxLanesOverride: 3,
+            minVoicesOverride: 2
+        ))
+
+        XCTAssertEqual(geometry.layout, .lanes)
+        XCTAssertEqual(RiverLaneResolver.resolveRiverLivingLanes(geometry, rank: 3), [0, 1, 2])
+
+        // Depuis la colonne 2 (b), « gauche » se pose sur la colonne 1 (d, la
+        // voisine immédiate) au rang 1 — jamais sur la colonne 0 (a), que
+        // l'ordre de naissance non trié plaçait en tête.
+        let step = RiverLaneResolver.resolveRiverStep(
+            RiverLaneResolver.ResolveRiverStepInput(
+                geometry: geometry,
+                cursor: RiverLaneResolver.RiverCursor(laneIndex: 2, rank: 3),
+                direction: .left
+            )
+        )
+        XCTAssertEqual(step.cursor.laneIndex, 1)
+        XCTAssertEqual(step.cursor.rank, 1)
+        XCTAssertEqual(step.reason, .moved)
+    }
+
     // — resolveRiverLaneAt — une colonne partagée dit QUI l'occupe à cette hauteur (river-lanes.test.ts L628-657)
 
     func test_resolveRiverLaneAt_returnsTheCurrentLivingOccupant_neverTheFirstEverOnTheColumn() {

@@ -660,10 +660,19 @@ nonisolated public enum RiverLaneResolver {
         lane.spans.first { $0.startRank <= rank && rank <= $0.endRank }
     }
 
-    /// Les branches VIVANTES à ce rang, par colonne — l'ordre est celui de
-    /// `geometry.lanes` (ordre de naissance), IDENTIQUE au comportement de la
-    /// loi TS : ce n'est un ordre de colonne strictement croissant que tant
-    /// que la rivière n'a pas partagé de colonnes (`assignColumns` identité).
+    /// Les branches VIVANTES à ce rang, par colonne CROISSANTE — miroir exact
+    /// de la loi TS `resolveRiverLivingLanes` (tri par `laneIndex`).
+    ///
+    /// Le tri est PORTANT, pas cosmétique : dans le layout à colonnes PARTAGÉES
+    /// (`packColumns`, plus de voix que de couloirs), `geometry.lanes` est en
+    /// ordre de NAISSANCE, qui n'est plus l'ordre de colonne dès qu'une voix
+    /// tardive réutilise une colonne basse libérée — un rang peut présenter ses
+    /// vivantes comme `[1, 2, 0]`. `resolveRiverStep` prend le voisin le plus
+    /// PROCHE dans une direction ; sans cet ordre croissant, il sauterait
+    /// par-dessus une branche adjacente. Les colonnes vivantes à un même rang
+    /// sont distinctes (`packColumns` n'y installe jamais deux segments qui se
+    /// croisent), donc `sorted()` est un ordre total déterministe.
+    ///
     /// C'est ce que la navigation latérale traverse. Une branche morte n'est
     /// pas navigable — on l'enjambe.
     ///
@@ -677,6 +686,7 @@ nonisolated public enum RiverLaneResolver {
         return geometry.lanes
             .filter { spanCovering($0, rank) != nil }
             .map(\.laneIndex)
+            .sorted()
     }
 
     /// QUI occupe cette colonne à cette hauteur — la question que le partage
@@ -916,11 +926,12 @@ nonisolated public enum RiverLaneResolver {
 
         if direction == .left || direction == .right {
             let living = resolveRiverLivingLanes(geometry, rank: cursor.rank)
-            // `.right` prend le PREMIER couloir plus loin rencontré dans
-            // l'ordre de naissance ; `.left` le DERNIER couloir plus proche
-            // du lecteur — miroir exact de `reachable.reverse()[0]` côté TS
-            // (l'ordre de `living` n'est PAS trié par colonne croissante dès
-            // que des colonnes se partagent, cf. `resolveRiverLivingLanes`).
+            // `living` est trié par colonne CROISSANTE (`resolveRiverLivingLanes`).
+            // `.right` prend donc le premier couloir de colonne SUPÉRIEURE — le
+            // voisin immédiat à droite ; `.left` le dernier de colonne
+            // INFÉRIEURE — le voisin immédiat à gauche. Miroir exact du TS
+            // (`filter(> cursor)[0]` à droite, `filter(< cursor)` inversé à
+            // gauche) : un pas latéral ne saute jamais par-dessus une branche.
             let nextIndex: Int? = direction == .right
                 ? living.first { $0 > cursor.laneIndex }
                 : living.filter { $0 < cursor.laneIndex }.last
