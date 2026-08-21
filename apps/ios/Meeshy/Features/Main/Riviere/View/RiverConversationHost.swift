@@ -33,7 +33,7 @@ struct RiverConversationHost: View {
         self.viewerId = viewerId
         self.topInset = topInset
         self.text = text
-        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: viewerId))
+        let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
         _geometry = State(initialValue: geometry)
         _fingerprint = State(initialValue: RiverConversationMapping.fingerprint(messages: messages))
         _navigation = StateObject(wrappedValue: RiverNavigationController(
@@ -93,7 +93,7 @@ struct RiverConversationHost: View {
         .adaptiveOnChange(of: RiverConversationMapping.fingerprint(messages: messages)) { _, next in
                 guard next != fingerprint else { return }
                 fingerprint = next
-                let resolved = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: viewerId))
+                let resolved = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
                 geometry = resolved
                 navigation.updateGeometry(resolved)
             }
