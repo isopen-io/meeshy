@@ -5,9 +5,31 @@
  * - Souscrit a USER_STATUS (event ponctuel par user) -> updateUserStatus
  * - Souscrit a PRESENCE_SNAPSHOT (seed initial a l'auth socket) -> mergeParticipants
  * - Tick local (60s) pour recalculer les transitions VERT -> ORANGE -> GRIS
- * - Heartbeat periodique (90s) pour maintenir la presence dans Redis (TTL 120s)
  * - Resync REST (`GET /users/presence`) au retour de focus tab et au retour online,
  *   debounce 1s pour eviter les rafales d'appels.
+ *
+ * Ce hook n'emet AUCUN heartbeat applicatif. Il en a emis un (90s), sur la
+ * justification « maintenir la presence dans Redis (TTL 120s) » : cette charge
+ * appartient desormais au serveur, pour TOUS les clients a la fois.
+ *
+ * Le gateway rafraichit la presence sur le pong ENGINE (`handleEnginePong`,
+ * `MeeshySocketIOManager` : `socket.conn.on('packet')`), que Socket.IO echange
+ * toutes les 25s (`pingInterval: 25000`) avec chaque client, sans qu'aucun code
+ * applicatif ait a le demander. Les deux chemins appellent exactement la meme
+ * methode — `StatusService.noteHeartbeat`, etranglee a 60s — donc un battement
+ * de 90s ne pouvait RIEN produire que le pong n'ait deja produit 3,6x plus
+ * souvent, et la cle Redis restait rafraichie toutes les 60s, bien en deca de
+ * son TTL de 120s.
+ *
+ * Ce battement etait de surcroit muet : le canal applicatif n'offre qu'une
+ * chose de plus que le pong — un `heartbeat:ack` porteur du RTT — et il
+ * s'obtient en envoyant `clientTime`. Le battement web partait NU, donc le
+ * gateway ne calculait aucun `latencyHintMs`, et l'ack repartait vers un client
+ * qui ne l'ecoutait pas. Une trame toutes les 90s par onglet, une trame de
+ * retour, pour un effet deja acquis.
+ *
+ * iOS garde le canal applicatif (`MessageSocketManager`, 30s AVEC `clientTime`)
+ * et c'est lui qui justifie que `CLIENT_EVENTS.HEARTBEAT` existe encore.
  */
 
 'use client';
@@ -20,7 +42,6 @@ import { getAuthToken } from '@/utils/token-utils';
 import type { User, UserStatusEvent } from '@/types';
 
 const STATUS_TICK_INTERVAL_MS = 60_000;
-const HEARTBEAT_INTERVAL_MS = 90_000;
 const RESYNC_DEBOUNCE_MS = 1_000;
 const RESYNC_MAX_IDS = 200;
 
@@ -109,18 +130,10 @@ export function useUserStatusRealtime() {
       triggerStatusTick();
     }, STATUS_TICK_INTERVAL_MS);
 
-    const heartbeatInterval = setInterval(() => {
-      const socket = socketService.getSocket();
-      if (socket?.connected) {
-        (socket as unknown as { emit: (event: string) => void }).emit('heartbeat');
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-
     return () => {
       unsubscribeStatus();
       unsubscribeSnapshot();
       clearInterval(tickInterval);
-      clearInterval(heartbeatInterval);
     };
   }, [updateUserStatus, mergeParticipants, triggerStatusTick, socketService]);
 

@@ -531,6 +531,28 @@ console.log(`[RT-DIAG] message:new emitted conv=${normalizedId} msg=${message.id
 
 **Correction :** Throttler `handleHeartbeat` côté serveur (une mise à jour DB max toutes les 30s par userId). Envisager de supprimer le heartbeat applicatif puisque les pings Socket.IO natifs (25s) suffisent pour détecter les déconnexions.
 
+**État — les deux moitiés sont faites, la seconde à moitié :**
+
+1. *Throttling* : **fait.** `StatusService.noteHeartbeat` étrangle à 60 s
+   (`HEARTBEAT_THROTTLE_MS`), donc au plus une écriture DB par minute et par
+   utilisateur, quelle que soit la cadence du client. Un client bavard ne peut
+   plus multiplier les `prisma.user.update`.
+
+2. *Suppression du battement applicatif* : **faite côté web (cycle 78).** Ce
+   rapport avait vu juste, et le serveur avait entre-temps rendu la chose
+   démontrable : `handleEnginePong` rafraîchit la présence sur le pong ENGINE
+   (25 s, tous clients), en appelant **la même** `noteHeartbeat`. Le battement
+   web de 90 s ne pouvait donc rien produire de neuf, et il partait NU (sans
+   `clientTime`) — donc sans même récolter le RTT de `heartbeat:ack`, seule
+   chose que le canal applicatif offre en plus du pong. Retiré de
+   `use-user-status-realtime`.
+
+   **iOS le garde** (30 s, AVEC `clientTime`) et c'est lui qui justifie que
+   `CLIENT_EVENTS.HEARTBEAT` reste au contrat. Voir `04-ios.md` §P13, qui porte
+   la même remarque pour iOS : elle reste ouverte, et son arbitrage dépend de
+   `connectionRTT` — un `PassthroughSubject` alimenté par cet ack et **abonné
+   nulle part** (cf. `tasks/realtime-sync-audit-2026-08-21-cycle78.md` §6).
+
 ---
 
 ## 3. Tableau récapitulatif
