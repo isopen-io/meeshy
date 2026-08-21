@@ -1222,7 +1222,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // l'appartenance restaurée je figure dans les participants actifs qu'il
       // énumère, et son commentaire dit en toutes lettres que c'est ainsi que la
       // cible « apprend son retour sur sa propre ligne de liste »
-      // (`routes/conversations/unban`). L'émetteur tenait sa part.
+      // (`routes/conversations/ban.ts`, chemin `unban`). L'émetteur tenait sa
+      // part.
       //
       // `membershipRestored === false` dit que la levée n'a réadmis personne —
       // j'étais parti de moi-même avant d'être banni : aucune ligne à remettre.
