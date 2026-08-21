@@ -253,7 +253,11 @@ struct FocalRowInput: Equatable {
             && lhs.voiceConsentMissing == rhs.voiceConsentMissing
             && lhs.transcription == rhs.transcription
             && lhs.translatedAudios == rhs.translatedAudios
-            && lhs.allAudioItems.map(\.id) == rhs.allAudioItems.map(\.id)
+            // Sans allocation : `map` construisait DEUX tableaux (toute la
+            // file audio de la conversation) à chaque comparaison du portillon
+            // `.equatable()` — c'est-à-dire à chaque reconfigure de cellule.
+            && lhs.allAudioItems.count == rhs.allAudioItems.count
+            && lhs.allAudioItems.lazy.map(\.id).elementsEqual(rhs.allAudioItems.lazy.map(\.id))
             && lhs.conversationName == rhs.conversationName
             && lhs.effects == rhs.effects
             && lhs.revealsTimestamp == rhs.revealsTimestamp

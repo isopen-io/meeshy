@@ -74,3 +74,50 @@ final class FocalMediaGridLayoutTests: XCTestCase {
         XCTAssertEqual(FocalMediaGridLayout.gridSpacing, 2)
     }
 }
+
+// MARK: - Vidéo solo au format réel (2026-08-21)
+
+extension FocalMediaGridLayoutTests {
+
+    /// Une vidéo portrait 9:16 n'est plus letterboxée dans un 300 × 240 : la
+    /// hauteur est plafonnée par la MÊME loi que la bulle (1.6 × largeur) et la
+    /// largeur suit le format — aucune bande noire.
+    func test_soloVideoSlot_portrait_followsTheAspectRatio_capped() {
+        let slot = FocalMediaGridLayout.soloVideoSlot(aspectRatio: 9.0 / 16.0)
+        XCTAssertEqual(slot.height, 480)
+        XCTAssertEqual(slot.width, 270)
+        XCTAssertEqual(slot.overflowCount, 0)
+    }
+
+    func test_soloVideoSlot_landscape16by9_keepsFullWidth() {
+        let slot = FocalMediaGridLayout.soloVideoSlot(aspectRatio: 16.0 / 9.0)
+        XCTAssertEqual(slot.width, 300)
+        XCTAssertEqual(slot.height, 169)
+    }
+
+    func test_soloVideoSlot_withoutMetadata_assumes16by9() {
+        XCTAssertEqual(
+            FocalMediaGridLayout.soloVideoSlot(aspectRatio: nil),
+            FocalMediaGridLayout.soloVideoSlot(aspectRatio: 16.0 / 9.0)
+        )
+        XCTAssertEqual(
+            FocalMediaGridLayout.soloVideoSlot(aspectRatio: 0),
+            FocalMediaGridLayout.soloVideoSlot(aspectRatio: 16.0 / 9.0)
+        )
+    }
+
+    func test_soloVideoSlot_square_isBoundedByTheGridWidth() {
+        let slot = FocalMediaGridLayout.soloVideoSlot(aspectRatio: 1)
+        XCTAssertEqual(slot.width, 300)
+        XCTAssertEqual(slot.height, 300)
+    }
+
+    /// Parité avec la loi de la bulle : même plafond (1.6), même repli.
+    func test_soloVideoSlot_heightMatchesTheBubbleLaw() {
+        var attachment = MeeshyMessageAttachment(id: "a", mimeType: "video/mp4", fileUrl: "https://x/v.mp4", uploadedBy: "u")
+        attachment.width = 720
+        attachment.height = 1280
+        let expected = attachment.videoHeight(forWidth: FocalMediaGridLayout.gridMaxWidth, maxRatio: FocalMediaGridLayout.soloVideoMaxHeightRatio).rounded()
+        XCTAssertEqual(FocalMediaGridLayout.soloVideoSlot(aspectRatio: attachment.videoAspectRatio).height, expected)
+    }
+}
