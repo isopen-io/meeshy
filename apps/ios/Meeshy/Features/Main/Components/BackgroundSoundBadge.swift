@@ -31,6 +31,13 @@ struct BackgroundSoundBadge: View, Equatable {
     let announcement: BackgroundAudioAnnouncement
     let accentHex: String
 
+    /// Accent pour une surface posée sur un MÉDIA arbitraire (photo/vidéo/
+    /// gradient de story) — jamais garanti AA contre une couleur dérivée du
+    /// contenu (accent de post, couleur d'avatar). Même convention que les
+    /// voisins du rail (horloge, heure de publication) : blanc à opacité
+    /// fixe, pas de calcul de contraste par pixel.
+    static let overMediaAccentHex = "FFFFFF"
+
     static func == (lhs: BackgroundSoundBadge, rhs: BackgroundSoundBadge) -> Bool {
         lhs.announcement == rhs.announcement && lhs.accentHex == rhs.accentHex
     }
@@ -85,19 +92,43 @@ struct BackgroundSoundBadge: View, Equatable {
 
 extension BackgroundSoundBadge {
     /// Provenance (B3.4) à partir des `StoryEffects` d'un POST ou d'une
-    /// STORY — miroir app-side EXACT du convertisseur §C2 : v3 ⇒
-    /// `storyEffects.canvasV3?.sound` (déjà bridgé en runtime, B7) ; legacy
-    /// ⇒ `backgroundAudioId` (bibliothèque) puis `voiceAttachmentId`
-    /// (piste propre ⇒ originale). Écrit UNE fois, appelé par les trois
-    /// surfaces de lecture via `announcement(for:)` ci-dessous.
+    /// STORY — miroir app-side EXACT du convertisseur §C2 :
+    ///
+    /// 1. v3 ⇒ `storyEffects.canvasV3?.sound` (déjà bridgé en runtime, B7) ;
+    /// 2. sinon la forme MODERNE dominante en production — un
+    ///    `audioPlayerObjects` avec `isBackground == true` (posé par le
+    ///    timeline editor ET par un son EMPRUNTÉ à la bibliothèque,
+    ///    `BorrowedSoundPost.effects(for:)`/`StoryComposerViewModel
+    ///    .addBorrowedSound`) — `soundId` posé ⇒ bibliothèque, absent ⇒
+    ///    piste propre ORIGINALE. Fonder l'existence sur ce CHAMP D'OBJET
+    ///    plutôt que sur `backgroundAudioId` seul est ce qui manquait :
+    ///    c'est la forme que `resolvedBackgroundAudio` (SDK,
+    ///    `StoryModels.swift`) consulte EN PREMIER ;
+    /// 3. sinon le legacy pur v1 (aucun `audioPlayerObjects`) :
+    ///    `backgroundAudioId` ⇒ bibliothèque — miroir de
+    ///    `CanvasV3Migration.swift:323-330`/`restoreSound:577`, où ce même
+    ///    champ ne reçoit QUE des soundId de bibliothèque à la
+    ///    reconversion v3→legacy.
+    ///
+    /// `voiceAttachmentId` (note vocale) N'EST PAS un signal d'existence
+    /// ici — même règle produit que la source de vérité SDK
+    /// `StoryAudioAvailability.hasBackgroundAudioTrack`, qui exclut
+    /// explicitement les notes vocales de la notion de « fond audio » que
+    /// cette icône représente : une note vocale seule n'annonce rien.
+    ///
+    /// Écrit UNE fois, appelé par les trois surfaces de lecture via
+    /// `announcement(for:)` ci-dessous.
     static func backgroundSound(of storyEffects: StoryEffects?) -> BackgroundSoundV3? {
         guard let storyEffects else { return nil }
         if let sound = storyEffects.canvasV3?.sound { return sound }
+        if let entry = storyEffects.audioPlayerObjects?.first(where: { $0.isBackground == true }) {
+            if let soundId = entry.soundId, !soundId.isEmpty {
+                return BackgroundSoundV3(source: .library(soundId: soundId), volume: 1)
+            }
+            return BackgroundSoundV3(source: .original, volume: 1)
+        }
         if let soundId = storyEffects.backgroundAudioId, !soundId.isEmpty {
             return BackgroundSoundV3(source: .library(soundId: soundId), volume: 1)
-        }
-        if let voiceId = storyEffects.voiceAttachmentId, !voiceId.isEmpty {
-            return BackgroundSoundV3(source: .original, volume: 1)
         }
         return nil
     }

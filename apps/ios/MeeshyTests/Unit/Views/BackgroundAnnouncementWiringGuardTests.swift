@@ -30,6 +30,28 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
         )
     }
 
+    /// Corollaire de la garde ci-dessus : elle ne comptait QUE dans
+    /// `BackgroundSoundBadge.swift` — une quatrième surface qui appellerait le
+    /// résolveur SDK EN DIRECT (en contournant `announcement(for:)`) n'aurait
+    /// jamais été détectée. Balaie les TROIS surfaces de lecture elles-mêmes.
+    func test_readingSurfaces_neverCallSDKResolverDirectly() throws {
+        let surfaces = [
+            "Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",
+            "Meeshy/Features/Main/Views/StoryViewerView.swift",
+            "Meeshy/Features/Main/Views/FeedPostCard.swift",
+            "Meeshy/Features/Main/Views/ReelsPlayerView.swift",
+        ]
+        for path in surfaces {
+            let text = try source(path)
+            let occurrences = text.components(separatedBy: "AudioChipDisplay.backgroundAnnouncement(").count - 1
+            XCTAssertEqual(
+                occurrences, 0,
+                "\(path) ne doit JAMAIS appeler AudioChipDisplay.backgroundAnnouncement( " +
+                "directement — seul BackgroundSoundBadge.swift délègue au résolveur SDK."
+            )
+        }
+    }
+
     // MARK: - « Trois surfaces »
 
     func test_storyHeader_mountsBackgroundSoundBadge() throws {
@@ -37,6 +59,23 @@ final class BackgroundAnnouncementWiringGuardTests: XCTestCase {
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge("),
             "Le header de story doit monter BackgroundSoundBadge — la vue commune E1."
+        )
+    }
+
+    /// Le header story se pose sur un fond de MÉDIA arbitraire (photo/vidéo/
+    /// gradient) — jamais une carte à fond de thème clair/sombre connu, à la
+    /// différence de `FeedPostCard`. Un accent de couleur d'avatar (souvent
+    /// sombre) peut y échouer AA sur un fond de story sombre. Les autres
+    /// éléments du MÊME rail (l'horloge, l'heure de publication) utilisent déjà
+    /// un blanc à opacité fixe pour cette raison — le badge doit suivre la même
+    /// convention plutôt que `group.avatarColor`.
+    func test_storyHeader_backgroundSoundBadge_usesFixedWhiteNotAvatarColor() throws {
+        let text = try source("Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift")
+        XCTAssertFalse(
+            text.contains("accentHex: group.avatarColor"),
+            "Sur le fond arbitraire d'une story (photo/vidéo), une couleur " +
+            "d'avatar n'est pas garantie AA — le header doit passer un accent " +
+            "fixe et lisible, comme le reste du rail (horloge, heure)."
         )
     }
 

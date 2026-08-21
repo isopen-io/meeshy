@@ -1044,10 +1044,15 @@ struct StoryHeaderView: View {
                                     // (bibliothèque, directive user
                                     // 2026-08-02). Même vue que la carte de
                                     // post et le plein écran réel (E1, « un
-                                    // résolveur, trois surfaces »).
+                                    // résolveur, trois surfaces »). Accent
+                                    // FIXE (pas `group.avatarColor`) : le
+                                    // header se pose sur un média arbitraire
+                                    // (photo/vidéo), comme l'horloge et
+                                    // l'heure voisines — non-régression du
+                                    // blanc pré-E1.
                                     BackgroundSoundBadge(
                                         announcement: backgroundSoundAnnouncement,
-                                        accentHex: group.avatarColor
+                                        accentHex: BackgroundSoundBadge.overMediaAccentHex
                                     )
                                     .equatable()
                                 }

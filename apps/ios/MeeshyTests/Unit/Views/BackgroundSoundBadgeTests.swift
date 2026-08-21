@@ -1,5 +1,7 @@
 import XCTest
 @testable import Meeshy
+@testable import MeeshySDK
+@testable import MeeshyUI
 
 /// Gardes de `BackgroundSoundBadge` (Lot E, Task E1 — « l'annonce du fond :
 /// un résolveur, trois surfaces »). B3.3-5 :
@@ -106,5 +108,93 @@ final class BackgroundSoundBadgeTests: XCTestCase {
             BackgroundSoundBadge.creditText(title: "Nuits d'été", username: nil, duration: nil),
             "Nuits d'été"
         )
+    }
+
+    // MARK: - `announcement(for:)` — comportement RÉEL du résolveur (DoD, constats 1/2/3)
+    //
+    // Les gardes ci-dessus ne couvrent que le TEXTE SOURCE du switch d'affichage
+    // (`case .original:`, `case .credit`) — jamais la logique qui DÉCIDE dans
+    // quel cas on tombe. Les tests suivants construisent de VRAIES `StoryEffects`
+    // dans les formes que la production émet réellement, et appellent
+    // `BackgroundSoundBadge.announcement(for:)` bout en bout.
+
+    /// Forme dominante de production pour un son EMPRUNTÉ : exactement ce que
+    /// `BorrowedSoundPost.effects(for:)` construit (`FeedView+Attachments.swift`)
+    /// et `StoryComposerViewModel.addBorrowedSound` (SDK) — un `audioPlayerObjects`
+    /// avec `isBackground: true` et `soundId` posé, AUCUN `backgroundAudioId` ni
+    /// `canvasV3`. Le badge doit créditer, pas se taire.
+    @MainActor
+    func test_announcement_borrowedSoundPostForm_isCredited() {
+        let sound = APISound(
+            id: "sound-1",
+            title: "Nuits d'été",
+            fileUrl: "https://cdn.example/sound.m4a",
+            durationMs: 15_000,
+            waveform: [0.1, 0.2],
+            uploader: APISoundUploader(id: "u1", username: "sam")
+        )
+        let effects = BorrowedSoundPost.effects(for: sound)
+        XCTAssertEqual(
+            BackgroundSoundBadge.announcement(for: effects),
+            .credit(title: "Nuits d'été", username: "sam", duration: 15),
+            "Un son emprunté à la bibliothèque (forme BorrowedSoundPost) doit " +
+            "produire le crédit « titre · @pseudo · M:SS » — pas EmptyView."
+        )
+    }
+
+    /// Piste posée en fond via l'éditeur timeline (enregistrement/import
+    /// propre), sans `soundId` : c'est une piste ORIGINALE, pas empruntée.
+    func test_announcement_timelineBackgroundEntryWithoutSoundId_isOriginal() {
+        var effects = StoryEffects()
+        effects.audioPlayerObjects = [
+            StoryAudioPlayerObject(postMediaId: "media-1", placement: "background",
+                                   volume: 1, waveformSamples: [], isBackground: true)
+        ]
+        XCTAssertEqual(BackgroundSoundBadge.announcement(for: effects), .original)
+    }
+
+    /// Legacy pur (v1, jamais de `audioPlayerObjects`) : `backgroundAudioId`
+    /// reste le discriminant bibliothèque — miroir de
+    /// `CanvasV3Migration.swift:323-330`/`:577` (`restoreSound`), non-régression.
+    func test_announcement_legacyBackgroundAudioIdOnly_isCredited() {
+        let effects = StoryEffects(backgroundAudioId: "lib-sound-9")
+        XCTAssertEqual(
+            BackgroundSoundBadge.announcement(for: effects),
+            .credit(title: nil, username: nil, duration: nil)
+        )
+    }
+
+    /// v3 déjà bridgé (`storyEffects.canvasV3?.sound`) : reste la branche
+    /// PRIORITAIRE, avant toute lecture de `audioPlayerObjects`.
+    func test_announcement_canvasV3Sound_takesPriorityOverLegacyFields() {
+        var effects = StoryEffects()
+        effects.canvasV3 = CanvasV3(
+            scenes: [SceneV3(id: "s1", objects: [])],
+            sound: BackgroundSoundV3(source: .library(soundId: "v3-sound"), volume: 1)
+        )
+        XCTAssertEqual(
+            BackgroundSoundBadge.announcement(for: effects),
+            .credit(title: nil, username: nil, duration: nil)
+        )
+    }
+
+    /// Une note vocale SEULE (`voiceAttachmentId`, sans fond posé) n'est PAS un
+    /// audio de fond — même règle produit que la source de vérité SDK
+    /// `StoryAudioAvailability.hasBackgroundAudioTrack` (« NONE of which are a
+    /// "background audio" in the product sense this icon represents »). Le
+    /// badge doit rester silencieux, pas annoncer une piste originale
+    /// inexistante.
+    func test_announcement_voiceAttachmentOnly_isNoneNotOriginal() {
+        let effects = StoryEffects(voiceAttachmentId: "voice-1")
+        XCTAssertEqual(
+            BackgroundSoundBadge.announcement(for: effects),
+            .none,
+            "Une note vocale seule ne doit jamais faire annoncer un « audio de " +
+            "fond » (étiquette + note+onde) — ce n'en est pas un."
+        )
+    }
+
+    func test_announcement_nilEffects_isNone() {
+        XCTAssertEqual(BackgroundSoundBadge.announcement(for: nil), .none)
     }
 }
