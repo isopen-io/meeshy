@@ -14,6 +14,14 @@ import MeeshySDK
 /// adaptateur les laisse à leur défaut plutôt que d'en fabriquer un —
 /// `StoryEffects` reste honnête sur ce qu'il sait, un `StoryEffects` mensonger
 /// serait pire qu'un plan incomplet.
+///
+/// `mediaObjects` traverse SANS filtre ni réécriture : `id` (synthétique ou
+/// non) et `isBackground` restent ceux du projet — c'est sur EUX que
+/// `Plan2DLayout.isLockedMedia` dérive `Plan2DTrack.isLocked` (revue Opus,
+/// constat 3). Un adaptateur qui les altérerait casserait le verrou en aval
+/// sans qu'aucun test de `Plan2DLayout` ne puisse le voir depuis sa propre
+/// fixture — `Plan2DProjectAdapterTests` referme ce trou par un test bout en
+/// bout (`TimelineProject` → `StoryEffects` → `Plan2DTrack.isLocked`).
 public nonisolated enum Plan2DProjectAdapter {
 
     public static func effects(from project: TimelineProject) -> StoryEffects {

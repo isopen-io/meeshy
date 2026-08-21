@@ -45,6 +45,16 @@ public nonisolated struct Plan2DTrack: Equatable, Identifiable, Sendable {
     public let z: Int
     public let bar: TrackBar
     public let keyframes: [Plan2DKeyframe]
+    /// Un média de FOND (`isBackground == true`) ou un clip SYNTHÉTIQUE (fond
+    /// image posé par le composer, id préfixé
+    /// `StoryComposerViewModel.syntheticTimelineClipIdPrefix`) est
+    /// verrouillé : sa fenêtre début/durée est ignorée en lecture, la
+    /// déplacer au doigt mentirait (retour user 2026-07-11). Restauré par la
+    /// revue Opus, constat 3 — l'ancien conteneur le portait déjà via
+    /// `isImmovableBackground` (`StoryTimelineView.swift:631`). Verrouillé =
+    /// NI poignées de bord NI déplacement temporel (D2) — jamais un obstacle
+    /// à la sélection, au mute ou au tap d'un keyframe.
+    public let isLocked: Bool
 
     /// Dérivé de `keyframes` — jamais un second tableau parallèle qui
     /// pourrait diverger (une seule source pour les temps ET l'identité).
@@ -55,13 +65,15 @@ public nonisolated struct Plan2DTrack: Equatable, Identifiable, Sendable {
                 plane: TrackPlane,
                 z: Int,
                 bar: TrackBar,
-                keyframes: [Plan2DKeyframe] = []) {
+                keyframes: [Plan2DKeyframe] = [],
+                isLocked: Bool = false) {
         self.id = id
         self.label = label
         self.plane = plane
         self.z = z
         self.bar = bar
         self.keyframes = keyframes
+        self.isLocked = isLocked
     }
 }
 
@@ -191,8 +203,16 @@ public nonisolated enum Plan2DLayout {
                         z: media.zIndex,
                         bar: bar(start: media.startTime, duration: media.duration,
                                  slideDuration: slideDuration),
-                        keyframes: markers(of: media.keyframes, clipStart: media.startTime))
+                        keyframes: markers(of: media.keyframes, clipStart: media.startTime),
+                        isLocked: isLockedMedia(media))
         }
+    }
+
+    /// Même règle que l'ancien conteneur (`isImmovableBackground`) : un clip
+    /// SYNTHÉTIQUE ou un média marqué `isBackground` sont verrouillés — leur
+    /// fenêtre début/durée est ignorée en lecture.
+    private static func isLockedMedia(_ media: StoryMediaObject) -> Bool {
+        StoryComposerViewModel.isSyntheticTimelineClipId(media.id) || media.isBackground
     }
 
     /// Loi des deux plans audio (B3.3) : le chip est du premier plan de

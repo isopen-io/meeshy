@@ -31,6 +31,7 @@ public struct Plan2DView: View, Equatable {
             && lhs.slideDuration == rhs.slideDuration
             && lhs.laneWidth == rhs.laneWidth
             && lhs.isDark == rhs.isDark
+            && lhs.selectedTrackId == rhs.selectedTrackId
     }
 
     public let tracks: [Plan2DTrack]
@@ -42,6 +43,13 @@ public struct Plan2DView: View, Equatable {
     public let laneWidth: CGFloat
     public let slideDuration: Double
     public let isDark: Bool
+    /// La piste sélectionnée — surlignée dans le Canvas (revue Opus, constat
+    /// 4 : sans cette entrée dans `==`, un `selectedClipId` changé ne
+    /// redessinait jamais le plan). `nil` = rien de sélectionné. Décide aussi
+    /// si la piste montre ses poignées de bord (constat 3 — parité
+    /// `ClipTrimHandles.shouldShow(isSelected:isLocked:)`, le trim exige la
+    /// sélection préalable).
+    public let selectedTrackId: String?
     public let onSelectTrack: (String) -> Void
     /// Un tap qui TOMBE sur un losange AFFICHÉ (`Plan2DKeyframe`, dans le
     /// rayon `keyframeHitRadius`) route ICI plutôt que vers `onSelectTrack` —
@@ -78,6 +86,7 @@ public struct Plan2DView: View, Equatable {
                 laneWidth: CGFloat,
                 slideDuration: Double,
                 isDark: Bool,
+                selectedTrackId: String?,
                 onSelectTrack: @escaping (String) -> Void,
                 onSelectKeyframe: @escaping (String) -> Void,
                 onReorder: @escaping (String, Int) -> Void,
@@ -91,6 +100,7 @@ public struct Plan2DView: View, Equatable {
         self.laneWidth = laneWidth
         self.slideDuration = slideDuration
         self.isDark = isDark
+        self.selectedTrackId = selectedTrackId
         self.onSelectTrack = onSelectTrack
         self.onSelectKeyframe = onSelectKeyframe
         self.onReorder = onReorder
@@ -141,14 +151,13 @@ public struct Plan2DView: View, Equatable {
             for (index, track) in tracks.enumerated() {
                 let rowY = CGFloat(index) * laneHeight
                 let planeColor = Self.color(for: track.plane, isDark: isDark)
+                let isSelected = track.id == selectedTrackId
 
                 context.fill(Path(CGRect(x: 0, y: rowY, width: size.width, height: laneHeight)),
                             with: .color(planeColor.opacity(0.06)))
 
                 context.draw(
-                    Text(track.label)
-                        .font(.caption)
-                        .foregroundColor(isDark ? .white : .black),
+                    Self.labelText(for: track, isDark: isDark),
                     at: CGPoint(x: 10, y: rowY + laneHeight / 2),
                     anchor: .leading
                 )
@@ -174,6 +183,16 @@ public struct Plan2DView: View, Equatable {
                     let diamond = Self.diamondPath(center: CGPoint(x: x, y: rowY + laneHeight / 2), radius: 5)
                     context.fill(diamond, with: .color(MeeshyColors.warning))
                     context.stroke(diamond, with: .color(.black.opacity(0.55)), lineWidth: 0.8)
+                }
+
+                // Même jeton que l'ancien conteneur (`TrackBarView.laneBackground`,
+                // `MeeshyColors.indigo400.opacity(0.55)`) — sans ce trait, un
+                // `selectedClipId` changé restait invisible (revue Opus, constat 4).
+                if isSelected {
+                    let laneFrame = CGRect(x: Self.labelColumnWidth, y: rowY,
+                                           width: laneWidth * zoom.scale, height: laneHeight)
+                    context.stroke(Path(laneFrame), with: .color(MeeshyColors.indigo400.opacity(0.55)),
+                                   lineWidth: 2)
                 }
             }
         }
@@ -202,6 +221,18 @@ public struct Plan2DView: View, Equatable {
                 }
             }
         }
+    }
+
+    /// Libellé de piste, préfixé du MÊME badge cadenas que l'ancien
+    /// conteneur (`TrackBarView.label`, `Image(systemName: "lock.fill")`
+    /// teinté `MeeshyColors.warning`) quand la piste est verrouillée (revue
+    /// Opus, constat 3). Un seul `Text` concaténé — le badge est un TRAIT du
+    /// même passe `Canvas`, jamais une sous-vue (budget P15).
+    private static func labelText(for track: Plan2DTrack, isDark: Bool) -> Text {
+        let name = Text(track.label).foregroundColor(isDark ? .white : .black)
+        guard track.isLocked else { return name.font(.caption) }
+        let lock = Text(Image(systemName: "lock.fill")).foregroundColor(MeeshyColors.warning)
+        return (lock + Text(" ") + name).font(.caption)
     }
 
     private static func diamondPath(center: CGPoint, radius: CGFloat) -> Path {
@@ -268,10 +299,12 @@ public struct Plan2DView: View, Equatable {
     /// Libellé VoiceOver d'une piste — MÊME composition que
     /// `TrackBarView.accessibilityComposedLabel` de l'ancien conteneur : le
     /// PRÉFIXE DE SECTION d'abord (ici le plan, la seule sémantique du plan
-    /// 2D), puis le nom de la piste, puis ce qu'elle occupe dans le temps.
-    /// Un `Canvas` n'est qu'un seul élément d'accessibilité : sans cette
-    /// composition rendue par `accessibilityChildren`, le plan entier
-    /// s'annoncerait comme un dessin muet.
+    /// 2D), puis le nom de la piste, puis ce qu'elle occupe dans le temps,
+    /// puis — verrouillée — le MÊME suffixe littéral que l'ancien conteneur
+    /// (`" (verrouillée)"`, revue Opus constat 3). Un `Canvas` n'est qu'un
+    /// seul élément d'accessibilité : sans cette composition rendue par
+    /// `accessibilityChildren`, le plan entier s'annoncerait comme un dessin
+    /// muet.
     static func accessibilityLabel(for track: Plan2DTrack) -> String {
         let occupation: String
         switch track.bar {
@@ -281,7 +314,8 @@ public struct Plan2DView: View, Equatable {
         case .timed(let start, let end):
             occupation = TrackBarView<AnyView>.formatTrackDuration(Float(end - start))
         }
-        return "\(planeLabel(track.plane)) — \(track.label) — \(occupation)"
+        let lockSuffix = track.isLocked ? " (verrouillée)" : ""
+        return "\(planeLabel(track.plane)) — \(track.label) — \(occupation)\(lockSuffix)"
     }
 
     /// Nom du plan, tel que VoiceOver l'annonce en tête de chaque piste. Le
@@ -357,8 +391,16 @@ public struct Plan2DView: View, Equatable {
         func contains(_ touchX: CGFloat) -> Bool { touchX >= minX && touchX <= maxX }
     }
 
-    /// Les deux zones de poignée d'une piste — vide pour un fantôme, qui n'a
-    /// pas de bord à tirer (il n'a pas de durée choisie, O4).
+    /// Les deux zones de poignée d'une piste — vide pour un fantôme (pas de
+    /// bord à tirer, il n'a pas de durée choisie, O4), pour une piste NON
+    /// sélectionnée, ou pour une piste VERROUILLÉE (fond/synthétique).
+    ///
+    /// Sélection préalable : « sélectionner une piste, c'est passer en mode
+    /// édition dessus » (parité `ClipTrimHandles.shouldShow(isSelected:
+    /// isLocked:)`) — sans cette garde, le rognage accidentel était possible
+    /// dès le premier contact sur n'importe quelle barre (revue Opus,
+    /// constat 3). Verrou : NI poignées NI déplacement pour un fond/
+    /// synthétique — sa fenêtre est ignorée en lecture.
     ///
     /// La zone vise 44 pt (HIG) et DÉBORDE hors de la barre quand celle-ci est
     /// étroite. Elle ne déborde jamais au point d'avaler l'autre poignée : sous
@@ -366,9 +408,9 @@ public struct Plan2DView: View, Equatable {
     /// Sans ce partage, le premier test évalué (`.start`) prenait tout contact
     /// et la poignée de FIN d'une barre plus étroite que 22 pt devenait
     /// inatteignable (revue Opus, mineur 18).
-    static func edgeHandleZones(for track: Plan2DTrack, rowIndex: Int, zoom: Plan2DZoom,
+    static func edgeHandleZones(for track: Plan2DTrack, rowIndex: Int, isSelected: Bool, zoom: Plan2DZoom,
                                 laneWidth: CGFloat, slideDuration: Double) -> [EdgeHandleZone] {
-        guard case let .timed(start, end) = track.bar else { return [] }
+        guard isSelected, !track.isLocked, case let .timed(start, end) = track.bar else { return [] }
         let startX = x(forTime: start, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         let endX = x(forTime: end, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         let half = edgeHandleMinHitWidth / 2
@@ -382,21 +424,22 @@ public struct Plan2DView: View, Equatable {
     }
 
     /// Toutes les cibles du plan, rangée par rangée — ce que la couche de
-    /// poignées pose réellement à l'écran.
-    static func edgeHandleZones(tracks: [Plan2DTrack], zoom: Plan2DZoom,
+    /// poignées pose réellement à l'écran. `selectedTrackId` borne les
+    /// cibles à la SEULE piste sélectionnée (trim préalable, ci-dessus).
+    static func edgeHandleZones(tracks: [Plan2DTrack], selectedTrackId: String?, zoom: Plan2DZoom,
                                 laneWidth: CGFloat, slideDuration: Double) -> [EdgeHandleZone] {
         tracks.enumerated().flatMap { index, track in
-            edgeHandleZones(for: track, rowIndex: index, zoom: zoom,
-                            laneWidth: laneWidth, slideDuration: slideDuration)
+            edgeHandleZones(for: track, rowIndex: index, isSelected: track.id == selectedTrackId,
+                            zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
         }
     }
 
     /// Poignée de bord touchée, si `touchX` tombe dans sa zone tappable. Au
     /// milieu exact d'une barre étroite, le DÉBUT l'emporte — une frontière
     /// doit appartenir à quelqu'un.
-    static func edgeHandle(touchX: CGFloat, track: Plan2DTrack,
+    static func edgeHandle(touchX: CGFloat, track: Plan2DTrack, isSelected: Bool,
                            zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> Edge? {
-        edgeHandleZones(for: track, rowIndex: 0, zoom: zoom, laneWidth: laneWidth,
+        edgeHandleZones(for: track, rowIndex: 0, isSelected: isSelected, zoom: zoom, laneWidth: laneWidth,
                         slideDuration: slideDuration)
             .first { $0.contains(touchX) }?
             .edge
@@ -494,9 +537,9 @@ public struct Plan2DView: View, Equatable {
         case track
     }
 
-    static func tapTarget(touchX: CGFloat, track: Plan2DTrack,
+    static func tapTarget(touchX: CGFloat, track: Plan2DTrack, isSelected: Bool,
                           zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> TapTarget {
-        guard edgeHandle(touchX: touchX, track: track, zoom: zoom,
+        guard edgeHandle(touchX: touchX, track: track, isSelected: isSelected, zoom: zoom,
                          laneWidth: laneWidth, slideDuration: slideDuration) == nil,
               let keyframeId = keyframeHit(touchX: touchX, track: track, zoom: zoom,
                                            laneWidth: laneWidth, slideDuration: slideDuration)
@@ -521,7 +564,10 @@ public struct Plan2DView: View, Equatable {
     ///
     /// Une piste FANTÔME est exclue : elle n'a pas de fenêtre à déplacer, et
     /// lui en fabriquer une au premier glissement transformerait un défaut en
-    /// choix (O4) — la même raison qui prive son bord de poignée.
+    /// choix (O4) — la même raison qui prive son bord de poignée. Une piste
+    /// VERROUILLÉE (fond/synthétique) l'est aussi : NI poignées NI
+    /// déplacement (revue Opus, constat 3) — la lecture ignore sa fenêtre,
+    /// la déplacer au doigt mentirait.
     ///
     /// Deux verrous, tous deux nés de la revue Opus : l'axe ÉLU doit être
     /// l'horizontal (un réordonnancement vertical n'émet JAMAIS de
@@ -531,7 +577,7 @@ public struct Plan2DView: View, Equatable {
                           isReorderArmed: Bool, track: Plan2DTrack, zoom: Plan2DZoom,
                           laneWidth: CGFloat, slideDuration: Double) -> Double? {
         guard gestureEdge == nil, isReorderArmed, axis == .horizontal else { return nil }
-        guard case .timed = track.bar else { return nil }
+        guard !track.isLocked, case .timed = track.bar else { return nil }
         let seconds = timeDelta(forDeltaX: translationSinceArm.width, zoom: zoom,
                                 laneWidth: laneWidth, slideDuration: slideDuration)
         guard seconds != 0 else { return nil }
@@ -581,8 +627,8 @@ public struct Plan2DView: View, Equatable {
     /// confisquer au scroller tous les glissements du plan : la même raison
     /// qui donnait à l'ancien conteneur ses `ClipTrimHandles`.
     private var edgeHandleLayer: some View {
-        ForEach(Self.edgeHandleZones(tracks: tracks, zoom: zoom, laneWidth: laneWidth,
-                                     slideDuration: slideDuration)) { zone in
+        ForEach(Self.edgeHandleZones(tracks: tracks, selectedTrackId: selectedTrackId, zoom: zoom,
+                                     laneWidth: laneWidth, slideDuration: slideDuration)) { zone in
             Color.clear
                 .frame(width: max(0, zone.width), height: TimelineMetrics.laneHeight - 16)
                 .contentShape(Rectangle())
@@ -639,6 +685,7 @@ public struct Plan2DView: View, Equatable {
             gestureEdge = row.flatMap { idx -> Edge? in
                 guard tracks.indices.contains(idx) else { return nil }
                 return Self.edgeHandle(touchX: value.startLocation.x, track: tracks[idx],
+                                      isSelected: tracks[idx].id == selectedTrackId,
                                       zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
             }
         }
@@ -728,6 +775,7 @@ public struct Plan2DView: View, Equatable {
                                    startRow: startRow, endRow: endRow) {
         case .select:
             switch Self.tapTarget(touchX: value.location.x, track: tracks[startRow],
+                                  isSelected: tracks[startRow].id == selectedTrackId,
                                   zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
             case .keyframe(let keyframeId): onSelectKeyframe(keyframeId)
             case .track: onSelectTrack(tracks[startRow].id)

@@ -254,6 +254,10 @@ public struct StoryTimelineHost: View {
                                 laneWidth: laneWidth,
                                 slideDuration: slideDuration,
                                 isDark: colorScheme == .dark,
+                                // Surligne la piste sélectionnée dans le
+                                // Canvas (revue Opus, constat 4) — SEULE
+                                // source, `TimelineViewModel.selection`.
+                                selectedTrackId: viewModel.selection.selectedClipId,
                                 // Tap ⇒ ouvre l'Inspector EXISTANT (S4) — la
                                 // même intention qu'un double tap sur
                                 // l'ancienne barre.

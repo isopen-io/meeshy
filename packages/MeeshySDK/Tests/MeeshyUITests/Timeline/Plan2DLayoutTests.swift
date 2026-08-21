@@ -243,6 +243,41 @@ struct Plan2DLayoutTests {
         #expect(plan.first?.bar == .timed(start: 0, end: 4))
     }
 
+    // MARK: - Le verrou (revue Opus, constat 3 : régression de l'ancien
+    // conteneur, `isImmovableBackground` — `StoryTimelineView.swift:631`)
+
+    @Test("Un média de FOND est verrouillé — sa fenêtre est ignorée en lecture, le porteur ne l'est jamais")
+    func backgroundMedia_isLocked_carrierIsNot() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "fond", aspectRatio: 1.777, isBackground: true),
+                StoryMediaObject(id: "porteur", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 0, duration: 4)
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        let plan = tracks(effects)
+        #expect(plan.first { $0.id == "fond" }?.isLocked == true)
+        #expect(plan.first { $0.id == "porteur" }?.isLocked == false)
+    }
+
+    @Test("Un clip SYNTHÉTIQUE (fond image posé par le composer, id préfixé) est verrouillé même sans isBackground")
+    func syntheticMedia_isLocked() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "\(StoryComposerViewModel.syntheticTimelineClipIdPrefix)slide-1",
+                                 aspectRatio: 1.0, startTime: 0, duration: 4)
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        #expect(tracks(effects).first?.isLocked == true)
+    }
+
+    @Test("Texte, sticker et audio ne sont jamais verrouillés — seul le média de fond/synthétique l'est")
+    func nonMediaTracks_areNeverLocked() {
+        #expect(tracks(composedSlide()).allSatisfy { !$0.isLocked })
+    }
+
     // MARK: - L'échelle vient de la durée
 
     @Test("t=0 ⇒ 0, t=durée ⇒ largeur de piste, et le zoom détaillé double l'échelle")

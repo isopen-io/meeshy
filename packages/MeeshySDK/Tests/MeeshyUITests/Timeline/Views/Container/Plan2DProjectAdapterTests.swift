@@ -77,4 +77,18 @@ struct Plan2DProjectAdapterTests {
                                             slideDuration: 10)
         #expect(viaAdapter == handBuilt)
     }
+
+    @Test("Un média de FOND reste verrouillé après le pont — l'adaptateur ne filtre ni ne réécrit isBackground/id")
+    func effects_preservesIsBackground_soDownstreamLockDerivationStillWorks() {
+        let fond = StoryMediaObject(id: "fond", aspectRatio: 1.777, isBackground: true)
+        let project = TimelineProject(
+            slideId: "slide-1", slideDuration: 10,
+            mediaObjects: [fond], audioPlayerObjects: [],
+            textObjects: [], clipTransitions: []
+        )
+
+        let track = Plan2DLayout.tracks(from: Plan2DProjectAdapter.effects(from: project),
+                                        slideDuration: 10).first
+        #expect(track?.isLocked == true)
+    }
 }

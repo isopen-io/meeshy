@@ -232,6 +232,49 @@ final class Plan2DTrackAccessibilityTests: XCTestCase {
         XCTAssertTrue(label.contains("suit") || label.contains("follow"),
                       "Un fantôme n'a pas de durée : il SUIT la slide, et le dit — got: \(label)")
     }
+
+    /// Même annonce littérale que l'ancien conteneur
+    /// (`TrackBarView.accessibilityComposedLabel`, `" (verrouillée)"`) —
+    /// restaurée par la revue Opus (constat 3), en queue de libellé.
+    func test_lockedTrack_announcesVerrouillee_asTheOldContainerDid() {
+        let locked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: true)
+        XCTAssertTrue(Plan2DView.accessibilityLabel(for: locked).contains("(verrouillée)"))
+    }
+}
+
+// MARK: - Sélection RENDUE (revue Opus, constat 4)
+
+/// L'ancien conteneur surlignait la piste sélectionnée à quatre endroits
+/// (`StoryTimelineView.swift:498/649/727/786`) ; `Plan2DView` n'exposait ni
+/// ne recevait aucun état de sélection — `.equatable()` (`StoryTimelineHost
+/// .swift:304`) garantissait donc qu'un `selectedClipId` changé ne
+/// redessinait JAMAIS le Canvas. `selectedTrackId` doit désormais entrer
+/// dans `==`, sans quoi la propriété existerait sans jamais influer le
+/// redessin qui la rendrait visible.
+@MainActor
+final class Plan2DSelectionEqualityTests: XCTestCase {
+
+    private static let track = Plan2DTrack(id: "a", label: "a", plane: .fg, z: 0,
+                                           bar: .timed(start: 0, end: 4))
+
+    private func makeView(selectedTrackId: String?) -> Plan2DView {
+        Plan2DView(
+            tracks: [Self.track], zoom: .fit, laneWidth: 300, slideDuration: 10, isDark: false,
+            selectedTrackId: selectedTrackId,
+            onSelectTrack: { _ in }, onSelectKeyframe: { _ in }, onReorder: { _, _ in },
+            onTrimStart: { _, _ in }, onTrimEnd: { _, _ in }, onMove: { _, _ in },
+            onMoveEnded: { _ in }, onScrollLockChanged: { _ in }
+        )
+    }
+
+    func test_aChangedSelection_makesTheViewUnequal() {
+        XCTAssertNotEqual(makeView(selectedTrackId: "a"), makeView(selectedTrackId: nil),
+                          "Sans selectedTrackId dans ==, sélectionner une piste ne redessinerait jamais le Canvas")
+    }
+
+    func test_theSameSelection_keepsTheViewEqual() {
+        XCTAssertEqual(makeView(selectedTrackId: "a"), makeView(selectedTrackId: "a"))
+    }
 }
 
 // MARK: - Déplacement temporel d'une piste au doigt

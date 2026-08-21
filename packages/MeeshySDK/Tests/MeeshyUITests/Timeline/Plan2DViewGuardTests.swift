@@ -219,13 +219,13 @@ final class Plan2DViewGuardTests: XCTestCase {
         let startX = Plan2DView.labelColumnWidth + 0
         let endX = Plan2DView.labelColumnWidth + 4
 
-        XCTAssertEqual(Plan2DView.edgeHandle(touchX: startX - half + 1, track: track,
+        XCTAssertEqual(Plan2DView.edgeHandle(touchX: startX - half + 1, track: track, isSelected: true,
                                              zoom: .fit, laneWidth: 4, slideDuration: 4), .start,
                       "À 1 pt à l'intérieur du bord GAUCHE de la zone (débordante hors barre) : bord de début")
-        XCTAssertEqual(Plan2DView.edgeHandle(touchX: endX + half - 1, track: track,
+        XCTAssertEqual(Plan2DView.edgeHandle(touchX: endX + half - 1, track: track, isSelected: true,
                                              zoom: .fit, laneWidth: 4, slideDuration: 4), .end,
                       "À 1 pt à l'intérieur du bord DROIT de la zone (débordante hors barre) : bord de fin")
-        XCTAssertNil(Plan2DView.edgeHandle(touchX: startX - half - 5, track: track,
+        XCTAssertNil(Plan2DView.edgeHandle(touchX: startX - half - 5, track: track, isSelected: true,
                                            zoom: .fit, laneWidth: 4, slideDuration: 4),
                     "Bien au-delà de la zone : aucune poignée")
     }
@@ -241,10 +241,10 @@ final class Plan2DViewGuardTests: XCTestCase {
         let endX = Plan2DView.labelColumnWidth + 4
         let midX = (startX + endX) / 2
 
-        XCTAssertEqual(Plan2DView.edgeHandle(touchX: midX + 2, track: track,
+        XCTAssertEqual(Plan2DView.edgeHandle(touchX: midX + 2, track: track, isSelected: true,
                                              zoom: .fit, laneWidth: 4, slideDuration: 4), .end,
                       "Au-delà du milieu d'une barre étroite, le contact vise la FIN")
-        XCTAssertEqual(Plan2DView.edgeHandle(touchX: midX - 2, track: track,
+        XCTAssertEqual(Plan2DView.edgeHandle(touchX: midX - 2, track: track, isSelected: true,
                                              zoom: .fit, laneWidth: 4, slideDuration: 4), .start,
                       "En deçà du milieu, le contact vise le DÉBUT")
     }
@@ -254,7 +254,7 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_edgeHandleZones_aWideBar_keepsTwoFullSizedZones() {
         let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
                                 bar: .timed(start: 0, end: 10))
-        let zones = Plan2DView.edgeHandleZones(for: track, rowIndex: 3, zoom: .fit,
+        let zones = Plan2DView.edgeHandleZones(for: track, rowIndex: 3, isSelected: true, zoom: .fit,
                                                laneWidth: 300, slideDuration: 10)
         XCTAssertEqual(zones.map(\.edge), [.start, .end])
         XCTAssertEqual(zones.map(\.rowIndex), [3, 3])
@@ -267,7 +267,7 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_edgeHandleZones_aNarrowBar_sharesItAtTheMidpoint() {
         let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
                                 bar: .timed(start: 0, end: 4))
-        let zones = Plan2DView.edgeHandleZones(for: track, rowIndex: 0, zoom: .fit,
+        let zones = Plan2DView.edgeHandleZones(for: track, rowIndex: 0, isSelected: true, zoom: .fit,
                                                laneWidth: 4, slideDuration: 4)
         let midX = Plan2DView.labelColumnWidth + 2
         XCTAssertEqual(zones.first(where: { $0.edge == .start })?.maxX ?? .nan, midX, accuracy: 0.001)
@@ -280,7 +280,7 @@ final class Plan2DViewGuardTests: XCTestCase {
             Plan2DTrack(id: "ghost", label: "g", plane: .fg, z: 1, bar: .ghost),
             Plan2DTrack(id: "clip", label: "c", plane: .fg, z: 0, bar: .timed(start: 0, end: 5))
         ]
-        let zones = Plan2DView.edgeHandleZones(tracks: tracks, zoom: .fit,
+        let zones = Plan2DView.edgeHandleZones(tracks: tracks, selectedTrackId: "clip", zoom: .fit,
                                                laneWidth: 300, slideDuration: 10)
         XCTAssertEqual(zones.map(\.trackId), ["clip", "clip"],
                        "Un fantôme n'a pas de bord à tirer : aucune cible ne se pose sur sa rangée")
@@ -292,15 +292,54 @@ final class Plan2DViewGuardTests: XCTestCase {
 
     func test_edgeHandleZones_aGhostTrackHasNoZone() {
         let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0, bar: .ghost)
-        XCTAssertTrue(Plan2DView.edgeHandleZones(for: track, rowIndex: 0, zoom: .fit,
+        XCTAssertTrue(Plan2DView.edgeHandleZones(for: track, rowIndex: 0, isSelected: true, zoom: .fit,
                                                  laneWidth: 300, slideDuration: 10).isEmpty)
     }
 
     func test_edgeHandle_ghostTrackHasNoHandle() {
         let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0, bar: .ghost)
-        XCTAssertNil(Plan2DView.edgeHandle(touchX: 100, track: track,
+        XCTAssertNil(Plan2DView.edgeHandle(touchX: 100, track: track, isSelected: true,
                                            zoom: .fit, laneWidth: 300, slideDuration: 10),
                     "Un fantôme n'a pas de bord à tirer — il n'a pas de durée choisie")
+    }
+
+    // MARK: - Guard 4n — le trim exige la sélection PRÉALABLE, et une piste
+    // verrouillée n'a NI poignées NI déplacement (revue Opus, constat 3 —
+    // parité `ClipTrimHandles.shouldShow(isSelected:isLocked:)`)
+
+    func test_edgeHandleZones_anUnselectedTimedTrack_hasNoZone() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 10))
+        XCTAssertTrue(Plan2DView.edgeHandleZones(for: track, rowIndex: 0, isSelected: false, zoom: .fit,
+                                                 laneWidth: 300, slideDuration: 10).isEmpty,
+                     "Sélectionner une piste, c'est passer en mode édition dessus — sans ça, pas de poignée")
+    }
+
+    func test_edgeHandleZones_aSelectedButLockedTrack_hasNoZone() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 10), isLocked: true)
+        XCTAssertTrue(Plan2DView.edgeHandleZones(for: track, rowIndex: 0, isSelected: true, zoom: .fit,
+                                                 laneWidth: 300, slideDuration: 10).isEmpty,
+                     "Une piste verrouillée (fond synthétique) n'a jamais de poignée, même sélectionnée")
+    }
+
+    func test_edgeHandle_anUnselectedTrack_returnsNilEvenOnTheExactEdge() {
+        let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 4))
+        XCTAssertNil(Plan2DView.edgeHandle(touchX: Plan2DView.labelColumnWidth, track: track, isSelected: false,
+                                           zoom: .fit, laneWidth: 4, slideDuration: 4),
+                    "Contact pile sur le bord d'une piste NON sélectionnée : toujours pas de poignée")
+    }
+
+    func test_edgeHandleZones_ofAWholePlan_omitsTheUnselectedTrack() {
+        let tracks = [
+            Plan2DTrack(id: "selected", label: "s", plane: .fg, z: 1, bar: .timed(start: 0, end: 5)),
+            Plan2DTrack(id: "other", label: "o", plane: .fg, z: 0, bar: .timed(start: 0, end: 5))
+        ]
+        let zones = Plan2DView.edgeHandleZones(tracks: tracks, selectedTrackId: "selected", zoom: .fit,
+                                               laneWidth: 300, slideDuration: 10)
+        XCTAssertEqual(Set(zones.map(\.trackId)), ["selected"],
+                       "Seule la piste sélectionnée pose des cibles de rognage")
     }
 
     // MARK: - Guard 4g — tap sur un losange AFFICHÉ route vers SON keyframe
@@ -458,7 +497,7 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_tapTarget_onADiamondSittingOnTheBarsEdge_opensTheClip() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track, isSelected: true,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
             .track,
             "Le doigt posé sur le bord vise le bord — le losange qui s'y superpose ne doit pas voler la fiche du clip"
@@ -468,7 +507,7 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_tapTarget_onADiamondAwayFromAnyEdge_opensThatKeyframe() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 150, track: track,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 150, track: track, isSelected: true,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
             .keyframe("kf-mid"),
             "Partout ailleurs sur la barre, le losange reste la cible la plus précise"
@@ -478,9 +517,21 @@ final class Plan2DViewGuardTests: XCTestCase {
     func test_tapTarget_onABareStretchOfBar_opensTheClip() {
         let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
         XCTAssertEqual(
-            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 90, track: track,
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth + 90, track: track, isSelected: true,
                                  zoom: .fit, laneWidth: 300, slideDuration: 10),
             .track
+        )
+    }
+
+    /// Sur une piste NON sélectionnée, il n'existe aucune poignée de bord
+    /// active pour préempter le tap (constat 3) — le losange posé sur ce même
+    /// bord redevient la cible la plus précise.
+    func test_tapTarget_onAnUnselectedTrack_theEdgeNeverPreemptsItsKeyframe() {
+        let track = Self.barWithDiamondsAtTheEdgeAndInTheMiddle()
+        XCTAssertEqual(
+            Plan2DView.tapTarget(touchX: Plan2DView.labelColumnWidth, track: track, isSelected: false,
+                                 zoom: .fit, laneWidth: 300, slideDuration: 10),
+            .keyframe("kf-edge")
         )
     }
 
@@ -765,6 +816,53 @@ final class Plan2DViewGuardTests: XCTestCase {
                      "Le déplacement doit atteindre l'appelant pendant le geste, pas seulement au relâchement")
         XCTAssertTrue(source.contains("onMoveEnded("),
                      "Le relâchement doit refermer la session de glissement côté appelant")
+    }
+
+    // MARK: - Guard 4o — sélection RENDUE et verrou RESTAURÉ (revue Opus,
+    // constats 3 et 4) : `Plan2DView` n'exposait ni ne recevait aucun état
+    // de sélection — un `selectedClipId` changé ne redessinait jamais le
+    // Canvas — et n'avait aucune notion de verrou.
+
+    func test_body_definesEqualityOverSelectedTrackId() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        guard let eqRange = source.range(of: "static func == ") else {
+            return XCTFail("La conformance Equatable doit être définie explicitement (closures exclues)")
+        }
+        let body = String(source[eqRange.upperBound...].prefix(400))
+        XCTAssertTrue(body.contains("selectedTrackId"),
+                     "Sans selectedTrackId dans ==, une sélection changée ne redessine jamais le Canvas (constat 4)")
+    }
+
+    func test_body_highlightsTheSelectedTrackInTheCanvas() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("track.id == selectedTrackId"),
+                     "Chaque piste doit se comparer à selectedTrackId pour savoir si elle se surligne")
+        XCTAssertTrue(source.contains("MeeshyColors.indigo400"),
+                     "La sélection se rend avec le MÊME jeton que l'ancien conteneur (TrackBarView.laneBackground)")
+    }
+
+    func test_body_lockedTrack_drawsALockBadge() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("lock.fill"),
+                     "Une piste verrouillée doit porter le MÊME badge cadenas que l'ancien conteneur (TrackBarView)")
+    }
+
+    func test_moveDelta_aLockedTrackNeverMoves() {
+        let locked = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0,
+                                 bar: .timed(start: 0, end: 4), isLocked: true)
+        XCTAssertNil(
+            Plan2DView.moveDelta(translationSinceArm: CGSize(width: 60, height: 0), axis: .horizontal,
+                                 gestureEdge: nil, isReorderArmed: true, track: locked,
+                                 zoom: .fit, laneWidth: 300, slideDuration: 10),
+            "NI poignées NI déplacement : un fond/synthétique verrouillé ne se déplace jamais dans le temps"
+        )
+    }
+
+    func test_accessibilityLabel_lockedTrack_announcesVerrouillee() {
+        let locked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: true)
+        let unlocked = Plan2DTrack(id: "t", label: "Fond", plane: .bg, z: 0, bar: .ghost, isLocked: false)
+        XCTAssertTrue(Plan2DView.accessibilityLabel(for: locked).contains("verrouillée"))
+        XCTAssertFalse(Plan2DView.accessibilityLabel(for: unlocked).contains("verrouillée"))
     }
 
     // MARK: - Helpers (garde de source)

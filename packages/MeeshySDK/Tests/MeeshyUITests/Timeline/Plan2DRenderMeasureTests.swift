@@ -60,6 +60,7 @@ final class Plan2DRenderMeasureTests: XCTestCase {
             laneWidth: 350,
             slideDuration: 30,
             isDark: false,
+            selectedTrackId: nil,
             onSelectTrack: { _ in },
             onSelectKeyframe: { _ in },
             onReorder: { _, _ in },
