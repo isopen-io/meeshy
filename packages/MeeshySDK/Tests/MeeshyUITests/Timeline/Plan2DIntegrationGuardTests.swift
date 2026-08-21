@@ -79,6 +79,63 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         XCTAssertFalse(sample.contains("startTime = nil") && sample.contains("duration = nil"))
     }
 
+    // MARK: - Guard 2c — tête de lecture + scrub + règle graduée du plan
+    //
+    // Le premier passage remplaçait le conteneur mono-piste par `Plan2DView`
+    // SEUL : la tête de lecture (`TimelineScrubArea`), le scrub, le pinch et
+    // la règle LABELLISÉE disparaissaient — `viewModel.scrub`/`beginScrub`/
+    // `endScrub` n'avaient plus AUCUN appelant côté UI, et `addKeyframeAtPlayhead`/
+    // `splitSelectedAtPlayhead` opéraient silencieusement à t≈0 (régression
+    // constatée, corrigée ici). Plutôt que réinventer un scrub bespoke dans
+    // la géométrie du plan (deux mappings temps→x incompatibles,
+    // `Plan2DLayout.x` contre `TimelineGeometry.x`), le conteneur RÉUTILISE
+    // `RulerView`/`PlayheadView` (gestes de scrub déjà construits, testés)
+    // via `Plan2DView.equivalentGeometry` — la conversion pure qui les fait
+    // coïncider exactement avec le repère du plan.
+
+    func test_storyTimelineHost_reusesRulerViewForScrub() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("RulerView("),
+                     "La tête de lecture doit réutiliser RulerView (scrub déjà construit) plutôt qu'un Canvas bespoke")
+        XCTAssertTrue(source.contains("viewModel.scrub("),
+                     "Le scrub doit atteindre viewModel.scrub(to:) — sinon addKeyframeAtPlayhead/splitSelectedAtPlayhead restent aveugles")
+    }
+
+    func test_storyTimelineHost_reusesPlayheadViewForTheIndicator() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("PlayheadView("),
+                     "La tête de lecture visible doit réutiliser PlayheadView plutôt qu'une ligne bespoke")
+    }
+
+    func test_storyTimelineHost_scrubGeometryIsThePlansEquivalentGeometry() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("Plan2DView.equivalentGeometry("),
+                     "RulerView/PlayheadView doivent recevoir la géométrie ÉQUIVALENTE du plan — "
+                     + "sinon leurs graduations/scrub désynchronisent des barres dessinées par Plan2DLayout.x")
+    }
+
+    // MARK: - Guard 2d — chrome d'ouverture/fermeture + transitions inter-clips
+
+    func test_storyTimelineHost_showsTheOpeningClosingChrome() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("TransitionChromeLane("),
+                     "Le chrome ouverture/fermeture de slide doit rester visible (perdu par le premier passage)")
+    }
+
+    func test_storyTimelineHost_keepsPerClipTransitionsReachable() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("TransitionJunctionResolver.resolve("),
+                     "Les jonctions inter-clips doivent être résolues — sinon aucune transition existante n'est plus affichée")
+        XCTAssertTrue(source.contains("TransitionBadge(") && source.contains("TransitionCreationBadge("),
+                     "La création ET l'édition d'une transition existante doivent rester atteignables (badges existants réutilisés, pas réinventés)")
+    }
+
+    /// Contrôle positif : la garde doit réellement détecter l'ABSENCE de la règle.
+    func test_guardDetectsAMissingRulerView() {
+        let sample = "struct Fake { var body: some View { Plan2DView(...) } }"
+        XCTAssertFalse(sample.contains("RulerView("))
+    }
+
     // MARK: - Guard 3 — ComposerControlsLayer n'est pas touché
 
     func test_composerControlsLayer_contentIsUnchanged() throws {

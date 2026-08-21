@@ -79,7 +79,7 @@ public struct ClipInspector: View {
                     volumeKeyframes: [VolumePoint] = [],
                     isDuckingDisabled: Bool = false,
                     slideHasBackgroundAudio: Bool = false,
-                    isFollowingSlide: Bool = true) {
+                    isFollowingSlide: Bool = false) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume

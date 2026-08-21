@@ -36,6 +36,11 @@ public struct Plan2DView: View, Equatable {
     public let slideDuration: Double
     public let isDark: Bool
     public let onSelectTrack: (String) -> Void
+    /// Un tap qui TOMBE sur un losange AFFICHÉ (`Plan2DKeyframe`, dans le
+    /// rayon `keyframeHitRadius`) route ICI plutôt que vers `onSelectTrack` —
+    /// S4 : l'édition reste à l'Inspecteur existant (`KeyframeInspector`),
+    /// mais encore faut-il pouvoir DÉSIGNER un keyframe précis.
+    public let onSelectKeyframe: (String) -> Void
     /// La piste `id` a été déposée à l'index `Int` — un entier dans l'espace
     /// de `tracks` (toutes plans confondus), pas un z relatif à un plan :
     /// c'est à l'appelant (au-delà de D2) de traduire cette position en
@@ -53,6 +58,7 @@ public struct Plan2DView: View, Equatable {
                 slideDuration: Double,
                 isDark: Bool,
                 onSelectTrack: @escaping (String) -> Void,
+                onSelectKeyframe: @escaping (String) -> Void,
                 onReorder: @escaping (String, Int) -> Void,
                 onTrimStart: @escaping (String, Double) -> Void,
                 onTrimEnd: @escaping (String, Double) -> Void) {
@@ -62,6 +68,7 @@ public struct Plan2DView: View, Equatable {
         self.slideDuration = slideDuration
         self.isDark = isDark
         self.onSelectTrack = onSelectTrack
+        self.onSelectKeyframe = onSelectKeyframe
         self.onReorder = onReorder
         self.onTrimStart = onTrimStart
         self.onTrimEnd = onTrimEnd
@@ -186,6 +193,18 @@ public struct Plan2DView: View, Equatable {
         return RulerView.tickInterval(for: equivalentZoom)
     }
 
+    /// `TimelineGeometry` ÉQUIVALENTE à la densité de pixels actuelle du plan
+    /// — même conversion que `tickInterval` ci-dessus, exposée pour que
+    /// l'appelant (D3) puisse RÉUTILISER `RulerView`/`PlayheadView` (mapping
+    /// temps→x continu, geste de scrub déjà construit et testé) comme règle
+    /// et tête de lecture du plan, sans jamais désynchroniser leur repère de
+    /// celui que `Plan2DLayout.x` fait autorité sur les barres/losanges.
+    static func equivalentGeometry(laneWidth: CGFloat, zoom: Plan2DZoom, slideDuration: Double) -> TimelineGeometry {
+        guard slideDuration > 0, laneWidth > 0 else { return TimelineGeometry(zoomScale: 0.05) }
+        let pixelsPerSecond = laneWidth * zoom.scale / CGFloat(slideDuration)
+        return TimelineGeometry(zoomScale: pixelsPerSecond / TimelineGeometry.basePixelsPerSecond)
+    }
+
     // MARK: - Gestes (rév. 2, M11)
 
     enum Edge: Equatable { case start, end }
@@ -234,6 +253,29 @@ public struct Plan2DView: View, Equatable {
         if abs(touchX - startX) <= half { return .start }
         if abs(touchX - endX) <= half { return .end }
         return nil
+    }
+
+    /// Rayon de tap d'un losange AFFICHÉ — même ordre de grandeur que la
+    /// zone tappable de `KeyframeMarkerView` (`.inset(by: -16)` autour d'un
+    /// losange de 8-10 pt) : le marqueur est petit, exiger la précision du
+    /// pixel serait une régression.
+    static let keyframeHitRadius: CGFloat = 16
+
+    /// Le losange le plus proche de `touchX`, dans SA piste, s'il tombe dans
+    /// `keyframeHitRadius` — `nil` si la piste n'a aucun losange ou si aucun
+    /// n'est assez proche. Consulté par `handleEnded` AVANT `onSelectTrack`
+    /// sur un outcome `.select` (Guard 4g) : sans lui, aucun keyframe
+    /// individuel n'est jamais atteignable au tap.
+    static func keyframeHit(touchX: CGFloat, track: Plan2DTrack,
+                            zoom: Plan2DZoom, laneWidth: CGFloat, slideDuration: Double) -> String? {
+        track.keyframes
+            .map { keyframe -> (id: String, distance: CGFloat) in
+                let kx = x(forTime: keyframe.time, zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration)
+                return (keyframe.id, abs(touchX - kx))
+            }
+            .filter { $0.distance <= keyframeHitRadius }
+            .min { $0.distance < $1.distance }
+            .map(\.id)
     }
 
     /// Delta de temps (secondes) pour un delta de pixels ANCRÉ au geste —
@@ -346,7 +388,12 @@ public struct Plan2DView: View, Equatable {
         switch Self.gestureOutcome(translation: value.translation, gestureEdge: gestureEdge,
                                    isReorderArmed: isReorderArmed, startRow: startRow, endRow: endRow) {
         case .select:
-            onSelectTrack(tracks[startRow].id)
+            if let keyframeId = Self.keyframeHit(touchX: value.location.x, track: tracks[startRow],
+                                                 zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
+                onSelectKeyframe(keyframeId)
+            } else {
+                onSelectTrack(tracks[startRow].id)
+            }
         case .reorder(let to):
             onReorder(tracks[startRow].id, to)
         case .none:

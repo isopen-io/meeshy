@@ -131,4 +131,36 @@ final class TimelineViewModelFollowSlideTests: XCTestCase {
 
         XCTAssertFalse(sut.canUndo)
     }
+
+    /// AGGRAVANT explicitement consigné et testé (revue DoD) : `followSlide`
+    /// termine par `recomputeSlideDuration()` — le MÊME recalcul qu'un bord
+    /// tiré ou une suppression — qui retombe sur la durée dérivée du CONTENU
+    /// restant, jamais plancher par une valeur PRÉCÉDENTE. Quand le clip
+    /// redevenu fantôme était la SEULE source de la durée courante (aucune
+    /// marge « +10 s » posée via `extendSlideDuration`, donc
+    /// `authoredSlideDuration == nil`), la slide RACCOURCIT. Combiné à
+    /// `test_followSlide_isNotUndoable` ci-dessus : cette perte de durée est
+    /// IRRÉVERSIBLE au clavier — aucune entrée d'annulation ne la restaure,
+    /// l'auteur doit ré-étirer le bord à la main pour la retrouver.
+    func test_followSlide_recomputesSlideDuration_canShrinkItIrreversibly() async {
+        var media = StoryMediaObject(id: "clip-1", postMediaId: "clip-1", kind: .video, aspectRatio: 1.0)
+        media.startTime = 0
+        media.duration = 10
+        // `slideDuration` EXACTEMENT dérivée de ce clip (10 − 10 = 0 ≤ 0,05,
+        // cf. `authoredDuration(in:)`) : aucune marge d'auteur ne plancher la
+        // durée une fois le clip redevenu fantôme.
+        let project = TimelineProject(slideId: "slide-1", slideDuration: 10,
+                                      mediaObjects: [media], audioPlayerObjects: [],
+                                      textObjects: [], clipTransitions: [])
+        let sut = makeSUT(project: project)
+        await sut.awaitConfigured()
+        XCTAssertNil(sut.authoredSlideDuration, "précondition : rien ne plancher la durée courante")
+
+        sut.followSlide(id: "clip-1")
+
+        XCTAssertLessThan(
+            sut.project.slideDuration, 10,
+            "« Suivre la slide » peut RACCOURCIR la slide (recompute sur le contenu restant) sans qu'aucun undo ne rattrape la perte"
+        )
+    }
 }

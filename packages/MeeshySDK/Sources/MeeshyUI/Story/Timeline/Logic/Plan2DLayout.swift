@@ -19,6 +19,20 @@ public nonisolated enum TrackBar: Equatable, Sendable {
     case ghost
 }
 
+/// Un losange AFFICHÉ (S4 : édité à l'Inspecteur existant, jamais dans le
+/// plan). Porte l'IDENTITÉ du `StoryKeyframe` d'origine — sans elle, un tap
+/// sur le losange ne pourrait router vers AUCUN `KeyframeInspector` (le bus
+/// de sélection route par id, `TimelineInspectorHost.resolveKeyframeSnapshot`).
+public nonisolated struct Plan2DKeyframe: Equatable, Sendable {
+    public let id: String
+    public let time: Double
+
+    public init(id: String, time: Double) {
+        self.id = id
+        self.time = time
+    }
+}
+
 /// Une rangée du plan 2D. Vertical = empilement (l'ordre de ce tableau EST
 /// l'ordre à l'écran), horizontal = durée.
 public nonisolated struct Plan2DTrack: Equatable, Identifiable, Sendable {
@@ -27,20 +41,24 @@ public nonisolated struct Plan2DTrack: Equatable, Identifiable, Sendable {
     public let plane: TrackPlane
     public let z: Int
     public let bar: TrackBar
-    public let keyframeTimes: [Double]
+    public let keyframes: [Plan2DKeyframe]
+
+    /// Dérivé de `keyframes` — jamais un second tableau parallèle qui
+    /// pourrait diverger (une seule source pour les temps ET l'identité).
+    public var keyframeTimes: [Double] { keyframes.map(\.time) }
 
     public init(id: String,
                 label: String,
                 plane: TrackPlane,
                 z: Int,
                 bar: TrackBar,
-                keyframeTimes: [Double] = []) {
+                keyframes: [Plan2DKeyframe] = []) {
         self.id = id
         self.label = label
         self.plane = plane
         self.z = z
         self.bar = bar
-        self.keyframeTimes = keyframeTimes
+        self.keyframes = keyframes
     }
 }
 
@@ -122,7 +140,7 @@ public nonisolated enum Plan2DLayout {
                         z: text.zIndex,
                         bar: bar(start: text.startTime, duration: text.duration,
                                  slideDuration: slideDuration),
-                        keyframeTimes: times(of: text.keyframes))
+                        keyframes: markers(of: text.keyframes))
         }
     }
 
@@ -170,7 +188,7 @@ public nonisolated enum Plan2DLayout {
                         z: media.zIndex,
                         bar: bar(start: media.startTime, duration: media.duration,
                                  slideDuration: slideDuration),
-                        keyframeTimes: times(of: media.keyframes))
+                        keyframes: markers(of: media.keyframes))
         }
     }
 
@@ -185,7 +203,7 @@ public nonisolated enum Plan2DLayout {
                         bar: bar(start: audio.startTime.map(Double.init),
                                  duration: audio.duration.map(Double.init),
                                  slideDuration: slideDuration),
-                        keyframeTimes: times(of: audio.keyframes))
+                        keyframes: markers(of: audio.keyframes))
         }
     }
 
@@ -229,8 +247,13 @@ public nonisolated enum Plan2DLayout {
         return .timed(start: begin, end: end)
     }
 
-    private static func times(of keyframes: [StoryKeyframe]?) -> [Double] {
-        (keyframes ?? []).map { Double($0.time) }.sorted()
+    /// Losanges AFFICHÉS d'un clip, triés par temps — identité comprise
+    /// (`Plan2DKeyframe.id`), pour que le tap (D2/D3) puisse router vers le
+    /// `KeyframeInspector` DU keyframe touché, pas un temps anonyme.
+    private static func markers(of keyframes: [StoryKeyframe]?) -> [Plan2DKeyframe] {
+        (keyframes ?? [])
+            .map { Plan2DKeyframe(id: $0.id, time: Double($0.time)) }
+            .sorted { $0.time < $1.time }
     }
 
     /// Tri STABLE par z décroissant : à z égal, l'ordre d'insertion tranche —

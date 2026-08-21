@@ -67,6 +67,22 @@ struct Plan2DLayoutTests {
         #expect(text?.label == "Aa \"Salut\"")
     }
 
+    @Test("Un losange AFFICHÉ porte l'IDENTITÉ de son keyframe, pas seulement son temps — sans elle, un tap ne peut jamais router vers le bon KeyframeInspector (S4)")
+    func text_keyframes_carryTheirOwnIdentity_sortedByTime() {
+        let effects = StoryEffects(
+            textObjects: [
+                StoryTextObject(id: "txt", text: "Salut", startTime: 1, duration: 3,
+                                keyframes: [StoryKeyframe(id: "kf-late", time: 2),
+                                            StoryKeyframe(id: "kf-early", time: 1)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        let text = tracks(effects).first
+        #expect(text?.keyframes.map(\.id) == ["kf-early", "kf-late"])
+        #expect(text?.keyframes.map(\.time) == [1, 2])
+        #expect(text?.keyframeTimes == [1, 2])
+    }
+
     @Test("Un début SANS durée court jusqu'au bout de la slide — c'est un choix, pas un fantôme")
     func timing_withStartButNoDuration_runsToTheEndOfTheSlide() {
         let effects = StoryEffects(

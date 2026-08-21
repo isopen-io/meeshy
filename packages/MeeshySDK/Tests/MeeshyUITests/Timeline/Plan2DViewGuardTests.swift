@@ -91,6 +91,47 @@ final class Plan2DViewGuardTests: XCTestCase {
                        RulerView.tickLadder.last)
     }
 
+    // MARK: - Guard 2c — géométrie ÉQUIVALENTE : réutiliser RulerView/PlayheadView
+    // sans jamais désynchroniser leur repère de celui du plan
+    //
+    // `Plan2DLayout.x` (D1, gelé) et `TimelineGeometry.x` (RulerView,
+    // PlayheadView, TimelineScrubArea) sont DEUX mappings temps→x distincts
+    // — le premier proportion-au-viewport à deux paliers de zoom, le second
+    // continu en pixels/seconde. `equivalentGeometry` est la conversion PURE
+    // qui les fait coïncider EXACTEMENT pour un (laneWidth, zoom,
+    // slideDuration) donné — c'est elle qui permet au conteneur (D3) de
+    // réutiliser RulerView/PlayheadView tels quels comme règle/tête de
+    // lecture du plan, plutôt que de réinventer un scrub bespoke.
+
+    func test_equivalentGeometry_xMatchesPlan2DLayoutXExactly() {
+        let geometry = Plan2DView.equivalentGeometry(laneWidth: 300, zoom: .fit, slideDuration: 10)
+        for t: Float in [0, 2.5, 5, 10] {
+            XCTAssertEqual(
+                geometry.x(for: t),
+                Plan2DLayout.x(forTime: Double(t), zoom: .fit, laneWidth: 300, slideDuration: 10),
+                accuracy: 0.001
+            )
+        }
+    }
+
+    func test_equivalentGeometry_atDetailZoom_stillMatches() {
+        let geometry = Plan2DView.equivalentGeometry(laneWidth: 300, zoom: .detail, slideDuration: 10)
+        XCTAssertEqual(
+            geometry.x(for: 10),
+            Plan2DLayout.x(forTime: 10, zoom: .detail, laneWidth: 300, slideDuration: 10),
+            accuracy: 0.001
+        )
+    }
+
+    func test_equivalentGeometry_withoutDuration_neverDividesByZero() {
+        // `Plan2DLayout.x` replie sur l'origine à durée nulle (garde dédiée) ;
+        // `TimelineGeometry` n'a pas cette notion (son plancher `zoomScale`
+        // est strictement positif) — la garantie ICI est l'ABSENCE de crash/NaN,
+        // pas l'égalité avec `Plan2DLayout.x` sur ce cas dégénéré.
+        let geometry = Plan2DView.equivalentGeometry(laneWidth: 300, zoom: .fit, slideDuration: 0)
+        XCTAssertTrue(geometry.x(for: 5).isFinite)
+    }
+
     // MARK: - Guard 3 — TimelineMetrics.laneHeight, une seule hauteur de lane
 
     func test_storyTimelineView_usesTimelineMetricsLaneHeight_atAllFourSites() throws {
@@ -194,6 +235,56 @@ final class Plan2DViewGuardTests: XCTestCase {
         XCTAssertNil(Plan2DView.edgeHandle(touchX: 100, track: track,
                                            zoom: .fit, laneWidth: 300, slideDuration: 10),
                     "Un fantôme n'a pas de bord à tirer — il n'a pas de durée choisie")
+    }
+
+    // MARK: - Guard 4g — tap sur un losange AFFICHÉ route vers SON keyframe
+    // (S4 : « l'édition de keyframes n'a pas bougé » — encore faut-il pouvoir
+    // en désigner UN). `keyframeHit` est la fonction PURE que `handleEnded`
+    // doit consulter AVANT `onSelectTrack` sur un outcome `.select` : sans
+    // elle, aucun losange n'est individuellement atteignable (régression
+    // constatée sur D3, corrigée ici).
+
+    func test_keyframeHit_returnsTheClosestKeyframeWithinItsHitRadius() {
+        let track = Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 10),
+                                keyframes: [Plan2DKeyframe(id: "kf-1", time: 1),
+                                            Plan2DKeyframe(id: "kf-2", time: 5)])
+        // laneWidth choisie pour que x(t) = t * 10 en zoom .fit sur 10 s.
+        let xOfKf1 = Plan2DView.labelColumnWidth + 10
+        XCTAssertEqual(
+            Plan2DView.keyframeHit(touchX: xOfKf1, track: track, zoom: .fit, laneWidth: 100, slideDuration: 10),
+            "kf-1"
+        )
+    }
+
+    func test_keyframeHit_beyondItsHitRadius_returnsNil() {
+        let track = Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0,
+                                bar: .timed(start: 0, end: 10),
+                                keyframes: [Plan2DKeyframe(id: "kf-1", time: 1)])
+        let farFromKf1 = Plan2DView.labelColumnWidth + 10 + Plan2DView.keyframeHitRadius + 5
+        XCTAssertNil(
+            Plan2DView.keyframeHit(touchX: farFromKf1, track: track, zoom: .fit, laneWidth: 100, slideDuration: 10)
+        )
+    }
+
+    func test_keyframeHit_trackWithoutKeyframes_returnsNil() {
+        let track = Plan2DTrack(id: "clip", label: "clip", plane: .fg, z: 0, bar: .timed(start: 0, end: 10))
+        XCTAssertNil(
+            Plan2DView.keyframeHit(touchX: Plan2DView.labelColumnWidth, track: track,
+                                   zoom: .fit, laneWidth: 100, slideDuration: 10)
+        )
+    }
+
+    func test_body_aTapChecksKeyframeHitBeforeSelectingTheTrack() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        guard let selectRange = source.range(of: "case .select:") else {
+            return XCTFail("Le corps doit décider l'outcome .select quelque part")
+        }
+        let afterSelect = String(source[selectRange.upperBound...].prefix(400))
+        XCTAssertTrue(afterSelect.contains("keyframeHit("),
+                     "Un tap classé .select doit d'abord tester keyframeHit — sinon aucun losange n'est jamais atteignable")
+        XCTAssertTrue(afterSelect.contains("onSelectKeyframe("),
+                     "Un keyframeHit trouvé doit router vers onSelectKeyframe, pas onSelectTrack")
     }
 
     // MARK: - Guard 4d — tap → appelle onSelectTrack (l'appel, pas la sheet)

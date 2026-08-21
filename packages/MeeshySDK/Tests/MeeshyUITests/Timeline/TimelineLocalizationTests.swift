@@ -53,6 +53,9 @@ final class TimelineLocalizationTests: XCTestCase {
         // Fiche d'édition — découpe (ex-double tap sur la barre vidéo)
         "story.timeline.inspector.split",
         "story.timeline.inspector.split.hint",
+        // Fiche d'édition — « Suivre la slide » (D3, revue totale U9)
+        "story.timeline.inspector.followSlide",
+        "story.timeline.inspector.followSlide.hint",
         // Fiche d'édition — place de la piste dans le plan
         "story.timeline.inspector.transform",
         "story.timeline.inspector.scale",

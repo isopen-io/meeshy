@@ -5,9 +5,26 @@ import MeeshySDK
 /// `TimelineSheetContent` (`Story/TimelineExportFlow.swift`) présente en
 /// réponse à `bandStateMachine.openTimeline`. Il dessine désormais LE plan
 /// (`Plan2DView`, D1/D2) : vertical = empilement, borné par les trois plans ;
-/// horizontal = durée. L'ancien conteneur mono-piste (`StoryTimelineView`,
-/// gardé pour ses propres tests et ses helpers statiques réutilisés ailleurs)
-/// n'est plus référencé ICI.
+/// horizontal = durée. L'ancien conteneur mono-piste (`StoryTimelineView`)
+/// n'est PLUS le point d'entrée de production — grep `StoryTimelineView(`
+/// hors ce fichier ne renvoie aucun site de production — mais il reste dans
+/// l'arbre : ses PROPRES tests le montent (`StoryTimelineViewSnapshotTests`,
+/// `StoryTimelineViewTests`, `StoryTimelineViewHoistOrderTests`) et plusieurs
+/// bancs de comportement transverses continuent de le monter comme scène
+/// entièrement câblée pour exercer d'autres composants
+/// (`TransportBarTests`, `ClipInspector_StateSyncTests`,
+/// `TimelineInspectorHostRoutingTests`, `..._IsMutedReactiveTests`,
+/// `AudioTextDragDriftTests`) — sa suppression romprait ces 6+ bancs pour un
+/// gain de ~900 lignes ; son sort définitif (portage de ces bancs vers
+/// `StoryTimelineHost`, ou suppression assumée) reste un chantier séparé, pas
+/// silencieux : DIT ici plutôt que reformulé en fausse réutilisation
+/// production.
+///
+/// La bascule compact/déployé de l'ancien conteneur (3 pistes visibles, un
+/// bouton « déployer » pour le reste) N'A PAS d'équivalent ICI — le plan
+/// affiche TOUJOURS l'intégralité des pistes, empilées par plan (c'est son
+/// principe même : « l'ordre des pistes EST l'ordre à l'écran », D1) ;
+/// scroller y substitue tronquer. Simplification ASSUMÉE, pas un oubli.
 ///
 /// State (`selectedClipId`, `currentTime`, `zoomScale`) lives in
 /// `TimelineViewModel`.
@@ -133,6 +150,10 @@ public struct StoryTimelineHost: View {
                             slideDuration: Double(viewModel.project.slideDuration))
     }
 
+    /// Zoom DEUX PALIERS du plan — piloté par le MÊME état que le transport
+    /// (`TransportBar` zoom in/out/reset), pas un second état dupliqué.
+    private var plan2DZoom: Plan2DZoom { viewModel.zoomScale > 1 ? .detail : .fit }
+
     @ViewBuilder
     private var plan2DRegion: some View {
         let tracks = plan2DTracks
@@ -141,39 +162,172 @@ public struct StoryTimelineHost: View {
                 .padding(.vertical, 28)
                 .padding(.horizontal, 16)
         } else {
-            GeometryReader { proxy in
-                ScrollView([.horizontal, .vertical], showsIndicators: true) {
-                    Plan2DView(
-                        tracks: tracks,
-                        // `.detail` double l'échelle — piloté par le MÊME
-                        // zoom que le transport (`TransportBar` zoom
-                        // in/out/reset), pas un second état dupliqué.
-                        zoom: viewModel.zoomScale > 1 ? .detail : .fit,
-                        laneWidth: max(0, proxy.size.width - Plan2DView.labelColumnWidth),
-                        slideDuration: Double(viewModel.project.slideDuration),
-                        isDark: colorScheme == .dark,
-                        // Tap ⇒ ouvre l'Inspector EXISTANT (S4) — la même
-                        // intention qu'un double tap sur l'ancienne barre.
-                        onSelectTrack: { viewModel.inspectClip(id: $0) },
-                        onReorder: { id, index in
-                            Self.applyReorder(id: id, toIndex: index, tracks: tracks, to: viewModel)
-                        },
-                        onTrimStart: { id, delta in
-                            viewModel.trimClipStart(id: id, deltaTimeSeconds: Float(delta))
-                        },
-                        onTrimEnd: { id, delta in
-                            viewModel.trimClipEnd(id: id, deltaTimeSeconds: Float(delta))
+            VStack(spacing: 0) {
+                // Chrome d'ouverture/fermeture (fondu/zoom/glissement/révélation
+                // configurés par `OpeningEffectChips`, hors timeline) — vivait
+                // hors du scroller horizontal dans l'ancien conteneur, reste
+                // hors de lui ici (même composant, réutilisé tel quel).
+                TransitionChromeLane(
+                    openingEffect: viewModel.project.openingEffect,
+                    closingEffect: viewModel.project.closingEffect,
+                    slideDuration: viewModel.project.slideDuration,
+                    geometry: TimelineGeometry(zoomScale: viewModel.zoomScale),
+                    isDark: colorScheme == .dark
+                )
+                GeometryReader { proxy in
+                    let laneWidth = max(0, proxy.size.width - Plan2DView.labelColumnWidth)
+                    let slideDuration = Double(viewModel.project.slideDuration)
+                    let zoom = plan2DZoom
+                    // Conversion PURE qui fait coïncider EXACTEMENT le repère
+                    // continu de RulerView/PlayheadView avec celui, à deux
+                    // paliers, que `Plan2DLayout.x` fait autorité sur les
+                    // barres/losanges du plan — sans elle, règle et barres
+                    // désynchroniseraient.
+                    let equivalentGeometry = Plan2DView.equivalentGeometry(
+                        laneWidth: laneWidth, zoom: zoom, slideDuration: slideDuration)
+                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // Règle graduée + scrub (drag ET tap) — RÉUTILISE
+                            // RulerView (geste déjà construit, testé) plutôt
+                            // que de réinventer un scrub bespoke : sans elle,
+                            // la tête de lecture ne bouge plus que pendant la
+                            // lecture, et `addKeyframeAtPlayhead`/
+                            // `splitSelectedAtPlayhead` opèrent à t≈0 en
+                            // silence (régression constatée, corrigée ici).
+                            RulerView(
+                                totalDuration: viewModel.project.slideDuration,
+                                geometry: equivalentGeometry,
+                                isDark: colorScheme == .dark,
+                                onTapTime: { viewModel.scrub(to: $0) },
+                                onScrubBegan: { viewModel.beginScrub() },
+                                onScrubEnded: { viewModel.endScrub() }
+                            )
+                            .equatable()
+                            .frame(width: laneWidth * zoom.scale, alignment: .leading)
+                            .padding(.leading, Plan2DView.labelColumnWidth)
+                            Plan2DView(
+                                tracks: tracks,
+                                zoom: zoom,
+                                laneWidth: laneWidth,
+                                slideDuration: slideDuration,
+                                isDark: colorScheme == .dark,
+                                // Tap ⇒ ouvre l'Inspector EXISTANT (S4) — la
+                                // même intention qu'un double tap sur
+                                // l'ancienne barre.
+                                onSelectTrack: { viewModel.inspectClip(id: $0) },
+                                // Tap sur un losange AFFICHÉ ⇒ MÊME bus de
+                                // sélection (`inspectClip` route par id —
+                                // clip, keyframe ou transition,
+                                // `TimelineInspectorHost.resolveSelectionKind`)
+                                // — le losange ouvre son PROPRE
+                                // `KeyframeInspector`.
+                                onSelectKeyframe: { viewModel.inspectClip(id: $0) },
+                                onReorder: { id, index in
+                                    Self.applyReorder(id: id, toIndex: index, tracks: tracks, to: viewModel)
+                                },
+                                onTrimStart: { id, delta in
+                                    viewModel.trimClipStart(id: id, deltaTimeSeconds: Float(delta))
+                                },
+                                onTrimEnd: { id, delta in
+                                    viewModel.trimClipEnd(id: id, deltaTimeSeconds: Float(delta))
+                                }
+                            )
+                            // Le playhead publie `currentTime` à 60 Hz pendant
+                            // la lecture — sans `.equatable()`, chaque tick
+                            // redessinerait le Canvas du plan alors que
+                            // tracks/zoom n'ont pas bougé (même pattern que
+                            // `VideoClipBar`/`AudioClipBar`/`TextClipBar`
+                            // dans l'ancien conteneur mono-piste).
+                            .equatable()
+                            .overlay(alignment: .topLeading) {
+                                transitionJunctionOverlay(tracks: tracks, laneWidth: laneWidth,
+                                                          zoom: zoom, slideDuration: slideDuration)
+                            }
                         }
-                    )
-                    // Le playhead publie `currentTime` à 60 Hz pendant la
-                    // lecture — sans `.equatable()`, chaque tick redessinerait
-                    // le Canvas du plan alors que tracks/zoom n'ont pas bougé
-                    // (même pattern que `VideoClipBar`/`AudioClipBar`/
-                    // `TextClipBar` dans l'ancien conteneur mono-piste).
-                    .equatable()
+                        .overlay(alignment: .topLeading) {
+                            playheadOverlay(geometry: equivalentGeometry, slideDuration: slideDuration)
+                        }
+                    }
                 }
+                .frame(maxHeight: .infinity)
             }
-            .frame(maxHeight: .infinity)
+        }
+    }
+
+    /// Tête de lecture VISIBLE — même composant que l'ancien conteneur
+    /// mono-piste (`PlayheadView`, drag-to-scrub déjà construit), décalée de
+    /// `Plan2DView.labelColumnWidth` (même convention que
+    /// `TimelineScrubArea.playheadLeadingInset`) pour atterrir exactement sur
+    /// l'origine des barres du plan.
+    private func playheadOverlay(geometry: TimelineGeometry, slideDuration: Double) -> some View {
+        GeometryReader { proxy in
+            PlayheadView(
+                currentTime: viewModel.currentTime,
+                totalDuration: Float(slideDuration),
+                geometry: geometry,
+                laneHeight: proxy.size.height,
+                isDark: colorScheme == .dark,
+                onScrub: { viewModel.scrub(to: $0) },
+                onScrubBegan: { viewModel.beginScrub() },
+                onScrubEnded: { viewModel.endScrub() }
+            )
+            .offset(x: Plan2DView.labelColumnWidth)
+        }
+    }
+
+    /// Jonctions inter-clips (crossfade) — chaque piste du plan porte UN
+    /// objet, jamais plusieurs (contrairement à l'ancienne lane par
+    /// catégorie) : le badge d'une jonction se pose donc sur la ligne du
+    /// clip AVAL (`toClipId`). Nombre de vues borné par le nombre de clips
+    /// média (pas par les keyframes) — MÊME pattern que l'ancien
+    /// `LaneTransitionOverlays`, budget P15 non concerné (il vise les
+    /// losanges, proportionnels aux keyframes, pas les jonctions).
+    @ViewBuilder
+    private func transitionJunctionOverlay(tracks: [Plan2DTrack], laneWidth: CGFloat,
+                                           zoom: Plan2DZoom, slideDuration: Double) -> some View {
+        let junctions = TransitionJunctionResolver.resolve(
+            project: viewModel.project, slideDuration: Float(slideDuration))
+        let frameWidth = Plan2DView.labelColumnWidth + laneWidth * zoom.scale
+        ForEach(junctions) { junction in
+            if let rowIndex = tracks.firstIndex(where: { $0.id == junction.toClipId }) {
+                let anchorX = Plan2DLayout.x(forTime: Double(junction.anchorTime), zoom: zoom,
+                                             laneWidth: laneWidth, slideDuration: slideDuration)
+                    + Plan2DView.labelColumnWidth
+                Group {
+                    if let id = junction.existingTransitionId,
+                       let kind = junction.existingKind,
+                       let duration = junction.existingDuration {
+                        TransitionBadge(
+                            id: id, kind: kind, duration: duration,
+                            isSelected: viewModel.selection.selectedClipId == id,
+                            isDark: colorScheme == .dark,
+                            anchorX: anchorX, laneHeight: TimelineMetrics.laneHeight,
+                            onTap: { viewModel.inspectClip(id: id) },
+                            onLongPress: { viewModel.inspectClip(id: id) },
+                            // La durée s'édite au TransitionInspector — même
+                            // raison que l'ancien conteneur (drag cumulatif
+                            // par frame dériverait, pattern snowball).
+                            onDurationDelta: { _ in }
+                        )
+                        .equatable()
+                    } else {
+                        TransitionCreationBadge(
+                            junctionId: junction.id, anchorX: anchorX,
+                            laneHeight: TimelineMetrics.laneHeight, isDark: colorScheme == .dark,
+                            onCreate: {
+                                if let id = viewModel.addTransition(
+                                    fromClipId: junction.fromClipId, toClipId: junction.toClipId,
+                                    kind: .crossfade, duration: 0.5) {
+                                    viewModel.inspectClip(id: id)
+                                }
+                            }
+                        )
+                        .equatable()
+                    }
+                }
+                .frame(width: frameWidth, height: TimelineMetrics.laneHeight, alignment: .topLeading)
+                .offset(y: CGFloat(rowIndex) * TimelineMetrics.laneHeight)
+            }
         }
     }
 
