@@ -46,7 +46,7 @@ class MessageSocketManager @Inject constructor(
     private val json: Json,
 ) {
     private val _messageReceived = buf<ApiMessage>()
-    private val _messageUpdated = buf<ApiMessage>()
+    private val _messageEdited = buf<ApiMessage>()
     private val _messageDeleted = buf<MessageDeletedEvent>()
     private val _messagePinned = buf<MessagePinnedEvent>()
     private val _messageUnpinned = buf<MessageUnpinnedEvent>()
@@ -75,7 +75,7 @@ class MessageSocketManager @Inject constructor(
     private val _notificationReceived = buf<ApiNotification>()
 
     val messageReceived: SharedFlow<ApiMessage> = _messageReceived.asSharedFlow()
-    val messageUpdated: SharedFlow<ApiMessage> = _messageUpdated.asSharedFlow()
+    val messageEdited: SharedFlow<ApiMessage> = _messageEdited.asSharedFlow()
     val messageDeleted: SharedFlow<MessageDeletedEvent> = _messageDeleted.asSharedFlow()
     val messagePinned: SharedFlow<MessagePinnedEvent> = _messagePinned.asSharedFlow()
     val messageUnpinned: SharedFlow<MessageUnpinnedEvent> = _messageUnpinned.asSharedFlow()
@@ -113,7 +113,7 @@ class MessageSocketManager @Inject constructor(
 
     fun attach() {
         listen("message:new", _messageReceived)
-        listen("message:updated", _messageUpdated)
+        listen("message:edited", _messageEdited)
         listen("message:deleted", _messageDeleted)
         listen("message:pinned", _messagePinned)
         listen("message:unpinned", _messageUnpinned)
@@ -124,7 +124,7 @@ class MessageSocketManager @Inject constructor(
         listen("conversation:unread-updated", _unreadUpdated)
         listen("message:translated", _translationCompleted)
         listen("message:translation", _translationInProgress)
-        listen("transcription:ready", _transcriptionReady)
+        listen("audio:transcription-ready", _transcriptionReady)
         listen("audio:translation-ready", _audioTranslationReady)
         listen("message:attachment-updated", _attachmentUpdated)
         listen("conversation:updated", _conversationUpdated)

@@ -66,6 +66,7 @@ import me.meeshy.sdk.model.AudioTranslationEvent
 import me.meeshy.sdk.model.LiveLocationStartedEvent
 import me.meeshy.sdk.model.LiveLocationStoppedEvent
 import me.meeshy.sdk.model.LiveLocationUpdatedEvent
+import me.meeshy.sdk.model.TranscriptionPayload
 import me.meeshy.sdk.model.TranscriptionReadyEvent
 import me.meeshy.sdk.model.TranslatedAudioPayload
 import me.meeshy.sdk.model.TranslationEvent
@@ -142,7 +143,7 @@ class ChatViewModelTest {
     ): MessageSocketManager =
         mockk<MessageSocketManager> {
             every { this@mockk.messageReceived } returns this@ChatViewModelTest.messageReceived
-            every { messageUpdated } returns MutableSharedFlow()
+            every { messageEdited } returns MutableSharedFlow()
             every { messageDeleted } returns MutableSharedFlow()
             every { this@mockk.messagePinned } returns this@ChatViewModelTest.messagePinned
             every { this@mockk.messageUnpinned } returns this@ChatViewModelTest.messageUnpinned
@@ -2116,10 +2117,12 @@ class ChatViewModelTest {
                 messageId = "m2",
                 conversationId = "c1",
                 attachmentId = "a1",
-                text = "Hello there",
-                language = "en",
-                confidence = 0.9,
-                durationMs = 4200L,
+                transcription = TranscriptionPayload(
+                    text = "Hello there",
+                    language = "en",
+                    confidence = 0.9,
+                    durationMs = 4200L,
+                ),
             ),
         )
         advanceUntilIdle()
@@ -2137,7 +2140,7 @@ class ChatViewModelTest {
                 messageId = "m2",
                 conversationId = "other",
                 attachmentId = "a1",
-                text = "Hello there",
+                transcription = TranscriptionPayload(text = "Hello there"),
             ),
         )
         advanceUntilIdle()
