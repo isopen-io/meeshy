@@ -260,15 +260,26 @@ public struct StoryTimelineHost: View {
                                 selectedTrackId: viewModel.selection.selectedClipId,
                                 // Tap ⇒ ouvre l'Inspector EXISTANT (S4) — la
                                 // même intention qu'un double tap sur
-                                // l'ancienne barre.
-                                onSelectTrack: { viewModel.inspectClip(id: $0) },
+                                // l'ancienne barre. La sélection ne se pose
+                                // QUE si une fiche va s'ouvrir : un id
+                                // qu'aucun résolveur ne connaît n'ouvrirait
+                                // rien tout en emportant la sélection en
+                                // cours (constat 1, second volet).
+                                onSelectTrack: {
+                                    TimelineInspectorHost.inspectIfResolvable(id: $0, viewModel: viewModel)
+                                },
                                 // Tap sur un losange AFFICHÉ ⇒ MÊME bus de
-                                // sélection (`inspectClip` route par id —
-                                // clip, keyframe ou transition,
-                                // `TimelineInspectorHost.resolveSelectionKind`)
-                                // — le losange ouvre son PROPRE
-                                // `KeyframeInspector`.
-                                onSelectKeyframe: { viewModel.inspectClip(id: $0) },
+                                // sélection (route par id — clip, keyframe ou
+                                // transition,
+                                // `TimelineInspectorHost.selectionKind(for:)`).
+                                // Un losange de média ou de texte ouvre son
+                                // PROPRE `KeyframeInspector` ; un losange
+                                // AUDIO ouvre la fiche de SON CLIP (l'audio
+                                // n'anime qu'un volume, déjà réglable à la
+                                // courbe de cette fiche — arbitrage 3, D6c).
+                                onSelectKeyframe: {
+                                    TimelineInspectorHost.inspectIfResolvable(id: $0, viewModel: viewModel)
+                                },
                                 onReorder: { id, index in
                                     Self.applyReorder(id: id, toIndex: index, tracks: tracks, to: viewModel)
                                 },

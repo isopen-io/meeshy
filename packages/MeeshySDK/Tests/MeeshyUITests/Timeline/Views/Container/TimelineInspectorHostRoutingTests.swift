@@ -56,6 +56,29 @@ final class TimelineInspectorHostRoutingTests: XCTestCase {
         )
     }
 
+    /// Un keyframe AUDIO — la seule famille dont le losange n'a jamais eu de
+    /// géométrie x/y/scale/opacity à animer, seulement un volume, déjà réglable
+    /// à la courbe de la fiche CLIP existante (`volumeKeyframes`).
+    private func projectWithAudioKeyframe(
+        audioId: String = "aud-1",
+        audioStart: Float = 2.0,
+        keyframeId: String = "kf-vol",
+        keyframeRelativeTime: Float = 0.5,
+        keyframeVolume: Float = 0.4
+    ) -> TimelineProject {
+        let keyframe = StoryKeyframe(id: keyframeId, time: keyframeRelativeTime, volume: keyframeVolume)
+        var audio = StoryAudioPlayerObject(id: audioId, postMediaId: "post-\(audioId)")
+        audio.startTime = audioStart
+        audio.duration = 4
+        audio.keyframes = [keyframe]
+        return TimelineProject(
+            slideId: "slide-1",
+            slideDuration: 10,
+            audioPlayerObjects: [audio],
+            textObjects: []
+        )
+    }
+
     private func projectWithTransition(
         transitionId: String = "trans-1",
         fromClipId: String = "media-a",
@@ -179,6 +202,109 @@ final class TimelineInspectorHostRoutingTests: XCTestCase {
         let vm = makeViewModel(project: projectWithClip(clipId: "clip-1"))
         vm.selectClip(id: "clip-1")
         XCTAssertNil(TimelineInspectorHost.resolveKeyframeSnapshot(viewModel: vm))
+    }
+
+    // MARK: - Un losange AUDIO route vers SON CLIP — jamais un cul-de-sac
+    // (revue Opus, constat 1 / addendum rev. 2, arbitrage 3). L'audio n'a pas
+    // de KeyframeInspector : la seule fiche qui régle son volume est déjà
+    // celle du clip (section volume/courbe existante).
+
+    func test_resolveSelectionKind_audioKeyframeSelection_returnsOwningAudioClip() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        vm.selectClip(id: "kf-vol")
+        guard case .clip(let snapshot) = TimelineInspectorHost.resolveSelectionKind(viewModel: vm) else {
+            XCTFail("Un keyframe AUDIO doit router vers l'inspecteur de SON clip — jamais un cul-de-sac")
+            return
+        }
+        XCTAssertEqual(snapshot.id, "aud-1")
+        XCTAssertEqual(snapshot.kind, .audio)
+    }
+
+    func test_resolveKeyframeSnapshot_audioKeyframeId_returnsNil() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        vm.selectClip(id: "kf-vol")
+        XCTAssertNil(TimelineInspectorHost.resolveKeyframeSnapshot(viewModel: vm),
+                     "L'audio n'a pas de KeyframeInspector dédié — ce keyframe route vers le clip, jamais vers ici")
+    }
+
+    func test_resolveAudioKeyframeOwnerSnapshot_audioKeyframeId_returnsTheOwningClip() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        vm.selectClip(id: "kf-vol")
+        let snapshot = TimelineInspectorHost.resolveAudioKeyframeOwnerSnapshot(viewModel: vm)
+        XCTAssertEqual(snapshot?.id, "aud-1")
+        XCTAssertEqual(snapshot?.kind, .audio)
+    }
+
+    /// Le résolveur ne connaît QUE les keyframes audio : un losange de média
+    /// garde son `KeyframeInspector` propre, il ne doit jamais se faire
+    /// rabattre sur la fiche de son clip.
+    func test_resolveAudioKeyframeOwnerSnapshot_mediaKeyframeId_returnsNil() {
+        let vm = makeViewModel(project: projectWithKeyframe(clipId: "media-1", keyframeId: "kf-1"))
+        vm.selectClip(id: "kf-1")
+        XCTAssertNil(TimelineInspectorHost.resolveAudioKeyframeOwnerSnapshot(viewModel: vm))
+    }
+
+    func test_presentedSelection_audioKeyframeTap_opensTheClipInspector_neverADeadEnd() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+        vm.inspectClip(id: "kf-vol")
+        guard case .clip(let snapshot) = TimelineInspectorHost.presentedSelection(viewModel: vm) else {
+            XCTFail("Un tap sur un losange audio doit ouvrir la fiche du clip — avant ce correctif la sheet ne s'ouvrait jamais")
+            return
+        }
+        XCTAssertEqual(snapshot.id, "aud-1")
+    }
+
+    // MARK: - La sélection n'est posée QUE si un inspecteur va s'ouvrir
+    // (addendum rév. 2, arbitrage 3 — second volet du constat 1 : le tap qui
+    // ne résout rien n'ouvrait aucune fiche ET écrasait la sélection en
+    // cours, sans laisser à l'utilisateur le moindre signal.)
+
+    func test_inspectIfResolvable_idNoInspectorResolves_leavesTheCurrentSelectionIntact() {
+        let vm = makeViewModel(project: projectWithClip(clipId: "media-1"))
+        vm.inspectClip(id: "media-1")
+
+        TimelineInspectorHost.inspectIfResolvable(id: Plan2DLayout.drawingTrackID, viewModel: vm)
+
+        XCTAssertEqual(vm.selection.selectedClipId, "media-1",
+                       "Un id qu'aucun résolveur ne connaît ne doit pas emporter la sélection en cours")
+        XCTAssertEqual(vm.selection.inspectedClipId, "media-1",
+                       "La fiche ouverte ne doit pas se refermer sur un tap qui n'ouvre rien")
+        guard case .clip(let snapshot) = TimelineInspectorHost.presentedSelection(viewModel: vm) else {
+            XCTFail("La fiche du clip consulté doit rester à l'écran")
+            return
+        }
+        XCTAssertEqual(snapshot.id, "media-1")
+    }
+
+    func test_inspectIfResolvable_audioKeyframeId_opensTheOwningClip() {
+        let vm = makeViewModel(project: projectWithAudioKeyframe(audioId: "aud-1", keyframeId: "kf-vol"))
+
+        TimelineInspectorHost.inspectIfResolvable(id: "kf-vol", viewModel: vm)
+
+        XCTAssertEqual(vm.selection.inspectedClipId, "kf-vol",
+                       "Un losange audio résout désormais — la garde ne doit pas l'écarter")
+        guard case .clip(let snapshot) = TimelineInspectorHost.presentedSelection(viewModel: vm) else {
+            XCTFail("Le losange audio doit ouvrir la fiche de SON clip")
+            return
+        }
+        XCTAssertEqual(snapshot.id, "aud-1")
+    }
+
+    /// Le clip SYNTHÉTIQUE reste sélectionnable : il RÉSOUT (`.clip`), c'est
+    /// `shouldShowClipInspector` qui décide ensuite de ne pas ouvrir de sheet
+    /// vide. La garde ne coupe que ce qu'AUCUN résolveur ne connaît — sinon
+    /// elle emporterait avec elle l'anneau de sélection du fond, délibérément
+    /// conservé.
+    func test_inspectIfResolvable_syntheticClipId_stillMovesTheSelection() {
+        let syntheticId = "\(StoryComposerViewModel.syntheticTimelineClipIdPrefix)slide-1"
+        let vm = makeViewModel(project: projectWithClip(clipId: syntheticId))
+
+        TimelineInspectorHost.inspectIfResolvable(id: syntheticId, viewModel: vm)
+
+        XCTAssertEqual(vm.selection.selectedClipId, syntheticId,
+                       "Un fond synthétique se sélectionne toujours — seule sa sheet reste fermée")
+        XCTAssertNil(TimelineInspectorHost.presentedSelection(viewModel: vm),
+                     "Et aucune fiche vide ne s'ouvre pour lui")
     }
 
     // MARK: - resolveTransitionSnapshot

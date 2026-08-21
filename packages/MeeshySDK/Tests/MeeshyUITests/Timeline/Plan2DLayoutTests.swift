@@ -118,6 +118,25 @@ struct Plan2DLayoutTests {
         #expect(track.keyframeTimes.allSatisfy { $0 >= start && $0 <= end })
     }
 
+    @Test("Un clip rogné plus court que son dernier keyframe l'ÉCRÊTE à la fenêtre — le losange ne dérive jamais hors de sa propre barre (revue Opus, mineur 15)")
+    func keyframes_beyondATrimmedWindow_areClampedToIt() {
+        let effects = StoryEffects(
+            mediaObjects: [
+                StoryMediaObject(id: "clip", mediaType: "video", aspectRatio: 1.777,
+                                 startTime: 2, duration: 2,
+                                 keyframes: [StoryKeyframe(id: "kf-in", time: 1),
+                                             StoryKeyframe(id: "kf-over", time: 5)])
+            ],
+            timelineDuration: Self.slideDuration
+        )
+        let track = tracks(effects).first
+        #expect(track?.bar == .timed(start: 2, end: 4))
+        #expect(track?.keyframes.map(\.id) == ["kf-in", "kf-over"],
+               "L'écrêtage ne doit jamais faire DISPARAÎTRE un losange — seulement le replier dans la fenêtre")
+        #expect(track?.keyframeTimes == [3, 4],
+               "kf-over (temps absolu 7) doit être écrêté à la FIN de la barre (4), pas dériver hors d'elle")
+    }
+
     @Test("Un chip audio décalé projette lui aussi ses losanges en absolu")
     func audioKeyframes_areProjectedOntoTheAbsoluteAxis() {
         let effects = StoryEffects(

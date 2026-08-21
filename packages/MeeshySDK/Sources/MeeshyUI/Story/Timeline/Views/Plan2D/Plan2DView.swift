@@ -565,11 +565,21 @@ public struct Plan2DView: View, Equatable {
     /// mineur 19 corrigeait — sur une piste NON sélectionnée, dont la barre
     /// entière tombe sous le rayon de tap d'un losange à t=0, le tap
     /// n'atteignait plus jamais `.track`, donc plus aucune sélection ne
-    /// pouvait naître d'un tap sur la barre. Mineur 19 appartient à D6a ;
-    /// sa reconciliation avec l'inspectabilité d'un keyframe AUDIO
-    /// (l'arbitrage 3, D6c : « un losange à t=0 ne vole pas le tap du bord
-    /// si le clip n'a pas d'inspecteur de keyframe pour lui ») reste le
-    /// périmètre de D6c — D6b ne touche pas à cette décision.
+    /// pouvait naître d'un tap sur la barre.
+    ///
+    /// Reconciliation avec l'inspectabilité d'un keyframe AUDIO (arbitrage 3,
+    /// D6c) : CLOSE, sans changement de règle ici. `TimelineInspectorHost.
+    /// resolveAudioKeyframeOwnerSnapshot` route désormais tout losange audio
+    /// vers l'inspecteur de SON CLIP — la même fiche que `.track` ouvrirait
+    /// pour cette piste. Les deux issues de `tapTarget` sur un chevauchement
+    /// audio (`.track` ou `.keyframe`) atterrissent donc sur LA MÊME sheet
+    /// (`Plan2DAudioKeyframeEdgeReconciliationTests`, prouvé bout en bout) :
+    /// la préséance du bord ne prive plus jamais l'utilisateur d'un
+    /// inspecteur pour cette famille, elle ne fait plus que choisir PAR OÙ il
+    /// y arrive. Pour texte/média, le losange reste distinct du clip
+    /// (KeyframeInspector ≠ ClipInspector) — la préséance du bord y protège
+    /// toujours la ré-atteignabilité de la fiche CLIP sur une barre courte,
+    /// exactement le rôle que mineur 19 lui donnait.
     nonisolated enum TapTarget: Equatable {
         case keyframe(String)
         case track

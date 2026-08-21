@@ -270,6 +270,43 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "Le plan doit surligner la piste que le viewModel tient déjà sélectionnée — sinon un selectedClipId changé ne redessine jamais le Canvas (constat 4)")
     }
 
+    // MARK: - Guard 2i — un tap du plan ne pose la sélection QUE si un
+    // inspecteur va s'ouvrir (addendum rév. 2, arbitrage 3 ; second volet du
+    // constat 1).
+    //
+    // `ClipSelectionState.inspect()` écrase `selectedClipId` SANS condition :
+    // router vers lui un id qu'aucun résolveur ne connaît n'ouvre aucune
+    // fiche ET emporte la sélection en cours — l'utilisateur perd sa piste
+    // sans rien recevoir en échange. L'hôte doit donc demander à
+    // `TimelineInspectorHost` si une fiche s'ouvrirait AVANT de la poser.
+    //
+    // Garde de SOURCE, comme ses voisines 2g/2h : les tests de comportement
+    // (`TimelineInspectorHostRoutingTests`) prouvent la garde elle-même, mais
+    // seul le balayage de l'hôte prouve qu'elle est réellement CÂBLÉE — un
+    // `viewModel.inspectClip` restauré ici les laisserait tous verts.
+
+    func test_storyTimelineHost_neverPosesASelectionThatNoInspectorResolves() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        for callback in ["onSelectTrack:", "onSelectKeyframe:"] {
+            guard let range = source.range(of: callback) else {
+                return XCTFail("L'hôte doit câbler \(callback) sur le plan")
+            }
+            let body = String(source[range.upperBound...].prefix(200))
+            XCTAssertTrue(body.contains("TimelineInspectorHost.inspectIfResolvable("),
+                         "\(callback) doit passer par la garde — sinon un id sans inspecteur "
+                         + "efface la sélection en cours sans rien ouvrir (constat 1)")
+            XCTAssertFalse(body.contains("viewModel.inspectClip("),
+                          "\(callback) ne doit plus poser la sélection sans garde")
+        }
+    }
+
+    /// Contrôle positif : la garde doit réellement détecter le câblage nu.
+    func test_guardDetectsAnUnguardedInspectClipWiring() {
+        let sample = "onSelectKeyframe: { viewModel.inspectClip(id: $0) },"
+        XCTAssertFalse(sample.contains("TimelineInspectorHost.inspectIfResolvable("))
+        XCTAssertTrue(sample.contains("viewModel.inspectClip("))
+    }
+
     // MARK: - Guard 3 — le diff de D3 ne déborde pas de Timeline/**
     //
     // La garde d'origine n'épinglait QU'UN fichier (`ComposerControlsLayer`)
@@ -344,6 +381,7 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/Plan2DReorderResolverTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/StoryTimelineHost_ReorderTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/TimelineInspectorHost_FollowSlideTests.swift",
+        "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Container/TimelineInspectorHostRoutingTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/ClipInspectorSnapshotTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/ClipInspectorTests.swift",
         "packages/MeeshySDK/Tests/MeeshyUITests/Timeline/Views/Inspector/__Snapshots__/ClipInspectorSnapshotTests/test_snapshot_inspector_audioSelected.inspector-audioSelected-dark.png",

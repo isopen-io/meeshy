@@ -149,13 +149,14 @@ public nonisolated enum Plan2DLayout {
 
     private static func textTracks(_ effects: StoryEffects, slideDuration: Double) -> [Plan2DTrack] {
         effects.textObjects.map { text in
-            Plan2DTrack(id: text.id,
+            let trackBar = bar(start: text.startTime, duration: text.duration,
+                               slideDuration: slideDuration)
+            return Plan2DTrack(id: text.id,
                         label: "\(Glyph.text) \"\(text.text)\"",
                         plane: .fg,
                         z: text.zIndex,
-                        bar: bar(start: text.startTime, duration: text.duration,
-                                 slideDuration: slideDuration),
-                        keyframes: markers(of: text.keyframes, clipStart: text.startTime))
+                        bar: trackBar,
+                        keyframes: markers(of: text.keyframes, clipStart: text.startTime, window: trackBar))
         }
     }
 
@@ -197,13 +198,14 @@ public nonisolated enum Plan2DLayout {
 
     private static func mediaTracks(_ effects: StoryEffects, slideDuration: Double) -> [Plan2DTrack] {
         (effects.mediaObjects ?? []).map { media in
-            Plan2DTrack(id: media.id,
+            let trackBar = bar(start: media.startTime, duration: media.duration,
+                               slideDuration: slideDuration)
+            return Plan2DTrack(id: media.id,
                         label: label(mediaGlyph(media.mediaType), media.name),
                         plane: media.isBackground ? .bg : .content,
                         z: media.zIndex,
-                        bar: bar(start: media.startTime, duration: media.duration,
-                                 slideDuration: slideDuration),
-                        keyframes: markers(of: media.keyframes, clipStart: media.startTime),
+                        bar: trackBar,
+                        keyframes: markers(of: media.keyframes, clipStart: media.startTime, window: trackBar),
                         isLocked: isLockedMedia(media))
         }
     }
@@ -219,14 +221,16 @@ public nonisolated enum Plan2DLayout {
     /// contenu, le fond sonore descend au plan du fond.
     private static func audioTracks(_ effects: StoryEffects, slideDuration: Double) -> [Plan2DTrack] {
         (effects.audioPlayerObjects ?? []).map { audio in
-            Plan2DTrack(id: audio.id,
+            let trackBar = bar(start: audio.startTime.map(Double.init),
+                               duration: audio.duration.map(Double.init),
+                               slideDuration: slideDuration)
+            return Plan2DTrack(id: audio.id,
                         label: label(Glyph.audio, audio.name),
                         plane: audio.isBackground == true ? .bg : .content,
                         z: audio.zIndex ?? 0,
-                        bar: bar(start: audio.startTime.map(Double.init),
-                                 duration: audio.duration.map(Double.init),
-                                 slideDuration: slideDuration),
-                        keyframes: markers(of: audio.keyframes, clipStart: audio.startTime.map(Double.init)))
+                        bar: trackBar,
+                        keyframes: markers(of: audio.keyframes, clipStart: audio.startTime.map(Double.init),
+                                          window: trackBar))
         }
     }
 
@@ -281,10 +285,30 @@ public nonisolated enum Plan2DLayout {
     /// `KeyframeInspector` (`TimelineInspectorHost.resolveKeyframeSnapshot`).
     /// Sans elle, un losange dérive du début de son clip : il se dessine hors
     /// de sa propre barre et le tap tombe sur le mauvais keyframe.
-    private static func markers(of keyframes: [StoryKeyframe]?, clipStart: Double?) -> [Plan2DKeyframe] {
+    ///
+    /// `window` ÉCRÊTE ensuite ce temps absolu à la barre RENDUE (revue Opus,
+    /// mineur 15) : un clip rogné plus court que son dernier keyframe (`kf.time`
+    /// ne bouge JAMAIS au rognage — `TimelineViewModel+Plan4Helpers.trimClipEnd`
+    /// ne touche que `duration`) le laisserait sinon dériver hors de sa propre
+    /// barre. L'écrêtage replie le losange au bord, il ne le fait jamais
+    /// disparaître — sans quoi un keyframe rogné deviendrait indétectable
+    /// plutôt que simplement précis à sa nouvelle borne. Un `.ghost` n'a pas de
+    /// fenêtre à écrêter (O4, aucun timing n'a été choisi) : le temps reste
+    /// tel quel.
+    private static func markers(of keyframes: [StoryKeyframe]?, clipStart: Double?,
+                                window: TrackBar) -> [Plan2DKeyframe] {
         let origin = max(0, clipStart ?? 0)
+        let clampRange: (lower: Double, upper: Double)? = {
+            guard case let .timed(start, end) = window else { return nil }
+            return (min(start, end), max(start, end))
+        }()
         return (keyframes ?? [])
-            .map { Plan2DKeyframe(id: $0.id, time: origin + Double($0.time)) }
+            .map { kf -> Plan2DKeyframe in
+                let absolute = origin + Double(kf.time)
+                guard let clampRange else { return Plan2DKeyframe(id: kf.id, time: absolute) }
+                let clamped = min(max(absolute, clampRange.lower), clampRange.upper)
+                return Plan2DKeyframe(id: kf.id, time: clamped)
+            }
             .sorted { $0.time < $1.time }
     }
 
