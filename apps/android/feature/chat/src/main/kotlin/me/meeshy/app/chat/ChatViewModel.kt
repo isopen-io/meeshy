@@ -2053,7 +2053,7 @@ private fun List<LocalMessage>.toBubbles(
                 senderId = local.message.senderId,
                 isOutgoing = currentUser?.id != null && local.message.senderId == currentUser.id,
                 createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt),
-                isSystem = local.message.messageSource == "system",
+                isSystem = local.message.isSystemMessage,
             )
         },
     )
