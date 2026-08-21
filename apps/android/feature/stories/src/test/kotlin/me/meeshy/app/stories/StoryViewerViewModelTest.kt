@@ -80,8 +80,9 @@ class StoryViewerViewModelTest {
     private fun viewModel(
         startUserId: String,
         posts: List<ApiPost>,
+        user: MeeshyUser? = null,
     ): StoryViewerViewModel {
-        every { session.currentUser } returns MutableStateFlow<MeeshyUser?>(null)
+        every { session.currentUser } returns MutableStateFlow(user)
         every { session.currentUserId } returns null
         coEvery { storyRepository.list(any(), any()) } returns NetworkResult.Success(posts)
         coEvery { storyRepository.markViewed(any()) } returns NetworkResult.Success(Unit)
@@ -756,5 +757,131 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.languageOverride).isNull()
         vm.back()
         assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+    }
+
+    // --- On-demand story translation (the flag strip's request arm) ---
+
+    private fun viewer(systemLanguage: String) =
+        MeeshyUser(id = "me", username = "me", systemLanguage = systemLanguage)
+
+    @Test
+    fun `a configured absent language surfaces as a translatable option once the story is translated`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "en"),
+                posts = listOf(
+                    storyPost(
+                        id = "s1", authorId = "a1", hoursAgo = 1,
+                        translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                    ),
+                ),
+            )
+            val languages = vm.state.value.availableLanguages
+            assertThat(languages.map { it.code }).containsExactly("es", "en").inOrder()
+            assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+            assertThat(languages.first { it.code == "en" }.isTranslatable).isTrue()
+        }
+
+    @Test
+    fun `no translatable options are offered when the story has no translations at all`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "en"),
+            posts = listOf(storyPost(id = "s1", authorId = "a1", hoursAgo = 1)),
+        )
+        assertThat(vm.state.value.availableLanguages).isEmpty()
+    }
+
+    @Test
+    fun `a present preferred language is never re-offered as translatable`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "es"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).containsExactly("es")
+        assertThat(languages.single().isTranslatable).isFalse()
+    }
+
+    // Requesting a SECONDARY configured language while the PRIMARY is already present:
+    // Prisme auto-resolution would keep showing the primary, so the viewer only lands on
+    // the requested language because the request switches the exploration override to it.
+    @Test
+    fun `requesting a translation for an absent language translates, merges, and switches to it`() =
+        runTest {
+            coEvery { storyRepository.translateStory(any(), "de") } answers {
+                me.meeshy.sdk.model.StoryTranslationMerge.mergeTranslation(firstArg(), "de", "hallo")
+            }
+            val vm = viewModel(
+                startUserId = "a1",
+                user = MeeshyUser(
+                    id = "me", username = "me",
+                    systemLanguage = "en", regionalLanguage = "de",
+                ),
+                posts = listOf(
+                    storyPost(
+                        id = "s1", authorId = "a1", hoursAgo = 1,
+                        translations = mapOf("en" to ApiPostTranslationEntry(text = "hi")),
+                    ),
+                ),
+            )
+            // Primary (en) is present, so the story already reads "hi"; de is the translatable arm.
+            assertThat(vm.state.value.current?.text).isEqualTo("hi")
+            assertThat(vm.state.value.availableLanguages.first { it.code == "de" }.isTranslatable).isTrue()
+
+            vm.requestStoryTranslation("de")
+
+            assertThat(vm.state.value.current?.text).isEqualTo("hallo")
+            assertThat(vm.state.value.languageOverride).isEqualTo("de")
+            assertThat(vm.state.value.availableLanguages.first { it.code == "de" }.isTranslatable).isFalse()
+        }
+
+    @Test
+    fun `a failed translation request leaves the displayed text unchanged`() = runTest {
+        coEvery { storyRepository.translateStory(any(), any()) } returns null
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "en"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+
+        vm.requestStoryTranslation("en")
+
+        assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
+        assertThat(vm.state.value.languageOverride).isNull()
+    }
+
+    @Test
+    fun `a second in-flight request for the same language does not fire a duplicate`() = runTest {
+        val gate = kotlinx.coroutines.CompletableDeferred<me.meeshy.sdk.model.StoryItem?>()
+        coEvery { storyRepository.translateStory(any(), "en") } coAnswers { gate.await() }
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "en"),
+            posts = listOf(
+                storyPost(
+                    id = "s1", authorId = "a1", hoursAgo = 1,
+                    translations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                ),
+            ),
+        )
+
+        vm.requestStoryTranslation("en")
+        vm.requestStoryTranslation("en")
+        gate.complete(null)
+
+        coVerify(exactly = 1) { storyRepository.translateStory(any(), "en") }
     }
 }

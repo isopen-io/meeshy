@@ -5,6 +5,25 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-21 — story on-demand translation: gotchas
+- **Mutation-proving an "override" line needs a scenario Prisme can't auto-resolve.** The story
+  request arm sets `languageOverride = storyId to target` after merging the pulled translation. If
+  the test requests the viewer's PRIMARY language, `emit()`'s auto-resolution
+  (`StoryContentResolver` → `preferredTranslation`) lands on that same freshly-merged translation on
+  its own, so **dropping the override still passes** — the mutation is not caught. Use a scenario
+  where a HIGHER-priority language is already present (prefs `en>de`, story present `en`, request
+  `de`): without the override, auto-resolution keeps showing `en`, so the test only goes green with
+  the override. Rule: to prove a display-switch line, pick inputs where the default resolution would
+  choose *something else*.
+- **Stories carry no `originalLanguage`.** `StoryItem` has `content` + `translations` but no source-
+  language field (unlike `ApiPost`). `translateStory` passes an empty `sourceLanguage` to the
+  translator (auto-detect), which is the same thing `translateSource` does for a post with a null
+  original. Don't invent a source-language field on the story model for this.
+- **`StoryItem.translations` is a `List<StoryTranslation>`, not a map.** The post/comment merges upsert
+  a `Map<code, entry>`; the story merge upserts a list (match by `indexOfFirst`, replace by
+  `mapIndexed`, else `+`). Same laws (blank/idempotent/in-place-or-append), different container — hence
+  a separate `StoryTranslationMerge` rather than reusing `PostTranslationMerge`.
+
 ## 2026-08-21 — comment on-demand translation: gotchas
 - **MockK `coAnswers` is a member infix, NOT a top-level import.** `import io.mockk.coAnswers`
   → *Unresolved reference*. Write `coEvery { … } coAnswers { gate.await() }` and import nothing

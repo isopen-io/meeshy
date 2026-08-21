@@ -14,6 +14,8 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryTranslationMerge
 import me.meeshy.sdk.model.StoryViewer
 import me.meeshy.sdk.model.toStoryViewer
 import me.meeshy.sdk.net.MeeshyApi
@@ -23,6 +25,8 @@ import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
 import me.meeshy.sdk.net.api.StoryApi
 import me.meeshy.sdk.net.api.StoryLikeRequest
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -43,6 +47,7 @@ class StoryRepository @Inject constructor(
     storyDao: StoryDao,
     syncMetaDao: SyncMetaDao,
     private val outboxRepository: OutboxRepository,
+    private val translationApi: TranslationApi,
 ) {
     private val cacheSource = StoryCacheSource(
         database = database,
@@ -219,6 +224,41 @@ class StoryRepository @Inject constructor(
      */
     suspend fun viewers(storyId: String): NetworkResult<List<StoryViewer>> =
         apiCall { storyApi.viewers(storyId) }.map { it.viewers.map { wire -> wire.toStoryViewer() } }
+
+    /**
+     * On-demand story translation (Prisme, pull side): the viewer tapped a configured
+     * language the story has no content for yet. Blocking-translates [item]'s original
+     * text into [targetLanguage] and returns the merged story the caller swaps in — the
+     * story-shaped sibling of [me.meeshy.sdk.post.PostRepository.translatePost] (stories
+     * carry no translation socket consumer, so the faithful move is pull-and-return, not
+     * a socket wait).
+     *
+     * Returns `null` — inert, no state to change — when the target is blank, the story has
+     * no source text, the network call fails, the translator returns a blank string, or the
+     * translation already matches what is stored (idempotent), mirroring [StoryTranslationMerge].
+     */
+    suspend fun translateStory(item: StoryItem, targetLanguage: String): StoryItem? {
+        val target = targetLanguage.trim()
+        if (target.isEmpty()) return null
+        val source = item.content?.takeIf { it.isNotBlank() } ?: return null
+
+        val translated = when (
+            val result = apiCall {
+                translationApi.translate(
+                    TranslateRequest(
+                        text = source,
+                        sourceLanguage = "",
+                        targetLanguage = target,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> result.data.translatedText
+            is NetworkResult.Failure -> return null
+        }
+        if (translated.isBlank()) return null
+        return StoryTranslationMerge.mergeTranslation(item, target, translated)
+    }
 
     private companion object {
         /** Outbox states that still represent an un-rolled-back publish. */
