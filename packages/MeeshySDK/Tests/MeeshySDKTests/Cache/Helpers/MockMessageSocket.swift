@@ -56,7 +56,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
-    let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
     let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
     let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
     let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
@@ -75,7 +74,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
     let callTranscriptionActiveReceived = PassthroughSubject<CallTranscriptionActiveData, Never>()
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
-    let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
 
     var isConnected: Bool = false

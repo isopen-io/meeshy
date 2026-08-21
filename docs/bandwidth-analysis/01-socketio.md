@@ -21,7 +21,6 @@ L'analyse identifie **18 problèmes** de consommation de bande passante dans le 
 | `message:edited` | Édition | `ROOMS.conversation(id)` | 2–15 KB |
 | `message:deleted` | Suppression | `ROOMS.conversation(id)` | ~100 B |
 | `message:translation` | Traduction texte prête | `ROOMS.conversation(id)` | 0.5–2 KB |
-| `message:translated` | Alias traduction | `ROOMS.conversation(id)` | 0.5–2 KB |
 | `message:pinned` | Épinglage | `ROOMS.conversation(id)` | ~150 B |
 | `message:unpinned` | Dés-épinglage | `ROOMS.conversation(id)` | ~100 B |
 | `message:consumed` | View-once consommé | `ROOMS.conversation(id)` | ~150 B |
@@ -37,7 +36,6 @@ L'analyse identifie **18 problèmes** de consommation de bande passante dans le 
 | `conversation:updated` | Nouveau message (bump) | `ROOMS.user(id)` × N participants | ~300 B × N |
 | `conversation:unread-updated` | Compteur non lus | `ROOMS.user(id)` | ~100 B |
 | `conversation:stats` | Stats | `ROOMS.conversation(id)` | ~500 B |
-| `conversation:online-stats` | Stats en ligne | `ROOMS.conversation(id)` | ~500 B |
 | `conversation:participant-left` | Quitte | `ROOMS.user(id)` | ~200 B |
 | `conversation:participant-banned` | Bannissement | `ROOMS.user(id)` | ~200 B |
 | `conversation:closed` | Fermeture | `ROOMS.conversation(id)` | ~150 B |
@@ -234,7 +232,7 @@ Ce champ `path` est le chemin du fichier sur le système de fichiers du serveur 
 
 **Fichier :** `packages/shared/types/socketio-events.ts` lignes 1213–1224
 
-**Description :** Le type `TranslationData` (envoyé dans `message:translation` et `message:translated`) inclut :
+**Description :** Le type `TranslationData` (envoyé dans `message:translation`) inclut :
 - `cacheKey: string` — clé de cache interne (ex: `messageId_fr_en`)
 - `cached: boolean` — information de debug interne
 - `translationModel: string` — information de modèle interne
@@ -274,7 +272,7 @@ const messagePayload = this._buildMessagePayload(
 
 **Sévérité :** HAUTE
 
-**Correction :** Ne PAS inclure les traductions dans `message:new`. Elles arrivent ensuite via `message:translation` / `message:translated`. Le client doit merger les traductions à la réception de l'événement dédié (ce qu'il fait déjà via `handleTranslation` dans `use-socket-cache-sync.ts`).
+**Correction :** Ne PAS inclure les traductions dans `message:new`. Elles arrivent ensuite via `message:translation`. Le client doit merger les traductions à la réception de l'événement dédié (ce qu'il fait déjà via `handleTranslation` dans `use-socket-cache-sync.ts`).
 
 ---
 

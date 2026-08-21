@@ -75,7 +75,6 @@ describe('PresenceService', () => {
         'user:status',
         'presence:snapshot',
         'conversation:stats',
-        'conversation:online-stats',
         'conversation:unread-updated',
         'reaction:added',
         'reaction:removed',
@@ -125,16 +124,6 @@ describe('PresenceService', () => {
       service.onConversationStats(listener);
       const event = { conversationId: 'conv-1', memberCount: 5 };
       socket._trigger('conversation:stats', event);
-      expect(listener).toHaveBeenCalledWith(event);
-    });
-
-    it('forwards conversation:online-stats events to registered listeners', () => {
-      const socket = makeSocket();
-      service.setupEventListeners(socket as any);
-      const listener = jest.fn();
-      service.onConversationOnlineStats(listener);
-      const event = { conversationId: 'conv-1', onlineCount: 3 };
-      socket._trigger('conversation:online-stats', event);
       expect(listener).toHaveBeenCalledWith(event);
     });
 
@@ -370,16 +359,6 @@ describe('PresenceService', () => {
       const unsub = service.onConversationStats(listener);
       unsub();
       socket._trigger('conversation:stats', {});
-      expect(listener).not.toHaveBeenCalled();
-    });
-
-    it('onConversationOnlineStats unsubscribe works', () => {
-      const socket = makeSocket();
-      service.setupEventListeners(socket as any);
-      const listener = jest.fn();
-      const unsub = service.onConversationOnlineStats(listener);
-      unsub();
-      socket._trigger('conversation:online-stats', {});
       expect(listener).not.toHaveBeenCalled();
     });
 

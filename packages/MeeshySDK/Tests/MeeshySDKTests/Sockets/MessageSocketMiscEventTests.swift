@@ -2,7 +2,7 @@ import XCTest
 @testable import MeeshySDK
 
 /// Additional message socket event struct decoding tests for types not yet covered.
-/// Covers: ReactionSyncEvent, SystemMessageEvent, AttachmentStatusEvent, MentionCreatedEvent,
+/// Covers: ReactionSyncEvent, AttachmentStatusEvent, MentionCreatedEvent,
 ///         ConversationParticipationEvent, ParticipantRoleUpdatedEvent, ConversationUpdatedEvent,
 ///         UserPreferencesUpdatedEvent, ConversationStatsEvent, ParticipantLeftEvent,
 ///         ParticipantBannedEvent, ParticipantUnbannedEvent
@@ -44,18 +44,6 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertTrue(event.reactions.isEmpty)
         XCTAssertNil(event.totalCount)
         XCTAssertNil(event.userReactions)
-    }
-
-    // MARK: - SystemMessageEvent
-
-    func test_systemMessageEvent_decoding() throws {
-        let json = """
-        {"type": "user_joined", "content": "Alice joined the conversation"}
-        """.data(using: .utf8)!
-
-        let event = try decoder.decode(SystemMessageEvent.self, from: json)
-        XCTAssertEqual(event.type, "user_joined")
-        XCTAssertEqual(event.content, "Alice joined the conversation")
     }
 
     // MARK: - AttachmentStatusEvent

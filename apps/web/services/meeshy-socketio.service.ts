@@ -331,10 +331,6 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationStats(listener);
   }
 
-  public onConversationOnlineStats(listener: (data: { conversationId: string; onlineUsers: any[]; updatedAt: Date }) => void): () => void {
-    return this.orchestrator.onConversationOnlineStats(listener);
-  }
-
   public onReactionAdded(listener: (data: any) => void): () => void {
     return this.orchestrator.onReactionAdded(listener);
   }

@@ -51,7 +51,6 @@ export type TypingListener = (event: TypingEvent) => void;
 export type UserStatusListener = (event: UserStatusEvent) => void;
 export type PresenceSnapshotListener = (event: PresenceSnapshotEventData) => void;
 export type ConversationStatsListener = (data: { conversationId: string; stats: Record<string, unknown> }) => void;
-export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: readonly { userId: string; displayName?: string }[]; updatedAt: Date }) => void;
 export type ReactionListener = (data: { messageId: string; userId: string; emoji: string; conversationId: string }) => void;
 export type ConversationJoinedListener = (data: { conversationId: string; userId: string }) => void;
 export type ReadStatusListener = (data: { conversationId: string; participantId: string; type: 'read' | 'received'; updatedAt: Date; summary: { totalMembers: number; deliveredCount: number; readCount: number } }) => void;

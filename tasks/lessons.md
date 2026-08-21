@@ -11557,3 +11557,57 @@ détails qui font la différence entre une garde et un décor :
    Android ~47 : un seuil global laisse un scan Android muet passer inaperçu
    derrière iOS. Une garde dont le scan peut devenir vide sans rougir rejoue
    dans son propre garde-fou l'échec silencieux qu'elle traque.
+
+## 2026-08-21 — Une exemption écrite en COMMENTAIRE ne peut pas rougir, donc elle pourrit (cycle 77)
+
+Le contrat portait un bloc de prose intitulé « Call events RESERVED (no emitter
+yet) », qui énumérait les canaux d'appel déclarés avant leur émetteur. Il
+nommait encore six événements — `call:missed`, `call:quality-alert`,
+`call:translated-segment`, `call:transcription-active`,
+`call:already-answered`, `call:screen-capture-alert` — dont la passerelle avait
+entre-temps implémenté l'émission. Personne n'était venu corriger la phrase,
+parce que rien ne pouvait la contredire.
+
+> **Une exemption que rien n'exécute survit à sa raison d'être, et finit par
+> couvrir un vrai défaut.** Si une liste d'exceptions mérite d'exister, elle
+> mérite d'être une VALEUR que le code importe — et vérifiée dans les DEUX sens :
+> ce qui y figure doit encore avoir besoin d'y figurer.
+
+La réservation vit donc désormais dans `RESERVED_SERVER_EVENTS`, exportée par le
+contrat, et la garde rougit aussi bien sur un nom orphelin non réservé que sur
+un nom réservé dont l'émetteur a atterri.
+
+### Corollaire — où placer la table d'exceptions
+
+Pas dans la garde. Une table d'exceptions cachée au fond d'un fichier de test
+est un endroit où l'on dépose ce qu'on ne veut pas traiter, et que personne ne
+relit. Placée à côté des noms qu'elle qualifie, dans le fichier qu'on ouvre de
+toute façon pour déclarer l'événement, réserver un canal redevient un acte
+VISIBLE en revue.
+
+### La prose piège les gardes AUX DEUX BOUTS
+
+La garde du cycle 76 importait les objets du contrat plutôt que de les relire au
+motif, précisément pour qu'un nom cité en PROSE ne passe pas pour déclaré. Elle
+scannait pourtant le code client sans retirer les commentaires — et elle a rougi
+sur `// NOTE: there is no socket.on("post:reaction-sync")`, une phrase qui
+documente une absence d'abonnement, lue comme un abonnement.
+
+> **Un commentaire n'est ni une déclaration ni un abonnement.** Toute garde qui
+> LIT du code doit dépouiller les commentaires avant de chercher — la précaution
+> vaut au bout serveur comme au bout client, et n'en armer qu'un seul laisse
+> l'autre moitié du piège en place.
+
+### Et le frère oublié, TROISIÈME occurrence
+
+`reaction:sync` avait été retiré du contrat pour cause d'absence d'émetteur — le
+commentaire de retrait raconte même qu'un client s'y était abonné et versait
+l'instantané dans le seau incrémental de `reaction:added`, donc un vrai bug. Ses
+deux frères du même pipeline, `post:reaction-sync` et `comment:reaction-sync`,
+sont restés déclarés. C'est le même motif qu'au cycle 76
+(`TranscriptionReadyEvent` plat quand son jumeau voisin avait déjà été corrigé),
+et c'est la troisième fois.
+
+> **Une correction de contrat ou de charge utile se termine par un `grep` des
+> FRÈRES**, pas du seul symbole corrigé. Les canaux d'un même pipeline
+> (`*:reaction-sync`, `*:translation-*`) partagent l'émetteur, donc le défaut.
