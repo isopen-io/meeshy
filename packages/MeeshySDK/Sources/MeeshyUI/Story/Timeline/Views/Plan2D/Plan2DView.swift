@@ -67,6 +67,11 @@ public struct Plan2DView: View, Equatable {
     /// Le doigt a quitté l'écran après un déplacement — clôt la session de
     /// glissement côté appelant.
     public let onMoveEnded: (String) -> Void
+    /// Le plan TIENT le geste (trim d'un bord, ou déplacement/réordonnancement
+    /// armé) : à l'appelant d'immobiliser le scroller qui l'entoure le temps
+    /// du geste. Sans ce signal, le contenu panne sous le doigt pendant que la
+    /// barre se rogne — les deux se disputent le même doigt (constat 5).
+    public let onScrollLockChanged: (Bool) -> Void
 
     public init(tracks: [Plan2DTrack],
                 zoom: Plan2DZoom,
@@ -79,7 +84,8 @@ public struct Plan2DView: View, Equatable {
                 onTrimStart: @escaping (String, Double) -> Void,
                 onTrimEnd: @escaping (String, Double) -> Void,
                 onMove: @escaping (String, Double) -> Void,
-                onMoveEnded: @escaping (String) -> Void) {
+                onMoveEnded: @escaping (String) -> Void,
+                onScrollLockChanged: @escaping (Bool) -> Void) {
         self.tracks = tracks
         self.zoom = zoom
         self.laneWidth = laneWidth
@@ -92,6 +98,7 @@ public struct Plan2DView: View, Equatable {
         self.onTrimEnd = onTrimEnd
         self.onMove = onMove
         self.onMoveEnded = onMoveEnded
+        self.onScrollLockChanged = onScrollLockChanged
     }
 
     // MARK: - Geste en vol (armement du réordonnancement, trim en cours)
@@ -111,6 +118,7 @@ public struct Plan2DView: View, Equatable {
     @State private var moveAnchor: CGSize = .zero
     /// Le doigt fait défiler : le plan a rendu la main et ne la reprend pas.
     @State private var hasYieldedToScroller: Bool = false
+    @State private var isScrollLocked: Bool = false
 
     public var body: some View {
         Canvas { context, size in
@@ -172,6 +180,12 @@ public struct Plan2DView: View, Equatable {
         .frame(width: Self.labelColumnWidth + laneWidth * zoom.scale,
               height: CGFloat(tracks.count) * TimelineMetrics.laneHeight)
         .contentShape(Rectangle())
+        // Les poignées AVANT le geste de rangée : posées après lui, elles
+        // seraient ses SŒURS et avaleraient le tap d'un bord (la fiche du clip
+        // redeviendrait inatteignable sur toute barre étroite). Posées avant,
+        // le geste de rangée les surplombe et continue de voir le contact,
+        // pendant que la poignée garde sa haute priorité face au scroller.
+        .overlay(alignment: .topLeading) { edgeHandleLayer }
         .simultaneousGesture(rowGesture)
         .accessibilityElement(children: .contain)
         // Éléments SYNTHÉTIQUES : `accessibilityChildren` ne rend rien à
@@ -366,6 +380,16 @@ public struct Plan2DView: View, Equatable {
         ]
     }
 
+    /// Toutes les cibles du plan, rangée par rangée — ce que la couche de
+    /// poignées pose réellement à l'écran.
+    static func edgeHandleZones(tracks: [Plan2DTrack], zoom: Plan2DZoom,
+                                laneWidth: CGFloat, slideDuration: Double) -> [EdgeHandleZone] {
+        tracks.enumerated().flatMap { index, track in
+            edgeHandleZones(for: track, rowIndex: index, zoom: zoom,
+                            laneWidth: laneWidth, slideDuration: slideDuration)
+        }
+    }
+
     /// Poignée de bord touchée, si `touchX` tombe dans sa zone tappable. Au
     /// milieu exact d'une barre étroite, le DÉBUT l'emporte — une frontière
     /// doit appartenir à quelqu'un.
@@ -546,6 +570,57 @@ public struct Plan2DView: View, Equatable {
             .onEnded(handleEnded)
     }
 
+    /// Les cibles de rognage, posées sur les bords des barres. Elles ne
+    /// dessinent RIEN (le Canvas a déjà tout dessiné) : ce sont des zones
+    /// tappables, bornées par le nombre de pistes TIMÉES — jamais par les
+    /// keyframes (budget P15 intact).
+    ///
+    /// Elles existent comme vues, et non comme un test de plus dans le geste
+    /// de rangée, parce que la HAUTE priorité ne s'obtient qu'ainsi sans
+    /// confisquer au scroller tous les glissements du plan : la même raison
+    /// qui donnait à l'ancien conteneur ses `ClipTrimHandles`.
+    private var edgeHandleLayer: some View {
+        ForEach(Self.edgeHandleZones(tracks: tracks, zoom: zoom, laneWidth: laneWidth,
+                                     slideDuration: slideDuration)) { zone in
+            Color.clear
+                .frame(width: max(0, zone.width), height: TimelineMetrics.laneHeight - 16)
+                .contentShape(Rectangle())
+                .highPriorityGesture(trimGesture(for: zone))
+                .offset(x: zone.minX,
+                        y: CGFloat(zone.rowIndex) * TimelineMetrics.laneHeight + 8)
+        }
+    }
+
+    /// `minimumDistance: 4` laisse passer les taps, qui ne translatent pas :
+    /// un contact posé sur un bord et relâché sans bouger reste un tap, et
+    /// c'est le geste de rangée qui l'ouvre à l'Inspecteur.
+    private func trimGesture(for zone: EdgeHandleZone) -> some Gesture {
+        DragGesture(minimumDistance: 4)
+            .onChanged { value in
+                setScrollLock(true)
+                let deltaX = value.translation.width - lastTrimTranslationX
+                lastTrimTranslationX = value.translation.width
+                let deltaSeconds = Self.timeDelta(forDeltaX: deltaX, zoom: zoom,
+                                                  laneWidth: laneWidth, slideDuration: slideDuration)
+                switch zone.edge {
+                case .start: onTrimStart(zone.trackId, deltaSeconds)
+                case .end: onTrimEnd(zone.trackId, deltaSeconds)
+                }
+            }
+            .onEnded { _ in
+                lastTrimTranslationX = 0
+                setScrollLock(false)
+            }
+    }
+
+    /// Idempotent : deux frames de suite ne repostent pas le même verrou, et
+    /// un geste qui n'a rien pris ne réveille pas l'hôte au relâchement.
+    private func setScrollLock(_ locked: Bool) {
+        guard isScrollLocked != locked else { return }
+        isScrollLocked = locked
+        onScrollLockChanged(locked)
+    }
+
     private func handleChanged(_ value: DragGesture.Value) {
         if gestureStartedAt == nil {
             gestureStartedAt = Date()
@@ -570,17 +645,10 @@ public struct Plan2DView: View, Equatable {
         guard let startRow = gestureStartRow, tracks.indices.contains(startRow) else { return }
         let track = tracks[startRow]
 
-        if let edge = gestureEdge {
-            let deltaX = value.translation.width - lastTrimTranslationX
-            lastTrimTranslationX = value.translation.width
-            let deltaSeconds = Self.timeDelta(forDeltaX: deltaX, zoom: zoom,
-                                              laneWidth: laneWidth, slideDuration: slideDuration)
-            switch edge {
-            case .start: onTrimStart(track.id, deltaSeconds)
-            case .end: onTrimEnd(track.id, deltaSeconds)
-            }
-            return
-        }
+        // Le contact a commencé dans une zone de poignée : le trim appartient
+        // à SA poignée, en haute priorité (grammaire du module). La rangée se
+        // tait — la streamer ici aussi doublerait la mutation.
+        guard gestureEdge == nil else { return }
 
         guard let startedAt = gestureStartedAt, !hasYieldedToScroller else { return }
         if !isReorderArmed {
@@ -600,6 +668,7 @@ public struct Plan2DView: View, Equatable {
                 HapticFeedback.light()
                 lockedAxis = axis
                 moveAnchor = value.translation
+                setScrollLock(true)
             }
         }
 
@@ -641,6 +710,7 @@ public struct Plan2DView: View, Equatable {
             lockedAxis = nil
             moveAnchor = .zero
             hasYieldedToScroller = false
+            setScrollLock(false)
         }
         guard let startRow = gestureStartRow, tracks.indices.contains(startRow) else { return }
         if isMoving { onMoveEnded(tracks[startRow].id) }

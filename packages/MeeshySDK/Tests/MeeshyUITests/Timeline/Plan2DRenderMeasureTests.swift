@@ -66,7 +66,8 @@ final class Plan2DRenderMeasureTests: XCTestCase {
             onTrimStart: { _, _ in },
             onTrimEnd: { _, _ in },
             onMove: { _, _ in },
-            onMoveEnded: { _ in }
+            onMoveEnded: { _ in },
+            onScrollLockChanged: { _ in }
         )
         let renderer = ImageRenderer(content: view)
         renderer.scale = 1

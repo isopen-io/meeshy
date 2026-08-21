@@ -203,6 +203,18 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
                      "Les échos doivent partager le repère du plan — sinon leurs tuiles ne tombent pas sur les mêmes secondes que les barres")
     }
 
+    /// Le plan et le scroller de l'hôte se disputaient le même doigt : le trim
+    /// et le déplacement armé s'appliquaient PENDANT que le contenu pannait
+    /// dessous (revue Opus, constat 5). L'hôte doit donc écouter le verrou que
+    /// le plan pose sur le geste.
+    func test_storyTimelineHost_stopsTheScrollerWhileThePlanHoldsTheGesture() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("onScrollLockChanged:"),
+                     "L'hôte doit recevoir le verrou de geste du plan")
+        XCTAssertTrue(source.contains(".scrollDisabled("),
+                     "Et le traduire en immobilité du scroller — sinon le contenu continue de panner sous le doigt")
+    }
+
     func test_storyTimelineHost_wiresTheClipTimeDragToTheExistingDragSession() throws {
         let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
         XCTAssertTrue(source.contains("viewModel.beginClipDrag("),

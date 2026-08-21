@@ -275,6 +275,21 @@ final class Plan2DViewGuardTests: XCTestCase {
                        "Les deux poignées se partagent la barre étroite au milieu — aucune n'avale l'autre")
     }
 
+    func test_edgeHandleZones_ofAWholePlan_targetOnlyTimedTracks_onTheirOwnRow() {
+        let tracks = [
+            Plan2DTrack(id: "ghost", label: "g", plane: .fg, z: 1, bar: .ghost),
+            Plan2DTrack(id: "clip", label: "c", plane: .fg, z: 0, bar: .timed(start: 0, end: 5))
+        ]
+        let zones = Plan2DView.edgeHandleZones(tracks: tracks, zoom: .fit,
+                                               laneWidth: 300, slideDuration: 10)
+        XCTAssertEqual(zones.map(\.trackId), ["clip", "clip"],
+                       "Un fantôme n'a pas de bord à tirer : aucune cible ne se pose sur sa rangée")
+        XCTAssertEqual(zones.map(\.rowIndex), [1, 1],
+                       "Les cibles se posent sur la RANGÉE de leur piste")
+        XCTAssertEqual(Set(zones.map(\.id)).count, 2,
+                       "Deux cibles distinctes, sinon un ForEach en perdrait une")
+    }
+
     func test_edgeHandleZones_aGhostTrackHasNoZone() {
         let track = Plan2DTrack(id: "t", label: "t", plane: .fg, z: 0, bar: .ghost)
         XCTAssertTrue(Plan2DView.edgeHandleZones(for: track, rowIndex: 0, zoom: .fit,
@@ -644,6 +659,53 @@ final class Plan2DViewGuardTests: XCTestCase {
         let source = try Self.strippedPlan2DViewSource()
         XCTAssertTrue(source.contains("hasYieldedToScroller"),
                      "Un geste rendu au scroller ne doit jamais se réarmer en cours de route (le doigt est déjà en train de faire défiler)")
+    }
+
+    // MARK: - Guard 4m — grammaire gestuelle du module (M11, VideoClipBar:178-183)
+    //
+    // Le trim de bord vit dans SA poignée, en HAUTE priorité : en priorité
+    // simultanée il s'appliquait pendant que le `ScrollView` de l'hôte pannait
+    // sous le doigt (revue Opus, constat 5). La rangée, elle, garde son geste
+    // à distance nulle — c'est lui qui porte le tap et l'armement — et se tait
+    // dès que le contact a commencé dans une zone de poignée, sinon la même
+    // frame produirait DEUX mutations.
+
+    func test_theEdgeTrimIsAHighPriorityGestureAtTheModulesMinimumDistance() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains(".highPriorityGesture(trimGesture("),
+                     "Le trim doit primer sur le scroller qui entoure le plan — c'est la note du module, écrite après constat")
+        guard let range = source.range(of: "func trimGesture(") else {
+            return XCTFail("Le trim doit vivre dans son propre geste")
+        }
+        XCTAssertTrue(String(source[range.upperBound...].prefix(300)).contains("DragGesture(minimumDistance: 4)"),
+                     "minimumDistance: 4 laisse passer les taps, qui ne translatent pas (VideoClipBar:182-183)")
+    }
+
+    func test_theRowGestureNeverStreamsTheTrim_itsOwnHandleDoes() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        guard let start = source.range(of: "private func handleChanged"),
+              let end = source.range(of: "private func handleEnded") else {
+            return XCTFail("Les deux étapes du geste de rangée doivent exister")
+        }
+        let rowHandler = String(source[start.upperBound..<end.lowerBound])
+        XCTAssertFalse(rowHandler.contains("onTrimStart(") || rowHandler.contains("onTrimEnd("),
+                       "Le geste de rangée doit se TAIRE sur un contact de bord — sinon la poignée et lui doublent la mutation")
+    }
+
+    func test_theRowGestureKeepsItsZeroDistance_forTapsAndArming() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("DragGesture(minimumDistance: 0)"),
+                     "Le tap et l'armement ont besoin des frames qu'un minimumDistance non nul avale")
+    }
+
+    func test_thePlanAsksTheScrollerToStandStillWhileItHoldsTheGesture() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("onScrollLockChanged"),
+                     "Le plan doit DIRE à son hôte qu'il tient le geste — sinon le contenu panne sous le doigt pendant le trim ou le déplacement")
+        XCTAssertTrue(source.contains("setScrollLock(true)"),
+                     "Le verrou se pose quand le plan prend le geste")
+        XCTAssertTrue(source.contains("setScrollLock(false)"),
+                     "Et se lève au relâchement — un verrou oublié tuerait le défilement pour de bon")
     }
 
     // MARK: - Guard 2b — la graduation n'est pas qu'une déclaration : le

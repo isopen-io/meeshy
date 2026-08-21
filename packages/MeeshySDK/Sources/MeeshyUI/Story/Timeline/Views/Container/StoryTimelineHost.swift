@@ -57,6 +57,12 @@ public struct StoryTimelineHost: View {
     @ObservedObject private var viewModel: TimelineViewModel
     @Environment(\.colorScheme) private var colorScheme
 
+    /// Le plan tient le geste (rognage d'un bord, déplacement ou
+    /// réordonnancement armé) : le scroller s'immobilise le temps du geste.
+    /// Sans lui, le contenu pannait sous le doigt PENDANT l'édition — les deux
+    /// se disputaient le même contact.
+    @State private var isPlanHoldingTheGesture: Bool = false
+
     private let previewSlot: (() -> AnyView)?
     /// Enregistrement de la story (export MP4) — rendu dans le transport,
     /// juste après la lecture (`TransportBar.onSave`). `nil` = pas de bouton.
@@ -285,7 +291,8 @@ public struct StoryTimelineHost: View {
                                         rawTime: drag.originalStartTime + Float(seconds),
                                         snapCandidates: [])
                                 },
-                                onMoveEnded: { _ in viewModel.endClipDrag() }
+                                onMoveEnded: { _ in viewModel.endClipDrag() },
+                                onScrollLockChanged: { isPlanHoldingTheGesture = $0 }
                             )
                             // Le playhead publie `currentTime` à 60 Hz pendant
                             // la lecture — sans `.equatable()`, chaque tick
@@ -307,6 +314,7 @@ public struct StoryTimelineHost: View {
                             playheadOverlay(geometry: equivalentGeometry, slideDuration: slideDuration)
                         }
                     }
+                    .scrollDisabled(isPlanHoldingTheGesture)
                     .frame(maxHeight: .infinity)
                 }
             }
