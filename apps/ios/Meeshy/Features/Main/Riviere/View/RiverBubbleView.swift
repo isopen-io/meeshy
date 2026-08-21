@@ -159,10 +159,50 @@ struct RiverBubbleView: View, Equatable {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
-        if content.bubble.isSystem {
-            systemNoticeRow
+        VStack(alignment: .leading, spacing: 0) {
+            // Retour produit 2026-08-21 : « les messages s'empilent bord à
+            // bord sans espace ». Chaque rang porte SA propre respiration en
+            // tête — jamais un `spacing` sur la pile, qui ne saurait pas la
+            // remplacer par une couture. Le rythme vertical reste donc
+            // constant (`RiverMetrics.Row.gap`), et c'est son CONTENU qui dit
+            // s'il s'agit d'un silence ou d'une continuation.
+            topSeam
+            if content.bubble.isSystem {
+                systemNoticeRow
+            } else {
+                speechRow
+            }
+        }
+    }
+
+    /// Le haut du rang : du VIDE quand une nouvelle voix prend la parole, une
+    /// couture POINTILLÉE quand c'est la même qui continue
+    /// (`isFirstInGroup == false`, décidé par la LOI — cette vue ne fait que
+    /// le dessiner). Le pointillé court à l'aplomb du rail de la branche,
+    /// c'est-à-dire au centre du couloir : il prolonge visuellement le trait
+    /// que `RiverLaneCanvas` trace derrière, sans le recalculer.
+    @ViewBuilder
+    private var topSeam: some View {
+        if content.bubble.isFirstInGroup || content.bubble.isSystem {
+            Color.clear
+                .frame(width: contentWidth, height: RiverMetrics.Row.gap)
+                .accessibilityHidden(true)
         } else {
-            speechRow
+            Path { path in
+                path.move(to: .zero)
+                path.addLine(to: CGPoint(x: 0, y: RiverMetrics.Row.gap))
+            }
+            .stroke(
+                laneColor.opacity(0.75),
+                style: StrokeStyle(
+                    lineWidth: RiverMetrics.Line.width,
+                    lineCap: .round,
+                    dash: [RiverMetrics.Row.continuationDashLength, RiverMetrics.Row.continuationDashGap]
+                )
+            )
+            .frame(width: RiverMetrics.Line.width, height: RiverMetrics.Row.gap)
+            .frame(width: contentWidth, alignment: .center)
+            .accessibilityHidden(true)
         }
     }
 

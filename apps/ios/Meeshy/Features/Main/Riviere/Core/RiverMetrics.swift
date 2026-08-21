@@ -92,6 +92,22 @@ nonisolated public enum RiverMetrics {
         }
     }
 
+    // MARK: - Rang
+
+    /// `river.row` — retour produit 2026-08-21. `gap` : la respiration
+    /// verticale entre DEUX RANGS ; sans elle les bulles s'empilaient bord à
+    /// bord et l'axe du temps ne se lisait plus. `continuationDash*` : les
+    /// tirets de la couture qui relie deux bulles CONSÉCUTIVES du même auteur
+    /// — l'espace seul dirait « quelqu'un d'autre a parlé », le pointillé dit
+    /// « la même voix continue ». Le GROUPEMENT lui-même reste une décision de
+    /// la LOI (`RiverBubble.isFirstInGroup`) : ces cotes ne font que le
+    /// dessiner.
+    nonisolated public enum Row {
+        public static let gap: CGFloat = 14
+        public static let continuationDashLength: CGFloat = 3
+        public static let continuationDashGap: CGFloat = 4
+    }
+
     // MARK: - En-tête de couloir
 
     /// `river.laneHeader` — hauteur `38`, en PIXELS. Distincte de

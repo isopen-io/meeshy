@@ -160,4 +160,21 @@ final class RiverMetricsTests: XCTestCase {
             "RiverMetrics.swift ne doit jamais dupliquer laneSilenceWindowMs (garde R15) — cette constante de loi vit uniquement dans RiverLaneResolver"
         )
     }
+    // MARK: - `river.row` (retour produit 2026-08-21)
+
+    /// L'écart entre deux RANGS et les tirets de la couture de continuation —
+    /// posés le jour où le retour produit a dit « les messages s'empilent bord
+    /// à bord sans espace ». Même règle que les autres familles : on répare le
+    /// token, jamais le test.
+    func test_row_matchesTokens() throws {
+        XCTAssertEqual(RiverMetrics.Row.gap, try CGFloat(tokenNumber("row", "gap")))
+        XCTAssertEqual(
+            RiverMetrics.Row.continuationDashLength,
+            try CGFloat(tokenNumber("row", "continuationDashLength"))
+        )
+        XCTAssertEqual(
+            RiverMetrics.Row.continuationDashGap,
+            try CGFloat(tokenNumber("row", "continuationDashGap"))
+        )
+    }
 }

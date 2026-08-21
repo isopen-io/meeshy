@@ -144,9 +144,24 @@ final class RiverScreenNotMountedTests: XCTestCase {
             "`ConversationView.init` câble `isRiverFlagEnabled` depuis le drapeau `riviere_mode` — la " +
             "sélection de Rivière à l'ouverture du fil suit désormais le drapeau ET l'éligibilité."
         )
+        // Le TEST porte sur le FAIT (un hôte est monté derrière `mode ==
+        // .river`), pas sur son emballage : la forme littérale
+        // `{ AnyView(RiverConversationHost(` a vécu un jour, puis le pane a dû
+        // être borné à l'écran (`Color.clear.overlay { … }`, sans quoi la
+        // largeur de la Rivière poussait l'en-tête du fil hors écran). Épingler
+        // l'emballage aurait fait rougir une garde qui n'avait rien à
+        // reprocher. On exige donc les deux ancres, dans l'ordre, à courte
+        // distance l'une de l'autre.
+        let riverBranch = try XCTUnwrap(
+            code.range(of: "if readingModeController.mode == .river {"),
+            "La branche de montage `mode == .river` a disparu de `ConversationView` — Rivière " +
+            "redeviendrait une promesse rompue (choisie au menu, jamais rendue)."
+        )
+        let windowEnd = code.index(riverBranch.upperBound, offsetBy: 220, limitedBy: code.endIndex) ?? code.endIndex
         XCTAssertTrue(
-            code.contains("if readingModeController.mode == .river { AnyView(RiverConversationHost("),
-            "Un hôte de rendu est monté derrière `mode == .river` — jamais une sélection sans écran."
+            code[riverBranch.upperBound..<windowEnd].contains("RiverConversationHost("),
+            "La branche `mode == .river` ne monte plus d'hôte de rendu — jamais une sélection " +
+            "sans écran."
         )
         XCTAssertEqual(
             code.components(separatedBy: "RiverConversationHost(").count - 1, 1,

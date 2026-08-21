@@ -182,6 +182,12 @@
       "bowRatio": 0.5,
       "$note": "courbe des connecteurs de réponse — trait plus fin que la branche elle-même, en pointillé côté peau. bow = max(minBow, |Δcouloir| * bowRatio), le contrôle de la courbe de Bézier."
     },
+    "row": {
+      "gap": 14,
+      "continuationDashLength": 3,
+      "continuationDashGap": 4,
+      "$note": "Retour produit 2026-08-21 : « les messages s'empilent bord à bord sans espace — chaque message doit avoir un espace, ou des pointillés entre les deux si ce sont deux messages de suite ». gap = respiration verticale entre DEUX RANGS (l'axe du temps a besoin de se lire) ; continuationDash* = tirets de la couture qui relie deux bulles CONSÉCUTIVES du même auteur (isFirstInGroup == false), tracée dans le couloir, couleur d'auteur — elle dit « c'est la même voix qui continue » là où l'espace, seul, dirait « quelqu'un d'autre a parlé ». Le GROUPEMENT reste une décision de la LOI (RiverBubble.isFirstInGroup) : ces cotes ne font que le dessiner."
+    },
     "laneHeader": {
       "height": 38,
       "$note": "hauteur de la bande d'en-tête de couloirs, en PIXELS — distincte de RIVER_HEADER_FADE_RANKS (loi, en RANGS) : la loi dit qui/quelle opacité, ce token dit la hauteur de la bande qui l'affiche (§7ter B)."
