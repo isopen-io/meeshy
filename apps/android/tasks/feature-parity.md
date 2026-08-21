@@ -2684,8 +2684,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reference (trim/blank→null); `DraftAutosave.restore` returns a `DraftRestore(text, replyToId)` snapshot that
       re-arms a reply-only or half-typed reply draft. `ChatViewModel` persists on `startReply`/`cancelReply`/
       `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
-      tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
-      Android — no state to persist).
+      tests. **Effects/blur/ephemeral persistence done** (slice `chat-draft-effects-persistence`, 2026-08-21):
+      `ConversationDraft` gained an `effects: MessageEffects` field (defaulted → legacy blobs decode to an empty
+      selection) folding iOS `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` into the single
+      `MessageEffects` SSOT. A NEW `ConversationDraft.isWorthPersisting` (`isMeaningful || effects.hasAnyEffect`)
+      mirrors iOS's split between the text-only list rule (`hasDraftText`) and the persistence rule
+      (`isEffectivelyEmpty`, which weighs effects): `DraftAutosave` switched to it (an effect armed on an empty
+      composer persists and survives navigation; clearing the last effect on an empty composer purges), while the
+      four conversation-list surfaces keep the text/reply-only `isMeaningful` — so an effects-only draft never
+      floats or badges a row, exactly like iOS. `DraftAutosave.resolve` gained an `effects` param (armed effects →
+      `Save`; a change in effects alone → `Save`; identical text+reply+effects → `None`); `DraftRestore` carries the
+      effects; `ChatViewModel.persistDraft` reads `pendingEffects` from state and `toggleEffect`/`selectEphemeralDuration`/
+      `clearEffects` now persist, restore re-arms `pendingEffects` on open. +19 tests (7 `ConversationDraftTest`
+      incl. back-compat decode, 8 `DraftAutosaveTest`, 4 VM round-trip), mutation-proven ×3 (drop the
+      `isWorthPersisting` effects clause → 1 fail; drop the resolve idempotence effects clause → 1 fail; drop the
+      empty-guard `!effects.hasAnyEffect` → 1 fail). **Pending:** the manual composer language pick
+      (`MessageDraft.selectedLanguage`) — a language-only draft is not meaningful on its own (iOS parity), a
+      clean narrower follow-up slice.
 - [◐] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress —
       **REST attachment chain + first real path (clipboard content) done** (slice `chat-clipboard-content-send`,
       2026-07-16). The durable upload→send chain now carries message attachments, mirroring the proven story

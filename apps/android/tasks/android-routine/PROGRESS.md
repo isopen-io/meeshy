@@ -2,6 +2,87 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Composer draft effects persistence shipped** (slice `chat-draft-effects-persistence`,
+> feature-parity's Chat `[◐]` "Draft auto-save/restore" line — the `effects`/`blur`/`ephemeral` fields its
+> **Pending** clause called out, now unblocked because the composer effects picker / ephemeral duration /
+> blur / view-once all shipped in later §C slices, so there is finally state to persist).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 6 open PRs at branch
+> time (#3249 shared, #3247 web, #3245/#3242 gateway, #3243 shared/gateway, #3241 iOS) are none of them
+> android-routine. Prior android iteration (#3248, chat-bubble-a11y-label) already merged. Branched off the
+> freshly-fetched `origin/main` (`3e64afaa`, which includes #3248 and #3241). This container **reaches
+> `dl.google.com`** (curl → 200), so the full local gate ran here.
+>
+> **SDK-bootstrap correction (see NOTES 2026-08-21):** the older recipe's `android-37 → android-37.0`
+> symlink is now HARMFUL. With cmdline-tools `11076708` the platform mis-registers (metadata "Platform 17"),
+> and the symlink makes sdkmanager reject it as an "inconsistent location" → `Failed to find target with hash
+> string 'android-37'`. Fix: fetch the newer bundle `commandlinetools-linux-13114758`, `sdkmanager
+> --channel=3 "platforms;android-37.0" "build-tools;36.0.0"`, and **no symlink** — AGP 8.13 resolves
+> `compileSdk 37` → the `android-37.0` dir directly. `assembleDebug testDebugUnitTest` green after.
+>
+> **The gap (re-proved by a read-only recon subagent over iOS + Android)**: iOS's app-side `DraftStore`
+> (`MessageDraft`) persists the FULL compose state — text, reply, **and** `effectFlags`/`isBlurEnabled`/
+> `ephemeralDurationRawValue` (+ `selectedLanguage`). Android's `ConversationDraft` persisted only
+> text + `replyToId`; a self-destruct duration or a confetti effect armed on the composer was lost on
+> navigation. The recon confirmed via grep that `pendingEffects: MessageEffects` already exists on
+> `ChatUiState` (line 160) but was never fed into `DraftAutosave.resolve` nor restored on open — a genuine,
+> now-portable gap needing **no** gateway endpoint, **no** wire-DTO change (`ConversationDraft` is a local
+> DataStore value type), and **no** timer/instrumentation.
+>
+> **Faithful two-predicate port (the key design call)**: iOS splits "worth persisting" (`isEffectivelyEmpty`,
+> weighs effects/blur/ephemeral) from the conversation-list "Brouillon" badge (`hasDraftText`, text-only).
+> Android's shared `ConversationDraft.isMeaningful` already drives FOUR conversation-list surfaces
+> (`DraftAwareOrdering` float, `LastMessagePreview` "Brouillon …" line, `DraftDiscard`, `ConversationListScreen`
+> `hasDraft` badge). Extending `isMeaningful` to include effects would make an effects-only draft float and
+> badge the list — a divergence from iOS. So I added a SEPARATE `ConversationDraft.isWorthPersisting`
+> (`isMeaningful || effects.hasAnyEffect`) used ONLY by `DraftAutosave`, leaving all four list surfaces
+> byte-for-byte unchanged. An effects-only draft now persists and restores but never floats/badges a row —
+> exactly iOS.
+>
+> **Pure core (`:core:model`)**: `ConversationDraft` gains `effects: MessageEffects = MessageEffects()`
+> (defaulted so a legacy blob decodes to an empty selection — back-compat covered by a decode test) folding
+> iOS's three separate fields into the single `MessageEffects` SSOT (a set flag bit = armed). New
+> `isWorthPersisting` extension. `isMeaningful` unchanged.
+>
+> **Pure reducer (`:feature:chat`)**: `DraftAutosave.resolve` gains an `effects: MessageEffects = MessageEffects()`
+> param — empty composer + armed effect → `Save`; a change in effects alone → `Save`; identical
+> text+reply+effects → `None`; clearing the last effect on an empty composer → `Clear` (via
+> `isWorthPersisting`). `DraftRestore` gains `effects`; `restore` returns `stored.effects` and gates on
+> `isWorthPersisting` (an effects-only stored draft re-arms an idle empty composer).
+>
+> **Trivial VM wiring**: `ChatViewModel.persistDraft` reads `_state.value.pendingEffects` (every existing
+> caller already updates state before calling, so no new params on the 6 call sites); `toggleEffect` /
+> `selectEphemeralDuration` / `clearEffects` now call `persistDraft` so an armed/cleared effect is saved
+> immediately; the open-time restore applies `pendingEffects = restored.effects` and tracks
+> `lastPersistedDraft` via `isWorthPersisting`. Post-send path unchanged (state cleared before the existing
+> `persistDraft("", null)` → reads empty effects → `Clear`). **Documented edge (iOS-parity):** `restore`
+> guards on text/editing only, not on already-armed composer effects — the load runs in `init` before the
+> user can interact, and iOS's `onAppear` restore has the same shape.
+>
+> **Tests**: **+19** — `ConversationDraftTest` +7 (effects never make a draft list-meaningful;
+> `isWorthPersisting` weighs effects / stays false when empty / true for text|reply; legacy blob missing
+> `effects` decodes to `MessageEffects()`), `DraftAutosaveTest` +8 (armed effects on empty composer → Save;
+> saved draft carries effects; clearing effects → Clear; effects-alone change → Save; identical
+> text+reply+effects → None; blank+no-effects+no-prior → None; restore re-arms effects-only + effects
+> alongside text/reply), `ChatViewModelTest` +4 round-trip (arming persists to the store; clearing the last
+> effect purges; effects-only stored draft re-arms `pendingEffects` on open). **Mutation (RED proof) ×3**:
+> (a) drop `isWorthPersisting`'s `|| effects.hasAnyEffect` → **exactly 1** `ConversationDraftTest` fails
+> (the list `isMeaningful` tests stay green, proving no leak); (b) drop `resolve`'s `previous.effects ==
+> effects` idempotence clause → **exactly 1** `DraftAutosaveTest` fails; (c) drop the empty-guard
+> `!effects.hasAnyEffect` → **exactly 1** `DraftAutosaveTest` fails. All restored.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) — **BUILD SUCCESSFUL**
+> across every module locally in this run; touched modules also ran explicitly green (`ConversationDraftTest`,
+> `DraftAutosaveTest` 31, `ChatViewModelTest`). Reviewer PASS. Diff is `apps/android` only.
+>
+> **Next**: the narrower follow-up `chat-draft-language-persistence` — persist the manual composer language
+> pick (`MessageDraft.selectedLanguage` / `ComposerLanguageState.withManualPick`) on `ConversationDraft`,
+> restoring the language pill's override. Per iOS a language-only draft is NOT meaningful (so it re-applies
+> only atop an otherwise worth-persisting draft) — a clean pure sub-rule + trivial VM wiring, same shape as
+> this slice. After that, the Chat `[◐]`/`[~]` boxes still open (finer send-lifecycle `Slow` tier — needs
+> outbox retry-attempt state plumbed into `BubbleContent`; edit-history viewer — blocked on a gateway
+> endpoint, not apps/android-only). Re-scout read-only before committing; parity notes are hypotheses.
+
 > On 2026-08-21 **Message-bubble accessibility composer shipped** (slice `chat-bubble-a11y-label`).
 > **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 5 open PRs were
 > web #3247 / gateway #3242 #3245 / shared #3243 / iOS #3241 — none android-routine). Prior iteration

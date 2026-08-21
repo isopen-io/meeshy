@@ -3139,6 +3139,60 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun arming_an_effect_on_an_empty_composer_persists_it_to_the_durable_store() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleEffect(MessageEffectFlags.CONFETTI)
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.effects?.has(MessageEffectFlags.CONFETTI)).isTrue()
+        assertThat(stored?.text).isEqualTo("")
+    }
+
+    @Test
+    fun clearing_the_last_armed_effect_on_an_empty_composer_purges_the_stored_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(
+                    conversationId = "c1",
+                    text = "",
+                    effects = MessageEffects(flags = MessageEffectFlags.GLOW),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        h.vm.clearEffects()
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun an_effects_only_stored_draft_re_arms_the_composer_effects_on_open() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(
+                    conversationId = "c1",
+                    text = "",
+                    effects = MessageEffects(flags = MessageEffectFlags.EPHEMERAL, ephemeralDuration = 300),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pendingEffects.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(h.vm.state.value.pendingEffects.ephemeralDuration).isEqualTo(300)
+        assertThat(h.vm.state.value.draft).isEqualTo("")
+    }
+
+    @Test
     fun editing_a_message_never_overwrites_the_stored_new_message_draft() = runTest(dispatcher) {
         val h = harness(
             syncedConversation(),
