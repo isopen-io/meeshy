@@ -215,20 +215,21 @@ nonisolated public enum FocalMetrics {
     /// Chips de la bordure basse du message en focus (2026-08-22 : « les
     /// icônes doivent être SUR la bordure, comme CATÉGORIE dans la liste »).
     nonisolated public enum FocusStrip {
-        public static let chipSize: CGFloat = 32
-        /// Débord sous le bas du contenu pour que le CENTRE des chips tombe
-        /// sur la ligne de la carte : la carte (fond SwiftUI de la rangée,
-        /// même repère que les chips) dépasse le bloc de contenu de
-        /// `focusCardInnerMargin` — un demi-chip plus cette marge.
-        public static let overhang: CGFloat = chipSize / 2 + FocalScrollPerspective.focusCardInnerMargin
-        /// Chip d'identité (avatar + nom + date) posée sur la ligne du HAUT
-        /// pour un message en focus qui n'est pas tête de groupe — une
-        /// superposition, jamais une hauteur de rangée (instantané, zéro
-        /// relayout).
+        /// TOUTES les chips du focus (identité, date+coche, traduction,
+        /// drapeaux, (+), réactions) = la MÊME capsule (2026-08-22 : « les
+        /// icônes en bas doivent être exactement comme ces chips »).
+        public static let chipHeight: CGFloat = 24
+        public static let chipMinWidth: CGFloat = 32
+        /// Inset des chips depuis le bord du bloc de contenu : le bloc est à
+        /// `Row.paddingHorizontal − focusCardHorizontalInset` (10 pt) du bord
+        /// de la carte, 4 pt de plus ⇒ 14 pt, comme l'encoche de la liste.
+        public static let chipInset: CGFloat = 4
+        /// Débord pour que le CENTRE des chips tombe sur la ligne de la
+        /// carte : la carte (fond SwiftUI de la rangée, même repère que les
+        /// chips) dépasse le bloc de contenu de `focusCardInnerMargin`.
+        public static let overhang: CGFloat = chipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
         public static let identityAvatarSize: CGFloat = 18
-        public static let identityChipHeight: CGFloat = 24
-        /// Même cote en haut : un demi-chip plus la marge de la carte.
-        public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
+        public static let identityOverhang: CGFloat = overhang
     }
 
     nonisolated public enum HiddenChrome {

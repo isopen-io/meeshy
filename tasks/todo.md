@@ -327,6 +327,10 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
       chips avant la pose) — chips et identité consolidées sur les lignes, vérifié en mouvement et au posé ;
       crash `APPLYING_SNAPSHOTS_REENTRANTLY` corrigé (sync différée + coalescée, un apply en vol) — stress
       6 balayages sans crash ; méta-rangée = heure seule.
+- [x] Lot 9 (directives 22/08 ter) : effectif → feuille des participants (vérifié) ; carte de liste 104 pt,
+      padding 14, respiration 18 (jeton partagé mis à jour) ; aperçu « Auteur : texte » sur 2 lignes (vérifié) ;
+      chips uniformes sur toutes les bulles en focus — identité à gauche, date + coche à droite, capsules en bas
+      (vérifié tête de groupe).
 - [ ] Rivière lots 2–5 inchangés (ci-dessous).
 
 ## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`

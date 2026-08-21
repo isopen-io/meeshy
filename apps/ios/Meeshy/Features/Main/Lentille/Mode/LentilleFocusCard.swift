@@ -57,6 +57,8 @@ struct LentilleFocusCard: View, Equatable {
     var onRemoveTag: (MeeshyConversationTag) -> Void = { _ in }
     /// Appui sur l'icône de synchronisation ⇒ synchronisation IMMÉDIATE.
     var onForceSync: () -> Void = {}
+    /// Appui sur l'effectif ⇒ la feuille des participants (2026-08-22).
+    var onShowParticipants: () -> Void = {}
     /// Pastille de présence de l'avatar (2026-08-22 : « il manque la
     /// pastille de présence dans la magnificence ») — même source que la
     /// rangée plate ; `.offline`/`nil` = aucun point.
@@ -287,22 +289,22 @@ struct LentilleFocusCard: View, Equatable {
         return ""
     }
 
+    /// « Auteur : début du texte » en UN seul texte qui coule sur deux
+    /// lignes — retour à la ligne naturel après l'auteur, la suite dessous
+    /// (directive 2026-08-22). Le dernier expéditeur, pour TOUTES les
+    /// conversations (2026-08-21) — la rangée plate le réserve aux groupes.
     private var previewLine: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
-            // Le dernier expéditeur, pour TOUTES les conversations (directive
-            // 2026-08-21) — la rangée plate le réserve aux groupes.
-            if let sender = conversation.lastMessageSenderName, !sender.isEmpty {
-                Text(sender)
-                    .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
-                    .foregroundColor(accent)
-                    .lineLimit(1)
-                    .layoutPriority(1)
-            }
-            Text(previewText)
-                .font(LentilleMetrics.Line2.font)
-                .foregroundColor(textSecondary)
-                .lineLimit(2)
-        }
+        (senderPrefix + Text(previewText).font(LentilleMetrics.Line2.font).foregroundColor(textSecondary))
+            .lineLimit(2)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var senderPrefix: Text {
+        guard let sender = conversation.lastMessageSenderName, !sender.isEmpty else { return Text("") }
+        return Text("\(sender) : ")
+            .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
+            .foregroundColor(accent)
     }
 
     // MARK: - Chip de type + memberCount (behaviour-matrix:L08) — sur la ligne
@@ -314,22 +316,28 @@ struct LentilleFocusCard: View, Equatable {
         return original == custom ? nil : original
     }
 
+    /// L'effectif est un BOUTON : l'appui ouvre la feuille des participants.
     private var typeBadge: some View {
-        HStack(spacing: 3) {
-            Image(systemName: Self.typeBadgeIcon(for: conversation.type))
-                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                .imageScale(.small)
-            if conversation.memberCount > 1 {
-                Text(conversation.memberCountDisplay)
+        Button(action: onShowParticipants) {
+            HStack(spacing: 3) {
+                Image(systemName: Self.typeBadgeIcon(for: conversation.type))
                     .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                    .imageScale(.small)
+                if conversation.memberCount > 1 {
+                    Text(conversation.memberCountDisplay)
+                        .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                }
             }
+            .foregroundColor(accent)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule(style: .continuous).fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
+            .overlay(Capsule(style: .continuous).strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1))
+            .contentShape(Capsule(style: .continuous))
         }
-        .foregroundColor(accent)
-        .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, MeeshySpacing.xs)
-        .background(Capsule(style: .continuous).fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
-        .overlay(Capsule(style: .continuous).strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1))
-        .accessibilityLabel(conversation.memberCountDisplay)
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "conversations.focus.show_participants", defaultValue: "Voir les participants", bundle: .main))
+        .accessibilityValue(conversation.memberCountDisplay)
     }
 
     /// Synchronisation en cours : même glyphe que la rangée plate, mais un
@@ -569,6 +577,8 @@ struct LentilleFocusCardHost: View {
     var presenceFor: (Conversation) -> PresenceState? = { _ in nil }
     /// Appui sur l'icône de synchronisation de la carte.
     var onForceSync: (Conversation) -> Void = { _ in }
+    /// Appui sur l'effectif de la carte ⇒ participants.
+    var onShowParticipants: (Conversation) -> Void = { _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -622,6 +632,7 @@ struct LentilleFocusCardHost: View {
                     onFilterByTag: onFilterByTag,
                     onRemoveTag: { tag in onRemoveTag(conversation, tag) },
                     onForceSync: { onForceSync(conversation) },
+                    onShowParticipants: { onShowParticipants(conversation) },
                     presenceState: presenceFor(conversation)
                 )
                 .equatable()

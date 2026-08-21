@@ -39,8 +39,13 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         // groupe est une SUPERPOSITION sur la ligne du haut (hauteur stable,
         // affichage instantané) — plus un en-tête inséré dans la rangée.
         XCTAssertFalse(row.contains("if input.isFirstInGroup || input.isFocused {"), "plus d'en-tête inséré au focus")
-        XCTAssertTrue(row.contains("if input.isFocused && !input.isFirstInGroup { focusIdentityChip"), "identité sur la ligne du haut")
+        // 2026-08-22 : pour TOUTES les bulles en focus — haut-gauche avatar +
+        // auteur, haut-droite date + coche, sur la ligne du haut ; l'en-tête
+        // de tête de groupe garde sa place et s'efface.
+        XCTAssertTrue(row.contains("if input.isFocused { HStack(alignment: .center, spacing: 4) { focusIdentityChip Spacer(minLength: 4) focusStampChip }"), "identité à gauche, date+coche à droite")
         XCTAssertTrue(row.contains(".offset(y: -FocalMetrics.FocusStrip.identityOverhang)"))
+        XCTAssertEqual(row.components(separatedBy: ".opacity(input.isFocused ? 0 : 1)").count - 1, 2, "en-tête ET ligne drapeau+réactions s'effacent en focus, sans bouger")
+        XCTAssertTrue(row.contains("BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)"), "la coche d'état de réception dans la chip de date")
     }
 
     /// 2026-08-22 : tout ce que porte la bulle en focus apparaît AVEC la carte
@@ -86,7 +91,8 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         let iPlus = try XCTUnwrap(tail.range(of: "\"face.smiling\"")).lowerBound
         let iReactions = try XCTUnwrap(tail.range(of: "focusReactionChip(reaction)")).lowerBound
         XCTAssertTrue(iTranslate < iFlags && iFlags < iPlus && iPlus < iReactions, "ordre : traduction, drapeaux, (+), réactions")
-        XCTAssertTrue(row.contains(".fill(mine ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))"), "fond PLEIN quand j'ai réagi")
+        XCTAssertTrue(row.contains("focusChip(filled: mine)"), "fond PLEIN quand j'ai réagi")
+        XCTAssertTrue(row.contains(".fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))"), "une seule coquille de chip")
         let controller = try normalized("Meeshy/Features/Main/Views/MessageListViewController.swift")
         XCTAssertTrue(controller.contains("cell.clipsToBounds = false"))
         XCTAssertTrue(controller.contains("cell.layer.zPosition = isFocusedCell ? 1 : 0"))

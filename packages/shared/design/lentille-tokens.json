@@ -46,9 +46,9 @@
       "ringType": "internal",
       "radius": 16,
       "colorAccent": true,
-      "height": 84,
+      "height": 104,
       "padding": {
-        "vertical": 8
+        "vertical": 14
       },
       "avatarSize": 52,
       "nameSize": 17,

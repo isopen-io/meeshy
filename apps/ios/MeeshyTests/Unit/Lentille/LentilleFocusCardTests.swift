@@ -463,6 +463,8 @@ extension LentilleFocusCardTests {
     func test_focusCard_memberCountAndSyncOnTheBottomLine_originalNameOnTheTopLine() throws {
         let code = try modeSource("LentilleFocusCard.swift")
         XCTAssertTrue(code.contains("Button(action: onForceSync)"), "l'icône de synchronisation est un bouton")
+        XCTAssertTrue(code.contains("Button(action: onShowParticipants)"), "l'effectif ouvre la feuille des participants")
+        XCTAssertTrue(code.contains("(senderPrefix + Text(previewText)"), "« Auteur : texte » en un seul texte sur deux lignes")
         XCTAssertTrue(code.contains("if conversation.userState.hasPendingSync {"), "visible seulement si une synchronisation est en attente")
         XCTAssertTrue(code.contains(".overlay(alignment: .top) {"), "nom original centré en haut")
         XCTAssertTrue(code.contains("Self.originalName(conversation: conversation)"))

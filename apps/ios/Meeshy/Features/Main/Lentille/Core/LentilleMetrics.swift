@@ -98,10 +98,12 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
-        /// Carte MAGNIFIÉE (2026-08-21) : déborde de la rangée (64) de 10 pt
-        /// de chaque côté — la loupe — sans toucher la hauteur des rangées.
-        public static let height: CGFloat = 84
-        public static let paddingVertical: CGFloat = 8
+        /// Carte MAGNIFIÉE (2026-08-21, accentuée le 22 : « une marge plus
+        /// importante et un padding suffisant en haut et en bas ») : déborde
+        /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
+        /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
+        public static let height: CGFloat = 104
+        public static let paddingVertical: CGFloat = 14
         /// Avatar de la carte = le contexte « liste » historique (52), un cran
         /// au-dessus de la rangée plate (44) : c'est la magnification.
         public static let avatarContext: AvatarContext = .conversationList
@@ -112,7 +114,7 @@ nonisolated public enum LentilleMetrics {
         /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
         /// rangées voisines s'écartent de la ligne de focus de ce montant
         /// pendant la scène — translation de compositor, zéro relayout.
-        public static let breathing: CGFloat = 12
+        public static let breathing: CGFloat = 18
         /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36

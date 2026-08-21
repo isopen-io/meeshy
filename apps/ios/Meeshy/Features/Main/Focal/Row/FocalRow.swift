@@ -117,10 +117,10 @@ struct FocalRow: View {
 
             // Le message EN FOCUS (Focal) porte toujours son identité — avatar,
             // présence, mood, jour et heure — même en continuation de groupe.
-            // Tête de groupe seulement : un message en focus qui n'est pas
-            // tête de groupe porte son identité SUR la ligne du haut de la
-            // carte (superposition, `focusIdentityChip`) — la hauteur de la
-            // rangée ne dépend jamais du focus (instantané, zéro relayout).
+            // Tête de groupe : en focus, l'identité et la date passent SUR
+            // les lignes de la carte (chips, 2026-08-22) — l'en-tête garde sa
+            // place et s'efface, la hauteur de la rangée ne dépend jamais du
+            // focus (instantané, zéro relayout).
             if input.isFirstInGroup {
                 FocalIdentityHeader(
                     isMe: content.isMe,
@@ -156,6 +156,7 @@ struct FocalRow: View {
                     isEditSaving: content.isEditSaving,
                     hasEditHistory: content.hasEditHistory
                 )
+                .opacity(input.isFocused ? 0 : 1)
             }
 
             // Matrice §5 « Éphémère / flou / vue unique » : le flou de
@@ -215,11 +216,15 @@ struct FocalRow: View {
                 focusCardBackground
             }
         }
-        .overlay(alignment: .topLeading) {
-            if input.isFocused && !input.isFirstInGroup {
-                focusIdentityChip
-                    .padding(.leading, indent)
-                    .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
+        .overlay(alignment: .top) {
+            if input.isFocused {
+                HStack(alignment: .center, spacing: 4) {
+                    focusIdentityChip
+                    Spacer(minLength: 4)
+                    focusStampChip
+                }
+                .padding(.horizontal, FocalMetrics.FocusStrip.chipInset)
+                .offset(y: -FocalMetrics.FocusStrip.identityOverhang)
             }
         }
         .overlay(alignment: .bottomLeading) {
@@ -624,20 +629,22 @@ struct FocalRow: View {
 
     private var focusAccent: Color { Color(hex: input.accentHex) }
 
-    /// Chip de la bordure — contour = l'accent de la scène (même langage que
-    /// les chips de la carte de focus de la liste).
-    private func focusChip<Content: View>(isActive: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
+    /// LA chip du focus — une seule coquille pour l'identité, la date, la
+    /// traduction, les drapeaux, le (+) et les réactions : capsule OPAQUE
+    /// (posée sur la ligne de la carte), contour à l'accent de la scène
+    /// (plein quand active / à moi), même langage que l'encoche de la liste.
+    private func focusChip<Content: View>(isActive: Bool = false, filled: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
         content()
-            .frame(width: 24, height: 24)
+            .padding(.horizontal, 7)
+            .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
+            .frame(height: FocalMetrics.FocusStrip.chipHeight)
             .background(
-                Circle()
-                    // Opaque : la chip est POSÉE sur la ligne de la carte.
-                    .fill(MeeshyColors.backgroundSecondary(isDark: input.isDark))
-                    .overlay(Circle().fill(focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
-                    .overlay(Circle().strokeBorder(focusAccent.opacity(isActive ? 1 : 0.45), lineWidth: isActive ? 1.5 : 1))
+                Capsule(style: .continuous)
+                    .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
+                    .overlay(Capsule(style: .continuous).fill(filled ? Color.clear : focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
+                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(isActive || filled ? 1 : 0.45), lineWidth: isActive || filled ? 1.5 : 1))
             )
-            .frame(width: FocalMetrics.FocusStrip.chipSize, height: FocalMetrics.FocusStrip.chipSize)
-            .contentShape(Circle())
+            .contentShape(Capsule(style: .continuous))
     }
 
     /// Sur la ligne BASSE de la carte du message en focus, dans CET ordre
@@ -694,7 +701,7 @@ struct FocalRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.leading, indent)
+        .padding(.leading, FocalMetrics.FocusStrip.chipInset)
     }
 
     /// Réaction sur la ligne : fond PLEIN (accent) si j'ai réagi, sinon la
@@ -705,24 +712,16 @@ struct FocalRow: View {
             HapticFeedback.light()
             actions.onToggleReaction?(reaction.emoji)
         } label: {
-            HStack(spacing: 2) {
-                Text(reaction.emoji).font(.caption2)
-                if reaction.count > 1 {
-                    Text("\(reaction.count)")
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(mine ? .white : focusAccent)
+            focusChip(filled: mine) {
+                HStack(spacing: 2) {
+                    Text(reaction.emoji).font(.caption2)
+                    if reaction.count > 1 {
+                        Text("\(reaction.count)")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(mine ? .white : focusAccent)
+                    }
                 }
             }
-            .padding(.horizontal, reaction.count > 1 ? 7 : 4)
-            .frame(height: 24)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(mine ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
-                    .overlay(Capsule(style: .continuous).fill(mine ? Color.clear : focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
-                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(mine ? 1 : 0.45), lineWidth: mine ? 1.5 : 1))
-            )
-            .frame(height: FocalMetrics.FocusStrip.chipSize)
-            .contentShape(Capsule(style: .continuous))
         }
         .buttonStyle(.plain)
         .simultaneousGesture(LongPressGesture(minimumDuration: 0.4).onEnded { _ in
@@ -748,35 +747,60 @@ struct FocalRow: View {
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)
     }
 
-    /// Identité (avatar + nom + date complète) SUR la ligne du HAUT de la
-    /// carte, pour un message en focus qui n'est pas tête de groupe.
+    /// HAUT-GAUCHE : avatar + auteur, sur la ligne du haut de la carte —
+    /// pour TOUTES les bulles en focus (2026-08-22). Toucher = profil.
     private var focusIdentityChip: some View {
-        HStack(spacing: 6) {
-            MeeshyAvatar(
-                name: input.senderDisplayName,
-                context: .postReaction,
-                accentColor: input.senderColorHex,
-                avatarURL: input.senderAvatarURL,
-                isDark: input.isDark
-            )
-            Text(input.senderDisplayName)
-                .font(MeeshyFont.relative(11.5, weight: .bold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: input.isDark))
-                .lineLimit(1)
-            Text(headerTimeString)
-                .font(MeeshyFont.relative(10.5))
-                .foregroundColor(MeeshyColors.textMuted(isDark: input.isDark))
-                .lineLimit(1)
-                .layoutPriority(1)
+        Button {
+            actions.onOpenProfile?(ProfileSheetUser(
+                userId: nil,
+                username: input.senderUsername ?? input.senderDisplayName,
+                displayName: input.senderDisplayName,
+                avatarURL: input.senderAvatarURL
+            ))
+        } label: {
+            focusChip {
+                HStack(spacing: 5) {
+                    MeeshyAvatar(
+                        name: input.senderDisplayName,
+                        context: .postReaction,
+                        accentColor: input.senderColorHex,
+                        avatarURL: input.senderAvatarURL,
+                        isDark: input.isDark
+                    )
+                    Text(input.senderDisplayName)
+                        .font(MeeshyFont.relative(11.5, weight: .bold))
+                        .foregroundColor(MeeshyColors.textPrimary(isDark: input.isDark))
+                        .lineLimit(1)
+                }
+                .padding(.leading, -3)
+            }
         }
-        .padding(.leading, 3)
-        .padding(.trailing, MeeshySpacing.sm)
-        .frame(height: FocalMetrics.FocusStrip.identityChipHeight)
-        .background(
-            Capsule(style: .continuous)
-                .fill(MeeshyColors.backgroundSecondary(isDark: input.isDark))
-                .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(0.45), lineWidth: 1))
-        )
+        .buttonStyle(.plain)
+        .accessibilityLabel(input.senderDisplayName)
+    }
+
+    /// HAUT-DROITE : date complète (pré-calculée) + coche d'état de réception
+    /// (mes messages), sur la ligne du haut — toucher = détails de lecture.
+    private var focusStampChip: some View {
+        let metaTint: Color = input.isDark ? .white.opacity(FocalMetrics.MetaText.darkOpacity) : .black.opacity(FocalMetrics.MetaText.lightOpacity)
+        let readTint: Color = input.isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
+        return Button {
+            actions.onShowReadStatus?(content.messageId)
+        } label: {
+            focusChip {
+                HStack(spacing: 4) {
+                    Text(headerTimeString)
+                        .font(MeeshyFont.relative(10.5, weight: .semibold))
+                        .foregroundColor(metaTint)
+                        .lineLimit(1)
+                    if content.isMe, let status = content.meta.deliveryStatus {
+                        BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
+                    }
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(headerTimeString)
     }
 
     @ViewBuilder

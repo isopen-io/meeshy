@@ -1373,6 +1373,11 @@ struct ConversationListView: View {
                 onForceSync: { _ in
                     HapticFeedback.light()
                     conversationViewModel.forceSync()
+                },
+                // Même feuille que l'avatar de la rangée (onglet Membres par défaut).
+                onShowParticipants: { conversation in
+                    HapticFeedback.light()
+                    handleConversationInfoView(conversation)
                 }
             )
             // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
