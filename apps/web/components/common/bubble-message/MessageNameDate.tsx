@@ -7,6 +7,7 @@ import { getUserDisplayName } from '@/utils/user-display-name';
 import { isAnonymousSender } from '@meeshy/shared/utils/sender-identity';
 import { formatRelativeDate } from '@/utils/date-format';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
+import { useOpenParticipantProfile } from '@/components/conversations/participant-profile-context';
 import { cn } from '@/lib/utils';
 import type { MessageSender } from './types';
 
@@ -35,6 +36,11 @@ export const MessageNameDate = memo(function MessageNameDate({
   // `isAnonymousSender` est la seule lecture autorisée — elle arbitre entre
   // `type` (qui fait foi) et les drapeaux hérités des routes de lien.
   const isAnonymous = isAnonymousSender(user as Record<string, unknown> | null | undefined);
+  const openParticipantProfile = useOpenParticipantProfile();
+  // `sender.id` porte le `Participant.id`, jamais le `User.id` — c'est la clé
+  // que la fiche attend (`getSenderUserId` existe précisément parce que les deux
+  // ne se confondent pas).
+  const participantId = typeof user?.id === 'string' ? user.id : null;
 
   return (
     <div className={cn(
@@ -42,10 +48,27 @@ export const MessageNameDate = memo(function MessageNameDate({
       isOwnMessage && "flex-row-reverse"
     )}>
       {isAnonymous ? (
-        <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-          <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
-          {displayName}
-        </span>
+        // Bloquer `/u/` n'était que la moitié du travail : le nom devenait un
+        // texte inerte, et l'identité fournie à l'entrée restait injoignable
+        // depuis le fil. La fiche en est la seule surface — le nom l'ouvre.
+        // Hors conversation (aperçus, pages de lien), le contexte est absent :
+        // on retombe sur le texte plutôt que d'offrir un bouton mort.
+        openParticipantProfile && participantId ? (
+          <button
+            type="button"
+            data-testid="participant-profile-trigger"
+            onClick={(e) => { e.stopPropagation(); openParticipantProfile(participantId); }}
+            className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors flex items-center gap-1"
+          >
+            <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+            {displayName}
+          </button>
+        ) : (
+          <span className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+            <Ghost className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
+            {displayName}
+          </span>
+        )
       ) : username ? (
         <Link
           href={`/u/${username}`}

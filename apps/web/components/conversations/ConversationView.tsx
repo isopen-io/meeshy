@@ -33,6 +33,7 @@ import type { Participant } from '@meeshy/shared/types/participant';
 import type { FailedMessage } from '@/stores/failed-messages-store';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { getEffectiveRole } from '@meeshy/shared/types/role-types';
+import { ParticipantProfileProvider } from './ParticipantProfileProvider';
 
 // Types pour les indicateurs de frappe
 interface TypingIndicator {
@@ -298,6 +299,10 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
     const accentStyle = useConversationAccent(conversation);
 
     return (
+      // Un visiteur sans compte n'a pas de page `/u/` : sa fiche est la seule
+      // surface où son identité existe, et elle doit s'ouvrir depuis partout où
+      // son nom apparaît. UN dialogue monté ici plutôt qu'un par nom affiché.
+      <ParticipantProfileProvider conversationId={conversation?.id ?? ''}>
       <div
         ref={ref}
         style={accentStyle as React.CSSProperties | undefined}
@@ -446,6 +451,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
           </ErrorBoundary>
         </div>
       </div>
+      </ParticipantProfileProvider>
     );
   }
 ));

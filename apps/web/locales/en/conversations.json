@@ -801,7 +801,29 @@
       "email": "Email",
       "birthday": "Birthday",
       "withheld": "provided, moderators only",
-      "title": "Participant profile"
+      "title": "Participant profile",
+      "capabilities": "In this conversation",
+      "noRestriction": "No restrictions",
+      "denied": {
+        "canViewHistory": "Cannot see messages sent before they joined",
+        "canSendMessages": "Cannot write",
+        "canSendImages": "Cannot send images",
+        "canSendFiles": "Cannot send files",
+        "canSendVideos": "Cannot send videos",
+        "canSendAudios": "Cannot send audio",
+        "canSendLinks": "Cannot send links",
+        "canSendLocations": "Cannot share their location"
+      },
+      "entryLink": "Link settings",
+      "linkInactive": "This link has been deactivated",
+      "linkUses": "Entries",
+      "linkExpires": "Expires on",
+      "linkRequires": "Requires",
+      "linkCountries": "Allowed countries",
+      "linkLanguages": "Allowed languages",
+      "requireNickname": "nickname",
+      "requireEmail": "email",
+      "requireBirthday": "date of birth"
     },
     "forward": {
       "title": "Forward message",

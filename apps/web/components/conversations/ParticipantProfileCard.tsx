@@ -1,10 +1,46 @@
 'use client';
 
 import { memo } from 'react';
-import { Ghost, Mail, Cake, Globe, MapPin, Link2, CalendarClock } from 'lucide-react';
+import { Ghost, Mail, Cake, Globe, MapPin, Link2, CalendarClock, Ban, ShieldCheck, Settings2 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
-import type { ParticipantProfile } from '@/hooks/queries/use-participant-profile';
+import type {
+  ParticipantProfile,
+  ParticipantEntryCapabilities,
+} from '@/hooks/queries/use-participant-profile';
+
+/**
+ * Les capacités, dans l'ordre où elles comptent pour qui lit la fiche.
+ *
+ * La carte n'énonce que les REFUS. Lister sept autorisations dont six accordées
+ * noierait l'unique information utile, et une fiche qui récite des permissions
+ * se lit comme un formulaire plutôt que comme une présentation.
+ *
+ * `canViewHistory` vient en tête : c'est la restriction qui explique le plus de
+ * comportements observables — quelqu'un qui ne réagit jamais à ce qui précède
+ * son arrivée ne l'ignore pas, il ne l'a jamais vu.
+ */
+const CAPABILITY_ORDER: readonly (keyof ParticipantEntryCapabilities)[] = [
+  'canViewHistory',
+  'canSendMessages',
+  'canSendImages',
+  'canSendFiles',
+  'canSendVideos',
+  'canSendAudios',
+  'canSendLinks',
+  'canSendLocations',
+];
+
+const CAPABILITY_DENIED_FALLBACK: Record<keyof ParticipantEntryCapabilities, string> = {
+  canViewHistory: 'Ne voit pas les messages antérieurs à son arrivée',
+  canSendMessages: 'Ne peut pas écrire',
+  canSendImages: 'Ne peut pas envoyer d’images',
+  canSendFiles: 'Ne peut pas envoyer de fichiers',
+  canSendVideos: 'Ne peut pas envoyer de vidéos',
+  canSendAudios: 'Ne peut pas envoyer d’audio',
+  canSendLinks: 'Ne peut pas envoyer de liens',
+  canSendLocations: 'Ne peut pas partager sa position',
+};
 
 interface ParticipantProfileCardProps {
   readonly profile: ParticipantProfile;
@@ -80,6 +116,26 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
   const birthdayLabel = profile.birthday
     ? new Date(profile.birthday).toLocaleDateString()
     : null;
+
+  const capabilities = profile.entryCapabilities;
+  const deniedCapabilities = capabilities
+    ? CAPABILITY_ORDER.filter((capability) => !capabilities[capability])
+    : [];
+
+  const entryLinkExpiry = profile.entryLink?.expiresAt
+    ? new Date(profile.entryLink.expiresAt).toLocaleDateString()
+    : null;
+
+  // Les exigences d'entrée se lisent ensemble : « pseudo · email » dit en un
+  // coup d'œil ce que l'hôte a demandé pour laisser passer. Une ligne par
+  // exigence transformerait trois booléens en trois lignes de formulaire.
+  const entryLinkRequirements = profile.entryLink
+    ? [
+        profile.entryLink.requireNickname && t('participantProfile.requireNickname', 'pseudo'),
+        profile.entryLink.requireEmail && t('participantProfile.requireEmail', 'email'),
+        profile.entryLink.requireBirthday && t('participantProfile.requireBirthday', 'date de naissance'),
+      ].filter((requirement): requirement is string => Boolean(requirement))
+    : [];
 
   return (
     <div className={cn('space-y-3', className)} data-testid="participant-profile-card">
@@ -168,6 +224,104 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
           />
         )}
       </div>
+
+      {profile.entryCapabilities && (
+        <div className="space-y-1.5" data-testid="participant-profile-capabilities">
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            {t('participantProfile.capabilities', 'Dans cette conversation')}
+          </div>
+          {deniedCapabilities.length === 0 ? (
+            <div
+              data-testid="participant-profile-no-restriction"
+              className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+            >
+              <ShieldCheck className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" aria-hidden="true" />
+              {t('participantProfile.noRestriction', 'Aucune restriction')}
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {deniedCapabilities.map((capability) => (
+                <li
+                  key={capability}
+                  data-testid={`participant-profile-denied-${capability}`}
+                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"
+                >
+                  <Ban className="h-3.5 w-3.5 flex-shrink-0 text-amber-500" aria-hidden="true" />
+                  {t(`participantProfile.denied.${capability}`, CAPABILITY_DENIED_FALLBACK[capability])}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {profile.entryLink && (
+        <div
+          className="space-y-1.5 rounded-lg border border-dashed border-gray-200 p-3 dark:border-gray-700"
+          data-testid="participant-profile-entry-link"
+        >
+          <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('participantProfile.entryLink', 'Réglages du lien')}
+          </div>
+
+          {!profile.entryLink.isActive && (
+            <div
+              data-testid="participant-profile-entry-link-inactive"
+              className="text-sm text-amber-600 dark:text-amber-400"
+            >
+              {t('participantProfile.linkInactive', 'Ce lien a été désactivé')}
+            </div>
+          )}
+
+          <ProfileRow
+            testId="participant-profile-entry-link-uses"
+            icon={<Link2 className="h-3.5 w-3.5" />}
+            label={t('participantProfile.linkUses', 'Entrées')}
+            value={
+              profile.entryLink.maxUses === null
+                ? String(profile.entryLink.currentUses)
+                : `${profile.entryLink.currentUses} / ${profile.entryLink.maxUses}`
+            }
+          />
+
+          {entryLinkExpiry && (
+            <ProfileRow
+              testId="participant-profile-entry-link-expiry"
+              icon={<CalendarClock className="h-3.5 w-3.5" />}
+              label={t('participantProfile.linkExpires', 'Expire le')}
+              value={entryLinkExpiry}
+            />
+          )}
+
+          {entryLinkRequirements.length > 0 && (
+            <ProfileRow
+              testId="participant-profile-entry-link-requirements"
+              icon={<ShieldCheck className="h-3.5 w-3.5" />}
+              label={t('participantProfile.linkRequires', 'Exige')}
+              value={entryLinkRequirements.join(' · ')}
+            />
+          )}
+
+          {profile.entryLink.allowedCountries.length > 0 && (
+            <ProfileRow
+              testId="participant-profile-entry-link-countries"
+              icon={<MapPin className="h-3.5 w-3.5" />}
+              label={t('participantProfile.linkCountries', 'Pays admis')}
+              value={profile.entryLink.allowedCountries.join(', ')}
+            />
+          )}
+
+          {profile.entryLink.allowedLanguages.length > 0 && (
+            <ProfileRow
+              testId="participant-profile-entry-link-languages"
+              icon={<Globe className="h-3.5 w-3.5" />}
+              label={t('participantProfile.linkLanguages', 'Langues admises')}
+              value={profile.entryLink.allowedLanguages.join(', ').toUpperCase()}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 });

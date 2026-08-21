@@ -14,6 +14,7 @@ type ParticipantUser = User & { type?: string; sessionToken?: string; shareLinkI
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import { isAnonymousParticipant, getParticipantDisplayName, getParticipantInitials } from '@/utils/participant-helpers';
+import { useOpenParticipantProfile } from './participant-profile-context';
 import { getUserDisplayName } from '@/utils/user-display-name';
 
 interface ConversationParticipantsProps {
@@ -42,6 +43,7 @@ export function ConversationParticipants({
   _conversationCategory
 }: ConversationParticipantsProps) {
   const { t } = useI18n('conversations');
+  const openParticipantProfile = useOpenParticipantProfile();
 
   // Les typing users sont désormais passés par props pour éviter des abonnements socket multiples
 
@@ -93,9 +95,16 @@ export function ConversationParticipants({
 
   // Dédupliquer les participants par userId pour éviter les erreurs de clés dupliquées
   const uniqueParticipantsMap = new Map<string, Participant>();
+  // La clé est l'IDENTITÉ, et « identité » ne veut pas dire `userId` : un
+  // visiteur sans compte n'en a pas. Indexer sur `userId` seul les écartait TOUS
+  // en silence — la branche `isAnonymous` plus bas était écrite et jamais
+  // rendue. Un inscrit se dédoublonne par son compte, un anonyme par sa ligne
+  // de participation, exactement comme la clé unique en base
+  // (`@@unique([conversationId, userId, sessionTokenHash])`).
   participants.forEach(p => {
-    if (p.userId && !uniqueParticipantsMap.has(p.userId)) {
-      uniqueParticipantsMap.set(p.userId, p);
+    const identity = p.userId || p.id;
+    if (identity && !uniqueParticipantsMap.has(identity)) {
+      uniqueParticipantsMap.set(identity, p);
     }
   });
   const uniqueParticipants = Array.from(uniqueParticipantsMap.values());
@@ -198,6 +207,22 @@ export function ConversationParticipants({
                     <Link key={uniqueKey} href={`/u/${user.username}`} onClick={(e) => e.stopPropagation()} className="relative group">
                       {avatarContent}
                     </Link>
+                  );
+                }
+
+                // Un visiteur sans compte n'a pas de page `/u/`, mais il a une
+                // fiche : c'est là que vit l'identité qu'il a fournie en
+                // entrant. La clé est le `Participant.id`, jamais `user.id`.
+                if (isAnonymous && openParticipantProfile && participant.id) {
+                  return (
+                    <button
+                      key={uniqueKey}
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); openParticipantProfile(participant.id); }}
+                      className="relative group"
+                    >
+                      {avatarContent}
+                    </button>
                   );
                 }
 

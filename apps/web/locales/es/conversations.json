@@ -803,7 +803,29 @@
       "email": "Correo",
       "birthday": "Nacimiento",
       "withheld": "proporcionado, solo moderadores",
-      "title": "Ficha del participante"
+      "title": "Ficha del participante",
+      "capabilities": "En esta conversación",
+      "noRestriction": "Sin restricciones",
+      "denied": {
+        "canViewHistory": "No ve los mensajes anteriores a su llegada",
+        "canSendMessages": "No puede escribir",
+        "canSendImages": "No puede enviar imágenes",
+        "canSendFiles": "No puede enviar archivos",
+        "canSendVideos": "No puede enviar vídeos",
+        "canSendAudios": "No puede enviar audio",
+        "canSendLinks": "No puede enviar enlaces",
+        "canSendLocations": "No puede compartir su ubicación"
+      },
+      "entryLink": "Ajustes del enlace",
+      "linkInactive": "Este enlace ha sido desactivado",
+      "linkUses": "Entradas",
+      "linkExpires": "Caduca el",
+      "linkRequires": "Exige",
+      "linkCountries": "Países admitidos",
+      "linkLanguages": "Idiomas admitidos",
+      "requireNickname": "apodo",
+      "requireEmail": "correo electrónico",
+      "requireBirthday": "fecha de nacimiento"
     },
     "forward": {
       "title": "Reenviar mensaje",
