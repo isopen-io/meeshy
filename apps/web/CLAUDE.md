@@ -247,6 +247,44 @@ un aperçu) est un no-op muet dès qu'un handler voisin sait retirer cette ligne
 rien, le cache ressort identique, aucune erreur n'est levée — et `staleTime: Infinity` plus un delta
 upsert-only sur `Conversation.updatedAt` ne rattrapent rien avant la réconciliation complète (24 h).
 
+### Un état local de REJET retient une identité, jamais un booléen
+Un `useState(false)` qu'un seul `set…(true)` fait basculer et que **rien** ne remet à `false` est une
+transition descendante sans sa montante — la forme sœur, côté composant, de la grille close
+ci-dessus. Il se corrige en retenant l'**identité de ce qui a été rejeté**, pas un drapeau :
+
+```ts
+const [dismissedMessageId, setDismissedMessageId] = useState<string | null>(null);
+if (!pinned || dismissedMessageId === pinned.id) return null;
+```
+
+Les identifiants du dépôt sont des ObjectId, donc **globalement uniques** : un seul champ réarme à la
+fois sur un nouveau sujet ET sur un changement d'entité parente — ni clé composée, ni `useEffect` de
+remise à zéro.
+
+Le piège qui rend ça non évident : **un composant paramétré par une entité mais monté SANS `key`**
+(`<PinnedMessageBanner conversationId={conversation.id} />`, `ConversationView.tsx`) n'est jamais
+remonté quand l'entité change. React réconcilie par position et par type : la query est re-clée et
+refetche, l'état local NON. Un rejet fait dans une conversation masquait ainsi la bannière de toutes
+les autres, jusqu'à un rechargement de page — aucun filet ne rattrape un `useState`.
+
+Toujours écrire le témoin négatif avec : **le même sujet re-servi reste rejeté**. Sans lui, un
+correctif qui réarme à chaque refetch passe, et le bouton de fermeture ne ferme plus rien.
+
+### Un abonnement socket dans un composant se BORNE à son entité
+La passerelle diffuse dans la room de sa conversation (`to(ROOMS.conversation(id))`) et le web est
+joint à **toutes** les rooms de ses conversations : un composant qui écoute `message:pinned` sans
+regarder la charge utile refetche sur l'activité de n'importe quelle autre conversation, pour un
+résultat identique par construction.
+
+Le filtre se lit **par la NÉGATIVE**, comme le tri-état `membershipRestored` : on ne saute que sur une
+entité **nommée et différente**. Une charge utile qui ne nomme rien ne prouve pas que l'événement est
+ailleurs — elle rafraîchit.
+
+```ts
+const named = (payload as { conversationId?: string } | null)?.conversationId;
+if (typeof named === 'string' && named !== conversationId) return;
+```
+
 ### Accusés de lecture — monotones par construction
 `readStatusSummaries` / `messageReadStatuses` (`stores/conversation-ui-store.ts`) ont DEUX écrivains
 et un seul est ordonné : le socket (`presence.service.ts`) et le lot REST
