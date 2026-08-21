@@ -54,10 +54,10 @@ struct LentilleFocusElectionHost: View {
                 // Amorçage : la position de repos est déjà une position de
                 // défilement. Sans lui, aucune carte tant que l'utilisateur
                 // n'a pas touché l'écran.
-                .onAppear { electFromScroll(viewportBottom: geo.frame(in: .global).maxY) }
+                .onAppear { electFromScroll(viewport: geo.frame(in: .global), offsetFromTop: LentilleFocusBand.offsetFromTop(relayOffset: relay.offset)) }
                 // Un tick d'offset = une élection. C'est le SEUL abonnement.
-                .adaptiveOnChange(of: relay.offset) { _, _ in
-                    electFromScroll(viewportBottom: geo.frame(in: .global).maxY)
+                .adaptiveOnChange(of: relay.offset) { _, offset in
+                    electFromScroll(viewport: geo.frame(in: .global), offsetFromTop: LentilleFocusBand.offsetFromTop(relayOffset: offset))
                 }
         }
         // Purement observationnel : cet hôte couvre la liste, il ne doit
@@ -69,11 +69,13 @@ struct LentilleFocusElectionHost: View {
 
     /// L'unique chemin d'écriture de l'élu. Le nom dit d'où il vient : d'un
     /// défilement, jamais d'un événement de données.
-    private func electFromScroll(viewportBottom: CGFloat) {
+    private func electFromScroll(viewport: CGRect, offsetFromTop: CGFloat) {
         election.adopt(
             Self.elect(
                 candidates: registry.candidates,
-                viewportBottom: viewportBottom,
+                viewportTop: viewport.minY,
+                viewportBottom: viewport.maxY,
+                offsetFromTop: offsetFromTop,
                 currentId: election.electedId
             )
         )
@@ -91,12 +93,14 @@ struct LentilleFocusElectionHost: View {
     /// position d'écran serait fausse partout ailleurs que sur la maquette.
     nonisolated static func elect(
         candidates: [FocalFocusCurve.RowCandidate],
+        viewportTop: CGFloat,
         viewportBottom: CGFloat,
+        offsetFromTop: CGFloat,
         currentId: String?
     ) -> String? {
         FocalFocusCurve.electFocusRow(
             candidates: candidates,
-            focusY: LentilleFocusBand.centerY(viewportBottom: viewportBottom),
+            focusY: LentilleFocusBand.centerY(viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: offsetFromTop),
             currentId: currentId,
             hysteresis: FocalFocusCurve.focusBandHalfHeight
         )

@@ -26,8 +26,27 @@ nonisolated enum LentilleFocusBand {
     /// Ordonnée du CENTRE de la bande, dans le même repère que le `midY` des
     /// rangs qu'on lui compare. `viewportBottom` est le bas de la région
     /// visible du défilement, exprimé dans ce même repère.
-    static func centerY(viewportBottom: CGFloat) -> CGFloat {
-        viewportBottom - FocalFocusCurve.focusBandOffset
+    /// Centre de la bande (2026-08-21, directive user : « la magnificence
+    /// presque au centre de l'écran » et « doit pouvoir toucher la première
+    /// conversation en tête ») : le CENTRE de la région visible — sauf près
+    /// du haut de la liste : à `offsetFromTop == 0` (au repos en haut) la
+    /// bande est au bord haut, et elle descend linéairement jusqu'au centre
+    /// sur la première demi-hauteur de défilement. Même loi pour l'élection
+    /// et pour la perspective des rangées — un seul `LentilleFocusBand`.
+    /// Le relais publie le `minY` de la sentinelle de `MeeshyRefreshableScroll`
+    /// (0 au repos en haut, NÉGATIF en descendant dans la liste) ; la bande
+    /// raisonne en « distance parcourue depuis le haut », positive. UNE
+    /// conversion, partagée par l'élection et la scène — jamais deux signes.
+    static func offsetFromTop(relayOffset: CGFloat) -> CGFloat {
+        -relayOffset
+    }
+
+    static func centerY(viewportTop: CGFloat, viewportBottom: CGFloat, offsetFromTop: CGFloat) -> CGFloat {
+        let center = (viewportTop + viewportBottom) / 2
+        let travel = center - viewportTop
+        guard travel > 0 else { return center }
+        let t = min(1, max(0, offsetFromTop / travel))
+        return viewportTop + travel * t
     }
 }
 
@@ -96,15 +115,23 @@ struct LentillePerspective: ViewModifier {
     /// par le miroir : positive au-DESSUS de la bande (le rang est plus haut à
     /// l'écran, donc son `midY` est plus petit), nulle dans la bande, négative
     /// dessous — le seul régime qui active le fondu court.
-    nonisolated static func distance(rowMidY: CGFloat, viewportBottom: CGFloat) -> CGFloat {
-        LentilleFocusBand.centerY(viewportBottom: viewportBottom) - rowMidY
+    nonisolated static func distance(rowMidY: CGFloat, viewportTop: CGFloat, viewportBottom: CGFloat, offsetFromTop: CGFloat) -> CGFloat {
+        LentilleFocusBand.centerY(viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: offsetFromTop) - rowMidY
     }
 
     /// La passe elle-même, réduite à sa décision : déléguer, ou rendre
     /// l'identité. Aucune arithmétique de courbe ne vit ici.
-    nonisolated static func pass(distance: CGFloat, reduceMotion: Bool) -> FocalFocusCurve.Result {
+    /// Loi `.list` sur la distance ABSOLUE (règle de consommation 2026-08-21 :
+    /// la bande est au centre, les rangées du dessous ne sont plus « passées »
+    /// — le fondu court sous la bande du miroir, pensé pour une bande en bas
+    /// d'écran, effacerait la moitié de la liste), fondue vers l'identité
+    /// selon le niveau de scène (`LentilleSceneActivity.blend`).
+    nonisolated static func pass(distance: CGFloat, level: CGFloat, reduceMotion: Bool) -> FocalFocusCurve.Result {
         guard !reduceMotion else { return FocalFocusCurve.Result(alpha: 1, scale: 1) }
-        return FocalFocusCurve.focusCurve(distance: distance, variant: .list)
+        return LentilleSceneActivity.blend(
+            FocalFocusCurve.focusCurve(distance: abs(distance), variant: .list),
+            level: level
+        )
     }
 
     // MARK: - Application
@@ -113,10 +140,16 @@ struct LentillePerspective: ViewModifier {
     /// dans la déclaration du protocole, mais le rendre visible ici évite
     /// qu'une lecture rapide prenne les deux branches de `#available` pour une
     /// erreur — c'est la seule structure de contrôle du fichier.
+    /// Niveau de scène (0 au repos, 1 en défilement) — observé ICI, par le
+    /// modificateur seul : son basculement (deux fois par session) ne
+    /// ré-évalue que les modificateurs, jamais les corps de rangée. `scene`
+    /// est aussi capturé par référence pour relire l'offset par frame.
+    @EnvironmentObject private var scene: LentilleSceneActivity
+
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 17.0, *) {
-            content.visualEffect { [reduceMotion] effect, proxy in
+            content.visualEffect { [reduceMotion, level = scene.level, scene] effect, proxy in
                 // Repère LOCAL du rang : `bounds(of:)` rend la région visible
                 // du défilement CONVERTIE dans ce repère, et le milieu du rang
                 // y vaut la moitié de sa propre hauteur. Les deux ordonnées
@@ -126,10 +159,15 @@ struct LentillePerspective: ViewModifier {
                 // rend `nil` : distance nulle, donc identité — jamais une
                 // perspective calculée sur un repère inventé.
                 let distance = proxy.bounds(of: .scrollView(axis: .vertical)).map { viewport in
-                    Self.distance(rowMidY: proxy.size.height / 2, viewportBottom: viewport.maxY)
+                    Self.distance(
+                        rowMidY: proxy.size.height / 2,
+                        viewportTop: viewport.minY,
+                        viewportBottom: viewport.maxY,
+                        offsetFromTop: scene.offset
+                    )
                 } ?? 0
 
-                let result = Self.pass(distance: distance, reduceMotion: reduceMotion)
+                let result = Self.pass(distance: distance, level: level, reduceMotion: reduceMotion)
 
                 return effect
                     .opacity(result.alpha)

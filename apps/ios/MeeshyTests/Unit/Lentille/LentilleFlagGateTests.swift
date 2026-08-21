@@ -173,13 +173,48 @@ final class LentilleFlagGateTests: XCTestCase {
         XCTAssertFalse(LentilleFeatureFlag.lentilleList.isEnabled(defaults: defaults, environment: [:]))
     }
 
-    /// La Rivière reste HORS du programme bêta (R-133) : activer la bêta ne
-    /// l'ouvre jamais toute seule, elle demeure un choix séparé.
-    func test_betaFeaturesExplicitlyOn_neverEnablesRiviereMode() {
-        let defaults = makeIsolatedDefaults()
-        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+    /// **Recalibré EN CONSCIENCE le 2026-08-21 — SECOND témoin du même fait.**
+    ///
+    /// Il affirmait, avec R-133, que la Rivière reste HORS du programme bêta.
+    /// C'était vrai tant qu'elle n'avait pas d'écran monté ; ça ne l'est plus
+    /// depuis que `ConversationView` la monte : la bascule « Activer les bêta »
+    /// est le SEUL interrupteur offert à l'utilisateur, et sans elle la Rivière
+    /// n'était joignable que par une variable d'environnement de processus.
+    ///
+    /// Ce témoin est le JUMEAU de
+    /// `RiverFeatureFlagTests.test_riviereMode_followsTheBetaSwitch_onlyWhen
+    /// ItHasBeenExpressed` — recalibré le même jour, il ne l'avait pas été
+    /// parce que la suite Rivière seule avait été rejouée. C'est la suite
+    /// COMPLÈTE qui l'a rattrapé : deux gardes du même fait vivent dans deux
+    /// dossiers différents, et n'en corriger qu'une laisse l'autre rougir.
+    ///
+    /// Ce qu'il protégeait — « une installation qui n'a RIEN demandé n'ouvre
+    /// pas la Rivière » — reste vérifié, par le cas d'absence ci-dessous.
+    func test_betaFeaturesExplicitlyOn_enablesRiviereMode_sinceItsScreenIsMounted() {
+        let expressed = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: expressed)
 
-        XCTAssertFalse(LentilleFeatureFlag.riviereMode.isEnabled(defaults: defaults, environment: [:]))
+        XCTAssertTrue(
+            LentilleFeatureFlag.riviereMode.isEnabled(defaults: expressed, environment: [:]),
+            "Bêta explicitement ON ⇒ la Rivière devient sélectionnable — sous réserve de la " +
+            "LOI (≥ 5 participants actifs, jamais en `direct`), qui reste la seule porte."
+        )
+    }
+
+    /// Le fait que le témoin d'origine protégeait vraiment : une préférence
+    /// bêta JAMAIS EXPRIMÉE ne vaut pas opt-in (« absence ⇒ OFF », retrait
+    /// I-075 du 2026-08-18). Sans lui, le recalibrage ci-dessus aurait
+    /// remplacé une garde par rien.
+    func test_betaFeaturesNeverExpressed_stillNeverEnablesRiviereMode() {
+        let untouched = makeIsolatedDefaults()
+
+        XCTAssertTrue(
+            BetaFeaturesPreference.isEnabled(defaults: untouched, environment: [:]),
+            "Décor : le DÉFAUT de la préférence bêta est ON — c'est ce qui rend le cas discriminant."
+        )
+        XCTAssertFalse(
+            LentilleFeatureFlag.riviereMode.isEnabled(defaults: untouched, environment: [:])
+        )
     }
 
     // MARK: - setForDebug

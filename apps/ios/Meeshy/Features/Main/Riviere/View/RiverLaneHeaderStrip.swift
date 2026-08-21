@@ -82,7 +82,11 @@ struct RiverLaneHeaderStrip: View {
         if !hidden.isEmpty {
             HStack(spacing: 3) {
                 if edge == .trailing { dots(hidden) }
-                Image(systemName: edge == .leading ? "chevron.left" : "chevron.right")
+                // `backward`/`forward`, jamais `left`/`right` : ces badges disent
+                // « en amont » et « en aval » du plan, pas « à main gauche » —
+                // et en arabe le plan lui-même se retourne
+                // (`RightToLeftLayoutGuardTests`).
+                Image(systemName: edge == .leading ? "chevron.backward" : "chevron.forward")
                     .font(MeeshyFont.relative(9, weight: .bold))
                     .foregroundColor(ThemeManager.shared.textMuted)
                 if edge == .leading { dots(hidden) }

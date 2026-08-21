@@ -1071,6 +1071,15 @@ struct RootView: View {
                 }
             }
         }
+        // Accès rapide « Publier un post » (liste de conversations, tableau de
+        // bord — 2026-08-21) : le flux se montre, et `ThemedFeedOverlay`
+        // consomme le drapeau en ouvrant son composeur.
+        .adaptiveOnChange(of: router.pendingOpenFeedComposer) { _, pending in
+            guard pending, !showFeed else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showFeed = true
+            }
+        }
         // `initial: true` covers the cold-launch race where a Universal
         // Link sets `pendingDeepLink` from AppDelegate.continue:userActivity:
         // BEFORE this view mounts. Without it, a plain `.onChange` only fires

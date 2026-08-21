@@ -161,7 +161,29 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
     /// gratuité-là que la décision produit supprime. Le `setEnabled(true)`
     /// ci-dessous est donc l'amendement : le chemin bout-en-bout reste
     /// intégralement valide POUR QUI L'A DEMANDÉ.
-    func test_betaExplicitlyOn_noStickyPreference_fewUnread_readerPresent_autoResolvesToScript() {
+    ///
+    /// **RETOUR DE FOCAL (décision produit 2026-08-21) — RECALIBRAGE DU FAIT
+    /// ATTESTÉ, PAS DU DANGER GARDÉ.** Entre le 2026-08-18 et le 2026-08-21 ce
+    /// témoin attestait `.script` : `ReadingModeController.clampRetiredModes`
+    /// rabattait TOUTE décision `.focal` sur `.script` (retrait Focal iOS).
+    /// Focal revient en passe MINIMALE (`FocalScrollPerspective` — transform +
+    /// opacity CALayer sur les cellules visibles, zéro relayout, zéro élection
+    /// ni atterrissage : la machinerie qui boguait n'est pas restaurée), le
+    /// clamp est supprimé et remplacé par `ReadingModeController.renderDecision`,
+    /// règle de consommation ÉTROITE qui ne réécrit QUE le choix collant
+    /// `.bubbles` drapeau ON. Le fait redevient donc `.focal`/`.default` —
+    /// exactement celui d'avant le 2026-08-18.
+    ///
+    /// Le DANGER gardé, lui, est inchangé et reste ce qui fait rougir ce
+    /// témoin : la couche de CONSOMMATION iOS ne doit jamais réécrire en
+    /// silence la branche AUTO de la loi PARTAGÉE (miroir de
+    /// `packages/shared/utils/reading-modes.ts`, vecteurs TS↔Swift). Aucune
+    /// préférence collante n'est posée ici, donc `renderDecision` DOIT être
+    /// transparent : tout clamp global qui reviendrait — ou une garde
+    /// `renderDecision` qui déborderait sur le cas sans collant — rallume
+    /// immédiatement ce test. La contre-épreuve du seul cas où la couche de
+    /// rendu a le droit de parler est le témoin suivant.
+    func test_betaExplicitlyOn_noStickyPreference_fewUnread_readerPresent_autoResolvesToFocal() {
         let defaults = makeIsolatedDefaults()
         BetaFeaturesPreference.setEnabled(true, defaults: defaults)
 
@@ -188,8 +210,60 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
             now: { now }
         )
 
-        XCTAssertEqual(controller.mode, .script, "AUTO, branche par défaut de la loi gelée (.focal) CLAMPÉE sur .script — RETRAIT FOCAL iOS 2026-08-18.")
+        XCTAssertEqual(controller.mode, .focal, "AUTO, branche par défaut de la loi gelée — `.focal` RENDU TEL QUEL : sans préférence collante, `renderDecision` doit être transparent (retour de Focal 2026-08-21 ; le clamp .focal → .script du 2026-08-18 est levé).")
         XCTAssertEqual(controller.decision.reason, .default)
+    }
+
+    // MARK: - Bêta ON, collant `.bubbles` ⇒ la SEULE réécriture de rendu tolérée
+
+    /// SECOND TÉMOIN, ajouté avec le recalibrage ci-dessus (2026-08-21) : la
+    /// règle de consommation qui REMPLACE le clamp retiré n'avait aucun témoin
+    /// dans le dépôt (`renderDecision` n'apparaissait que dans du code de
+    /// production — `ReadingModeController`, `ReadingModeLensSheet`,
+    /// `LentilleModeMenu`). Le clamp partait avec son témoin ; son remplaçant
+    /// doit arriver avec le sien, sinon le retrait du clamp fait perdre de la
+    /// couverture au lieu d'en déplacer.
+    ///
+    /// Décor : choix collant `.bubbles`, drapeau ON. La loi PARTAGÉE le rabat
+    /// sur `.focal`/`.clampedUnavailable` (`.bulles` n'appartient à aucun
+    /// catalogue drapeau-on — `clampToCapabilities`), et c'est précisément ce
+    /// rabat que la couche de rendu iOS annule : Bulles est un CHOIX, pas un
+    /// repli, même chemin que le web (`use-thread-reading-mode.ts`,
+    /// `THREAD_MOUNTABLE_MODES` contient `'bubbles'`). La loi reste INTACTE.
+    ///
+    /// Discriminant vs le témoin précédent (leçon 266) : mêmes drapeau, mêmes
+    /// capacités, même compte de non-lus — SEULE la préférence collante change,
+    /// et les deux décisions diffèrent (`.focal`/`.default` vs
+    /// `.bubbles`/`.sticky`). La raison est assertée aussi fort que le mode :
+    /// un `.clampedUnavailable` ferait mentir l'encoche « AUTO · … » en
+    /// affichant « rabattu » là où l'utilisateur a choisi.
+    func test_betaExplicitlyOn_stickyBubbles_isRenderedAsAChoice_notClampedByTheLaw() {
+        let defaults = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: defaults)
+
+        let isFlagEnabled = LentilleFeatureFlag.readingModes.isEnabled(defaults: defaults, environment: [:])
+        XCTAssertTrue(isFlagEnabled, "Décor : la cascade doit résoudre TRUE — sinon c'est la branche `.flagDisabled` de la loi qui rendrait `.bubbles`, et ce témoin ne prouverait rien.")
+
+        let capabilities = makeCapabilities(isFlagEnabled: isFlagEnabled)
+        XCTAssertFalse(
+            capabilities.availableModes.contains(.bubbles),
+            "Prérequis DISCRIMINANT : drapeau ON, `.bubbles` n'est PAS au catalogue — la loi partagée rabat donc bien le collant sur `.focal`/`.clampedUnavailable`, et seule la règle de rendu iOS peut rendre `.bubbles` ici."
+        )
+
+        let store = InMemoryStore()
+        store.stubbedMode = .bubbles
+
+        let controller = ReadingModeController(
+            conversationId: "c1",
+            scope: .registered(userId: "u1"),
+            unreadCount: 3,
+            capabilities: capabilities,
+            isFlagEnabled: isFlagEnabled,
+            store: store
+        )
+
+        XCTAssertEqual(controller.mode, .bubbles, "Choix collant `.bubbles` drapeau ON ⇒ rendu `.bubbles` — `renderDecision` (2026-08-21) annule le rabat de la loi, comme l'ancien clamp le faisait dans l'autre sens.")
+        XCTAssertEqual(controller.decision.reason, .sticky, "La raison doit dire « choisi », jamais `.clampedUnavailable` — l'encoche « AUTO · … » mentirait sinon.")
     }
 
     /// Même décor, mais > 25 non-lus (rattrapage) ⇒ `.summary` — la branche

@@ -75,7 +75,8 @@ nonisolated public enum FocalMetrics {
         public static let paddingVertical: CGFloat = 5
         public static let paddingHorizontal: CGFloat = 16
         /// Cote ABSENTE de `thread.*` — voir doc de tête (TODO CONTRACTUEL).
-        public static let groupTopPadding: CGFloat = 8
+        /// 8 → 4 le 2026-08-21 (« réduit l'espace entre les groupes »).
+        public static let groupTopPadding: CGFloat = 4
     }
 
     // MARK: - Avatar (pastille)
@@ -159,7 +160,27 @@ nonisolated public enum FocalMetrics {
     /// partie avec le pass — restent les DEUX cotes de gabarit devenues la
     /// règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
     /// retrait de texte ne varient jamais, la liste ne saute donc jamais.
+    /// Tempo de la SCÈNE Focal (2026-08-21, directive user) : la perspective
+    /// n'existe que pendant le défilement ; au repos, tout redevient Script.
+    nonisolated public enum Scene {
+        /// Repos sans geste avant que la scène s'aplatisse (« au bout de
+        /// quelques secondes sans scroller ») — 2,0 → 4,5 s le 2026-08-22
+        /// (directive « passe à < 5 s ») : avec `flattenDuration`, la
+        /// magnificence a disparu en 4,95 s. Liste et fil lisent ce token.
+        public static let restDelay: TimeInterval = 4.5
+        /// Durée de l'aplatissement (transform + opacité + carte).
+        public static let flattenDuration: TimeInterval = 0.45
+        /// Durée de l'entrée en perspective au premier tick d'un geste —
+        /// les ticks de cette fenêtre animent depuis la valeur présentée,
+        /// jamais un saut.
+        public static let enterDuration: TimeInterval = 0.25
+    }
+
     nonisolated public enum Focus {
+        /// Plafond de caractères du texte du message EN FOCUS (2026-08-21) :
+        /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.
+        public static let maxCharacters: Int = 360
+
         /// Gabarit de pastille réservé en permanence par l'en-tête
         /// (`FocalIdentityHeader`, `minHeight`) — la pastille rendue reste
         /// `Avatar.size` (22) dans ce cadre de 34.
@@ -193,10 +214,34 @@ nonisolated public enum FocalMetrics {
     /// dans `ConversationView.swift`. `translateY` et `opacityEnd` restent
     /// mirrorées pour la parité EXHAUSTIVE `thread.*` de la tâche 0, sans
     /// consommateur à ce jour.
+    /// Chips de la bordure basse du message en focus (2026-08-22 : « les
+    /// icônes doivent être SUR la bordure, comme CATÉGORIE dans la liste »).
+    nonisolated public enum FocusStrip {
+        /// TOUTES les chips du focus (identité, date+coche, traduction,
+        /// drapeaux, (+), réactions) = la MÊME capsule (2026-08-22 : « les
+        /// icônes en bas doivent être exactement comme ces chips »).
+        public static let chipHeight: CGFloat = 24
+        public static let chipMinWidth: CGFloat = 32
+        /// Inset des chips depuis le bord du bloc de contenu : le bloc est à
+        /// `Row.paddingHorizontal − focusCardHorizontalInset` (10 pt) du bord
+        /// de la carte, 4 pt de plus ⇒ 14 pt, comme l'encoche de la liste.
+        public static let chipInset: CGFloat = 4
+        /// Débord pour que le CENTRE des chips tombe sur la ligne de la
+        /// carte : la carte (fond SwiftUI de la rangée, même repère que les
+        /// chips) dépasse le bloc de contenu de `focusCardInnerMargin`.
+        public static let overhang: CGFloat = chipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
+        public static let identityAvatarSize: CGFloat = 18
+        public static let identityOverhang: CGFloat = overhang
+    }
+
     nonisolated public enum HiddenChrome {
         public static let translateY: CGFloat = 94
         public static let opacityEnd: Double = 0
         public static let easeOut: Double = 0.25
+        /// Course d'un composant de chrome vers SON bord quand il s'escamote
+        /// (directive user 2026-08-21 : « disparaissent avec fondu vers les
+        /// bords, réapparaissent venant du bord vers leur position »).
+        public static let edgeTravel: CGFloat = 28
     }
 
     // MARK: - Pilule de défilement
@@ -272,5 +317,32 @@ nonisolated public enum FocalMetrics {
     nonisolated public enum SurfaceTint {
         public static let lightFill: Double = 0.04
         public static let darkFill: Double = 0.06
+    }
+
+    // MARK: - Contour des chips de la carte de focus
+
+    /// Opacités du CONTOUR des chips posées sur la carte du message en focus
+    /// (`Focal/Row/FocalRow.swift` — bande de chips, puce d'identité, chips
+    /// de réaction), arrivées avec le retour de Focal (2026-08-21).
+    ///
+    /// Nommées ici plutôt que laissées en littéraux orphelins dans un fichier
+    /// de peau, pour la MÊME raison que `SurfaceTint` (garde R15) — et pour
+    /// une raison de plus, propre à ces valeurs : `0.45` et `0.40` figurent
+    /// TELS QUELS dans la liste des littéraux de LOI que la garde surveille,
+    /// et « 0.45 » contient de surcroît le jeton isolé `45`. La garde n'avait
+    /// donc AUCUN moyen de distinguer une opacité de peau d'une cote de loi
+    /// dérobée : elle rougissait, à raison, sur les deux.
+    ///
+    /// AUCUNE cote `thread.*` de `lentille-tokens.json` ne porte ces valeurs —
+    /// même statut que `SurfaceTint` : teinte décorative interne à la carte de
+    /// focus, pas cote normative du fil, donc centralisée ici sans revendiquer
+    /// de miroir.
+    nonisolated public enum FocusChip {
+        /// Contour d'une chip au repos — pleine quand la chip est active ou
+        /// remplie, atténuée sinon.
+        public static let idleBorderOpacity: Double = 0.45
+        /// Contour de la bande de chips, par thème.
+        public static let borderOpacityLight: Double = 0.40
+        public static let borderOpacityDark: Double = 0.55
     }
 }

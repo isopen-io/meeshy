@@ -173,7 +173,7 @@ nonisolated enum LentilleFeatureFlag {
 
     func isEnabled(
         defaults: UserDefaults = .standard,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessEnvironmentSnapshot.current
     ) -> Bool {
         switch environment[environmentKey] {
         case "1": return true
@@ -217,4 +217,20 @@ nonisolated enum LentilleFeatureFlag {
     static var isRiviereModeEnabled: Bool {
         LentilleFeatureFlag.riviereMode.isEnabled()
     }
+}
+
+// MARK: - Instantané d'environnement
+
+/// L'environnement du processus, matérialisé UNE fois.
+///
+/// `ProcessInfo.processInfo.environment` construit un `[String: String]`
+/// complet à CHAQUE lecture (pont Objective-C → Swift). Pris comme paramètre
+/// par défaut de `isEnabled(defaults:environment:)`, il était réévalué à
+/// chaque appel — et le drapeau `lentille_list` est lu par rang, par passe
+/// de body, par aperçu, par décision de carte : une allocation de
+/// dictionnaire par rangée et par passe (audit fluidité 2026-08-21, H1/H2).
+/// L'environnement d'un processus ne change pas après son lancement ; les
+/// tests injectent le leur par paramètre et ne passent jamais par ici.
+nonisolated enum ProcessEnvironmentSnapshot {
+    static let current: [String: String] = ProcessInfo.processInfo.environment
 }

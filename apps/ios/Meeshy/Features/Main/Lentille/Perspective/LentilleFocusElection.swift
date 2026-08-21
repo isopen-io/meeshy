@@ -116,16 +116,19 @@ extension View {
         isEnabled: Bool
     ) -> some View {
         if isEnabled {
-            background(
-                GeometryReader { geo in
-                    Color.clear
-                        .onAppear { registry.register(id: id, midY: geo.frame(in: .global).midY) }
-                        .adaptiveOnChange(of: geo.frame(in: .global).midY) { _, midY in
-                            registry.register(id: id, midY: midY)
-                        }
-                        .onDisappear { registry.unregister(id: id) }
+            // `onGeometryChange` (iOS 16+) : la MÊME mesure — le `midY` global,
+            // relu à chaque layout, défilement compris — sans monter de vue de
+            // plus par rang (un `GeometryReader` en fond + `onChange` coûtait
+            // une vue et une comparaison par rang et par layout, audit
+            // fluidité 2026-08-21, H8). L'action est appelée au montage avec
+            // la valeur initiale : l'amorçage de `onAppear` est couvert.
+            self
+                .onGeometryChange(for: CGFloat.self) { proxy in
+                    proxy.frame(in: .global).midY
+                } action: { midY in
+                    registry.register(id: id, midY: midY)
                 }
-            )
+                .onDisappear { registry.unregister(id: id) }
         } else {
             self
         }
