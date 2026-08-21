@@ -44,6 +44,13 @@ public struct ClipInspector: View {
         /// La slide porte un audio de fond. Sans lui, rien n'est atténué : la
         /// bascule d'atténuation serait un contrôle sans effet.
         public let slideHasBackgroundAudio: Bool
+        /// `true` quand `timing == nil` au modèle (O4 — le clip est un
+        /// FANTÔME, sa fenêtre suit la durée de la slide). `false` = une
+        /// fenêtre explicite a été posée (un bord tiré, typiquement) — c'est
+        /// alors que « Suivre la slide » (D3, revue totale U9) redevient
+        /// pertinente : la sortie de l'état doit être aussi évidente que son
+        /// entrée.
+        public let isFollowingSlide: Bool
 
         /// Un point de la courbe de volume, tel que la fiche l'affiche.
         ///
@@ -71,7 +78,8 @@ public struct ClipInspector: View {
                     transform: ClipTransform = .identity,
                     volumeKeyframes: [VolumePoint] = [],
                     isDuckingDisabled: Bool = false,
-                    slideHasBackgroundAudio: Bool = false) {
+                    slideHasBackgroundAudio: Bool = false,
+                    isFollowingSlide: Bool = false) {
             self.id = id; self.displayName = displayName; self.kind = kind
             self.startTime = startTime; self.duration = duration
             self.volume = volume
@@ -82,6 +90,7 @@ public struct ClipInspector: View {
             self.volumeKeyframes = volumeKeyframes
             self.isDuckingDisabled = isDuckingDisabled
             self.slideHasBackgroundAudio = slideHasBackgroundAudio
+            self.isFollowingSlide = isFollowingSlide
         }
     }
 
@@ -170,6 +179,10 @@ public struct ClipInspector: View {
     public let onBackgroundToggled: (Bool) -> Void
     public let onAddKeyframe: () -> Void
     public let onDelete: () -> Void
+    /// « Suivre la slide » (D3, revue totale U9) : remet `timing` à `nil` —
+    /// symétrique du bord tiré, qui convertit implicitement un fantôme en
+    /// durée explicite.
+    public let onFollowSlide: () -> Void
     /// Découpe le clip à la tête de lecture. Cette action était le DOUBLE TAP
     /// sur la barre vidéo : trancher un média n'est pas ce qu'on attend d'un
     /// geste d'ouverture, et elle n'était même câblée que sur la vidéo.
@@ -208,6 +221,12 @@ public struct ClipInspector: View {
     public let onRemoveVolumePoint: (String) -> Void
     /// Coupe (`true`) ou rétablit (`false`) l'atténuation automatique du clip.
     public let onDuckingDisabledChanged: (Bool) -> Void
+    /// Coupe ou rétablit le son de CE clip (D3, revue DoD : le mute par clip
+    /// vivait sur la barre de l'ancien conteneur mono-piste et n'avait plus
+    /// aucune surface depuis le passage au plan). L'appelant le branche sur
+    /// `TimelineViewModel.toggleClipMute` — annulable, et le niveau quitté
+    /// est rendu au rétablissement.
+    public let onToggleMute: () -> Void
 
     /// True quand couper l'atténuation automatique a un effet.
     ///
@@ -307,6 +326,7 @@ public struct ClipInspector: View {
                 onBackgroundToggled: @escaping (Bool) -> Void,
                 onAddKeyframe: @escaping () -> Void,
                 onDelete: @escaping () -> Void,
+                onFollowSlide: @escaping () -> Void = {},
                 onSplit: @escaping () -> Void = {},
                 onClose: @escaping () -> Void = {},
                 onStartAdjusted: @escaping (Float) -> Void = { _ in },
@@ -322,7 +342,8 @@ public struct ClipInspector: View {
                 playheadTime: Float = 0,
                 onAddVolumePoint: @escaping (Float) -> Void = { _ in },
                 onRemoveVolumePoint: @escaping (String) -> Void = { _ in },
-                onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in }) {
+                onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in },
+                onToggleMute: @escaping () -> Void = {}) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -332,6 +353,7 @@ public struct ClipInspector: View {
         self.onBackgroundToggled = onBackgroundToggled
         self.onAddKeyframe = onAddKeyframe
         self.onDelete = onDelete
+        self.onFollowSlide = onFollowSlide
         self.onSplit = onSplit
         self.onClose = onClose
         self.onStartAdjusted = onStartAdjusted
@@ -348,6 +370,7 @@ public struct ClipInspector: View {
         self.onAddVolumePoint = onAddVolumePoint
         self.onRemoveVolumePoint = onRemoveVolumePoint
         self.onDuckingDisabledChanged = onDuckingDisabledChanged
+        self.onToggleMute = onToggleMute
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
@@ -361,6 +384,12 @@ public struct ClipInspector: View {
 
     public func simulateVolumeCommit(value: Float) {
         onVolumeChanged(min(StoryVolume.maxGain, max(0, value)))
+    }
+
+    /// Même rôle que `simulateVolumeCommit` pour le mute par clip : atteindre
+    /// l'action sans simuler un tap dans une vue non hostable.
+    public func simulateMuteToggle() {
+        onToggleMute()
     }
 
     /// Test-only read of the current local `@State` values. Used by
@@ -743,6 +772,7 @@ public struct ClipInspector: View {
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(volume > 1 ? MeeshyColors.warning : .secondary)
+                muteButton
             }
             Slider(value: $volume, in: 0...StoryVolume.maxGain, step: 0.01) { editing in
                 if !editing { onVolumeChanged(volume) }
@@ -755,6 +785,31 @@ public struct ClipInspector: View {
                 duckingToggle
             }
         }
+    }
+
+    /// Mute UN-BOUTON du clip. Il vivait sur la barre de l'ancien conteneur
+    /// mono-piste ; le plan 2D dessine ses pistes en un passe `Canvas` et n'a
+    /// plus de barre où poser un contrôle — la fiche d'édition le reprend.
+    ///
+    /// Il ne fait PAS double emploi avec le curseur : couper puis rétablir
+    /// rend le niveau QUITTÉ (`toggleClipMute` garde le mémento), là où
+    /// glisser à 0 puis remonter oblige à retrouver sa position à la main.
+    private var muteButton: some View {
+        Button(action: onToggleMute) {
+            Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(volume == 0 ? MeeshyColors.warning : MeeshyColors.indigo400)
+                .contentShape(Rectangle().inset(by: -8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(volume == 0
+            ? String(localized: "story.timeline.inspector.unmute",
+                     defaultValue: "Rétablir le son du clip", bundle: .module)
+            : String(localized: "story.timeline.inspector.mute",
+                     defaultValue: "Couper le son du clip", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.mute.hint",
+                                  defaultValue: "Rétablir rend le niveau quitté, pas le maximum",
+                                  bundle: .module))
     }
 
     /// Atténuation automatique de la piste vidéo tant que l'audio de fond joue.
@@ -1019,16 +1074,42 @@ public struct ClipInspector: View {
         AdaptiveGlassContainer(spacing: 12) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
+                    if !clip.isFollowingSlide { followSlideButton }
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
                 VStack(alignment: .leading, spacing: 10) {
+                    if !clip.isFollowingSlide { followSlideButton }
                     if Self.supportsSplit(kind: clip.kind) { splitButton }
                     if Self.supportsDeletion(kind: clip.kind) { deleteButton }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    /// « Suivre la slide » (D3, revue totale U9) — n'apparaît que quand une
+    /// fenêtre EXPLICITE a été posée (`!clip.isFollowingSlide`) : un fantôme
+    /// n'a rien à relâcher, l'afficher pour lui serait un contrôle mort.
+    private var followSlideButton: some View {
+        Button(action: onFollowSlide) {
+            Label(String(localized: "story.timeline.inspector.followSlide",
+                         defaultValue: "Suivre la slide", bundle: .module),
+                  systemImage: "arrow.uturn.backward.circle")
+                .font(.footnote.weight(.semibold))
+                .fixedSize(horizontal: true, vertical: false)
+                .glassControlForeground()
+                .padding(.horizontal, 12)
+                .frame(height: 36)
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.indigo500, interactive: true)
+                .contentShape(Rectangle().inset(by: -4))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "story.timeline.inspector.followSlide",
+                                   defaultValue: "Suivre la slide", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.followSlide.hint",
+                                  defaultValue: "Remet la fenêtre du clip à zéro : il suit de nouveau la durée de la slide",
+                                  bundle: .module))
     }
 
     private var splitButton: some View {

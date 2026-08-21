@@ -31,7 +31,7 @@ final class TwoFingerDragDisablesSnapTests: XCTestCase {
         let candidate = SnapCandidate(kind: .clipStart, time: 2.0)
         sut.beginClipDrag(clipId: "clip-1")
         // rawTime is 2.05 — within tolerance of 2.0 candidate, but snap is disabled
-        sut.dragClipMoved(rawTime: 2.05, snapCandidates: [candidate])
+        sut.dragClipMoved(rawTime: 2.05, snapCandidates: [candidate], geometry: TimelineGeometry(zoomScale: 1.0))
 
         let clipStart = sut.project.mediaObjects.first?.startTime ?? -1
         XCTAssertEqual(clipStart, 2.05, accuracy: 0.001,
