@@ -137,3 +137,81 @@ La table des 18 styles reprend les valeurs du résolveur iOS (grasse/serif/mono/
 ## Hors périmètre (dit une fois)
 
 Composer web COMPLET (fonctionnalités nouvelles — l'émission v3 de l'écran actuel est F5b, AU périmètre) · lecture ANIMÉE des timings/keyframes web · résolution d'URL des sons de bibliothèque · collage/stickers web · porte de version web (R6 l'interdit).
+
+---
+
+# Addendum rév. 2 — Rattrapage revue Opus (2026-08-21), tâches F7a–F7f
+
+**Contexte.** Revue finale : `tasks/composer-lot-f-revue-opus.md` — 25 constats
+(2 BLOQUANTS, 13 MAJEURS, 10 MINEURS), 15 axes blanchis. Constats n°1/2/5/6/12/15
+reconfirmés sur pièces par l'orchestrateur. Le lot NE MERGE PAS avant fermeture
+des bloquants et majeurs. Le fil rouge : F1–F3 ont construit des composants JUSTES
+mais les ont câblés à moitié (état muet lu par personne, badge jamais monté,
+métadonnées jamais lues, une seule langue passée), et le chemin v3 perd des
+comportements que le legacy garantissait (autoplay, scrim, 65 %, animation).
+
+**Arbitrages tranchés :**
+1. **Parité legacy = plancher** (constats 6, 7, 8, 13, 14, 18, 19) : tout ce que
+   le chemin legacy faisait, le chemin v3 le fait — autoplay (fond ET porteur,
+   démarrage muted pour la politique navigateur), loop forcé comme le legacy,
+   overlay média 65 % + arrondi, voile de lisibilité (monté par StoryViewer
+   AUTOUR de la scène, le composant pur reste pur), gestionnaires de buffering
+   transmis, et l'ANIMATION : `CanvasV3Scene` accepte `playheadSec` et branche
+   les résolveurs EXISTANTS (`resolveKeyframeState`, `resolveClipTransitionOpacity`)
+   sur `timing.keyframes` v3 et `clipTransitions` de scène — adaptateur de forme,
+   pas de réécriture.
+2. **Le mute est un COMPORTEMENT** (1, 2, 3, 22) : `CanvasV3Scene` accepte
+   `muted` et l'applique aux lecteurs de FOND (vidéo bg + audio de bandeau) ;
+   StoryViewer le passe ; le badge est MONTÉ sur carte (PostCard — ses appelants
+   réels) et détail (PostDetail), alimenté par un extracteur partagé de
+   `story-transforms` qui lit le crédit depuis l'objet `kind:audio` de la scène
+   (name, soundAuthorUsername, duration) ; clés i18n mute/unmute ajoutées aux
+   catalogues components (4 locales, cliquet accents respecté).
+3. **La clé du FIL fait foi** (5) : `fontSize` (émise par iOS et le convertisseur)
+   alimente l'échelle cqw ; `fontSizeDesign` reste un alias interne du funnel v1.
+4. **Prisme complet** (4, 15) : le texte racine émis porte `locale` (résolue
+   comme `originalLanguage`) ; `preferredLanguages` = la chaîne ORDONNÉE de
+   `getUserLanguagePreferences(user)` (source de vérité existante), jamais une
+   seule langue.
+5. **Résilience par objet** (10) : chaque objet rendu est wrappé (try/catch +
+   défauts sur transform/payload) — un objet malformé est sauté, la scène survit.
+6. **`v >= 3`** (12) aux quatre sites (`StoryViewer`, `story-transforms` ×3).
+7. **Repost** (16, 17) : B3.2 (icône = le verbe) appliquée à PostDetail et
+   ReelPlayer ; accessibilité par un span `sr-only` portant la phrase complète
+   (le pattern aria-label sur div générique est interdit par ARIA).
+8. **originalLanguage = langue du CONTENU** (20, 21) : la locale d'interface ne
+   part QUE pour une story SANS texte (sinon le serveur détecte depuis le texte,
+   plus fiable) ; le commentaire faux de posts.service est corrigé.
+9. **Forme jumelle** (23) : l'objet de fond émis porte l'id littéral `bg`.
+10. **Multi-scènes** (24) : dette VISIBLE — ligne P0 dédiée (le composer web
+    n'émet qu'une scène ; le rendu multi-scènes appartient au futur lot C/E).
+11. **Constat 25 (défaut du lot B, corrigé ICI)** : `CanvasV3Migration.swift`
+    n'émet `bounds` que si start ET end existent et end >= start (miroir du TS
+    durci) + test dans `CanvasV3MigrationTests`. Fichier SDK hors du périmètre
+    du lot D (vérifier l'absence de collision avant commit).
+
+### Task F7a — CanvasV3Scene : fidélité + résilience + animation (constats 5,6,7,8,10,13,14,18,24 ; arbitrages 1,3,5)
+**Files:** `apps/web/components/v2/CanvasV3Scene.tsx`, `apps/web/__tests__/components/canvas-v3-scene.test.tsx` (+ suite animation dédiée si plus lisible).
+Props nouvelles : `muted?: boolean`, `playheadSec?: number`, `videoGateHandlers?`. Rouge d'abord sur CHAQUE comportement (fontSize du fil → cqw ; autoplay porteur ; overlay 65 % arrondi ; objet malformé sauté ; keyframes v3 animent opacity/position ; clipTransitions appliquées ; multi-scènes hors périmètre documenté).
+
+### Task F7b — StoryViewer + story-transforms : câblage réel (constats 1,3,9,12,15,19 ; arbitrages 1,2,4,6)
+**Files:** `apps/web/components/v2/StoryViewer.tsx`, `apps/web/lib/story-transforms.ts`, tests associés.
+Mute passé à la scène ; scrim v3 ; `preferredLanguages` complets via `getUserLanguagePreferences` ; `aspectRatio` dérivé de `width/height` de PostMedia dans `mediaById` ; extracteur `backgroundSoundCredit(scenes)` partagé ; `v >= 3` ×4.
+
+### Task F7c — Surfaces : badge monté + B3.2 partout + aria (constats 2,16,17,22 ; arbitrages 2,7)
+**Files:** `apps/web/components/v2/PostCard.tsx` + ses appelants réels (les trouver : grep `<PostCard`), `apps/web/components/v2/PostDetail.tsx`, `apps/web/components/feed/ReelPlayer.tsx`, catalogues i18n components (4 locales), tests.
+
+### Task F7d — Émission : locale, id bg, garde langue (constats 4,20,21,23 ; arbitrages 4,8,9)
+**Files:** `apps/web/components/v2/StoryComposer.tsx`, `apps/web/services/posts.service.ts`, tests.
+
+### Task F7e — SDK : bounds cohérents (constat 25 ; arbitrage 11)
+**Files:** `packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3Migration.swift`, `packages/MeeshySDK/Tests/MeeshySDKTests/Models/Story/CanvasV3MigrationTests.swift`. Gate iOS ciblé (scheme MeeshySDK-Package, DD /tmp/meeshy-dd-lot-f-sdk, attente lock).
+
+### Task F7f — Gate final + P0 refondu
+Suite web COMPLÈTE verte + gate iOS ciblé re-vert (F7e) ; P0 : dénominateur 57→63
+(6 tâches F7), camembert 37/63, lignes F7 dans la matrice, dette multi-scènes
+visible, en-tête lot F honnête. Commit final.
+
+**Ordre : F7a → F7b → F7c → F7d → F7e → F7f.** TDD strict, DoD par tâche,
+P0 : seule F7f la touche (règle spéciale, comme B8) — les commits F7a–F7e citent
+l'addendum.
