@@ -1,0 +1,201 @@
+/**
+ * F1 — `CanvasV3Scene`, le rendu v3 du web : un composant PUR, statique.
+ *
+ * Les timings ne sont pas joués (dette explicite du plan lot F) : un objet
+ * timé est simplement VISIBLE. Ce qui est jugé ici, c'est la fidélité de la
+ * scène — ancres, bandes, ratio du porteur, table des 18 styles, ordre des
+ * plans — et la TOLÉRANCE de lecture : un kind réservé n'a jamais le droit
+ * de casser le rendu.
+ */
+import { render, screen } from '@testing-library/react';
+import React from 'react';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { CanvasV3Schema, type CanvasV3 } from '@meeshy/shared/types/canvas-v3';
+
+import { CanvasV3Scene } from '@/components/v2/CanvasV3Scene';
+
+const FIXTURES = join(__dirname, '../../../../packages/shared/fixtures/canvas-v3');
+
+function fixture(name: string): CanvasV3 {
+  return CanvasV3Schema.parse(JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), 'utf8')));
+}
+
+function textObject(payload: Record<string, unknown>): CanvasV3 {
+  return {
+    v: 3,
+    scenes: [
+      {
+        id: 's1',
+        objects: [
+          {
+            id: 't1',
+            kind: 'text',
+            anchor: { t: 'free', x: 0.5, y: 0.5 },
+            plane: 'fg',
+            z: 0,
+            transform: { scale: 1, rotation: 0, opacity: 1 },
+            payload,
+          },
+        ],
+      },
+    ],
+  };
+}
+
+const ALL_STYLES = [
+  'bold', 'neon', 'typewriter', 'handwriting', 'classic', 'calligraphy',
+  'cartoon', 'futuristic', 'fantasy', 'curve', 'tag', 'italic', 'retro',
+  'elegant', 'poster', 'bubble', 'note', 'brush',
+] as const;
+
+describe('CanvasV3Scene — la scène v3 (F1)', () => {
+  it('renders the minimal-text fixture at its free anchor', () => {
+    render(<CanvasV3Scene doc={fixture('minimal-text')} sceneIndex={0} />);
+
+    const text = screen.getByTestId('canvas-v3-object-t1');
+    expect(text).toHaveTextContent('Bonjour');
+    expect(text.style.left).toBe('50%');
+    expect(text.style.top).toBe('42%');
+  });
+
+  it('letterboxes the 16:9 carrier inside a 9:16 scene and files each text in its band', () => {
+    const mediaById = new Map([
+      ['64b000000000000000000001', { url: '/m/reel.mp4', mimeType: 'video/mp4', aspectRatio: 16 / 9 }],
+    ]);
+    render(<CanvasV3Scene doc={fixture('reel-16x9-bands')} sceneIndex={0} mediaById={mediaById} />);
+
+    expect(screen.getByTestId('canvas-v3-scene').style.aspectRatio).toBe('9 / 16');
+    expect(Number(screen.getByTestId('canvas-v3-object-m1').style.aspectRatio)).toBeCloseTo(16 / 9, 4);
+
+    const top = screen.getByTestId('canvas-v3-object-t1');
+    const bottom = screen.getByTestId('canvas-v3-object-t2');
+    expect(top).toHaveTextContent('Le titre');
+    expect(top.className).toContain('band-top');
+    expect(top.style.top).toBe('6%');
+    expect(bottom).toHaveTextContent('legende du film');
+    expect(bottom.className).toContain('band-bottom');
+    expect(bottom.style.bottom).toBe('6%');
+  });
+
+  it('maps the 18 text styles, neon glowing, poster condensed-bold, italic slanted', () => {
+    for (const style of ALL_STYLES) {
+      const { unmount } = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: style })} />);
+      expect(screen.getByTestId('canvas-v3-object-t1').style.fontFamily).not.toBe('');
+      unmount();
+    }
+
+    const neon = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'neon' })} />);
+    expect(screen.getByTestId('canvas-v3-object-t1').style.textShadow).toContain('currentColor');
+    neon.unmount();
+
+    const poster = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'poster' })} />);
+    const posterEl = screen.getByTestId('canvas-v3-object-t1');
+    expect(posterEl.style.fontFamily).toContain('Avenir Next Condensed');
+    expect(posterEl.style.fontWeight).toBe('800');
+    poster.unmount();
+
+    const italic = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'italic' })} />);
+    const italicEl = screen.getByTestId('canvas-v3-object-t1');
+    expect(italicEl.style.fontStyle).toBe('italic');
+    expect(italicEl.style.fontFamily).toContain('Georgia');
+    italic.unmount();
+  });
+
+  it('falls back to the default style on an unknown textStyle instead of throwing', () => {
+    const known = render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'bold' })} />);
+    const expected = screen.getByTestId('canvas-v3-object-t1').getAttribute('style');
+    known.unmount();
+
+    expect(() =>
+      render(<CanvasV3Scene doc={textObject({ text: 'A', textStyle: 'houdini-2099' })} />)
+    ).not.toThrow();
+    expect(screen.getByTestId('canvas-v3-object-t1').getAttribute('style')).toBe(expected);
+  });
+
+  it('stacks bg under content under fg, then by z inside a plane', () => {
+    const doc: CanvasV3 = {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            {
+              id: 'fgText', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'fg', z: 1,
+              transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { text: 'devant' },
+            },
+            {
+              id: 'bgMedia', kind: 'media', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'bg', z: 0,
+              transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { background: '#112233' },
+            },
+            {
+              id: 'carrier', kind: 'media', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'content', z: 2,
+              transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { mediaURL: '/m/a.jpg', mediaType: 'image' },
+            },
+          ],
+        },
+      ],
+    };
+    render(<CanvasV3Scene doc={doc} />);
+
+    expect(screen.getByTestId('canvas-v3-object-bgMedia').style.zIndex).toBe('0');
+    expect(screen.getByTestId('canvas-v3-object-carrier').style.zIndex).toBe('12');
+    expect(screen.getByTestId('canvas-v3-object-fgText').style.zIndex).toBe('21');
+  });
+
+  it('ignores a reserved kind silently — reading tolerance, never a throw', () => {
+    const doc = {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            {
+              id: 'vote', kind: 'interactive', anchor: { t: 'free', x: 0.5, y: 0.2 }, plane: 'fg', z: 0,
+              transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { question: 'Alors ?' },
+            },
+            {
+              id: 't1', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'fg', z: 0,
+              transform: { scale: 1, rotation: 0, opacity: 1 }, payload: { text: 'Bonjour' },
+            },
+          ],
+        },
+      ],
+    } as unknown as CanvasV3;
+
+    expect(() => render(<CanvasV3Scene doc={doc} />)).not.toThrow();
+    expect(screen.getByTestId('canvas-v3-object-t1')).toHaveTextContent('Bonjour');
+    expect(screen.queryByTestId('canvas-v3-object-vote')).toBeNull();
+    expect(screen.queryByText('Alors ?')).toBeNull();
+  });
+
+  it('resolves the reader languages IN ORDER, the origin competing at its own rank', () => {
+    const doc: CanvasV3 = {
+      v: 3,
+      scenes: [
+        {
+          id: 's1',
+          objects: [
+            {
+              id: 't1', kind: 'text', anchor: { t: 'free', x: 0.5, y: 0.5 }, plane: 'fg', z: 0,
+              transform: { scale: 1, rotation: 0, opacity: 1 }, locale: 'en',
+              payload: { text: 'Hello', translations: { fr: 'Bonjour' } },
+            },
+          ],
+        },
+      ],
+    };
+
+    const frFirst = render(<CanvasV3Scene doc={doc} preferredLanguages={['fr', 'en']} />);
+    expect(screen.getByTestId('canvas-v3-object-t1')).toHaveTextContent('Bonjour');
+    frFirst.unmount();
+
+    const enFirst = render(<CanvasV3Scene doc={doc} preferredLanguages={['en', 'fr']} />);
+    expect(screen.getByTestId('canvas-v3-object-t1')).toHaveTextContent('Hello');
+    enFirst.unmount();
+
+    const noMatch = render(<CanvasV3Scene doc={doc} preferredLanguages={['de']} />);
+    expect(screen.getByTestId('canvas-v3-object-t1')).toHaveTextContent('Hello');
+    noMatch.unmount();
+  });
+});
