@@ -16,6 +16,8 @@ import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-c
 import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { useReactToStoryMutation } from '@/hooks/social/use-stories';
 import { useAuthStore } from '@/stores/auth-store';
+import { CanvasV3Scene } from './CanvasV3Scene';
+import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 
 // ============================================================================
 // Types
@@ -94,6 +96,10 @@ interface StoryData {
   originalLanguage?: string;
   translations?: Array<{ languageCode: string; languageName: string; content: string }>;
   storyEffects?: {
+    /// F2 — un blob v3 (`packages/shared/types/canvas-v3`) porte `v: 3` ;
+    /// un blob legacy ne le porte jamais. Le viewer discrimine sur ce seul
+    /// champ, sans parser le reste avec Zod (coût de bundle évité côté web).
+    v?: number;
     background?: string; // "#hex" | "gradient:from,to" | "image_url"
     textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
     textColor?: string;
@@ -823,6 +829,7 @@ function StoryViewer({
   }
 
   const effects = story.storyEffects;
+  const isCanvasV3 = effects?.v === 3;
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
@@ -859,6 +866,18 @@ function StoryViewer({
           filter: cssFilter,
         }}
       >
+        {/* F2 — un blob v3 monte la scène pure (`CanvasV3Scene`) ; le chemin
+            legacy ci-dessous (média de fond, overlays `effects.*`, stickers)
+            devient le REPLI, jamais rendu simultanément. */}
+        {isCanvasV3 ? (
+          <CanvasV3Scene
+            doc={effects as CanvasV3}
+            mediaById={story.mediaById}
+            preferredLanguages={userLanguage ? [userLanguage] : []}
+            className="absolute inset-0"
+          />
+        ) : (
+          <>
         {/* Media background */}
         {story.mediaUrl && story.mediaType === 'image' && (
           <img
@@ -1046,6 +1065,8 @@ function StoryViewer({
             {sticker.emoji}
           </div>
         ))}
+          </>
+        )}
 
         {/* Content layer - above background, below UI controls */}
         <div className="absolute inset-0 flex flex-col pointer-events-none">
@@ -1124,8 +1145,9 @@ function StoryViewer({
 
           {/* Spacer to push text to its positioned location */}
           <div className="flex-1 relative">
-            {/* Story text content */}
-            {story.content && (
+            {/* Story text content — F2: le v3 loge son propre texte dans la
+                scène (`CanvasV3Scene`), jamais dans ce bloc `textStyleClass`. */}
+            {!isCanvasV3 && story.content && (
               <div
                 className="absolute pointer-events-auto max-w-[85%]"
                 style={{
