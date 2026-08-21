@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-21 — SDK platform: `compileSdk = 37` wants `android-37.0`, install ordering matters
+- The repo is on `compileSdk = 37` = **Android 17**, whose platform package is `platforms;android-37.0`
+  (`AndroidVersion.ApiLevel=37.0`), NOT `android-37`. The ROUTINE §Environment recipe still installs
+  `platforms;android-35`; that is not enough — add `android-37.0`. `sdkmanager "platforms;android-37"`
+  fails (`Failed to find package`); the cmdline-tools bundle only speaks SDK XML v3 and can't see the
+  v4-only stable name.
+- **Let AGP auto-download it, but wait for it.** With `local.properties` pointing at the SDK, the first
+  Gradle invocation auto-installs `android-37.0` — but if dependency resolution runs while that install is
+  still in flight it dies with `Failed to find target with hash string 'android-37'`. Re-run once the
+  install line prints complete (or pre-run `./gradlew :core:model:compileDebugKotlin` to force the download),
+  then the real build/test resolves cleanly. AGP 8.13.0 maps `compileSdk 37` → the `android-37.0` platform.
+- **Orphaned models are the frontier.** `AgentAnalysis.kt` (`ConversationMessageStatsResponse`,
+  `ConversationAnalysis`, `ParticipantProfile`…) shipped with ZERO consumers (grep outside the model file =
+  nothing). When a parity area looks "already started", grep for consumers before assuming — a defined-but-
+  unconsumed DTO is unbuilt, and wiring it (repository + pure projection + VM + sheet) is a clean vertical slice.
+- **Inject `today` for any windowed/time-bucketed projection.** iOS computes `activityData` off `Date()`
+  inside a view getter (untestable). The Android SSOT takes `today: LocalDate` as a parameter and the
+  Composable passes `LocalDate.now()` in — the same "pass time in" doctrine the chat header uses for presence
+  (`System.currentTimeMillis()`). Makes the cutoff-window mutation catchable in a plain JVM test.
+
 ## 2026-08-21 — story on-demand translation: gotchas
 - **Mutation-proving an "override" line needs a scenario Prisme can't auto-resolve.** The story
   request arm sets `languageOverride = storyId to target` after merging the pulled translation. If
