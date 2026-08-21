@@ -174,6 +174,35 @@ sites de `.finally` existent dans la passerelle ; l'autre est correct. Les autre
 formes de promesse dérivée détachée (`.then` sans second argument sur une chaîne
 `void`ée, `Promise.all` partiel) n'ont pas été balayées.
 
+**BLOCAGE DÉPÔT — `main` est rouge, et toute PR l'est avec elle.** La PR #3281
+porte ce cycle et ne peut pas devenir verte : la porte `Law literals guard`
+échoue **verbatim sur `origin/main`**, sur trois opacités codées en dur —
+`FocalRow.swift:646` (`0.45`), `FocalRow.swift:745` (`0.40`),
+`LentilleFocusCard.swift:184` (`0.35`). La CI de `main` était VERTE au run de
+20:19Z (`181127da`, merge du cycle 79) et rouge au suivant, 20:43Z — `f935f91b`,
+« Merge feat/ios-list-scroll-fluidity », **fusionnée directement sur `main` sans
+CI de PR**. Le commit Android suivant (`6a38ae3f`) hérite du rouge.
+
+Deux précisions qui comptent pour le diagnostic :
+
+- **Le bruit `@meeshy/web#type-check` n'est PAS la cause.** `Lint` et
+  `Type-check` sont `continue-on-error: true` (`ci.yml:124`, `:128`) : ils ne
+  font jamais tomber le job. Et ils sont antérieurs — **1276 erreurs `tsc` web
+  mesurées à l'identique sur `origin/main` ET sur le dernier commit vert**.
+- **Ce n'est pas une violation de loi mais une collision numérique.** Ligne 645,
+  juste au-dessus de la 646 fautive, `opacity(input.isDark ? 0.18 : 0.14)` passe
+  sans broncher : `0.45`/`0.40`/`0.35` ne sont fautives que parce qu'elles
+  figurent dans la liste de la garde.
+
+Non corrigé ici pour trois raisons cumulées : arbitrage de rendu qui n'appartient
+pas à la passerelle ; invérifiable dans ce conteneur (ni Xcode ni toolchain
+Swift) ; et fichiers d'un chantier EN VOL (`feat/ios-list-scroll-fluidity`,
+cf. `todo.md`), que CLAUDE.md § Parallel Worktree Strategy interdit de toucher
+depuis un autre poste. Correctif proposé au chantier propriétaire, dans le
+commentaire de la PR : hisser chaque opacité en constante nommée dans le `Core/`
+voisin (`FocalMetrics`, `LentilleMetrics` — sous-arbre que la garde exclut
+délibérément), rendu strictement préservé.
+
 **Le compteur `_seq` brûle des numéros sur timeout.** `allocateSeq` dégrade en
 émission SANS `_seq` quand `nextSeq` traîne — mais l'upsert MongoDB a déjà
 consommé le numéro. Le `checkpointSeq` du serveur avance donc d'un cran que
