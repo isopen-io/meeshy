@@ -194,7 +194,27 @@ Deux précisions qui comptent pour le diagnostic :
   sans broncher : `0.45`/`0.40`/`0.35` ne sont fautives que parce qu'elles
   figurent dans la liste de la garde.
 
-Non corrigé ici pour trois raisons cumulées : arbitrage de rendu qui n'appartient
+**Seconde porte rouge, même commit d'origine — et celle-là a un correctif
+prouvé.** `Test web` tombe sur `lentille-tokens.parity.test.ts` : 78 tokens CSS
+contre 82 en JSON, reproduit à l'identique sur `origin/main` seul. `f935f91b` a
+fait entrer le groupe `list.focusCard` dans
+`packages/shared/design/lentille-tokens.json` (`height: 104`,
+`padding.vertical: 14`, `avatarSize: 52`, `nameSize: 17` — exactement le Lot 9
+de `todo.md`) sans que le miroir `apps/web/styles/lentille-tokens.css` suive.
+C'est le SEUL fichier `apps/web`/`packages/shared` qui bouge entre le dernier
+commit vert et `main`.
+
+Ici, aucun arbitrage : le JSON EST la source de vérité, le CSS est le côté qui a
+dérivé — la réparation que la philosophie du test prescrit littéralement
+(« never repair the test by copying the drifted value; repair the token
+instead »). Les quatre lignes à ajouter au groupe `/* list.focusCard */` ont été
+**appliquées et vérifiées en local (3/3 verts), puis retirées** : un échec qui
+reproduit sur la base n'appartient pas à cette PR, et le groupe de tokens
+appartient au chantier `feat/ios-list-scroll-fluidity`, encore en vol. Correctif
+livré verbatim dans le commentaire de la PR.
+
+La garde des littéraux, elle, n'est pas corrigée ici pour trois raisons
+cumulées : arbitrage de rendu qui n'appartient
 pas à la passerelle ; invérifiable dans ce conteneur (ni Xcode ni toolchain
 Swift) ; et fichiers d'un chantier EN VOL (`feat/ios-list-scroll-fluidity`,
 cf. `todo.md`), que CLAUDE.md § Parallel Worktree Strategy interdit de toucher
