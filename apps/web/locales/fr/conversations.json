@@ -827,7 +827,17 @@
       "linkLanguages": "Langues admises",
       "requireNickname": "pseudo",
       "requireEmail": "email",
-      "requireBirthday": "date de naissance"
+      "requireBirthday": "date de naissance",
+      "allowed": {
+        "canViewHistory": "Voir les messages antérieurs",
+        "canSendMessages": "Écrire des messages",
+        "canSendImages": "Envoyer des photos",
+        "canSendFiles": "Envoyer des fichiers",
+        "canSendVideos": "Envoyer des vidéos",
+        "canSendAudios": "Envoyer de l’audio",
+        "canSendLinks": "Envoyer des liens",
+        "canSendLocations": "Partager sa position"
+      }
     },
     "forward": {
       "title": "Transférer le message",

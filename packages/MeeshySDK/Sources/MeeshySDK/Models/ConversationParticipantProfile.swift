@@ -77,6 +77,26 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
     }
 }
 
+/// Ce que rend `PATCH …/participants/:participantId/rights` : l'état résolu
+/// après écriture, jamais le delta envoyé.
+public struct ParticipantRightsUpdateResult: Decodable, Sendable, Equatable {
+    public let participantId: String
+    public let conversationId: String
+    public let rights: ParticipantEntryCapabilities
+}
+
+/// Un hôte a modifié les droits d'un visiteur — charge utile de
+/// `participant:rights-updated`.
+///
+/// Le sujet est nommé par `participantId` et non par `userId` : il n'a
+/// précisément pas de compte. `rights` porte l'état RÉSOLU.
+public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
+    public let conversationId: String
+    public let participantId: String
+    public let updatedBy: String
+    public let rights: ParticipantEntryCapabilities
+}
+
 /// Les réglages du lien emprunté — second cercle, réservé aux administrateurs
 /// et modérateurs de la conversation.
 ///
@@ -152,7 +172,11 @@ public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
     /// Ce que la personne peut faire dans la salle. `nil` quand elle A un
     /// compte : elle n'est entrée par aucun lien, donc aucune condition
     /// d'entrée ne la régit.
-    public let entryCapabilities: ParticipantEntryCapabilities?
+    ///
+    /// `var` parce que c'est le SEUL champ que la fiche repose sans recharger :
+    /// après une écriture de l'hôte, ou à réception de `participant:rights-updated`,
+    /// le serveur rend l'état résolu et il n'y a rien d'autre à rafraîchir.
+    public var entryCapabilities: ParticipantEntryCapabilities?
 
     /// Les réglages du lien emprunté. `nil` hors du cercle des hôtes — c'est le
     /// gateway qui tranche, jamais la vue.

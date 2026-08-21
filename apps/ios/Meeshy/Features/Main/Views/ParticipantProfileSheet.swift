@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import MeeshySDK
 import MeeshyUI
 
@@ -49,6 +50,13 @@ struct ParticipantProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var profile: ConversationParticipantProfile?
     @State private var loadFailed = false
+    @State private var rightsWriteInFlight = false
+
+    /// `entryLink` n'est servi qu'aux administrateurs et modérateurs : sa
+    /// PRÉSENCE est la réponse du gateway à « ce lecteur peut-il écrire ». La
+    /// vue ne refait pas cet arbitrage — un droit recalculé côté client n'est
+    /// pas un droit.
+    private var canEditRights: Bool { profile?.entryLink != nil }
 
     var body: some View {
         NavigationStack {
@@ -93,6 +101,17 @@ struct ParticipantProfileSheet: View {
             } catch {
                 loadFailed = true
             }
+        }
+        // Un AUTRE hôte peut modifier ces droits pendant que cette fiche est
+        // ouverte. L'événement porte l'état résolu : on le pose, sans recharger
+        // — la charge utile est déjà la vérité.
+        .onReceive(
+            MessageSocketManager.shared.participantRightsUpdated
+                .receive(on: DispatchQueue.main)
+        ) { event in
+            guard event.participantId == participantId,
+                  event.conversationId == conversationId else { return }
+            profile?.entryCapabilities = event.rights
         }
     }
 
@@ -153,8 +172,24 @@ struct ParticipantProfileSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle(capabilitiesLabel)
 
-            let denied = capabilities.denied
-            if denied.isEmpty {
+            if canEditRights {
+                // En lecture, la feuille n'énonce que les refus. En ÉDITION il
+                // faut les huit : on n'accorde pas un droit qu'on ne montre pas.
+                ForEach(ParticipantEntryCapabilities.Capability.allCases, id: \.rawValue) { capability in
+                    Toggle(isOn: Binding(
+                        get: { capabilities.isAllowed(capability) },
+                        set: { newValue in Task { await setRight(capability, to: newValue) } }
+                    )) {
+                        Text(allowedLabel(capability))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                            .foregroundColor(theme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .tint(MeeshyColors.success)
+                    .disabled(rightsWriteInFlight)
+                    .accessibilityIdentifier("participant-profile-toggle-\(capability.rawValue)")
+                }
+            } else if capabilities.denied.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 13))
@@ -167,7 +202,7 @@ struct ParticipantProfileSheet: View {
                 }
                 .accessibilityIdentifier("participant-profile-no-restriction")
             } else {
-                ForEach(denied, id: \.rawValue) { capability in
+                ForEach(capabilities.denied, id: \.rawValue) { capability in
                     HStack(spacing: 8) {
                         Image(systemName: "nosign")
                             .font(.system(size: 13))
@@ -319,6 +354,52 @@ struct ParticipantProfileSheet: View {
             defaultValue: "fourni, réservé aux modérateurs",
             bundle: .main
         )
+    }
+
+    /// Écrit UN droit, et n'envoie que celui-là : la surcharge est un delta côté
+    /// gateway, et lui poster les huit gèlerait les sept autres à leur valeur du
+    /// moment — ils cesseraient de suivre les conditions du join.
+    ///
+    /// La réponse porte l'état RÉSOLU : on la pose telle quelle. En cas d'échec,
+    /// on ne touche à rien — l'interrupteur revient de lui-même à ce que
+    /// `profile` dit, qui est resté la vérité.
+    private func setRight(_ capability: ParticipantEntryCapabilities.Capability, to value: Bool) async {
+        guard !rightsWriteInFlight else { return }
+        rightsWriteInFlight = true
+        defer { rightsWriteInFlight = false }
+
+        do {
+            let updated = try await ConversationService.shared.updateParticipantRights(
+                conversationId: conversationId,
+                participantId: participantId,
+                rights: [capability.rawValue: value]
+            )
+            profile?.entryCapabilities = updated
+        } catch {
+            // L'échec laisse l'état serveur intact ; le rendu suivant réaligne
+            // l'interrupteur sur `profile`.
+        }
+    }
+
+    private func allowedLabel(_ capability: ParticipantEntryCapabilities.Capability) -> String {
+        switch capability {
+        case .canViewHistory:
+            return String(localized: "participantProfile.allowed.canViewHistory", defaultValue: "Voir les messages antérieurs", bundle: .main)
+        case .canSendMessages:
+            return String(localized: "participantProfile.allowed.canSendMessages", defaultValue: "Écrire des messages", bundle: .main)
+        case .canSendImages:
+            return String(localized: "participantProfile.allowed.canSendImages", defaultValue: "Envoyer des photos", bundle: .main)
+        case .canSendFiles:
+            return String(localized: "participantProfile.allowed.canSendFiles", defaultValue: "Envoyer des fichiers", bundle: .main)
+        case .canSendVideos:
+            return String(localized: "participantProfile.allowed.canSendVideos", defaultValue: "Envoyer des vidéos", bundle: .main)
+        case .canSendAudios:
+            return String(localized: "participantProfile.allowed.canSendAudios", defaultValue: "Envoyer de l’audio", bundle: .main)
+        case .canSendLinks:
+            return String(localized: "participantProfile.allowed.canSendLinks", defaultValue: "Envoyer des liens", bundle: .main)
+        case .canSendLocations:
+            return String(localized: "participantProfile.allowed.canSendLocations", defaultValue: "Partager sa position", bundle: .main)
+        }
     }
 
     private var capabilitiesLabel: String { String(localized: "participantProfile.capabilities", defaultValue: "Dans cette conversation", bundle: .main) }

@@ -823,7 +823,17 @@
       "linkLanguages": "Allowed languages",
       "requireNickname": "nickname",
       "requireEmail": "email",
-      "requireBirthday": "date of birth"
+      "requireBirthday": "date of birth",
+      "allowed": {
+        "canViewHistory": "See earlier messages",
+        "canSendMessages": "Write messages",
+        "canSendImages": "Send photos",
+        "canSendFiles": "Send files",
+        "canSendVideos": "Send videos",
+        "canSendAudios": "Send audio",
+        "canSendLinks": "Send links",
+        "canSendLocations": "Share their location"
+      }
     },
     "forward": {
       "title": "Forward message",

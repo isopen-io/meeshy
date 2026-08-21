@@ -825,7 +825,17 @@
       "linkLanguages": "Idiomas admitidos",
       "requireNickname": "alcunha",
       "requireEmail": "email",
-      "requireBirthday": "data de nascimento"
+      "requireBirthday": "data de nascimento",
+      "allowed": {
+        "canViewHistory": "Ver as mensagens anteriores",
+        "canSendMessages": "Escrever mensagens",
+        "canSendImages": "Enviar fotos",
+        "canSendFiles": "Enviar ficheiros",
+        "canSendVideos": "Enviar vídeos",
+        "canSendAudios": "Enviar áudio",
+        "canSendLinks": "Enviar ligações",
+        "canSendLocations": "Partilhar a sua localização"
+      }
     },
     "forward": {
       "title": "Encaminhar mensagem",
