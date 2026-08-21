@@ -53,3 +53,42 @@ Deux témoins gardent cet état en conscience (`RiverScreenNotMountedTests` posi
 - [ ] Défaut du drapeau ON + témoins retournés
 - [ ] Build + suite iOS vertes
 - [ ] Recette sur le simulateur `Meeshy-iOS26`
+
+---
+
+## Reste à faire — arbitrages produit du 2026-08-21 non encore livrés
+
+Ordre de valeur décroissante. Chaque ligne est un lot autonome.
+
+- [ ] **R-3 · Plan à axe du temps avec poignée.** Axe des ordonnées = le temps ;
+      une poignée apparaît au défilement, graduée jour / semaine / mois / année
+      selon l'amplitude réelle du fil ; en la tenant on saute directement à la
+      période voulue. C'est le lot le plus lourd : il faut une projection
+      rang → date (la loi sert déjà `createdAtMs`), une échelle adaptative et
+      un `scrollTo` par rang cible.
+- [ ] **R-4 · La bulle Rivière devient une vraie bulle.** Appui long (menu),
+      réactions, traductions, pièces jointes — images, vidéos, audio avec
+      transcription à segments coloriés et synchronisés à la lecture, comme le
+      fil. Aujourd'hui `RiverBubbleView` ne rend que texte + citation.
+      Réutiliser les composants du Fil plutôt que les réécrire.
+- [ ] **R-5 · Identité vivante.** Avatars avec présence et cercle de story ;
+      le nom devient activable — profil pour un compte, feuille d'information
+      pour un visiteur anonyme. `ProfileSheetUser` existe déjà (`FocalRowInput`).
+- [ ] **R-6 · La citation mène à sa cible.** Un tap sur la citation d'une bulle
+      déplace le curseur ET cadre le rang du message cité (`moveTo` +
+      `scrollTo`) — la loi sert déjà le connecteur et son `toRank`.
+- [ ] **R-7 · Canvas plein écran avec marges.** Le pane occupe déjà l'écran ;
+      reste à réserver le bas (composeur) et à garantir qu'aucune bulle ne
+      tombe sous une zone non atteignable.
+- [ ] **R-8 · Affinages mesurés au simulateur.** La bande de couloirs se vide
+      quand la ligne de lecture tombe entre deux rangs (la loi ne nomme
+      personne sur le vide — décider si la peau doit garder le dernier nom
+      connu) ; le plan s'ouvre avec ~135 pt de marge à gauche au premier
+      cadrage.
+
+## Hors périmètre de cette branche
+
+Les captures « padding des bulles du fil » et « padding des items de
+conversation » (2026-08-21) montrent `focusIdentityChip` / `focusStrip` /
+encoche CATÉGORIE : ce code vit sur `feat/ios-list-scroll-fluidity`, pas sur
+`main`. Il ne peut pas être corrigé depuis cette branche.
