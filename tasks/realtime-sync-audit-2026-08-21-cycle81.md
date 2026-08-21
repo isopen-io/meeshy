@@ -157,6 +157,14 @@ ont été mises à jour ensemble — mais la preuve vient de la CI : `ios.yml`
 (compile-only sur PR, `apps/ios/**` + `packages/MeeshySDK/**`) et `android.yml`
 (`assembleDebug` + `testDebugUnitTest`). Pas de merge avant leur vert.
 
+**Le SECOND consommateur web de `comment:liked` n'avait rien à recevoir.**
+`hooks/social/use-social-socket.ts` relaie l'événement à un `onCommentLiked`
+optionnel, dont l'unique fournisseur (`use-feed-realtime.ts`) est un **no-op
+explicitement documenté** — « comment like counts live on the comment itself,
+not the post […] for the feed list view this is a no-op ». Y ajouter une option
+`onCommentUnliked` n'aurait créé qu'un second no-op et une option inutilisée.
+Vérifié, pas supposé : les deux consommateurs ont été relus.
+
 **Aucun consommateur Android** ne collecte `commentLiked` aujourd'hui — la
 descendante y est donc, comme sa montante, une couche miroir du fil sans lecteur
 applicatif. C'est délibéré : laisser une demi-paire dans une couche dont le rôle
