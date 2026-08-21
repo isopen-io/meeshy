@@ -43,6 +43,15 @@ protocol ConversationSocketDelegate: AnyObject {
     func markMessageAsConsumed(messageId: String)
     func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
+    /// Re-fetch messages this reader had hidden for themselves and has just
+    /// restored from another device (`message:restored-for-me`).
+    ///
+    /// Separate from `syncMissedMessages` on purpose, and NOT expressible by
+    /// it: that one is a forward-only watermark backfill (`listAfter(after:
+    /// newestLocal)`), while a restored message is almost always OLDER than the
+    /// newest message held — it was hidden from somewhere back in the history.
+    /// Routing a restore through the watermark would silently no-op.
+    func restoreMessagesForMe(ids: [String]) async
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async
     func persistMessagesUsingServerIds() async
     /// Server rejected `conversation:join` — purge per-conversation cache,
@@ -670,6 +679,36 @@ final class ConversationSocketHandler {
                 // instantané figé survivrait au retrait.
                 for messageId in hiddenIds {
                     StarredMessagesStore.shared.remove(messageId: messageId)
+                }
+            }
+            .store(in: &cancellables)
+
+        // Retour en vue PERSONNEL — l'inverse exact du masquage ci-dessus.
+        //
+        // Le masquage a PURGÉ la ligne : cet appareil ne détient plus rien à
+        // ré-afficher, et l'événement ne porte qu'une ADRESSE (aucun contenu —
+        // une apparition ne s'écrit pas comme une tombstone inversée). Le seul
+        // geste honnête est donc d'aller rechercher, ce que le délégué fait.
+        //
+        // Ni `markDeleted` inversé, ni `syncMissedMessages` : ce dernier ne
+        // remonte le temps dans AUCUN cas (watermark strictement en avant),
+        // alors qu'un message rendu est presque toujours PLUS VIEUX que le
+        // dernier message détenu.
+        //
+        // Même découpage par conversation que le masquage : le lot peut nommer
+        // plusieurs fils, ce handler ne parle que du sien.
+        socketManager.messageRestoredForMe
+            .map { event in
+                event.messages
+                    .filter { ref in ref.conversationId == convId }
+                    .map(\.messageId)
+            }
+            .filter { ids in !ids.isEmpty }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] restoredIds in
+                guard let self else { return }
+                Task { [weak self] in
+                    await self?.delegate?.restoreMessagesForMe(ids: restoredIds)
                 }
             }
             .store(in: &cancellables)
