@@ -900,3 +900,95 @@ describe('timeRemaining - extended', () => {
     expect(timeRemaining(past)).toBeNull();
   });
 });
+
+// =============================================================================
+// postToStoryData - text object locale backfill from originalLanguage
+// (constat 4, BLOQUANT — rejet DoD de F7d)
+// =============================================================================
+
+// Le composer web n'a AUCUN sélecteur de langue explicite pour l'auteur
+// (contrairement à iOS, `StoryComposerViewModel+Elements.swift:674`) : il ne
+// peut donc jamais poser une `locale` HONNÊTE sur le texte racine à
+// l'émission — deviner depuis la locale d'interface rouvrait la règle 3 du
+// Prisme (arbitrage 4 vs 8, F7d 94bdb8ae2). Sans repli, l'origine ne
+// concourt alors JAMAIS à son rang (`CanvasV3Scene.resolveText`,
+// `sameLanguage(language, o.locale)`) : un texte anglais SANS `locale`,
+// prisme `['en','fr']`, traduction `fr` disponible, sert « Bonjour » à un
+// lecteur anglais-primaire — l'inversion que la règle 3 interdit.
+//
+// Le serveur, lui, détecte déjà la VRAIE langue à la création
+// (`PostService.ts` `detectLanguage(data.content)`, jamais devinée) et la
+// persiste sur `post.originalLanguage`. `postToStoryData` la reporte donc
+// ICI, à la LECTURE, sur tout objet texte dépourvu de sa propre `locale` —
+// iOS en pose une par objet (`CanvasV3Migration.swift:189`) et n'est donc
+// jamais retouché par ce repli.
+describe('postToStoryData - text object locale backfill from originalLanguage (constat 4)', () => {
+  function textObject(
+    overrides: Partial<NonNullable<CanvasV3['scenes']>[number]['objects'][number]> = {},
+  ): NonNullable<CanvasV3['scenes']>[number]['objects'][number] {
+    return {
+      id: 't1',
+      kind: 'text',
+      anchor: { t: 'free', x: 0.5, y: 0.5 },
+      plane: 'fg',
+      z: 0,
+      transform: { scale: 1, rotation: 0, opacity: 1 },
+      payload: { text: 'Hello there', translations: { fr: 'Bonjour' } },
+      ...overrides,
+    };
+  }
+
+  it('backfills the SERVER-DETECTED originalLanguage onto a root text object with no locale', () => {
+    const post = createPost({
+      content: 'Hello there',
+      originalLanguage: 'en',
+      storyEffects: { v: 3, scenes: [{ id: 's1', objects: [textObject()] }] },
+    });
+
+    const result = postToStoryData(post);
+
+    expect(result.storyEffects?.scenes?.[0]?.objects[0]).toMatchObject({ locale: 'en' });
+  });
+
+  it('never overrides a locale the object already carries — iOS emits one per object', () => {
+    const post = createPost({
+      originalLanguage: 'en',
+      storyEffects: { v: 3, scenes: [{ id: 's1', objects: [textObject({ locale: 'es' })] }] },
+    });
+
+    const result = postToStoryData(post);
+
+    expect(result.storyEffects?.scenes?.[0]?.objects[0]).toMatchObject({ locale: 'es' });
+  });
+
+  it('leaves a non-text object untouched', () => {
+    const bg: NonNullable<CanvasV3['scenes']>[number]['objects'][number] = {
+      id: 'bg',
+      kind: 'media',
+      anchor: { t: 'free', x: 0.5, y: 0.5 },
+      plane: 'bg',
+      z: 0,
+      transform: { scale: 1, rotation: 0, opacity: 1 },
+      payload: { background: '#fff' },
+    };
+    const post = createPost({
+      originalLanguage: 'en',
+      storyEffects: { v: 3, scenes: [{ id: 's1', objects: [bg] }] },
+    });
+
+    const result = postToStoryData(post);
+
+    expect(result.storyEffects?.scenes?.[0]?.objects[0]).not.toHaveProperty('locale');
+  });
+
+  it('leaves the text object without a locale when originalLanguage is unknown', () => {
+    const post = createPost({
+      originalLanguage: undefined,
+      storyEffects: { v: 3, scenes: [{ id: 's1', objects: [textObject()] }] },
+    });
+
+    const result = postToStoryData(post);
+
+    expect(result.storyEffects?.scenes?.[0]?.objects[0]).not.toHaveProperty('locale');
+  });
+});

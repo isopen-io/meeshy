@@ -273,6 +273,37 @@ export interface BackgroundSoundCredit {
   durationSeconds?: number;
 }
 
+// Constat 4 (BLOQUANT, rejet DoD de F7d) — le composer web n'a AUCUN
+// sélecteur de langue explicite pour l'auteur (contre iOS,
+// `StoryComposerViewModel+Elements.swift:674`) : il ne peut donc jamais
+// poser une `locale` HONNÊTE sur le texte racine à l'ÉMISSION — deviner
+// depuis la locale d'interface rouvre la règle 3 du Prisme (arbitrage 4 vs
+// 8). Sans repli, `CanvasV3Scene.resolveText` (`sameLanguage(language,
+// o.locale)`) ne peut jamais faire concourir l'origine à son rang : un
+// texte anglais sans `locale`, prisme `['en','fr']`, traduction `fr`
+// disponible, sert « Bonjour » à un lecteur anglais-primaire.
+//
+// Le serveur, lui, détecte déjà la VRAIE langue à la création
+// (`PostService.ts` `detectLanguage(data.content)`, jamais devinée) et la
+// persiste sur `post.originalLanguage`. On la reporte donc ICI, à la
+// LECTURE — l'entonnoir UNIQUE vers le viewer — sur tout objet texte
+// dépourvu de sa propre `locale`. iOS pose une `locale` PAR OBJET
+// (`CanvasV3Migration.swift:189`) : ce repli ne la retouche jamais.
+function withOriginLocale(
+  scenes: NonNullable<CanvasV3['scenes']>,
+  originalLanguage: string | undefined,
+): NonNullable<CanvasV3['scenes']> {
+  if (!originalLanguage) return scenes;
+  return scenes.map((scene) => ({
+    ...scene,
+    objects: scene.objects.map((object) =>
+      object.kind === 'text' && !object.locale
+        ? { ...object, locale: originalLanguage }
+        : object
+    ),
+  }));
+}
+
 export function backgroundSoundCredit(scenes: CanvasV3['scenes']): BackgroundSoundCredit {
   const audioObject = (scenes ?? [])
     .flatMap((scene) => scene.objects)
@@ -444,7 +475,7 @@ export function postToStoryData(post: Post): StoryData {
   // reste tolérante objet par objet.
   const isV3Shaped = typeof effects?.v === 'number' && effects.v >= 3;
   const canvasScenes = isV3Shaped && Array.isArray(effects.scenes)
-    ? (effects.scenes as CanvasV3['scenes'])
+    ? withOriginLocale(effects.scenes as NonNullable<CanvasV3['scenes']>, post.originalLanguage ?? undefined)
     : undefined;
   const backgroundSound = isV3Shaped && effects.sound !== null && typeof effects.sound === 'object'
     ? (effects.sound as CanvasV3['sound'])
