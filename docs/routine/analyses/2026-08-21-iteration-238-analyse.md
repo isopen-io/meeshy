@@ -106,10 +106,25 @@ this.prisma.mention.findMany({ ..., orderBy: { mentionedAt: 'desc' }, take: limi
 ## Proposed improvements
 1. **RED** : suite `mentions-schemas.test.ts` — 5 tests tombent rouges sur `main`
    (`abc`, `-5`, `0`, `101`, `100000` traversent).
-2. **GREEN** : aligner `limit` sur la brique standard
-   `.string().regex(/^\d+$/).transform(Number).refine(v => v >= 1 && v <= 100).prefault('20')`.
+2. **GREEN** : `.string().regex(/^\d+$/).transform(Number).refine(v => v >= 0 && v <= 100).prefault('20')`.
+   C'est le `regex(/^\d+$/)` qui ferme le vrai défaut (un négatif ne matche jamais
+   `\d+` → 400, donc jamais de `take: -5`) ; le `refine` ne fait que plafonner.
 3. **REFACTOR** : commentaire in-line citant les schémas jumeaux et le chemin
    `take: limit` de `MentionService`, pour que la divergence ne se reforme pas.
+
+## Correctif CI (post-push, catch de `Test gateway`)
+Le premier push (`refine(v >= 1)`, aligné strictement sur les jumeaux) a fait tomber
+un témoin de route PRÉEXISTANT :
+`mentions-routes.test.ts › falls back to limit=50 when limit=0 is provided (falsy guard)`
+(attendu 200 + service appelé avec `50`, reçu 400). Ce test gèle un contrat
+DÉLIBÉRÉ **propre à ce endpoint** : `routes/mentions.ts` fait `limit || 50`, donc
+`limit=0` y signifie « non spécifié → défaut 50 ». Les schémas jumeaux rejettent `0`
+car ils n'ont pas ce repli ; `MyMentionsQuerySchema` doit donc admettre `0`
+(borne basse `>= 0`, pas `>= 1`). Le vrai bug — `take` NÉGATIF — était fermé par le
+`regex` seul ; `0` n'a jamais été le défaut (`take: 0` est inoffensif, et le repli le
+transforme de toute façon en 50). Contrat corrigé : `regex(/^\d+$/)` + `refine(0..100)`.
+Leçon : lancer AUSSI `mentions-routes.test.ts`, pas seulement `mentions-suggestions`,
+avant de pousser un changement de schéma de query de ce endpoint.
 
 ## Validation criteria
 - `mentions-schemas.test.ts` : 15/15 vert après fix (5 rouges avant).

@@ -30,12 +30,18 @@ Tests: 5 failed, 10 passed, 15 total
 ```ts
 limit: z
   .string()
-  .regex(/^\d+$/, 'Limit must be a positive integer')
+  .regex(/^\d+$/, 'Limit must be a non-negative integer')  // ferme le VRAI défaut : négatif → 400
   .transform(Number)
-  .refine(val => val >= 1 && val <= 100, 'Limit must be between 1 and 100')
+  .refine(val => val >= 0 && val <= 100, 'Limit must be between 0 and 100')  // plafond partagé
   .prefault('20')
 ```
-Forme RECOPIÉE verbatim de `GetNotificationsQuerySchema.limit` (norme éprouvée).
+Proche des jumeaux, mais borne basse `>= 0` (pas `>= 1`) : ce endpoint traite
+`limit=0` comme « non spécifié » via son propre `limit || 50` (contrat gelé par
+`mentions-routes.test.ts`). Le `regex` seul ferme le bug du `take` négatif.
+
+**Catch CI :** le premier essai (`refine(v >= 1)`) a fait tomber
+`mentions-routes.test.ts › falls back to limit=50 when limit=0` (200 attendu,
+400 reçu). Contrat corrigé pour préserver le repli `0 → 50`.
 
 ### Phase 3 — REFACTOR
 Commentaire in-line : cite les quatre schémas jumeaux + le chemin `take: limit` de
@@ -54,7 +60,8 @@ Retirer `.regex(...)` + `.refine(...)` et le fichier de test.
 ## Critères de validation
 - [x] `mentions-schemas.test.ts` : 5 rouges avant fix.
 - [x] `mentions-schemas.test.ts` : 15/15 vert après fix.
-- [x] `src/__tests__/unit/validation/` + `mentions-suggestions.test.ts` : 346/346 vert.
+- [x] `mentions-routes.test.ts` (dont `limit=0 → 50`) : vert après correctif CI.
+- [x] `src/__tests__/unit/validation/` + `mentions-routes` + `mentions-suggestions` : 339/339 vert.
 - [x] `tsc --noEmit -p tsconfig.json` : propre.
 
 ## Statut de complétion

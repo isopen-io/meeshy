@@ -45,11 +45,16 @@ describe('MyMentionsQuerySchema', () => {
   });
 
   it('rejects a negative limit (would reverse Prisma take semantics)', () => {
+    // `/^\d+$/` is what closes the real defect: a negative never matches, so it
+    // can never reach Prisma as a `take: -5` that returns the OLDEST rows reversed.
     expect(() => MyMentionsQuerySchema.parse({ limit: '-5' })).toThrow();
   });
 
-  it('rejects limit < 1', () => {
-    expect(() => MyMentionsQuerySchema.parse({ limit: '0' })).toThrow();
+  it('accepts 0 — this endpoint treats it as "unspecified" via its own || 50 fallback', () => {
+    // Deliberately admitted (lower bound >= 0, not >= 1 like the twin schemas):
+    // routes/mentions.ts does `limit || 50`, a contract frozen by
+    // mentions-routes.test.ts. The schema returns 0; the route maps it to 50.
+    expect(MyMentionsQuerySchema.parse({ limit: '0' }).limit).toBe(0);
   });
 
   it('rejects limit > 100 (shared pagination cap)', () => {
