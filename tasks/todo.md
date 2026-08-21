@@ -295,6 +295,25 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
 **Restes** : mesure Instruments (CPU main thread, frames distinctes/s) sur la nouvelle scène ;
 `meeshy.sh test` complet ; déploiement device du résultat final.
 
+## Review — session 4 du 21/08 (carte de focus, favoris, état vide, répertoire, bordure du focus)
+- [x] Carte de focus Lentille : date complète « à » (`FocalFocusTimestamp.listLabel`), dernier expéditeur
+      pour TOUTES les conversations, encoche CATÉGORIE haut-gauche (Menu → `moveToSection`), chips
+      d'étiquettes bord bas (filtrer / retirer le filtre / supprimer) ; `activeTagFilter` dans le VM
+      (`filterConversations(_:searchText:filter:tag:)`), callbacks passés par `LentilleFocusCardHost`.
+      Vérifié simulateur (Meeshy-iOS26) : « J. Charles N. M. · Lundi à 17:36 », « CATÉGORIE », expéditeur
+      sur un direct. Chips de tags NON vues (aucune conversation étiquetée dans le compte de test).
+- [x] Feuille d'infos · Options : « Réaction » → « Favori » (`star.fill`) ; champ Catégorie : retour = OK
+      (`submitLabel(.done)`, teinte système — limite iOS).
+- [x] État vide : deux gros boutons (membres à qui écrire → découverte ; mes contacts → répertoire) +
+      tuiles dégradées façon Dashboard ; 8 portes routées (garde `LentilleSceneActivityTests` mise à jour).
+- [x] Répertoire > 200 : `listAll` paginé (`DirectoryPaging.hasMore`, filet 25 pages) sur Phonebook et
+      Discover ; `DirectoryPagingTests` (450 contacts ⇒ 3 pages ; multiple exact ⇒ page vide qui clôt ; cap).
+- [x] Espace entre groupes : `groupTopPadding` 8 → 4, fin de groupe 10 → 6.
+- [x] Message en focus : bordure basse (drapeaux dispo + icône traduction + (+) emoji + réactions),
+      coches de l'en-tête → détails de lecture. Vérifié simulateur : « Aujourd'hui 14:36 », chips 🇫🇷 / 🅰 /
+      😂 / ☺ sur la bordure. Limite : la bordure arrive au POSÉ (détails synchronisés au repos).
+- [ ] Rivière lots 2–5 inchangés (ci-dessous).
+
 ## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`
 
 État trouvé : loi miroir `RiverLaneResolver` + vecteurs (R-132 ✅), peau `RiverStreamHost`/canvas/

@@ -44,6 +44,19 @@ struct LentilleFocusCard: View, Equatable {
     let isDark: Bool
     let reduceMotion: Bool
     var onSelectPreference: (ReadingModeOrchestrator.ReadingModePreference) -> Void = { _ in }
+    /// Catégories de l'utilisateur — l'encoche HAUT-GAUCHE (directive
+    /// 2026-08-21 : « la catégorie en haut à gauche exactement comme le
+    /// mode ; en y touchant, la liste des catégories pour déplacer »).
+    var categories: [ConversationSection] = []
+    /// Étiquette qui filtre la liste EN CE MOMENT (`nil` = aucun filtre) —
+    /// la chip correspondante propose « retirer le filtre » au lieu de
+    /// « afficher les conversations avec ce tag ».
+    var activeTagFilter: String? = nil
+    var onMoveToSection: (String) -> Void = { _ in }
+    var onFilterByTag: (String?) -> Void = { _ in }
+    var onRemoveTag: (MeeshyConversationTag) -> Void = { _ in }
+    /// Horloge de la date complète (injectée par les tests).
+    var now: Date = Date()
 
     static func == (lhs: LentilleFocusCard, rhs: LentilleFocusCard) -> Bool {
         lhs.conversation.id == rhs.conversation.id
@@ -54,6 +67,26 @@ struct LentilleFocusCard: View, Equatable {
             && lhs.preferredContentLanguages == rhs.preferredContentLanguages
             && lhs.isDark == rhs.isDark
             && lhs.reduceMotion == rhs.reduceMotion
+            && lhs.categories == rhs.categories
+            && lhs.activeTagFilter == rhs.activeTagFilter
+    }
+
+    /// Date COMPLÈTE du dernier message, MÊME loi que le message en focus du
+    /// fil (`FocalFocusTimestamp`) avec le joint « à » : « Aujourd'hui à
+    /// 5:49 », « Hier à 22:12 », « Mardi à 23:50 », « Sam. 3 oct. 2025 à
+    /// 14:41 » (directive 2026-08-21).
+    nonisolated static func fullTimestamp(lastMessageAt: Date, now: Date, calendar: Calendar, locale: Locale) -> String {
+        FocalFocusTimestamp.listLabel(
+            sentAt: lastMessageAt,
+            timeString: TimeStringCache.shared.format(lastMessageAt),
+            now: now,
+            calendar: calendar,
+            locale: locale,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui", bundle: .main),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier", bundle: .main),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier", bundle: .main),
+            atWord: String(localized: "conversations.focus.at", defaultValue: "à", bundle: .main)
+        )
     }
 
     private var accent: Color { Color(hex: conversation.accentColor) }
@@ -86,6 +119,20 @@ struct LentilleFocusCard: View, Equatable {
             // et s'inset depuis le bord droit.
             notch
                 .offset(x: -LentilleMetrics.ModeNotch.right, y: LentilleMetrics.ModeNotch.top)
+        }
+        // Catégorie : MÊME chip que l'encoche de mode, au coin HAUT-GAUCHE
+        // (miroir exact : `top: -9; left: 14`).
+        .overlay(alignment: .topLeading) {
+            categoryNotch
+                .offset(x: LentilleMetrics.ModeNotch.right, y: LentilleMetrics.ModeNotch.top)
+        }
+        // Étiquettes : chips sur le bord BAS, qui POKENT hors de la carte
+        // comme l'encoche poke hors du bord haut.
+        .overlay(alignment: .bottomLeading) {
+            if !conversation.tags.isEmpty {
+                tagChips
+                    .offset(x: LentilleMetrics.ModeNotch.right, y: -LentilleMetrics.ModeNotch.top)
+            }
         }
         // behaviour-matrix:L08 — le badge de type (groupe/canal/bot +
         // memberCount) est absorbé par la focus card. Coin bas-droit : le seul
@@ -165,10 +212,11 @@ struct LentilleFocusCard: View, Equatable {
             Text("·")
                 .font(LentilleMetrics.Time.font)
                 .foregroundColor(textMuted)
-            Text(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
+            Text(Self.fullTimestamp(lastMessageAt: conversation.lastMessageAt, now: now, calendar: .current, locale: .current))
                 .font(LentilleMetrics.Time.font)
                 .foregroundColor(textMuted)
-                .layoutPriority(1)
+                .lineLimit(1)
+                .layoutPriority(2)
             Spacer(minLength: 0)
             if conversation.userState.unreadCount > 0 {
                 unreadBadge
@@ -217,8 +265,9 @@ struct LentilleFocusCard: View, Equatable {
 
     private var previewLine: some View {
         HStack(alignment: .firstTextBaseline, spacing: 4) {
-            if conversation.type != .direct,
-               let sender = conversation.lastMessageSenderName, !sender.isEmpty {
+            // Le dernier expéditeur, pour TOUTES les conversations (directive
+            // 2026-08-21) — la rangée plate le réserve aux groupes.
+            if let sender = conversation.lastMessageSenderName, !sender.isEmpty {
                 Text(sender)
                     .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
                     .foregroundColor(accent)
@@ -282,24 +331,154 @@ struct LentilleFocusCard: View, Equatable {
                 onSelect: onSelectPreference
             )
         } label: {
-            Text(notchText)
+            notchChip(notchText)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel(notchText)
+    }
+
+    /// Le chip d'encoche — partagé par le mode (haut-droite) et la catégorie
+    /// (haut-gauche) : « exactement comme le mode ».
+    private func notchChip(_ text: String) -> some View {
+        Text(text)
+            .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+            .foregroundColor(accent)
+            .lineLimit(1)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1)
+            )
+            .contentShape(Capsule(style: .continuous))
+    }
+
+    // MARK: - Encoche CATÉGORIE (haut-gauche, 2026-08-21)
+
+    private var currentCategory: ConversationSection? {
+        categories.first { $0.id == conversation.userState.sectionId }
+    }
+
+    nonisolated static func categoryText(current: String?, fallback: String) -> String {
+        (current ?? fallback).uppercased()
+    }
+
+    private var categoryText: String {
+        Self.categoryText(
+            current: currentCategory?.name,
+            fallback: String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main)
+        )
+    }
+
+    /// Toucher ⇒ le catalogue des catégories pour DÉPLACER la conversation —
+    /// même contenu que le sous-menu « Déplacer vers… » du menu contextuel.
+    private var categoryNotch: some View {
+        Menu {
+            ForEach(categories) { category in
+                let isCurrent = category.id == conversation.userState.sectionId
+                Button {
+                    onMoveToSection(isCurrent ? "" : category.id)
+                } label: {
+                    if isCurrent {
+                        Label("\(category.name) \u{2713}", systemImage: category.icon)
+                    } else {
+                        Label(category.name, systemImage: category.icon)
+                    }
+                }
+            }
+            if !categories.isEmpty {
+                Divider()
+            }
+            Button {
+                onMoveToSection("")
+            } label: {
+                Label(
+                    String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
+                    systemImage: "tray.fill"
+                )
+            }
+        } label: {
+            notchChip(categoryText)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .accessibilityLabel(categoryText)
+    }
+
+    // MARK: - Étiquettes en chips sur le bord BAS (2026-08-21)
+
+    /// Fond = couleur de l'étiquette ; CONTOUR = l'anneau de la carte (même
+    /// accent, même épaisseur) : la chip suit le contour de la magnificence.
+    private var tagChips: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            ForEach(conversation.tags.prefix(LentilleMetrics.Tags.maxCount)) { tag in
+                tagChip(tag)
+            }
+            if conversation.tags.count > LentilleMetrics.Tags.maxCount {
+                Text("+\(conversation.tags.count - LentilleMetrics.Tags.maxCount)")
+                    .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                    .foregroundColor(textMuted)
+            }
+        }
+    }
+
+    /// Toucher une étiquette : filtrer la liste sur elle (ou RETIRER le
+    /// filtre si c'est elle qui filtre), ou la supprimer de la conversation.
+    private func tagChip(_ tag: MeeshyConversationTag) -> some View {
+        let isFiltering = activeTagFilter == tag.name
+        return Menu {
+            if isFiltering {
+                Button {
+                    onFilterByTag(nil)
+                } label: {
+                    Label(
+                        String(localized: "conversations.focus.tag_clear", defaultValue: "Retirer le filtre", bundle: .main),
+                        systemImage: "line.3.horizontal.decrease.circle"
+                    )
+                }
+            } else {
+                Button {
+                    onFilterByTag(tag.name)
+                } label: {
+                    Label(
+                        String(localized: "conversations.focus.tag_filter", defaultValue: "Afficher les conversations avec ce tag", bundle: .main),
+                        systemImage: "line.3.horizontal.decrease.circle.fill"
+                    )
+                }
+            }
+            Button(role: .destructive) {
+                onRemoveTag(tag)
+            } label: {
+                Label(
+                    String(localized: "conversations.focus.tag_remove", defaultValue: "Supprimer ce tag", bundle: .main),
+                    systemImage: "trash"
+                )
+            }
+        } label: {
+            Text(tag.name)
                 .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                .foregroundColor(accent)
+                .foregroundColor(.white)
+                .lineLimit(1)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .padding(.vertical, MeeshySpacing.xs)
-                .background(
-                    Capsule(style: .continuous)
-                        .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
-                )
+                .background(Capsule(style: .continuous).fill(Color(hex: tag.color)))
                 .overlay(
                     Capsule(style: .continuous)
-                        .strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1)
+                        .strokeBorder(
+                            accent,
+                            lineWidth: isFiltering ? LentilleMetrics.FocusCard.ringSize * 2 : LentilleMetrics.FocusCard.ringSize
+                        )
                 )
                 .contentShape(Capsule(style: .continuous))
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
-        .accessibilityLabel(notchText)
+        .accessibilityLabel(tag.name)
     }
 }
 
@@ -332,6 +511,13 @@ struct LentilleFocusCardHost: View {
     let isAnonymous: Bool
     let preferredContentLanguages: [String]
     var preferenceStore: ReadingModePreferenceStoring = LentilleReadingModePreferenceCenter.shared
+    /// Catégories + filtre d'étiquette + actions (2026-08-21) — passés par
+    /// la liste, qui possède le VM ; la carte reste une vue pure.
+    var categories: [ConversationSection] = []
+    var activeTagFilter: String? = nil
+    var onMoveToSection: (_ conversationId: String, _ sectionId: String) -> Void = { _, _ in }
+    var onFilterByTag: (String?) -> Void = { _ in }
+    var onRemoveTag: (_ conversation: Conversation, _ tag: MeeshyConversationTag) -> Void = { _, _ in }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -378,7 +564,12 @@ struct LentilleFocusCardHost: View {
                     reduceMotion: reduceMotion,
                     onSelectPreference: { selected in
                         LentilleModeMenuActions.select(selected, conversationId: conversation.id, store: preferenceStore)
-                    }
+                    },
+                    categories: categories,
+                    activeTagFilter: activeTagFilter,
+                    onMoveToSection: { sectionId in onMoveToSection(conversation.id, sectionId) },
+                    onFilterByTag: onFilterByTag,
+                    onRemoveTag: { tag in onRemoveTag(conversation, tag) }
                 )
                 .equatable()
                 .frame(

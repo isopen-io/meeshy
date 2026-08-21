@@ -146,6 +146,7 @@ struct FocalRow: View {
                         isAgentGrammarEnabled: input.showsAgentGrammar
                     ),
                     onOpenProfile: actions.onOpenProfile,
+                    onShowReadStatus: actions.onShowReadStatus.map { show in { show(content.messageId) } },
                     // F-083ter (F10) — « modifié » visible en tête de groupe.
                     editedAt: content.editedAt,
                     isEditSaving: content.isEditSaving,
@@ -541,7 +542,9 @@ struct FocalRow: View {
             isMe: content.isMe,
             isLastReceivedMessage: input.isLastReceivedMessage
         )
-        if (content.translation != nil && !content.isBlurred) || showsReactions {
+        if input.isFocused {
+            focusStrip
+        } else if (content.translation != nil && !content.isBlurred) || showsReactions {
             HStack(alignment: .center, spacing: 6) {
                 // Jamais de drapeau EN CLAIR sur un message protégé (revue
                 // adversariale 2026-08-18) : la bulle floute sa bande de
@@ -574,6 +577,102 @@ struct FocalRow: View {
     private var isShowingOriginal: Bool {
         guard let translation = content.translation else { return true }
         return translation.activeLangCode.lowercased() == translation.originalLangCode.lowercased()
+    }
+
+    // MARK: - Bordure basse du message EN FOCUS (2026-08-21)
+
+    /// Les langues proposées sur la bordure : l'originale d'abord, puis les
+    /// traductions disponibles, puis la langue AFFICHÉE (sans doublon,
+    /// ordre du Prisme) — l'active porte l'anneau plein.
+    nonisolated static func focusFlagCodes(originalLangCode: String, availableFlags: [String], activeLangCode: String) -> [String] {
+        var seen = Set<String>()
+        return ([originalLangCode] + availableFlags + [activeLangCode]).filter { seen.insert($0.lowercased()).inserted }
+    }
+
+    private var focusAccent: Color { Color(hex: input.accentHex) }
+
+    /// Chip de la bordure — contour = l'accent de la scène (même langage que
+    /// les chips de la carte de focus de la liste).
+    private func focusChip<Content: View>(isActive: Bool = false, @ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(width: 24, height: 24)
+            .background(
+                Circle()
+                    .fill(focusAccent.opacity(input.isDark ? 0.18 : 0.14))
+                    .overlay(Circle().strokeBorder(focusAccent.opacity(isActive ? 1 : 0.35), lineWidth: isActive ? 1.5 : 0.7))
+            )
+            .frame(width: 32, height: 32)
+            .contentShape(Circle())
+    }
+
+    /// Sur la bordure basse du message en focus : les drapeaux des
+    /// traductions DISPONIBLES (toucher = afficher cette langue), l'icône de
+    /// traduction du mode bulle (détails), le (+) emoji et les réactions.
+    private var focusStrip: some View {
+        HStack(alignment: .center, spacing: 4) {
+            if let translation = content.translation, !content.isBlurred {
+                ForEach(
+                    Self.focusFlagCodes(
+                        originalLangCode: translation.originalLangCode,
+                        availableFlags: translation.availableFlags,
+                        activeLangCode: translation.activeLangCode
+                    ),
+                    id: \.self
+                ) { code in
+                    Button {
+                        actions.onSetActiveDisplayLanguage?(content.messageId, code)
+                    } label: {
+                        focusChip(isActive: code.lowercased() == translation.activeLangCode.lowercased()) {
+                            Text(flagEmoji(code)).font(MeeshyFont.relative(12))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(LanguageData.info(for: code.lowercased())?.name ?? code)
+                }
+                Button {
+                    actions.onShowTranslationDetail?(content.messageId)
+                } label: {
+                    focusChip {
+                        Image(systemName: "character.bubble")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(focusAccent)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "focal.focus.translation_detail", defaultValue: "Détails de traduction", bundle: .main))
+            }
+            if content.isMe {
+                // L'overlay ne propose son (+) qu'aux messages REÇUS : le
+                // message en focus l'offre toujours.
+                Button {
+                    actions.onOpenReactPicker?(content.messageId)
+                } label: {
+                    focusChip {
+                        Image(systemName: "face.smiling")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(focusAccent)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "focal.focus.add_reaction", defaultValue: "Ajouter une réaction", bundle: .main))
+            }
+            BubbleReactionsOverlay(
+                messageId: content.messageId,
+                summaries: content.reactions,
+                isMe: content.isMe,
+                isDark: input.isDark,
+                // Forcé : le (+) du message reçu en focus, dernier ou pas.
+                isLastReceivedMessage: true,
+                accentHex: input.accentHex,
+                onAddReaction: actions.onAddReaction,
+                onToggleReaction: actions.onToggleReaction,
+                onOpenReactPicker: actions.onOpenReactPicker,
+                onShowReactions: actions.onShowReactions
+            )
+            .equatable()
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, indent)
     }
 
     @ViewBuilder

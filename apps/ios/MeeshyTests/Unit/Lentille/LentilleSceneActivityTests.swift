@@ -123,18 +123,27 @@ final class LentilleSceneActivityTests: XCTestCase {
                       "L'état vide = les mêmes accès rapides.")
         XCTAssertEqual(code.components(separatedBy: "ConversationListQuickActions(").count - 1, 1,
                        "Une seule fabrique, deux montages : zéro divergence entre queue et état vide.")
-        for door in ["case .newMessage: onNewConversation?()", "case .story: storyViewModel.showStoryComposer = true",
+        for door in ["case .findMembers: router.push(.peopleDiscovery(.discover))", "case .myContacts: router.push(.contacts(.contacts))",
+                     "case .newMessage: onNewConversation?()", "case .story: storyViewModel.showStoryComposer = true",
                      "case .mood: showStatusComposer = true", "case .post: router.pendingOpenFeedComposer = true",
                      "case .invite: showCreateAffiliate = true", "case .shortcutLink: showCreateTrackingLink = true"] {
             XCTAssertTrue(code.contains(door), "Chaque accès rapide route vers une porte EXISTANTE : \(door)")
         }
     }
 
-    func test_quickActionsView_exposesTheSixDoors_inOrder() {
+    func test_quickActionsView_exposesTheEightDoors_inOrder_heroesFirst() {
         XCTAssertEqual(
             ConversationListQuickActions.Action.allCases,
+            [.findMembers, .myContacts, .newMessage, .story, .mood, .post, .invite, .shortcutLink]
+        )
+        // État vide : les deux héros sortent de la grille (gros boutons) ;
+        // en queue de liste, tout le monde est une tuile.
+        XCTAssertEqual(ConversationListQuickActions.Action.heroes, [.findMembers, .myContacts])
+        XCTAssertEqual(
+            ConversationListQuickActions.Action.tiles(isEmptyState: true),
             [.newMessage, .story, .mood, .post, .invite, .shortcutLink]
         )
+        XCTAssertEqual(ConversationListQuickActions.Action.tiles(isEmptyState: false), ConversationListQuickActions.Action.allCases)
         for action in ConversationListQuickActions.Action.allCases {
             XCTAssertFalse(action.title.isEmpty)
             XCTAssertFalse(action.icon.isEmpty)

@@ -74,4 +74,25 @@ final class FocalFocusTimestampTests: XCTestCase {
             XCTAssertTrue(code.contains("String(localized: \"\(key)\""), "mot du catalogue attendu : \(key)")
         }
     }
+
+    // MARK: - La LISTE : même loi, joint « à » (directive 2026-08-21)
+
+    private func listLabel(_ sentAt: Date, time: String) -> String {
+        FocalFocusTimestamp.listLabel(
+            sentAt: sentAt, timeString: time, now: now, calendar: calendar, locale: locale,
+            today: "Aujourd'hui", yesterday: "Hier", dayBeforeYesterday: "Avant-hier", atWord: "à"
+        )
+    }
+
+    func test_listLabel_joinsWithTheAtWord_onEveryBranch() {
+        XCTAssertEqual(listLabel(date(2026, 8, 21, 5, 49), time: "5:49"), "Aujourd'hui à 5:49")
+        XCTAssertEqual(listLabel(date(2026, 8, 20, 22, 12), time: "22:12"), "Hier à 22:12")
+        XCTAssertEqual(listLabel(date(2026, 8, 18, 23, 50), time: "23:50"), "Mercredi à 23:50")
+        // Au-delà d'une semaine : la date ET l'heure, jointes par « à » (plus de « · »).
+        XCTAssertEqual(listLabel(date(2025, 10, 3, 14, 41), time: "14:41"), "Ven. 3 oct. 2025 à 14:41")
+    }
+
+    func test_threadLabel_keepsItsSpaceJoiner_theListJoinerIsOptIn() {
+        XCTAssertEqual(label(date(2026, 8, 21, 9, 30)), "Aujourd'hui 12:45")
+    }
 }

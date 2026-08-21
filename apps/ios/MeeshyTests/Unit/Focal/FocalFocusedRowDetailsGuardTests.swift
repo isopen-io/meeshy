@@ -41,6 +41,29 @@ final class FocalFocusedRowDetailsGuardTests: XCTestCase {
         )
     }
 
+    /// 2026-08-21 : le message en focus porte sur sa bordure basse les
+    /// drapeaux disponibles, l'icône de traduction, le (+) emoji et ses
+    /// réactions ; ses coches (haut-droite) ouvrent les détails de lecture.
+    func test_focusedRow_hasTheBottomStrip_andTappableChecks() throws {
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        XCTAssertTrue(row.contains("if input.isFocused { focusStrip }"), "la bordure basse remplace la ligne drapeau+réactions en focus")
+        XCTAssertTrue(row.contains("actions.onSetActiveDisplayLanguage?(content.messageId, code)"), "un drapeau = afficher cette langue")
+        XCTAssertTrue(row.contains("actions.onShowTranslationDetail?(content.messageId)"), "l'icône de traduction du mode bulle")
+        XCTAssertTrue(row.contains("actions.onOpenReactPicker?(content.messageId)"), "le (+) emoji, même sur mes messages")
+        XCTAssertTrue(row.contains("isLastReceivedMessage: true,"), "les réactions + (+) du message reçu, dernier ou pas")
+        XCTAssertTrue(row.contains("onShowReadStatus: actions.onShowReadStatus.map"), "les coches ouvrent les détails de lecture")
+        let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        XCTAssertTrue(header.contains("Button(action: onShowReadStatus)"), "les coches sont un bouton quand la rangée sait ouvrir les détails")
+    }
+
+    func test_focusFlagCodes_putTheOriginalFirst_thenAvailable_thenTheDisplayedOne_neverRepeated() {
+        XCTAssertEqual(
+            FocalRow.focusFlagCodes(originalLangCode: "en", availableFlags: ["fr", "EN", "es"], activeLangCode: "fr"),
+            ["en", "fr", "es"]
+        )
+        XCTAssertEqual(FocalRow.focusFlagCodes(originalLangCode: "fr", availableFlags: [], activeLangCode: "en"), ["fr", "en"])
+    }
+
     func test_identityHeader_rendersAPermanentTime_whenAskedTo_andTheRevealedOneOtherwise() throws {
         let header = try normalized("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
         XCTAssertTrue(

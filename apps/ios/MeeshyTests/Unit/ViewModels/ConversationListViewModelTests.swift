@@ -627,6 +627,24 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(loaded, "deleting a conversation must sweep every local call transcript it carried")
     }
 
+    // MARK: - filterConversations : étiquette active (carte de focus, 2026-08-21)
+
+    func test_filterConversations_activeTag_keepsOnlyConversationsCarryingIt_andNilKeepsAll() {
+        var tagged = makeConversation(id: "conv1")
+        tagged.tags = [MeeshyConversationTag(name: "Travail", color: "#FF0000")]
+        let untagged = makeConversation(id: "conv2")
+
+        let filtered = ConversationListViewModel.filterConversations(
+            [tagged, untagged], searchText: "", filter: .all, tag: "Travail"
+        )
+        XCTAssertEqual(filtered.map(\.id), ["conv1"], "seules les conversations portant l'étiquette restent")
+
+        let cleared = ConversationListViewModel.filterConversations(
+            [tagged, untagged], searchText: "", filter: .all, tag: nil
+        )
+        XCTAssertEqual(cleared.map(\.id), ["conv1", "conv2"], "retirer le filtre rend toute la liste")
+    }
+
     // MARK: - filterConversations hides soft-deleted rows
 
     func test_filterConversations_excludesSoftDeleted() {

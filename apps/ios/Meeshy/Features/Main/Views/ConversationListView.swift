@@ -1347,7 +1347,22 @@ struct ConversationListView: View {
                 // un aplatissement de la liste par passe de body — H15).
                 conversationById: { id in conversationViewModel.conversations.first { $0.id == id } },
                 isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                categories: conversationViewModel.userCategories,
+                activeTagFilter: conversationViewModel.activeTagFilter,
+                onMoveToSection: { conversationId, sectionId in
+                    HapticFeedback.light()
+                    conversationViewModel.moveToSection(conversationId: conversationId, sectionId: sectionId)
+                },
+                onFilterByTag: { tag in
+                    HapticFeedback.light()
+                    conversationViewModel.activeTagFilter = tag
+                },
+                onRemoveTag: { conversation, tag in
+                    HapticFeedback.light()
+                    // Même mutation que la feuille d'infos (optimiste + rollback).
+                    ConversationOptionsViewModel(conversation: conversation).removeTag(tag.name)
+                }
             )
             // Scène (2026-08-21) : un consommateur de plus du MÊME relais —
             // niveau d'activité lu par les rangées et par la carte.
@@ -1370,6 +1385,8 @@ struct ConversationListView: View {
             minHeight: minHeight,
             onAction: { action in
                 switch action {
+                case .findMembers: router.push(.peopleDiscovery(.discover))
+                case .myContacts: router.push(.contacts(.contacts))
                 case .newMessage: onNewConversation?()
                 case .story: storyViewModel.showStoryComposer = true
                 case .mood: showStatusComposer = true

@@ -219,8 +219,10 @@ struct BubbleStandardLayout: View {
         // message suivant. Le facteur x1.6 garde une silhouette compacte
         // entre messages sans overlay, et offre une "respiration" claire
         // autour de ceux qui en ont.
+        // Fin de groupe 10 → 6 (overlay 35 → 31) le 2026-08-21 : « réduit
+        // l'espace entre les groupes de messages ».
         if isLastInGroup {
-            return hasOverflowingOverlay ? 35 : 10
+            return hasOverflowingOverlay ? 31 : 6
         }
         return hasOverflowingOverlay ? 32 : 2
     }

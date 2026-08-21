@@ -69,6 +69,9 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Reactive Filters & Prepared Data
     @Published var searchText: String = ""
     @Published var selectedFilter: ConversationFilter = .all
+    /// Filtre par ÉTIQUETTE (2026-08-21, carte de focus Lentille : toucher un
+    /// tag ⇒ « toutes les conversations avec ce tag ») — `nil` = aucun filtre.
+    @Published var activeTagFilter: String? = nil
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
     /// Brouillons actifs indexés par conversationId. Alimente le badge
@@ -540,11 +543,12 @@ class ConversationListViewModel: ObservableObject {
         // Single unified pipeline: conversations, search, filter, or categories change
         // → filter + group in one pass → single @Published update (groupedConversations).
         // Eliminates the old 3-broadcast chain ($conversations → $filteredConversations → $groupedConversations).
-        Publishers.CombineLatest4($conversations, $searchText, $selectedFilter, $userCategories)
+        Publishers.CombineLatest4($conversations, $searchText, Publishers.CombineLatest($selectedFilter, $activeTagFilter), $userCategories)
             .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
-            .sink { [weak self] (convs, text, filter, categories) in
+            .sink { [weak self] (convs, text, filters, categories) in
                 guard let self else { return }
-                let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
+                let (filter, tag) = filters
+                let filtered = Self.filterConversations(convs, searchText: text, filter: filter, tag: tag)
                 self.filteredConversations = filtered
                 let drafts = self.draftSummaries
                 self.groupingTask?.cancel()
@@ -567,9 +571,12 @@ class ConversationListViewModel: ObservableObject {
     nonisolated static func filterConversations(
         _ conversations: [Conversation],
         searchText: String,
-        filter: ConversationFilter
+        filter: ConversationFilter,
+        tag: String? = nil
     ) -> [Conversation] {
         return conversations.filter { c in
+            // Étiquette active (carte de focus) : seules celles qui la portent.
+            if let tag, !c.tags.contains(where: { $0.name == tag }) { return false }
             // Soft delete (`.deleteForUser` / `.leave` set `deletedForUserAt`):
             // the store keeps the row in RAM until a refresh drops it, so the
             // list must hide it from EVERY filter (incl. .archived). Matches

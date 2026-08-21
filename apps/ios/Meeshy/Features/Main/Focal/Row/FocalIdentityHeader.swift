@@ -48,6 +48,10 @@ struct FocalIdentityHeader: View, Equatable {
     let isDark: Bool
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    /// 2026-08-21 : toucher les COCHES (haut-droite, à côté de la date)
+    /// ouvre la vue « détails de lecture » du message ; la date reste
+    /// informative (pas un bouton).
+    var onShowReadStatus: (() -> Void)? = nil
     /// F-083ter (F10) — voir `editedIndicator`.
     var editedAt: Date? = nil
     var isEditSaving: Bool = false
@@ -167,12 +171,7 @@ struct FocalIdentityHeader: View, Equatable {
                 stamp
 
                 if isMe, let deliveryStatus {
-                    BubbleDeliveryCheck(
-                        status: deliveryStatus,
-                        isOffline: false,
-                        tint: metaTint,
-                        readTint: readTint
-                    )
+                    deliveryChecks(deliveryStatus)
                 }
             }
         }
@@ -187,6 +186,25 @@ struct FocalIdentityHeader: View, Equatable {
 
     private var avatarSize: CGFloat {
         FocalMetrics.Avatar.size
+    }
+
+    /// Les coches : un bouton quand la rangée sait ouvrir les détails de
+    /// lecture (zone de toucher élargie, le glyphe reste au gabarit méta).
+    @ViewBuilder
+    private func deliveryChecks(_ status: Message.DeliveryStatus) -> some View {
+        let check = BubbleDeliveryCheck(status: status, isOffline: false, tint: metaTint, readTint: readTint)
+        if let onShowReadStatus {
+            Button(action: onShowReadStatus) {
+                check
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "message.read_status", defaultValue: "Détails de lecture", bundle: .main))
+        } else {
+            check
+        }
     }
 
     /// L'horodatage de tête de groupe — MÊME règle que `FocalMetaRow.stamp` :

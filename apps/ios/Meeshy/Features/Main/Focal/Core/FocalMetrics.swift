@@ -75,7 +75,8 @@ nonisolated public enum FocalMetrics {
         public static let paddingVertical: CGFloat = 5
         public static let paddingHorizontal: CGFloat = 16
         /// Cote ABSENTE de `thread.*` — voir doc de tête (TODO CONTRACTUEL).
-        public static let groupTopPadding: CGFloat = 8
+        /// 8 → 4 le 2026-08-21 (« réduit l'espace entre les groupes »).
+        public static let groupTopPadding: CGFloat = 4
     }
 
     // MARK: - Avatar (pastille)

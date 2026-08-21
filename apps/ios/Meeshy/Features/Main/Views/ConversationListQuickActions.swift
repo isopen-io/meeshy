@@ -18,10 +18,12 @@ import MeeshyUI
 struct ConversationListQuickActions: View, Equatable {
 
     enum Action: CaseIterable, Equatable {
-        case newMessage, story, mood, post, invite, shortcutLink
+        case findMembers, myContacts, newMessage, story, mood, post, invite, shortcutLink
 
         var icon: String {
             switch self {
+            case .findMembers: return "magnifyingglass"
+            case .myContacts: return "person.crop.circle.badge.checkmark"
             case .newMessage: return "square.and.pencil"
             case .story: return "plus.circle.fill"
             case .mood: return "face.smiling"
@@ -33,6 +35,8 @@ struct ConversationListQuickActions: View, Equatable {
 
         var title: String {
             switch self {
+            case .findMembers: return String(localized: "conversations.quick.find_members", defaultValue: "Chercher des membres à qui écrire", bundle: .main)
+            case .myContacts: return String(localized: "conversations.quick.my_contacts", defaultValue: "Voir mes contacts sur Meeshy", bundle: .main)
             case .newMessage: return String(localized: "conversations.quick.newMessage", defaultValue: "Nouveau message", bundle: .main)
             case .story: return String(localized: "conversations.quick.story", defaultValue: "Créer une story", bundle: .main)
             case .mood: return String(localized: "conversations.quick.mood", defaultValue: "Poser un mood", bundle: .main)
@@ -40,6 +44,31 @@ struct ConversationListQuickActions: View, Equatable {
             case .invite: return String(localized: "conversations.quick.invite", defaultValue: "Inviter des amis", bundle: .main)
             case .shortcutLink: return String(localized: "conversations.quick.shortcutLink", defaultValue: "Lien raccourci", bundle: .main)
             }
+        }
+
+        /// Boîtes COLORÉES comme le Dashboard (`WidgetPreviewView.quickActionButton`) :
+        /// une icône blanche sur un dégradé, ombre teintée.
+        @MainActor var gradient: [Color] {
+            switch self {
+            case .findMembers: return [MeeshyColors.indigo500, MeeshyColors.indigo700]
+            case .myContacts: return [MeeshyColors.success, MeeshyColors.indigo500]
+            case .newMessage: return [MeeshyColors.indigo500, MeeshyColors.indigo700]
+            case .story: return [MeeshyColors.purple500, MeeshyColors.purple700]
+            case .mood: return [MeeshyColors.warning, MeeshyColors.purple500]
+            case .post: return [MeeshyColors.purple500, MeeshyColors.indigo500]
+            case .invite: return [MeeshyColors.info, MeeshyColors.indigo500]
+            case .shortcutLink: return [MeeshyColors.shareAccent, MeeshyColors.indigo500]
+            }
+        }
+
+        /// Les deux GROS boutons de l'état vide (directive 2026-08-21) :
+        /// chercher des membres à qui écrire, retrouver ses contacts sur
+        /// Meeshy (synchronisation du carnet). En queue de liste, ils
+        /// redeviennent des tuiles ordinaires.
+        nonisolated static let heroes: [Action] = [.findMembers, .myContacts]
+
+        nonisolated static func tiles(isEmptyState: Bool) -> [Action] {
+            isEmptyState ? allCases.filter { !heroes.contains($0) } : allCases
         }
     }
 
@@ -78,8 +107,16 @@ struct ConversationListQuickActions: View, Equatable {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            if isEmptyState {
+                VStack(spacing: MeeshySpacing.sm) {
+                    ForEach(Action.heroes, id: \.self) { action in
+                        hero(action)
+                    }
+                }
+            }
+
             LazyVGrid(columns: Self.columns, spacing: MeeshySpacing.sm) {
-                ForEach(Action.allCases, id: \.self) { action in
+                ForEach(Action.tiles(isEmptyState: isEmptyState), id: \.self) { action in
                     tile(action)
                 }
             }
@@ -90,6 +127,42 @@ struct ConversationListQuickActions: View, Equatable {
         .accessibilityElement(children: .contain)
     }
 
+    /// Gros bouton pleine largeur, dégradé du Dashboard, texte blanc.
+    private func hero(_ action: Action) -> some View {
+        Button {
+            HapticFeedback.medium()
+            onAction(action)
+        } label: {
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: action.icon)
+                    .font(MeeshyFont.relative(22, weight: .semibold))
+                    .frame(width: 28)
+                Text(action.title)
+                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .opacity(0.8)
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.lg)
+            .frame(maxWidth: .infinity)
+            .background(gradientBox(action.gradient, radius: MeeshyRadius.lg))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(action.title)
+    }
+
+    private func gradientBox(_ gradient: [Color], radius: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: radius, style: .continuous)
+            .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
+            .shadow(color: gradient.first?.opacity(0.3) ?? .clear, radius: 8, y: 4)
+    }
+
     private func tile(_ action: Action) -> some View {
         Button {
             HapticFeedback.light()
@@ -98,8 +171,9 @@ struct ConversationListQuickActions: View, Equatable {
             VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: action.icon)
                     .font(MeeshyFont.relative(20, weight: .semibold))
-                    .foregroundColor(MeeshyColors.indigo500)
-                    .frame(height: 28)
+                    .foregroundColor(.white)
+                    .frame(width: 44, height: 44)
+                    .background(gradientBox(action.gradient, radius: 14))
                 Text(action.title)
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))

@@ -411,6 +411,34 @@ extension LentilleFocusCardTests {
 
     /// L'encoche est un `Menu` SYSTÈME : un `.popover` devient une feuille
     /// plein écran sur iPhone (retour user 2026-08-21).
+    /// 2026-08-21 : la catégorie est une encoche HAUT-GAUCHE (miroir exact de
+    /// l'encoche de mode) dont le menu déplace la conversation ; les étiquettes
+    /// sont des chips sur le bord BAS dont le menu filtre / retire le filtre /
+    /// supprime ; la date est la date COMPLÈTE du fil (« Aujourd'hui à 5:49 »),
+    /// plus jamais le relatif court ; le dernier expéditeur s'affiche pour
+    /// TOUTES les conversations.
+    func test_focusCard_hasCategoryNotchTopLeading_tagChipsBottomEdge_andTheFullTimestamp() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains(".overlay(alignment: .topLeading) {"), "encoche catégorie en haut à gauche")
+        XCTAssertTrue(code.contains("categoryNotch"))
+        XCTAssertTrue(code.contains("onMoveToSection("), "toucher la catégorie déplace la conversation")
+        XCTAssertTrue(code.contains(".overlay(alignment: .bottomLeading) {"), "chips d'étiquettes sur le bord bas")
+        XCTAssertTrue(code.contains("onFilterByTag(tag.name)"))
+        XCTAssertTrue(code.contains("onFilterByTag(nil)"), "une étiquette qui filtre propose de RETIRER le filtre")
+        XCTAssertTrue(code.contains("onRemoveTag(tag)"))
+        XCTAssertTrue(code.contains("FocalFocusTimestamp.listLabel("), "la date complète vient de la loi du fil")
+        XCTAssertFalse(code.contains("RelativeTimeFormatter.shortString"), "plus de relatif court sur la carte")
+        XCTAssertFalse(
+            code.contains("conversation.type != .direct,\n               let sender"),
+            "le dernier expéditeur s'affiche pour toutes les conversations"
+        )
+    }
+
+    func test_categoryText_isTheCurrentCategoryUppercased_orTheFallback() {
+        XCTAssertEqual(LentilleFocusCard.categoryText(current: "Travail", fallback: "Catégorie"), "TRAVAIL")
+        XCTAssertEqual(LentilleFocusCard.categoryText(current: nil, fallback: "Catégorie"), "CATÉGORIE")
+    }
+
     func test_notch_isANativeMenu_neverAPopover() throws {
         let code = try modeSource("LentilleFocusCard.swift")
         XCTAssertTrue(code.contains("Menu {"), "l'encoche doit être un `Menu` natif")
