@@ -65,8 +65,37 @@ enum MessageDayGrouping {
         calendar: Calendar = .current
     ) -> Bool {
         guard let previous else { return true }
-        if previous.isSystem || current.isSystem { return true }
-        guard !previous.senderId.isEmpty, previous.senderId == current.senderId else { return true }
-        return !calendar.isDate(previous.createdAt, inSameDayAs: current.createdAt)
+        return !continues(previous, current, calendar: calendar)
+    }
+
+    /// La rangée ferme-t-elle un groupe ?
+    ///
+    /// En mode Bulles, c'est le DERNIER message d'une suite qui porte
+    /// l'identité — `BubbleStandardLayout.showIdentityBar` s'accroche à
+    /// `isLastInGroup`, et l'espacement bas s'y accroche aussi. Tête et queue
+    /// partagent volontairement la même continuité : deux prédicats séparés
+    /// dériveraient l'un de l'autre à la première évolution.
+    static func isGroupTail(
+        current: GroupCandidate,
+        next: GroupCandidate?,
+        calendar: Calendar = .current
+    ) -> Bool {
+        guard let next else { return true }
+        return !continues(current, next, calendar: calendar)
+    }
+
+    /// Deux rangées voisines appartiennent-elles à la même suite ?
+    ///
+    /// Un message système n'est pas une prise de parole : il n'entre dans
+    /// aucune suite, ni comme prédécesseur ni comme successeur. Et deux
+    /// expéditeurs sans identifiant ne sont pas la même personne.
+    private static func continues(
+        _ earlier: GroupCandidate,
+        _ later: GroupCandidate,
+        calendar: Calendar
+    ) -> Bool {
+        if earlier.isSystem || later.isSystem { return false }
+        guard !earlier.senderId.isEmpty, earlier.senderId == later.senderId else { return false }
+        return calendar.isDate(earlier.createdAt, inSameDayAs: later.createdAt)
     }
 }

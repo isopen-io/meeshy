@@ -156,4 +156,86 @@ final class MessageDayGroupingTests: XCTestCase {
             calendar: makeCalendar()
         ))
     }
+
+    // MARK: - Queue de groupe : c'est le DERNIER message qui porte l'identité
+
+    /// En mode Bulles, `showIdentityBar` s'accroche à `isLastInGroup` : dans
+    /// une suite du même auteur, seule la dernière bulle montre avatar et nom.
+    /// La règle de continuité est la MÊME que pour la tête — les deux ne
+    /// peuvent pas diverger.
+
+    func test_isGroupTail_noNext_closesGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19)),
+            next: nil
+        ))
+    }
+
+    func test_isGroupTail_sameSenderSameDay_doesNotClose() {
+        XCTAssertFalse(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            next: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 11)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    func test_isGroupTail_differentNextSender_closesGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            next: .init(senderId: "b", isSystem: false, createdAt: date(2026, 5, 19, 11)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    func test_isGroupTail_nextDay_closesGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 23, 59)),
+            next: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 20, 0, 1)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    /// Un avis d'arrivée qui SUIT ferme le groupe : la dernière vraie bulle
+    /// garde son identité au lieu de la céder au message système.
+    func test_isGroupTail_nextIsSystem_closesGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            next: .init(senderId: "a", isSystem: true, createdAt: date(2026, 5, 19, 10, 1)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    func test_isGroupTail_systemNoticeItself_closesGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "a", isSystem: true, createdAt: date(2026, 5, 19, 10)),
+            next: .init(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10, 1)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    func test_isGroupTail_bothSendersBlank_closesGroup() {
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(
+            current: .init(senderId: "", isSystem: false, createdAt: date(2026, 5, 19, 10)),
+            next: .init(senderId: "", isSystem: false, createdAt: date(2026, 5, 19, 11)),
+            calendar: makeCalendar()
+        ))
+    }
+
+    /// Tête et queue partagent la même continuité : dans une suite de trois du
+    /// même auteur, seul le premier est tête et seul le dernier est queue.
+    func test_headAndTail_agreeOnAThreeMessageRun() {
+        let a = MessageDayGrouping.GroupCandidate(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 10))
+        let b = MessageDayGrouping.GroupCandidate(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 11))
+        let c = MessageDayGrouping.GroupCandidate(senderId: "a", isSystem: false, createdAt: date(2026, 5, 19, 12))
+        let cal = makeCalendar()
+
+        XCTAssertTrue(MessageDayGrouping.isGroupHead(previous: nil, current: a, calendar: cal))
+        XCTAssertFalse(MessageDayGrouping.isGroupTail(current: a, next: b, calendar: cal))
+
+        XCTAssertFalse(MessageDayGrouping.isGroupHead(previous: a, current: b, calendar: cal))
+        XCTAssertFalse(MessageDayGrouping.isGroupTail(current: b, next: c, calendar: cal))
+
+        XCTAssertFalse(MessageDayGrouping.isGroupHead(previous: b, current: c, calendar: cal))
+        XCTAssertTrue(MessageDayGrouping.isGroupTail(current: c, next: nil, calendar: cal))
+    }
 }

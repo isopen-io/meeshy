@@ -1114,6 +1114,35 @@ final class MessageListViewController: UIViewController {
             // (bulle qui épouse son contenu → platter système collé à la bulle,
             // plus de « card » bordé). Une seule liste de paramètres, pas de
             // duplication de l'init ~40 champs.
+            // Mode Bulles : c'est le DERNIER message d'une suite qui porte
+            // l'identité — `BubbleStandardLayout.showIdentityBar` s'accroche à
+            // `isLastInGroup`, et l'espacement bas aussi (10pt en fin de suite,
+            // 2pt à l'intérieur). Ce drapeau était figé à `true`, donc AUCUN
+            // regroupement n'existait : chaque bulle reçue montrait son avatar.
+            //
+            // Même règle de continuité que la tête de groupe du mode Focal
+            // (`MessageDayGrouping`) — un message système n'entre dans aucune
+            // suite, et deux expéditeurs sans identifiant ne sont pas la même
+            // personne.
+            let isLastInGroup: Bool = {
+                guard let index = self.store.index(of: localId),
+                      index + 1 < self.store.messages.count else { return true }
+                let next = self.store.messages[index + 1]
+                return MessageDayGrouping.isGroupTail(
+                    current: .init(
+                        senderId: senderId,
+                        isSystem: message.messageSource == .system,
+                        createdAt: message.createdAt
+                    ),
+                    next: .init(
+                        senderId: next.senderId,
+                        // `MessageRecord` porte la source en CHAÎNE, `MeeshyMessage`
+                        // l'énumération — comparaison au `rawValue`, pas à un littéral.
+                        isSystem: next.messageSource == MeeshyMessage.MessageSource.system.rawValue,
+                        createdAt: next.createdAt
+                    )
+                )
+            }()
             let makeThemedBubble: (Bool) -> ThemedMessageBubble = { standalone in
                 ThemedMessageBubble(
                         message: message,
@@ -1160,7 +1189,7 @@ final class MessageListViewController: UIViewController {
                         // BubbleStandardLayout → AudioMediaView était déjà
                         // câblé de bout en bout.
                         activeAudioLanguage: languageSelection?.activeDisplayLangCode,
-                        isLastInGroup: true,
+                        isLastInGroup: isLastInGroup,
                         isLastReceivedMessage: isLastReceived,
                         isLastSentMessage: isLastSent,
                         mentionDisplayNames: mentionDisplayNames,
@@ -1192,9 +1221,9 @@ final class MessageListViewController: UIViewController {
             // travail 2 assume que WS-6 construit `FocalRowInput` « à partir
             // des lets déjà snapés — aucun calcul nouveau ». Trois lookups
             // s'avèrent RÉELLEMENT nouveaux — aucun équivalent ailleurs dans
-            // le dépôt : `isFirstInGroup` (aucun groupement par expéditeur
-            // n'existe — les bulles posent `isLastInGroup: true` EN DUR
-            // ci-dessus, `makeThemedBubble`), `senderPresence`
+            // le dépôt : `isFirstInGroup` (le regroupement vit désormais dans
+            // `MessageDayGrouping` — tête ici, queue au-dessus pour les bulles,
+            // même règle de continuité), `senderPresence`
             // (`PresenceManager.shared`, déjà utilisé par `ConversationView
             // .headerPresenceState`) et `isRightToLeft`
             // (`collectionView.effectiveUserInterfaceLayoutDirection`,
