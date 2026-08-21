@@ -255,8 +255,10 @@ function audioObject(audio: CanvasAudioSource): UnrankedObjectV3 {
   };
 }
 
-/// O3 — `scenes` n'existe que s'il reste au moins un objet : jamais de cadre
-/// vide servi au fil.
+/// O3 — jamais de cadre vide servi au fil : la palette a toujours une valeur,
+/// le porteur de fond existe donc TOUJOURS et la scène ne peut pas être vide.
+/// `z` est le rang d'INSERTION (fond, texte racine, porteur, audio), pas un
+/// ordre par plan — le plan porte déjà l'empilement à la lecture.
 function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
   const objects: ObjectV3[] = [
     backgroundObject(state.background),
@@ -265,7 +267,7 @@ function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
     ...(state.audio ?? []).map(audioObject),
   ].map((object, index) => ({ ...object, z: index }));
 
-  return { v: 3, ...(objects.length > 0 ? { scenes: [{ id: 's1', objects }] } : {}) };
+  return { v: 3, scenes: [{ id: 's1', objects }] };
 }
 
 // ============================================================================

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 import { safeBackgroundImageUrl } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
@@ -163,6 +164,7 @@ type ResolvedMedia = {
   aspectRatio?: number;
   muted: boolean;
   loop: boolean;
+  isBackground: boolean;
 };
 
 function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResolution>): ResolvedMedia {
@@ -176,6 +178,7 @@ function resolveMedia(o: ObjectV3, mediaById?: Map<string, CanvasV3MediaResoluti
     aspectRatio: numeric(o.payload.aspectRatio) ?? entry?.aspectRatio,
     muted: o.payload.muted !== false,
     loop: o.payload.loop === true,
+    isBackground: o.payload.isBackground === true,
   };
 }
 
@@ -221,6 +224,39 @@ function MediaObject({ o, mediaById }: { o: ObjectV3; mediaById?: Map<string, Ca
   }
 
   const media = resolveMedia(o, mediaById);
+
+  /// Parité du chemin legacy : un porteur `isBackground` remplit le cadre en
+  /// `object-cover`, il ne se letterbox pas. C'est le cas de la photo ou de la
+  /// vidéo posée par le composer web, comme de toute story iOS convertie.
+  if (media.url && media.isBackground) {
+    const fullBleed: React.CSSProperties = {
+      zIndex: PLANE_Z[o.plane] + o.z,
+      opacity: o.transform.opacity,
+    };
+    return media.kind === 'video' ? (
+      <video
+        data-testid={`canvas-v3-object-${o.id}`}
+        data-kind="media"
+        src={media.url}
+        className="absolute inset-0 h-full w-full object-cover"
+        style={fullBleed}
+        muted={media.muted}
+        loop={media.loop}
+        autoPlay
+        playsInline
+      />
+    ) : (
+      <img
+        data-testid={`canvas-v3-object-${o.id}`}
+        data-kind="media"
+        src={media.url}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        style={fullBleed}
+      />
+    );
+  }
+
   return (
     <div
       data-testid={`canvas-v3-object-${o.id}`}
@@ -247,6 +283,37 @@ function MediaObject({ o, mediaById }: { o: ObjectV3; mediaById?: Map<string, Ca
         <img src={media.url} alt="" className="h-full w-full object-contain" />
       )}
     </div>
+  );
+}
+
+/// Parité du lecteur legacy (`audioObjects` → `StoryAudioElement`) : une piste
+/// de fond joue sans surface, une piste posée garde ses contrôles à son ancre.
+/// Sans ce rendu, une story v3 à pièce jointe audio perd son lecteur — la
+/// famille v1 qui le portait n'existe plus pour la rattraper.
+function AudioObject({ o, mediaById }: { o: ObjectV3; mediaById?: Map<string, CanvasV3MediaResolution> }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  const volume = numeric(o.payload.volume) ?? 1;
+  useEffect(() => {
+    if (ref.current) ref.current.volume = Math.max(0, Math.min(1, volume));
+  }, [volume]);
+
+  const id = str(o.payload.postMediaId) ?? str(o.payload.mediaId);
+  const url = str(o.payload.mediaURL) ?? (id ? mediaById?.get(id)?.url : undefined);
+  if (!url) return null;
+
+  const isBackground = o.payload.isBackground === true;
+  return (
+    <audio
+      ref={ref}
+      data-testid={`canvas-v3-object-${o.id}`}
+      data-kind="audio"
+      src={url}
+      autoPlay
+      loop
+      controls={!isBackground}
+      className={isBackground ? undefined : cn('pointer-events-auto', bandClass(o.anchor))}
+      style={isBackground ? { display: 'none' } : { ...objectStyle(o), width: '60%' }}
+    />
   );
 }
 
@@ -289,6 +356,7 @@ export function CanvasV3Scene({
       {scene.objects.map((o) => {
         if (o.kind === 'text') return <TextObject key={o.id} o={o} preferredLanguages={preferredLanguages} />;
         if (o.kind === 'media') return <MediaObject key={o.id} o={o} mediaById={mediaById} />;
+        if (o.kind === 'audio') return <AudioObject key={o.id} o={o} mediaById={mediaById} />;
         if (o.kind === 'sticker') return <StickerObject key={o.id} o={o} />;
         return null;
       })}

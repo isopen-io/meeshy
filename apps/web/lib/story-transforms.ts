@@ -1,4 +1,5 @@
 import type { Post, PostAuthor } from '@meeshy/shared/types/post';
+import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { getUserDisplayName } from '@/utils/user-display-name';
 import type { StoryItem } from '@/components/v2/StoryTray';
@@ -231,15 +232,45 @@ function asObjectArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? (value.filter((v) => v && typeof v === 'object') as Record<string, unknown>[]) : [];
 }
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+// Projection v1 d'une scène v3 : les trois termes de la durée (fenêtre la plus
+// longue, temps de lecture, boucle du fond) sont les MÊMES — seule la FORME du
+// blob change. Sans elle, une story v3 (donc toute story servie à un client qui
+// annonce `X-Canvas-Caps: 3`) ne présente plus aucune famille v1 et retombe sur
+// les 6 s par défaut : une vidéo de 14 s se coupe au tiers.
+function v1ViewOfScene(scene: Record<string, unknown>): Record<string, unknown> {
+  const objects = asObjectArray(scene.objects);
+  const family = (kind: string): Record<string, unknown>[] =>
+    objects
+      .filter((o) => o.kind === kind)
+      .map((o) => {
+        const timing = asObject(o.timing);
+        const payload = asObject(o.payload);
+        return { ...payload, ...(typeof timing.start === 'number' ? { startTime: timing.start } : {}) };
+      });
+  return {
+    ...(typeof scene.timelineDuration === 'number' ? { timelineDuration: scene.timelineDuration } : {}),
+    mediaObjects: family('media'),
+    audioPlayerObjects: family('audio'),
+    textObjects: family('text'),
+  };
+}
+
 export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
+  const v3Scene = effects?.v === 3 ? asObjectArray(effects.scenes)[0] : undefined;
+  const source = v3Scene ? v1ViewOfScene(v3Scene) : effects;
+
   // Priority 0 — author-pinned timeline duration is authoritative (the timeline
   // IS the story). `nil` for everything existing → falls back to content.
-  const pinned = positiveNumber(effects?.timelineDuration);
+  const pinned = positiveNumber(source?.timelineDuration);
   if (pinned !== undefined) return Math.round(pinned * 1000);
 
-  const mediaObjects = asObjectArray(effects?.mediaObjects);
-  const audioObjects = asObjectArray(effects?.audioPlayerObjects);
-  const textObjects = asObjectArray(effects?.textObjects);
+  const mediaObjects = asObjectArray(source?.mediaObjects);
+  const audioObjects = asObjectArray(source?.audioPlayerObjects);
+  const textObjects = asObjectArray(source?.textObjects);
 
   // Component 1 — background video/audio of natural duration.
   const bgVideoDur = positiveNumber(
@@ -335,6 +366,20 @@ export function postToStoryData(post: Post): StoryData {
         .filter((t): t is { languageCode: string; languageName: string; content: string } => t !== null)
     : undefined;
 
+  // Un blob v3 traverse le funnel INTACT. Reconstruit à clés FIXES, il perdait
+  // `v`, `scenes` et `sound` : la garde `v === 3` de `StoryViewer` restait
+  // fausse, `CanvasV3Scene` ne se montait jamais et la story revenait au fond
+  // par défaut — sans son texte, sans son audio, sans son annonce de fond.
+  // `postToStoryData` est l'entonnoir UNIQUE vers le viewer : ce qu'il jette
+  // n'existe plus. Le contrat est validé à l'ÉCRITURE (gateway) ; la lecture
+  // reste tolérante objet par objet.
+  const canvasScenes = effects?.v === 3 && Array.isArray(effects.scenes)
+    ? (effects.scenes as CanvasV3['scenes'])
+    : undefined;
+  const backgroundSound = effects?.v === 3 && effects.sound !== null && typeof effects.sound === 'object'
+    ? (effects.sound as CanvasV3['sound'])
+    : undefined;
+
   const textObjects = effects ? parseTextObjects(effects.textObjects) : undefined;
   const mediaObjects = effects ? parseMediaObjects(effects.mediaObjects) : undefined;
   const audioObjects = effects ? parseAudioObjects(effects.audioPlayerObjects) : undefined;
@@ -350,6 +395,9 @@ export function postToStoryData(post: Post): StoryData {
     originalLanguage: post.originalLanguage ?? undefined,
     translations: translations && translations.length > 0 ? translations : undefined,
     storyEffects: effects ? {
+      v: typeof effects.v === 'number' ? effects.v : undefined,
+      scenes: canvasScenes,
+      sound: backgroundSound,
       // Canonical key is `background` (iOS composer + gateway StoryEffectsSchema);
       // `backgroundColor` is a legacy alias kept as a fallback for old payloads.
       background: typeof effects.background === 'string'

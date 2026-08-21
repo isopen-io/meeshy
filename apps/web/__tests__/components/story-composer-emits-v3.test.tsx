@@ -204,7 +204,7 @@ describe('StoryComposer emits CanvasV3 (F5b)', () => {
     expect(audio?.payload.waveformSamples).toBeUndefined();
   });
 
-  it('gives every object its own id and a plane-ordered z, background first', () => {
+  it('gives every object its own id and an insertion-ranked z, background first', () => {
     mockUploadedAttachments = [
       createAttachment({ id: 'media-audio', mimeType: 'audio/mpeg' }),
       createAttachment({ id: 'media-img', mimeType: 'image/jpeg' }),

@@ -101,6 +101,11 @@ interface StoryData {
     /// un blob legacy ne le porte jamais. Le viewer discrimine sur ce seul
     /// champ, sans parser le reste avec Zod (coût de bundle évité côté web).
     v?: number;
+    /// Logement du document v3 lui-même : sans ces deux clés, l'entonnoir
+    /// `postToStoryData` n'avait nulle part où poser `scenes`/`sound` et les
+    /// jetait — la garde ci-dessus ne voyait alors JAMAIS un blob v3.
+    scenes?: CanvasV3['scenes'];
+    sound?: CanvasV3['sound'];
     background?: string; // "#hex" | "gradient:from,to" | "image_url"
     textStyle?: 'bold' | 'neon' | 'typewriter' | 'handwriting';
     textColor?: string;
@@ -837,7 +842,7 @@ function StoryViewer({
   const isCanvasV3 = effects?.v === 3;
   /// L'annonce du fond (B3.3-6) n'existe que pour un blob v3 — `sound` n'a
   /// pas de logement dans la forme legacy locale de `storyEffects`.
-  const backgroundSound = isCanvasV3 ? (effects as CanvasV3).sound : undefined;
+  const backgroundSound = isCanvasV3 ? effects?.sound : undefined;
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
