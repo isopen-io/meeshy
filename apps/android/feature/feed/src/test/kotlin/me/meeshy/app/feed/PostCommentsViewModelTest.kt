@@ -1155,14 +1155,17 @@ class PostCommentsViewModelTest {
     }
 
     @Test
-    fun `onCommentFlagTap into a content-less language is inert`() = runTest {
+    fun `onCommentFlagTap into a content-less language requests it and leaves the display until it lands`() = runTest {
         coEvery { repository.getComments("p1", null, any()) } returns
             NetworkResult.Success(listOf(translated("c1")))
+        coEvery { repository.translateComment(any(), "de") } returns null // translation not yet available
         val vm = viewModel(user = MeeshyUser(id = "me", username = "me", systemLanguage = "en"))
 
-        vm.onCommentFlagTap("c1", "de") // no German translation on this comment
+        vm.onCommentFlagTap("c1", "de") // no German content yet — the on-demand request arm
 
+        // The display stays on the Prisme default until a translation actually lands.
         assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+        coVerify(exactly = 1) { repository.translateComment(any(), "de") }
     }
 
     @Test
@@ -1176,6 +1179,97 @@ class PostCommentsViewModelTest {
 
         assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
     }
+
+    // --- On-demand comment translation (request arm of the flag strip) ---
+
+    /** A fr comment translated to en only — a bilingual (en/es) reader sees es as a translatable chip. */
+    private fun frEnOnly(id: String, parentId: String? = null) = ApiPostComment(
+        id = id,
+        content = "Bonjour",
+        originalLanguage = "fr",
+        parentId = parentId,
+        translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")),
+    )
+
+    private fun bilingual() = MeeshyUser(id = "me", username = "me", systemLanguage = "en", regionalLanguage = "es")
+
+    @Test
+    fun `onCommentFlagTap on a translatable language requests it and switches to the merged translation`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("c1")))
+        coEvery { repository.translateComment(any(), "es") } returns
+            frEnOnly("c1").copy(
+                translations = mapOf(
+                    "en" to ApiPostTranslationEntry(text = "Hello"),
+                    "es" to ApiPostTranslationEntry(text = "Hola"),
+                ),
+            )
+        val vm = viewModel(user = bilingual())
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+
+        vm.onCommentFlagTap("c1", "es")
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hola")
+        assertThat(vm.state.value.translatingLanguages).isEmpty()
+        coVerify(exactly = 1) { repository.translateComment(any(), "es") }
+    }
+
+    @Test
+    fun `a failed on-demand comment translation leaves the display unchanged`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("c1")))
+        coEvery { repository.translateComment(any(), "es") } returns null
+        val vm = viewModel(user = bilingual())
+
+        vm.onCommentFlagTap("c1", "es")
+
+        assertThat(contentOf(vm, "c1")).isEqualTo("Hello")
+        assertThat(vm.state.value.translatingLanguages).isEmpty()
+        coVerify(exactly = 1) { repository.translateComment(any(), "es") }
+    }
+
+    @Test
+    fun `a second in-flight translation tap does not fire a duplicate request`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("c1")))
+        val gate = CompletableDeferred<ApiPostComment?>()
+        coEvery { repository.translateComment(any(), "es") } coAnswers { gate.await() }
+        val vm = viewModel(user = bilingual())
+
+        vm.onCommentFlagTap("c1", "es")
+        assertThat(vm.state.value.translatingLanguages).contains("c1|es")
+        vm.onCommentFlagTap("c1", "es") // ignored while the first is in flight
+
+        gate.complete(null)
+        coVerify(exactly = 1) { repository.translateComment(any(), "es") }
+        assertThat(vm.state.value.translatingLanguages).isEmpty()
+    }
+
+    @Test
+    fun `onCommentFlagTap translates a reply on demand too`() = runTest {
+        coEvery { repository.getComments("p1", null, any()) } returns
+            NetworkResult.Success(listOf(comment("c1").copy(replyCount = 1)))
+        coEvery { repository.getCommentReplies("p1", "c1", null, any()) } returns
+            NetworkResult.Success(listOf(frEnOnly("r1", parentId = "c1")))
+        coEvery { repository.translateComment(any(), "es") } returns
+            frEnOnly("r1", parentId = "c1").copy(
+                translations = mapOf(
+                    "en" to ApiPostTranslationEntry(text = "Hello"),
+                    "es" to ApiPostTranslationEntry(text = "Hola"),
+                ),
+            )
+        val vm = viewModel(user = bilingual())
+        vm.toggleReplies("c1")
+        assertThat(replyContentOf(vm, "c1", "r1")).isEqualTo("Hello")
+
+        vm.onCommentFlagTap("r1", "es")
+
+        assertThat(replyContentOf(vm, "c1", "r1")).isEqualTo("Hola")
+        coVerify(exactly = 1) { repository.translateComment(any(), "es") }
+    }
+
+    private fun replyContentOf(vm: PostCommentsViewModel, parentId: String, replyId: String): String? =
+        vm.state.value.replyThreads[parentId]?.replies?.firstOrNull { it.id == replyId }?.content
 
     // --- Composer @-mention autocomplete ---
 
