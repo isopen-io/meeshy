@@ -519,6 +519,22 @@ describe('SocialEventsHandler', () => {
     });
   });
 
+  describe('broadcastCommentUnliked', () => {
+    // Jumelle descendante : mêmes deux adresses que la pose (le commentateur,
+    // et la room du post où lisent les autres). Sans elle le compteur d'un
+    // commentaire ne sait que monter en direct.
+    it('emits comment:unliked to the comment author feed room AND the post room', () => {
+      const { handler, io } = buildHandler();
+      const commentAuthorId = 'comment-author-1';
+      const data = { commentId: COMMENT_ID, postId: POST_ID, userId: USER_ID, emoji: '👍', likeCount: 0 } as any;
+
+      handler.broadcastCommentUnliked(data, commentAuthorId);
+
+      expect(io.to).toHaveBeenCalledWith(`feed:${commentAuthorId}`);
+      expect(io.to).toHaveBeenCalledWith(`post:${POST_ID}`);
+    });
+  });
+
   describe('broadcastPostUpdated', () => {
     it('emits post:updated to visibility-filtered friend feed rooms and author', async () => {
       const { handler, io } = buildHandler();

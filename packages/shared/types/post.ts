@@ -404,6 +404,25 @@ export interface CommentLikedEventData {
   readonly likeCount: number;
 }
 
+/**
+ * Jumelle DESCENDANTE de {@link CommentLikedEventData} — même forme, même
+ * garantie. `likeCount` est le total ABSOLU du commentaire APRÈS retrait, pas
+ * un décrément : un client écrit la valeur reçue, ce qui rend l'événement
+ * idempotent sous double livraison et rattrapable après un manqué, exactement
+ * comme la montante.
+ *
+ * Le couple calque `post:liked` / `post:unliked`. Sans la descendante, le
+ * compteur d'un commentaire ne savait que MONTER en direct : la pose diffusait,
+ * le retrait ne diffusait rien.
+ */
+export interface CommentUnlikedEventData {
+  readonly postId: string;
+  readonly commentId: string;
+  readonly userId: string;
+  readonly emoji: string;
+  readonly likeCount: number;
+}
+
 export interface PostTranslationUpdatedEventData {
   readonly postId: string;
   readonly language: string;

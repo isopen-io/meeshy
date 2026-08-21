@@ -155,6 +155,13 @@ public struct SocketCommentDeletedData: Decodable, Sendable {
     public let commentCount: Int
 }
 
+/// Charge utile de `comment:liked` ET de sa jumelle descendante
+/// `comment:unliked` : le contrat déclare deux interfaces de forme identique
+/// (`CommentLikedEventData` / `CommentUnlikedEventData`), parce que `likeCount`
+/// y est le total ABSOLU après application — jamais un delta. Une seule forme
+/// suffit donc ici, comme `SocketCommentReactionUpdateEvent` sert déjà
+/// `comment:reaction-added` et `comment:reaction-removed`. Le SENS vit dans le
+/// sujet, pas dans les champs.
 public struct SocketCommentLikedData: Decodable, Sendable {
     public let postId: String
     public let commentId: String
@@ -283,6 +290,7 @@ public protocol SocialSocketProviding: Sendable {
     var commentUpdated: PassthroughSubject<SocketCommentUpdatedData, Never> { get }
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
     var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
+    var commentUnliked: PassthroughSubject<SocketCommentLikedData, Never> { get }
     var commentReactionAdded: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
     var commentReactionRemoved: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
     var commentReactionSync: PassthroughSubject<SocketCommentReactionSyncEvent, Never> { get }
@@ -342,6 +350,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let commentUpdated = PassthroughSubject<SocketCommentUpdatedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
+    public let commentUnliked = PassthroughSubject<SocketCommentLikedData, Never>()
     public let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
     public let commentReactionRemoved = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
     public let commentReactionSync = PassthroughSubject<SocketCommentReactionSyncEvent, Never>()
@@ -1154,6 +1163,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketCommentLikedData.self, from: data) { [weak self] payload in
                 self?.commentLiked.send(payload)
+            }
+        }
+
+        socket.on("comment:unliked") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketCommentLikedData.self, from: data) { [weak self] payload in
+                self?.commentUnliked.send(payload)
             }
         }
 
