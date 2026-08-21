@@ -47,7 +47,7 @@ export interface PostCardProps {
   mentions?: readonly PostReference[];
   /** Signed-in viewer's id — resolves the personal "you're referenced" marker for a SILENT reference. */
   viewerId?: string;
-  /** Original post being reposted — renders the "Reposted from @handle" banner + nested card. */
+  /** Original post being reposted — renders the `↻ @handle` attribution + nested card. */
   repostOf?: Post['repostOf'];
   /** True for a quote-repost (reposter added their own comment). Drives which counters show where. */
   isQuote?: boolean;
@@ -490,11 +490,12 @@ function PostCard({
             )}
             {...repostClickableProps}
           >
-            <div className="flex items-center gap-1.5 mb-2 text-xs text-[var(--gp-text-muted)]">
-              <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>{t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}</span>
+            <div
+              className="flex items-center gap-1.5 mb-2 text-xs text-[var(--gp-text-muted)]"
+              aria-label={t('post.repostedFrom', `Reposted from @${repostOf.author?.username ?? ''}`)}
+            >
+              <span aria-hidden="true" className="shrink-0">↻</span>
+              <span aria-hidden="true">@{repostOf.author?.username ?? ''}</span>
             </div>
 
             <div className="flex items-center gap-2 mb-1.5">
