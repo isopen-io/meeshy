@@ -345,9 +345,16 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             // state: in a group call, one peer failing must not toast/kill
             // the call while others are still connected, and 'Connected!'
             // must fire once for the call, not once per participant join.
+            //
+            // No toast.error() here: onError below reaches the hook's sole
+            // production consumer (VideoCallInterface.tsx's handleWebRTCError),
+            // which ALREADY shows a translated toast for this exact code
+            // (t('toasts.peerConnectionFailed')). A toast here too doubled
+            // every connection failure into two stacked notifications — one
+            // hardcoded English (this one), one correctly localized — on
+            // every locale but en. setError still records internal state.
             if (aggregated === 'failed' && previousAggregated !== 'failed') {
               setError('Connection failed');
-              toast.error('Connection failed. Please try again.');
               onError?.(new Error('PEER_CONNECTION_FAILED'));
             } else if (aggregated === 'connected' && previousAggregated !== 'connected') {
               setConnecting(false);
@@ -415,8 +422,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
                 // EVERY participant's ICE has failed — one peer failing in a
                 // group call while others are still connected must not toast
                 // an error for (or call onError on) the whole call.
+                // No toast.error() here either — same duplicate-notification
+                // fix as the aggregated 'failed' branch above: the consumer's
+                // handleWebRTCError already shows the translated
+                // toasts.iceConnectionFailed for this code.
                 setError('ICE connection failed');
-                toast.error('Connection failed. Retrying...');
                 onError?.(new Error('ICE_CONNECTION_FAILED'));
               }
             }
@@ -437,8 +447,12 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
               return;
             }
 
+            // No toast.error(error.message) here: the raw internal message
+            // (untranslated, and often a code like 'PEER_CONNECTION_FAILED'
+            // rather than user-facing text) would show verbatim on top of
+            // the translated toast onError already produces downstream —
+            // same duplicate-notification bug as the two branches above.
             setError(error.message);
-            toast.error(error.message);
             onError?.(error);
           },
         });
@@ -491,10 +505,12 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
       logger.error('[useWebRTCP2P]', 'Failed to initialize local stream', { error });
       setConnecting(false);
 
+      // No toast.error(message) — onError below is the consumer's exclusive
+      // toast surface (VideoCallInterface.tsx's handleWebRTCError), same fix
+      // as the connection-state branches above.
       const message =
         error instanceof Error ? error.message : 'Failed to access camera/microphone';
       setError(message);
-      toast.error(message);
       onError?.(error instanceof Error ? error : new Error(message));
 
       throw error;
@@ -658,9 +674,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         // forever, an orphaned RTCPeerConnection leak.
         removeParticipant(targetUserId);
 
+        // No toast.error(message) — the consumer's onError forward already
+        // toasts once for the whole call (same fix as above).
         const message = error instanceof Error ? error.message : 'Failed to create offer';
         setError(message);
-        toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
@@ -747,9 +764,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         // forever.
         removeParticipant(fromUserId);
 
+        // No toast.error(message) — same duplicate-notification fix as
+        // createOffer's catch above.
         const message = error instanceof Error ? error.message : 'Failed to handle offer';
         setError(message);
-        toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
       } finally {
         offerInFlightRef.current.delete(fromUserId);
@@ -814,9 +832,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         // reuse instead of a fresh instance.
         removeParticipant(fromUserId);
 
+        // No toast.error(message) — same duplicate-notification fix as
+        // createOffer/handleOffer's catches above.
         const message = error instanceof Error ? error.message : 'Failed to handle answer';
         setError(message);
-        toast.error(message);
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
@@ -1130,9 +1149,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.handleRenegotiationOffer({ type: 'offer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation offer', { error, from: signal.from });
+              // No toast.error(message) — same duplicate-notification fix as
+              // the initial-negotiation catches above.
               const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
               setError(message);
-              toast.error(message);
               onError?.(error instanceof Error ? error : new Error(message));
             });
           } else if (offerInFlightRef.current.has(signal.from)) {
@@ -1165,9 +1185,10 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             trackIncomingNegotiationId(signal.from, signal.negotiationId);
             existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp }).catch((error) => {
               logger.error('[useWebRTCP2P]', 'Failed to handle renegotiation answer', { error, from: signal.from });
+              // No toast.error(message) — same duplicate-notification fix as
+              // the renegotiation-offer catch above.
               const message = error instanceof Error ? error.message : 'Failed to renegotiate call';
               setError(message);
-              toast.error(message);
               onError?.(error instanceof Error ? error : new Error(message));
             });
           } else {

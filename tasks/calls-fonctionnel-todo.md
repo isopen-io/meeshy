@@ -10200,3 +10200,121 @@ qu'aucun n'a laissé un frère non corrigé — motif dominant de cette routine 
   `use-webrtc-p2p.ts` portant plusieurs `toast.error(error.message)` sur du texte anglais codé en
   dur, jamais traduit (Vague 149) ; kick modérateur sans vérification du rôle CONVERSATION de la
   cible (`calls.ts`/`participants.ts`, Vague 149 — décision produit, hors périmètre).
+
+
+## Vague 151 — `use-webrtc-p2p.ts` toastait ses propres erreurs EN PLUS de les forwarder — chaque échec WebRTC affichait deux notifications empilées (web) (2026-08-21)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprend
+explicitement l'item laissé en « Non fait volontairement » par la Vague 150 (PR #3263, non encore
+mergée au moment où cette vague démarre — zéro chevauchement de fichier vérifié) et par la Vague 149 :
+« reste de `use-webrtc-p2p.ts` portant plusieurs `toast.error(error.message)` sur du texte anglais
+codé en dur, jamais traduit ». L'audit de cette vague va plus loin que le repérage initial : le
+défaut n'est pas seulement une fuite i18n, c'est une **notification dupliquée** sur les neuf chemins
+d'erreur du hook.
+
+## Current state (avant correctif)
+
+`useWebRTCP2P` (`hooks/use-webrtc-p2p.ts`) accepte un callback `onError?: (error: Error) => void`.
+Son unique consommateur en production, `VideoCallInterface.tsx`, câble
+`onError: handleWebRTCError` — un handler qui affiche **lui-même** un toast unique et TRADUIT
+(`t('toasts.peerConnectionFailed')` / `t('toasts.iceConnectionFailed')` / repli générique préfixé,
+posé par la Vague 149).
+
+Le hook, lui, affichait **déjà** son propre `toast.error(...)` sur CHACUN des neuf chemins d'erreur,
+juste avant de forwarder via `onError?.(...)` — les deux branches d'agrégation de connexion (état
+pair / état ICE), le handler générique `onError` du service WebRTC, `initializeLocalStream`,
+`createOffer`, `handleOffer`, `handleAnswer`, et les deux catches de renégociation
+(offre/réponse). Neuf occurrences du même motif, dans le même fichier.
+
+## Problems identified
+
+1. **Notification dupliquée sur TOUS les échecs d'appel.** Toute erreur WebRTC affichait DEUX
+   toasts empilés : celui du hook (texte brut, souvent le CODE interne littéral —
+   `'PEER_CONNECTION_FAILED'`, ou un message générique anglais comme `'Failed to create offer'` —
+   jamais traduit) et celui de `VideoCallInterface` (traduit, correct). Sur `fr`/`es`/`pt`, le second
+   toast affichait un texte localisé PENDANT que le premier restait figé en anglais juste au-dessus —
+   une redondance visible, mesurable, sur chaque locale non-anglaise.
+2. **Le premier toast était strictement moins informatif que le second.** `toast.error(error.message)`
+   sur le chemin générique du service (ligne ~441) pouvait littéralement afficher le CODE interne
+   (`'PEER_CONNECTION_FAILED'`) à l'utilisateur si `onError` était atteint par un chemin qui ne passe
+   pas par l'agrégation de connexion — un texte de débogage, jamais destiné à un humain.
+3. **Le hook n'a AUCUNE raison de toaster lui-même.** Son unique consommateur en production forwarde
+   déjà systématiquement vers un toast unique et traduit. Un hook headless qui possède SA PROPRE
+   politique de notification, en plus de forwarder vers celle de son consommateur, viole le principe
+   de source unique de vérité pour la présentation d'erreur : deux endroits décident du même
+   affichage, et ils ne sont jamais synchronisés (l'un `error.message` brut, l'autre `t(clé)`).
+
+## Root causes
+
+- Le hook a été écrit AVANT que `onError` existe comme contrat de forwarding complet (les commentaires
+  en tête des deux branches d'agrégation — « toast + onError » — montrent que les deux étaient déjà
+  pensés comme un COUPLE, pas comme deux surfaces indépendantes). L'ajout de `handleWebRTCError` côté
+  consommateur (Vague 149) a posé un second point d'affichage sans jamais retirer le premier — le même
+  point aveugle que documente cette routine sur les paires écrivain/lecteur (cf. leçons 77-bis/78/79
+  du dépôt) : le hook « semblait » gérer sa propre notification, alors qu'un consommateur en aval
+  gère déjà exactement la même chose.
+
+## Business impact
+
+- **Réel et visible sur toute locale non-anglaise.** Un utilisateur francophone dont la connexion pair
+  échoue voit deux toasts empilés : « Connection failed. Please try again. » (brut, anglais, jamais
+  traduit) immédiatement suivi de « Connexion échouée. Veuillez réessayer. » (traduit). Une UX FaceTime-
+  grade ne montre jamais deux notifications contradictoires en langue pour un seul événement.
+
+## Technical impact
+
+- **Contrat inchangé.** `onError` reste optionnel, sa signature ne change pas, aucun consommateur
+  existant n'est affecté au-delà de la suppression du doublon.
+- **`setError(...)` conservé sur les neuf sites** — état interne du hook, jamais exposé par son
+  `return` (vérifié : `error` n'apparaît pas dans l'objet retourné), donc sans risque de régression
+  d'affichage ailleurs.
+- **`toast.success('Connected!')` inchangé** — aucun doublon symétrique côté succès (le consommateur
+  ne forwarde pas de callback `onSuccess`), hors périmètre de ce correctif.
+
+## Risk assessment
+
+- **Faible.** Le seul consommateur de production (`VideoCallInterface.tsx`) forwarde déjà `onError`
+  vers un toast unique sur les neuf chemins concernés — supprimer le toast du hook ne supprime AUCUNE
+  notification utilisateur, seulement le doublon. Recherche exhaustive : aucun autre call site de
+  `useWebRTCP2P` en dehors des tests.
+- **Rollback :** `git revert` du commit unique ; réintroduit les neuf `toast.error(...)` supprimés.
+
+## Proposed improvements / Fix
+
+Retrait des neuf `toast.error(...)` du hook (agrégation pair, agrégation ICE, `onError` générique du
+service, `initializeLocalStream`, `createOffer`, `handleOffer`, `handleAnswer`, renégociation offre,
+renégociation réponse) — `setError(...)` et `onError?.(...)` intacts sur chacun. Commentaire in-line
+sur chaque site, citant la Vague 149/150 et le mécanisme de doublon.
+
+## Tests (TDD, RED confirmé avant le fix)
+
+`__tests__/hooks/use-webrtc-p2p.test.tsx` : neuf assertions `expect(toast.error).not.toHaveBeenCalled()`
+ajoutées ou converties depuis des assertions positives obsolètes (`toHaveBeenCalledWith('Connection
+failed. Please try again.')` / `'Connection failed. Retrying...'`), + 4 tests neufs (renégociation
+offre en échec, renégociation réponse en échec, erreur générique du service). RED confirmé par
+`git stash` du seul fichier de production : **9/75 tests rouges**, chacun échouant précisément sur
+`expect(toast.error).not.toHaveBeenCalled()` avec le texte brut anciennement toasté en preuve
+(`"Connection failed. Please try again."`, `"Connection failed. Retrying..."`,
+`"SOME_OTHER_INTERNAL_ERROR"`). GREEN après fix : **75/75**. Sweep web
+`--testPathPatterns="[Cc]all|webrtc"` : **59 suites / 790 tests** verts, 0 régression
+(`calls-i18n-regression.test.tsx` toujours vert — namespace `toasts` non touché par ce test-là).
+`npx tsc --noEmit` (apps/web, diff `git stash`/`stash pop`) : **0 erreur ajoutée** — 1276 erreurs
+préexistantes, compte identique avant/après ; 0 erreur sur `use-webrtc-p2p.ts` avant comme après.
+
+## Implementation complexity
+
+- **Faible.** 1 fichier de production modifié (9 suppressions de ligne + 9 commentaires), 1 fichier
+  de test modifié (5 tests existants convertis/étendus + 4 tests neufs).
+
+## Non fait volontairement / reste ouvert
+
+`toast.success('Connected!')` n'a pas de pendant traduit dans `VideoCallInterface` — pas un doublon
+(le consommateur ne forwarde aucun `onSuccess`), donc hors périmètre de CE correctif ; à auditer
+séparément si le message doit être localisé. Reconduits (inchangés) : dead code / god-object
+`CallManager.swift` (~5880 lignes, toolchain iOS hors d'atteinte) ; ADR `actor CallEventQueue` non
+implémenté ; `mergeEntries`/`upsertRemoteSegment` sans filtre `targetLanguage` explicite côté client
+(racine déjà éliminée côté serveur, Vague 135) ; gaps d'infrastructure groupe
+(`2026-08-13-group-calls-gap-analysis.md`) ; suspend/resume audio-only par-pair (Vague 143) ; kick
+modérateur sans vérification du rôle CONVERSATION de la cible (`calls.ts`/`participants.ts`, Vague
+147/149 — décision produit) ; dette lint systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/`
+(Vague 143, non corrigée — chantier distinct, décision d'équipe requise).

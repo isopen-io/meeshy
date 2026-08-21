@@ -225,6 +225,10 @@ describe('useWebRTCP2P', () => {
 
       expect(mockSetError).toHaveBeenCalledWith('Camera access denied');
       expect(onError).toHaveBeenCalled();
+      // onError is the hook's ONLY toast surface — the consumer
+      // (VideoCallInterface.tsx) shows the translated toast from it. A
+      // direct toast.error() here duplicated the notification.
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 
@@ -315,6 +319,8 @@ describe('useWebRTCP2P', () => {
 
       expect(mockSetError).toHaveBeenCalled();
       expect(onError).toHaveBeenCalled();
+      // Same single-toast-surface fix as the initialization-error test above.
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     // P1 leak fix: the peer connection was already created + registered
@@ -444,8 +450,9 @@ describe('useWebRTCP2P', () => {
     // service.createAnswer() throws.
     it('closes and deregisters the orphaned peer connection when answering an incoming offer fails', async () => {
       mockCreateAnswer.mockRejectedValue(new Error('Answer failed'));
+      const onError = jest.fn();
 
-      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId }));
+      renderHook(() => useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError }));
 
       const signalHandler = getSignalHandler();
 
@@ -458,6 +465,9 @@ describe('useWebRTCP2P', () => {
 
       expect(mockClose).toHaveBeenCalled();
       expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+      expect(onError).toHaveBeenCalled();
+      // Same single-toast-surface fix as createOffer's error test above.
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     // Vague 148: `handleAnswer` is the third negotiation-completing function
@@ -470,9 +480,10 @@ describe('useWebRTCP2P', () => {
     // to reuse instead of a fresh instance.
     it('closes and deregisters the orphaned peer connection when handling an answer fails', async () => {
       mockSetRemoteDescription.mockRejectedValueOnce(new Error('setRemoteDescription failed'));
+      const onError = jest.fn();
 
       const { result } = renderHook(() =>
-        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError })
       );
 
       // The offerer's peer connection is created + registered here.
@@ -481,6 +492,8 @@ describe('useWebRTCP2P', () => {
       });
       mockClose.mockClear();
       mockRemovePeerConnection.mockClear();
+      onError.mockClear();
+      (toast.error as jest.Mock).mockClear();
 
       const signalHandler = getSignalHandler();
 
@@ -493,6 +506,9 @@ describe('useWebRTCP2P', () => {
 
       expect(mockClose).toHaveBeenCalled();
       expect(mockRemovePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
+      expect(onError).toHaveBeenCalled();
+      // Same single-toast-surface fix as createOffer/handleOffer's error tests above.
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 
@@ -687,6 +703,54 @@ describe('useWebRTCP2P', () => {
       expect(mockSetRemoteAnswer).toHaveBeenCalledWith(
         expect.objectContaining({ type: 'answer', sdp: 'reanswer-sdp' })
       );
+    });
+
+    // Same single-toast-surface fix as the initial-negotiation error tests
+    // above, applied to the renegotiation catch blocks.
+    it('never toasts directly when a renegotiation offer fails, only forwards onError', async () => {
+      mockHandleRenegotiationOffer.mockRejectedValueOnce(new Error('Renegotiation offer failed'));
+      const onError = jest.fn();
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError })
+      );
+      const signalHandler = await establish(result);
+      onError.mockClear();
+      (toast.error as jest.Mock).mockClear();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'reoffer-sdp' },
+        });
+        await Promise.resolve();
+      });
+
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Renegotiation offer failed' }));
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('never toasts directly when a renegotiation answer fails, only forwards onError', async () => {
+      mockSetRemoteAnswer.mockRejectedValueOnce(new Error('Renegotiation answer failed'));
+      const onError = jest.fn();
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError })
+      );
+      const signalHandler = await establish(result);
+      onError.mockClear();
+      (toast.error as jest.Mock).mockClear();
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'reanswer-sdp' },
+        });
+        await Promise.resolve();
+      });
+
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Renegotiation answer failed' }));
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 
@@ -1342,8 +1406,13 @@ describe('useWebRTCP2P', () => {
 
       act(() => peer1.onConnectionStateChange('failed'));
       expect(result.current.connectionState).toBe('failed');
-      expect(toast.error).toHaveBeenCalledWith('Connection failed. Please try again.');
+      // The hook itself must never toast: onError is the SOLE surface — the
+      // consumer (VideoCallInterface.tsx) shows a single translated toast
+      // from it. A direct toast.error() here doubled the notification (one
+      // hardcoded English, one localized) on every locale but en.
+      expect(toast.error).not.toHaveBeenCalled();
       expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'PEER_CONNECTION_FAILED' }));
 
       // A second, already-failed peer must not re-fire the same global
       // error a second time — the aggregate did not change.
@@ -1398,7 +1467,7 @@ describe('useWebRTCP2P', () => {
       expect(result.current.iceConnectionState).toBe('connected');
     });
 
-    it('only surfaces the ICE "Connection failed. Retrying..." toast once every peer has failed', async () => {
+    it('only surfaces the ICE "Connection failed. Retrying..." error once every peer has failed, and never toasts directly', async () => {
       const { onError, peer1, peer2 } = await connectTwoPeers();
 
       // Both peers must be registered in the aggregate BEFORE either fails —
@@ -1409,12 +1478,13 @@ describe('useWebRTCP2P', () => {
       act(() => peer2.onIceConnectionStateChange('connected'));
 
       act(() => peer1.onIceConnectionStateChange('failed'));
-      expect(toast.error).not.toHaveBeenCalledWith('Connection failed. Retrying...');
       expect(onError).not.toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
 
       act(() => peer2.onIceConnectionStateChange('failed'));
-      expect(toast.error).toHaveBeenCalledWith('Connection failed. Retrying...');
       expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'ICE_CONNECTION_FAILED' }));
+      // The hook itself never toasts — onError is the SOLE surface (see the
+      // PEER_CONNECTION_FAILED test above for the full rationale).
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('a single peer exhausting ICE restart attempts does not escalate to a call-wide error while another peer is still connected (Vague 147)', async () => {
@@ -1438,6 +1508,21 @@ describe('useWebRTCP2P', () => {
       expect(result.current.connectionState).toBe('connected');
       expect(toast.error).not.toHaveBeenCalled();
       expect(onError).not.toHaveBeenCalled();
+    });
+
+    // Same single-toast-surface fix as the connection-state branches above,
+    // for the service's generic (non-ICE-restart, non-exhausted) onError
+    // callback — the one WebRTCService raises for any other internal error.
+    it('forwards a generic peer error via onError without toasting the raw internal message directly', async () => {
+      const { onError, peer1 } = await connectTwoPeers();
+
+      (toast.error as jest.Mock).mockClear();
+      onError.mockClear();
+
+      act(() => peer1.onError(new Error('SOME_OTHER_INTERNAL_ERROR')));
+
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'SOME_OTHER_INTERNAL_ERROR' }));
+      expect(toast.error).not.toHaveBeenCalled();
     });
   });
 
