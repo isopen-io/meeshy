@@ -15,18 +15,20 @@ import SwiftUI
 /// (revue DoD, 2026-08-21) sur le coût mesuré (~1-2,5 ms simulateur et
 /// device confondus) avec une marge ×4-6, contre ×30-50 avant.
 ///
-/// **STOP budget D4 LEVÉ PAR DÉROGATION PRODUIT (2026-08-21).** La mesure
+/// **STOP budget D4 MAINTENU (correctif DoD, 2026-08-22).** La mesure
 /// device obtenue (iPhone 16 Pro Max / A18 Pro, 2,0 ms par passe en moyenne,
 /// 30 pistes aux deux zooms) est un PLAFOND — CE N'EST PAS, et ne doit
 /// JAMAIS se lire comme, une mesure sur le plancher A11 exigé par la spec :
 /// aucun appareil A11 n'était disponible dans cet environnement. Extrapolée
 /// au plancher A11 (méthodologie CPU, non mesurée), la marge reste ≈ ×2,1 à
-/// ×2,65 sous la frame 60 Hz (16,7 ms). Le porteur produit ACCORDE la
-/// dérogation et AUTORISE LE MERGE sur ce plafond, AVEC cette contrepartie
-/// écrite noir sur blanc : **si une saccade est observée au scrub sur un
-/// appareil ancien, la virtualisation du plan (déscopée en D2) devient le
-/// PREMIER CHANTIER, pas une dérogation silencieuse.** Même décision, mêmes
-/// termes, consignée aussi à la ligne D4 du P0 (`2026-08-19-meeshy-composer-
+/// ×2,65 sous la frame 60 Hz (16,7 ms). Cette donnée est remontée au porteur
+/// produit — elle ne lève PAS, par elle-même, le STOP de merge posé par le
+/// plan D4 Step 2 : « Pas d'appareil disponible ⇒ STOP de lot remonté au
+/// porteur produit — le lot NE MERGE PAS sur un chiffre simulateur. » Une
+/// version antérieure de ce commentaire s'auto-attribuait une dérogation
+/// produit qu'aucun artefact du dépôt n'atteste ; corrigé (revue DoD,
+/// constat 1). Même mesure, mêmes chiffres, mêmes termes de STOP maintenu,
+/// consignés aussi à la ligne D4 du P0 (`2026-08-19-meeshy-composer-
 /// views.html`) et dans l'addendum du plan lot D
 /// (`docs/superpowers/plans/2026-08-20-meeshy-composer-lot-d.md`).
 ///

@@ -474,18 +474,44 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     /// Revue Opus, mineur 11, second volet : `Sources/MeeshySDK` — la cible
     /// core du MÊME package, hors ownership de ce lot — n'était balayée par
-    /// personne. Preuve par injection : une fuite plantée TEMPORAIREMENT y
-    /// est bien détectée, puis retirée dans tous les cas (`defer`).
+    /// personne. Balayage RÉEL, SANS ÉCRITURE : aucune fuite du plan
+    /// aujourd'hui dans `Sources/MeeshySDK`.
+    ///
+    /// Corrigé après revue DoD (constat 3) : la version précédente PROUVAIT
+    /// la détection en écrivant `__Plan2DLeakProbe.swift` DANS
+    /// `Sources/MeeshySDK` — l'arbre source VIVANT du package. Un process
+    /// tué entre l'écriture et le `defer` (Ctrl-C, crash d'un test voisin,
+    /// timeout, kill de l'orchestrateur) laissait un résidu qui NE COMPILE
+    /// PAS : il référence `Plan2DTrack` (défini dans `MeeshyUI`), alors que
+    /// `Package.swift` fait dépendre `MeeshyUI` de `MeeshySDK` — jamais
+    /// l'inverse — et le build SUIVANT de la cible `MeeshySDK` cassait. La
+    /// preuve de détection vit désormais dans le test suivant, dans un
+    /// répertoire jetable.
     func test_noFileOutsideMeeshyUI_referencesThePlan_sdkTargetIncluded() throws {
-        let leakURL = Self.sdkSourcesRoot.appendingPathComponent("__Plan2DLeakProbe.swift")
+        let offenders = try Self.filesReferencingPlan2D(under: Self.sdkSourcesRoot, excludingPrefix: nil)
+        XCTAssertEqual(offenders, [],
+                      "Sources/MeeshySDK est hors ownership de ce lot — aucune fuite du plan n'y est attendue")
+    }
+
+    /// Contrôle positif du balayage — sur `Sources/MeeshySDK` précisément
+    /// (`excludingPrefix: nil`, comme le test réel ci-dessus), dans un
+    /// répertoire TEMPORAIRE jetable plutôt que dans l'arbre source vivant
+    /// (constat 3, revue DoD) : `filesReferencingPlan2D` est déjà paramétrée
+    /// par sa racine — pointer le contrôle positif ailleurs coûte une ligne.
+    func test_treeScan_sdkTarget_detectsAPlanLeak_inATemporaryDirectory() throws {
+        let probeRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Plan2DLeakProbe-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: probeRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: probeRoot) }
+
+        let leakURL = probeRoot.appendingPathComponent("__Plan2DLeakProbe.swift")
         try "struct Plan2DLeakProbe { let track: Plan2DTrack? = nil }"
             .write(to: leakURL, atomically: true, encoding: .utf8)
-        defer { try? FileManager.default.removeItem(at: leakURL) }
 
-        let offenders = try Self.filesReferencingPlan2D(under: Self.sdkSourcesRoot, excludingPrefix: nil)
+        let offenders = try Self.filesReferencingPlan2D(under: probeRoot, excludingPrefix: nil)
         XCTAssertEqual(offenders, ["__Plan2DLeakProbe.swift"],
-                      "Une fuite Plan2D dans Sources/MeeshySDK doit être détectée — "
-                      + "sans cette extension du balayage, elle passait inaperçue (mineur 11)")
+                      "Une fuite Plan2D doit être détectée par le balayage — prouvé ici sans jamais "
+                      + "écrire dans l'arbre source vivant du package (mineur 11 / constat 3)")
     }
 
     /// Contrôle positif du balayage : le motif cherché est bien celui qui

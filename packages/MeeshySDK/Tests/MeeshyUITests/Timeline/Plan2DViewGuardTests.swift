@@ -836,19 +836,41 @@ final class Plan2DViewGuardTests: XCTestCase {
 
     func test_body_clipsTheTrackLabelToItsColumn() throws {
         let source = try Self.strippedPlan2DViewSource()
-        guard let labelRange = source.range(of: "Self.labelText(for:") else {
-            return XCTFail("Plan2DView doit dessiner le libellé via Self.labelText(for:)")
-        }
-        let before = String(source[source.startIndex..<labelRange.lowerBound].suffix(400))
-        XCTAssertTrue(before.contains(".clip(to:"),
+        XCTAssertTrue(try Self.labelIsClipped(inSource: source),
                      "Le libellé doit se dessiner À L'INTÉRIEUR d'un clip borné à la colonne d'étiquette — "
                      + "sinon un texte long déborde sur les barres (mineur 16, revue Opus)")
     }
 
-    /// Contrôle positif : la garde doit réellement détecter l'ABSENCE de clip.
-    func test_guardDetectsALabelDrawnWithoutClip() {
-        let sample = "context.draw(Self.labelText(for: track, isDark: isDark), at: p, anchor: .leading)"
-        XCTAssertFalse(sample.contains(".clip(to:"))
+    /// Contrôle positif : la garde doit réellement détecter l'ABSENCE de clip
+    /// — ET reconnaître un échantillon AVEC clip. Corrigé après revue DoD
+    /// (mineur 4) : la version précédente assertait `String.contains` sur un
+    /// littéral local, sans jamais appeler `labelIsClipped(inSource:)` — la
+    /// fonction que le test réel ci-dessus exerce. Une régression dans cette
+    /// fonction (ex. une fenêtre `suffix` mal dimensionnée) aurait laissé ce
+    /// contrôle vert.
+    func test_guardDetectsALabelDrawnWithoutClip() throws {
+        let withoutClip = "context.draw(Self.labelText(for: track, isDark: isDark), at: p, anchor: .leading)"
+        XCTAssertFalse(try Self.labelIsClipped(inSource: withoutClip))
+
+        let withClip = "context.drawLayer { layer in\n"
+            + "    layer.clip(to: Path(labelClipRect))\n"
+            + "    layer.draw(Self.labelText(for: track, isDark: isDark), at: p, anchor: .leading)\n"
+            + "}"
+        XCTAssertTrue(try Self.labelIsClipped(inSource: withClip))
+    }
+
+    /// Logique PURE derrière `test_body_clipsTheTrackLabelToItsColumn` :
+    /// le libellé se dessine via `Self.labelText(for:)`, et le clip qui le
+    /// borne doit apparaître dans les 400 caractères qui PRÉCÈDENT cet
+    /// appel dans le passe `Canvas`. Extraite pour que le contrôle positif
+    /// exerce la MÊME fonction que le test réel, jamais un duplicata.
+    private static func labelIsClipped(inSource source: String) throws -> Bool {
+        guard let labelRange = source.range(of: "Self.labelText(for:") else {
+            throw NSError(domain: "Plan2DViewGuardTests", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "Plan2DView doit dessiner le libellé via Self.labelText(for:)"])
+        }
+        let before = String(source[source.startIndex..<labelRange.lowerBound].suffix(400))
+        return before.contains(".clip(to:")
     }
 
     // MARK: - Couleur par PLAN, jamais par format/kind (U15)
