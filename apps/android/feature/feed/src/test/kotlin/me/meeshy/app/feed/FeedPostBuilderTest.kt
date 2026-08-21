@@ -218,6 +218,20 @@ class FeedPostBuilderTest {
     }
 
     @Test
+    fun build_configuredLanguageWithoutContentSurfacesAsATranslatableChip() {
+        // Translated to en only; a bilingual (en/es) viewer sees es as a request-on-demand chip.
+        val enOnly = post(translations = mapOf("en" to ApiPostTranslationEntry(text = "Hello")))
+        val result = FeedPostBuilder.build(enOnly, bilingualPrefs, null, activeLanguageCode = null)
+
+        assertThat(result.languageStrip.map { it.code }).containsExactly("fr", "en", "es").inOrder()
+        val es = result.languageStrip.first { it.code == "es" }
+        assertThat(es.isTranslatable).isTrue()
+        assertThat(es.isActive).isFalse()
+        assertThat(es.isOriginal).isFalse()
+        assertThat(result.languageStrip.first { it.code == "en" }.isActive).isTrue()
+    }
+
+    @Test
     fun resolveActiveCode_overrideWithContentWins() {
         val code = FeedPostBuilder.resolveActiveCode(bilingualPost(), bilingualPrefs, override = "es")
         assertThat(code).isEqualTo("es")
