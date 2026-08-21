@@ -51,7 +51,7 @@ Aucune. La signature et le type de retour de `chunk` sont inchangés.
 - [x] RED écrit et prouvé.
 - [x] GREEN posé.
 - [x] Validations locales exécutées.
-- [ ] Commit + push + PR.
+- [x] Commit `fe4d665e` + push `claude/brave-archimedes-oj0vgv` + PR #3253 (souscrite).
 
 ## Progress tracking
 - Constat issu d'une passe de survey des utilitaires purs `packages/shared/utils/` hors des 8
