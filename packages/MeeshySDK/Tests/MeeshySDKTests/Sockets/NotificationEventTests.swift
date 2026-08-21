@@ -275,5 +275,4 @@ final class NotificationEventTests: XCTestCase {
         XCTAssertEqual(event.postId, "post-from-metadata")
         XCTAssertEqual(event.messagePreview, "Great post!")
     }
-
 }
