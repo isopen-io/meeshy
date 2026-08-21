@@ -126,8 +126,9 @@ champs. Pas de struct jumelle recopiée.
 | `comments-like-delete` (route) | 16/16, dont 2 témoins neufs |
 | `SocialEventsHandler` (×2 suites) | 135/135 avec les 2 précédentes |
 | `use-post-socket-cache-sync` (web) | 115/115, dont 4 témoins neufs |
-| suite gateway complète | (voir §7) |
-| suite web complète | (voir §7) |
+| **suite gateway complète** | **805 suites / 18 814 tests, 0 échec** |
+| **suite web complète** | **743 suites / 13 900 tests, 0 échec** |
+| `posts-comments` (harnais réparé, cf. ci-dessous) | 37/37 |
 
 **Preuve par mutation** — chaque garde neuve prouvée LIANTE en la neutralisant :
 
@@ -147,6 +148,25 @@ Les témoins neufs ne sont pas que positifs :
 - **absence de destinataire** : `authorId` nul ⇒ aucune diffusion, comme à la
   pose — pas d'`emitToUser(undefined)` ;
 - **négatif** : un `commentId` étranger ne bouge rien.
+
+### Un harnais que la suite complète a démasqué
+
+La première passe complète du gateway est sortie à **1 rouge** : `posts-comments.test.ts`
+déclare son PROPRE double de `fastify.socialEvents` avec quatre méthodes
+nommées à la main. La route DELETE en appelle désormais une cinquième —
+`broadcastCommentUnliked` n'y étant pas, l'appel levait et la route rendait
+**500 au lieu de 200**.
+
+Réparé du côté du **double**, pas de la production : `fastify.socialEvents` est
+typé `SocialEventsHandler` (`types/fastify.d.ts`), donc un garde
+`typeof … === 'function'` au site d'appel n'aurait protégé de rien de réel et
+n'aurait existé que pour un harnais incomplet.
+
+La leçon est de méthode, pas de code : **les trois suites directement visées
+étaient vertes, et le rouge était ailleurs**. Un double nommé à la main est un
+contrat recopié — il dérive dès qu'on ajoute une méthode au vrai
+collaborateur, et rien ne le signale avant la suite complète. Seconde passe :
+**805/805**.
 
 ## 6. Limites assumées
 
