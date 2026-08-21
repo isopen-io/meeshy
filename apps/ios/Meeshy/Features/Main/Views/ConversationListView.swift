@@ -1258,8 +1258,12 @@ struct ConversationListView: View {
     /// viennent de `CollapsibleHeaderMetrics` (64 déployée / 44 repliée), la
     /// métrique que le header lui-même consomme — jamais un nombre recopié ici.
     /// `0` sous drapeau OFF : ni inset, ni décalage.
+    /// `accessoryCollapsedHeight` (60) et non `collapsedHeight` (44) : ce
+    /// header porte un `titleAccessory` (la trail compacte de stories), et
+    /// replié il mesure 60 pt — la bande de stickers épinglée à 44 passait
+    /// SOUS la trail (chevauchement « P[avatar]ANCIEN », 2026-08-21).
     private var stickyHeaderInset: CGFloat {
-        LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0
+        LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.accessoryCollapsedHeight : 0
     }
 
     /// R-a (réserve tracée Porte V1, `tasks/lentille-workshop-execution.md`
@@ -1571,7 +1575,11 @@ struct ConversationListView: View {
                         ConversationPaginationFooter()
                     }
 
-                    Color.clear.frame(height: 280)
+                    // Queue de liste : juste de quoi passer sous la barre de
+                    // recherche et amener la dernière rangée jusqu'à la bande
+                    // de focus — 400 pt (280 + 120) laissaient un demi-écran
+                    // de vide sous la dernière conversation (2026-08-21).
+                    Color.clear.frame(height: 60)
                         .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
@@ -1581,7 +1589,7 @@ struct ConversationListView: View {
                         }
                 }
                 .padding(.top, 8)
-                .padding(.bottom, 120)
+                .padding(.bottom, 80)
             }
             // LIGNE D'ÉPINGLAGE (LWS-6/I-063bis). Un `LazyVStack(pinnedViews:)`
             // épingle au bord haut de la RÉGION VISIBLE de son ScrollView. Ici
@@ -1600,6 +1608,17 @@ struct ConversationListView: View {
                 isEnabled: LentilleFeatureFlag.isLentilleListEnabled,
                 height: stickyHeaderInset
             ))
+            // Ligne d'épinglage des stickers, en coordonnées GLOBALES : bord
+            // haut de la région visible du défilement (safe area comprise)
+            // plus l'inset collant. Mesurée sur le CONTENEUR — qui ne bouge
+            // pas au défilement, donc zéro écriture par tick — et lue par la
+            // pilule pour nommer la section réellement épinglée (2026-08-21 :
+            // « le sticker le plus haut » désignait une section déjà passée).
+            .onGeometryChange(for: CGFloat.self) { proxy in
+                proxy.frame(in: .global).minY + proxy.safeAreaInsets.top
+            } action: { visibleTop in
+                sectionPositionRegistry.registerPinLine(visibleTop + stickyHeaderInset)
+            }
             .scrollDismissesKeyboard(.interactively)
             // ÉLECTION DE LA FOCUS CARD (LWS-8/I-070). Posé sur le conteneur,
             // APRÈS l'inset sticky : l'hôte mesure le bas de la région visible du

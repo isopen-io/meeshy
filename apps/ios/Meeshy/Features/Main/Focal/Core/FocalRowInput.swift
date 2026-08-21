@@ -128,18 +128,22 @@ struct FocalRowInput: Equatable {
     /// justification et la garantie de compatibilité du site de montage.
     let effects: MessageEffects
 
-    // MARK: - Horodatage révélé au défilement
+    // MARK: - Position dans le fil
 
-    /// Le défilement est en cours ⇒ les heures des rangées se montrent,
-    /// puis s'effacent à l'arrêt.
-    ///
-    /// Remplace la pilule flottante « jour · heure » (`ScrollTimePillOverlay`),
-    /// qui affichait UN horodatage détaché en haut d'écran pendant que chaque
-    /// rangée portait déjà le sien en permanence — trois chromes temporels
-    /// concurrents pour une seule information. La loi de fenêtre
-    /// (`ScrollTimePillLaw`, `lingerMs = 900`) est CONSERVÉE et pilote
-    /// désormais ce booléen : même tempo, autre support.
-    let revealsTimestamp: Bool
+    /// Le DERNIER message reçu de la conversation : la rangée Script/Focal y
+    /// monte le bouton (+) d'ajout rapide de réaction, comme la bulle
+    /// (`BubbleReactionsOverlay.isMounted`). Signal de position, fourni par
+    /// l'hôte (`lastReceivedMessageId` du VM) — 2026-08-21, l'écart « jamais
+    /// côté Focal » est comblé.
+    let isLastReceivedMessage: Bool
+    /// Focal (2026-08-21) : le message EN FOCUS — celui de la carte teintée.
+    /// Il porte ses détails même en continuation de groupe (avatar, présence,
+    /// mood, date ET heure d'envoi) et plafonne son texte
+    /// (`FocalMetrics.Focus.maxCharacters`) pour tenir dans une magnificence
+    /// lisible. Posé par l'hôte À LA POSE seulement (jamais par frame).
+    let isFocused: Bool
+    /// Date d'envoi — affichée en clair (jour + heure) sur le message en focus.
+    let sentAt: Date?
 
     init(
         localId: String,
@@ -175,7 +179,9 @@ struct FocalRowInput: Equatable {
         allAudioItems: [ConversationViewModel.AudioItem],
         conversationName: String,
         effects: MessageEffects = .none,
-        revealsTimestamp: Bool = false
+        isLastReceivedMessage: Bool = false,
+        isFocused: Bool = false,
+        sentAt: Date? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -210,7 +216,9 @@ struct FocalRowInput: Equatable {
         self.allAudioItems = allAudioItems
         self.conversationName = conversationName
         self.effects = effects
-        self.revealsTimestamp = revealsTimestamp
+        self.isLastReceivedMessage = isLastReceivedMessage
+        self.isFocused = isFocused
+        self.sentAt = sentAt
     }
 
     /// Manuelle (pas synthétisée) : `userLanguages` est un TUPLE — les
@@ -260,7 +268,9 @@ struct FocalRowInput: Equatable {
             && lhs.allAudioItems.lazy.map(\.id).elementsEqual(rhs.allAudioItems.lazy.map(\.id))
             && lhs.conversationName == rhs.conversationName
             && lhs.effects == rhs.effects
-            && lhs.revealsTimestamp == rhs.revealsTimestamp
+            && lhs.isLastReceivedMessage == rhs.isLastReceivedMessage
+            && lhs.isFocused == rhs.isFocused
+            && lhs.sentAt == rhs.sentAt
     }
 }
 

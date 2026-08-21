@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 @testable import Meeshy
 
 /// F-082 (WS-3) — critère §7 « Grilles 1/2/3/4+ conservées (gridMaxWidth 300,

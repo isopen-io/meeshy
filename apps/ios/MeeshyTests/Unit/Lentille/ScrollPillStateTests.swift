@@ -337,6 +337,82 @@ final class ScrollPillStateTests: XCTestCase {
         )
     }
 
+    // MARK: - Section ÉPINGLÉE (2026-08-21) — celle qui TIENT la ligne d'épinglage
+
+    /// Un `LazyVStack(pinnedViews:)` garde un moment le sticker POUSSÉ par le
+    /// suivant au-dessus de la ligne (minY < ligne) avant de le démonter : le
+    /// « plus haut à l'écran » nommait alors une section déjà passée
+    /// (« AUJOURD'HUI » affiché sous « PLUS ANCIEN » épinglé, simulateur
+    /// 2026-08-21). L'épinglé est le sticker le plus BAS parmi ceux situés à la
+    /// ligne ou au-dessus — celui qui la tient.
+    func test_pinnedSectionId_isTheStickerHoldingTheLine_notAStaleOnePushedAbove() {
+        let positions: [String: CGFloat] = ["today": 40, "week": 82, "older": 122, "much-older": 380]
+        XCTAssertEqual(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: positions, pinLine: 122),
+            "older",
+            "Deux stickers périmés dorment encore au-dessus de la ligne : la pilule nomme " +
+            "celui qui TIENT la ligne, jamais le plus haut."
+        )
+    }
+
+    func test_pinnedSectionId_duringAPush_staysOnThePushedSticker_untilTheNextReachesTheLine() {
+        let pinLine: CGFloat = 122
+        let pushing: [String: CGFloat] = ["today": 110, "week": 150]
+        XCTAssertEqual(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: pushing, pinLine: pinLine),
+            "today",
+            "Pendant la poussée, le sticker poussé (déjà un peu au-dessus de la ligne) reste " +
+            "l'épinglé tant que le suivant n'a pas atteint la ligne."
+        )
+        let arrived: [String: CGFloat] = ["today": 82, "week": 122]
+        XCTAssertEqual(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: arrived, pinLine: pinLine),
+            "week",
+            "Le suivant a atteint la ligne : c'est lui l'épinglé."
+        )
+    }
+
+    func test_pinnedSectionId_atTheTopOfTheList_namesTheFirstUpcomingSticker() {
+        let positions: [String: CGFloat] = ["today": 200, "week": 420]
+        XCTAssertEqual(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: positions, pinLine: 122),
+            "today",
+            "Aucun sticker à la ligne (liste au repos en haut) : la pilule nomme la section " +
+            "du haut de l'écran, la première à venir."
+        )
+    }
+
+    func test_pinnedSectionId_toleratesSubpointRounding_atTheLine() {
+        let positions: [String: CGFloat] = ["today": 60, "week": 122.4]
+        XCTAssertEqual(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: positions, pinLine: 122),
+            "week",
+            "Une fraction de point au-dessus de la ligne (arrondi de layout) est « à la ligne »."
+        )
+    }
+
+    func test_pinnedSectionId_withoutAMeasuredLine_fallsBackToTheTopmostSticker() {
+        let positions: [String: CGFloat] = ["today": 40, "older": 122]
+        XCTAssertEqual(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: positions, pinLine: nil),
+            "today",
+            "Ligne pas encore mesurée (premier layout) : règle historique, le plus haut."
+        )
+        XCTAssertNil(
+            LentilleSectionPositionRegistry.pinnedSectionId(positions: [:], pinLine: 122),
+            "Aucun sticker monté : aucun épinglé."
+        )
+    }
+
+    func test_registry_keepsTheLastMeasuredPinLine() {
+        let registry = LentilleSectionPositionRegistry()
+        XCTAssertNil(registry.pinLine, "Rien mesuré : pas de ligne.")
+        registry.registerPinLine(122)
+        XCTAssertEqual(registry.pinLine, 122)
+        registry.registerPinLine(138)
+        XCTAssertEqual(registry.pinLine, 138, "La dernière mesure gagne (rotation, header).")
+    }
+
     // MARK: - Montage : déclaré == monté, chacun derrière SA condition (leçon 257)
 
     func test_sectionScrollPill_isMountedExactlyOnce_behindTheFlag() throws {

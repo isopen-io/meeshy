@@ -110,7 +110,9 @@ struct FocalRow: View {
             // propriétés du MESSAGE, pas du groupe).
             badgesSection
 
-            if input.isFirstInGroup {
+            // Le message EN FOCUS (Focal) porte toujours son identité — avatar,
+            // présence, mood, jour et heure — même en continuation de groupe.
+            if input.isFirstInGroup || input.isFocused {
                 FocalIdentityHeader(
                     isMe: content.isMe,
                     senderDisplayName: input.senderDisplayName,
@@ -122,7 +124,8 @@ struct FocalRow: View {
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
                     senderIsAnonymous: input.senderIsAnonymous,
-                    timeString: content.meta.timeString,
+                    timeString: headerTimeString,
+                    revealsTimeAlways: input.isFocused,
                     deliveryStatus: content.meta.deliveryStatus,
                     isDark: input.isDark,
                     // WS-10 (F-089) : `input.showsAgentGrammar` PORTE DÉJÀ la
@@ -173,7 +176,7 @@ struct FocalRow: View {
             failedRetrySection
             flagAndReactionsRow
 
-            if !input.isFirstInGroup {
+            if !input.isFirstInGroup && !input.isFocused {
                 FocalMetaRow(
                     isMe: content.isMe,
                     timeString: content.meta.timeString,
@@ -231,10 +234,10 @@ struct FocalRow: View {
     /// Réutilise `BubbleReactionsOverlay` (§1.3, `internal`, vérifié non
     /// `fileprivate`) TEL QUEL — pilule `11`pt, fond `backgroundSecondary`,
     /// comptes monospaced, pop `springBouncy` à l'arrivée, picker/détail
-    /// inchangés : exactement F05. `isLastReceivedMessage` reste `false`
-    /// (le bouton `(+)` d'ajout rapide ne s'affiche donc jamais côté Focal
-    /// pour l'instant — `FocalRowInput`, figé, ne porte pas ce signal de
-    /// position de défilement ; écart signalé, pas une extension inventée).
+    /// inchangés : exactement F05. Le bouton `(+)` d'ajout rapide suit la
+    /// MÊME règle que la bulle (`BubbleReactionsOverlay.isMounted`) : sur le
+    /// dernier message reçu (`input.isLastReceivedMessage`, fourni par
+    /// l'hôte depuis 2026-08-21 — l'écart « jamais côté Focal » est comblé).
     // (réactions : fusionnées dans `flagAndReactionsRow` — drapeau premier,
     // même ligne, arbitrage user 2026-08-18)
 
@@ -447,6 +450,7 @@ struct FocalRow: View {
                 trackedLinks: content.text?.trackedLinks ?? [:],
                 fontSize: textSize,
                 expandLabel: String(localized: "focal.readmore", defaultValue: "Lire plus", bundle: .main),
+                truncateLimit: input.isFocused ? FocalMetrics.Focus.maxCharacters : BubbleExpandableText.truncateLimit,
                 onExpandOverride: { actions.onReadMore?(readMorePayload) }
             )
             .equatable()
@@ -465,6 +469,18 @@ struct FocalRow: View {
 
     /// Charge de la sheet « Lire plus » — le MÊME texte effectif que la
     /// rangée (Prisme déjà résolu), jamais une seconde résolution.
+    /// En focus : jour + heure (« mar. 19 août · 14:41 ») ; sinon l'heure seule.
+    private var headerTimeString: String {
+        guard input.isFocused, let sentAt = input.sentAt else { return content.meta.timeString }
+        return Self.focusedTimeString(sentAt: sentAt, timeString: content.meta.timeString)
+    }
+
+    nonisolated static func focusedTimeString(sentAt: Date, timeString: String, calendar: Calendar = .current) -> String {
+        if calendar.isDateInToday(sentAt) { return timeString }
+        let day = sentAt.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated).locale(calendar.locale ?? .current))
+        return "\(day) · \(timeString)"
+    }
+
     private var readMorePayload: FocalReadMorePayload {
         FocalReadMorePayload(
             messageId: content.messageId,
@@ -502,7 +518,12 @@ struct FocalRow: View {
     /// porteur de réactions.
     @ViewBuilder
     private var flagAndReactionsRow: some View {
-        if (content.translation != nil && !content.isBlurred) || !content.reactions.isEmpty {
+        let showsReactions = BubbleReactionsOverlay.isMounted(
+            hasReactions: !content.reactions.isEmpty,
+            isMe: content.isMe,
+            isLastReceivedMessage: input.isLastReceivedMessage
+        )
+        if (content.translation != nil && !content.isBlurred) || showsReactions {
             HStack(alignment: .center, spacing: 6) {
                 // Jamais de drapeau EN CLAIR sur un message protégé (revue
                 // adversariale 2026-08-18) : la bulle floute sa bande de
@@ -512,13 +533,13 @@ struct FocalRow: View {
                 if content.translation != nil, !content.isBlurred {
                     originalLanguageFlag
                 }
-                if !content.reactions.isEmpty {
+                if showsReactions {
                     BubbleReactionsOverlay(
                         messageId: content.messageId,
                         summaries: content.reactions,
                         isMe: content.isMe,
                         isDark: input.isDark,
-                        isLastReceivedMessage: false,
+                        isLastReceivedMessage: input.isLastReceivedMessage,
                         accentHex: input.accentHex,
                         onAddReaction: actions.onAddReaction,
                         onToggleReaction: actions.onToggleReaction,

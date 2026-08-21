@@ -39,6 +39,11 @@ struct FocalIdentityHeader: View, Equatable {
     /// lisible, pas un espace réservé, et un compte peut le porter.
     var senderIsAnonymous: Bool = false
     let timeString: String
+    /// Le message EN FOCUS (Focal, 2026-08-21) garde son horodatage en
+    /// PERMANENCE — jour + heure, défilement ou pas : il ne passe pas par le
+    /// révélé (`FocalRevealedTime`, masqué au repos). `false` = règle
+    /// commune des têtes de groupe (révélé pendant le défilement seulement).
+    var revealsTimeAlways: Bool = false
     let deliveryStatus: Message.DeliveryStatus?
     let isDark: Bool
     var agentStyle: AgentAuthoredStyle.Descriptor = .human
@@ -187,9 +192,18 @@ struct FocalIdentityHeader: View, Equatable {
     /// L'horodatage de tête de groupe — MÊME règle que `FocalMetaRow.stamp` :
     /// révélé pendant le défilement seulement. Sans cette règle commune, une
     /// tête de groupe gardait son heure en dur pendant qu'une rangée de suite
-    /// masquait la sienne — deux règles pour la même information.
+    /// masquait la sienne — deux règles pour la même information. Seule
+    /// exception : le message EN FOCUS (`revealsTimeAlways`), dont les
+    /// détails — jour + heure compris — sont permanents.
+    @ViewBuilder
     private var stamp: some View {
-        FocalRevealedTime(timeString: timeString, tint: metaTint)
+        if revealsTimeAlways {
+            Text(timeString)
+                .font(MeeshyFont.relative(10.5))
+                .foregroundColor(metaTint)
+        } else {
+            FocalRevealedTime(timeString: timeString, tint: metaTint)
+        }
     }
 
     /// F-083ter (F10) — « un message édité affiche « modifié » en 10.5 en

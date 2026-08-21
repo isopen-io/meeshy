@@ -160,6 +160,10 @@ nonisolated public enum FocalMetrics {
     /// règle CONSTANTE de toutes les rangées : la hauteur d'en-tête et le
     /// retrait de texte ne varient jamais, la liste ne saute donc jamais.
     nonisolated public enum Focus {
+        /// Plafond de caractères du texte du message EN FOCUS (2026-08-21) :
+        /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.
+        public static let maxCharacters: Int = 360
+
         /// Gabarit de pastille réservé en permanence par l'en-tête
         /// (`FocalIdentityHeader`, `minHeight`) — la pastille rendue reste
         /// `Avatar.size` (22) dans ce cadre de 34.

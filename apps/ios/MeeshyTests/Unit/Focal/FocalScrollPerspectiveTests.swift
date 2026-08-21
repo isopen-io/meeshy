@@ -1,0 +1,140 @@
+import XCTest
+import QuartzCore
+@testable import Meeshy
+
+/// Focal minimal (2026-08-21) : la pose d'une cellule ne dépend que de sa
+/// distance à la ligne de focus, par la loi PARTAGÉE du fil — jamais d'une
+/// hauteur, d'une élection ou d'un atterrissage.
+final class FocalScrollPerspectiveTests: XCTestCase {
+
+    func test_pose_onOrBelowTheFocusLine_isIdentity() {
+        XCTAssertEqual(FocalScrollPerspective.pose(distance: 0, reduceMotion: false), .identity)
+        XCTAssertEqual(FocalScrollPerspective.pose(distance: -120, reduceMotion: false), .identity)
+    }
+
+    func test_pose_aboveTheFocusLine_followsTheSharedThreadCurve() {
+        let pose = FocalScrollPerspective.pose(distance: 190, reduceMotion: false)
+        let law = FocalFocusCurve.focusCurve(distance: 190, variant: .thread)
+        XCTAssertEqual(pose.scale, law.scale, accuracy: 0.0001)
+        XCTAssertEqual(pose.alpha, law.alpha, accuracy: 0.0001)
+        XCTAssertLessThan(pose.scale, 1)
+        XCTAssertLessThan(pose.alpha, 1)
+    }
+
+    func test_pose_farAboveTheFocusLine_isClampedAtTheLawFloor() {
+        let pose = FocalScrollPerspective.pose(distance: 5_000, reduceMotion: false)
+        XCTAssertEqual(pose.scale, 1 - FocalFocusCurve.threadScaleDecay, accuracy: 0.0001)
+        XCTAssertEqual(pose.alpha, 1 - FocalFocusCurve.threadAlphaDecay, accuracy: 0.0001)
+    }
+
+    func test_pose_underReduceMotion_isIdentity_whateverTheDistance() {
+        XCTAssertEqual(FocalScrollPerspective.pose(distance: 400, reduceMotion: true), .identity)
+    }
+
+    func test_focusY_isTheVisibleBottomMinusComposerMinusTheThreadBand() {
+        XCTAssertEqual(
+            FocalScrollPerspective.focusY(visibleBottom: 874, bottomInset: 90),
+            874 - 90 - FocalFocusCurve.threadFocusBandOffset
+        )
+    }
+
+    func test_transform_atScaleOne_isIdentity() {
+        XCTAssertTrue(CATransform3DIsIdentity(FocalScrollPerspective.transform(scale: 1, size: CGSize(width: 300, height: 100))))
+    }
+
+    /// Le pivot de la spec — (16 %, bas visuel) = (0.16·w, 0) dans le repère
+    /// renversé — reste FIXE sous la mise à l'échelle.
+    func test_transform_keepsTheSpecPivotFixed() {
+        let size = CGSize(width: 300, height: 100)
+        let t = FocalScrollPerspective.transform(scale: 0.6, size: size)
+        let affine = CATransform3DGetAffineTransform(t)
+        // Point du layer exprimé par rapport à son centre (anchorPoint 0.5, 0.5).
+        let pivot = CGPoint(x: 0.16 * size.width - size.width / 2, y: 0 - size.height / 2)
+        let moved = pivot.applying(affine)
+        XCTAssertEqual(moved.x, pivot.x, accuracy: 0.001)
+        XCTAssertEqual(moved.y, pivot.y, accuracy: 0.001)
+        // …et un point opposé se rapproche du pivot.
+        let far = CGPoint(x: size.width / 2, y: size.height / 2)
+        let farMoved = far.applying(affine)
+        XCTAssertLessThan(abs(farMoved.x - pivot.x), abs(far.x - pivot.x))
+        XCTAssertLessThan(abs(farMoved.y - pivot.y), abs(far.y - pivot.y))
+    }
+
+    /// Le câblage hôte : la passe tourne au tick de défilement, à l'affichage
+    /// d'une cellule et après chaque apply — et chaque configuration REMET le
+    /// layer à plat (cellule recyclée d'un mode à l'autre).
+    func test_host_appliesThePassOnScrollDisplayAndApply_andResetsOnConfigure() throws {
+        // Unit/Focal → Unit → MeeshyTests → apps/ios : QUATRE remontées.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertGreaterThanOrEqual(code.components(separatedBy: "applyFocalPerspectiveToVisibleCells()").count - 1, 3,
+            "scrollViewDidScroll + fin d'apply + changement de mode, au minimum")
+        XCTAssertTrue(code.contains("FocalScrollPerspective.reset(cell.contentView.layer)"))
+        XCTAssertTrue(code.contains("applyFocalPerspective(to: cell)"))
+    }
+
+    // MARK: - Compaction + focus (retours user 2026-08-21)
+
+    private func cell(_ id: String, midY: CGFloat, height: CGFloat = 100, isMessage: Bool = true) -> FocalScrollPerspective.CellGeometry {
+        FocalScrollPerspective.CellGeometry(id: id, visualMidY: midY, height: height, isMessage: isMessage)
+    }
+
+    /// Les rangées sous la ligne de focus ne bougent pas ; au-dessus, chaque
+    /// rangée est tirée vers le bas de la hauteur PERDUE par celles qui la
+    /// séparent de la ligne — les interstices ne grandissent plus.
+    func test_poses_pullEachUpperRowByTheHeightLostBelowIt() {
+        let focusY: CGFloat = 700
+        // Distances 150/250/350 : toutes DANS la portée de la loi (maxDistance
+        // 380) — au-delà, l'échelle touche son plancher et deux rangées
+        // lointaines ont la même échelle (ce que ce témoin ne teste pas).
+        let cells = [cell("below", midY: 760), cell("a", midY: 550), cell("b", midY: 450), cell("c", midY: 350)]
+        let poses = FocalScrollPerspective.poses(cells: cells, focusY: focusY, reduceMotion: false)
+        let byId = Dictionary(uniqueKeysWithValues: poses.map { ($0.id, $0) })
+        XCTAssertEqual(byId["below"], FocalScrollPerspective.CellPose(id: "below", scale: 1, alpha: 1, pull: 0))
+        XCTAssertEqual(byId["a"]?.pull, 0)
+        let lostA = (1 - byId["a"]!.scale) * 100
+        XCTAssertEqual(byId["b"]!.pull, lostA, accuracy: 0.0001)
+        let lostB = (1 - byId["b"]!.scale) * 100
+        XCTAssertEqual(byId["c"]!.pull, lostA + lostB, accuracy: 0.0001)
+        XCTAssertLessThan(byId["c"]!.scale, byId["b"]!.scale)
+        XCTAssertLessThan(byId["b"]!.scale, byId["a"]!.scale)
+    }
+
+    func test_poses_nonMessageCells_fadeButKeepTheirScale_andLoseNoHeight() {
+        let poses = FocalScrollPerspective.poses(
+            cells: [cell("pill", midY: 300, height: 40, isMessage: false), cell("m", midY: 100)],
+            focusY: 700, reduceMotion: false
+        )
+        let byId = Dictionary(uniqueKeysWithValues: poses.map { ($0.id, $0) })
+        XCTAssertEqual(byId["pill"]?.scale, 1)
+        XCTAssertLessThan(byId["pill"]!.alpha, 1)
+        XCTAssertEqual(byId["m"]?.pull, 0, "une pilule ne rétrécit pas : elle ne libère aucune hauteur")
+    }
+
+    func test_poses_underReduceMotion_areAllIdentity() {
+        let poses = FocalScrollPerspective.poses(cells: [cell("a", midY: 100), cell("b", midY: 500)], focusY: 700, reduceMotion: true)
+        XCTAssertTrue(poses.allSatisfy { $0.scale == 1 && $0.alpha == 1 && $0.pull == 0 })
+    }
+
+    func test_focusedId_isTheNearestMessage_withHysteresis() {
+        let cells = [cell("near", midY: 690), cell("far", midY: 400), cell("pill", midY: 705, isMessage: false)]
+        XCTAssertEqual(FocalScrollPerspective.focusedId(cells: cells, focusY: 700, currentId: nil), "near")
+        // L'élu tient tant qu'il reste dans l'hystérésis du fil…
+        let drifted = [cell("near", midY: 700 - FocalFocusCurve.threadFocusBandHysteresis + 1), cell("other", midY: 702)]
+        XCTAssertEqual(FocalScrollPerspective.focusedId(cells: drifted, focusY: 700, currentId: "near"), "near")
+        // …et cède au-delà.
+        let gone = [cell("near", midY: 700 - FocalFocusCurve.threadFocusBandHysteresis - 1), cell("other", midY: 702)]
+        XCTAssertEqual(FocalScrollPerspective.focusedId(cells: gone, focusY: 700, currentId: "near"), "other")
+    }
+
+    func test_transform_withPull_movesTheLayerTowardsTheFocusLine_inTheFlippedSpace() {
+        let size = CGSize(width: 300, height: 100)
+        let t = FocalScrollPerspective.transform(scale: 1, pull: 40, size: size)
+        let affine = CATransform3DGetAffineTransform(t)
+        let p = CGPoint(x: 0, y: 0).applying(affine)
+        XCTAssertEqual(p.y, -40, accuracy: 0.001, "vers le bas visuel = −y dans le repère renversé")
+        XCTAssertEqual(p.x, 0, accuracy: 0.001)
+    }
+}

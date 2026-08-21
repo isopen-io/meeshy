@@ -257,8 +257,8 @@ final class LentilleFocusCardTests: XCTestCase {
     }
 
     /// Découverte DYNAMIQUE (leçon 257) — jamais une liste de noms recopiée :
-    /// un fichier ajouté demain (I-072 : `LentillePeekView.swift`, la vue
-    /// `LentilleModeMenu`) entre automatiquement dans le périmètre.
+    /// un fichier ajouté demain (la vue `LentilleModeMenu`, un sélecteur de
+    /// plus) entre automatiquement dans le périmètre.
     private func modeSources() throws -> [(name: String, code: String)] {
         let entries = try FileManager.default.contentsOfDirectory(
             at: Self.modeDirectory, includingPropertiesForKeys: nil
@@ -396,6 +396,7 @@ extension LentilleFocusCardTests {
 
     /// La hauteur de la carte vient d'un token partagé (R17) — et elle DÉBORDE
     /// de la rangée (64) : c'est la loupe, jamais un agrandissement de la rangée.
+    @MainActor
     func test_focusCardHeight_isTheMagnifiedToken_andExceedsTheRow() throws {
         let tokensURL = Self.repoRoot.appendingPathComponent("packages/shared/design/lentille-tokens.json")
         let data = try Data(contentsOf: tokensURL)
@@ -403,7 +404,8 @@ extension LentilleFocusCardTests {
         let list = try XCTUnwrap(root["list"] as? [String: Any])
         let focusCard = try XCTUnwrap(list["focusCard"] as? [String: Any])
         XCTAssertEqual(Double(LentilleMetrics.FocusCard.height), focusCard["height"] as? Double)
-        XCTAssertEqual(Double(LentilleMetrics.FocusCard.avatarContext.size), focusCard["avatarSize"] as? Double)
+        let avatarSize = Double(LentilleMetrics.FocusCard.avatarContext.size)
+        XCTAssertEqual(avatarSize, focusCard["avatarSize"] as? Double)
         XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
     }
 

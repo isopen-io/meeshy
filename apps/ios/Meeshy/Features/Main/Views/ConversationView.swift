@@ -2114,7 +2114,12 @@ struct ConversationView: View {
     /// avant de pouvoir le boxer, et le décodage de mangled name débordait
     /// toujours la pile au 1er rendu (2026-08-17).
     private var readingModeAffordanceCluster: AnyView {
-        guard readingModeController.mode != .bubbles else { return AnyView(EmptyView()) }
+        // Drapeau OFF ⇒ la loi ne rend que `.bubbles` : pas de chip. Drapeau
+        // ON ⇒ chip TOUJOURS, y compris en Bulles (c'est depuis lui qu'on en
+        // sort — 2026-08-21, Bulles est l'un des trois rendus du fil).
+        guard readingModeCapabilities.availableModes.contains(where: { $0 != .bubbles }) else {
+            return AnyView(EmptyView())
+        }
         // P2 (spec Magnificence 17/08) : UN SEUL chip — tap = CYCLE des modes
         // disponibles (loi pure ReadingModeCycle), appui long = menu natif
         // listant tous les modes. Le bouton Aa a disparu avec sa bascule de
@@ -2131,8 +2136,8 @@ struct ConversationView: View {
                     HapticFeedback.light()
                     guard let next = ReadingModeCycle.next(
                         after: readingModeController.mode,
-                        availableInOrder: ReadingModeLensCatalog.displayOrder.filter {
-                            readingModeCapabilities.availableModes.contains($0)
+                        availableInOrder: ReadingModeLensCatalog.cycleOrder.filter {
+                            $0 == .bubbles || readingModeCapabilities.availableModes.contains($0)
                         }
                     ) else { return }
                     readingModeController.select(next)

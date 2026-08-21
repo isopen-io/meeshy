@@ -160,16 +160,53 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// Pendant le mouvement, chaque frame re-sollicite naturellement les
     /// cellules refusées (budget réarmé par tour) ; le rattrapage complet
     /// attend la pose, en se re-proposant au tour suivant.
+    ///
+    /// **2026-08-21 — plus de re-proposition « au tour suivant ».** Se re-poser
+    /// par `DispatchQueue.main.async` à chaque tour de boucle pendant tout le
+    /// mouvement faisait tourner la main queue à vide : Time Profiler sur un
+    /// défilement de 10 s — 830 ms CPU dans cette méthode et sa closure,
+    /// 2,9 s de pièges noyau dispatch (`mach_msg2_trap`, `kdebug`), le tout
+    /// en concurrence directe avec le rendu. Désormais le rattrapage est
+    /// simplement NOTÉ (`recoveryInvalidationPending`) ; c'est l'hôte qui le
+    /// déclenche à la pose (`flushPendingRecoveryInvalidation()` depuis
+    /// `settleAtRest`), avec un filet `asyncAfter` de 250 ms — une seule
+    /// relance en vol — si aucun arrêt n'est signalé (défilement programmé).
+    private(set) var recoveryInvalidationPending = false
+
     private func fireOrDeferRecoveryInvalidation() {
         recoveryInvalidationScheduled = false
         if let collectionView, collectionView.isDragging || collectionView.isDecelerating {
-            recoveryInvalidationScheduled = true
-            DispatchQueue.main.async { [weak self] in
-                self?.fireOrDeferRecoveryInvalidation()
-            }
+            recoveryInvalidationPending = true
+            scheduleRecoveryRetry()
             return
         }
+        recoveryInvalidationPending = false
         invalidateLayout()
+    }
+
+    private var recoveryRetryScheduled = false
+
+    private func scheduleRecoveryRetry() {
+        guard !recoveryRetryScheduled else { return }
+        recoveryRetryScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.recoveryRetryInterval) { [weak self] in
+            guard let self else { return }
+            self.recoveryRetryScheduled = false
+            guard self.recoveryInvalidationPending else { return }
+            self.fireOrDeferRecoveryInvalidation()
+        }
+    }
+
+    /// Filet de relance du rattrapage pendant un mouvement que l'hôte ne
+    /// signalerait pas (250 ms : invisible, et 400 fois moins de réveils
+    /// qu'un tour de boucle).
+    static let recoveryRetryInterval: TimeInterval = 0.25
+
+    /// À appeler à la POSE (fin de décélération / fin de drag sans momentum /
+    /// fin d'animation) : joue le rattrapage complet noté pendant le mouvement.
+    func flushPendingRecoveryInvalidation() {
+        guard recoveryInvalidationPending else { return }
+        fireOrDeferRecoveryInvalidation()
     }
 
     override func invalidateLayout(with context: UICollectionViewLayoutInvalidationContext) {
@@ -183,6 +220,24 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
             scheduleTransactionReset()
         }
         super.invalidateLayout(with: context)
+    }
+
+    // MARK: - Sur-réserve Focal (2026-08-21)
+
+    /// Hauteur supplémentaire de contenu demandée AU-DESSUS de l'écran
+    /// (côté y croissant du repère renversé = visuellement le haut) quand la
+    /// perspective Focal compacte les rangées vers la ligne de focus : les
+    /// rangées tirées vers le bas libèrent de la place que des cellules encore
+    /// « hors écran » pour UIKit doivent déjà occuper. `0` hors Focal.
+    var focalOverscan: CGFloat = 0 {
+        didSet { if oldValue != focalOverscan { invalidateLayout() } }
+    }
+
+    override func layoutAttributesForElements(in rect: CGRect) -> [UICollectionViewLayoutAttributes]? {
+        guard focalOverscan > 0 else { return super.layoutAttributesForElements(in: rect) }
+        var extended = rect
+        extended.size.height += focalOverscan
+        return super.layoutAttributesForElements(in: extended)
     }
 
     private var pendingBatchAdjustment: CGFloat = 0

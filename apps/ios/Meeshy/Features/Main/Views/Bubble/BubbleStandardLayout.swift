@@ -209,7 +209,7 @@ struct BubbleStandardLayout: View {
     /// (cf. `BubbleReactionsOverlay.addButton`), donc il faut reserver assez
     /// d'espace pour qu'il n'entre pas en collision avec la cellule suivante.
     private var hasOverflowingOverlay: Bool {
-        hasReactions || (!content.isMe && isLastReceivedMessage)
+        BubbleReactionsOverlay.isMounted(hasReactions: hasReactions, isMe: content.isMe, isLastReceivedMessage: isLastReceivedMessage)
     }
 
     private var bottomSpacing: CGFloat {
