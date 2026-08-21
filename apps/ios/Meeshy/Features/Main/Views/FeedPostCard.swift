@@ -282,6 +282,16 @@ struct FeedPostCard: View {
     private var mentionTint: Color { MeeshyColors.mentionColor(isDark: theme.mode.isDark) }
     private var hashtagTint: Color { MeeshyColors.hashtagColor(isDark: theme.mode.isDark) }
 
+    /// Accent du badge son de fond (E1) : sur carte SOMBRE, l'accent
+    /// déterministe du post (revue totale C8, non-régression `accentColor`
+    /// — même valeur que `surfaceGradient`/la bordure de carte) ; sur carte
+    /// CLAIRE, le même repli AA que les mentions/hashtags du corps
+    /// (`mentionTint`, indigo vérifié AA) plutôt que l'accent brut du post,
+    /// qui peut échouer AA sur fond blanc (revue totale U16).
+    private var backgroundSoundAccentHex: String {
+        theme.mode.isDark ? accentColor : MeeshyColors.indigo600Hex
+    }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -668,6 +678,15 @@ struct FeedPostCard: View {
                                         defaultValue: "a republié", bundle: .main)
                         )
                     }
+
+                    // Annonce du fond (B3.3-5), résolveur unique partagé
+                    // avec le viewer story et le plein écran réel (E1) —
+                    // BackgroundSoundBadge rend EmptyView sans piste (B3.5).
+                    BackgroundSoundBadge(
+                        announcement: BackgroundSoundBadge.announcement(for: post.storyEffects),
+                        accentHex: backgroundSoundAccentHex
+                    )
+                    .equatable()
                 }
 
                 HStack(spacing: 4) {

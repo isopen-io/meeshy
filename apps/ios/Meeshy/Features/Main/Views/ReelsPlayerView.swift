@@ -922,6 +922,15 @@ struct ReelPageView: View {
                 statInline(icon: "eye.fill", count: reel.viewCount,
                            a11yLabel: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main))
             }
+
+            // Annonce du fond (B3.3-5), résolveur unique partagé avec la
+            // carte de post et le viewer story (E1) — BackgroundSoundBadge
+            // rend EmptyView sans piste (B3.5).
+            BackgroundSoundBadge(
+                announcement: BackgroundSoundBadge.announcement(for: reel.storyEffects),
+                accentHex: accentColor
+            )
+            .equatable()
         }
     }
 

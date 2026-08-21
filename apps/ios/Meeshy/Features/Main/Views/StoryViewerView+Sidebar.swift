@@ -824,13 +824,12 @@ struct StoryHeaderView: View {
     let currentGroup: StoryGroup?
     let currentStory: StoryItem?
     let isOwnStory: Bool
-    /// Primitive passée par le parent (règle « Zero Unnecessary Re-render » —
-    /// une leaf view ne recalcule pas d'état viewer, elle reçoit un `Bool`).
-    let hasBackgroundAudio: Bool
-    /// Ce qui suit la note : crédit défilant (son de bibliothèque) ou onde
-    /// (piste propre), plus la fenêtre du fond qui arme le compteur de temps
-    /// restant. Résolu par le parent — même règle Equatable/primitives.
-    let headerAudioDisplay: AudioChipHeaderModel
+    /// Annonce du fond (B3.3-5), résolue par le parent — primitive
+    /// Equatable descendue en `let` (règle « Zero Unnecessary Re-render »).
+    /// Remplace `hasBackgroundAudio` + `headerAudioDisplay` (E1) : un seul
+    /// résolveur partagé avec la carte de post et le plein écran réel,
+    /// `BackgroundSoundBadge.announcement(for:)`.
+    let backgroundSoundAnnouncement: BackgroundAudioAnnouncement
     /// La story porte-t-elle une transcription affichable ? Primitive, même
     /// règle : le header ne consulte pas les `StoryEffects` lui-même.
     let hasAudioTranscript: Bool
@@ -1037,51 +1036,20 @@ struct StoryHeaderView: View {
                                         .font(MeeshyFont.relative(12, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
 
-                                    // Note musicale juste après la date : signale la
-                                    // PRÉSENCE d'un audio de fond sur la story — pas
-                                    // son état de lecture (ni mute, ni timing de la
-                                    // timeline). Directive user 2026-07-13.
-                                    // L'onde qui la suit, elle, dit que ça joue
-                                    // (directive user 2026-07-30).
-                                    if hasBackgroundAudio {
-                                        Image(systemName: "music.note")
-                                            .font(MeeshyFont.relative(10, weight: .semibold))
-                                            .foregroundColor(.white.opacity(0.7))
-                                            .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
-
-                                        // Le header est reconstruit à chaque tick de
-                                        // la barre de progression : l'animation vit
-                                        // dans un `TimelineView` interne à l'atome,
-                                        // donc elle ne redéclenche jamais le rendu de
-                                        // ce header. Pas de câblage de la pause :
-                                        // l'appui long qui met la story en pause
-                                        // masque déjà tout le chrome, header compris.
-                                        //
-                                        // Son de BIBLIOTHÈQUE → crédit défilant
-                                        // « titre · @pseudo · M:SS » à la place de
-                                        // l'onde — le temps restant du fond défile
-                                        // AVEC le texte ; piste propre → onde, comme
-                                        // toujours (directive user 2026-08-02).
-                                        // Hauteur/police passées à l'atome (14/11) au
-                                        // lieu d'écraser son ancien 18 interne ; le
-                                        // compteur observe le playhead DANS l'atome,
-                                        // jamais ici (doctrine du commentaire
-                                        // ci-dessus). Pas de `paused` : le long-press
-                                        // qui met en pause masque tout le chrome, et
-                                        // le temps gèle déjà via le playhead.
-                                        switch headerAudioDisplay.display {
-                                        case .marquee(let text):
-                                            AudioChipMarquee(text: text,
-                                                             window: headerAudioDisplay.window,
-                                                             height: 14,
-                                                             fontSize: 11)
-                                                .frame(width: 124)
-                                                .opacity(0.85)
-                                        case .waveform:
-                                            StoryHeaderAudioWaveform()
-                                                .opacity(0.8)
-                                        }
-                                    }
+                                    // Annonce du fond (B3.3-5) : résolveur
+                                    // unique — `BackgroundSoundBadge` rend
+                                    // EmptyView sans piste (B3.5), sinon note
+                                    // PUIS onde (piste ORIGINALE, directive
+                                    // user 2026-07-30) ou marquee crédit
+                                    // (bibliothèque, directive user
+                                    // 2026-08-02). Même vue que la carte de
+                                    // post et le plein écran réel (E1, « un
+                                    // résolveur, trois surfaces »).
+                                    BackgroundSoundBadge(
+                                        announcement: backgroundSoundAnnouncement,
+                                        accentHex: group.avatarColor
+                                    )
+                                    .equatable()
                                 }
                             }
                         }
