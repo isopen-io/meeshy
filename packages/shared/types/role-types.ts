@@ -71,9 +71,15 @@ export function hasMinimumRole(
   userRole: GlobalUserRole | GlobalUserRoleType,
   requiredRole: GlobalUserRole | GlobalUserRoleType
 ): boolean {
-  /* v8 ignore next 2 -- TypeScript types ensure roles are always in GLOBAL_ROLE_HIERARCHY; || 0 unreachable */
-  const userLevel = GLOBAL_ROLE_HIERARCHY[userRole as GlobalUserRole] || 0;
-  const requiredLevel = GLOBAL_ROLE_HIERARCHY[requiredRole as GlobalUserRole] || 0;
+  // Case-fold the input like every sibling (isGlobalAdmin, isGlobalUserRole,
+  // normalizeGlobalRole): GLOBAL_ROLE_HIERARCHY keys are UPPERCASE, and a role
+  // arriving in another case (a raw persisted value, an untyped call site) would
+  // otherwise index the map as undefined → level 0 → silently non-privileged.
+  // `|| 0` still fails closed for genuinely unknown roles (kept, unlike routing
+  // through normalizeGlobalRole which would upgrade an unknown role to USER).
+  const userLevel = GLOBAL_ROLE_HIERARCHY[userRole.toUpperCase() as GlobalUserRole] || 0;
+  /* v8 ignore next -- requiredRole is typed GlobalUserRole|GlobalUserRoleType, always in GLOBAL_ROLE_HIERARCHY */
+  const requiredLevel = GLOBAL_ROLE_HIERARCHY[requiredRole.toUpperCase() as GlobalUserRole] || 0;
   return userLevel >= requiredLevel;
 }
 
@@ -134,9 +140,15 @@ export function hasMinimumMemberRole(
   userRole: MemberRole | MemberRoleType | string,
   requiredRole: MemberRole | MemberRoleType
 ): boolean {
-  const userLevel = MEMBER_ROLE_HIERARCHY[userRole as MemberRole] || 0;
+  // Case-fold the input like every sibling (isMemberAdmin, isMemberCreator,
+  // isMemberRole): MEMBER_ROLE_HIERARCHY keys are lowercase, and an UPPERCASE role
+  // would otherwise index the map as undefined → level 0. apps/web already
+  // pre-lowercases at two call sites to work around this; the fix moves the
+  // normalization into the primitive so no caller has to remember it. `|| 0`
+  // still fails closed for genuinely unknown roles.
+  const userLevel = MEMBER_ROLE_HIERARCHY[userRole.toLowerCase() as MemberRole] || 0;
   /* v8 ignore next -- requiredRole is typed MemberRole|MemberRoleType, always in MEMBER_ROLE_HIERARCHY */
-  const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole as MemberRole] || 0;
+  const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole.toLowerCase() as MemberRole] || 0;
   return userLevel >= requiredLevel;
 }
 
