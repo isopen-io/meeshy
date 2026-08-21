@@ -7,7 +7,7 @@ import MeeshyUI
 /// axes. C'est le SEUL fichier qui les assemble — chacune d'elles reste
 /// montable et testable seule.
 ///
-/// **Grille, pas position absolue** : `LazyVGrid` à colonnes FIXES
+/// **Grille, pas position absolue** : une pile de RANGÉES à colonnes FIXES
 /// (`RiverMetrics.Lane.widthReference`, ou une largeur de couloir plus
 /// étroite passée par l'appelant — §7ter, « `maxLanes`/la largeur de couloir
 /// restent des PARAMÈTRES d'entrée, jamais tronquer le texte »), remplie en
@@ -17,6 +17,12 @@ import MeeshyUI
 /// de ce rang restent des cellules vides qui préservent l'alignement — la
 /// hauteur de la RANGÉE s'ajuste au contenu réel (§7ter A1, « la hauteur
 /// n'est plus une constante »).
+///
+/// Un `LazyVGrid` portait cette grille jusqu'au lot 2 ; il ne sait PAS
+/// étendre une cellule sur toutes ses colonnes, ce qu'exige l'avis système
+/// pleine largeur. Une `LazyVStack` de `HStack` rend la MÊME grille
+/// (couloirs contigus de `laneWidth`, `RiverColumnLayout` inchangé) et sait,
+/// elle, poser un rang à cheval.
 ///
 /// **Sérialisée** (`geometry.layout == .serialized`) : `geometry.laneCount
 /// == 1` déjà côté loi — la grille tombe naturellement à une seule colonne,
@@ -50,6 +56,11 @@ struct RiverStreamHost: View {
 
     @State private var frames: [String: CGRect] = [:]
     @State private var horizontalOffset: CGFloat = 0
+    /// Le fil s'ouvre au PRÉSENT — une seule fois. Un lecteur qui est remonté
+    /// dans l'histoire ne doit jamais être ramené en bas par l'arrivée d'un
+    /// message (même règle que le fil : la position de la barre ne dit pas ce
+    /// qui a été vu).
+    @State private var hasLandedOnCursor = false
 
     private var laneCount: Int { max(1, geometry.laneCount) }
 
@@ -80,6 +91,32 @@ struct RiverStreamHost: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            scrollPane
+                .onAppear { landOnCursor(proxy) }
+        }
+    }
+
+    /// Atterrissage au PRÉSENT : le curseur d'ouverture est la bulle la plus
+    /// récente (`RiverConversationMapping.initialCursor`) — sans ce cadrage,
+    /// la Rivière s'ouvrait sur le message le PLUS ANCIEN de la fenêtre
+    /// chargée, et il fallait dérouler toute l'histoire pour rejoindre la
+    /// conversation. Le rang EST l'identité de la rangée dans la grille
+    /// (`ForEach(0..<rankCount, id: \.self)`), donc la cible du `scrollTo`.
+    ///
+    /// Différé d'un tour de boucle : la pile paresseuse (`LazyVStack`) n'a
+    /// pas encore posé ses rangées au premier `onAppear`. Si le cadrage
+    /// échoue, la Rivière s'ouvre simplement en haut — jamais une erreur.
+    private func landOnCursor(_ proxy: ScrollViewProxy) {
+        guard !hasLandedOnCursor, geometry.rankCount > 0 else { return }
+        hasLandedOnCursor = true
+        let target = min(max(0, navigation.cursor.rank), geometry.rankCount - 1)
+        DispatchQueue.main.async {
+            proxy.scrollTo(target, anchor: .bottom)
+        }
+    }
+
+    private var scrollPane: some View {
         ScrollView([.horizontal, .vertical]) {
             grid
                 .background(RiverLaneCanvas(geometry: geometry, frames: frames, columns: columns))
@@ -112,15 +149,35 @@ struct RiverStreamHost: View {
 
     // MARK: - Grille
 
+    /// **Rang-majeur, couloir-mineur** — la boucle de RANG enveloppe celle de
+    /// COULOIR : rang 0 tous couloirs, puis rang 1, etc. C'est l'ordre
+    /// d'insertion dans l'arbre SwiftUI, donc l'ordre VoiceOver, donc l'ordre
+    /// chronologique strict (`RiverStreamHostSourceGuardTests`).
+    ///
+    /// **Lot 2 — un rang système n'a pas de couloir** : la loi le sert dans
+    /// `bubbles` avec son rang mais l'a retiré de toute branche, et documente
+    /// que « la peau le rend PLEINE LARGEUR ». Ce rang-là saute donc la rangée
+    /// de couloirs et prend toute la largeur du pane. Le `LazyVGrid` d'origine
+    /// ne savait pas faire une cellule à cheval sur plusieurs colonnes ; une
+    /// pile de rangées le sait, et reproduit la MÊME grille.
     private var grid: some View {
-        let item = GridItem(.fixed(laneWidth), spacing: 0)
-        return LazyVGrid(columns: Array(repeating: item, count: laneCount), spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(0..<max(0, geometry.rankCount), id: \.self) { rank in
-                ForEach(0..<laneCount, id: \.self) { laneIndex in
-                    cell(rank: rank, laneIndex: laneIndex)
+                if let bubble = bubbleByRank[rank],
+                   bubble.isSystem,
+                   let content = contentByMessageId[bubble.messageId] {
+                    RiverBubbleView(content: content, contentWidth: columns.totalWidth)
+                        .padding(.vertical, RiverMetrics.Bubble.baseGap)
+                } else {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(0..<laneCount, id: \.self) { laneIndex in
+                            cell(rank: rank, laneIndex: laneIndex)
+                        }
+                    }
                 }
             }
         }
+        .frame(width: columns.totalWidth, alignment: .leading)
     }
 
     @ViewBuilder

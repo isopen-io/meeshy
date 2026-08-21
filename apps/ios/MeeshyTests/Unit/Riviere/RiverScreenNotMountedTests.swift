@@ -9,40 +9,36 @@ import XCTest
 /// **Position A — le MENU ne grise plus Rivière en dur (R-135, livré).**
 /// `LentilleModeMenuModel.build` dérive désormais `isDisabled` pour Rivière
 /// EXACTEMENT comme pour Focal/Script/Résumé
-/// (`capabilities.availableModes.contains(mode)`) sur les TROIS surfaces de
+/// (`capabilities.availableModes.contains(mode)`) sur les DEUX surfaces de
 /// liste (encoche `LentilleFocusCard`, sous-menu contextuel
-/// `LentilleReadingModeSubmenu`, aperçu `LentillePeekView` —
+/// `LentilleReadingModeSubmenu` — l'aperçu `LentillePeekView` est supprimé
+/// depuis le 2026-08-21 ;
 /// `LentilleReadingModeContext.capabilitiesInput` lit désormais
 /// `LentilleFeatureFlag.isRiviereModeEnabled`). Voir `ModeMenuModelTests`
 /// pour le comportement complet (grisée drapeau OFF, dégrisée drapeau ON +
 /// éligible, grisée sous seuil, grisée en `direct`).
 ///
-/// **Position B — l'ÉCRAN reste NON MONTÉ (inchangé).** `RiverStreamHost`
-/// (l'hôte qui PEINT réellement les couloirs) n'a toujours AUCUN site de
-/// montage : ni `ConversationView.swift` (dont le propre appel à
-/// `resolveCapabilities`, dans son `init`, ne passe TOUJOURS PAS
-/// `isRiverFlagEnabled` — re-vérifié par
-/// `test_conversationView_stillDoesNotWireTheRiverFlag` ci-dessous), ni
-/// aucun autre fichier du dépôt. Recalibrer le menu ne mène PAS,
-/// mécaniquement, à monter l'écran : ce sont deux fichiers différents
-/// (`LentilleReadingModeContext` pour la liste, `ConversationView` pour le
-/// fil ouvert), et seul le premier a été touché par R-135. Une sélection
-/// « Rivière » reste donc CLAMPÉE (`clamped-unavailable`,
-/// `resolveOrchestratorDecision` rend `.focal`, que le clamp du RETRAIT
-/// FOCAL iOS 2026-08-18 rabat sur `.script`) dès l'ouverture d'une conversation — la
-/// loi documente elle-même ce cas : « un choix collant `riviere` mémorisé
-/// avant l'extinction du drapeau Rivière rendrait un mode que personne ne
-/// sait dessiner ». Monter `RiverStreamHost` (calculer une
-/// `RiverLaneResolver.RiverGeometry` + un `[RiverBubbleContent]` depuis
-/// `ConversationViewModel.messages`, brancher `RiverNavigationController`)
-/// est un chantier de conteneur à part entière — hors périmètre « mux
-/// menus » de R-135, réservé à un futur lot, documenté dans le rapport R-135.
+/// **Position B — l'ÉCRAN EST MONTÉ, et les deux gestes vont ENSEMBLE**
+/// (chantier Rivière iOS, lot 1 — 2026-08-21). La version antérieure de
+/// cette position affirmait le contraire (« `RiverStreamHost` n'a AUCUN site
+/// de montage », « `ConversationView.init` ne câble TOUJOURS PAS
+/// `isRiverFlagEnabled` ») et se terminait par une consigne explicite : le
+/// lot qui monterait l'écran devrait mettre cette suite à jour EN LA
+/// DOCUMENTANT plutôt que de la supprimer. C'est ce qui est fait ici.
 ///
-/// Ce témoin verrouille les DEUX positions : si un futur lot monte
-/// effectivement l'écran ET/OU rebranche `isRiverFlagEnabled` dans
-/// `ConversationView`, il doit AUSSI mettre à jour/retirer la partie
-/// concernée de cette suite — jamais la laisser rougir en silence en
-/// croyant à une régression.
+/// Ce que la position B vérifie désormais, et pourquoi c'est la MÊME
+/// exigence, pas une plus faible : le danger qu'elle nommait n'a jamais été
+/// « monter l'écran », c'était la DISSOCIATION des deux gestes — un drapeau
+/// câblé sans écran (Rivière choisie, bulles rendues : une promesse
+/// silencieusement rompue, `clamped-unavailable`), ou un écran monté que
+/// rien ne rend joignable. Le témoin exige donc les deux DANS LE MÊME
+/// fichier : `ConversationView.init` câble `isRiverFlagEnabled` ET
+/// `ConversationView.body` monte `RiverConversationHost` derrière
+/// `mode == .river`, en UN seul site. Retirer l'un des deux fait rougir.
+///
+/// `RiverStreamHost` — la PEAU qui peint les couloirs — reste, lui,
+/// référencé nulle part hors de `Riviere/` : le fil ne connaît que la porte
+/// (`RiverConversationHost`), jamais la peinture.
 final class RiverScreenNotMountedTests: XCTestCase {
 
     private static var meeshyRoot: URL {
@@ -133,31 +129,39 @@ final class RiverScreenNotMountedTests: XCTestCase {
     /// monter `RiverStreamHost` (ou un hôte équivalent) — sinon la sélection
     /// deviendrait une promesse silencieusement rompue (Rivière choisie,
     /// bulles rendues).
-    func test_conversationView_stillDoesNotWireTheRiverFlag() throws {
+    /// Chantier Rivière iOS, lot 1 (2026-08-21) — POSITION B LEVÉE : le drapeau
+    /// `riviere_mode` est câblé dans `resolveCapabilities` ET un hôte de rendu
+    /// (`RiverConversationHost`) est monté dans le MÊME fichier, derrière
+    /// `mode == .river` — exactement l'exigence que l'ancienne garde énonçait.
+    func test_conversationView_wiresTheRiverFlag_andMountsTheRiverHost_together() throws {
         let url = Self.meeshyRoot.appendingPathComponent("Features/Main/Views/ConversationView.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let code = AppSourceGuard.stripComments(raw)
+            .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
 
-        let markerRange = try XCTUnwrap(
-            code.range(of: "let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init("),
-            "Repère du site d'appel introuvable — `ConversationView.init` a bougé, cette garde " +
-            "doit être re-pointée avant tout le reste."
+        XCTAssertTrue(
+            code.contains("isFlagEnabled: isFlagEnabled, isRiverFlagEnabled: LentilleFeatureFlag.isRiviereModeEnabled, conversationType:"),
+            "`ConversationView.init` câble `isRiverFlagEnabled` depuis le drapeau `riviere_mode` — la " +
+            "sélection de Rivière à l'ouverture du fil suit désormais le drapeau ET l'éligibilité."
         )
-        // Fenêtre courte APRÈS le repère : le corps du `.init(...)` lui-même,
-        // pas le fichier entier (qui référence légitimement le NOM du
-        // paramètre ailleurs, en commentaire — cf. `RiverModeGate.swift`
-        // n'est PAS ce fichier, mais un futur commentaire ici serait
-        // légitime).
-        let windowEnd = code.index(markerRange.upperBound, offsetBy: 400, limitedBy: code.endIndex) ?? code.endIndex
-        let initBody = code[markerRange.upperBound..<windowEnd]
+        XCTAssertTrue(
+            code.contains("if readingModeController.mode == .river { AnyView(RiverConversationHost("),
+            "Un hôte de rendu est monté derrière `mode == .river` — jamais une sélection sans écran."
+        )
+        XCTAssertEqual(
+            code.components(separatedBy: "RiverConversationHost(").count - 1, 1,
+            "UN seul site de montage de l'hôte Rivière dans le fil."
+        )
+    }
 
-        XCTAssertFalse(
-            initBody.contains("isRiverFlagEnabled"),
-            "`ConversationView.init` câble maintenant `isRiverFlagEnabled` dans son propre " +
-            "`resolveCapabilities` — cela rend `.river` réellement sélectionnable À L'OUVERTURE " +
-            "DU FIL. Documenter ce changement ET vérifier qu'un hôte de rendu (`RiverStreamHost` " +
-            "ou équivalent) est monté DANS LE MÊME commit, sinon la sélection resterait une " +
-            "promesse rompue (Rivière choisie, bulles rendues) — voir la docstring de tête de " +
-            "cette suite."
-        )
+    /// Le point d'entrée vit dans `Riviere/` (`RiverConversationHost`) : `RiverStreamHost`
+    /// (la peau) reste référencé NULLE PART en dehors du dossier — le fil ne connaît
+    /// que l'hôte de conversation, qui injecte le texte Prisme et possède la navigation.
+    func test_theOnlyDoorIntoTheRiver_isTheConversationHost() throws {
+        let hits = try nonRiviereSwiftFiles().filter { url in
+            (try? String(contentsOf: url, encoding: .utf8))?.contains("RiverConversationHost(") == true
+        }
+        XCTAssertEqual(hits.map(\.lastPathComponent), ["ConversationView.swift"],
+                       "Le fil est l'unique site hors `Riviere/` qui monte l'hôte de conversation.")
     }
 }

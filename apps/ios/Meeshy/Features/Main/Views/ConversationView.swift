@@ -570,6 +570,11 @@ struct ConversationView: View {
         let capabilities = ReadingModeOrchestrator.resolveCapabilities(.init(
             identity: identity.readingModeIdentity,
             isFlagEnabled: isFlagEnabled,
+            // Chantier Rivière iOS, lot 1 (2026-08-21) : le drapeau `riviere_mode`
+            // rend `.river` réellement sélectionnable à l'ouverture du fil —
+            // et `RiverConversationHost` est monté dans ce même fichier (la
+            // sélection n'est plus une promesse rompue).
+            isRiverFlagEnabled: LentilleFeatureFlag.isRiviereModeEnabled,
             conversationType: Self.readingModeConversationType(for: conversation?.type),
             activeParticipantCount: conversation?.memberCount ?? 0
         ))
@@ -1327,6 +1332,23 @@ struct ConversationView: View {
             // (≤ 60) et de `previewMode` (49), en-dessous du header flottant
             // (100, toujours joignable) et de la barre d'erreur/quick-reaction
             // (97/99, sans objet en mode résumé).
+            // Chantier Rivière iOS, lot 1 (2026-08-21) — le mode `.river` route
+            // vers un HÔTE DÉDIÉ, comme `.summary` : la géométrie vient de la
+            // loi partagée (`RiverLaneResolver`), le texte du Prisme (traduction
+            // préférée ou original), et un avis système n'est la voix de
+            // personne (`RiverConversationMapping`).
+            if readingModeController.mode == .river {
+                AnyView(RiverConversationHost(
+                    messages: viewModel.messages,
+                    viewerId: viewModel.currentUserIdForView,
+                    text: { message in
+                        viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
+                    }
+                ))
+                .zIndex(80)
+                .transition(.opacity)
+            }
+
             if readingModeController.mode == .summary {
                 // AnyView : même coupe que ci-dessus (contribue au débordement
                 // de pile de `bodyContent`, 2026-08-17).

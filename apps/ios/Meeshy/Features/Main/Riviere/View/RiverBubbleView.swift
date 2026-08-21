@@ -28,6 +28,10 @@ struct RiverBubbleContent: Equatable {
     /// mimerait une branche que le verdict de forme vient de retirer.
     let layout: RiverLaneResolver.RiverLayout
     let replyPreview: RiverReplyPreview?
+    /// L'avis système, prêt à peindre — non-nil UNIQUEMENT quand
+    /// `bubble.isSystem`. Défaut `nil` : les sites de montage antérieurs à
+    /// le lot 2 (et leurs témoins) restent inchangés.
+    let systemNotice: RiverSystemNotice?
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -36,7 +40,8 @@ struct RiverBubbleContent: Equatable {
         timeString: String,
         text: String,
         layout: RiverLaneResolver.RiverLayout,
-        replyPreview: RiverReplyPreview? = nil
+        replyPreview: RiverReplyPreview? = nil,
+        systemNotice: RiverSystemNotice? = nil
     ) {
         self.bubble = bubble
         self.senderDisplayName = senderDisplayName
@@ -45,7 +50,26 @@ struct RiverBubbleContent: Equatable {
         self.text = text
         self.layout = layout
         self.replyPreview = replyPreview
+        self.systemNotice = systemNotice
     }
+}
+
+/// **Un avis système n'est la voix de personne** — et la peau doit le dire.
+///
+/// La loi l'a déjà retiré des voix, des couloirs, des connecteurs et des
+/// groupes (`RiverLaneResolver`, « ce qu'un avis système n'est pas ») ; elle
+/// le sert quand même dans `bubbles`, avec son rang, et documente que « la
+/// peau le rend PLEINE LARGEUR ». Ce type porte de quoi le faire — en
+/// réutilisant les vues et les clés i18n du Fil, jamais un libellé réécrit
+/// pour la Rivière.
+enum RiverSystemNotice: Equatable {
+    /// « X a rejoint la conversation » — `BubbleJoinNoticeView`, qui sait dire
+    /// l'arrivant sans compte et les droits du lien d'entrée.
+    case join(BubbleContent.JoinNotice)
+    /// Résumé d'appel — `BubbleCallNoticeView`, la carte compacte du Fil.
+    case call(BubbleContent.CallNotice)
+    /// Tout autre jalon, déjà localisé par l'appelant.
+    case plain(String)
 }
 
 /// « La citation est une RÉFÉRENCE, pas une relecture » (§7ter A4) — une
@@ -135,6 +159,45 @@ struct RiverBubbleView: View, Equatable {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
+        if content.bubble.isSystem {
+            systemNoticeRow
+        } else {
+            speechRow
+        }
+    }
+
+    // MARK: - Avis système — GRAVÉ, jamais une prise de parole
+
+    /// Pleine largeur, centré, heure EN TÊTE : exactement ce que le Fil et
+    /// Focal en font (`BubbleJoinNoticeView`, `FocalSystemNoticeRow`), donc
+    /// exactement les mêmes vues. Ni pastille d'auteur, ni contour de couloir,
+    /// ni heure en base : l'avis n'a pas d'auteur à montrer, et la loi ne lui
+    /// a donné aucune branche à porter. Il ne publie PAS son cadre — aucun
+    /// trait ne l'aborde, `RiverLaneCanvas` n'a rien à y lire.
+    @ViewBuilder
+    private var systemNoticeRow: some View {
+        Group {
+            switch content.systemNotice {
+            case .join(let notice):
+                BubbleJoinNoticeView(notice: notice, isDark: isDark, timeString: content.timeString)
+            case .call(let notice):
+                BubbleCallNoticeView(notice: notice, accentHex: colorHex, isDark: isDark)
+            case .plain(let text):
+                FocalSystemNoticeRow(text: text, isDark: isDark, timeString: content.timeString)
+            case .none:
+                // Un avis dont l'appelant n'a pas résolu le libellé garde
+                // quand même son rang et son heure — le fil ne saute jamais
+                // un jalon en silence.
+                FocalSystemNoticeRow(text: content.text, isDark: isDark, timeString: content.timeString)
+            }
+        }
+        .frame(width: contentWidth, alignment: .center)
+        .accessibilityElement(children: .combine)
+    }
+
+    // MARK: - Prise de parole
+
+    private var speechRow: some View {
         VStack(alignment: .leading, spacing: RiverMetrics.Bubble.baseGap) {
             if content.bubble.isFirstInGroup {
                 identityHeader
