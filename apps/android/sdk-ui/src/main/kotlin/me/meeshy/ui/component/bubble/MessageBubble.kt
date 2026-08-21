@@ -382,10 +382,23 @@ public fun MessageBubble(
                 }
 
                 if (content.isOutgoing) {
-                    DeliveryStatusIcon(
-                        status = content.deliveryStatus,
-                        onColor = onColor,
-                    )
+                    // The online in-flight clock is debounced: a send that
+                    // round-trips under 200ms never flashes it (parity iOS
+                    // `SendingClockGlyph`). The offline hourglass and every
+                    // settled tier render immediately.
+                    if (content.deliveryStatus == DeliveryStatus.Pending) {
+                        if (rememberSendingGlyphRevealed(content.createdAtIso)) {
+                            DeliveryStatusIcon(
+                                status = content.deliveryStatus,
+                                onColor = onColor,
+                            )
+                        }
+                    } else {
+                        DeliveryStatusIcon(
+                            status = content.deliveryStatus,
+                            onColor = onColor,
+                        )
+                    }
                 }
             }
         }
