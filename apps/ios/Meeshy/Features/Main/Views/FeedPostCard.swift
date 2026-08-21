@@ -308,11 +308,14 @@ struct FeedPostCard: View {
     private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
 
     /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
-    /// iPad en colonne large n'étire pas la scène en mur vertical géant) —
-    /// et hauteur 9:16 dérivée UNE FOIS, jamais mesurée en layout (voir
-    /// `cardScenePlayer(document:)`).
+    /// iPad en colonne large n'étire pas la scène en mur vertical géant).
+    /// La hauteur n'est PAS dupliquée en constante : `.aspectRatio(9:16)`
+    /// la dérive de la largeur RÉELLEMENT proposée par le parent (voir
+    /// `cardScenePlayer(document:)`) — un plafond en points calculé sur la
+    /// largeur MAXIMALE (420 × 16/9 = 747pt) déforme la scène dès que la
+    /// carte est plus étroite que ce plafond (≈329pt sur iPhone 16 Pro,
+    /// après le double padding horizontal de 16pt de la carte).
     private static let cardSceneMaxWidth: CGFloat = 420
-    private static let cardSceneHeight: CGFloat = (cardSceneMaxWidth * 16.0 / 9.0).rounded()
 
     /// Scène du post en carte (Task E3) — `MeeshyScenePlayer(.card)`. Née en
     /// PAUSE et le RESTE : `sceneIndex`/`isPlaying` sont des `.constant`
@@ -325,15 +328,25 @@ struct FeedPostCard: View {
     /// `isPlaying: .constant(false)` garantit qu'aucune commande locale ne
     /// lève jamais la pause.
     ///
-    /// `.frame(height:)` EXPLICITE — jamais `.aspectRatio` seul ni un
-    /// `GeometryReader` qui reboucleraient sur le layout à chaque frame :
-    /// `MeeshyScenePlayer` enveloppe un hôte UIKit
-    /// (`StoryReaderRepresentable`), et un hôte hosted qui dérive sa propre
-    /// hauteur dans une liste défilante est exactement la famille du piège
-    /// de récursion self-sizing documenté dans ce dépôt
-    /// (`UIHostingConfiguration`/hôte UIKit imbriqué, crash SIGTRAP
-    /// `_updateVisibleCellsNow` ×7, incident `MessageListLayout.swift`
-    /// 2026-08-18) — une constante figée l'exclut par construction.
+    /// `.preferredContentLanguages(...)` câble le Prisme Linguistique — même
+    /// source que le voisin `StoryRepostEmbedCell` (branche `isStoryRepost`
+    /// juste en dessous) : sans cet appel `MeeshyScenePlayer` garde
+    /// `languages: []` et `StoryTextObject.resolvedText` rend
+    /// inconditionnellement le texte ORIGINAL de l'auteur (correctif rejet
+    /// DoD, constat 1 — « le prisme s'applique à TOUT le contenu »).
+    ///
+    /// `.aspectRatio(9.0/16.0, contentMode: .fit)` — même patron que
+    /// `StoryRepostEmbedCell`, qui rend le MÊME hôte (`StoryReaderRepresentable`
+    /// via `MeeshyScenePlayer`) dans le MÊME fil sans jamais avoir récursé.
+    /// C'est un modificateur TOP-DOWN : le parent propose une taille à
+    /// l'enfant, l'enfant ne mesure jamais sa propre taille pour la
+    /// reboucler sur le layout — distinct du piège self-sizing BOTTOM-UP
+    /// (un hôte hosted qui DÉRIVE sa propre hauteur et la reboucle,
+    /// famille du crash SIGTRAP `_updateVisibleCellsNow` ×7 documenté par
+    /// l'incident `MessageListLayout.swift` 2026-08-18 — SwiftUI DANS une
+    /// cellule UIKit, l'inverse du cas présent, UIKit DANS SwiftUI) : un
+    /// `GeometryReader` local resterait interdit, `.aspectRatio` ne l'est
+    /// pas (correctif rejet DoD, constat 2).
     @ViewBuilder
     private func cardScenePlayer(document: CanvasV3) -> some View {
         MeeshyScenePlayer(
@@ -343,12 +356,19 @@ struct FeedPostCard: View {
             isPlaying: .constant(false),
             accentColorHex: accentColor
         )
+        .preferredContentLanguages(AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+        .aspectRatio(9.0 / 16.0, contentMode: .fit)
         .frame(maxWidth: Self.cardSceneMaxWidth)
-        .frame(height: Self.cardSceneHeight)
         .frame(maxWidth: .infinity, alignment: .center)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .contentShape(Rectangle())
         .onTapGesture { onTapPost?(post) }
+    }
+
+    /// VoiceOver label pour la scène de carte — même convention que
+    /// `mediaAccessibilityLabel` (attribution à l'auteur).
+    private var cardSceneAccessibilityLabel: String {
+        String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
     }
 
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
@@ -499,9 +519,11 @@ struct FeedPostCard: View {
                 // ni un repost de réel.
                 if let cardSceneDocument {
                     cardScenePlayer(document: cardSceneDocument)
-                        .accessibilityElement(children: .contain)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(cardSceneAccessibilityLabel)
                         .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
                         .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { onTapPost?(post) }
                 } else if isStoryRepost {
                     // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
                     // For this branch the gateway has snapshotted the original story media
