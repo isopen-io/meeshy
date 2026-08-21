@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import org.junit.Test
 
 class CommentRepliesStateTest {
@@ -383,5 +384,23 @@ class CommentRepliesStateTest {
     fun `removedThread is inert for a parent with no thread state`() {
         val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
         assertThat(base.removedThread("zzz")).isSameInstanceAs(base)
+    }
+
+    @Test
+    fun `retranslated replaces only the matching reply's translations`() {
+        val entries = mapOf("es" to ApiPostTranslationEntry(text = "Hola"))
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1"), reply("r2")))
+            .retranslated("r1", entries)
+
+        assertThat(s.repliesFor("c1").first { it.id == "r1" }.translations).isEqualTo(entries)
+        assertThat(s.repliesFor("c1").first { it.id == "r2" }.translations).isNull()
+    }
+
+    @Test
+    fun `retranslated is inert when no loaded thread holds the reply`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+        assertThat(base.retranslated("zzz", mapOf("es" to ApiPostTranslationEntry(text = "Hola"))))
+            .isSameInstanceAs(base)
     }
 }

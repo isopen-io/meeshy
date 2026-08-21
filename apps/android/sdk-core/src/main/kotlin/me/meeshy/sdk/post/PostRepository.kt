@@ -413,7 +413,7 @@ class PostRepository @Inject constructor(
      */
     suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
         val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
-        val merged = translateAndMerge(post, targetLanguage) ?: return false
+        val merged = translatePost(post, targetLanguage) ?: return false
         _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
         return true
     }
@@ -428,20 +428,41 @@ class PostRepository @Inject constructor(
      * [requestOnDemandTranslation] and this pull-and-return variant share the single
      * translate-then-[PostTranslationMerge] law in [translateAndMerge].
      */
-    suspend fun translatePost(post: ApiPost, targetLanguage: String): ApiPost? =
-        translateAndMerge(post, targetLanguage)
+    suspend fun translatePost(post: ApiPost, targetLanguage: String): ApiPost? {
+        val target = targetLanguage.trim()
+        val translated = translateSource(post.content, post.originalLanguage, target) ?: return null
+        return PostTranslationMerge.mergeTranslation(post, target, translated)
+    }
 
     /**
-     * The shared translate-then-merge law: trim the target, read the post's source
-     * text, blocking-translate it, and fold the result into [post] via
-     * [PostTranslationMerge]. Returns the merged post, or `null` when nothing should
-     * change (blank target, no source, network failure, blank translation, or an
-     * idempotent match — [PostTranslationMerge.mergeTranslation] returning `null`).
+     * On-demand translation for a comment the caller already holds (the comment thread
+     * owns its rows outside the feed cache): blocking-translates [comment]'s original
+     * text into [targetLanguage] and returns the merged comment the caller can swap in.
+     * Returns `null` — inert, no state to change — for the same reasons [translatePost]
+     * does (blank target, no source text, network failure, blank translation, or an
+     * idempotent no-op). The comment-keyed sibling of [translatePost]; both share the
+     * single translate law in [translateSource] and the [PostTranslationMerge] upsert.
      */
-    private suspend fun translateAndMerge(post: ApiPost, targetLanguage: String): ApiPost? {
+    suspend fun translateComment(comment: ApiPostComment, targetLanguage: String): ApiPostComment? {
         val target = targetLanguage.trim()
+        val translated = translateSource(comment.content, comment.originalLanguage, target) ?: return null
+        return PostTranslationMerge.mergeTranslation(comment, target, translated)
+    }
+
+    /**
+     * The shared translate law over any Prisme content: reject a blank [target] or blank
+     * [source] before touching the network, then blocking-translate [source] from
+     * [sourceLanguage] into [target]. Returns the non-blank translated text, or `null`
+     * when nothing should be stored (blank target/source, network failure, or a blank
+     * translation). Callers pass an already-trimmed [target] and fold the result into
+     * their own content type via [PostTranslationMerge].
+     */
+    private suspend fun translateSource(
+        source: String?,
+        sourceLanguage: String?,
+        target: String,
+    ): String? {
         if (target.isEmpty()) return null
-        val source = post.content
         if (source.isNullOrBlank()) return null
 
         val translated = when (
@@ -449,7 +470,7 @@ class PostRepository @Inject constructor(
                 translationApi.translate(
                     TranslateRequest(
                         text = source,
-                        sourceLanguage = post.originalLanguage?.trim().orEmpty(),
+                        sourceLanguage = sourceLanguage?.trim().orEmpty(),
                         targetLanguage = target,
                     ),
                 )
@@ -458,9 +479,7 @@ class PostRepository @Inject constructor(
             is NetworkResult.Success -> result.data.translatedText
             is NetworkResult.Failure -> return null
         }
-        if (translated.isBlank()) return null
-
-        return PostTranslationMerge.mergeTranslation(post, target, translated)
+        return translated.takeUnless { it.isBlank() }
     }
 
     suspend fun viewPost(postId: String, duration: Int? = null): NetworkResult<Unit> =

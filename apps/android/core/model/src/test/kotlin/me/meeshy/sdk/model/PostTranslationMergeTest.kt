@@ -95,4 +95,61 @@ class PostTranslationMergeTest {
         assertThat(merged).isNotNull()
         assertThat(merged!!.translations!!.keys).containsExactly("es")
     }
+
+    // --- Comment overload: same upsert law, comment-typed result. ---
+
+    private fun comment(
+        id: String = "c1",
+        content: String = "Bonjour",
+        originalLanguage: String? = "fr",
+        translations: Map<String, ApiPostTranslationEntry>? = null,
+    ) = ApiPostComment(
+        id = id,
+        content = content,
+        originalLanguage = originalLanguage,
+        translations = translations,
+    )
+
+    @Test
+    fun `appends the translation to a comment with no translations`() {
+        val merged = PostTranslationMerge.mergeTranslation(comment(translations = null), "es", "Hola")
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.id).isEqualTo("c1")
+        assertThat(merged.translations).containsExactly("es", ApiPostTranslationEntry(text = "Hola"))
+    }
+
+    @Test
+    fun `replaces an existing comment translation in place, matched case-insensitively`() {
+        val merged = PostTranslationMerge.mergeTranslation(
+            comment(translations = mapOf("ES" to ApiPostTranslationEntry(text = "Hola vieja"))),
+            "es",
+            "Hola nueva",
+        )
+
+        assertThat(merged).isNotNull()
+        assertThat(merged!!.translations!!.keys).containsExactly("ES")
+        assertThat(merged.translations!!["ES"]!!.text).isEqualTo("Hola nueva")
+    }
+
+    @Test
+    fun `is a no-op when the identical comment translation is already present`() {
+        val merged = PostTranslationMerge.mergeTranslation(
+            comment(translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola"))),
+            "es",
+            "Hola",
+        )
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun `is a no-op for a blank target language on a comment`() {
+        assertThat(PostTranslationMerge.mergeTranslation(comment(), "   ", "Hola")).isNull()
+    }
+
+    @Test
+    fun `is a no-op for a blank translated text on a comment`() {
+        assertThat(PostTranslationMerge.mergeTranslation(comment(), "es", "   ")).isNull()
+    }
 }
