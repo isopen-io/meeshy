@@ -315,9 +315,10 @@ public struct Plan2DView: View, Equatable {
     /// Tolérance de doigt avant qu'un mouvement ne soit plus considéré comme
     /// un tap/une tenue immobile — même valeur que le slop de capture (P9).
     static let reorderSlop: CGFloat = 24
-    /// Cible tappable minimale (HIG) — les poignées de bord la réclament
-    /// TOUJOURS, y compris quand la barre visuelle est bien plus étroite
-    /// (la zone déborde alors hors de la barre).
+    /// Cible tappable visée (HIG) — la zone d'une poignée DÉBORDE hors de la
+    /// barre pour l'atteindre quand celle-ci est étroite, et ne cède que
+    /// devant l'autre poignée, avec qui elle partage alors la barre au milieu
+    /// (`edgeHandleZones`).
     static let edgeHandleMinHitWidth: CGFloat = 44
 
     static func withinSlop(_ translation: CGSize) -> Bool {
@@ -345,15 +346,15 @@ public struct Plan2DView: View, Equatable {
     /// donnée du plan. UNE seule source : le hit-test du geste et les cibles
     /// réellement posées à l'écran la lisent au même endroit.
     nonisolated struct EdgeHandleZone: Equatable, Identifiable {
-        public let trackId: String
-        public let edge: Edge
-        public let rowIndex: Int
-        public let minX: CGFloat
-        public let maxX: CGFloat
+        let trackId: String
+        let edge: Edge
+        let rowIndex: Int
+        let minX: CGFloat
+        let maxX: CGFloat
 
-        public var id: String { "\(trackId)#\(edge == .start ? "start" : "end")" }
-        public var width: CGFloat { maxX - minX }
-        public func contains(_ touchX: CGFloat) -> Bool { touchX >= minX && touchX <= maxX }
+        var id: String { "\(trackId)#\(edge == .start ? "start" : "end")" }
+        var width: CGFloat { maxX - minX }
+        func contains(_ touchX: CGFloat) -> Bool { touchX >= minX && touchX <= maxX }
     }
 
     /// Les deux zones de poignée d'une piste — vide pour un fantôme, qui n'a
@@ -684,6 +685,9 @@ public struct Plan2DView: View, Equatable {
             onMove(track.id, seconds)
         }
 
+        // Le cran de franchissement annonce un CHANGEMENT DE PLAN à venir : sur
+        // un geste élu horizontal, qui ne réordonne rien, il annoncerait une
+        // mutation qui n'arrivera pas.
         guard lockedAxis != .horizontal else { return }
         let currentRow = Self.rowIndex(forY: value.location.y,
                                        laneHeight: TimelineMetrics.laneHeight,
