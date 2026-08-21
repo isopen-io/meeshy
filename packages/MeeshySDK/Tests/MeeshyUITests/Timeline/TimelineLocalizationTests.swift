@@ -56,6 +56,15 @@ final class TimelineLocalizationTests: XCTestCase {
         // Fiche d'édition — « Suivre la slide » (D3, revue totale U9)
         "story.timeline.inspector.followSlide",
         "story.timeline.inspector.followSlide.hint",
+        // Fiche d'édition — mute par clip (D3, revue DoD : capacité rendue)
+        "story.timeline.inspector.mute",
+        "story.timeline.inspector.unmute",
+        "story.timeline.inspector.mute.hint",
+        // Plan 2D — annonce VoiceOver d'une piste (plan + occupation)
+        "story.timeline.plan.plane.fg.a11y",
+        "story.timeline.plan.plane.content.a11y",
+        "story.timeline.track.section.bg.a11y",
+        "story.timeline.plan.track.followsSlide.a11y",
         // Fiche d'édition — place de la piste dans le plan
         "story.timeline.inspector.transform",
         "story.timeline.inspector.scale",

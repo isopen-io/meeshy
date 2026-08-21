@@ -438,6 +438,9 @@ public struct TimelineInspectorHost: View {
             },
             onDuckingDisabledChanged: { [viewModel] isDisabled in
                 viewModel.setClipDuckingDisabled(id: clipId, isDisabled: isDisabled)
+            },
+            onToggleMute: { [viewModel] in
+                viewModel.toggleClipMute(id: clipId)
             }
         )
         .padding(presentation == .popover ? 12 : 0)

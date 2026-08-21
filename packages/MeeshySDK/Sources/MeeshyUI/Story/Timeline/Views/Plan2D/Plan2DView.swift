@@ -11,6 +11,10 @@ import UIKit
 /// cadres pointillés des fantômes (O4) et les losanges de keyframes AFFICHÉS
 /// (édités à l'Inspecteur existant, S4) sont des TRAITS, pas des sous-vues.
 ///
+/// Une fois ARMÉ (appui court puis glisser), le geste est à DEUX axes —
+/// vertical = empilement (`onReorder`), horizontal = durée (`onMove`) : la
+/// thèse même du plan. Le glissement NU, lui, appartient au scroller.
+///
 /// Pure vue de dessin + geste : elle ne connaît ni `TimelineViewModel` ni
 /// `Views/Inspector` — le tap appelle `onSelectTrack`, à l'appelant (D3)
 /// d'ouvrir l'Inspecteur existant. C'est délibéré (le SDK fournit
@@ -51,6 +55,15 @@ public struct Plan2DView: View, Equatable {
     /// même piège que `ClipTrimHandles`, mêmes deltas ancrés au geste.
     public let onTrimStart: (String, Double) -> Void
     public let onTrimEnd: (String, Double) -> Void
+    /// Déplacement TEMPOREL de la piste, en secondes CUMULÉES depuis le début
+    /// du geste (jamais incrémental, contrairement au trim) : l'appelant
+    /// reconstruit le temps depuis l'origine capturée au premier appel, la
+    /// parade anti-dérive « boule de neige » déjà en place sur les barres de
+    /// l'ancien conteneur.
+    public let onMove: (String, Double) -> Void
+    /// Le doigt a quitté l'écran après un déplacement — clôt la session de
+    /// glissement côté appelant.
+    public let onMoveEnded: (String) -> Void
 
     public init(tracks: [Plan2DTrack],
                 zoom: Plan2DZoom,
@@ -61,7 +74,9 @@ public struct Plan2DView: View, Equatable {
                 onSelectKeyframe: @escaping (String) -> Void,
                 onReorder: @escaping (String, Int) -> Void,
                 onTrimStart: @escaping (String, Double) -> Void,
-                onTrimEnd: @escaping (String, Double) -> Void) {
+                onTrimEnd: @escaping (String, Double) -> Void,
+                onMove: @escaping (String, Double) -> Void,
+                onMoveEnded: @escaping (String) -> Void) {
         self.tracks = tracks
         self.zoom = zoom
         self.laneWidth = laneWidth
@@ -72,6 +87,8 @@ public struct Plan2DView: View, Equatable {
         self.onReorder = onReorder
         self.onTrimStart = onTrimStart
         self.onTrimEnd = onTrimEnd
+        self.onMove = onMove
+        self.onMoveEnded = onMoveEnded
     }
 
     // MARK: - Geste en vol (armement du réordonnancement, trim en cours)
@@ -82,6 +99,7 @@ public struct Plan2DView: View, Equatable {
     @State private var isReorderArmed: Bool = false
     @State private var lastPlaneCrossingRow: Int?
     @State private var lastTrimTranslationX: CGFloat = 0
+    @State private var isMoving: Bool = false
 
     public var body: some View {
         Canvas { context, size in
@@ -144,6 +162,21 @@ public struct Plan2DView: View, Equatable {
               height: CGFloat(tracks.count) * TimelineMetrics.laneHeight)
         .contentShape(Rectangle())
         .simultaneousGesture(rowGesture)
+        .accessibilityElement(children: .contain)
+        // Éléments SYNTHÉTIQUES : `accessibilityChildren` ne rend rien à
+        // l'écran, il ne fait que découper l'élément unique du `Canvas` en
+        // une rangée par piste. Le budget P15 (jamais une vue par keyframe)
+        // reste intact — ces enfants ne coûtent aucun dessin.
+        .accessibilityChildren {
+            VStack(spacing: 0) {
+                ForEach(tracks) { track in
+                    Color.clear
+                        .frame(height: TimelineMetrics.laneHeight)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(Self.accessibilityLabel(for: track))
+                }
+            }
+        }
     }
 
     private static func diamondPath(center: CGPoint, radius: CGFloat) -> Path {
@@ -203,6 +236,45 @@ public struct Plan2DView: View, Equatable {
         guard slideDuration > 0, laneWidth > 0 else { return TimelineGeometry(zoomScale: 0.05) }
         let pixelsPerSecond = laneWidth * zoom.scale / CGFloat(slideDuration)
         return TimelineGeometry(zoomScale: pixelsPerSecond / TimelineGeometry.basePixelsPerSecond)
+    }
+
+    // MARK: - Accessibilité : une piste = un élément, préfixé par son plan
+
+    /// Libellé VoiceOver d'une piste — MÊME composition que
+    /// `TrackBarView.accessibilityComposedLabel` de l'ancien conteneur : le
+    /// PRÉFIXE DE SECTION d'abord (ici le plan, la seule sémantique du plan
+    /// 2D), puis le nom de la piste, puis ce qu'elle occupe dans le temps.
+    /// Un `Canvas` n'est qu'un seul élément d'accessibilité : sans cette
+    /// composition rendue par `accessibilityChildren`, le plan entier
+    /// s'annoncerait comme un dessin muet.
+    static func accessibilityLabel(for track: Plan2DTrack) -> String {
+        let occupation: String
+        switch track.bar {
+        case .ghost:
+            occupation = String(localized: "story.timeline.plan.track.followsSlide.a11y",
+                                defaultValue: "Suit la slide", bundle: .module)
+        case .timed(let start, let end):
+            occupation = TrackBarView<AnyView>.formatTrackDuration(Float(end - start))
+        }
+        return "\(planeLabel(track.plane)) — \(track.label) — \(occupation)"
+    }
+
+    /// Nom du plan, tel que VoiceOver l'annonce en tête de chaque piste. Le
+    /// FOND réutilise la clé de section de l'ancien conteneur
+    /// (`TrackBarView.accessibilityComposedLabel`) : une seule source pour un
+    /// seul mot.
+    static func planeLabel(_ plane: TrackPlane) -> String {
+        switch plane {
+        case .fg:
+            return String(localized: "story.timeline.plan.plane.fg.a11y",
+                          defaultValue: "Premier plan", bundle: .module)
+        case .content:
+            return String(localized: "story.timeline.plan.plane.content.a11y",
+                          defaultValue: "Contenu", bundle: .module)
+        case .bg:
+            return String(localized: "story.timeline.track.section.bg.a11y",
+                          defaultValue: "Fond", bundle: .module)
+        }
     }
 
     // MARK: - Gestes (rév. 2, M11)
@@ -285,6 +357,30 @@ public struct Plan2DView: View, Equatable {
         return Double(deltaX / (laneWidth * zoom.scale)) * slideDuration
     }
 
+    /// Déplacement TEMPOREL d'une piste, en secondes cumulées depuis le début
+    /// du geste — `nil` quand aucun déplacement ne s'applique.
+    ///
+    /// Le glissement horizontal NU appartient au scroller (le plan déborde de
+    /// son viewport au zoom `.detail`) : déplacer une piste dans le temps
+    /// passe donc par le MÊME armement que le réordonnancement vertical
+    /// (appui court puis drag, M11), qui est le seul canal sans conflit. Une
+    /// fois armé, le geste est vraiment à DEUX axes — vertical = empilement,
+    /// horizontal = durée — soit la thèse même du plan 2D.
+    ///
+    /// Une piste FANTÔME est exclue : elle n'a pas de fenêtre à déplacer, et
+    /// lui en fabriquer une au premier glissement transformerait un défaut en
+    /// choix (O4) — la même raison qui prive son bord de poignée.
+    static func moveDelta(translation: CGSize, gestureEdge: Edge?, isReorderArmed: Bool,
+                          track: Plan2DTrack, zoom: Plan2DZoom, laneWidth: CGFloat,
+                          slideDuration: Double) -> Double? {
+        guard gestureEdge == nil, isReorderArmed else { return nil }
+        guard case .timed = track.bar else { return nil }
+        let seconds = timeDelta(forDeltaX: translation.width, zoom: zoom,
+                                laneWidth: laneWidth, slideDuration: slideDuration)
+        guard seconds != 0 else { return nil }
+        return seconds
+    }
+
     /// Ce que produit un relâchement de doigt — décidé sur la seule
     /// TRANSLATION finale, jamais sur `gestureEdge`/`isReorderArmed` seuls :
     /// une poignée de bord ARMÉE dès le touch-down (zone tappable ≥ 44 pt,
@@ -327,6 +423,7 @@ public struct Plan2DView: View, Equatable {
             lastPlaneCrossingRow = row
             lastTrimTranslationX = 0
             isReorderArmed = false
+            isMoving = false
             gestureEdge = row.flatMap { idx -> Edge? in
                 guard tracks.indices.contains(idx) else { return nil }
                 return Self.edgeHandle(touchX: value.startLocation.x, track: tracks[idx],
@@ -357,6 +454,13 @@ public struct Plan2DView: View, Equatable {
             HapticFeedback.light()
         }
 
+        if let seconds = Self.moveDelta(translation: value.translation, gestureEdge: gestureEdge,
+                                        isReorderArmed: isReorderArmed, track: track,
+                                        zoom: zoom, laneWidth: laneWidth, slideDuration: slideDuration) {
+            isMoving = true
+            onMove(track.id, seconds)
+        }
+
         let currentRow = Self.rowIndex(forY: value.location.y,
                                        laneHeight: TimelineMetrics.laneHeight,
                                        trackCount: tracks.count) ?? startRow
@@ -378,8 +482,10 @@ public struct Plan2DView: View, Equatable {
             isReorderArmed = false
             lastPlaneCrossingRow = nil
             lastTrimTranslationX = 0
+            isMoving = false
         }
         guard let startRow = gestureStartRow, tracks.indices.contains(startRow) else { return }
+        if isMoving { onMoveEnded(tracks[startRow].id) }
 
         let endRow = Self.rowIndex(forY: value.location.y,
                                    laneHeight: TimelineMetrics.laneHeight,

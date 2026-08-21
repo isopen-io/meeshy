@@ -160,6 +160,59 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
         XCTAssertFalse(sample.contains("RulerView("))
     }
 
+    // MARK: - Guard 2f — capacités de l'ancien conteneur, rendues au plan
+    //
+    // Le swap avait laissé sans surface trois capacités que la barre de
+    // l'ancien conteneur portait : le mute PAR CLIP (bouton sur la barre
+    // vidéo/audio), les échos d'un fond qui BOUCLE (`LoopRepeatOverlay`) et
+    // le déplacement temporel d'un clip AU DOIGT. Elles reviennent par
+    // réutilisation des composants et des méthodes existants — jamais par
+    // réinvention.
+
+    func test_clipInspector_carriesTheMuteAction() throws {
+        let source = try Self.strippedSource(of: Self.clipInspectorURL)
+        XCTAssertTrue(source.contains("onToggleMute"),
+                     "Le mute par clip doit exister comme action sur ClipInspector")
+        XCTAssertTrue(source.contains("story.timeline.inspector.mute"),
+                     "L'action doit porter un libellé localisé, pas une icône muette")
+        XCTAssertTrue(source.contains("Button(action: onToggleMute)"),
+                     "Le bouton doit réellement déclencher l'action — une propriété non rendue serait un contrôle mort")
+    }
+
+    func test_timelineInspectorHost_wiresTheMuteActionToTheUndoableToggle() throws {
+        let source = try Self.strippedSource(of: Self.timelineInspectorHostURL)
+        XCTAssertTrue(source.contains("viewModel.toggleClipMute("),
+                     "Le mute de la fiche doit passer par toggleClipMute (annulable, rend le niveau quitté)")
+    }
+
+    func test_storyTimelineHost_redrawsTheLoopEchoesOfALoopingBackground() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("LoopRepeatOverlay("),
+                     "Un fond qui boucle doit retrouver ses échos — sinon sa piste se lit comme « le fond disparaît »")
+        XCTAssertTrue(source.contains("Self.loopEchoes("),
+                     "Les échos doivent venir du calcul PUR, pas d'un filtrage inline dans la vue")
+    }
+
+    func test_storyTimelineHost_loopEchoesShareThePlansEquivalentGeometry() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        guard let range = source.range(of: "LoopRepeatOverlay(") else {
+            return XCTFail("StoryTimelineHost doit construire LoopRepeatOverlay")
+        }
+        let body = String(source[range.upperBound...].prefix(400))
+        XCTAssertTrue(body.contains("geometry: geometry") || body.contains("geometry: equivalentGeometry"),
+                     "Les échos doivent partager le repère du plan — sinon leurs tuiles ne tombent pas sur les mêmes secondes que les barres")
+    }
+
+    func test_storyTimelineHost_wiresTheClipTimeDragToTheExistingDragSession() throws {
+        let source = try Self.strippedSource(of: Self.storyTimelineHostURL)
+        XCTAssertTrue(source.contains("viewModel.beginClipDrag("),
+                     "Le déplacement temporel doit ouvrir la session de glissement existante (origine capturée UNE fois)")
+        XCTAssertTrue(source.contains("viewModel.dragClipMoved("),
+                     "Le temps doit se reconstruire depuis l'origine capturée, jamais depuis le modèle déjà muté (dérive boule de neige)")
+        XCTAssertTrue(source.contains("viewModel.endClipDrag("),
+                     "La session de glissement doit se refermer au relâchement")
+    }
+
     // MARK: - Guard 3 — ComposerControlsLayer n'est pas touché
 
     func test_composerControlsLayer_contentIsUnchanged() throws {
@@ -196,6 +249,10 @@ final class Plan2DIntegrationGuardTests: XCTestCase {
 
     private static var timelineViewModelPlan4HelpersURL: URL {
         sourcesRoot.appendingPathComponent("Story/Timeline/ViewModel/TimelineViewModel+Plan4Helpers.swift")
+    }
+
+    private static var timelineInspectorHostURL: URL {
+        sourcesRoot.appendingPathComponent("Story/Timeline/Views/Container/TimelineInspectorHost.swift")
     }
 
     private static var composerControlsLayerURL: URL {

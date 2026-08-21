@@ -39,6 +39,17 @@ import MeeshySDK
 /// (`plan2DZoom` est binaire `.fit`/`.detail`), alors qu'ils continuent de
 /// faire varier `zoomScale` en continu de 0,05 à 8,0.
 ///
+/// Trois capacités que la barre de l'ancien conteneur portait sont RENDUES
+/// ici, par réutilisation des composants et méthodes existants : le mute PAR
+/// CLIP (bouton de la fiche d'édition, `TimelineViewModel.toggleClipMute` —
+/// annulable), les ÉCHOS d'un fond qui boucle (`LoopRepeatOverlay`, tuilage
+/// inchangé) et le DÉPLACEMENT temporel d'une piste au doigt (même session
+/// `beginClipDrag`/`dragClipMoved`/`endClipDrag`, donc même parade
+/// anti-dérive). Le déplacement passe par l'ARMEMENT du geste (appui court
+/// puis glisser) : le glissement horizontal nu appartient au scroller du
+/// plan, et une fois armé le geste est à deux axes — vertical = empilement,
+/// horizontal = durée.
+///
 /// State (`selectedClipId`, `currentTime`, `zoomScale`) lives in
 /// `TimelineViewModel`.
 public struct StoryTimelineHost: View {
@@ -256,7 +267,25 @@ public struct StoryTimelineHost: View {
                                 },
                                 onTrimEnd: { id, delta in
                                     viewModel.trimClipEnd(id: id, deltaTimeSeconds: Float(delta))
-                                }
+                                },
+                                // Déplacement TEMPOREL au doigt, une fois le
+                                // geste armé (le glissement nu appartient au
+                                // scroller) : MÊME session de glissement que
+                                // l'ancien conteneur — l'origine est capturée
+                                // UNE fois par `beginClipDrag`, puis le temps
+                                // se reconstruit depuis elle. Relire
+                                // `startTime` à chaque frame dériverait
+                                // (`applyClipPosition` l'a déjà muté).
+                                onMove: { id, seconds in
+                                    if viewModel.selection.activeDrag?.clipId != id {
+                                        viewModel.beginClipDrag(clipId: id)
+                                    }
+                                    guard let drag = viewModel.selection.activeDrag else { return }
+                                    viewModel.dragClipMoved(
+                                        rawTime: drag.originalStartTime + Float(seconds),
+                                        snapCandidates: [])
+                                },
+                                onMoveEnded: { _ in viewModel.endClipDrag() }
                             )
                             // Le playhead publie `currentTime` à 60 Hz pendant
                             // la lecture — sans `.equatable()`, chaque tick
@@ -268,6 +297,10 @@ public struct StoryTimelineHost: View {
                             .overlay(alignment: .topLeading) {
                                 transitionJunctionOverlay(tracks: tracks, laneWidth: laneWidth,
                                                           zoom: zoom, slideDuration: slideDuration)
+                            }
+                            .overlay(alignment: .topLeading) {
+                                loopEchoOverlay(tracks: tracks, laneWidth: laneWidth,
+                                                zoom: zoom, geometry: equivalentGeometry)
                             }
                         }
                         .overlay(alignment: .topLeading) {
@@ -299,6 +332,36 @@ public struct StoryTimelineHost: View {
                 onScrubEnded: { viewModel.endScrub() }
             )
             .offset(x: Plan2DView.labelColumnWidth)
+        }
+    }
+
+    /// Échos d'un fond qui BOUCLE — composant existant (`LoopRepeatOverlay`,
+    /// tuilage déjà testé) reposé sur la rangée du plan qui porte le clip,
+    /// avec le repère du plan (`equivalentGeometry`) pour que ses tuiles
+    /// tombent sur les mêmes secondes que les barres.
+    ///
+    /// Teinte PAR PLAN (U15) : un écho appartient toujours au fond, il prend
+    /// donc la couleur du fond — jamais la teinte par format
+    /// (vert média / orange audio) de l'ancien conteneur, qui aurait
+    /// réintroduit dans le plan une sémantique que le plan n'a pas.
+    @ViewBuilder
+    private func loopEchoOverlay(tracks: [Plan2DTrack], laneWidth: CGFloat,
+                                 zoom: Plan2DZoom, geometry: TimelineGeometry) -> some View {
+        ForEach(Self.loopEchoes(project: viewModel.project, tracks: tracks)) { echo in
+            ZStack(alignment: .topLeading) {
+                LoopRepeatOverlay(
+                    nativeDuration: echo.nativeDuration,
+                    clipStartTime: echo.clipStartTime,
+                    slideDuration: viewModel.project.slideDuration,
+                    tint: Plan2DView.color(for: .bg, isDark: colorScheme == .dark),
+                    geometry: geometry,
+                    laneHeight: TimelineMetrics.laneHeight
+                )
+            }
+            .frame(width: laneWidth * zoom.scale, height: TimelineMetrics.laneHeight,
+                   alignment: .topLeading)
+            .offset(x: Plan2DView.labelColumnWidth,
+                    y: CGFloat(echo.rowIndex) * TimelineMetrics.laneHeight)
         }
     }
 
@@ -355,6 +418,54 @@ public struct StoryTimelineHost: View {
                 .frame(width: frameWidth, height: TimelineMetrics.laneHeight, alignment: .topLeading)
                 .offset(y: CGFloat(rowIndex) * TimelineMetrics.laneHeight)
             }
+        }
+    }
+
+    // MARK: - Échos de boucle (fond vidéo/audio en boucle)
+
+    /// Une piste de FOND qui boucle, et l'endroit où ses échos se dessinent.
+    ///
+    /// Un fond court joué en boucle remplit toute la slide à la lecture
+    /// (`AVPlayerLooper`, `StoryBackgroundLayer`) : sans écho, sa piste
+    /// s'arrête au bout de sa durée native et se lit comme « le fond
+    /// disparaît » (retour user 2026-07-17, à l'origine de
+    /// `LoopRepeatOverlay`).
+    public struct LoopEcho: Equatable, Identifiable {
+        public let trackId: String
+        public let rowIndex: Int
+        public let clipStartTime: Float
+        public let nativeDuration: Float
+
+        public var id: String { trackId }
+
+        public init(trackId: String, rowIndex: Int, clipStartTime: Float, nativeDuration: Float) {
+            self.trackId = trackId
+            self.rowIndex = rowIndex
+            self.clipStartTime = clipStartTime
+            self.nativeDuration = nativeDuration
+        }
+    }
+
+    /// Pistes du plan qui réclament des échos de boucle, avec leur rangée.
+    /// PURE — la vue ne fait que dessiner ce que ceci calcule.
+    static func loopEchoes(project: TimelineProject, tracks: [Plan2DTrack]) -> [LoopEcho] {
+        let looping: [(id: String, start: Float, duration: Float?)] =
+            project.mediaObjects
+                .filter { $0.isBackground && $0.loop }
+                .map { ($0.id, Float($0.startTime ?? 0), $0.duration.map { Float($0) }) }
+            + project.audioPlayerObjects
+                .filter { $0.isBackground == true && $0.loop == true }
+                .map { ($0.id, $0.startTime ?? 0, $0.duration) }
+
+        return looping.compactMap { clip in
+            guard let row = tracks.firstIndex(where: { $0.id == clip.id }) else { return nil }
+            return LoopEcho(
+                trackId: clip.id,
+                rowIndex: row,
+                clipStartTime: clip.start,
+                nativeDuration: TimelineGeometry.effectiveClipDuration(
+                    startTime: clip.start, duration: clip.duration,
+                    slideDuration: project.slideDuration))
         }
     }
 

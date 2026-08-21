@@ -519,6 +519,35 @@ final class Plan2DViewGuardTests: XCTestCase {
         XCTAssertNotEqual(fg, bg)
     }
 
+    // MARK: - Guard 4i — le plan expose CHAQUE piste à VoiceOver
+    //
+    // Un `Canvas` n'est qu'UN élément d'accessibilité : le plan entier
+    // s'annoncerait comme un dessin muet. L'ancien conteneur donnait à chaque
+    // rangée son propre élément (`TrackBarView` : `accessibilityElement(
+    // children: .combine)` + `accessibilityComposedLabel`). Le plan le rend
+    // par `accessibilityChildren` — des éléments SYNTHÉTIQUES, jamais rendus,
+    // donc sans coût de dessin (budget P15 intact).
+
+    func test_body_exposesOneAccessibilityElementPerTrack() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains(".accessibilityChildren"),
+                     "Chaque piste doit avoir son propre élément d'accessibilité — sinon le plan est un dessin muet")
+        XCTAssertTrue(source.contains("Self.accessibilityLabel(for:"),
+                     "Chaque élément doit porter le libellé composé de SA piste (plan + nom + occupation)")
+    }
+
+    // MARK: - Guard 4j — déplacement temporel d'une piste au doigt
+
+    func test_body_streamsTheTimeMoveWhileTheGestureIsArmed() throws {
+        let source = try Self.strippedPlan2DViewSource()
+        XCTAssertTrue(source.contains("Self.moveDelta("),
+                     "Le déplacement temporel doit passer par la décision PURE moveDelta")
+        XCTAssertTrue(source.contains("onMove("),
+                     "Le déplacement doit atteindre l'appelant pendant le geste, pas seulement au relâchement")
+        XCTAssertTrue(source.contains("onMoveEnded("),
+                     "Le relâchement doit refermer la session de glissement côté appelant")
+    }
+
     // MARK: - Helpers (garde de source)
 
     /// Le fichier vit dans `Tests/MeeshyUITests/Timeline/` : QUATRE remontées

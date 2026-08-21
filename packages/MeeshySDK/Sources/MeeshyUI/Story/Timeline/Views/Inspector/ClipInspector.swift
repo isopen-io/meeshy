@@ -221,6 +221,12 @@ public struct ClipInspector: View {
     public let onRemoveVolumePoint: (String) -> Void
     /// Coupe (`true`) ou rétablit (`false`) l'atténuation automatique du clip.
     public let onDuckingDisabledChanged: (Bool) -> Void
+    /// Coupe ou rétablit le son de CE clip (D3, revue DoD : le mute par clip
+    /// vivait sur la barre de l'ancien conteneur mono-piste et n'avait plus
+    /// aucune surface depuis le passage au plan). L'appelant le branche sur
+    /// `TimelineViewModel.toggleClipMute` — annulable, et le niveau quitté
+    /// est rendu au rétablissement.
+    public let onToggleMute: () -> Void
 
     /// True quand couper l'atténuation automatique a un effet.
     ///
@@ -336,7 +342,8 @@ public struct ClipInspector: View {
                 playheadTime: Float = 0,
                 onAddVolumePoint: @escaping (Float) -> Void = { _ in },
                 onRemoveVolumePoint: @escaping (String) -> Void = { _ in },
-                onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in }) {
+                onDuckingDisabledChanged: @escaping (Bool) -> Void = { _ in },
+                onToggleMute: @escaping () -> Void = {}) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -363,6 +370,7 @@ public struct ClipInspector: View {
         self.onAddVolumePoint = onAddVolumePoint
         self.onRemoveVolumePoint = onRemoveVolumePoint
         self.onDuckingDisabledChanged = onDuckingDisabledChanged
+        self.onToggleMute = onToggleMute
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
@@ -376,6 +384,12 @@ public struct ClipInspector: View {
 
     public func simulateVolumeCommit(value: Float) {
         onVolumeChanged(min(StoryVolume.maxGain, max(0, value)))
+    }
+
+    /// Même rôle que `simulateVolumeCommit` pour le mute par clip : atteindre
+    /// l'action sans simuler un tap dans une vue non hostable.
+    public func simulateMuteToggle() {
+        onToggleMute()
     }
 
     /// Test-only read of the current local `@State` values. Used by
@@ -758,6 +772,7 @@ public struct ClipInspector: View {
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(volume > 1 ? MeeshyColors.warning : .secondary)
+                muteButton
             }
             Slider(value: $volume, in: 0...StoryVolume.maxGain, step: 0.01) { editing in
                 if !editing { onVolumeChanged(volume) }
@@ -770,6 +785,31 @@ public struct ClipInspector: View {
                 duckingToggle
             }
         }
+    }
+
+    /// Mute UN-BOUTON du clip. Il vivait sur la barre de l'ancien conteneur
+    /// mono-piste ; le plan 2D dessine ses pistes en un passe `Canvas` et n'a
+    /// plus de barre où poser un contrôle — la fiche d'édition le reprend.
+    ///
+    /// Il ne fait PAS double emploi avec le curseur : couper puis rétablir
+    /// rend le niveau QUITTÉ (`toggleClipMute` garde le mémento), là où
+    /// glisser à 0 puis remonter oblige à retrouver sa position à la main.
+    private var muteButton: some View {
+        Button(action: onToggleMute) {
+            Image(systemName: volume == 0 ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(volume == 0 ? MeeshyColors.warning : MeeshyColors.indigo400)
+                .contentShape(Rectangle().inset(by: -8))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(volume == 0
+            ? String(localized: "story.timeline.inspector.unmute",
+                     defaultValue: "Rétablir le son du clip", bundle: .module)
+            : String(localized: "story.timeline.inspector.mute",
+                     defaultValue: "Couper le son du clip", bundle: .module))
+        .accessibilityHint(String(localized: "story.timeline.inspector.mute.hint",
+                                  defaultValue: "Rétablir rend le niveau quitté, pas le maximum",
+                                  bundle: .module))
     }
 
     /// Atténuation automatique de la piste vidéo tant que l'audio de fond joue.
