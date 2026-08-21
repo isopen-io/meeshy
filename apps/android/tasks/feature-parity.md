@@ -1641,7 +1641,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ContactsListViewModel.paintMoodStatusesFromCache`) ; `moodEmojiFor(conversation)` délègue au pur
       résolveur ; la ligne `MeeshyAvatar(..., moodEmoji = state.moodEmojiFor(...))` remplace le `null`
       codé en dur — le badge emoji du peer d'un DM remplace la pastille de présence comme sur iOS) ;
-      presence pending
+      **presence done** (vérifié 2026-08-21 : le dot de présence était déjà câblé — `ConversationListScreen.kt`
+      passe `presence = state.presenceStateFor(conversation, System.currentTimeMillis())` jusqu'au
+      `MeeshyAvatar(..., presence = …)` de la rangée, aux côtés de `storyRing` et `moodEmoji` ; les trois
+      affordances d'avatar coexistent comme sur iOS, un badge mood supprimant le dot quand les deux sont
+      présents). La ligne rangée « rich last-message preview » est désormais complète.
 - [◐] Draft-aware ordering (drafts float to top); bump-to-top on send/receive —
       **drafts-float-to-top done** (slice `conversations-draft-aware-ordering`,
       2026-07-07) : pure `:feature:conversations` `DraftAwareOrdering.apply(convos,
@@ -2121,6 +2125,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
       gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
       `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
+- [~] Message-bubble VoiceOver/TalkBack composed label — **pure composer done** (slice
+      `chat-bubble-a11y-label`, 2026-08-21 : port iOS `MessageAccessibilityLabelComposer.compose`
+      (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`).
+      Pur `:sdk-ui` `MessageBubbleAccessibilityLabel.compose(content, strings, locale, timeText?)` :
+      un unique libellé parlé dans l'ordre gelé iOS — sender → reply → text → images → audios →
+      location/files → time → delivery → edited → pinned → ephemeral → reactions — joint par `, `.
+      Chaînes injectées via `BubbleAccessibilityStrings` (motif `RelativeTimeFormat`, zéro dépendance
+      Android, JVM-testable). Court-circuit supprimé (sender + « message supprimé »). Écarts assumés
+      vs iOS documentés : pas de distinction image/vidéo (un seul compteur « images »), pas de « vous »
+      pour l'auteur de la réponse (modèle Android sans `isMe`), pas d'horloge dans la meta-row (⇒
+      `timeText` fourni seulement là où une heure est visible). **+20 tests** mutation-prouvés (casser
+      le court-circuit supprimé → 1 échec exact ; effondrer l'arm excerpt de réponse → 2 échecs exacts).
+      **Câblage sûr, non destructif** : `MessageBubble` gagne un param opt-in `accessibilityLabel:
+      String? = null` appliqué via `clearAndSetSemantics` — branché UNIQUEMENT au héros de l'overlay
+      long-press (`MessageOverlayPreviewHero`, non-interactif « never intercepts input »), où
+      effondrer l'arbre sémantique est prouvablement sûr. La bulle interactive de la liste garde
+      `null` → ses cibles tactiles par-élément (réactions, images, long-press) intactes. Le libellé
+      composé de la liste attend un test instrumenté TalkBack (hors du gate JVM). Strings EN/FR/ES/PT.
+      **Reste** : câbler le libellé composé sur la bulle de liste derrière une vérif TalkBack instrumentée.
 - [◐] Rich text rendering (markdown, mentions, `m+` links, URLs, search highlight) — core done
       (`chat-rich-text-segments` 2026-07-06): pure `:core:model` `MessageTextParser` SSOT (port of iOS
       `MessageTextRenderer`) — one earliest-match-wins pass over markdown **bold**/*italic*/~~strike~~/
@@ -2185,8 +2208,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       outgoing send-side glyph through it; `MessageBubble` renders `Icons.Filled.HourglassEmpty` +
       `bubble_status_queued` (EN/FR/ES/PT). `ChatViewModel` injects `NetworkConditionMonitor` and folds
       `condition == OFFLINE` (distinct) into the message-stream combine so going offline re-paints the glyph
-      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Pending:** the finer 8-state
-      send-lifecycle glyphs (slow/invisible pre-200ms debounce), tap-checks → read-status sheet
+      live. +7 resolver + 5 builder + 1 VM tests, mutation-proven. **Sub-200ms clock debounce done**
+      (`chat-send-clock-reveal-debounce` 2026-08-21): port of iOS
+      `BubbleDeliveryCheck.SendingClockGlyph.shouldRevealImmediately` (`revealDelay = 0.2`) — a send that
+      round-trips under 200ms never flashes the online in-flight clock the user has no time to perceive.
+      New pure `SendLifecycleResolver.shouldRevealSendingGlyph(sendStartedAtMillis, nowMillis)` +
+      `SENDING_REVEAL_DELAY_MILLIS = 200L` (null start → reveal now; `>=` inclusive boundary; negative
+      elapsed from clock skew stays hidden). Compose glue `rememberSendingGlyphRevealed` (`produceState` +
+      one-shot `delay`, same shape as `rememberBubbleRenderKind`) gates ONLY the `DeliveryStatus.Pending`
+      clock at the `MessageBubble` render site off `content.createdAtIso`; the offline hourglass and every
+      settled tier render immediately. +8 resolver tests, mutation-proven (`>=`→`>` fails exactly the
+      exactly-200ms boundary test). **Pending:** the finer `slow`/retry glyph tier, tap-checks → read-status sheet
 - [~] Edited / pinned / forwarded indicators; edit-history viewer
       **Edited ✅** (`bubble_edited` badge), **pinned ✅** (`chat-pinned-banner`), **forwarded ✅**
       (slice `chat-forwarded-indicator`, 2026-07-08, +5 tests): `BubbleContent.isForwarded` derived in
@@ -2648,7 +2680,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
       renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
       backend `/mentions` API merge over the local roster (online enrichment).
-- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
+- [x] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
       (slice `chat-draft-autosave`, 2026-07-07): pure `:feature:chat` `DraftAutosave` SSOT (blank composer
       purges, non-blank saves raw, unchanged writes nothing → `Save`/`Clear`/`None`; restore seeds an idle empty
       composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
@@ -2661,8 +2693,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       reference (trim/blank→null); `DraftAutosave.restore` returns a `DraftRestore(text, replyToId)` snapshot that
       re-arms a reply-only or half-typed reply draft. `ChatViewModel` persists on `startReply`/`cancelReply`/
       `onDraftChange` and re-arms `replyingToMessageId` on open; the durable store round-trips the reference. +16
-      tests. **Pending:** the language/effects/blur/ephemeral fields (those composer features are not yet built on
-      Android — no state to persist).
+      tests. **Effects/blur/ephemeral persistence done** (slice `chat-draft-effects-persistence`, 2026-08-21):
+      `ConversationDraft` gained an `effects: MessageEffects` field (defaulted → legacy blobs decode to an empty
+      selection) folding iOS `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` into the single
+      `MessageEffects` SSOT. A NEW `ConversationDraft.isWorthPersisting` (`isMeaningful || effects.hasAnyEffect`)
+      mirrors iOS's split between the text-only list rule (`hasDraftText`) and the persistence rule
+      (`isEffectivelyEmpty`, which weighs effects): `DraftAutosave` switched to it (an effect armed on an empty
+      composer persists and survives navigation; clearing the last effect on an empty composer purges), while the
+      four conversation-list surfaces keep the text/reply-only `isMeaningful` — so an effects-only draft never
+      floats or badges a row, exactly like iOS. `DraftAutosave.resolve` gained an `effects` param (armed effects →
+      `Save`; a change in effects alone → `Save`; identical text+reply+effects → `None`); `DraftRestore` carries the
+      effects; `ChatViewModel.persistDraft` reads `pendingEffects` from state and `toggleEffect`/`selectEphemeralDuration`/
+      `clearEffects` now persist, restore re-arms `pendingEffects` on open. +19 tests (7 `ConversationDraftTest`
+      incl. back-compat decode, 8 `DraftAutosaveTest`, 4 VM round-trip), mutation-proven ×3 (drop the
+      `isWorthPersisting` effects clause → 1 fail; drop the resolve idempotence effects clause → 1 fail; drop the
+      empty-guard `!effects.hasAnyEffect` → 1 fail). **Manual composer-language persistence done** (slice
+      `chat-draft-language-persistence`, 2026-08-21): `ConversationDraft` gained `selectedLanguage: String?`
+      (defaulted → legacy blobs decode to no language) porting iOS `MessageDraft.selectedLanguage`. Per iOS
+      `isEffectivelyEmpty`/`hasDraftText` (both ignore `selectedLanguage`), a language pick is **not content**:
+      `isMeaningful` and `isWorthPersisting` are BOTH left unchanged, so a language-only composer neither floats/
+      badges a row nor is persisted — the language rides along an otherwise worth-persisting draft. Only the
+      deliberate **manual** override (`ComposerLanguageState.manualOverride`) is persisted; live detection is not
+      (it re-derives from the restored text). `DraftAutosave.resolve` gained a `selectedLanguage` param
+      (normalised trim/blank→null; a change to it on a worth-persisting draft → `Save`; identical text+lang →
+      `None`; language alone on an empty composer → `None`); `DraftRestore` carries `selectedLanguage`; `restore`
+      re-applies it via `withManualPick` (a restored pick wins over detection of the restored text and freezes
+      analysis). `ChatViewModel.persistDraft` reads `manualOverride` from state and `onComposerLanguagePicked`
+      now persists (iOS `.adaptiveOnChange(of: selectedLanguage)` parity); open-time restore applies the pick.
+      +17 tests (4 `ConversationDraftTest` incl. back-compat decode + not-content proofs, 10 `DraftAutosaveTest`
+      = 7 resolve + 3 restore, 3 VM round-trip), mutation-proven (drop the resolve `selectedLanguage` idempotence
+      clause → exactly the `only_the_language_pick_changing` test fails, `identical_text_and_language` stays green).
 - [◐] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress —
       **REST attachment chain + first real path (clipboard content) done** (slice `chat-clipboard-content-send`,
       2026-07-16). The durable upload→send chain now carries message attachments, mirroring the proven story

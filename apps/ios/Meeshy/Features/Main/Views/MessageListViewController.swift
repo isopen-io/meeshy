@@ -1226,8 +1226,21 @@ final class MessageListViewController: UIViewController {
                 let isFirstInGroup: Bool = {
                     guard let index = self.store.index(of: localId), index > 0 else { return true }
                     let previous = self.store.messages[index - 1]
-                    guard previous.senderId == senderId else { return true }
-                    return !Calendar.current.isDate(previous.createdAt, inSameDayAs: message.createdAt)
+                    return MessageDayGrouping.isGroupHead(
+                        previous: .init(
+                            senderId: previous.senderId,
+                            // `MessageRecord` (persistance) porte la source en CHAÎNE,
+                            // là où `MeeshyMessage` porte l'énumération — on compare
+                            // au `rawValue` plutôt qu'à un littéral.
+                            isSystem: previous.messageSource == MeeshyMessage.MessageSource.system.rawValue,
+                            createdAt: previous.createdAt
+                        ),
+                        current: .init(
+                            senderId: senderId,
+                            isSystem: message.messageSource == .system,
+                            createdAt: message.createdAt
+                        )
+                    )
                 }()
                 let focalInput = FocalRowInput(
                     localId: localId,

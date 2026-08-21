@@ -209,7 +209,13 @@ export function convertV1ToV3(
   const thumbHash = str(blob.thumbHash);
   if (thumbHash !== undefined) scene.thumbHash = thumbHash;
 
-  const doc: CanvasV3 = { v: 3, ...(remapped.length > 0 ? { scenes: [scene] } : {}) };
+  const sceneCarriesSomething = remapped.length > 0
+    || scene.thumbHash !== undefined
+    || scene.timelineDuration !== undefined
+    || scene.opening !== undefined
+    || scene.closing !== undefined
+    || (scene.clipTransitions?.length ?? 0) > 0;
+  const doc: CanvasV3 = { v: 3, ...(sceneCarriesSomething ? { scenes: [scene] } : {}) };
 
   const transcriptions = asArray(blob.voiceTranscriptions)
     .flatMap(t => {

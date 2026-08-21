@@ -171,6 +171,19 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     const golden = JSON.parse(readFileSync(join(DIR, 'v1-legacy-full.v3.json'), 'utf8')) as unknown;
     expect(convertV1ToV3(v1())).toEqual(golden);
   });
+
+  it('keeps the scene when only a thumbHash lives on it (offline queue, computed after persist)', () => {
+    const doc = convertV1ToV3({ thumbHash: '1QcSHQRnh493V4dIh4eXh0h4kJUI' });
+    expect(doc.scenes).toHaveLength(1);
+    expect(doc.scenes?.[0].objects).toHaveLength(0);
+    expect(doc.scenes?.[0].thumbHash).toBe('1QcSHQRnh493V4dIh4eXh0h4kJUI');
+  });
+
+  it('a truly empty blob still emits NO scenes (O3)', () => {
+    const doc = convertV1ToV3({});
+    expect(doc.scenes).toBeUndefined();
+  });
+
 });
 
 const rich = (): Record<string, unknown> =>
@@ -200,9 +213,8 @@ describe('storyEffectsV3 — contrat étendu (rattrapage B8a)', () => {
     expect(convertV1ToV3(rich()).scenes[0].thumbHash).toBe('1QcSHQRnh493V4dIh4eXh0h4kJUI');
   });
 
-  it('no visual object ⇒ NO scenes at all (O3, jamais de cadre vide)', () => {
+  it('no visual object AND nothing carried ⇒ NO scenes at all (O3, jamais de cadre vide)', () => {
     expect(convertV1ToV3({}).scenes).toBeUndefined();
-    expect(convertV1ToV3({ thumbHash: '1QcSHQRnh493V4dIh4eXh0h4kJUI' }).scenes).toBeUndefined();
   });
 
   it('the media carrier keeps its aspectRatio and its pivot anchor', () => {

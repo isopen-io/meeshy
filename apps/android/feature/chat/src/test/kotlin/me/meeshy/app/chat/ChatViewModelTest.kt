@@ -3139,6 +3139,102 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun arming_an_effect_on_an_empty_composer_persists_it_to_the_durable_store() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.toggleEffect(MessageEffectFlags.CONFETTI)
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.effects?.has(MessageEffectFlags.CONFETTI)).isTrue()
+        assertThat(stored?.text).isEqualTo("")
+    }
+
+    @Test
+    fun clearing_the_last_armed_effect_on_an_empty_composer_purges_the_stored_draft() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(
+                    conversationId = "c1",
+                    text = "",
+                    effects = MessageEffects(flags = MessageEffectFlags.GLOW),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        h.vm.clearEffects()
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun an_effects_only_stored_draft_re_arms_the_composer_effects_on_open() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(
+                    conversationId = "c1",
+                    text = "",
+                    effects = MessageEffects(flags = MessageEffectFlags.EPHEMERAL, ephemeralDuration = 300),
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.pendingEffects.has(MessageEffectFlags.EPHEMERAL)).isTrue()
+        assertThat(h.vm.state.value.pendingEffects.ephemeralDuration).isEqualTo(300)
+        assertThat(h.vm.state.value.draft).isEqualTo("")
+    }
+
+    @Test
+    fun picking_a_composer_language_persists_it_alongside_the_typed_draft() = runTest(dispatcher) {
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onDraftChange("hola")
+        h.vm.onComposerLanguagePicked("de")
+        advanceUntilIdle()
+
+        val stored = h.draftStore.load("c1")
+        assertThat(stored?.text).isEqualTo("hola")
+        assertThat(stored?.selectedLanguage).isEqualTo("de")
+    }
+
+    @Test
+    fun picking_a_language_on_an_empty_composer_persists_nothing() = runTest(dispatcher) {
+        // Parity with iOS: a language pick is not content, so it never creates a draft on its own.
+        val h = harness(syncedConversation(), currentUser = me)
+        advanceUntilIdle()
+
+        h.vm.onComposerLanguagePicked("de")
+        advanceUntilIdle()
+
+        assertThat(h.draftStore.load("c1")).isNull()
+    }
+
+    @Test
+    fun a_stored_draft_re_applies_its_manual_language_on_open() = runTest(dispatcher) {
+        val h = harness(
+            syncedConversation(),
+            currentUser = me,
+            drafts = mapOf(
+                "c1" to ConversationDraft(conversationId = "c1", text = "hola", selectedLanguage = "de"),
+            ),
+        )
+        advanceUntilIdle()
+
+        assertThat(h.vm.state.value.draft).isEqualTo("hola")
+        // The restored manual pick wins over live detection of the restored Spanish text.
+        assertThat(h.vm.state.value.composerLanguageCode).isEqualTo("de")
+    }
+
+    @Test
     fun editing_a_message_never_overwrites_the_stored_new_message_draft() = runTest(dispatcher) {
         val h = harness(
             syncedConversation(),

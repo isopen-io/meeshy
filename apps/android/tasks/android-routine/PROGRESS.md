@@ -2,6 +2,283 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Sub-200ms sending-clock debounce shipped** (slice `chat-send-clock-reveal-debounce`,
+> feature-parity's Chat `[~]` "Delivery status" line — the `invisible pre-200ms debounce` half of its
+> **Pending** 8-state clause, now shipped; only the finer `slow`/retry glyph tier remains).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 9 open PRs at branch
+> time (#3255/#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none
+> android-routine. Prior android iteration (#3254, chat-draft-language-persistence) already merged.
+> Branched off freshly-fetched `origin/main` (`c138ffe4`, which includes #3254).
+>
+> **SDK bootstrap — the platform-metadata fight, finally understood (see NOTES 2026-08-21):** since the
+> Android *minor* SDK releases (36.1, **37.0**, 37.1…) an API level is no longer published under a bare
+> `android-37` name — only `android-37.0`. The prior recipe (`cp -r android-37.0 android-37` + sed
+> `source.properties`) is now HARMFUL: the copy keeps `package.xml` (`path="platforms;android-37.0"`,
+> `<api-level>37.0</api-level>`), so AGP sees a package claiming to be `android-37.0` living in the
+> `android-37` dir → "Observed package id … in inconsistent location" → the whole SDK scan aborts →
+> "Failed to find target with hash string 'android-37'". **The fix is to do NOTHING by hand**: install a
+> pristine `platforms;android-37.0` via `sdkmanager --channel=3` and let **AGP auto-map `compileSdk 37` →
+> `android-37.0`** itself (exactly what CI's setup-android does — `android.yml` even documents this). No
+> `android-37` dir, no sed, no symlink, auto-download left ON. `assembleDebug testDebugUnitTest` green
+> after. This container **reaches `dl.google.com`** (curl → 200), so the full local gate ran here.
+>
+> **The gap (re-proved by reading source)**: iOS's `BubbleDeliveryCheck.SendingClockGlyph` debounces the
+> **online in-flight clock**: `shouldRevealImmediately(sendStartedAt, now)` keeps the clock hidden for the
+> first `revealDelay = 0.2s` of a send, revealed via a self-cancelling `.task`, so a send that round-trips
+> in under 200ms never flashes an icon the user has no time to perceive. Android showed the `Schedule`
+> clock immediately for a `DeliveryStatus.Pending` bubble — no debounce. The offline hourglass
+> (`QueuedOffline`) and settled tiers are NOT debounced on iOS, and stay immediate here.
+>
+> **Pure core (`:core:model` `SendLifecycleResolver`)**: new
+> `shouldRevealSendingGlyph(sendStartedAtMillis: Long?, nowMillis: Long): Boolean` +
+> `SENDING_REVEAL_DELAY_MILLIS = 200L` — faithful port: `null` start → `true` (reveal now, nothing to
+> debounce); elapsed `>= 200ms` → `true` (iOS's `>=` inclusive boundary); under the window (incl. a
+> negative elapsed from device clock skew) → `false`. `resolve()` untouched.
+>
+> **Wiring (Compose glue, coverage-exempt)**: new `SendingClockRevealPresenter.rememberSendingGlyphRevealed`
+> (`produceState` initialised from the pure decision + one-shot `delay(remaining)` then flip to revealed —
+> the SAME shape as `rememberBubbleRenderKind`'s tick loop). `MessageBubble` gates ONLY the
+> `DeliveryStatus.Pending` clock behind it, reading the send-start from the existing
+> `content.createdAtIso` (an optimistic pending bubble's `createdAt` IS its send-start — no new
+> `BubbleContent` field, no builder/VM param, no wire change). Every other status renders immediately as
+> before.
+>
+> **Tests**: **+8 `SendLifecycleResolverTest`** — no start → reveal; just-started/100ms/199ms hidden;
+> exactly-200ms/5s revealed; future start (clock skew) hidden; the 200ms constant. Mirrors the iOS twin
+> `BubbleDeliveryCheckSendingRevealTests` exactly, plus the 199ms exclusive-lower-edge + skew arms.
+> **Mutation (RED proof)**: `>=`→`>` fails **exactly** `a send elapsed exactly 200ms reveals the clock`
+> (15 run, 1 failed, no collateral). Restored. The `produceState`/`delay` presenter is thin Compose glue,
+> exempt per TDD-COVERAGE.
+>
+> **Verified**: `:core:model:testDebugUnitTest` (SendLifecycleResolverTest) green; `:sdk-ui`
+> `compileDebugKotlin` green; full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS.
+> Diff is `apps/android` only.
+>
+> **Next**: the last piece of the Delivery-status line is the finer `slow`/retry glyph tier (iOS
+> `DeliveryStatus.slow` — a warning-tinted clock for a message still in automatic outbox retry after its
+> first attempt failed but before the budget is exhausted). That needs the outbox retry-attempt count
+> plumbed into the send state → `BubbleContent`, so it is a bigger slice than this one (not a pure
+> resolver alone). Otherwise the Chat area's remaining apps/android-only boxes are thin; if the retry-state
+> plumbing looks heavy, advance to **Feed (§F)** per build-order. Re-scout read-only before committing —
+> parity notes are hypotheses.
+
+> On 2026-08-21 **Manual composer-language draft persistence shipped** (slice `chat-draft-language-persistence`,
+> the last open piece of feature-parity's Chat "Draft auto-save/restore" line — now `[x]`).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 8 open PRs at branch time
+> (#3253/#3249/#3247/#3245/#3243/#3242 shared/web/gateway, #3251/#3250 iOS) are none android-routine. Prior
+> android iteration (#3252, chat-draft-effects-persistence) already merged. Branched off freshly-fetched
+> `origin/main` (`f2a2e404`, which includes #3252).
+>
+> **SDK bootstrap (see NOTES 2026-08-21 later):** the "newer cmdline-tools fix the platform metadata" claim
+> did NOT hold this run — `platforms/android-37.0/source.properties` again came out malformed (`Platform 17`,
+> `ApiLevel=37.0`), so AGP's `compileSdk 37`→`android-37` hash found no match. Fixed by a real `cp -r
+> android-37.0 android-37` + `sed` on `source.properties` (ApiLevel→37). `assembleDebug testDebugUnitTest`
+> green after across all modules. This container **reaches `dl.google.com`** (curl → 200) so the full local
+> gate ran here.
+>
+> **The gap**: iOS's app-side `MessageDraft` persists `selectedLanguage` (the composer language pick)
+> alongside text/reply/effects, restored in `ConversationView.onAppear` (`if let lang = draft.selectedLanguage
+> { composerState.selectedLanguage = lang }`) and re-persisted on `.adaptiveOnChange(of: selectedLanguage)`.
+> Android's `ConversationDraft` carried text+reply+effects but not the language — a deliberate language
+> override armed but not sent was lost on navigation.
+>
+> **The key design call — a language is NOT content (faithful iOS port)**: iOS `MessageDraft.isEffectivelyEmpty`
+> (persistence) and `hasDraftText` (list badge) BOTH ignore `selectedLanguage`. So on Android I left
+> `ConversationDraft.isMeaningful` AND `isWorthPersisting` **unchanged** — a language-only composer neither
+> floats/badges a conversation row nor is persisted on its own; the language rides along an otherwise
+> worth-persisting draft (text/reply/effects present) and is dropped with it. This is the cleanest match to
+> iOS and needed NO new predicate (unlike the effects slice, which added `isWorthPersisting`).
+>
+> **Manual override only**: Android's `ComposerLanguageState` splits `detected` (auto) from `manualOverride`
+> (deliberate pick). Only `manualOverride` is persisted — live detection is redundant (re-derives from the
+> restored text). Restore re-applies it via `withManualPick` (wins over detection of the restored text, locks
+> analysis) — exactly iOS's override-wins semantics.
+>
+> **Pure core (`:core:model`)**: `ConversationDraft` gains `selectedLanguage: String? = null` (defaulted →
+> legacy blob decodes to no language, back-compat covered by a decode test). `isMeaningful`/`isWorthPersisting`
+> untouched.
+>
+> **Pure reducer (`:feature:chat`)**: `DraftAutosave.resolve` gains `selectedLanguage: String? = null`
+> (normalised trim/blank→null; folded into the idempotence clause so a language change on a worth-persisting
+> draft → `Save`, identical text+lang → `None`; the blank-guard is untouched so a language on an empty composer
+> → `None`, never rescuing it). `DraftRestore` gains `selectedLanguage`; `restore` returns the normalised
+> stored language.
+>
+> **Trivial VM wiring**: `ChatViewModel.persistDraft` reads `_state.value.composerLanguage.manualOverride`;
+> `onComposerLanguagePicked` now calls `persistDraft` (iOS `.adaptiveOnChange` parity); the open-time restore
+> applies `restored.selectedLanguage?.let { withManualPick(it) }`. Send/clear paths reset `composerLanguage =
+> ComposerLanguageState()` before their existing `persistDraft("", null)` → manualOverride null → language
+> cleared with the draft (no change needed there).
+>
+> **Tests**: **+17** — `ConversationDraftTest` +4 (a language pick alone is neither meaningful nor worth
+> persisting; a pick riding a real draft leaves both predicates on the content; legacy blob missing
+> `selectedLanguage` decodes to null), `DraftAutosaveTest` +10 (7 resolve: language on empty composer → None;
+> language-only over no prior → None; text+lang saved; only-the-language-changing → Save; identical text+lang →
+> None; trim/blank→null; clearing language while text remains → Save without lang — + 3 restore: returns / trims
+> & drops / a text-only draft restores with no language), `ChatViewModelTest` +3 round-trip (picking a
+> language persists it alongside the typed draft; a pick on an empty composer persists nothing; a stored
+> text+language draft re-applies the manual override on open). **Mutation (RED proof)**: drop the resolve
+> `previous.selectedLanguage == language` idempotence clause → **exactly** `only_the_language_pick_changing_on_a_text_draft_still_saves`
+> fails while `identical_text_and_language_writes_nothing` stays green (proving the clause is the tested
+> behaviour, not a tautology). Restored after.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) — **BUILD SUCCESSFUL**
+> across every module locally in this run; touched modules also ran explicitly green (`ConversationDraftTest`,
+> `DraftAutosaveTest`, `ChatViewModelTest`). Reviewer PASS. Diff is `apps/android` only.
+>
+> **Next**: the Chat "Draft auto-save/restore" line is now fully `[x]`. Remaining Chat `[◐]`/`[~]` boxes:
+> finer send-lifecycle `Slow` tier (needs outbox retry-attempt state plumbed into `BubbleContent`) and the
+> edit-history viewer (blocked — needs a gateway endpoint, not apps/android-only). With Chat drafts closed,
+> the next high-value area per build-order (`… → Chat → Feed → Stories → Calls`) is the top unchecked Chat
+> box that stays apps/android-only, else advance to Feed. Re-scout read-only before committing — parity notes
+> are hypotheses.
+
+> On 2026-08-21 **Composer draft effects persistence shipped** (slice `chat-draft-effects-persistence`,
+> feature-parity's Chat `[◐]` "Draft auto-save/restore" line — the `effects`/`blur`/`ephemeral` fields its
+> **Pending** clause called out, now unblocked because the composer effects picker / ephemeral duration /
+> blur / view-once all shipped in later §C slices, so there is finally state to persist).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 6 open PRs at branch
+> time (#3249 shared, #3247 web, #3245/#3242 gateway, #3243 shared/gateway, #3241 iOS) are none of them
+> android-routine. Prior android iteration (#3248, chat-bubble-a11y-label) already merged. Branched off the
+> freshly-fetched `origin/main` (`3e64afaa`, which includes #3248 and #3241). This container **reaches
+> `dl.google.com`** (curl → 200), so the full local gate ran here.
+>
+> **SDK-bootstrap correction (see NOTES 2026-08-21):** the older recipe's `android-37 → android-37.0`
+> symlink is now HARMFUL. With cmdline-tools `11076708` the platform mis-registers (metadata "Platform 17"),
+> and the symlink makes sdkmanager reject it as an "inconsistent location" → `Failed to find target with hash
+> string 'android-37'`. Fix: fetch the newer bundle `commandlinetools-linux-13114758`, `sdkmanager
+> --channel=3 "platforms;android-37.0" "build-tools;36.0.0"`, and **no symlink** — AGP 8.13 resolves
+> `compileSdk 37` → the `android-37.0` dir directly. `assembleDebug testDebugUnitTest` green after.
+>
+> **The gap (re-proved by a read-only recon subagent over iOS + Android)**: iOS's app-side `DraftStore`
+> (`MessageDraft`) persists the FULL compose state — text, reply, **and** `effectFlags`/`isBlurEnabled`/
+> `ephemeralDurationRawValue` (+ `selectedLanguage`). Android's `ConversationDraft` persisted only
+> text + `replyToId`; a self-destruct duration or a confetti effect armed on the composer was lost on
+> navigation. The recon confirmed via grep that `pendingEffects: MessageEffects` already exists on
+> `ChatUiState` (line 160) but was never fed into `DraftAutosave.resolve` nor restored on open — a genuine,
+> now-portable gap needing **no** gateway endpoint, **no** wire-DTO change (`ConversationDraft` is a local
+> DataStore value type), and **no** timer/instrumentation.
+>
+> **Faithful two-predicate port (the key design call)**: iOS splits "worth persisting" (`isEffectivelyEmpty`,
+> weighs effects/blur/ephemeral) from the conversation-list "Brouillon" badge (`hasDraftText`, text-only).
+> Android's shared `ConversationDraft.isMeaningful` already drives FOUR conversation-list surfaces
+> (`DraftAwareOrdering` float, `LastMessagePreview` "Brouillon …" line, `DraftDiscard`, `ConversationListScreen`
+> `hasDraft` badge). Extending `isMeaningful` to include effects would make an effects-only draft float and
+> badge the list — a divergence from iOS. So I added a SEPARATE `ConversationDraft.isWorthPersisting`
+> (`isMeaningful || effects.hasAnyEffect`) used ONLY by `DraftAutosave`, leaving all four list surfaces
+> byte-for-byte unchanged. An effects-only draft now persists and restores but never floats/badges a row —
+> exactly iOS.
+>
+> **Pure core (`:core:model`)**: `ConversationDraft` gains `effects: MessageEffects = MessageEffects()`
+> (defaulted so a legacy blob decodes to an empty selection — back-compat covered by a decode test) folding
+> iOS's three separate fields into the single `MessageEffects` SSOT (a set flag bit = armed). New
+> `isWorthPersisting` extension. `isMeaningful` unchanged.
+>
+> **Pure reducer (`:feature:chat`)**: `DraftAutosave.resolve` gains an `effects: MessageEffects = MessageEffects()`
+> param — empty composer + armed effect → `Save`; a change in effects alone → `Save`; identical
+> text+reply+effects → `None`; clearing the last effect on an empty composer → `Clear` (via
+> `isWorthPersisting`). `DraftRestore` gains `effects`; `restore` returns `stored.effects` and gates on
+> `isWorthPersisting` (an effects-only stored draft re-arms an idle empty composer).
+>
+> **Trivial VM wiring**: `ChatViewModel.persistDraft` reads `_state.value.pendingEffects` (every existing
+> caller already updates state before calling, so no new params on the 6 call sites); `toggleEffect` /
+> `selectEphemeralDuration` / `clearEffects` now call `persistDraft` so an armed/cleared effect is saved
+> immediately; the open-time restore applies `pendingEffects = restored.effects` and tracks
+> `lastPersistedDraft` via `isWorthPersisting`. Post-send path unchanged (state cleared before the existing
+> `persistDraft("", null)` → reads empty effects → `Clear`). **Documented edge (iOS-parity):** `restore`
+> guards on text/editing only, not on already-armed composer effects — the load runs in `init` before the
+> user can interact, and iOS's `onAppear` restore has the same shape.
+>
+> **Tests**: **+19** — `ConversationDraftTest` +7 (effects never make a draft list-meaningful;
+> `isWorthPersisting` weighs effects / stays false when empty / true for text|reply; legacy blob missing
+> `effects` decodes to `MessageEffects()`), `DraftAutosaveTest` +8 (armed effects on empty composer → Save;
+> saved draft carries effects; clearing effects → Clear; effects-alone change → Save; identical
+> text+reply+effects → None; blank+no-effects+no-prior → None; restore re-arms effects-only + effects
+> alongside text/reply), `ChatViewModelTest` +4 round-trip (arming persists to the store; clearing the last
+> effect purges; effects-only stored draft re-arms `pendingEffects` on open). **Mutation (RED proof) ×3**:
+> (a) drop `isWorthPersisting`'s `|| effects.hasAnyEffect` → **exactly 1** `ConversationDraftTest` fails
+> (the list `isMeaningful` tests stay green, proving no leak); (b) drop `resolve`'s `previous.effects ==
+> effects` idempotence clause → **exactly 1** `DraftAutosaveTest` fails; (c) drop the empty-guard
+> `!effects.hasAnyEffect` → **exactly 1** `DraftAutosaveTest` fails. All restored.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) — **BUILD SUCCESSFUL**
+> across every module locally in this run; touched modules also ran explicitly green (`ConversationDraftTest`,
+> `DraftAutosaveTest` 31, `ChatViewModelTest`). Reviewer PASS. Diff is `apps/android` only.
+>
+> **Next**: the narrower follow-up `chat-draft-language-persistence` — persist the manual composer language
+> pick (`MessageDraft.selectedLanguage` / `ComposerLanguageState.withManualPick`) on `ConversationDraft`,
+> restoring the language pill's override. Per iOS a language-only draft is NOT meaningful (so it re-applies
+> only atop an otherwise worth-persisting draft) — a clean pure sub-rule + trivial VM wiring, same shape as
+> this slice. After that, the Chat `[◐]`/`[~]` boxes still open (finer send-lifecycle `Slow` tier — needs
+> outbox retry-attempt state plumbed into `BubbleContent`; edit-history viewer — blocked on a gateway
+> endpoint, not apps/android-only). Re-scout read-only before committing; parity notes are hypotheses.
+
+> On 2026-08-21 **Message-bubble accessibility composer shipped** (slice `chat-bubble-a11y-label`).
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 5 open PRs were
+> web #3247 / gateway #3242 #3245 / shared #3243 / iOS #3241 — none android-routine). Prior iteration
+> #3246 (mood) already merged. Branched off the freshly-fetched `origin/main` (`d3686997`, which
+> includes the prior Android mood/story-ring merges). This container **reaches `dl.google.com`** (curl
+> → 200), so the full local gate ran here; SDK bootstrapped `platforms;android-37.0` via cmdline-tools
+> `11076708` `--channel=3` + the `android-37` alias, Gradle 8.13 by the wrapper.
+>
+> **First closed a stale marker**: the conversation-row `presence` sub-gap. Grep-verified the dot is
+> already wired — `ConversationListScreen.kt:232` passes `presence = state.presenceStateFor(conversation,
+> System.currentTimeMillis())` down to the row's `MeeshyAvatar(..., presence = …)` (`:649`), alongside
+> `storyRing` and `moodEmoji`. All three avatar affordances coexist (a mood badge suppresses the dot),
+> exactly as iOS. The conversation-row "rich last-message preview" line is now **complete** — no new
+> slice was needed for presence; feature-parity updated to `presence done`.
+>
+> **The gap (re-proved by reading source)**: iOS composes ONE spoken VoiceOver label per message bubble
+> (`MessageAccessibilityLabelComposer.compose`, itself the port of `BubbleStandardLayout.messageAccessibilityLabel`)
+> in a frozen order. Android's `MessageBubble` had no composed label — it relied on default child-merge
+> with only per-icon `contentDescription`s (delivery glyphs, starred, translated). A repo-wide grep for
+> a bubble a11y composer hit only docs/contacts/auth — never chat. So the composed message label was a
+> real, categorical gap.
+>
+> **Pure core (`:sdk-ui`)**: `MessageBubbleAccessibilityLabel.compose(content, strings, locale, timeText?)`
+> — framework-free object over `BubbleContent`, emitting the joined label in the iOS-frozen order
+> (sender → reply → text → images → audios → location/files → time → delivery → edited → pinned →
+> ephemeral → reactions). Localized wording injected via `BubbleAccessibilityStrings` /
+> `BubbleDeliveryA11yStrings` (the `RelativeTimeFormat` injection pattern — zero Android deps, fully
+> JVM-testable). A deleted message short-circuits to sender + "deleted". **Assumed deviations vs iOS,
+> documented**: no image/video split (one "images" count — Android `BubbleContent` carries no video
+> distinction); no "you" reply-author phrasing (Android reply target has no `isMe`); no clock in the
+> Android bubble meta-row, so `timeText` is only supplied where a time is actually shown (null here).
+>
+> **Safe, NON-destructive wiring**: `MessageBubble` gains an opt-in `accessibilityLabel: String? = null`
+> applied via `clearAndSetSemantics` — wired ONLY at `MessageOverlayPreviewHero` (the long-press overlay
+> hero, documented "Purely decorative and non-interactive — never intercepts input"), where collapsing
+> the semantics subtree is provably safe. The interactive **list** bubble keeps the default `null`, so
+> its per-element touch targets (reaction taps, image taps, long-press) are untouched — I deliberately
+> did NOT merge/clear semantics on the interactive bubble, since collapsing its touch targets would
+> regress TalkBack and cannot be verified without an on-device/instrumented run (routine §CI-reality
+> caution). Wiring the composed label onto the list bubble is left as a future instrumented-test slice.
+> Strings added EN/FR/ES/PT.
+>
+> **Tests**: **+20 `MessageBubbleAccessibilityLabelTest`** (pure composer — every arm: received sender /
+> unknown / blank-name; outgoing never names sender; blank text skipped; reply excerpt / blank-excerpt →
+> author-only / unknown author / deleted-target author-only; images+audios counts; location-then-file
+> order; unnamed file; time appended / blank-time dropped; delivery after time; all 6 delivery arms;
+> edited+pinned+ephemeral order; reactions summary last; deleted short-circuit; bare outgoing).
+> **Mutation (RED proof) ×2**: (a) neutering the deleted short-circuit `return` fails **exactly** 1 test
+> (20 run, 1 failed); (b) collapsing the reply-excerpt arm to author-only fails **exactly** 2 tests
+> (the two excerpt cases). Both restored.
+>
+> **Verified**: `./apps/android/meeshy.sh check` — `BUILD SUCCESSFUL` (assembleDebug + every module's
+> `testDebugUnitTest`) green locally in this run. Reviewer PASS.
+>
+> **Next**: the natural follow-up is a Roborazzi/instrumented slice to wire and verify the composed
+> `accessibilityLabel` on the interactive list bubble WITHOUT regressing per-element touch targets
+> (custom accessibility actions for reactions/images under one merged node) — needs the instrumented
+> test harness, out of the JVM gate. Otherwise advance to the next Chat `[◐]`/`[~]` box: candidates are
+> the finer 8-state send-lifecycle glyphs (slow/invisible pre-200ms debounce; needs send-lifecycle
+> timing state) or the edit-history viewer (blocked on a gateway edit-history endpoint — not
+> apps/android-only). Prefer a pure-resolver + trivial-value-wiring slice as always; re-scout with a
+> read-only recon over iOS + Android before committing, since parity notes are hypotheses not facts.
+
 > On 2026-08-20 **Conversation-row mood badge shipped** (slice `conversation-row-mood`,
 > feature-parity's Conversations `[~]` rich last-message-preview line — the `mood` avatar
 > affordance, the second of the three sub-gaps `presence/story-ring/mood`; story-ring merged
