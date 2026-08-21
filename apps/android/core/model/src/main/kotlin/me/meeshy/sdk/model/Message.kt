@@ -109,6 +109,13 @@ data class ApiMessage(
     val isViewOnce: Boolean? = null,
     val viewOnceCount: Int = 0,
     val expiresAt: String? = null,
+    /**
+     * `"user" | "system" | "ads" | "app" | "agent" | "authority"` — port of
+     * `messageSource` (MessageModels.swift / `packages/shared/types/message-types.ts`).
+     * A system message (e.g. a join/leave notice) is never a turn at talk: it
+     * never groups with a neighbour — see `MessageGrouping` (feature/chat).
+     */
+    val messageSource: String? = null,
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,

@@ -12,7 +12,14 @@ class MessageGroupingTest {
         senderId: String? = "u1",
         isOutgoing: Boolean = false,
         at: Long? = 0L,
-    ) = MessageGroupInput(id = id, senderId = senderId, isOutgoing = isOutgoing, createdAtMillis = at)
+        isSystem: Boolean = false,
+    ) = MessageGroupInput(
+        id = id,
+        senderId = senderId,
+        isOutgoing = isOutgoing,
+        createdAtMillis = at,
+        isSystem = isSystem,
+    )
 
     private fun positionsFor(vararg messages: MessageGroupInput) =
         MessageGrouping.positions(messages.toList())
@@ -193,5 +200,57 @@ class MessageGroupingTest {
         )
 
         assertThat(positions.keys).containsExactly("m1", "m2", "m3")
+    }
+
+    // A system message ("X joined the conversation") is written with the
+    // arriver as its author. Grouping on sender id alone would fold the
+    // newcomer's first real bubble into their own join notice's run. A system
+    // message is never a turn at talk: it always stands alone, and it never
+    // extends into a neighbour either as predecessor or successor.
+
+    @Test
+    fun a_system_message_never_continues_the_previous_same_sender_message() {
+        val positions = positionsFor(
+            msg("m1", senderId = "u1", at = 0L),
+            msg("m2", senderId = "u1", at = 1_000L, isSystem = true),
+        )
+
+        assertThat(positions.getValue("m1").isLastInGroup).isTrue()
+        assertThat(positions.getValue("m2").isStandalone).isTrue()
+    }
+
+    @Test
+    fun a_system_message_never_lets_the_next_same_sender_message_continue_it() {
+        val positions = positionsFor(
+            msg("m1", senderId = "u1", at = 0L, isSystem = true),
+            msg("m2", senderId = "u1", at = 1_000L),
+        )
+
+        assertThat(positions.getValue("m1").isStandalone).isTrue()
+        assertThat(positions.getValue("m2").isFirstInGroup).isTrue()
+    }
+
+    @Test
+    fun two_system_messages_from_the_same_sender_never_group_with_each_other() {
+        val positions = positionsFor(
+            msg("m1", senderId = "u1", at = 0L, isSystem = true),
+            msg("m2", senderId = "u1", at = 1_000L, isSystem = true),
+        )
+
+        assertThat(positions.getValue("m1").isStandalone).isTrue()
+        assertThat(positions.getValue("m2").isStandalone).isTrue()
+    }
+
+    @Test
+    fun a_join_notice_never_groups_with_the_newcomers_own_first_bubble_even_when_it_concerns_the_reader() {
+        // The join notice can concern the reader themself (isOutgoing = true) —
+        // isSystem is an orthogonal mark, never a stand-in for isOutgoing.
+        val positions = positionsFor(
+            msg("m1", senderId = "me", isOutgoing = true, at = 0L, isSystem = true),
+            msg("m2", senderId = "me", isOutgoing = true, at = 1_000L),
+        )
+
+        assertThat(positions.getValue("m1").isStandalone).isTrue()
+        assertThat(positions.getValue("m2").isFirstInGroup).isTrue()
     }
 }
