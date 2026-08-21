@@ -45,7 +45,14 @@
       "ringSize": 1.5,
       "ringType": "internal",
       "radius": 16,
-      "colorAccent": true
+      "colorAccent": true,
+      "height": 84,
+      "padding": {
+        "vertical": 8
+      },
+      "avatarSize": 52,
+      "nameSize": 17,
+      "magnified": true
     },
     "modeNotch": {
       "size": 9.5,

@@ -98,6 +98,17 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
+        /// Carte MAGNIFIÉE (2026-08-21) : déborde de la rangée (64) de 10 pt
+        /// de chaque côté — la loupe — sans toucher la hauteur des rangées.
+        public static let height: CGFloat = 84
+        public static let paddingVertical: CGFloat = 8
+        /// Avatar de la carte = le contexte « liste » historique (52), un cran
+        /// au-dessus de la rangée plate (44) : c'est la magnification.
+        public static let avatarContext: AvatarContext = .conversationList
+        public static let nameSize: CGFloat = 17
+        @MainActor public static var nameFont: Font { MeeshyFont.relative(nameSize, weight: Name.weight) }
+        public static let shadowRadius: CGFloat = 12
+        public static let shadowY: CGFloat = 4
     }
 
     // MARK: - Encoche de mode

@@ -160,3 +160,73 @@ Note : le lecteur web fait DÉJÀ « clic = barre » (handleToggleReactionPicker
 
 ## Review
 - Build app : vert (67 s). Tests ciblés : en cours (build-for-testing puis suites Story*).
+
+---
+
+# Listes iOS — fluidité du défilement + modes Bulles / Script / Focal (2026-08-21)
+
+Demande user (21/08) : « revoir entièrement les effets des listings de conversations et de
+messages, défilement le plus fluide possible, arranger et compléter la vue Script, Bulle et
+Focal pour la liste de conversation, itérer sur le simulateur Meeshy-iOS26 ».
+
+Lecture retenue (cartes Lentille / fil / docs du 21/08) : le triptyque Script · Bulles · Focal
+est celui du FIL (parité web `LensSwitcher`) ; il se choisit depuis la LISTE (encoche de la carte
+de focus, sous-menu, aperçu) et depuis le chip du fil. La liste elle-même (Lentille) n'a qu'une
+présentation (rangées plates + perspective douce + carte de focus) — ses effets sont revus ici.
+
+Branche `feat/ios-list-scroll-fluidity` (worktree `../v2_meeshy-ios-list-fluidity`, base
+`origin/main` bfd152fe2). Simulateur cible : `Meeshy-iOS26` `C295B364-8CA6-4214-BC52-E411A97EBFE2`.
+
+## Lot A — harnais de mesure (sans code produit)
+- [ ] Script de scène reproductible (idb) : liste 4 swipes, fil 4 swipes
+- [ ] Métrique objective : `simctl io recordVideo` + `ffmpeg mpdecimate` (frames dupliquées
+      = hitches) + Time Profiler (`xctrace`, CPU main thread pendant le geste)
+- [ ] Référence chiffrée sur `origin/main` (liste Lentille, fil Script, fil Bulles)
+
+## Lot B — liste de conversations (Lentille + peau historique)
+Fluidité (cartes H1-H19) :
+- [ ] H1/H2 `LentilleFeatureFlag.isEnabled` : plus de `ProcessInfo.environment` par appel
+      (instantané d'environnement unique par processus) ; drapeau lu UNE fois par passe et
+      descendu aux rangs (`usesLentilleSkin`)
+- [ ] H3 menu contextuel natif : construit À L'OUVERTURE (closure), plus à chaque passe
+- [ ] H4 `preferredContentLanguages` hissé une fois par passe
+- [ ] H18 `shouldAutoLoadPreview` O(1) (index) au lieu de `firstIndex` O(n) par rang
+- [ ] H6 avatar Lentille : contexte dédié sans ressort `repeatForever` par rang
+- [ ] H8 candidature focale via `onGeometryChange` (plus de `GeometryReader`+`onChange`/rang)
+- [ ] H15/H17 aplatissement + tableau de candidats : pas d'allocation O(liste) par passe/tick
+- [ ] H10 libellés `RelativeTimeFormatter` mis en cache (plus de `String(localized:)` par tick)
+Effets :
+- [ ] L1 carte de focus : suit la rangée élue à CHAQUE tick (position vivante), peinte
+      DERRIÈRE le contenu de la rangée (plus de masquage de la 2ᵉ ligne), jamais dans le vide
+- [ ] L2 encoche : libellé cohérent avec les modes réellement offerts
+- [ ] L4 pilule de section : libellé = section du haut de l'écran (plus de libellé périmé)
+- [ ] L5 sticker épinglé vs en-tête replié (trail de stories) : plus de chevauchement
+- [ ] L7 queue de liste : 400 pt de vide → juste ce qu'exigent barre de recherche + bande
+- [ ] Vérification simulateur (captures avant/après, métrique Lot A)
+
+## Lot C — fil de messages (Bulles + Script)
+- [ ] Verrou de scène : plus de `layoutAttributesForItem` ×2n par frame
+- [ ] `FocalRowInput.==` sans allocation ; `statusForUser` O(1) ; direction de layout et
+      résolution de langue mises en cache par instantané (plus par cellule)
+- [ ] Bulles : `BubbleContent` construit à la configuration, plus dans `body`
+- [ ] Menu contextuel iOS 26 : second arbre de vue construit à l'ouverture seulement
+- [ ] `GeometryReader` par cellule (`MessageFramePreferenceKey`) → `onGeometryChange` ou retrait
+- [ ] `MessageListView` : objets d'environnement parasites (P1-5) hors du chemin `update`
+- [ ] Chrome (boutons/composeur/pilule) : retour à la levée du doigt vérifié au simulateur
+- [ ] Vérification simulateur + métrique Lot A
+
+## Lot D — modes Bulles · Script · Focal complets et sélectionnables
+- [ ] Bulles : entrée des menus (liste + chip) ; choix collant rendu en `.bubbles` drapeau ON
+      (règle de CONSOMMATION, loi partagée intacte — même chemin que le web)
+- [ ] Focal : passe de perspective MINIMALE (transform + opacity CALayer sur les cellules
+      visibles, loi `.thread` partagée, zéro relayout, zéro élection/atterrissage/carte) ;
+      retrait du clamp `.focal → .script` ; retour dans `displayOrder` et `LentilleModeMenu`
+- [ ] Script : bouton (+) réaction rapide (`isLastReceivedMessage`), champ mort
+      `revealsTimestamp` tranché
+- [ ] Docs : `apps/ios/decisions.md` (entrée 2026-08-21), `docs/focal-retrait-ios-2026-08-18.md`
+      (addendum « réintroduction minimale »)
+- [ ] Vérification simulateur des 3 modes (ouverture, défilement, bascule live)
+
+## Lot E — clôture
+- [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé) puis `meeshy.sh test`
+- [ ] `tasks/lessons.md` si correction user ; revue finale ; commits par lot

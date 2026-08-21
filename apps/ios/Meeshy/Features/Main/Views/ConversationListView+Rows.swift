@@ -84,7 +84,14 @@ struct ConversationRowItem: View {
     ///    contrairement aux rows : un contenu de menu n'a pas d'identité
     ///    structurelle à préserver (reconstruit à l'ouverture du menu).
     /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
-    let nativeContextMenu: AnyView
+    /// 2026-08-21 (audit fluidité H3) : une CLOSURE, plus une valeur. La
+    /// valeur était matérialisée par `ConversationListView.conversationRow`
+    /// à CHAQUE passe de body de la LISTE (N menus complets par passe, dont
+    /// les passes déclenchées par la présence ou la frappe d'autrui). La
+    /// closure n'est invoquée que dans le body de CETTE row — derrière le
+    /// portillon `.equatable()` — et son type reste `AnyView` (aucun
+    /// paramètre générique : les deux raisons ci-dessus tiennent toujours).
+    let nativeContextMenu: () -> AnyView
 
     var body: some View {
         SwipeableRow(
@@ -121,7 +128,7 @@ struct ConversationRowItem: View {
                         NSItemProvider(object: conversation.id as NSString)
                     }
                     .contextMenu {
-                        nativeContextMenu
+                        nativeContextMenu()
                     } preview: {
                         // Preview — troisième point d'entrée du menu de mode
                         // (contrat LWS-8, « trois points d'entrée, une
@@ -302,6 +309,24 @@ struct ConversationRowItem: View {
             )
             .equatable()
         }
+    }
+}
+
+// MARK: - Contexte de passe (résolu UNE fois par passe de body de la liste)
+
+/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (audit
+/// fluidité 2026-08-21, H4/H18) : les langues du lecteur (copie de tableau par
+/// rang) et l'éligibilité à l'auto-chargement d'aperçu (`firstIndex` O(n) par
+/// rang ⇒ O(n²) par passe). `autoPreviewIds` applique la MÊME règle que
+/// `ConversationListView.shouldAutoLoadPreview` (préfixe `limit` de l'ordre
+/// rendu), en O(1) par rang.
+struct ConversationRowPassContext {
+    let preferredContentLanguages: [String]
+    let autoPreviewIds: Set<String>
+
+    init(orderedConversationIds: [String], preferredContentLanguages: [String], autoPreviewLimit: Int) {
+        self.preferredContentLanguages = preferredContentLanguages
+        self.autoPreviewIds = Set(orderedConversationIds.prefix(max(0, autoPreviewLimit)))
     }
 }
 

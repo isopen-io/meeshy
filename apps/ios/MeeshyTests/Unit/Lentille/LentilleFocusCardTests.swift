@@ -379,3 +379,74 @@ final class LentilleFocusCardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Carte MAGNIFIÉE (2026-08-21) — suit la rangée, menu natif, contenu réel
+
+extension LentilleFocusCardTests {
+
+    private static var repoRoot: URL {
+        iosRoot
+            .deletingLastPathComponent()   // .../apps
+            .deletingLastPathComponent()   // repo
+    }
+
+    private func modeSource(_ file: String) throws -> String {
+        try String(contentsOf: Self.modeDirectory.appendingPathComponent(file), encoding: .utf8)
+    }
+
+    /// La hauteur de la carte vient d'un token partagé (R17) — et elle DÉBORDE
+    /// de la rangée (64) : c'est la loupe, jamais un agrandissement de la rangée.
+    func test_focusCardHeight_isTheMagnifiedToken_andExceedsTheRow() throws {
+        let tokensURL = Self.repoRoot.appendingPathComponent("packages/shared/design/lentille-tokens.json")
+        let data = try Data(contentsOf: tokensURL)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let list = try XCTUnwrap(root["list"] as? [String: Any])
+        let focusCard = try XCTUnwrap(list["focusCard"] as? [String: Any])
+        XCTAssertEqual(Double(LentilleMetrics.FocusCard.height), focusCard["height"] as? Double)
+        XCTAssertEqual(Double(LentilleMetrics.FocusCard.avatarContext.size), focusCard["avatarSize"] as? Double)
+        XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
+    }
+
+    /// L'encoche est un `Menu` SYSTÈME : un `.popover` devient une feuille
+    /// plein écran sur iPhone (retour user 2026-08-21).
+    func test_notch_isANativeMenu_neverAPopover() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("Menu {"), "l'encoche doit être un `Menu` natif")
+        XCTAssertFalse(code.contains(".popover("), "plus jamais de `.popover` : feuille plein écran sur iPhone")
+    }
+
+    /// La carte peint la conversation (nom, heure, aperçu Prisme / pont ✦),
+    /// pas un cadre vide posé sur la rangée.
+    func test_focusCard_paintsTheConversation_notAnEmptyFrame() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("conversation.displayName"))
+        XCTAssertTrue(code.contains("resolvedLastMessagePreview(preferredLanguages:"))
+        XCTAssertTrue(code.contains("LentilleBridgeLine("))
+        XCTAssertTrue(code.contains("MeeshyAvatar("))
+    }
+
+    /// L'hôte suit le défilement : abonné au MÊME relais que l'élection, il
+    /// relit le `midY` vivant de l'élu à chaque tick. Sans cela la carte dérivait
+    /// jusqu'à une demi-bande (45 pt) de la rangée entre deux élections.
+    func test_cardHost_followsTheScrollRelay_andReadsTheLiveRowPosition() throws {
+        let code = try modeSource("LentilleFocusCard.swift")
+        XCTAssertTrue(code.contains("@ObservedObject var relay: ScrollOffsetRelay"))
+        XCTAssertTrue(code.contains("registry.midYById[conversation.id]"))
+    }
+
+    /// Rangée sortie de l'écran (plus dans le registre) ⇒ pas de carte : elle
+    /// ne flotte jamais dans le vide en fin de liste.
+    func test_localY_isNil_whenTheRowIsNoLongerMounted() {
+        XCTAssertNil(LentilleFocusCardHost.localY(rowMidY: nil, hostMinY: 100))
+        XCTAssertEqual(LentilleFocusCardHost.localY(rowMidY: 640, hostMinY: 100), 540)
+    }
+
+    /// Le pont ✦ ne remplace l'aperçu que s'il reste des non-lus — même règle
+    /// que la rangée plate.
+    func test_showsBridge_requiresUnreadAndABridge() {
+        let bridge = ConversationBridge(kind: .fallback, unreadCount: 3, suggestedMode: .focal)
+        XCTAssertTrue(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: bridge))
+        XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 0, bridge: bridge))
+        XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: nil))
+    }
+}

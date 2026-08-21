@@ -343,7 +343,7 @@ final class ScrollPillStateTests: XCTestCase {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertEqual(
-            occurrences(of: "SectionScrollPillHost(relay: scrollOffsetRelay, title: title)", in: code), 1,
+            occurrences(of: "SectionScrollPillHost( relay: scrollOffsetRelay, title: title, sections: conversationViewModel.groupedConversations.map(\\.section), positions: sectionPositionRegistry )", in: code), 1,
             "La pilule doit être montée — une fois, via son hôte, alimenté par le relais " +
             "EXISTANT. I-061 l'avait écrite et testée sans la monter : une vue juste, " +
             "compilée, invisible."
@@ -451,17 +451,21 @@ final class ScrollPillStateTests: XCTestCase {
     func test_selfEntryRouting_reusesTheExistingDoors() throws {
         let code = normalizedCode(try listViewSource())
 
+        // 2026-08-21 (retour user) : le tap sur MON avatar ouvre TOUJOURS le
+        // listing « Mes stories » (brouillons + boutons créer / sélectionner) ;
+        // le résolveur partagé du tray n'a plus rien à décider ici, et le (+)
+        // de l'entrée crée une story directement.
         XCTAssertEqual(
-            occurrences(of: "StoryTrayActionResolver.avatarTap(", in: code), 1,
-            "La décision du tap « moi » appartient au résolveur PARTAGÉ avec le tray " +
-            "(`StoryTrayActionResolver`), jamais à une règle recopiée dans la liste — les " +
-            "deux peaux ne peuvent pas diverger."
+            occurrences(of: "StoryTrayActionResolver.avatarTap(", in: code), 0,
+            "Le tap « moi » du rail n'est plus une décision : il ouvre le listing, toujours."
         )
         XCTAssertTrue(
-            code.contains("actionLabel: StoryTrayActionResolver.avatarAccessibilityLabel("),
-            "L'annonce VoiceOver sort de la MÊME règle que le routage : le libellé et la " +
-            "destination ne peuvent pas diverger (régression déjà vécue côté tray, « Changer " +
-            "mon mood » annoncé pour un tap qui ouvrait le composeur)."
+            code.contains("actionLabel: StoryTrayCopy.manageStories"),
+            "L'annonce VoiceOver dit la destination RÉELLE du tap : « Mes stories »."
+        )
+        XCTAssertTrue(
+            code.contains("onSelfCreateStory: {"),
+            "Créer une story passe par le (+) de l'entrée « moi », pas par le tap avatar."
         )
         XCTAssertEqual(
             // R-j (Porte V1) : la chaîne littérale a migré vers la constante
@@ -477,7 +481,7 @@ final class ScrollPillStateTests: XCTestCase {
             "jour où deux écrans la montent."
         )
         XCTAssertTrue(
-            code.contains("case .createStory: storyViewModel.showStoryComposer = true"),
+            code.contains("storyViewModel.showStoryComposer = true"),
             "Le composeur de story passe par le cover monté aux racines, comme depuis S5."
         )
         XCTAssertEqual(
