@@ -789,7 +789,8 @@ export function registerParticipantsRoutes(
       // participant, parce qu'un visiteur sans compte n'a pas de ligne `User` et
       // que sa room porte son `Participant.id`. Sans elle, l'intéressé — le seul
       // que la décision contraint — serait le dernier informé.
-      const io = fastify.socketIOHandler?.getIO?.();
+      const manager = fastify.socketIOHandler?.getManager();
+      const io = manager?.getIO();
       if (io) {
         const payload = {
           conversationId,
@@ -804,7 +805,7 @@ export function registerParticipantsRoutes(
       // Le middleware d'auth met en cache la ligne participant : sans
       // invalidation, le prochain envoi de ce visiteur serait arbitré sur ses
       // anciens droits pendant toute la durée du cache.
-      fastify.socketIOHandler?.invalidateParticipantCache?.(target.id, conversationId);
+      manager?.invalidateParticipantCache?.(target.id, conversationId);
 
       return sendSuccess(reply, { participantId: target.id, conversationId, rights });
     } catch (error) {

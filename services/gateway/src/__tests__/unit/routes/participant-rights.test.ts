@@ -121,7 +121,13 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow) {
     put: register('PUT'),
     delete: register('DELETE'),
     prisma,
-    socketIOHandler: { getIO: () => io, invalidateParticipantCache: jest.fn() },
+    // Même forme que la production : le handler expose un MANAGER, qui porte
+    // `getIO` et `invalidateParticipantCache`. Un mock qui les poserait à plat
+    // sur le handler ferait passer un test que `tsc` refuse — c'est exactement
+    // ce qui a fait rougir `Build (bun)` en CI pendant que la suite était verte.
+    socketIOHandler: {
+      getManager: () => ({ getIO: () => io, invalidateParticipantCache: jest.fn() }),
+    },
   } as any;
 
   registerParticipantsRoutes(fastify, prisma as never, jest.fn(), jest.fn());
