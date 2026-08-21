@@ -247,11 +247,14 @@ describe('registerParticipantsRoutes', () => {
   // Deux GET : la LISTE des participants, et la FICHE de l'un d'eux — cette
   // dernière ajoutée pour les visiteurs sans compte, qui n'ont pas de page
   // `/u/{pseudo}` où présenter ce qu'ils ont fourni en entrant.
-  it('should register all five routes', () => {
+  // Six depuis que l'hôte peut piloter les droits d'un visiteur sans compte
+  // (`PATCH …/participants/:participantId/rights`) : c'est le levier rendu en
+  // échange du figeage des conditions d'entrée au join.
+  it('should register all six routes', () => {
     expect(mockFastify.get).toHaveBeenCalledTimes(2);
     expect(mockFastify.post).toHaveBeenCalledTimes(1);
     expect(mockFastify.delete).toHaveBeenCalledTimes(1);
-    expect(mockFastify.patch).toHaveBeenCalledTimes(1);
+    expect(mockFastify.patch).toHaveBeenCalledTimes(2);
   });
 
   it('should use optionalAuth for GET and requiredAuth for POST, DELETE, PATCH', () => {

@@ -313,6 +313,12 @@ export async function registerMetadataRoutes(
           conversationId: true,
           joinedAt: true,
           shareLinkId: true,
+          // Le droit de voir l'avant-jointure est FIGÉ sur la ligne participant,
+          // et la surcharge de l'hôte y vit aussi. Les omettre ferait retomber
+          // ce lecteur sur le lien pendant que les deux autres appliquent la
+          // valeur figée — soit la règle à deux énoncés que ce bloc s'interdit.
+          permissions: true,
+          anonymousSession: true,
         } as const;
 
         const participant = isAnonymous

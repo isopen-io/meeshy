@@ -42,6 +42,63 @@ export type ParticipantRightsSource = {
   readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
 };
 
+/**
+ * Les droits qu'un hôte peut piloter, énumérés.
+ *
+ * Sert de FILTRE au corps de `PATCH …/rights` : ce qui n'y figure pas n'atteint
+ * jamais `anonymousSession.rights`, où Prisma l'écrirait sans broncher — un type
+ * composite Mongo n'a pas de colonne à violer.
+ *
+ * `canViewHistory` en fait partie : c'est précisément le levier rendu à l'hôte
+ * en échange du figeage au join.
+ */
+export const PARTICIPANT_RIGHT_NAMES = [
+  'canSendMessages',
+  'canSendFiles',
+  'canSendImages',
+  'canSendVideos',
+  'canSendAudios',
+  'canSendLocations',
+  'canSendLinks',
+  'canViewHistory',
+] as const;
+
+export type ParticipantRightName = (typeof PARTICIPANT_RIGHT_NAMES)[number];
+
+/**
+ * Les droits d'entrée résolus, `canViewHistory` compris, tels qu'une fiche ou un
+ * événement doivent les énoncer.
+ *
+ * `historyFallback` porte ce qui s'applique quand RIEN n'est figé — le champ a
+ * été ajouté après coup, donc toute participation antérieure l'a ABSENT, et sur
+ * le connecteur MongoDB un champ absent ne se distingue pas d'un `false` par une
+ * requête. Le lire comme un refus annoncerait « ne voit pas l'historique » à
+ * propos de visiteurs qui le voient parfaitement.
+ *
+ * L'appelant passe alors ce que le LIEN autorise, exactement comme le fait
+ * `historyFloorFor` pour la lecture : sans quoi la fiche annoncerait un droit
+ * que la lecture ne respecte pas. Défaut `true` — un lien introuvable ne borne
+ * rien, posture unique du dépôt.
+ */
+export function resolveEntryRights(
+  participant: ParticipantRightsSource,
+  overrideRights?: ParticipantRightsOverride | null,
+  historyFallback: boolean = true,
+): Record<ParticipantRightName, boolean> {
+  const source: ParticipantRightsSource = overrideRights
+    ? { ...participant, anonymousSession: { rights: overrideRights } }
+    : participant;
+
+  const resolved = resolveParticipantRights(source);
+  const frozenHistory = source.anonymousSession?.rights?.canViewHistory
+    ?? (participant.permissions as { canViewHistory?: boolean | null }).canViewHistory;
+
+  return {
+    ...resolved,
+    canViewHistory: typeof frozenHistory === 'boolean' ? frozenHistory : historyFallback,
+  };
+}
+
 export function resolveParticipantRights(
   participant: ParticipantRightsSource,
 ): ParticipantPermissions {

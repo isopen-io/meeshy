@@ -42,11 +42,21 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import type { ParticipantRightsOverride } from './participantRights';
 
-/** Ce qu'il faut d'une ligne `Participant` pour répondre à la question. */
+/**
+ * Ce qu'il faut d'une ligne `Participant` pour répondre à la question.
+ *
+ * `permissions` et `anonymousSession.rights` portent le droit FIGÉ et sa
+ * surcharge. Les deux sont facultatifs : un appelant qui ne les charge pas
+ * obtient l'ancien comportement — le lien décide — ce qui est aussi ce qu'il
+ * faut pour les participations créées avant que le droit ne soit figé.
+ */
 export type ShareLinkJoin = {
   readonly joinedAt: Date;
   readonly shareLinkId: string | null;
+  readonly permissions?: ParticipantRightsOverride | null;
+  readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
 };
 
 export type ShareLinkParticipation = ShareLinkJoin & {
@@ -74,7 +84,21 @@ export type ShareLinkHistoryGrant = { readonly allowViewHistory: boolean } | nul
  * que le cas lui-même.
  */
 export function historyFloorFor(join: ShareLinkJoin, link: ShareLinkHistoryGrant): Date | null {
-  if (!join.shareLinkId || !link || link.allowViewHistory) return null;
+  if (!join.shareLinkId) return null;
+
+  // On entre sous les conditions du MOMENT : le droit figé au join décide, et un
+  // hôte qui modifie son lien ensuite ne retire rien à qui est déjà là. Son
+  // levier sur les personnes déjà entrées est la surcharge, lue en premier.
+  //
+  // ABSENT n'est pas « faux ». Toute participation antérieure à ce champ ne le
+  // porte pas — et sur le connecteur MongoDB un champ absent ne matche ni `null`
+  // ni `NOT null`. Le lire comme un refus fermerait l'historique à toute la
+  // population existante d'un coup, sans qu'aucune requête ne le signale. Le
+  // repli sur le lien EST le comportement historique, préservé à l'identique.
+  const granted = join.anonymousSession?.rights?.canViewHistory ?? join.permissions?.canViewHistory;
+  if (typeof granted === 'boolean') return granted ? null : join.joinedAt;
+
+  if (!link || link.allowViewHistory) return null;
   return join.joinedAt;
 }
 

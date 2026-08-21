@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { ParticipantProfileDialog } from './ParticipantProfileDialog';
 import { ParticipantProfileContext } from './participant-profile-context';
+import { useParticipantRightsSync } from '@/hooks/queries/use-participant-rights-sync';
 
 interface ParticipantProfileProviderProps {
   readonly conversationId: string;
@@ -20,6 +21,11 @@ export function ParticipantProfileProvider({
   children,
 }: ParticipantProfileProviderProps) {
   const [participantId, setParticipantId] = useState<string | null>(null);
+
+  // L'écoute vit ici, pas dans le dialogue : le VISITEUR concerné n'ouvre pas
+  // sa propre fiche, et c'est pourtant lui que la décision contraint. Montée au
+  // niveau de la conversation, elle le suit tant qu'il y est.
+  useParticipantRightsSync(conversationId);
 
   /**
    * Le dialogue n'est monté qu'à partir de la PREMIÈRE ouverture, et le reste

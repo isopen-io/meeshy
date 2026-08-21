@@ -404,7 +404,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             canSendVideos: false,
             canSendAudios: false,
             canSendLocations: false,
-            canSendLinks: false
+            canSendLinks: false,
+            // Figé comme les sept autres : on entre sous les conditions du
+            // MOMENT. Un hôte qui décoche `allowViewHistory` ensuite ne referme
+            // rien à qui est déjà là — son levier sur les personnes déjà
+            // entrées est la surcharge par participant.
+            canViewHistory: shareLink.allowViewHistory
           },
           anonymousSession: {
             shareLinkId: shareLink.id,

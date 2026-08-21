@@ -37,6 +37,22 @@ const CAPABILITY_ORDER: readonly (keyof ParticipantEntryCapabilities)[] = [
  * formulations concurrentes pour une seule règle se liraient comme deux règles.
  * Jumeau iOS : `ParticipantProfileSheet.deniedLabel`.
  */
+/**
+ * Les mêmes droits, énoncés à l'ENDROIT — un interrupteur se lit « ce qu'il
+ * accorde », pas « ce qu'il refuse ». Le libellé négatif de la lecture (« Ne
+ * peut pas… ») deviendrait illisible à côté d'un interrupteur allumé.
+ */
+const CAPABILITY_ALLOWED_FALLBACK: Record<keyof ParticipantEntryCapabilities, string> = {
+  canViewHistory: 'Voir les messages antérieurs',
+  canSendMessages: 'Écrire des messages',
+  canSendImages: 'Envoyer des photos',
+  canSendFiles: 'Envoyer des fichiers',
+  canSendVideos: 'Envoyer des vidéos',
+  canSendAudios: 'Envoyer de l’audio',
+  canSendLinks: 'Envoyer des liens',
+  canSendLocations: 'Partager sa position',
+};
+
 const CAPABILITY_DENIED_FALLBACK: Record<keyof ParticipantEntryCapabilities, string> = {
   canViewHistory: 'Ne voit pas les messages antérieurs à son arrivée',
   canSendMessages: 'Ne peut pas écrire de messages',
@@ -51,6 +67,15 @@ const CAPABILITY_DENIED_FALLBACK: Record<keyof ParticipantEntryCapabilities, str
 interface ParticipantProfileCardProps {
   readonly profile: ParticipantProfile;
   readonly className?: string;
+  /**
+   * Fourni quand le lecteur peut écrire les droits de ce visiteur. Son absence
+   * met la section en lecture seule.
+   *
+   * La carte ne décide pas de ce droit : l'arbitrage appartient au gateway, qui
+   * sert ou non `entryLink`, et au conteneur qui branche ce callback. Une carte
+   * qui trancherait elle-même rejouerait côté client une règle d'autorisation.
+   */
+  readonly onToggleCapability?: (capability: keyof ParticipantEntryCapabilities, value: boolean) => void;
 }
 
 interface ProfileRowProps {
@@ -108,6 +133,7 @@ function ProfileRow({ testId, icon, label, value, withheld, withheldLabel }: Pro
 export const ParticipantProfileCard = memo(function ParticipantProfileCard({
   profile,
   className,
+  onToggleCapability,
 }: ParticipantProfileCardProps) {
   const { t } = useI18n('conversations');
 
@@ -236,7 +262,40 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
           <div className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
             {t('participantProfile.capabilities', 'Dans cette conversation')}
           </div>
-          {deniedCapabilities.length === 0 ? (
+          {onToggleCapability && capabilities ? (
+            // En lecture, la carte n'énonce que les refus. En ÉDITION il faut
+            // les huit : on ne peut pas accorder un droit qu'on ne montre pas.
+            <ul className="space-y-1">
+              {CAPABILITY_ORDER.map((capability) => {
+                const allowed = capabilities[capability];
+                return (
+                  <li key={capability} className="flex items-center gap-2 text-sm">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={allowed}
+                      data-testid={`participant-profile-toggle-${capability}`}
+                      onClick={() => onToggleCapability(capability, !allowed)}
+                      className={cn(
+                        'relative h-5 w-9 flex-shrink-0 rounded-full transition-colors',
+                        allowed ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform',
+                          allowed ? 'translate-x-4' : 'translate-x-0.5'
+                        )}
+                      />
+                    </button>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {t(`participantProfile.allowed.${capability}`, CAPABILITY_ALLOWED_FALLBACK[capability])}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : deniedCapabilities.length === 0 ? (
             <div
               data-testid="participant-profile-no-restriction"
               className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300"

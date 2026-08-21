@@ -15,7 +15,7 @@
  *     visiteur qui a tout rempli d'un visiteur qui n'a rien donné.
  */
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ParticipantProfileCard } from '../ParticipantProfileCard';
 import type { ParticipantProfile } from '@/hooks/queries/use-participant-profile';
 
@@ -239,5 +239,67 @@ describe('ParticipantProfileCard — réglages du lien', () => {
     render(<ParticipantProfileCard profile={profile({ entryLink })} />);
 
     expect(screen.queryByTestId('participant-profile-entry-link-inactive')).toBeNull();
+  });
+});
+
+/**
+ * L'ÉDITION — réservée aux hôtes, et la carte ne décide pas de ce droit.
+ *
+ * Elle rend des interrupteurs quand on lui passe de quoi écrire, du texte
+ * sinon. L'arbitrage appartient au gateway (`entryLink` servi ou non) et au
+ * conteneur qui branche le callback ; une carte qui déciderait elle-même
+ * rejouerait côté client une règle d'autorisation.
+ */
+describe('ParticipantProfileCard — édition par l’hôte', () => {
+  const entryLink = {
+    name: 'Invitation publique',
+    isActive: true,
+    expiresAt: null,
+    maxUses: null,
+    currentUses: 3,
+    requireNickname: true,
+    requireEmail: false,
+    requireBirthday: false,
+    allowedCountries: [],
+    allowedLanguages: [],
+  };
+
+  it('reste en lecture seule sans callback d’écriture', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} />);
+
+    expect(screen.queryByTestId('participant-profile-toggle-canSendFiles')).toBeNull();
+  });
+
+  it('rend un interrupteur par droit quand l’écriture est possible', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={jest.fn()} />);
+
+    expect(screen.getByTestId('participant-profile-toggle-canSendFiles')).toBeTruthy();
+    expect(screen.getByTestId('participant-profile-toggle-canViewHistory')).toBeTruthy();
+  });
+
+  // En lecture, la carte n'énonce que les refus. En ÉDITION il faut les huit :
+  // un hôte ne peut pas accorder un droit qu'on ne lui montre pas.
+  it('montre AUSSI les droits accordés — on ne retire pas ce qui est caché', () => {
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={jest.fn()} />);
+
+    expect(screen.getByTestId('participant-profile-toggle-canSendMessages')).toBeTruthy();
+  });
+
+  it('remonte le droit et sa valeur CIBLE au basculement', () => {
+    const onToggle = jest.fn();
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={onToggle} />);
+
+    fireEvent.click(screen.getByTestId('participant-profile-toggle-canSendFiles'));
+
+    expect(onToggle).toHaveBeenCalledWith('canSendFiles', true);
+  });
+
+  it('remonte `false` pour un droit actuellement accordé', () => {
+    const onToggle = jest.fn();
+    render(<ParticipantProfileCard profile={profile({ entryLink })} onToggleCapability={onToggle} />);
+
+    fireEvent.click(screen.getByTestId('participant-profile-toggle-canSendMessages'));
+
+    expect(onToggle).toHaveBeenCalledWith('canSendMessages', false);
   });
 });
