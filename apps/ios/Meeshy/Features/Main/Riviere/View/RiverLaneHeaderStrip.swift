@@ -15,11 +15,17 @@ import MeeshyUI
 /// la bande elle-même ne défile PAS verticalement : c'est l'appelant qui la
 /// pose hors du `ScrollView` vertical (`RiverStreamHost`).
 struct RiverLaneHeaderStrip: View {
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+
     let headers: [RiverLaneResolver.RiverLaneHeader]
     let columns: RiverColumnLayout
     /// Décalage horizontal du pane défilant — la bande translate à l'identique
     /// pour rester alignée sur les couloirs qu'elle nomme.
     let horizontalOffset: CGFloat
+    /// Largeur RÉELLEMENT visible du plan — ce qui sépare « nommé » de « hors
+    /// du champ ». Dite par l'appelant, qui la mesure déjà.
+    var visibleWidth: CGFloat = 0
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -38,9 +44,83 @@ struct RiverLaneHeaderStrip: View {
         .frame(width: columns.totalWidth, height: RiverMetrics.LaneHeader.height, alignment: .topLeading)
         .offset(x: -horizontalOffset)
         .clipped()
-        // Décoratif — le nom vit DÉJÀ dans chaque bulle en tête de groupe
-        // (§7ter A2) ; VoiceOver n'a rien à annoncer de plus ici.
-        .accessibilityHidden(true)
+        .overlay(alignment: .leading) { offscreenBadge(headers: hiddenToTheLeft, edge: .leading) }
+        .overlay(alignment: .trailing) { offscreenBadge(headers: hiddenToTheRight, edge: .trailing) }
+        // Les NOMS restent décoratifs — ils vivent DÉJÀ dans chaque bulle en
+        // tête de groupe (§7ter A2). Les badges de hors-champ, eux, portent
+        // une information que RIEN d'autre ne donne : ils gardent leur
+        // étiquette (voir `offscreenBadge`).
+        .accessibilityElement(children: .contain)
+    }
+
+    // MARK: - Hors du champ
+
+    /// « La vue Rivière doit signaler les personnes les plus à droite qu'on ne
+    /// voit pas encore dans le plan, et les personnes les plus à gauche »
+    /// (arbitrage produit 2026-08-21). Sans ce signal, un plan de sept
+    /// couloirs sur un écran qui en montre un et demi laisse croire que la
+    /// conversation tient tout entière sous les yeux.
+    ///
+    /// Le partage se fait sur le RAIL du couloir, la même abscisse que la
+    /// bande utilise déjà pour poser ses noms — aucun second calcul de
+    /// géométrie (garde R15).
+    private var hiddenToTheLeft: [RiverLaneResolver.RiverLaneHeader] {
+        guard visibleWidth > 0 else { return [] }
+        return headers.filter { columns.railX($0.laneIndex) < horizontalOffset }
+    }
+
+    private var hiddenToTheRight: [RiverLaneResolver.RiverLaneHeader] {
+        guard visibleWidth > 0 else { return [] }
+        return headers.filter { columns.railX($0.laneIndex) > horizontalOffset + visibleWidth }
+    }
+
+    @ViewBuilder
+    private func offscreenBadge(
+        headers hidden: [RiverLaneResolver.RiverLaneHeader],
+        edge: HorizontalEdge
+    ) -> some View {
+        if !hidden.isEmpty {
+            HStack(spacing: 3) {
+                if edge == .trailing { dots(hidden) }
+                Image(systemName: edge == .leading ? "chevron.left" : "chevron.right")
+                    .font(MeeshyFont.relative(9, weight: .bold))
+                    .foregroundColor(ThemeManager.shared.textMuted)
+                if edge == .leading { dots(hidden) }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(MeeshyColors.backgroundSecondary(isDark: isDark).opacity(0.92)))
+            .accessibilityLabel(
+                String(
+                    format: String(
+                        localized: edge == .leading
+                            ? "riviere.header.offscreen.left"
+                            : "riviere.header.offscreen.right",
+                        defaultValue: edge == .leading ? "%lld voix à gauche" : "%lld voix à droite",
+                        bundle: .main
+                    ),
+                    hidden.count
+                )
+            )
+        }
+    }
+
+    /// Une pastille par voix hors champ, jusqu'à trois — au-delà, le compte
+    /// dit ce que les pastilles ne diraient plus.
+    @ViewBuilder
+    private func dots(_ hidden: [RiverLaneResolver.RiverLaneHeader]) -> some View {
+        HStack(spacing: 2) {
+            ForEach(Array(hidden.prefix(3).enumerated()), id: \.offset) { _, header in
+                Circle()
+                    .fill(Color(hex: DynamicColorGenerator.colorForName(header.colorSeed)))
+                    .frame(width: 5, height: 5)
+            }
+            if hidden.count > 3 {
+                Text("\(hidden.count)")
+                    .font(MeeshyFont.relative(9, weight: .bold))
+                    .foregroundColor(ThemeManager.shared.textMuted)
+            }
+        }
     }
 
     private func headerLabel(_ header: RiverLaneResolver.RiverLaneHeader) -> some View {

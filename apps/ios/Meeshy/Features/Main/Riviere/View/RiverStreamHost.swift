@@ -57,6 +57,9 @@ struct RiverStreamHost: View {
     /// les primitives de mesure existantes, il n'en déclare jamais une
     /// troisième (`RiverSourceGuardTests`).
     var paneHeight: CGFloat = 0
+    /// Largeur RÉELLE du pane, DITE par l'appelant — ce qui sépare les voix
+    /// nommées de celles qui attendent hors du champ.
+    var paneWidth: CGFloat = 0
 
     @ObservedObject var navigation: RiverNavigationController
 
@@ -192,9 +195,14 @@ struct RiverStreamHost: View {
         // rognage la borne à la largeur proposée sans rien changer à son
         // contenu ni à son offset.
         .safeAreaInset(edge: .top, spacing: 0) {
-            RiverLaneHeaderStrip(headers: laneHeaders, columns: columns, horizontalOffset: horizontalOffset)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipped()
+            RiverLaneHeaderStrip(
+                headers: laneHeaders,
+                columns: columns,
+                horizontalOffset: horizontalOffset,
+                visibleWidth: paneWidth
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
         }
         .simultaneousGesture(swipeGesture)
         .accessibilityElement(children: .contain)

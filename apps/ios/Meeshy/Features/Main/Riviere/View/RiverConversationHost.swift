@@ -76,6 +76,7 @@ struct RiverConversationHost: View {
                 geometry: geometry,
                 contents: contents,
                 paneHeight: proxy.size.height,
+                paneWidth: proxy.size.width,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

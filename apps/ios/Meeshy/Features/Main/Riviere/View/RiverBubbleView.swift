@@ -175,12 +175,13 @@ struct RiverBubbleView: View, Equatable {
         }
     }
 
-    /// Le haut du rang : du VIDE quand une nouvelle voix prend la parole, une
-    /// couture POINTILLÉE quand c'est la même qui continue
-    /// (`isFirstInGroup == false`, décidé par la LOI — cette vue ne fait que
-    /// le dessiner). Le pointillé court à l'aplomb du rail de la branche,
-    /// c'est-à-dire au centre du couloir : il prolonge visuellement le trait
-    /// que `RiverLaneCanvas` trace derrière, sans le recalculer.
+    /// Le haut du rang. Une nouvelle voix qui prend la parole gagne du VIDE
+    /// (`Row.gap`) ; la MÊME voix qui continue ne gagne RIEN — sa bulle vient
+    /// se COLLER à la précédente, et un trait POINTILLÉ HORIZONTAL marque la
+    /// jointure (arbitrage produit 2026-08-21 : « ce n'est pas la ligne qui
+    /// doit être en pointillé mais la séparation entre les deux bulles, qui
+    /// devraient être collées »). Le groupement lui-même reste une décision de
+    /// la LOI (`isFirstInGroup`) — cette vue ne fait que le dessiner.
     @ViewBuilder
     private var topSeam: some View {
         if content.bubble.isFirstInGroup || content.bubble.isSystem {
@@ -189,19 +190,17 @@ struct RiverBubbleView: View, Equatable {
                 .accessibilityHidden(true)
         } else {
             Path { path in
-                path.move(to: .zero)
-                path.addLine(to: CGPoint(x: 0, y: RiverMetrics.Row.gap))
+                path.move(to: CGPoint(x: 0, y: RiverMetrics.Row.continuationSeam / 2))
+                path.addLine(to: CGPoint(x: contentWidth, y: RiverMetrics.Row.continuationSeam / 2))
             }
             .stroke(
-                laneColor.opacity(0.75),
+                laneColor.opacity(0.55),
                 style: StrokeStyle(
-                    lineWidth: RiverMetrics.Line.width,
-                    lineCap: .round,
+                    lineWidth: 1,
                     dash: [RiverMetrics.Row.continuationDashLength, RiverMetrics.Row.continuationDashGap]
                 )
             )
-            .frame(width: RiverMetrics.Line.width, height: RiverMetrics.Row.gap)
-            .frame(width: contentWidth, alignment: .center)
+            .frame(width: contentWidth, height: RiverMetrics.Row.continuationSeam)
             .accessibilityHidden(true)
         }
     }
@@ -272,15 +271,20 @@ struct RiverBubbleView: View, Equatable {
                 .font(MeeshyFont.relative(FocalMetrics.Text.size))
                 .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
 
-            if !content.bubble.isFirstInGroup {
-                footerTime
-            }
+            // « L'heure d'une bulle doit TOUJOURS être en bas dans la bulle »
+            // (arbitrage produit 2026-08-21). Elle ne vivait en base que pour
+            // les bulles de SUITE ; une tête de groupe la portait dans sa
+            // rangée d'identité, si bien qu'une même conversation lisait son
+            // horloge à deux endroits selon le rang.
+            footerTime
         }
         // `gutter` reste au propriétaire de la COLONNE (`RiverStreamHost`,
         // l'espace EXTÉRIEUR à la bulle où passe le trait) — jamais dupliqué
-        // ici : le seul écart interne de cette vue est `baseGap`.
-        .padding(.horizontal, RiverMetrics.Bubble.baseGap)
-        .padding(.vertical, RiverMetrics.Bubble.baseGap)
+        // ici. Le retrait INTÉRIEUR, lui, a son propre token depuis le retour
+        // produit du 2026-08-21 : `baseGap` (l'écart de pile entre les blocs)
+        // en tenait lieu et laissait le texte coller au contour.
+        .padding(.horizontal, RiverMetrics.Bubble.contentPadding)
+        .padding(.vertical, RiverMetrics.Bubble.contentPadding)
         .frame(width: contentWidth, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
@@ -354,15 +358,9 @@ struct RiverBubbleView: View, Equatable {
                 )
 
             Spacer(minLength: 0)
-
-            // « L'heure vit en base de bulle » (amendement R) : en tête de
-            // groupe, la base ET la tête portent la même horloge — c'est la
-            // règle du Fil (`FocalIdentityHeader`/`FocalMetaRow`, même
-            // horodatage dans les deux positions selon qu'un rang ouvre ou
-            // prolonge un groupe).
-            Text(content.timeString)
-                .font(FocalMetrics.Time.font)
-                .foregroundColor(metaTint)
+            // L'heure N'EST PLUS répétée ici : elle vit en base de bulle, pour
+            // TOUS les rangs (arbitrage produit 2026-08-21). La tête de groupe
+            // ne porte plus que l'identité — la pastille et le nom.
         }
         // Même largeur que `messageBox` (`contentWidth`) : la pastille
         // s'aligne sur le bord GAUCHE de la bulle, l'heure sur son bord

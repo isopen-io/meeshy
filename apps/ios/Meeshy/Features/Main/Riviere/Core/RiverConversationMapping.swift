@@ -60,9 +60,57 @@ nonisolated enum RiverConversationMapping {
                 )
             },
             participants: order.map { RiverLaneResolver.RiverParticipantInput(id: $0, displayName: namesById[$0] ?? $0) },
-            viewerId: viewerId
+            viewerId: viewerId,
+            silenceWindowMs: adaptiveSilenceWindowMs(messages: ranked)
         )
     }
+
+    /// **La fenêtre de silence ne peut pas être une constante.**
+    ///
+    /// Elle décide combien de temps une branche survit à sa dernière prise de
+    /// parole — donc combien de voix tiennent SIMULTANÉMENT dans le plan.
+    /// Arbitrage produit 2026-08-21 : « il devrait aller jusqu'à 7 personnes
+    /// alignées sur l'horizontal pour les communications de l'ordre des dix
+    /// minutes — valeur configurable : dans une conversation peu causante on
+    /// peut monter en heures ou en jours, là où dans une conversation très
+    /// dynamique on peut passer en minutes voire en dessous ».
+    ///
+    /// La règle lit donc la CADENCE RÉELLE plutôt qu'une horloge fixe : on
+    /// remonte le fil jusqu'à avoir croisé autant de voix distinctes que la
+    /// loi accepte de couloirs (`RiverLaneResolver.maxLanes` — lu, jamais
+    /// recopié : garde R15), et le temps qu'il a fallu pour les croiser EST la
+    /// fenêtre. Une conversation qui parle vite la resserre à la minute, une
+    /// conversation lente l'étire au jour, sans qu'aucun seuil n'ait à être
+    /// deviné.
+    ///
+    /// Bornes : jamais moins d'une minute (sous laquelle une branche mourrait
+    /// entre deux phrases d'une même personne), jamais plus de trente jours
+    /// (au-delà, tout le monde serait éternellement « présent »). Fenêtre
+    /// indécidable — moins de deux voix, ou horloges illisibles — : `nil`,
+    /// c'est-à-dire le défaut de la loi, jamais un nombre fabriqué.
+    static func adaptiveSilenceWindowMs(messages: [MeeshyMessage]) -> Double? {
+        let spoken = messages.filter { isVoice($0) }.sorted { $0.createdAt < $1.createdAt }
+        guard let latest = spoken.last else { return nil }
+
+        var seen = Set<String>()
+        var oldestOfWindow: Date?
+        for message in spoken.reversed() {
+            seen.insert(message.senderId)
+            oldestOfWindow = message.createdAt
+            if seen.count >= RiverLaneResolver.maxLanes { break }
+        }
+        guard seen.count >= 2, let oldest = oldestOfWindow else { return nil }
+
+        let spanMs = latest.createdAt.timeIntervalSince(oldest) * 1000
+        guard spanMs.isFinite, spanMs > 0 else { return nil }
+        return min(max(spanMs, minimumSilenceWindowMs), maximumSilenceWindowMs)
+    }
+
+    /// Une minute — en deçà, une branche mourrait entre deux phrases d'une
+    /// même personne.
+    static let minimumSilenceWindowMs: Double = 60_000
+    /// Trente jours — au-delà, plus personne ne quitterait jamais le plan.
+    static let maximumSilenceWindowMs: Double = 30 * 24 * 60 * 60 * 1000
 
     /// Un message est une VOIX s'il vient d'un humain ou d'un agent — jamais du
     /// système, jamais supprimé (une bulle vide ferait un rang vide).

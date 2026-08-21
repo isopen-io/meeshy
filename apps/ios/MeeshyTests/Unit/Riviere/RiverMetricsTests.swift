@@ -166,6 +166,20 @@ final class RiverMetricsTests: XCTestCase {
     /// posés le jour où le retour produit a dit « les messages s'empilent bord
     /// à bord sans espace ». Même règle que les autres familles : on répare le
     /// token, jamais le test.
+    /// Le retrait INTÉRIEUR de la bulle a son propre token : le confondre avec
+    /// `baseGap` (écart de pile) laissait le texte coller au contour.
+    func test_bubble_contentPadding_matchesTokens() throws {
+        XCTAssertEqual(
+            RiverMetrics.Bubble.contentPadding,
+            try CGFloat(tokenNumber("bubble", "contentPadding"))
+        )
+        XCTAssertNotEqual(
+            RiverMetrics.Bubble.contentPadding,
+            RiverMetrics.Bubble.baseGap,
+            "Deux cotes DISTINCTES : une marge n'est pas un écart de pile."
+        )
+    }
+
     func test_row_matchesTokens() throws {
         XCTAssertEqual(RiverMetrics.Row.gap, try CGFloat(tokenNumber("row", "gap")))
         XCTAssertEqual(

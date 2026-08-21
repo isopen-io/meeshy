@@ -70,6 +70,13 @@ nonisolated public enum RiverMetrics {
     nonisolated public enum Bubble {
         public static let detourRadius: CGFloat = 14
         public static let baseGap: CGFloat = 8
+        /// Retrait INTÉRIEUR de la bulle — retour produit 2026-08-21 : « il
+        /// faut assurer une certaine distance entre les bords et le contenu ».
+        /// `baseGap` en tenait lieu, à tort : c'est un ÉCART DE PILE entre les
+        /// blocs d'une bulle (citation, texte, heure), pas une marge. Les
+        /// confondre donnait 8 pt de respiration à un texte cerné d'un contour
+        /// de 2,5 pt.
+        public static let contentPadding: CGFloat = 14
         public static let identityNameMaxWidth: CGFloat = 0.44
         public static let flatBorderWidth: CGFloat = 1
     }
@@ -104,6 +111,11 @@ nonisolated public enum RiverMetrics {
     /// dessiner.
     nonisolated public enum Row {
         public static let gap: CGFloat = 14
+        /// Hauteur de la couture entre deux bulles CONSÉCUTIVES du même
+        /// auteur : elles se TOUCHENT (arbitrage produit 2026-08-21 — « ce
+        /// n'est pas la LIGNE qui doit être en pointillé mais la SÉPARATION
+        /// entre les deux bulles, qui devraient être collées »).
+        public static let continuationSeam: CGFloat = 3
         public static let continuationDashLength: CGFloat = 3
         public static let continuationDashGap: CGFloat = 4
     }

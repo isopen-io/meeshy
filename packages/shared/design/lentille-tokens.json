@@ -172,9 +172,10 @@
     "bubble": {
       "detourRadius": 14,
       "baseGap": 8,
+      "contentPadding": 14,
       "identityNameMaxWidth": "44%",
       "flatBorderWidth": 1,
-      "$note": "detourRadius = rayon de contournement de bulle (le trait épouse ce rayon en abordant/quittant la bulle) ; baseGap = écart horizontal de la ligne de base où vit l'heure (amendement R : « l'heure vit en base de bulle ») ; identityNameMaxWidth = §7ter A.5 (2026-08-17), borne du nom en tête de groupe (% de la largeur de bulle, même convention que list.row.transformOriginX — garantit que la branche, à l'aplomb du centre du couloir, croise du vide dans la rangée d'identité, jamais un mot) ; flatBorderWidth = §7ter A.6, contour NEUTRE de la vue sérialisée (le bord gauche et le bord bas restent `line.width`, couleur d'auteur — aucune ligne n'aborde la bulle en vue sérialisée, un contour complet coloré y mimerait une branche que le verdict de forme vient de retirer)."
+      "$note": "detourRadius = rayon de contournement de bulle (le trait épouse ce rayon en abordant/quittant la bulle) ; baseGap = écart horizontal de la ligne de base où vit l'heure (amendement R : « l'heure vit en base de bulle ») ; identityNameMaxWidth = §7ter A.5 (2026-08-17), borne du nom en tête de groupe (% de la largeur de bulle, même convention que list.row.transformOriginX — garantit que la branche, à l'aplomb du centre du couloir, croise du vide dans la rangée d'identité, jamais un mot) ; contentPadding = retrait INTÉRIEUR de la bulle (retour produit 2026-08-21 : « assurer une certaine distance entre les bords et le contenu ») — distinct de baseGap, qui n'est qu'un ÉCART DE PILE entre les blocs d'une bulle et ne saurait tenir lieu de marge ; flatBorderWidth = §7ter A.6, contour NEUTRE de la vue sérialisée (le bord gauche et le bord bas restent `line.width`, couleur d'auteur — aucune ligne n'aborde la bulle en vue sérialisée, un contour complet coloré y mimerait une branche que le verdict de forme vient de retirer)."
     },
     "connector": {
       "strokeWidth": 1.4,
@@ -184,9 +185,10 @@
     },
     "row": {
       "gap": 14,
+      "continuationSeam": 3,
       "continuationDashLength": 3,
       "continuationDashGap": 4,
-      "$note": "Retour produit 2026-08-21 : « les messages s'empilent bord à bord sans espace — chaque message doit avoir un espace, ou des pointillés entre les deux si ce sont deux messages de suite ». gap = respiration verticale entre DEUX RANGS (l'axe du temps a besoin de se lire) ; continuationDash* = tirets de la couture qui relie deux bulles CONSÉCUTIVES du même auteur (isFirstInGroup == false), tracée dans le couloir, couleur d'auteur — elle dit « c'est la même voix qui continue » là où l'espace, seul, dirait « quelqu'un d'autre a parlé ». Le GROUPEMENT reste une décision de la LOI (RiverBubble.isFirstInGroup) : ces cotes ne font que le dessiner."
+      "$note": "Retour produit 2026-08-21 : « les messages s'empilent bord à bord sans espace — chaque message doit avoir un espace, ou des pointillés entre les deux si ce sont deux messages de suite ». gap = respiration verticale entre DEUX RANGS (l'axe du temps a besoin de se lire) ; continuationSeam = hauteur de la couture entre deux bulles CONSÉCUTIVES du même auteur (isFirstInGroup == false) : elles se TOUCHENT, un trait POINTILLÉ HORIZONTAL les sépare (arbitrage produit 2026-08-21 : « ce n'est pas la ligne qui doit être en pointillé mais la séparation entre les deux bulles, qui devraient être collées ») ; continuationDash* = longueur et écart de ces tirets. Le GROUPEMENT reste une décision de la LOI (RiverBubble.isFirstInGroup) : ces cotes ne font que le dessiner."
     },
     "laneHeader": {
       "height": 38,
