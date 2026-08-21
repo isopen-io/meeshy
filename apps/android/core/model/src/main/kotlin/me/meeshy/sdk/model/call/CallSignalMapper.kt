@@ -37,7 +37,10 @@ object CallSignalMapper {
             // by [endedSignal], not folded here. They are inert to the identity-less
             // FSM-facing stream so a *waiting* call's teardown (fanned out to a busy
             // user's rooms) can never blindly reduce the *active* call.
-            "call:ended", "call:missed" -> null
+            // `call:force-leave` joins them for the same reason: it is a
+            // teardown of THIS call, and it must be gated on the active id
+            // rather than blindly reducing whatever call the FSM holds.
+            "call:ended", "call:missed", "call:force-leave" -> null
             "call:media-toggled" -> {
                 json.decodeFromString<CallMediaTogglePayload>(rawJson)
                 null
@@ -92,7 +95,8 @@ object CallSignalMapper {
     }.getOrNull()
 
     /**
-     * Decode an inbound teardown frame (`call:ended` / `call:missed`) into the
+     * Decode an inbound teardown frame (`call:ended` / `call:missed` /
+     * `call:force-leave`) into the
      * identity-carrying [CallEndedSignal] — the ended call's id plus the
      * [CallEvent] the FSM reduces iff that id is the *active* call's — or `null`
      * when the frame is not a teardown, is malformed, or carries no (blank) id.
@@ -114,6 +118,17 @@ object CallSignalMapper {
             "call:missed" -> {
                 val payload = json.decodeFromString<CallMissedPayload>(rawJson)
                 payload.callId.takeIf { it.isNotBlank() }?.let { CallEndedSignal(it, CallEvent.RingTimeout) }
+            }
+            // `call:force-leave` — the server took THIS device out of the call
+            // (end of conversation membership: left, banned, removed, thread
+            // deleted for oneself). The call itself may well carry on for the
+            // others; what ends is this side's participation, so the local
+            // teardown is exactly a remote hang-up as far as the FSM is
+            // concerned. Identity-gated like its two siblings: the frame names
+            // the call it removes us from, never "the current call".
+            "call:force-leave" -> {
+                val payload = json.decodeFromString<CallForceLeavePayload>(rawJson)
+                payload.callId.takeIf { it.isNotBlank() }?.let { CallEndedSignal(it, CallEvent.RemoteHangUp) }
             }
             else -> null
         }

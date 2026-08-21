@@ -39,6 +39,10 @@
  * ouverte (cycle 72, § 6, piste 1) et non un oubli : raccrocher au nez de gens
  * qui se parlent serait une régression, là où une épingle de position figée dans
  * un fil mort est le défaut de sécurité que `LocationHandler` documente déjà.
+ * L'argument tient parce que la clôture ne retire le droit de PERSONNE — tous
+ * les interlocuteurs restent membres. Il s'inverse pour la fin d'appartenance,
+ * qui sort bel et bien le partant des appels du fil (`endConversationMembership`,
+ * cycle 75) : là, ce qui vient de cesser est précisément son droit d'être là.
  *
  * Elle ne couvre pas non plus la fin d'APPARTENANCE — le membre qui sort d'un
  * fil qui, lui, continue de vivre. C'est une fin distincte, ni celle de l'objet
