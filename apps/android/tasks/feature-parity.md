@@ -2671,7 +2671,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `ChatViewModel` recomputes on `onDraftChange`, exposes `onMentionSelected`, resets on send; `ChatScreen`
       renders a neutral accent-avatar suggestion strip above the composer. +40 tests. **Pending:** debounced
       backend `/mentions` API merge over the local roster (online enrichment).
-- [◐] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
+- [x] Draft auto-save/restore (text + reply + language + effects + blur + ephemeral) — **text + reply-ref done**
       (slice `chat-draft-autosave`, 2026-07-07): pure `:feature:chat` `DraftAutosave` SSOT (blank composer
       purges, non-blank saves raw, unchanged writes nothing → `Save`/`Clear`/`None`; restore seeds an idle empty
       composer only, never clobbering an in-flight edit or already-typed text) + durable `:sdk-core`
@@ -2698,9 +2698,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `clearEffects` now persist, restore re-arms `pendingEffects` on open. +19 tests (7 `ConversationDraftTest`
       incl. back-compat decode, 8 `DraftAutosaveTest`, 4 VM round-trip), mutation-proven ×3 (drop the
       `isWorthPersisting` effects clause → 1 fail; drop the resolve idempotence effects clause → 1 fail; drop the
-      empty-guard `!effects.hasAnyEffect` → 1 fail). **Pending:** the manual composer language pick
-      (`MessageDraft.selectedLanguage`) — a language-only draft is not meaningful on its own (iOS parity), a
-      clean narrower follow-up slice.
+      empty-guard `!effects.hasAnyEffect` → 1 fail). **Manual composer-language persistence done** (slice
+      `chat-draft-language-persistence`, 2026-08-21): `ConversationDraft` gained `selectedLanguage: String?`
+      (defaulted → legacy blobs decode to no language) porting iOS `MessageDraft.selectedLanguage`. Per iOS
+      `isEffectivelyEmpty`/`hasDraftText` (both ignore `selectedLanguage`), a language pick is **not content**:
+      `isMeaningful` and `isWorthPersisting` are BOTH left unchanged, so a language-only composer neither floats/
+      badges a row nor is persisted — the language rides along an otherwise worth-persisting draft. Only the
+      deliberate **manual** override (`ComposerLanguageState.manualOverride`) is persisted; live detection is not
+      (it re-derives from the restored text). `DraftAutosave.resolve` gained a `selectedLanguage` param
+      (normalised trim/blank→null; a change to it on a worth-persisting draft → `Save`; identical text+lang →
+      `None`; language alone on an empty composer → `None`); `DraftRestore` carries `selectedLanguage`; `restore`
+      re-applies it via `withManualPick` (a restored pick wins over detection of the restored text and freezes
+      analysis). `ChatViewModel.persistDraft` reads `manualOverride` from state and `onComposerLanguagePicked`
+      now persists (iOS `.adaptiveOnChange(of: selectedLanguage)` parity); open-time restore applies the pick.
+      +17 tests (4 `ConversationDraftTest` incl. back-compat decode + not-content proofs, 10 `DraftAutosaveTest`
+      = 7 resolve + 3 restore, 3 VM round-trip), mutation-proven (drop the resolve `selectedLanguage` idempotence
+      clause → exactly the `only_the_language_pick_changing` test fails, `identical_text_and_language` stays green).
 - [◐] Send with attachments (TUS resumable; audio over socket, others over REST) + upload progress —
       **REST attachment chain + first real path (clipboard content) done** (slice `chat-clipboard-content-send`,
       2026-07-16). The durable upload→send chain now carries message attachments, mirroring the proven story

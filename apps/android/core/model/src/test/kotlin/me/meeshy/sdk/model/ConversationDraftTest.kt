@@ -74,6 +74,29 @@ class ConversationDraftTest {
         ).isTrue()
     }
 
+    // ---- a manual language pick never counts toward either predicate (iOS `isEffectivelyEmpty`
+    // and `hasDraftText` both ignore `MessageDraft.selectedLanguage`: a language rides along a
+    // real draft, it never rescues an otherwise-empty one) ----
+
+    @Test
+    fun `a language pick alone does not make a draft meaningful for the list`() {
+        val languageOnly = ConversationDraft(conversationId = "c1", text = "  ", selectedLanguage = "fr")
+        assertThat(languageOnly.isMeaningful).isFalse()
+    }
+
+    @Test
+    fun `a language pick alone does not make a draft worth persisting`() {
+        val languageOnly = ConversationDraft(conversationId = "c1", text = "   ", selectedLanguage = "de")
+        assertThat(languageOnly.isWorthPersisting).isFalse()
+    }
+
+    @Test
+    fun `a language pick riding a real draft leaves both predicates on the underlying content`() {
+        val withLanguage = ConversationDraft(conversationId = "c1", text = "wip", selectedLanguage = "es")
+        assertThat(withLanguage.isMeaningful).isTrue()
+        assertThat(withLanguage.isWorthPersisting).isTrue()
+    }
+
     // ---- back-compat: a legacy blob without the effects field decodes to an empty selection ----
 
     @Test
@@ -84,5 +107,14 @@ class ConversationDraftTest {
 
         assertThat(decoded.effects).isEqualTo(MessageEffects())
         assertThat(decoded.effects.hasAnyEffect).isFalse()
+    }
+
+    @Test
+    fun `a persisted draft missing the selectedLanguage field decodes to no language`() {
+        val legacy = """{"conversationId":"c1","text":"hi","replyToId":"m1"}"""
+
+        val decoded = json.decodeFromString<ConversationDraft>(legacy)
+
+        assertThat(decoded.selectedLanguage).isNull()
     }
 }
