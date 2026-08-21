@@ -523,11 +523,6 @@ struct ReelPageView: View {
     @State private var audioFullscreen: AudioFullscreenSource?
     /// Lieu du réel ouvert plein écran (tap sur le sticker de position).
     @State private var reelFullscreenPlace: BubbleFullscreenPlace?
-    /// Muet LOCAL du fond audio storyEffects (B3.6, Task E2) — distinct de
-    /// l'audio NATIF du réel, qui reste toujours actif (`manager.isMuted`
-    /// réaffirmé par `drive()`, non touché ici). Jamais `isGlobalMuted` du
-    /// viewer story : surfaces indépendantes.
-    @State private var isBackgroundSoundMuted = false
     /// Prisme: the language the viewer explicitly picked via a flag / the
     /// translate toggle. `nil` = the auto-resolved preferred translation.
     @State private var selectedLanguage: String?
@@ -940,19 +935,30 @@ struct ReelPageView: View {
 
             // Muet LOCAL du fond storyEffects — distinct de l'audio NATIF du
             // réel (toujours actif, `drive()` réaffirme `manager.isMuted =
-            // false`, non touché ici).
-            if BackgroundSoundBadge.showsMuteButton(for: announcement) {
+            // false`, non touché ici). Gate renforcée (correctif revue DoD,
+            // BLOQUANT #1) : le bouton ne se monte QUE si un lecteur LOCAL
+            // existe réellement pour le piloter (`borrowedSoundTrack`,
+            // chargé dans `audioPlayer` par `startBorrowedSoundIfNeeded()`)
+            // — l'annonce seule peut être vraie sans qu'aucun moteur pilotable
+            // ne joue localement (ex. audio incrusté dans une vidéo). Le tap
+            // pilote RÉELLEMENT `audioPlayer` (pause/reprise, position
+            // conservée) — l'icône et le libellé a11y suivent
+            // `audioPlayer.isPlaying`, jamais un état local séparé qui
+            // pourrait diverger du son réellement audible.
+            if BackgroundSoundBadge.showsMuteButton(for: announcement), borrowedSoundTrack != nil {
                 Button {
-                    isBackgroundSoundMuted.toggle()
+                    audioPlayer.togglePlayPause()
                     HapticFeedback.light()
                 } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isBackgroundSoundMuted))
+                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
                         .font(MeeshyFont.relative(10, weight: .semibold))
                         .foregroundColor(.white.opacity(0.85))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
-                .accessibilityLabel(isBackgroundSoundMuted
-                    ? String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main)
-                    : String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main))
+                .accessibilityLabel(audioPlayer.isPlaying
+                    ? String(localized: "reels.action.mute", defaultValue: "Couper le son de fond", bundle: .main)
+                    : String(localized: "reels.action.unmute", defaultValue: "Réactiver le son de fond", bundle: .main))
             }
         }
     }

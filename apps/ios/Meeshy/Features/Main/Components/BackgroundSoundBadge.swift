@@ -170,4 +170,25 @@ extension BackgroundSoundBadge {
     static func muteIconName(isMuted: Bool) -> String {
         isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
     }
+
+    /// B3.6, correctif revue DoD (rejet du commit 1721a0ee2, constat majeur
+    /// #3) — porte du bouton muet du DÉTAIL (`PostDetailView`) : DOIT
+    /// coïncider avec le canvas RÉELLEMENT rendu par `postDetailContent`
+    /// (`storyCanvasSection` pour une story avec contenu, `repostEmbed` pour
+    /// une story-repost), jamais résolue séparément sur
+    /// `StoryItem(feedPost:).storyEffects` seul — cette dernière valeur
+    /// reste non-nil pour un post NON-story portant son PROPRE fond audio
+    /// (son emprunté, forme dominante E1, `BorrowedSoundPost.effects(for:)`)
+    /// alors qu'AUCUN canvas ne rend nulle part pour ce post : le bouton
+    /// serait monté, le tap ne piloterait rien.
+    ///
+    /// `renderedItem` est la MÊME valeur `StoryItem(feedPost: post)` que
+    /// l'appelant a déjà construite pour son propre rendu (correctif revue
+    /// mineur #8) — jamais une seconde conversion ici.
+    static func detailCanvasIsRendered(post: FeedPost, renderedItem: StoryItem) -> Bool {
+        if post.isStory {
+            return renderedItem.storyEffects != nil || !renderedItem.media.isEmpty
+        }
+        return (post.repost?.type ?? "").uppercased() == "STORY"
+    }
 }

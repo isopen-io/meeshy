@@ -425,8 +425,14 @@ struct PostDetailView: View {
         // own media here to avoid showing the same story content twice. Mirrors
         // the existing text-dedup guards (`if !post.isStory` / `if !isStoryRepost`).
         let isSharedStory = (post.repost?.type ?? "").uppercased() == "STORY"
+        // Conversion UNIQUE — partagée par storyCanvasSection ET la porte du
+        // bouton muet dans actionsBar (correctif revue mineur #8) : évite une
+        // 2e construction de StoryItem(feedPost:) par évaluation de body (ce
+        // panneau réévalue à chaque frame de scroll via storyCanvasVisible),
+        // ET garantit que la porte et le rendu voient EXACTEMENT le même item.
+        let renderedItem = StoryItem(feedPost: post)
         if post.isStory {
-            storyCanvasSection(post)
+            storyCanvasSection(post, renderedItem: renderedItem)
         } else if post.hasMedia, !isSharedStory {
             detailMediaSection(post.media, owner: DetailMediaAuthor(post: post))
                 .padding(.horizontal, 16)
@@ -473,7 +479,7 @@ struct PostDetailView: View {
         }
 
         // Actions bar
-        actionsBar(post)
+        actionsBar(post, renderedItem: renderedItem)
 
         // Separator + Comments (ZONE 3)
         Rectangle()
@@ -1707,7 +1713,7 @@ struct PostDetailView: View {
     // MARK: - Actions Bar
 
     @ViewBuilder
-    private func actionsBar(_ post: FeedPost) -> some View {
+    private func actionsBar(_ post: FeedPost, renderedItem: StoryItem) -> some View {
         HStack(spacing: 0) {
             // Heart button — socket-driven (joins post room on appear, leaves on disappear)
             Button {
@@ -1794,12 +1800,16 @@ struct PostDetailView: View {
             .accessibilityHint(String(localized: "a11y.post.bookmark.hint", defaultValue: "Enregistrer cette publication", bundle: .main))
 
             // Muet du canvas (B3.6, Task E2) — monté SI ET SEULEMENT SI une
-            // piste existe. Résolveur partagé (E1) sur `StoryItem(feedPost:)`,
-            // qui retombe déjà sur `repost.storyEffects` quand le post n'a pas
-            // de contenu propre — la MÊME cascade que `storyCanvasSection` /
-            // `repostEmbed` ci-dessous, donc le prédicat ne peut pas diverger
-            // du canvas RÉELLEMENT rendu.
-            if BackgroundSoundBadge.showsMuteButton(for: BackgroundSoundBadge.announcement(for: StoryItem(feedPost: post).storyEffects)) {
+            // piste existe (résolveur partagé E1, sur `renderedItem` HISSÉ par
+            // l'appelant — pas une reconstruction locale, correctif revue
+            // mineur #8) ET si un canvas est RÉELLEMENT rendu quelque part
+            // dans `postDetailContent` (`detailCanvasIsRendered`, correctif
+            // revue majeur #3) : l'annonce seule peut être vraie pour un post
+            // NON-story portant son PROPRE fond (son emprunté, E1) sans
+            // qu'aucun canvas ne rende — le bouton serait alors décoratif.
+            let detailAnnouncement = BackgroundSoundBadge.announcement(for: renderedItem.storyEffects)
+            if BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem),
+               BackgroundSoundBadge.showsMuteButton(for: detailAnnouncement) {
                 Spacer()
 
                 Button {
@@ -1827,13 +1837,14 @@ struct PostDetailView: View {
     /// during a call. Empty guard covers an expired/asset-less story (no
     /// black box).
     @ViewBuilder
-    private func storyCanvasSection(_ post: FeedPost) -> some View {
+    private func storyCanvasSection(_ post: FeedPost, renderedItem: StoryItem) -> some View {
         // Le garde « indisponible » s'évalue sur la conversion ENRICHIE
         // (`StoryItem(feedPost:)` retombe sur la source d'une republication) :
         // une story-repost sans ajouts propres a `storyEffects`/`media` nil
         // côté post mais un contenu complet côté source — elle doit rendre
-        // son canvas, pas le placeholder.
-        let renderedItem = StoryItem(feedPost: post)
+        // son canvas, pas le placeholder. `renderedItem` est HISSÉ par
+        // l'appelant (`postDetailContent`), partagé avec la porte du bouton
+        // muet (correctif revue mineur #8) — pas reconstruit ici.
         if renderedItem.storyEffects == nil && renderedItem.media.isEmpty {
             HStack(spacing: 6) {
                 Image(systemName: "sparkles.rectangle.stack")

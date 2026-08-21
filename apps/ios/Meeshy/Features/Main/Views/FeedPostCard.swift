@@ -939,9 +939,6 @@ struct FeedPostCard: View {
 
     // MARK: - Actions Bar
     @State private var likeAnimating = false
-    /// Muet LOCAL à la carte (B3.6, Task E2) — jamais `isGlobalMuted` du
-    /// viewer story : surfaces indépendantes, chacune son propre lecteur.
-    @State private var isBackgroundSoundMuted = false
 
     /// Effective liked state: socket-driven override when available, else post.isLiked.
     private var effectiveIsLiked: Bool { isLiked ?? post.isLiked }
@@ -1160,27 +1157,14 @@ struct FeedPostCard: View {
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
             .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
 
-            // Muet du fond (B3.6, Task E2) — monté SI ET SEULEMENT SI une
-            // piste existe, sur la MÊME valeur que le badge de la rangée
-            // auteur (`backgroundSoundAnnouncement`) : un seul prédicat
-            // partagé, jamais une seconde condition qui pourrait diverger.
-            if BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement) {
-                Spacer()
-
-                Button {
-                    isBackgroundSoundMuted.toggle()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: isBackgroundSoundMuted))
-                        .font(MeeshyFont.relative(17))
-                        .foregroundColor(theme.textSecondary)
-                }
-                .frame(minWidth: 44, minHeight: 44)
-                .contentShape(Rectangle())
-                .accessibilityLabel(isBackgroundSoundMuted
-                    ? String(localized: "a11y.feed.post.sound.unmute", defaultValue: "Réactiver le son du fond", bundle: .main)
-                    : String(localized: "a11y.feed.post.sound.mute", defaultValue: "Couper le son du fond", bundle: .main))
-            }
+            // Pas de bouton muet ici en E2 (correctif revue DoD, constat
+            // majeur #2) : la carte n'embarque encore AUCUN lecteur local
+            // capable de jouer le fond (l'embed story-repost fige
+            // `mute: true` dans `StoryRepostEmbedCell`, hors périmètre E2 ;
+            // la scène jouée dans la carte arrive avec E3,
+            // `MeeshyScenePlayer(.card)`). Le badge d'ANNONCE ci-dessus
+            // (`backgroundSoundAnnouncement`, rangée auteur, E1) reste seul
+            // — un bouton sans lecteur à piloter serait décoratif.
         }
         .padding(.top, 4)
     }

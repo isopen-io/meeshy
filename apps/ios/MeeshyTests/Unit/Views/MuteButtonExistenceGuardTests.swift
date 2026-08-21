@@ -12,31 +12,37 @@ import XCTest
 /// main qui pourrait diverger. `BackgroundSoundBadge.showsMuteButton(for:)`
 /// est CE prédicat, écrit une fois à côté de `backgroundSound(of:)`/
 /// `announcement(for:)` (E1), appelé par les surfaces qui montent un bouton
-/// muet — jamais un `!= .none` recopié localement (vérifié par
-/// `test_readingSurfaces_neverRecomputeExistenceLocally`).
+/// muet — jamais un `!= BackgroundAudioAnnouncement.none` recopié localement
+/// (vérifié par `test_readingSurfaces_neverRecomputeExistenceLocally`).
 ///
-/// Trois surfaces (B3.6) :
-/// - carte de post (`FeedPostCard`, rangée d'engagement) — NOUVEAU ;
-/// - détail de post (`PostDetailView`, rangée d'engagement) — NOUVEAU, le
-///   tap contrôle RÉELLEMENT le canvas story inline (`mute:` n'est plus
-///   figé à `false`) ;
-/// - plein écran post (galerie média / `VideoTransportControls`, SDK) — a
-///   DÉJÀ son mute (`manager.isMuted`) : assertion de NON-régression.
-///
-/// Non-régression, hors des « trois » : le rail du viewer story
-/// (`StoryViewerView+Sidebar`, `isGlobalMuted`) et l'audio natif du réel
-/// plein écran (`ReelsPlayerView`, `manager.isMuted` toujours réaffirmé à
-/// `false` par `drive()`) restent INCHANGÉS — `ReelsPlayerView` gagne son
-/// propre bouton LOCAL (fond audio storyEffects, pas l'audio natif de la
-/// vidéo), sans toucher `drive()`.
-///
-/// Pas de ViewInspector dans ce dépôt (même limite que
-/// `BackgroundSoundBadgeTests`) : gardes de source (`MyStoriesSourceCorpus`,
-/// déjà comment-strippé) + comportement des fonctions PURES.
+/// Correctif revue DoD (rejet du commit 1721a0ee2) : « le bouton existe » ne
+/// suffit pas — le tap doit RÉELLEMENT atteindre un lecteur. Deux des trois
+/// surfaces livraient un état muet en ÉCRITURE SEULE (déclaré, basculé, lu
+/// pour l'icône — aucun consommateur). Fermé ici :
+/// - carte de post (`FeedPostCard`) : bouton RETIRÉ pour E2 — aucun lecteur
+///   local n'existe encore dans ce fichier (arrive avec E3,
+///   `MeeshyScenePlayer(.card)`). Le badge E1 (annonce) reste inchangé ;
+/// - détail de post (`PostDetailView`) : bouton CONSERVÉ, mais sa porte est
+///   maintenant conjuguée au prédicat de rendu réel du canvas
+///   (`BackgroundSoundBadge.detailCanvasIsRendered`) — un post NON-story
+///   portant son propre fond (son emprunté, E1) ne monte plus un bouton
+///   inerte ;
+/// - plein écran réel (`ReelsPlayerView`) : bouton CONSERVÉ, gate additionnée
+///   (`borrowedSoundTrack != nil` — le seul cas où un lecteur LOCAL existe
+///   réellement), le tap pilote RÉELLEMENT `audioPlayer.togglePlayPause()`.
 final class MuteButtonExistenceGuardTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {
         try MyStoriesSourceCorpus.text(of: relativePath)
+    }
+
+    /// Le bloc de code entre deux marqueurs (le second exclu). `end == nil`
+    /// borne jusqu'à la fin du fichier.
+    private func block(from start: String, to end: String?, in text: String) -> String {
+        guard let startRange = text.range(of: start) else { return "" }
+        let tail = text[startRange.upperBound...]
+        guard let end, let endRange = tail.range(of: end) else { return String(tail) }
+        return String(tail[..<endRange.lowerBound])
     }
 
     // MARK: - B3.6 existence : un prédicat pur, partagé
@@ -75,7 +81,11 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
     }
 
     // MARK: - Câblage : les surfaces neuves réutilisent le prédicat PARTAGÉ, jamais un `!= .none` recopié
-
+    //
+    // Correctif revue (constat mineur #10) : la forme QUALIFIÉE seulement —
+    // un simple `!= .none` matcherait n'importe quel autre enum de ces
+    // fichiers (faux positif garanti à terme, sans lien avec le défaut
+    // visé) ; `!= BackgroundAudioAnnouncement.none` est le cas précis.
     func test_readingSurfaces_neverRecomputeExistenceLocally() throws {
         let surfaces = [
             "Meeshy/Features/Main/Views/FeedPostCard.swift",
@@ -85,55 +95,64 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         for path in surfaces {
             let text = try source(path)
             XCTAssertFalse(
-                text.contains("!= .none") || text.contains("!= BackgroundAudioAnnouncement.none"),
+                text.contains("!= BackgroundAudioAnnouncement.none"),
                 "\(path) ne doit jamais recopier localement une condition d'existence " +
-                "(`!= .none`) — un seul prédicat partagé, BackgroundSoundBadge.showsMuteButton(for:)."
+                "qualifiée — un seul prédicat partagé, BackgroundSoundBadge.showsMuteButton(for:)."
             )
         }
     }
 
-    // MARK: - Carte (FeedPostCard) — rangée d'engagement
+    // MARK: - Carte (FeedPostCard) — bouton RETIRÉ pour E2 (correctif majeur #2)
+    //
+    // Aucun lecteur local n'existe encore dans ce fichier pour piloter un
+    // muet (l'embed story-repost, `StoryRepostEmbedCell`, fige `mute: true`
+    // et est hors périmètre E2 ; la scène jouée dans la carte arrive avec
+    // E3, `MeeshyScenePlayer(.card)`). Monter le bouton sans lecteur en
+    // aurait fait une commande décorative — retiré ici, reporté à E3.
 
-    func test_feedPostCard_mountsMuteButton_gatedBySharedAnnouncement() throws {
+    func test_feedPostCard_muteButton_isNotMounted_deferredToE3() throws {
+        let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
+        XCTAssertFalse(
+            text.contains("BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)"),
+            "La carte ne doit PAS monter de bouton muet en E2 — aucun lecteur local n'existe " +
+            "encore pour le piloter (arrive avec E3, MeeshyScenePlayer(.card))."
+        )
+        XCTAssertFalse(
+            text.contains("isBackgroundSoundMuted"),
+            "État muet DÉCORATIF retiré : la carte ne doit plus déclarer un état qui n'atteint " +
+            "aucun lecteur."
+        )
+    }
+
+    /// Non-régression E1 : le badge d'ANNONCE (pas le bouton) reste monté,
+    /// résolu sur la MÊME valeur qu'avant — seule la commande de contrôle a
+    /// été retirée, pas l'affichage informatif.
+    func test_feedPostCard_backgroundSoundBadge_stillMounted_noRegression() throws {
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
         XCTAssertTrue(
             text.contains("private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement"),
-            "La carte doit exposer l'annonce résolue (E1) comme UNE valeur réutilisable."
+            "La carte doit continuer d'exposer l'annonce résolue (E1)."
         )
         XCTAssertTrue(
             text.contains("announcement: backgroundSoundAnnouncement"),
-            "Le badge (E1) doit consommer cette MÊME valeur — pas une résolution séparée."
-        )
-        XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)"),
-            "Le bouton muet doit se monter via le prédicat partagé, sur la MÊME valeur que le badge."
-        )
-        XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.muteIconName(isMuted: isBackgroundSoundMuted)"),
-            "L'icône du bouton doit dire l'état via le helper partagé."
+            "Le badge (E1) doit continuer de consommer cette valeur — non-régression."
         )
     }
 
-    func test_feedPostCard_muteState_isLocalNotGlobal() throws {
-        let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
-        XCTAssertTrue(
-            text.contains("@State private var isBackgroundSoundMuted"),
-            "Le muet de la carte doit être un état LOCAL à la carte."
-        )
-        XCTAssertFalse(
-            text.contains("isGlobalMuted"),
-            "La carte ne doit JAMAIS référencer le muet global du viewer story — surfaces indépendantes."
-        )
-    }
-
-    // MARK: - Détail (PostDetailView) — rangée d'engagement + canvas RÉELLEMENT muté
+    // MARK: - Détail (PostDetailView) — rangée d'actions + canvas RÉELLEMENT muté
 
     func test_postDetailView_mountsMuteButton_gatedBySharedResolver() throws {
         let text = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.announcement(for: StoryItem(feedPost: post).storyEffects)"),
-            "Le détail doit résoudre l'annonce via le MÊME résolveur partagé (E1), sur l'effectif " +
-            "storyEffects (native OU repost-de-story via la cascade de StoryItem(feedPost:))."
+            text.contains("let renderedItem = StoryItem(feedPost: post)"),
+            "La conversion StoryItem(feedPost:) doit être hissée en UNE valeur partagée " +
+            "par la porte du bouton et storyCanvasSection (correctif revue #8) — jamais " +
+            "reconstruite par évaluation de body."
+        )
+        XCTAssertTrue(
+            text.contains("BackgroundSoundBadge.announcement(for: renderedItem.storyEffects)"),
+            "Le détail doit résoudre l'annonce via le MÊME résolveur partagé (E1), sur la " +
+            "valeur HISSÉE — pas une reconstruction locale."
         )
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.showsMuteButton(for:"),
@@ -142,6 +161,22 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         XCTAssertTrue(
             text.contains("BackgroundSoundBadge.muteIconName(isMuted: isCanvasMuted)"),
             "L'icône du bouton doit dire l'état via le helper partagé."
+        )
+    }
+
+    /// Correctif revue (BLOQUANT-adjacent, majeur #3) : la porte du bouton
+    /// ne doit JAMAIS diverger du canvas RÉELLEMENT rendu par
+    /// `postDetailContent` — un post NON-story portant son PROPRE
+    /// storyEffects (son emprunté, forme dominante E1) n'affiche aucun
+    /// canvas nulle part et ne doit donc PAS monter de bouton.
+    func test_postDetailView_muteButtonGate_isConjoinedWithCanvasRenderPredicate() throws {
+        let text = try source("Meeshy/Features/Main/Views/PostDetailView.swift")
+        XCTAssertTrue(
+            text.contains("BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem)"),
+            "La porte du bouton doit conjuguer le prédicat de rendu réel du canvas " +
+            "(BackgroundSoundBadge.detailCanvasIsRendered) — pas seulement l'existence de " +
+            "l'annonce, qui peut être vraie sans qu'aucun canvas ne rende (post non-story " +
+            "portant son propre fond)."
         )
     }
 
@@ -176,7 +211,73 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - `BackgroundSoundBadge.detailCanvasIsRendered` — comportement RÉEL, pas juste la source
+    //
+    // Les gardes de source ci-dessus ne couvrent que le CÂBLAGE (le bon
+    // appel est présent) — jamais si le prédicat calcule la bonne réponse.
+    // Ces tests construisent de VRAIS FeedPost dans les formes que la
+    // production émet (E1 : BorrowedSoundPost pour un post NON-story) et
+    // appellent la fonction bout en bout.
+
+    /// Forme dominante E1 pour un son EMPRUNTÉ SANS canvas : post de type
+    /// POST (pas STORY), pas de repost, storyEffects PROPRE (le fond
+    /// emprunté). Aucun canvas ne rend nulle part dans postDetailContent —
+    /// le prédicat DOIT retourner false, sous peine de bouton inerte
+    /// (c'est exactement le défaut du commit rejeté).
+    func test_detailCanvasIsRendered_nonStoryPostWithOwnBackground_isFalse() {
+        var post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "")
+        post.storyEffects = StoryEffects(backgroundAudioId: "lib-sound-9")
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertFalse(
+            BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem),
+            "Un post NON-story portant son propre fond audio ne rend AUCUN canvas — le " +
+            "bouton ne doit pas se monter (défaut du commit rejeté)."
+        )
+    }
+
+    /// Story native avec effects — storyCanvasSection rend bien un canvas.
+    func test_detailCanvasIsRendered_nativeStoryWithEffects_isTrue() {
+        var post = FeedPost(author: "alice", authorId: "a1", type: "STORY", content: "")
+        post.storyEffects = StoryEffects(backgroundAudioId: "lib-sound-9")
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertTrue(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
+    }
+
+    /// Story native SANS effects ni média — storyCanvasSection rend le
+    /// placeholder « Story indisponible », pas un canvas.
+    func test_detailCanvasIsRendered_emptyNativeStory_isFalse() {
+        let post = FeedPost(author: "alice", authorId: "a1", type: "STORY", content: "")
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertFalse(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
+    }
+
+    /// POST qui reposte une STORY (isStoryRepost) : repostEmbed rend
+    /// inconditionnellement le canvas de la source.
+    func test_detailCanvasIsRendered_storyRepost_isTrue() {
+        let repost = RepostContent(author: "bob", authorId: "b1", content: "", type: "STORY",
+                                    storyEffects: StoryEffects(backgroundAudioId: "lib-sound-9"))
+        let post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "", repost: repost)
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertTrue(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
+    }
+
+    /// POST qui reposte un POST (pas une story) : ni storyCanvasSection ni
+    /// la branche isStoryRepost de repostEmbed ne rendent de canvas.
+    func test_detailCanvasIsRendered_nonStoryRepost_isFalse() {
+        let repost = RepostContent(author: "bob", authorId: "b1", content: "", type: "POST")
+        let post = FeedPost(author: "alice", authorId: "a1", type: "POST", content: "", repost: repost)
+        let renderedItem = StoryItem(feedPost: post)
+        XCTAssertFalse(BackgroundSoundBadge.detailCanvasIsRendered(post: post, renderedItem: renderedItem))
+    }
+
     // MARK: - Plein écran POST (galerie média / VideoTransportControls) — NON-régression, 3e surface
+    //
+    // Correctif revue (mineur #6) : l'ancienne garde vérifiait seulement le
+    // NOM de la vue appelante (`ConversationMediaGalleryView(`) — jamais le
+    // site qui porte RÉELLEMENT le muet. Supprimer le bouton muet du
+    // transport laissait l'ancien test vert. Remonte désormais jusqu'au
+    // site réel : carte/détail → galerie → VideoTransportControls (SDK) →
+    // `manager.isMuted`.
 
     func test_postFullscreenGallery_stillMountedByCardAndDetail_noRegression() throws {
         for path in [
@@ -186,10 +287,33 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             let text = try source(path)
             XCTAssertTrue(
                 text.contains("ConversationMediaGalleryView("),
-                "\(path) : la galerie plein écran (qui porte déjà VideoTransportControls.muteButton, " +
-                "SDK) ne doit pas régresser — 3e surface de B3.6, non réécrite ici."
+                "\(path) : la galerie plein écran ne doit pas régresser — 3e surface de B3.6."
             )
         }
+    }
+
+    func test_postFullscreenGallery_mountsVideoTransportControls_noRegression() throws {
+        let text = try source("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
+        XCTAssertTrue(
+            text.contains("VideoTransportControls("),
+            "La galerie doit monter le composant SDK qui porte réellement le muet plein écran."
+        )
+    }
+
+    func test_videoTransportControls_muteButton_pilotsRealPlayer_noRegression() throws {
+        let text = MyStoriesSourceCorpus.strippingComments(
+            try String(
+                contentsOf: MyStoriesSourceCorpus.appRoot()
+                    .appendingPathComponent("../../packages/MeeshySDK/Sources/MeeshyUI/Media/VideoTransportControls.swift"),
+                encoding: .utf8
+            )
+        )
+        XCTAssertTrue(
+            text.contains("manager.isMuted.toggle()"),
+            "Le SITE qui porte réellement le muet plein écran (SDK, VideoTransportControls) " +
+            "doit rester câblé au lecteur — retirer ce bouton laisserait l'ancienne garde " +
+            "(nom de vue seul) verte à tort."
+        )
     }
 
     // MARK: - Rail du viewer story — NON-régression (déjà son propre muet, hors périmètre)
@@ -210,7 +334,7 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Réel plein écran (ReelsPlayerView) — bouton local NEUF, natif inchangé
+    // MARK: - Réel plein écran (ReelsPlayerView) — bouton local, RÉELLEMENT câblé au lecteur
 
     func test_reelsPlayerView_mountsMuteButton_gatedBySharedAnnouncement() throws {
         let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
@@ -220,12 +344,43 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             "valeur `announcement` que le badge de la ligne meta (E1)."
         )
         XCTAssertTrue(
-            text.contains("BackgroundSoundBadge.muteIconName(isMuted: isBackgroundSoundMuted)"),
-            "L'icône du bouton doit dire l'état via le helper partagé."
+            text.contains("BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying)"),
+            "L'icône doit dire l'état RÉEL du lecteur (audioPlayer.isPlaying) — pas un état " +
+            "local séparé qui pourrait diverger du son réellement audible."
+        )
+    }
+
+    /// Correctif revue BLOQUANT #1 : le tap doit RÉELLEMENT piloter le
+    /// lecteur qui joue la piste de fond (`audioPlayer`, `startBorrowedSoundIfNeeded()`)
+    /// — jamais un état écrit sans consommateur. La porte est renforcée :
+    /// le bouton ne se monte QUE quand un lecteur LOCAL existe
+    /// (`borrowedSoundTrack != nil`) pour éviter de promettre un contrôle
+    /// sur un cas où l'annonce vient d'ailleurs (ex. audio incrusté dans une
+    /// vidéo) sans qu'aucun moteur pilotable n'existe.
+    func test_reelsPlayerView_muteButton_wiresToLocalPlayer() throws {
+        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        XCTAssertTrue(
+            text.contains("audioPlayer.togglePlayPause()"),
+            "Le tap doit basculer le lecteur RÉEL de la piste de fond empruntée — pas un " +
+            "état local sans consommateur."
         )
         XCTAssertTrue(
-            text.contains("@State private var isBackgroundSoundMuted"),
-            "Le muet du fond du réel doit être un état LOCAL à la page."
+            text.contains("borrowedSoundTrack != nil"),
+            "La porte doit exiger qu'un lecteur LOCAL existe (borrowedSoundTrack) — jamais " +
+            "monter un bouton sur la seule existence de l'annonce quand rien de pilotable " +
+            "ne joue localement."
+        )
+    }
+
+    /// L'état muet DÉCORATIF (écriture seule) doit avoir disparu : sa seule
+    /// présence prouvait le défaut du commit rejeté (supprimer les
+    /// `.toggle()` laissait l'ancienne garde de 17 tests verte).
+    func test_reelsPlayerView_decorativeMuteState_isRemoved() throws {
+        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        XCTAssertFalse(
+            text.contains("isBackgroundSoundMuted"),
+            "L'état muet local sans consommateur doit être retiré — remplacé par la lecture " +
+            "directe de audioPlayer.isPlaying, la SEULE source de vérité sur ce qui joue."
         )
     }
 
@@ -249,6 +404,29 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
             "L'invariant « le viewer plein écran joue TOUJOURS avec le son natif » " +
             "(réaffirmé par drive()) ne doit pas régresser — le bouton NEUF pilote un " +
             "état LOCAL séparé (fond storyEffects), jamais `manager.isMuted`."
+        )
+    }
+
+    /// Correctif revue (mineur #7) : cible tactile 44x44 (HIG), même
+    /// convention que la carte (le MÊME commit l'ajoutait sur FeedPostCard
+    /// sans l'ajouter ici) — c'est le seul contrôle interactif de la ligne
+    /// meta auteur, un glyphe de 10pt sans zone de hit élargie ratait un tap
+    /// sur deux à l'usage (précédent documenté sur la carte).
+    func test_reelsPlayerView_muteButton_hasFortyFourPointHitTarget() throws {
+        let text = try source("Meeshy/Features/Main/Views/ReelsPlayerView.swift")
+        let buttonBlock = block(
+            from: "BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying)",
+            to: "reels.action.unmute",
+            in: text
+        )
+        XCTAssertFalse(buttonBlock.isEmpty, "Bloc du bouton muet du réel introuvable.")
+        XCTAssertTrue(
+            buttonBlock.contains(".frame(minWidth: 44, minHeight: 44)"),
+            "Cible tactile 44x44 (HIG) manquante sur le bouton muet du réel."
+        )
+        XCTAssertTrue(
+            buttonBlock.contains(".contentShape(Rectangle())"),
+            "Zone de hit non élargie au rectangle complet sur le bouton muet du réel."
         )
     }
 }
