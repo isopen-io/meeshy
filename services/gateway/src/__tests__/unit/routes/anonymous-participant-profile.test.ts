@@ -52,12 +52,26 @@ const joinPermissions = {
   canSendLinks: false,
 };
 
+/**
+ * Relative, et non datée en dur.
+ *
+ * Cette route-ci RECOPIE `expiresAt` sans jamais le comparer à l'heure
+ * courante : une date figée n'y ferait donc tomber aucun témoin. Mais un montage
+ * daté en dur ne dit pas de lui-même s'il est comparé quelque part, et le dépôt
+ * vient de perdre une CI sur exactement ce motif — une échéance atteinte pour de
+ * vrai, sans commit fautif, donc introuvable par bissection.
+ *
+ * Le repère est donc relatif par défaut : ce qui ne peut pas expirer n'a pas
+ * besoin qu'on vérifie s'il expire.
+ */
+const A_YEAR_AHEAD = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
 const shareLinkRow = {
   id: 'link-1',
   name: 'Invitation publique',
   isActive: true,
   allowViewHistory: false,
-  expiresAt: new Date('2026-12-31T00:00:00Z'),
+  expiresAt: A_YEAR_AHEAD,
   maxUses: 50,
   currentUses: 12,
   requireNickname: true,
