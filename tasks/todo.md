@@ -382,3 +382,17 @@ autorisé si c'est compliqué : deux bulles distinctes.
 - [x] MERGÉ dans `main` (f935f91bf + correctifs CI 4c605ce0d / 5a3c81b9b / 1def3504d) — CI, Docker, iOS, Xcode Cloud verts le 2026-08-22.
 - [ ] Suites iOS touchées vertes (`xcodebuild test` ciblé, 24 classes, simulateur dédié) puis `meeshy.sh test`
 - [ ] `tasks/lessons.md` si correction user ; revue finale ; commits par lot
+
+# Passe de merge des PR ouvertes (2026-08-22, directive « merge sans régression ni doublon, reste synchronisé avec le remote »)
+
+- [x] Inventaire : 23 PR ouvertes vers `main` (#3242→#3324) ; #3322 déjà MERGED par une autre session → 22 à traiter.
+- [x] Revue parallèle (6 agents, groupés par fichiers communs) : 0 « déjà sur main », 0 doublon pur ; 4 chevauchements réels résolus à la main (#3242/#3243 borne stricte `playbackStretch` ; #3262/#3317 `removingHandle` = `escapeRegex` + `NAME_BOUNDARY_LEFT` ; #3320 vs #3322 redéclaration silencieuse de `editedMessageResponseSchema` ; #3299 CHANGELOG).
+- [x] Greffes : miroir Swift de #3270 (`resolveRiverLaneAt` ignore `isSystem` + témoin) ; pbxproj de #3250 vérifié main + 4 lignes / 1792 ×2 ; `branch-tracking.md` réconcilié ; journaux homonymes (`cycle80-bis`, `iteration-237b…e`, `238b`) désenchevêtrés.
+- [x] Gates sur l'état fusionné : law ✓ · vitest shared 2405/2405 ✓ · tsc gateway 0 ✓ · XCTest app 88/88 + SDK ✓ · gateway 19090/19093 et web 13904/13942 sous charge (timeouts), rejeu isolé 202/202 et 149/149 ✓ ; rejeu des suites COMPLÈTES au repos en cours (discriminant flake/interaction, cf. Leçon 243 voisine).
+- [x] Sync remote : #3320/#3323 mergés entre-temps sur `origin/main` (940ad0c1b) → `origin/main` intégré dans `main` local, résolution du tronc retenue pour `messages-advanced.ts`. Push fast-forward `2bfaebf59`, 22 PR MERGED.
+- [ ] #3325 (cycle 92, enveloppes d'erreur gateway, 27 fichiers) — revue en cours.
+- [ ] #3326 (Android, jointure par lien partagé authentifiée) — revue en cours, CI Android en attente.
+
+## Review
+- Incident : un script de résolution en échec + chaîne `&&` filtrée par `grep` a committé des marqueurs (`bce89832a`, worktree privé) → repris par `reset --hard` sur le merge précédent, rejoué proprement ; règle consignée (Leçon 243). Deuxième occurrence du motif (`grep -c` à 0 rend 1) sans dégât.
+- Suivis ouverts (hors périmètre, signalés par les revues) : `SignalProtocolEngine` émet des IV de 16 octets alors que `SignalSchemas.encryptedMessage.iv` (mort) en attend 12 ; `offset` non borné dans `admin-schemas.ts` ; trois idiomes de clamp `limit` (helper Zod SSOT à créer) ; #3324 laisse le corps des messages web (`use-message-translations.ts`) comparer des codes bruts ; règle de rang du kick d'appel plus stricte que `participants.ts` ; 2 `#expect` Swift à greffer dans `ComposerMentionQueryTests` (bob@alice, marie-claire).
