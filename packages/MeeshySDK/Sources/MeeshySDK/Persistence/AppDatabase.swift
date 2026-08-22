@@ -266,6 +266,17 @@ public final class AppDatabase: @unchecked Sendable {
             try db.create(index: "idx_cache_entries_itemId", on: "cache_entries", columns: ["itemId"])
         }
 
+        // P2-2a — empreinte du plaintext par entrée : permet au flush dirty de
+        // SAUTER le re-chiffrement + la réécriture des items inchangés (le blob
+        // chiffré est non déterministe, seul un hash du plaintext est
+        // comparable). Nullable : les rangées existantes convergent au premier
+        // flush qui les réécrit.
+        migrator.registerMigration("v8_cache_entries_content_hash") { db in
+            try db.alter(table: "cache_entries") { t in
+                t.add(column: "contentHash", .text)
+            }
+        }
+
         try migrator.migrate(writer)
     }
 }

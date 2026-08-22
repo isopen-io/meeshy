@@ -316,9 +316,11 @@ public final class MessageStore: ObservableObject {
     private func publish(records: [MessageRecord], mergeInMemory: Bool) {
         // BUG1 diagnostics — capture the pre-state to detect any publish that
         // DROPS currently-displayed messages (the suspected "all sent messages
-        // vanish while one is pending" path). Cheap: only sets/array maps.
+        // vanish while one is pending" path). Le chemin nominal ne paie que
+        // deux Sets d'ids ; le dictionnaire de classification (copie des
+        // records) n'est construit QUE sur drop détecté.
         let beforeCount = messages.count
-        let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
+        let beforeIds = Set(messages.map(\.localId))
 
         let next: [MessageRecord]
         if mergeInMemory, windowMode == .latest {
@@ -341,8 +343,9 @@ public final class MessageStore: ObservableObject {
         let published = Self.collapsingDuplicateServerIds(next)
 
         let afterIds = Set(published.map(\.localId))
-        let droppedIds = Set(beforeById.keys).subtracting(afterIds)
+        let droppedIds = beforeIds.subtracting(afterIds)
         if !droppedIds.isEmpty {
+            let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
             // Classify each dropped row: when its serverId survives in the
             // published set under ANOTHER localId, the logical message is
             // still on screen — the drop is the duplicate-mirror collapse

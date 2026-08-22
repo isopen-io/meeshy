@@ -2166,13 +2166,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // CALL-FIX 2026-06-06 — WebSocket transport (polling handshake → auto
-            // upgrade to WebSocket). The previous `.forcePolling(true)` (HTTP
-            // long-poll ONLY) dropped mid-call: every re-poll under WebRTC CPU load
-            // surfaced as "transport close" on the gateway, killing call:initiate /
-            // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
-            // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
-            // 20s server-side, so the persistent WebSocket now holds.
+            // CALL-FIX 2026-06-06 — WebSocket transport. The previous
+            // `.forcePolling(true)` (HTTP long-poll ONLY) dropped mid-call: every
+            // re-poll under WebRTC CPU load surfaced as "transport close" on the
+            // gateway, killing call:initiate / SDP / ICE signaling. The old "~35s
+            // the WS dropped" was a ping timeout (gateway pingTimeout was 10s) —
+            // bumped to 20s server-side, so the persistent WebSocket holds.
+            //
+            // P4-1 2026-08-22 — WebSocket DIRECT (plus de handshake polling +
+            // upgrade) : supprime 1-2 RTT + une requête HTTP à CHAQUE connect —
+            // cold start, foreground, rotation de token, reconnexion. Parité
+            // avec le web (`transports: ['websocket', 'polling']`, WS d'abord) ;
+            // la gateway n'impose aucune restriction de transport.
+            .forceWebsockets(true),
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),
@@ -2199,7 +2205,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // CALL-FIX 2026-06-06 — WebSocket transport (voir connect()).
+            // CALL-FIX 2026-06-06 + P4-1 — WebSocket direct (voir connect()).
+            .forceWebsockets(true),
             .extraHeaders(["X-Session-Token": sessionToken]),
             .reconnects(true),
             .reconnectWait(1),

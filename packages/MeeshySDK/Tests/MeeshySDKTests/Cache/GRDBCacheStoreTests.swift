@@ -222,6 +222,59 @@ final class GRDBCacheStoreTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    /// P2-2a — un flush dont les payloads n'ont pas changé ne réécrit AUCUNE
+    /// rangée : l'empreinte plaintext (`contentHash`) court-circuite le
+    /// re-chiffrement + l'UPDATE. Discriminant déterministe : une sentinelle
+    /// `updatedAt` posée en base AVANT le flush — une réécriture l'écraserait
+    /// avec `now`, un skip la laisse intacte.
+    func test_flushDirtyKeys_unchangedItems_skipRewrite() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+        try await store.save([CacheTestItem(id: "1", name: "Alice"),
+                              CacheTestItem(id: "2", name: "Bob")], for: "hashkey")
+
+        let sentinel = Date(timeIntervalSince1970: 1_000_000)
+        try await db.write { db in
+            try db.execute(sql: "UPDATE cache_entries SET updatedAt = ? WHERE key = ?",
+                           arguments: [sentinel, "hashkey"])
+        }
+
+        // Mutation identité : le contenu publié est le même — la clé devient
+        // dirty mais aucun payload ne change.
+        await store.update(for: "hashkey") { existing in existing }
+        await store.flushDirtyKeys()
+
+        let after = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "hashkey").order(Column("itemId")).fetchAll(db)
+        }
+        XCTAssertEqual(after.count, 2)
+        for row in after {
+            XCTAssertEqual(row.updatedAt.timeIntervalSince1970,
+                           sentinel.timeIntervalSince1970, accuracy: 1,
+                           "aucune rangée inchangée ne doit être re-chiffrée ni réécrite")
+        }
+        XCTAssertEqual(after.compactMap(\.contentHash).count, 2,
+            "les rangées portent leur empreinte plaintext")
+    }
+
+    /// La contrepartie : un payload réellement modifié est bien réécrit.
+    func test_flushDirtyKeys_changedItem_isRewritten() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+        try await store.save([CacheTestItem(id: "1", name: "Alice")], for: "hashkey2")
+        let blobBefore = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "hashkey2").fetchOne(db)
+        }?.encodedData
+
+        await store.update(for: "hashkey2") { _ in [CacheTestItem(id: "1", name: "Alicia")] }
+        await store.flushDirtyKeys()
+
+        let rowAfter = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "hashkey2").fetchOne(db)
+        }
+        XCTAssertNotEqual(rowAfter?.encodedData, blobBefore)
+    }
+
     func test_flushDirtyKeys_removesDeletedItems() async throws {
         let db = try makeDB()
         let store = try makeStore(db: db)

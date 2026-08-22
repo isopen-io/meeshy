@@ -536,7 +536,8 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // CALL-FIX 2026-06-06 — WebSocket transport (voir MessageSocketManager).
+            // CALL-FIX 2026-06-06 + P4-1 — WebSocket direct (voir MessageSocketManager).
+            .forceWebsockets(true),
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),

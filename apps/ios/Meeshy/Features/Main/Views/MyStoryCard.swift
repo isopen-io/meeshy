@@ -194,8 +194,18 @@ struct MyStoryCard: View {
                 Rectangle().fill(storyBackgroundStyle(hex))
             }
 
-            if let path = model.localCoverPath, let image = UIImage(contentsOfFile: path) {
-                Image(uiImage: image).resizable().scaledToFill()
+            // P1-4a : plus de `UIImage(contentsOfFile:)` dans le body — le
+            // décodage plein format tournait sur le main thread À CHAQUE
+            // render de cellule. `CachedAsyncImage` décode off-main, borné à
+            // la taille de cellule, et son NSCache rend les re-renders
+            // synchrones. Le fond `backgroundHex` (couche du dessous) couvre
+            // la frame de chargement initiale.
+            if let path = model.localCoverPath, FileManager.default.fileExists(atPath: path) {
+                CachedAsyncImage(
+                    url: URL(fileURLWithPath: path).absoluteString,
+                    targetSize: Self.thumbnailTargetSize
+                ) { Color.clear }
+                .scaledToFill()
             } else {
                 switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
                                                         remoteURL: model.thumbnailURL) {
