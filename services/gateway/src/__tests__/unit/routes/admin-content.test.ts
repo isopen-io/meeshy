@@ -259,3 +259,112 @@ describe('Admin content routes — GET /share-links', () => {
     expect(body.success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Les LIGNES atteignent-elles le fil ?
+//
+// Les témoins ci-dessus attestent que ces routes RÉPONDENT — `statusCode`,
+// `body.success` — et jamais ce qu'elles DISENT ; et leurs doubles rendent `[]`,
+// si bien qu'une assertion de contenu y serait de toute façon vide. Les deux
+// listes déclaraient `data: { type: 'array', items: { type: 'object' } }` :
+// sans `properties`, fast-json-stringify sérialisait CHAQUE ligne en `{}`.
+//
+// La réponse gardait donc sa longueur et sa pagination — et perdait toutes ses
+// données. C'est la forme la plus trompeuse de ce défaut : rien ne ressemble
+// autant à une liste valide qu'une liste de la bonne taille.
+// ---------------------------------------------------------------------------
+
+const MESSAGE_ROW = {
+  id: 'msg-1',
+  content: 'Bonjour',
+  messageType: 'text',
+  originalLanguage: 'fr',
+  isEdited: false,
+  createdAt: new Date('2026-08-22T10:00:00.000Z'),
+  sender: {
+    id: 'part-1',
+    userId: 'usr-1',
+    displayName: 'Alice',
+    avatar: null,
+    type: 'user',
+    language: 'fr',
+    user: { id: 'usr-1', username: 'alice', displayName: 'Alice', firstName: 'A', lastName: 'B', avatar: null },
+  },
+  conversation: { id: 'conv-1', identifier: 'mshy_x', title: 'Fil', type: 'group' },
+  attachments: [{ id: 'att-1', fileName: 'a.png', mimeType: 'image/png' }],
+  _count: { replies: 3 },
+};
+
+const COMMUNITY_ROW = {
+  id: 'comm-1',
+  identifier: 'mshy_tech',
+  name: 'Tech',
+  description: 'Une communauté',
+  avatar: null,
+  isPrivate: false,
+  createdAt: new Date('2026-08-22T10:00:00.000Z'),
+  creator: { id: 'usr-9', username: 'bob', displayName: 'Bob', avatar: null },
+  _count: { members: 12, Conversation: 4 },
+};
+
+describe('Admin content routes — les lignes servies, pas seulement le statut', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('GET /messages sert chaque message avec son contenu, son auteur et son fil', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([MESSAGE_ROW]);
+    mockPrisma.message.count.mockResolvedValue(1);
+    const local = buildApp('ADMIN');
+    await local.ready();
+
+    const row = JSON.parse((await local.inject({ method: 'GET', url: '/messages' })).body).data[0];
+    await local.close();
+
+    expect(row).toMatchObject({ id: 'msg-1', content: 'Bonjour', messageType: 'text', originalLanguage: 'fr' });
+    expect(row.sender).toMatchObject({ id: 'part-1', displayName: 'Alice' });
+    expect(row.sender.user).toMatchObject({ username: 'alice' });
+    expect(row.conversation).toMatchObject({ id: 'conv-1', title: 'Fil' });
+    expect(row._count).toEqual({ replies: 3 });
+  });
+
+  // `attachmentMediaSelect` évolue avec le pipeline média : la pièce jointe est
+  // une donnée d'inspection, pas un contrat client, et passe donc entière
+  // (`additionalProperties: true`) plutôt que par une copie qui dériverait.
+  it('GET /messages laisse passer la pièce jointe entière', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([MESSAGE_ROW]);
+    mockPrisma.message.count.mockResolvedValue(1);
+    const local = buildApp('ADMIN');
+    await local.ready();
+
+    const row = JSON.parse((await local.inject({ method: 'GET', url: '/messages' })).body).data[0];
+    await local.close();
+
+    expect(row.attachments[0]).toMatchObject({ id: 'att-1', fileName: 'a.png', mimeType: 'image/png' });
+  });
+
+  it('GET /communities sert chaque communauté avec son identité, son créateur et ses compteurs', async () => {
+    mockPrisma.community.findMany.mockResolvedValue([COMMUNITY_ROW]);
+    mockPrisma.community.count.mockResolvedValue(1);
+    const local = buildApp('ADMIN');
+    await local.ready();
+
+    const row = JSON.parse((await local.inject({ method: 'GET', url: '/communities' })).body).data[0];
+    await local.close();
+
+    expect(row).toMatchObject({ id: 'comm-1', identifier: 'mshy_tech', name: 'Tech', isPrivate: false });
+    expect(row.creator).toMatchObject({ id: 'usr-9', username: 'bob' });
+    expect(row._count).toEqual({ members: 12, Conversation: 4 });
+  });
+
+  it('la pagination reste juste — c’est ce qui rendait la liste vide crédible', async () => {
+    mockPrisma.community.findMany.mockResolvedValue([COMMUNITY_ROW]);
+    mockPrisma.community.count.mockResolvedValue(1);
+    const local = buildApp('ADMIN');
+    await local.ready();
+
+    const body = JSON.parse((await local.inject({ method: 'GET', url: '/communities' })).body);
+    await local.close();
+
+    expect(body.pagination).toMatchObject({ total: 1, hasMore: false });
+    expect(body.data).toHaveLength(1);
+  });
+});

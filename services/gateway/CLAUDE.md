@@ -562,7 +562,7 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage a été fait : 38 sites, et il reste 36
+### Le balayage a été fait : 38 sites, et il reste 31
 
 Le cycle 86 a outillé le balayage du gateway. Un `grep` ne suffit pas — il faut
 résoudre l'objet littéral englobant (a-t-il `properties` ?), calculer la portée
@@ -571,13 +571,44 @@ destructeur), et **dépouiller les commentaires**, sans quoi on retrouve les
 commentaires des cycles précédents au lieu des défauts.
 
 Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
-**l'inventaire trié des 36 restants est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle86.md` §6.** Les plus graves sont
-les 15 `items:` — des LISTES qui sortent en tableaux de `{}`, ce qui ressemble
-à une réponse valide. Et les 4 `user:` / 1 `sender:` touchent la famille de la
-présence : **les traiter comme le cycle 84 bis a traité le sien** — déclarer le
-schéma ET poser le gate dans le même lot, sans quoi la réparation publie la
-fuite (§ Une PANNE peut tenir la porte).
+**l'inventaire trié des 31 restants est dans
+`tasks/realtime-sync-audit-2026-08-22-cycle87.md` §6** (le tri du cycle 86 bis
+était FAUX — voir juste en dessous). Les plus graves restants sont les 4 `user:`
+et 1 `sender:`, qui touchent la famille de la présence : **les traiter comme le
+cycle 84 bis a traité le sien** — déclarer le schéma ET poser le gate dans le
+même lot, sans quoi la réparation publie la fuite (§ Une PANNE peut tenir la
+porte). Et `communities/core.ts:524` vit dans le module OMBRÉ : vérifier
+d'abord qui enregistre la route.
+
+### Un tri est une AFFIRMATION, et se vérifie comme telle
+
+Le cycle 86 bis a publié une priorité sur quatorze sites groupés sous
+l'étiquette `items`, en les annonçant « listes vides, gravité maximale ». Le tri
+était faux, par un artefact d'extraction : sur
+`data: { type: 'array', items: { type: 'object' } }`, l'objet nu est porté par
+`items` — le mot-clé JSON Schema — et non par `data`. **Trois charges utiles
+ENTIÈRES se sont donc rangées sous une étiquette de détail**, dans le même
+document qui affirmait n'en avoir laissé que deux ; les onze autres sont des
+champs `details`/`errors` de réponses 400 **sans aucun producteur** (gravité
+documentaire — les retirer plutôt que les déclarer).
+
+Corrigé au cycle 87, après ouverture de chacun des quatorze. **Ne jamais
+prioriser un inventaire sur la foi d'une clé extraite par script sans avoir
+ouvert les sites.**
+
+### La liste vide est plus dangereuse que la réponse vide
+
+Une charge utile `data:` sérialisée en `{}` se voit — l'écran est blanc,
+quelqu'un le signale. Une LISTE de la bonne longueur, à la pagination juste,
+dont chaque ligne est `{}`, ressemble à un défaut d'affichage : elle envoie
+chercher du mauvais côté et survit plus longtemps. Trois listes
+d'administration (`/admin/messages`, `/admin/communities`, `/admin/posts`,
+toutes lues par le web) l'ont fait jusqu'au cycle 87.
+
+Corollaire de harnais : **un double Prisma qui rend `[]` rend tout témoin de
+contenu trivialement vert.** Rien ne distingue « la route sert ses lignes » de
+« la route n'a aucune ligne » tant que le double est vide — c'est ce qui a
+laissé ces trois listes couvertes et cassées.
 
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
