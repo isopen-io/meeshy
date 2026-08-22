@@ -615,7 +615,63 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 8
+### Cette famille a TROIS formes, et le balayage n'en distingue aucune
+
+Un schéma de réponse ne décrit pas seulement le CONTENU d'un champ : il décrit
+aussi **sa présence**, et à quel NIVEAU d'enveloppe il prétend la décrire. Les
+trois cas ont la même signature dans le code et des conséquences sans commune
+mesure :
+
+| forme | exemple | effet |
+|---|---|---|
+| **1** — la clé déclarée EXISTE dans la charge | `creator: { type: 'object' }` sur une charge qui porte `creator` | ce champ sort `{}`, **le reste survit** |
+| **2** — la clé déclarée N'EXISTE PAS | `data: { properties: { message } }` sur une charge sans `message` | **le parent ENTIER sort `{}`** |
+| **3** — le schéma décrit la MAUVAISE enveloppe | `GET /messages/:messageId` (voir plus bas) | **rien ne sort vide** — le balayage rend un FAUX POSITIF |
+
+Le balayage ne voit que le schéma, jamais la charge d'en face. **Avant de
+réparer un site de l'inventaire, poser les deux questions : que passe le
+gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le
+décrire ?**
+
+La forme 3 est la plus dangereuse, parce que l'outil s'y trompe **dans le sens
+rassurant** : un champ signalé « vidé » peut être servi brut, en fuite. C'est
+exactement ce qui s'est passé sur `messages.ts` (cycle 88) — détail dans
+§ *Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE*.
+
+Trois sites de forme 2 corrigés au cycle 88 bis, tous du même patron : une
+enveloppe `data.message` / `data.link` qu'aucun gestionnaire n'a jamais produite.
+Les deux transports REST d'édition de message rendaient `{"success":true,
+"data":{}}` ; `POST /conversations/:id/new-link` rendait
+`{"success":true,"data":{"link":{}}}` — ni lien, ni code, ni réglages.
+
+**Un défaut de sérialisation, seul, produit une boucle de réémission temps
+réel.** Sur `PATCH /messages/:messageId`, `data: {}` fait échouer le décodage
+Android (`ApiMessage.id`/`.conversationId` n'ont pas de défaut) ; `apiCall` rend
+`Failure(PARSE)` ; `OutboxFlushWorker` traduit tout `Failure` d'une
+`EDIT_MESSAGE` en `TransientFailure`, donc en RÉESSAI. La ligne d'outbox ne
+draine jamais, et chaque vidange rejoue l'édition que le serveur rediffuse en
+`message:edited` à toute la room. Chaque maillon est correct ; c'est la réponse
+vide qui les compose en boucle. **Chercher la cause d'une boucle de réessai dans
+la file d'attente, c'est chercher là où la lumière est meilleure.**
+
+### Une forme écrite dans du CODE MORT n'est pas maintenue, et se propage
+
+`messageResponseSchema` portait l'enveloppe fantôme `data.message` et n'était
+**utilisé nulle part** — ce qui l'a mis hors de portée de toute correction, et
+n'a rien empêché : ses deux copies inline vivaient dans les routes servies. Un
+schéma mort n'est pas neutre, il est un **patron**.
+
+Le correctif n'est pas de le supprimer, c'est de le rendre VIVANT : corrigé en
+`data: messageSchema` et CONSOMMÉ par les deux routes, il n'y a plus de forme à
+copier, il y a un import.
+
+Corollaire : **un contrat déclaré doit être EXERCÉ.** Des trois transports
+d'édition de message, le seul qui servait la charge entière est
+`PUT /messages/:messageId` — celui qui ne déclare AUCUN schéma de réponse. Un
+schéma faux est strictement pire que pas de schéma ; la conclusion n'est pas
+d'en retirer, c'est d'en tester la sortie.
+
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 4
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -652,12 +708,15 @@ au cliquet comme dette de FORME, plus comme fuite.
 
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
-main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
-`voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient ; les trois
-de `voice/translation.ts` au cycle 91, avec la TRONCATURE que portait la forme
-« juste » du même fichier.
-**L'inventaire trié des 8 restants — tous sur des charges utiles `200` — est
-dans `tasks/realtime-sync-audit-2026-08-22-cycle91.md` §8.**
+main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
+cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `voice/translation.ts`
+au cycle 91, avec la TRONCATURE que portait la forme « juste » du même fichier ;
+les trois enveloppes fantômes au cycle 88 bis. **Il ne reste que 4 sites** —
+`calls.ts|details|400`, `links/admin.ts|creator|200`, `messages.ts|sender|200`,
+`users/profile.ts|permissions|200` — triés dans
+`tasks/realtime-sync-audit-2026-08-22-cycle91.md` §8 et `…-cycle88-bis.md` §5.
+Le second pose les deux questions à instruire AVANT de réparer : que passe le
+gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le décrire ?
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et

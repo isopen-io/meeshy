@@ -1749,18 +1749,25 @@ export const messageListResponseSchema = {
 } as const;
 
 /**
- * Single message response schema
+ * Single message response schema — l'enveloppe d'un message SERVI SEUL
+ * (édition REST, notamment).
+ *
+ * `data` EST le message. Ce schéma a longtemps déclaré `data.message`, un
+ * enveloppement qu'aucun gestionnaire n'a jamais produit — tous font
+ * `sendSuccess(reply, messageResponse)` — et qu'aucun client n'a jamais lu :
+ * iOS décode `APIResponse<APIMessage>`, Android `ApiResponse<ApiMessage>`,
+ * et pour les deux `data` est le message.
+ *
+ * Une clé déclarée mais absente ne dégrade pas la réponse, elle l'EMPORTE :
+ * `fast-json-stringify` applique `additionalProperties: false` par défaut, donc
+ * `data` sortait `{}`. Le défaut est resté invisible ici tant que ce schéma
+ * était mort — il vivait par COPIE, inline, dans les deux routes d'édition.
  */
 export const messageResponseSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: true },
-    data: {
-      type: 'object',
-      properties: {
-        message: messageSchema
-      }
-    }
+    data: messageSchema
   }
 } as const;
 
