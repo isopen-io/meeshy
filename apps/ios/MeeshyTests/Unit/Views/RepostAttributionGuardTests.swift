@@ -95,6 +95,21 @@ final class RepostAttributionGuardTests: XCTestCase {
             "La fenêtre de l'attribution doit se refermer sur son accolade équilibrée — sinon " +
             "les assertions de contenu lisent une fenêtre tronquée et deviennent vacuously vraies."
         )
+
+        // Prise FALSIFIABLE (revue DoD E5, constat 3) : sur du Swift compilable,
+        // `hasSuffix("}")` est vrai par construction — balancedWindow ne rend une
+        // fenêtre QUE lorsque la profondeur revient à zéro, donc ce test ne pouvait
+        // pas rougir et gonflait le compte d'une assertion qui ne défendait rien.
+        // Ce qui se perd RÉELLEMENT, c'est une fenêtre trop COURTE : amputée, elle
+        // rendrait vacuously vraies les assertions d'absence qui suivent. L'étiquette
+        // d'accessibilité est le dernier élément du bloc — l'exiger prouve que la
+        // fenêtre va jusqu'au bout.
+        XCTAssertTrue(
+            block.contains(".accessibilityLabel("),
+            "La fenêtre doit atteindre l'étiquette d'accessibilité, dernier élément de " +
+            "l'attribution. Sans elle, la fenêtre est tronquée et tout ce que les autres " +
+            "assertions ne trouvent pas est « absent » par accident.\n\(block)"
+        )
     }
 
     func test_attributionKeepsTheRepostGlyph() throws {
@@ -111,6 +126,20 @@ final class RepostAttributionGuardTests: XCTestCase {
             block.contains("Text(\"@\\(handle)\")"),
             "Le texte VISIBLE de l'attribution est le handle seul (« @handle »), directive " +
             "produit du 2026-08-19. Trouvé à la place :\n\(block)"
+        )
+
+        // Le « SEUL » du nom de ce test, enfin asserté (revue DoD E5, constat 1).
+        // La présence du handle ne dit RIEN de son voisinage : un futur commit
+        // qui rajoute « · republié » sous une clé NEUVE — donc invisible à la
+        // garde de clé ci-dessous, qui ne compte que le préfixe existant —
+        // passerait vert. Compter les Text( rendus est ce qui ferme ce chemin :
+        // l'attribution en porte EXACTEMENT un, celui du handle. Le verbe de
+        // l'étiquette VoiceOver n'en est pas un (c'est un String(format:)).
+        let renderedTexts = block.components(separatedBy: "Text(").count - 1
+        XCTAssertEqual(
+            renderedTexts, 1,
+            "L'attribution ne rend qu'UN texte : « @handle ». \(renderedTexts) trouvé(s) — " +
+            "un voisin a été ajouté, et l'icône a cessé d'être le verbe (B3.2).\n\(block)"
         )
     }
 
