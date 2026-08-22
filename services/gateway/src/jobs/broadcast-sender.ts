@@ -1,6 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService } from '../services/EmailService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { buildBroadcastRecipientFilter, type BroadcastTargeting } from './broadcast-recipients';
 
 const logger = enhancedLogger.child({ module: 'BroadcastSenderJob' });
 
@@ -155,37 +156,8 @@ export class BroadcastSenderJob {
     }
   }
 
-  private buildRecipientFilter(targeting: {
-    languages?: string[];
-    countries?: string[];
-    activityStatus?: 'active' | 'inactive' | 'all';
-    inactiveSinceDays?: number;
-  }): any {
-    const where: any = {
-      emailVerifiedAt: { not: null },
-      isActive: true,
-      deletedAt: null,
-    };
-
-    if (targeting.languages && targeting.languages.length > 0) {
-      where.systemLanguage = { in: targeting.languages };
-    }
-
-    if (targeting.countries && targeting.countries.length > 0) {
-      where.registrationCountry = { in: targeting.countries };
-    }
-
-    if (targeting.activityStatus === 'active') {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      where.lastActiveAt = { gte: thirtyDaysAgo };
-    } else if (targeting.activityStatus === 'inactive') {
-      const days = targeting.inactiveSinceDays || 30;
-      const sinceDate = new Date();
-      sinceDate.setDate(sinceDate.getDate() - days);
-      where.lastActiveAt = { lt: sinceDate };
-    }
-
-    return where;
+  /** Ciblage commun (`buildBroadcastRecipientFilter`) + contrainte du canal : une adresse vérifiée. */
+  private buildRecipientFilter(targeting: BroadcastTargeting): any {
+    return { ...buildBroadcastRecipientFilter(targeting), emailVerifiedAt: { not: null } };
   }
 }

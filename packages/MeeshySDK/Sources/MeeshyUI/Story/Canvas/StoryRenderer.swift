@@ -621,6 +621,11 @@ extension StoryRenderer {
                           thumbHash: slide.effects.thumbHash)
         }
         if let urlString = slide.mediaURL, !urlString.isEmpty {
+            // TRANSITOIRE — route legacy IMAGE (`StorySlide.mediaURL`, stories
+            // d'avant les `mediaObjects` et forme « média seul » servie aux
+            // clients sans `X-Canvas-Caps`). La vidéo legacy n'arrive plus ici :
+            // `StoryItem.legacyVideoCarrier` la migre en objet de fond. À
+            // SUPPRIMER avec lui quand le parc ne lit plus que le canvas v3.
             // Legacy background (StorySlide.mediaURL, set only for pre-mediaObjects
             // stories). Route the direct URL through the postMediaId field so
             // `StoryBackgroundLayer.configure` resolves it via `directURLIfAny`

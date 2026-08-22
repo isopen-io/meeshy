@@ -79,7 +79,7 @@ import Foundation
 /// AUTRE client (l'item « Focal (bêta) » du menu d'appui long), hors décision
 /// du 2026-08-18 — voir la docstring de ce type. Le retrait vit ICI, dans la
 /// cascade, pas là-bas dans la polarité de défaut.
-nonisolated enum LentilleFeatureFlag {
+nonisolated enum LentilleFeatureFlag: CaseIterable {
     case lentilleList
     case readingModes
     /// R-133 — le troisième drapeau annoncé par la doc de tête : couvre
@@ -123,10 +123,9 @@ nonisolated enum LentilleFeatureFlag {
     /// `"0"` force OFF, toute autre valeur (y compris absente) retombe :
     /// - les TROIS drapeaux (`.readingModes`/`.lentilleList` depuis le
     ///   2026-08-19, `.riviereMode` depuis le 2026-08-21) → clé EXPLICITEMENT posée (`object(forKey:) != nil`)
-    ///   ⇒ sa valeur ; sinon `BetaFeaturesPreference.isEnabled` MAIS
-    ///   uniquement si cette préférence est EXPRIMÉE — sans quoi
-    ///   `defaults.bool(forKey:)`, donc `false` (retrait I-075 du
-    ///   2026-08-18 : absence ⇒ OFF, docstring du type ci-dessus).
+    ///   ⇒ sa valeur ; sinon `BetaFeaturesPreference.isEnabled`, qui naît OFF
+    ///   (décision produit du 2026-08-22) — donc `false` sur une installation
+    ///   neuve, `true` quand « Activer les bêta » a été basculé.
     /// Drapeaux que la bascule « Activer les bêta » (Réglages) gouverne
     /// lorsqu'ils n'ont pas de valeur propre.
     ///
@@ -165,7 +164,7 @@ nonisolated enum LentilleFeatureFlag {
     /// (clé propre posée, dans les deux sens) priment toujours, et une
     /// préférence bêta JAMAIS EXPRIMÉE ne vaut toujours pas opt-in
     /// (« absence ⇒ OFF », retrait du 2026-08-18).
-    private var isCoveredByBetaProgramme: Bool {
+    var isCoveredByBetaProgramme: Bool {
         switch self {
         case .readingModes, .lentilleList, .riviereMode: return true
         }
@@ -180,19 +179,15 @@ nonisolated enum LentilleFeatureFlag {
         case "0": return false
         default: break
         }
-        // Étage 3 — la condition `isExplicitlySet` EST le retrait du
-        // 2026-08-18 : sans elle, une préférence bêta jamais touchée rendait
-        // `true` (son défaut ON) et allumait ces surfaces sur toute
-        // installation neuve. `.riviereMode` y est entré le 2026-08-21, le
-        // jour où son écran a eu un point d'entrée (voir
-        // `isCoveredByBetaProgramme`).
-        if isCoveredByBetaProgramme,
-           defaults.object(forKey: userDefaultsKey) == nil,
-           BetaFeaturesPreference.isExplicitlySet(defaults: defaults, environment: environment) {
+        // Étage 3 — la préférence bêta, qui naît OFF depuis le 2026-08-22 :
+        // une installation neuve (rien de posé nulle part) rend `false`, une
+        // bêta activée dans les Réglages allume les drapeaux couverts. Le
+        // retrait du 2026-08-18 (« une bêta jamais touchée ne vaut pas
+        // opt-in ») est désormais porté par la polarité de la préférence
+        // elle-même, plus par un prédicat d'expression.
+        if isCoveredByBetaProgramme, defaults.object(forKey: userDefaultsKey) == nil {
             return BetaFeaturesPreference.isEnabled(defaults: defaults, environment: environment)
         }
-        // Clé absente ⇒ `false` (défaut Foundation) : c'est le « absence ⇒
-        // OFF » de la décision produit, pour les trois drapeaux désormais.
         return defaults.bool(forKey: userDefaultsKey)
     }
 
