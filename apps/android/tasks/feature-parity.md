@@ -3057,10 +3057,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       conversationId. SOTA over iOS: a blank linkId is inert (no doomed network call) and a success
       envelope carrying a blank conversationId folds to Failure, so a caller never navigates to an empty
       id. +6 behavioural tests, 2 mutation RED proofs (blank-linkId guard, blank-conversationId guard).
-      **Remaining before `[x]`:** a `:sdk-core` `ShareLinkEntryResolver` that assembles the facts
-      (preview + `AnonymousSessionStore.load(linkId)` + in-memory conversation list) and dispatches the
-      intent to either `AnonymousSessionRepository.join` or `ShareLinkJoinRepository.joinAuthenticated`,
-      and rewiring `MeeshyApp.kt`'s deep-link route to branch on the intent.
+      **Fact-assembly resolver shipped** (slice `sharelink-entry-resolver`, 2026-08-22): app-side
+      `ShareLinkEntryResolver` (`:feature:auth`, NOT `:sdk-core` — it does I/O + consults device state,
+      so by the grain test it is product orchestration; faithful port of iOS's app-side
+      `ShareLinkEntryResolver.swift`, which lives in `apps/ios/.../Navigation/`, not the SDK). Injects a
+      `ShareLinkPreviewProviding` seam + `AnonymousSessionStore`; `resolve(identifier, isAuthenticated,
+      knownConversationIds) → ShareLinkEntryResolution(intent, conversationTitle)?`. Assembles the five
+      `ShareLinkEntryFacts` and delegates the decision to the pure `ShareLinkEntryPolicy`. SOTA over iOS:
+      a blank identifier is inert (no doomed empty preview), and a preview with no conversation / a blank
+      conversation id resolves to `null` (graceful fallback, not iOS's force-unwrap crash). Android's
+      single-value guest store means "stored session for THIS link" = `store.load()?.linkId == identifier`
+      — a session opened on a different link never resumes here. +15 behavioural tests, 2 mutation RED
+      proofs (linkId-equality guard, identifier-trim-before-preview).
+      **Remaining before `[x]`:** rewire `MeeshyApp.kt`'s deep-link route to call the resolver and branch
+      the navigation on the intent (open conversation / silent account-join / resume guest / choose-identity
+      sheet / requires-account) instead of always presenting the anonymous guest form.
 - [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
       **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
       `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns
