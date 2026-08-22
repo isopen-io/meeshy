@@ -7,7 +7,7 @@ import MeeshyUI
 /// axes. C'est le SEUL fichier qui les assemble — chacune d'elles reste
 /// montable et testable seule.
 ///
-/// **Grille, pas position absolue** : `LazyVGrid` à colonnes FIXES
+/// **Grille, pas position absolue** : une pile de RANGÉES à colonnes FIXES
 /// (`RiverMetrics.Lane.widthReference`, ou une largeur de couloir plus
 /// étroite passée par l'appelant — §7ter, « `maxLanes`/la largeur de couloir
 /// restent des PARAMÈTRES d'entrée, jamais tronquer le texte »), remplie en
@@ -17,6 +17,12 @@ import MeeshyUI
 /// de ce rang restent des cellules vides qui préservent l'alignement — la
 /// hauteur de la RANGÉE s'ajuste au contenu réel (§7ter A1, « la hauteur
 /// n'est plus une constante »).
+///
+/// Un `LazyVGrid` portait cette grille jusqu'au lot 2 ; il ne sait PAS
+/// étendre une cellule sur toutes ses colonnes, ce qu'exige l'avis système
+/// pleine largeur. Une `LazyVStack` de `HStack` rend la MÊME grille
+/// (couloirs contigus de `laneWidth`, `RiverColumnLayout` inchangé) et sait,
+/// elle, poser un rang à cheval.
 ///
 /// **Sérialisée** (`geometry.layout == .serialized`) : `geometry.laneCount
 /// == 1` déjà côté loi — la grille tombe naturellement à une seule colonne,
@@ -45,11 +51,36 @@ struct RiverStreamHost: View {
     /// abaissable par l'appelant sur un écran étroit (§7ter, jamais une
     /// troncature de texte).
     var laneWidth: CGFloat = RiverMetrics.Lane.widthReference
+    /// Hauteur RÉELLE du pane, DITE par l'appelant (qui la mesure déjà pour
+    /// borner la Rivière à l'écran). Sert l'unique ligne de lecture
+    /// (`focusRank`). Reçue plutôt que mesurée ici : `Riviere/View/` réutilise
+    /// les primitives de mesure existantes, il n'en déclare jamais une
+    /// troisième (`RiverSourceGuardTests`).
+    var paneHeight: CGFloat = 0
+    /// Largeur RÉELLE du pane, DITE par l'appelant — ce qui sépare les voix
+    /// nommées de celles qui attendent hors du champ.
+    var paneWidth: CGFloat = 0
+    /// Bande haute occupée par l'en-tête FLOTTANT du fil, DITE par l'appelant.
+    ///
+    /// C'est un inset de CONTENU, pas une marge du pane (retour produit
+    /// 2026-08-22 : « le header doit être transparent »). Posé en marge
+    /// extérieure, il faisait peindre au pane une DALLE PLATE derrière
+    /// l'en-tête : on ne voyait plus le fond vivant de la conversation, et
+    /// rien ne passait jamais dessous. Porté ici, dans le `safeAreaInset` du
+    /// `ScrollView`, il pousse le contenu AU REPOS sous l'en-tête tout en le
+    /// laissant DÉFILER DERRIÈRE — ce que fait déjà le fil en Bulles/Script.
+    var headerInset: CGFloat = 0
 
     @ObservedObject var navigation: RiverNavigationController
 
     @State private var frames: [String: CGRect] = [:]
     @State private var horizontalOffset: CGFloat = 0
+    /// Le fil s'ouvre au PRÉSENT — une seule fois. Un lecteur qui est remonté
+    /// dans l'histoire ne doit jamais être ramené en bas par l'arrivée d'un
+    /// message (même règle que le fil : la position de la barre ne dit pas ce
+    /// qui a été vu).
+    @State private var hasLandedOnCursor = false
+
 
     private var laneCount: Int { max(1, geometry.laneCount) }
 
@@ -65,13 +96,45 @@ struct RiverStreamHost: View {
         Dictionary(uniqueKeysWithValues: geometry.bubbles.map { ($0.rank, $0) })
     }
 
-    /// Hauteur de lecture, en RANG — `resolveRiverLaneHeaders` l'accepte
-    /// fractionnaire (§7ter B), mais sans mesure de défilement câblée dans ce
-    /// lot (R-135 branchera l'hôte réel), le curseur en tient lieu : un
-    /// repli honnête, jamais un second calcul de bande de focus.
+    /// **Hauteur de lecture, en RANG** — ce que `resolveRiverLaneHeaders`
+    /// attend (§7ter B, fractionnaire).
+    ///
+    /// Elle valait le CURSEUR tant que l'écran n'était pas monté : un repli
+    /// honnête, mais un repli. Monté, il ment — le curseur ne bouge qu'au
+    /// balayage ou au tap, jamais au défilement, si bien que la bande de
+    /// couloirs nommait des voix d'un tout autre instant que celui qu'on lit,
+    /// ou ne nommait personne (retour produit 2026-08-21 : « aucune
+    /// information de la conversation n'est préservée et visible à tout
+    /// moment »).
+    ///
+    /// La vraie hauteur se MESURE : les cadres publiés par les bulles
+    /// (`MessageFramePreferenceKey`) vivent dans le repère FIXE du pane, donc
+    /// celui qui croise la ligne de lecture EST le rang qu'on lit. Aucun
+    /// second calcul de loi : on nomme un rang, la loi fait le reste. Sans
+    /// cadre encore mesuré (premier rendu), le curseur reprend son rôle de
+    /// repli.
     private var focusRank: Double {
-        Double(navigation.cursor.rank)
+        guard paneHeight > 0 else { return Double(navigation.cursor.rank) }
+        // La ligne de lecture se compte dans la surface RÉELLEMENT LUE, sous
+        // l'en-tête : la rapporter au pane entier la ferait tomber DANS la
+        // bande de l'en-tête, et la bande de couloirs nommerait une voix qu'on
+        // ne voit pas — le défaut même corrigé la veille.
+        let readingLine = headerInset + (paneHeight - headerInset) * Self.readingLineRatio
+        var best: (rank: Int, distance: CGFloat)?
+        for bubble in geometry.bubbles {
+            guard let frame = frames[bubble.messageId] else { continue }
+            let distance = abs(frame.midY - readingLine)
+            if best == nil || distance < best!.distance {
+                best = (bubble.rank, distance)
+            }
+        }
+        return Double(best?.rank ?? navigation.cursor.rank)
     }
+
+    /// La ligne de lecture — un tiers sous le haut du pane, là où l'œil se
+    /// pose quand il descend une conversation (même parti pris que la bande
+    /// de focus du fil).
+    private static let readingLineRatio: CGFloat = 0.34
 
     private var laneHeaders: [RiverLaneResolver.RiverLaneHeader] {
         RiverLaneResolver.resolveRiverLaneHeaders(
@@ -80,6 +143,39 @@ struct RiverStreamHost: View {
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            scrollPane
+                .onAppear { landOnCursor(proxy) }
+        }
+    }
+
+    /// Atterrissage au PRÉSENT : le curseur d'ouverture est la bulle la plus
+    /// récente (`RiverConversationMapping.initialCursor`) — sans ce cadrage,
+    /// la Rivière s'ouvrait sur le message le PLUS ANCIEN de la fenêtre
+    /// chargée, et il fallait dérouler toute l'histoire pour rejoindre la
+    /// conversation. Le rang EST l'identité de la rangée dans la grille
+    /// (`ForEach(0..<rankCount, id: \.self)`), donc la cible du `scrollTo`.
+    ///
+    /// Différé d'un tour de boucle : la pile paresseuse (`LazyVStack`) n'a
+    /// pas encore posé ses rangées au premier `onAppear`. Si le cadrage
+    /// échoue, la Rivière s'ouvre simplement en haut — jamais une erreur.
+    private func landOnCursor(_ proxy: ScrollViewProxy) {
+        guard !hasLandedOnCursor, geometry.rankCount > 0 else { return }
+        hasLandedOnCursor = true
+        let target = min(max(0, navigation.cursor.rank), geometry.rankCount - 1)
+        DispatchQueue.main.async {
+            // Ancre au bord GAUCHE du rang, pas `.bottom` : le pane défile sur
+            // DEUX axes, et une ancre centrée en X emmenait aussi la vue vers
+            // la droite du rang — c'est-à-dire dans les colonnes VIDES des
+            // couloirs qui ne parlent pas à cet instant (mesuré au
+            // simulateur : écran blanc, seule la pastille du dernier couloir
+            // visible au bord droit). L'axe du temps se cadre, l'axe des voix
+            // reste à la rive.
+            proxy.scrollTo(target, anchor: UnitPoint(x: 0, y: 1))
+        }
+    }
+
+    private var scrollPane: some View {
         ScrollView([.horizontal, .vertical]) {
             grid
                 .background(RiverLaneCanvas(geometry: geometry, frames: frames, columns: columns))
@@ -103,8 +199,30 @@ struct RiverStreamHost: View {
         .onPreferenceChange(MessageFramePreferenceKey.self) { frames = $0 }
         .onPreferenceChange(HorizontalScrollOffsetKey.self) { horizontalOffset = $0 } // iOS 16–17
         .trackScrollContentOffsetX { horizontalOffset = $0 } // iOS 18+
+        // La bande NOMME les couloirs et suit leur défilement horizontal : sa
+        // largeur intrinsèque est celle de TOUS les couloirs
+        // (`columns.totalWidth`, jusqu'à 7 × 300 pt). Posée nue en
+        // `safeAreaInset` — hors du `ScrollView`, donc en LARGEUR RÉELLE —
+        // elle imposait cette largeur à son parent : l'écran hôte s'élargissait
+        // à 2100 pt et poussait l'en-tête du fil hors de l'écran (mesuré au
+        // simulateur : bouton « Retour » à x = −683). Le cadre extensible +
+        // rognage la borne à la largeur proposée sans rien changer à son
+        // contenu ni à son offset.
         .safeAreaInset(edge: .top, spacing: 0) {
-            RiverLaneHeaderStrip(headers: laneHeaders, columns: columns, horizontalOffset: horizontalOffset)
+            VStack(spacing: 0) {
+                // La place de l'en-tête du fil — vide et TRANSPARENTE : les
+                // bulles la traversent au défilement, l'en-tête de verre les
+                // laisse voir.
+                Color.clear.frame(height: headerInset)
+                RiverLaneHeaderStrip(
+                    headers: laneHeaders,
+                    columns: columns,
+                    horizontalOffset: horizontalOffset,
+                    visibleWidth: paneWidth
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
+            }
         }
         .simultaneousGesture(swipeGesture)
         .accessibilityElement(children: .contain)
@@ -112,15 +230,35 @@ struct RiverStreamHost: View {
 
     // MARK: - Grille
 
+    /// **Rang-majeur, couloir-mineur** — la boucle de RANG enveloppe celle de
+    /// COULOIR : rang 0 tous couloirs, puis rang 1, etc. C'est l'ordre
+    /// d'insertion dans l'arbre SwiftUI, donc l'ordre VoiceOver, donc l'ordre
+    /// chronologique strict (`RiverStreamHostSourceGuardTests`).
+    ///
+    /// **Lot 2 — un rang système n'a pas de couloir** : la loi le sert dans
+    /// `bubbles` avec son rang mais l'a retiré de toute branche, et documente
+    /// que « la peau le rend PLEINE LARGEUR ». Ce rang-là saute donc la rangée
+    /// de couloirs et prend toute la largeur du pane. Le `LazyVGrid` d'origine
+    /// ne savait pas faire une cellule à cheval sur plusieurs colonnes ; une
+    /// pile de rangées le sait, et reproduit la MÊME grille.
     private var grid: some View {
-        let item = GridItem(.fixed(laneWidth), spacing: 0)
-        return LazyVGrid(columns: Array(repeating: item, count: laneCount), spacing: 0) {
+        LazyVStack(alignment: .leading, spacing: 0) {
             ForEach(0..<max(0, geometry.rankCount), id: \.self) { rank in
-                ForEach(0..<laneCount, id: \.self) { laneIndex in
-                    cell(rank: rank, laneIndex: laneIndex)
+                if let bubble = bubbleByRank[rank],
+                   bubble.isSystem,
+                   let content = contentByMessageId[bubble.messageId] {
+                    RiverBubbleView(content: content, contentWidth: columns.totalWidth)
+                        .padding(.vertical, RiverMetrics.Bubble.baseGap)
+                } else {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(0..<laneCount, id: \.self) { laneIndex in
+                            cell(rank: rank, laneIndex: laneIndex)
+                        }
+                    }
                 }
             }
         }
+        .frame(width: columns.totalWidth, alignment: .leading)
     }
 
     @ViewBuilder
@@ -162,3 +300,5 @@ struct RiverStreamHost: View {
             }
     }
 }
+
+

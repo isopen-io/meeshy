@@ -91,7 +91,15 @@ export function useParticipantProfile(
         `/conversations/${conversationId}/participants/${participantId}/profile`
       );
       if (!response.success || !response.data) {
-        throw new Error(response.error ?? 'profile unavailable');
+        // Le CODE voyage avec l'erreur : « cette personne est partie » et
+        // « la fiche est indisponible » sont deux phrases différentes, et seul
+        // le gateway sait laquelle est vraie. Sans lui, la vue devrait deviner.
+        // `code` vit à la racine de l'enveloppe (`utils/response.ts`).
+        const failure = new Error(response.error ?? 'profile unavailable') as Error & {
+          code?: string;
+        };
+        failure.code = (response as { code?: string }).code;
+        throw failure;
       }
       return response.data;
     },

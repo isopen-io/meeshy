@@ -110,13 +110,25 @@ final class RiverActivationLockTests: XCTestCase {
 
     /// `true` si un site de montage RÉEL de l'écran Rivière existe hors de
     /// sa propre peau. Commentaires RETIRÉS avant la recherche
-    /// (`AppSourceGuard.stripComments`) — une docstring qui NOMME
-    /// `RiverStreamHost` en le décrivant (comme celle-ci, ou celle de
+    /// (`AppSourceGuard.stripComments`) — une docstring qui NOMME l'hôte en
+    /// le décrivant (comme celle-ci, ou celle de
     /// `RiverScreenNotMountedTests`) ne compte pas comme un montage.
-    private func riverStreamHostHasMountSite() throws -> Bool {
+    ///
+    /// **Le symbole a changé le 2026-08-21 (chantier Rivière iOS, lot 1) et
+    /// ce verrou devait l'apprendre.** Il cherchait `RiverStreamHost` — la
+    /// PEAU. Le point d'entrée réellement livré est `RiverConversationHost`,
+    /// qui vit dans `Riviere/View/` (avec la peau, dont il est l'assemblage)
+    /// et que `ConversationView` monte. Continuer de chercher `RiverStreamHost`
+    /// hors de `Riviere/` aurait rendu ce verrou AVEUGLE : il aurait répondu
+    /// « aucun écran monté » alors que l'écran l'est, et refusé un défaut ON
+    /// parfaitement sûr — un faux positif qui, la fois suivante, se serait
+    /// fait désactiver plutôt que corriger. Ce qu'il vérifie est inchangé :
+    /// qu'un fichier HORS de la peau monte réellement la Rivière.
+    private func riverScreenHasMountSite() throws -> Bool {
         for url in try nonRiviereSwiftFiles() {
             guard let code = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            if AppSourceGuard.stripComments(code).contains("RiverStreamHost") {
+            let stripped = AppSourceGuard.stripComments(code)
+            if stripped.contains("RiverConversationHost(") || stripped.contains("RiverStreamHost(") {
                 return true
             }
         }
@@ -130,7 +142,7 @@ final class RiverActivationLockTests: XCTestCase {
 
     func test_theLock_defaultIsOnAndNotMounted_mustNeverBothBeTrue() throws {
         let defaultIsOn = riverModeFlagDefaultIsOn()
-        let isMounted = try riverStreamHostHasMountSite()
+        let isMounted = try riverScreenHasMountSite()
         let unsafeCombination = defaultIsOn && !isMounted
 
         XCTAssertFalse(
@@ -148,7 +160,15 @@ final class RiverActivationLockTests: XCTestCase {
     /// — il existe pour que la sortie d'échec du verrou, lue seule, n'oblige
     /// personne à deviner LEQUEL des deux faits a bougé.
     func test_currentState_bothFactsNamed() throws {
-        XCTAssertFalse(riverModeFlagDefaultIsOn(), "défaut du drapeau")
-        XCTAssertFalse(try riverStreamHostHasMountSite(), "site de montage")
+        XCTAssertFalse(
+            riverModeFlagDefaultIsOn(),
+            "défaut du drapeau — une installation qui n'a RIEN demandé n'ouvre pas la Rivière"
+        )
+        XCTAssertTrue(
+            try riverScreenHasMountSite(),
+            "site de montage — depuis le lot 1 (2026-08-21), `ConversationView` monte " +
+            "`RiverConversationHost` : c'est la combinaison SÛRE OFF+monté, celle qui laisse " +
+            "un futur défaut ON passer sans que ce verrou n'ait rien à objecter."
+        )
     }
 }

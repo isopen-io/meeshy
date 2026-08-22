@@ -2,7 +2,8 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// Chantier Rivière iOS, lot 1 — le pont PUR fil → loi (`RiverConversationMapping`).
+/// Chantier Rivière iOS — le pont PUR fil → loi (`RiverConversationMapping`),
+/// lot 1 (branchement) puis lot 2 (les avis système entrent MARQUÉS).
 @MainActor
 final class RiverConversationMappingTests: XCTestCase {
 
@@ -25,19 +26,41 @@ final class RiverConversationMappingTests: XCTestCase {
 
     // MARK: - Les messages système ne sont la voix de personne
 
-    func test_systemMessages_areExcluded_fromVoicesAndLanes() {
+    /// **Lot 2 — recalibrage EN CONSCIENCE du témoin du lot 1.** Celui-ci
+    /// affirmait « l'avis d'arrivée n'entre pas dans la loi » : c'était la
+    /// façon la plus courte d'éviter la lane fantôme, mais elle faisait
+    /// DISPARAÎTRE l'avis de la Rivière — un lecteur n'y voyait jamais « X a
+    /// rejoint la conversation ». La loi partagée sait faire mieux : l'avis y
+    /// entre MARQUÉ (`isSystem`), garde son rang dans le temps, et reste
+    /// exclu des voix, des couloirs, des connecteurs et des groupes. Le fait
+    /// que le lot 1 protégeait (« pas de lane fantôme ») est TOUJOURS
+    /// vérifié ici — il est simplement obtenu par la marque, pas par
+    /// l'amputation.
+    func test_systemMessages_enterTheLawMarked_keepTheirRank_butAreNeverAVoice() {
         let messages = [
             message("m1", sender: "alice", name: "Alice", minutes: 0),
             message("sys", sender: "newcomer", name: "Nouveau", minutes: 1, source: .system),
             message("m2", sender: "bob", name: "Bob", minutes: 2)
         ]
         let input = RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
-        XCTAssertEqual(input.messages.map(\.id), ["m1", "m2"], "l'avis d'arrivée n'entre pas dans la loi")
+
+        XCTAssertEqual(input.messages.map(\.id), ["m1", "sys", "m2"], "l'avis garde son rang dans le temps")
+        XCTAssertEqual(
+            input.messages.first(where: { $0.id == "sys" })?.isSystem, true,
+            "sans cette marque, `senderId` ferait de l'arrivant une voix : l'avis est écrit avec l'ARRIVANT pour auteur"
+        )
         XCTAssertEqual(input.participants.map(\.id), ["alice", "bob"], "l'arrivant n'est pas une voix : pas de lane fantôme")
         XCTAssertEqual(input.viewerId, "me")
+
+        // La preuve va jusqu'au bout : la LOI, pas seulement son entrée.
+        let geometry = RiverLaneResolver.resolveRiverLanes(input)
+        XCTAssertTrue(geometry.bubbles.contains { $0.messageId == "sys" && $0.isSystem })
+        XCTAssertFalse(geometry.lanes.contains { $0.laneId == "newcomer" })
     }
 
-    func test_deletedMessages_areNotVoices_either() {
+    /// Un message supprimé, lui, reste dehors — dans les deux lots : une
+    /// bulle vide ferait un rang vide.
+    func test_deletedMessages_stayOutOfTheLaw_entirely() {
         let messages = [message("m1", sender: "alice", minutes: 0), message("gone", sender: "alice", minutes: 1, deleted: true)]
         XCTAssertEqual(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me").messages.map(\.id), ["m1"])
     }
@@ -67,7 +90,7 @@ final class RiverConversationMappingTests: XCTestCase {
         let messages = [message("m1", sender: "alice", name: "Alice", minutes: 0), m2]
         let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
         let contents = RiverConversationMapping.contents(
-            geometry: geometry, messages: messages,
+            geometry: geometry, messages: messages, viewerId: "me",
             text: { "PRISME:\($0.id)" },
             time: { _ in "12:45" }
         )
@@ -89,10 +112,96 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(RiverConversationMapping.initialCursor(geometry: empty), RiverLaneResolver.RiverCursor(laneIndex: 0, rank: 0))
     }
 
-    func test_fingerprint_ignoresSystemMessages_andChangesWithVoices() {
+    /// **Lot 2 — recalibrage EN CONSCIENCE.** Tant que les avis étaient
+    /// écartés de la loi, les ignorer dans l'empreinte était juste. Maintenant
+    /// qu'ils occupent un rang, une arrivée qui ne changerait pas l'empreinte
+    /// ne serait JAMAIS redessinée : le lecteur verrait la conversation
+    /// continuer sans jamais voir qui vient d'entrer.
+    func test_fingerprint_changesWhenASystemNoticeArrives_andWhenAVoiceSpeaks() {
         let base = [message("m1", sender: "alice", minutes: 0)]
-        let withSystem = base + [message("sys", sender: "x", minutes: 1, source: .system)]
-        XCTAssertEqual(RiverConversationMapping.fingerprint(messages: base), RiverConversationMapping.fingerprint(messages: withSystem))
-        XCTAssertNotEqual(RiverConversationMapping.fingerprint(messages: base), RiverConversationMapping.fingerprint(messages: base + [message("m2", sender: "bob", minutes: 2)]))
+
+        XCTAssertNotEqual(
+            RiverConversationMapping.fingerprint(messages: base),
+            RiverConversationMapping.fingerprint(messages: base + [message("sys", sender: "x", minutes: 1, source: .system)]),
+            "une arrivée change la Rivière : elle prend un rang"
+        )
+        XCTAssertNotEqual(
+            RiverConversationMapping.fingerprint(messages: base),
+            RiverConversationMapping.fingerprint(messages: base + [message("m2", sender: "bob", minutes: 2)])
+        )
+    }
+
+    // MARK: - Lot 2 : l'avis arrive à la peau prêt à être GRAVÉ
+
+    /// La peau ne doit pas avoir à ré-inspecter le message : le contenu porte
+    /// déjà de quoi peindre l'avis, et `nil` pour toute prise de parole.
+    func test_contents_systemBubbleCarriesItsNotice_speechCarriesNone() {
+        let messages = [
+            message("m1", sender: "alice", name: "Alice", minutes: 0),
+            message("sys", sender: "newcomer", name: "Nouveau", minutes: 1, source: .system)
+        ]
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { "PRISME:\($0.id)" },
+            time: { _ in "12:45" }
+        )
+
+        XCTAssertNil(contents.first { $0.bubble.messageId == "m1" }?.systemNotice)
+        XCTAssertEqual(
+            contents.first { $0.bubble.messageId == "sys" }?.systemNotice,
+            .plain("PRISME:sys"),
+            "un avis sans métadonnée dédiée garde son libellé, déjà résolu par l'appelant"
+        )
+    }
+
+    /// Un avis d'ARRIVÉE ne se réécrit pas : il est rendu par la vue du Fil
+    /// (`BubbleJoinNoticeView`), avec ses clés i18n et son glyphe fantôme —
+    /// le libellé français figé du gateway (`content`) ne sert que de repli.
+    func test_contents_joinNotice_isHandedToTheThreadsOwnView_notRewritten() {
+        var arrival = message("sys", sender: "newcomer", name: "Nouveau", minutes: 1, source: .system)
+        arrival.joinNotice = JoinNoticeMetadata(
+            participantId: "newcomer",
+            displayName: "Zoé",
+            isAnonymous: true,
+            viaShareLink: true,
+            username: "ano_zoe",
+            givenName: "Zoé"
+        )
+        let messages = [message("m1", sender: "alice", name: "Alice", minutes: 0), arrival]
+        let geometry = RiverLaneResolver.resolveRiverLanes(RiverConversationMapping.lanesInput(messages: messages, viewerId: "me"))
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { "PRISME:\($0.id)" },
+            time: { _ in "12:45" }
+        )
+
+        guard case .join(let notice)? = contents.first(where: { $0.bubble.messageId == "sys" })?.systemNotice else {
+            return XCTFail("l'arrivée doit être servie comme telle, jamais comme un texte nu")
+        }
+        XCTAssertEqual(notice.displayName, "Zoé")
+        XCTAssertTrue(notice.isAnonymous, "le glyphe fantôme dit que l'arrivant n'a pas de compte")
+    }
+
+    /// La graine de couleur de la bulle est EXACTEMENT celle que la loi a
+    /// donnée à la branche de son auteur. Le lot 1 lisait `senderName ??
+    /// senderId` ici et `senderName ?? senderUsername ?? senderId` pour les
+    /// participants : un auteur sans `senderName` peignait donc sa bulle
+    /// d'une couleur et son trait d'une autre.
+    func test_contents_colourSeed_isTheSameOneTheLawGaveToTheLane() {
+        var anonymous = message("m1", sender: "u1", minutes: 0)
+        anonymous.senderName = nil
+        anonymous.senderUsername = "ano_zoe"
+        let messages = [anonymous, message("m2", sender: "bob", name: "Bob", minutes: 1)]
+        let input = RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        let geometry = RiverLaneResolver.resolveRiverLanes(input)
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "12:45" }
+        )
+
+        let laneSeed = geometry.lanes.first { $0.laneId == "u1" }?.colorSeed
+        XCTAssertEqual(laneSeed, "ano_zoe")
+        XCTAssertEqual(contents.first { $0.bubble.messageId == "m1" }?.colorSeed, laneSeed)
     }
 }

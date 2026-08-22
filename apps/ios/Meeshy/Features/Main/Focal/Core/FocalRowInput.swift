@@ -339,6 +339,10 @@ struct FocalRowActions {
     /// CORRIGÉ vs le texte littéral du contrat (`ProfileUser`, inexistant
     /// dans le dépôt) — voir doc de tête de fichier.
     var onOpenProfile: ((ProfileSheetUser) -> Void)?
+    /// Appui long sur un avis d'arrivée — ouvre la fiche de PARTICIPATION de
+    /// l'arrivant, par son `Participant.id`. Distinct de `onOpenProfile`, qui
+    /// présente un compte : l'avis mène à la fiche quelle que soit la porte.
+    var onOpenParticipantProfile: ((String) -> Void)?
     /// Ouvre le menu complet du message (édition, suppression, signalement,
     /// traduction détaillée…) depuis la barre de contrôles de la rangée élue.
     /// Câblé sur le MÊME gestionnaire que l'appui long — la barre est une
@@ -374,6 +378,7 @@ struct FocalRowActions {
         onSetSecondaryLanguage: ((String, String?) -> Void)? = nil,
         onPlayAudio: ((String) -> Void)? = nil,
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
+        onOpenParticipantProfile: ((String) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
         onCallBack: ((String) -> Void)? = nil,
         onLongPressCallDetail: ((String) -> Void)? = nil,
@@ -397,6 +402,7 @@ struct FocalRowActions {
         self.onSetSecondaryLanguage = onSetSecondaryLanguage
         self.onPlayAudio = onPlayAudio
         self.onOpenProfile = onOpenProfile
+        self.onOpenParticipantProfile = onOpenParticipantProfile
         self.onViewStory = onViewStory
         self.onCallBack = onCallBack
         self.onLongPressCallDetail = onLongPressCallDetail

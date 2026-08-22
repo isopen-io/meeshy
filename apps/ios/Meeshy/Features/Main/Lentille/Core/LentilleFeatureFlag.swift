@@ -83,18 +83,21 @@ nonisolated enum LentilleFeatureFlag {
     case lentilleList
     case readingModes
     /// R-133 — le troisième drapeau annoncé par la doc de tête : couvre
-    /// UNIQUEMENT la sélectionnabilité de la peau Rivière. Défaut OFF, DEUX
-    /// étages seulement (env → `defaults.bool`), comme `lentilleList` —
-    /// jamais de cascade bêta (réservée à `readingModes`, docstring
-    /// ci-dessus, second amendement I-075) : activer le programme bêta
-    /// n'ouvre JAMAIS la Rivière tout seul, elle reste un choix séparé.
+    /// UNIQUEMENT la sélectionnabilité de la peau Rivière. Défaut OFF en
+    /// l'absence de tout choix. Il n'avait, à l'origine, que DEUX étages
+    /// (env → `defaults.bool`) : la cascade bêta lui était refusée, « la
+    /// Rivière reste un choix séparé ». Cette réserve est LEVÉE depuis le
+    /// 2026-08-21, le jour où son écran a eu un point d'entrée — voir
+    /// `isCoveredByBetaProgramme` pour le motif.
     /// Consommé comme `isRiverFlagEnabled` de
-    /// `ReadingModeOrchestrator.ResolveCapabilitiesInput` (amendement R) —
-    /// AUCUN site de montage ne câble encore cette entrée (R-135, hors
-    /// périmètre de ce lot) : à drapeau OFF ou ON, `resolveCapabilities`
-    /// reçoit son défaut `false` tant que ce câblage n'existe pas, donc le
-    /// mode ne s'ouvre nulle part — snapshot OFF identique par construction,
-    /// pas par gate applicatif.
+    /// `ReadingModeOrchestrator.ResolveCapabilitiesInput` (amendement R).
+    /// `ConversationView.init` le câble depuis le chantier Rivière iOS lot 1
+    /// (2026-08-21) et monte `RiverConversationHost` derrière `mode ==
+    /// .river` dans le même fichier : la sélection n'est plus une promesse
+    /// rompue. Depuis le 2026-08-21, ce drapeau suit AUSSI la bascule
+    /// « Activer les bêta » quand il n'a pas de valeur propre — voir
+    /// `isCoveredByBetaProgramme`, qui dit pourquoi la réserve R-133 est
+    /// levée.
     case riviereMode
 
     var userDefaultsKey: String {
@@ -118,8 +121,8 @@ nonisolated enum LentilleFeatureFlag {
     /// dictionnaire d'environnement, pour ne jamais dépendre du process réel
     /// ni y laisser de résidu. La surcharge process prime : `"1"` force ON,
     /// `"0"` force OFF, toute autre valeur (y compris absente) retombe :
-    /// - `.riviereMode` → `defaults.bool(forKey:)` (défaut `false`) ;
-    /// - `.readingModes`/`.lentilleList` (2026-08-19) → clé EXPLICITEMENT posée (`object(forKey:) != nil`)
+    /// - les TROIS drapeaux (`.readingModes`/`.lentilleList` depuis le
+    ///   2026-08-19, `.riviereMode` depuis le 2026-08-21) → clé EXPLICITEMENT posée (`object(forKey:) != nil`)
     ///   ⇒ sa valeur ; sinon `BetaFeaturesPreference.isEnabled` MAIS
     ///   uniquement si cette préférence est EXPRIMÉE — sans quoi
     ///   `defaults.bool(forKey:)`, donc `false` (retrait I-075 du
@@ -136,8 +139,27 @@ nonisolated enum LentilleFeatureFlag {
     /// n'affichait donc jamais la liste Lentille, sans que rien ne l'explique.
     /// Un seul interrupteur, une seule signification.
     ///
-    /// `.riviereMode` reste dehors (R-133, docstring du cas) : la Rivière est
-    /// un choix séparé que le programme bêta n'ouvre jamais tout seul.
+    /// **Élargissement produit du 2026-08-21 — `.riviereMode` rejoint à son
+    /// tour.** R-133 l'avait laissé dehors (« la Rivière est un choix séparé
+    /// que le programme bêta n'ouvre jamais tout seul ») ; le montage de
+    /// l'écran au fil (chantier Rivière iOS, lots 1–2) rend ce découpage
+    /// intenable pour la MÊME raison qui a fait entrer `.lentilleList` deux
+    /// jours plus tôt : la bascule « Activer les bêta » est le SEUL
+    /// interrupteur bêta offert à l'utilisateur, et `riviere_mode` n'en avait
+    /// AUCUN — `setForDebug` n'a aucun site d'appel de production, et le seul
+    /// moyen d'ouvrir la Rivière était une variable d'environnement de
+    /// processus (`MEESHY_FLAG_RIVIERE_MODE=1`), c'est-à-dire un outil de
+    /// développement. Un mode conçu, dessiné, prouvé par vecteurs et
+    /// désormais monté ne peut pas rester injoignable pour la personne qui
+    /// l'a demandé. Un seul interrupteur, une seule signification.
+    ///
+    /// Ce que l'élargissement NE change PAS : la Rivière ne s'ouvre toujours
+    /// que là où la LOI l'autorise (`resolveCapabilities` : ≥ 5 participants
+    /// actifs, jamais en `direct`), l'étage 1 (env) et l'étage 2 (clé propre
+    /// posée, dans les deux sens) priment toujours, et une préférence bêta
+    /// JAMAIS EXPRIMÉE ne vaut toujours pas opt-in (« absence ⇒ OFF »,
+    /// retrait du 2026-08-18) — le verrou d'activation
+    /// (`RiverActivationLockTests`) reste donc satisfait par le défaut.
     ///
     /// Ce que l'élargissement NE change PAS : l'étage 1 (env) et l'étage 2
     /// (clé propre posée, dans les deux sens) priment toujours, et une
@@ -145,8 +167,7 @@ nonisolated enum LentilleFeatureFlag {
     /// (« absence ⇒ OFF », retrait du 2026-08-18).
     private var isCoveredByBetaProgramme: Bool {
         switch self {
-        case .readingModes, .lentilleList: return true
-        case .riviereMode: return false
+        case .readingModes, .lentilleList, .riviereMode: return true
         }
     }
 
@@ -162,7 +183,9 @@ nonisolated enum LentilleFeatureFlag {
         // Étage 3 — la condition `isExplicitlySet` EST le retrait du
         // 2026-08-18 : sans elle, une préférence bêta jamais touchée rendait
         // `true` (son défaut ON) et allumait ces surfaces sur toute
-        // installation neuve. `.riviereMode` en est délibérément exclu (R-133).
+        // installation neuve. `.riviereMode` y est entré le 2026-08-21, le
+        // jour où son écran a eu un point d'entrée (voir
+        // `isCoveredByBetaProgramme`).
         if isCoveredByBetaProgramme,
            defaults.object(forKey: userDefaultsKey) == nil,
            BetaFeaturesPreference.isExplicitlySet(defaults: defaults, environment: environment) {

@@ -50,6 +50,7 @@ struct ParticipantProfileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var profile: ConversationParticipantProfile?
     @State private var loadFailed = false
+    @State private var hasLeft = false
     @State private var rightsWriteInFlight = false
 
     /// `entryLink` n'est servi qu'aux administrateurs et modérateurs : sa
@@ -67,11 +68,17 @@ struct ParticipantProfileSheet: View {
                     // configuré tronque ses propres réglages.
                     ScrollView { content(profile) }
                 } else if loadFailed {
-                    Text(String(
-                        localized: "participantProfile.unavailable",
-                        defaultValue: "Fiche indisponible",
-                        bundle: .main
-                    ))
+                    Text(hasLeft
+                        ? String(
+                            localized: "participantProfile.hasLeft",
+                            defaultValue: "Cette personne a quitté la conversation",
+                            bundle: .main
+                          )
+                        : String(
+                            localized: "participantProfile.unavailable",
+                            defaultValue: "Fiche indisponible",
+                            bundle: .main
+                          ))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
                     .foregroundColor(theme.textSecondary)
                     .accessibilityIdentifier("participant-profile-error")
@@ -99,6 +106,18 @@ struct ParticipantProfileSheet: View {
                     participantId: participantId
                 )
             } catch {
+                // 404 et panne ne se disent pas pareil. Un avis d'arrivée reste
+                // dans le fil pour toujours et mène ici longtemps après le
+                // départ de son auteur : servir « Fiche indisponible » ferait
+                // passer un fait de conversation pour une panne.
+                //
+                // Le STATUT suffit à trancher — le gateway ne rend 404 sur cette
+                // route que pour un participant qu'il ne sert pas — là où une
+                // coupure réseau lève `networkError` et garde le message
+                // générique, qui est alors le bon.
+                if case APIError.serverError(404, _) = error {
+                    hasLeft = true
+                }
                 loadFailed = true
             }
         }

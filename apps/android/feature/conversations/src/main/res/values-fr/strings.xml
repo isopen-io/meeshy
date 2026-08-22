@@ -72,6 +72,16 @@
     <string name="conversations_lock_subtitle_unlock">Saisissez le code de %1$s pour le déverrouiller</string>
     <string name="conversations_lock_subtitle_open">Saisissez le code de %1$s pour l\'ouvrir</string>
     <string name="conversations_lock_subtitle_unlock_all">Saisissez votre master PIN pour déverrouiller toutes les conversations</string>
+    <string name="conversations_lock_title_new_master">Nouveau master PIN</string>
+    <string name="conversations_lock_title_confirm_new">Confirmer le nouveau PIN</string>
+    <string name="conversations_lock_title_remove_master">Supprimer le master PIN</string>
+    <string name="conversations_lock_subtitle_change_verify">Saisissez votre master PIN actuel</string>
+    <string name="conversations_lock_subtitle_new_master">Choisissez un nouveau master PIN à 6 chiffres</string>
+    <string name="conversations_lock_subtitle_confirm_new">Confirmez votre nouveau master PIN</string>
+    <string name="conversations_lock_subtitle_remove_master">Saisissez votre master PIN pour confirmer la suppression</string>
+    <string name="conversations_change_master_pin">Changer le master PIN</string>
+    <string name="conversations_remove_master_pin">Supprimer le master PIN</string>
+    <string name="conversations_lock_security_menu">Réglages de verrouillage</string>
     <string name="conversations_unlock_all">Déverrouiller toutes les conversations</string>
     <string name="conversations_lock_error_master_incorrect">Master PIN incorrect</string>
     <string name="conversations_lock_error_pin_mismatch">Les PIN ne correspondent pas</string>

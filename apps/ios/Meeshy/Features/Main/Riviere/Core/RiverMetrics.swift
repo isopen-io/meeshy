@@ -51,6 +51,14 @@ nonisolated public enum RiverMetrics {
     /// reste un paramètre d'entrée de la loi, indépendant de cette largeur.
     nonisolated public enum Lane {
         public static let widthReference: CGFloat = 300
+        /// Bornes du PINCE (retour produit 2026-08-22). Le plancher garde une
+        /// bulle lisible — §7ter interdit de tronquer le texte pour gagner une
+        /// colonne, et c'est bien la LARGEUR DE COULOIR qu'on fait varier, pas
+        /// une échelle appliquée au rendu : un `scaleEffect` aurait rapetissé
+        /// le TEXTE lui-même, et faussé au passage les cadres mesurés dont le
+        /// canvas et la ligne de lecture dépendent.
+        public static let widthMin: CGFloat = 210
+        public static let widthMax: CGFloat = 540
         public static let gutter: CGFloat = 28
     }
 
@@ -70,6 +78,13 @@ nonisolated public enum RiverMetrics {
     nonisolated public enum Bubble {
         public static let detourRadius: CGFloat = 14
         public static let baseGap: CGFloat = 8
+        /// Retrait INTÉRIEUR de la bulle — retour produit 2026-08-21 : « il
+        /// faut assurer une certaine distance entre les bords et le contenu ».
+        /// `baseGap` en tenait lieu, à tort : c'est un ÉCART DE PILE entre les
+        /// blocs d'une bulle (citation, texte, heure), pas une marge. Les
+        /// confondre donnait 8 pt de respiration à un texte cerné d'un contour
+        /// de 2,5 pt.
+        public static let contentPadding: CGFloat = 14
         public static let identityNameMaxWidth: CGFloat = 0.44
         public static let flatBorderWidth: CGFloat = 1
     }
@@ -90,6 +105,27 @@ nonisolated public enum RiverMetrics {
         public static func bow(laneDistancePoints: CGFloat) -> CGFloat {
             max(minBow, abs(laneDistancePoints) * bowRatio)
         }
+    }
+
+    // MARK: - Rang
+
+    /// `river.row` — retour produit 2026-08-21. `gap` : la respiration
+    /// verticale entre DEUX RANGS ; sans elle les bulles s'empilaient bord à
+    /// bord et l'axe du temps ne se lisait plus. `continuationDash*` : les
+    /// tirets de la couture qui relie deux bulles CONSÉCUTIVES du même auteur
+    /// — l'espace seul dirait « quelqu'un d'autre a parlé », le pointillé dit
+    /// « la même voix continue ». Le GROUPEMENT lui-même reste une décision de
+    /// la LOI (`RiverBubble.isFirstInGroup`) : ces cotes ne font que le
+    /// dessiner.
+    nonisolated public enum Row {
+        public static let gap: CGFloat = 14
+        /// Hauteur de la couture entre deux bulles CONSÉCUTIVES du même
+        /// auteur : elles se TOUCHENT (arbitrage produit 2026-08-21 — « ce
+        /// n'est pas la LIGNE qui doit être en pointillé mais la SÉPARATION
+        /// entre les deux bulles, qui devraient être collées »).
+        public static let continuationSeam: CGFloat = 3
+        public static let continuationDashLength: CGFloat = 3
+        public static let continuationDashGap: CGFloat = 4
     }
 
     // MARK: - En-tête de couloir

@@ -526,13 +526,25 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Access denied: you are not a member of this conversation', { code: 'CONVERSATION_ACCESS_DENIED' });
       }
 
+      // Chargé SANS filtre d'activité, puis trié : un avis d'arrivée reste dans
+      // le fil pour toujours et mène ici longtemps après le départ de son
+      // auteur. « Inconnu » et « parti » ne sont pas la même réponse — les
+      // confondre sous un 404 nu force le client à dire « fiche indisponible »,
+      // qui se lit comme une panne, là où la vérité est un fait de conversation.
+      //
+      // La fiche n'est pas servie pour autant : seul le CODE distingue, jamais
+      // le corps.
       const participant = await prisma.participant.findFirst({
-        where: { id: participantId, conversationId, isActive: true },
+        where: { id: participantId, conversationId },
         include: { user: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true } } }
       });
 
       if (!participant) {
         return sendNotFound(reply, 'Participant not found in this conversation');
+      }
+
+      if (!participant.isActive) {
+        return sendNotFound(reply, 'This person has left the conversation', { code: 'PARTICIPANT_LEFT' });
       }
 
       // Le rang du LECTEUR dans CETTE conversation décide du second cercle. Un

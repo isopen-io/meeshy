@@ -129,43 +129,46 @@ struct LentilleFocusCard: View, Equatable {
             notch
                 .offset(x: -LentilleMetrics.ModeNotch.right, y: LentilleMetrics.ModeNotch.top)
         }
-        // Catégorie : MÊME chip que l'encoche de mode, au coin HAUT-GAUCHE
-        // (miroir exact : `top: -9; left: 14`).
-        .overlay(alignment: .topLeading) {
-            categoryNotch
-                .offset(x: LentilleMetrics.ModeNotch.right, y: LentilleMetrics.ModeNotch.top)
-        }
-        // Étiquettes : chips sur le bord BAS, qui POKENT hors de la carte
-        // comme l'encoche poke hors du bord haut.
+        // **UN seul ancrage de bord bas** (retour produit 2026-08-22 : « la
+        // conversation magnifiée semble trop surchargée avec des espaces
+        // compliqués ; les éléments autour doivent être plus discrets ou
+        // enlevés »).
+        //
+        // La carte portait CINQ ancrages — encoche de mode, catégorie,
+        // étiquettes, effectif + synchronisation, nom original — soit jusqu'à
+        // six capsules bordées d'accent débordant des deux bords, dont trois à
+        // la même ordonnée. Une carte de magnification est un instrument de
+        // LECTURE : elle doit dire « voici de qui il s'agit et ce qui vient
+        // d'être dit », en plus gros. Elle le disait moins bien que la rangée
+        // plate qu'elle recouvre.
+        //
+        // Le critère qui a tranché chaque retrait : « cette action a-t-elle
+        // déjà un domicile ? » — catégorie : trois (menu contextuel, panneau,
+        // glisser-déposer sur les chips de section) ; synchronisation : deux
+        // appels AUTOMATIQUES (reconnexion socket, retour au premier plan), et
+        // la rangée plate en peint déjà le glyphe ; participants : l'avatar de
+        // la rangée SOUS la carte ouvre la même feuille et reste touchable
+        // (`allowsHitTesting(false)` ci-dessus) ; nom original : feuille
+        // d'infos et champ Renommer.
+        //
+        // Restent l'ENCOCHE DE MODE — seule capsule bordée de la carte, et
+        // seule raison FONCTIONNELLE de son existence — et, en bas, les
+        // étiquettes avec l'effectif. Les étiquettes ne peuvent PAS partir
+        // sèchement : `activeTagFilter` n'a qu'un seul écrivain dans toute
+        // l'app, ce menu. Elles perdent donc leur contour d'accent au lieu de
+        // leur place ; leur relogement dans le menu contextuel reste à faire.
         .overlay(alignment: .bottomLeading) {
-            if !conversation.tags.isEmpty {
-                tagChips
-                    .offset(x: LentilleMetrics.ModeNotch.right, y: -LentilleMetrics.ModeNotch.top)
-            }
-        }
-        // behaviour-matrix:L08 + 2026-08-22 : l'effectif (type + memberCount)
-        // est SUR la ligne basse, coin droit, juste avant l'icône de
-        // synchronisation en cours (appui = synchroniser maintenant).
-        .overlay(alignment: .bottomTrailing) {
             HStack(spacing: MeeshySpacing.xs) {
+                if !conversation.tags.isEmpty {
+                    tagChips
+                }
+                Spacer(minLength: 0)
                 if conversation.type != .direct {
                     typeBadge
                 }
-                if conversation.userState.hasPendingSync {
-                    syncChip
-                }
             }
-            .offset(x: -LentilleMetrics.ModeNotch.right, y: -LentilleMetrics.ModeNotch.top)
-        }
-        // Nom PERSONNALISÉ affiché ⇒ le nom original, centré sur la ligne du
-        // haut (2026-08-22).
-        .overlay(alignment: .top) {
-            if let original = Self.originalName(conversation: conversation) {
-                notchChip(original)
-                    .offset(y: LentilleMetrics.ModeNotch.top)
-                    .allowsHitTesting(false)
-                    .accessibilityLabel(original)
-            }
+            .padding(.horizontal, LentilleMetrics.ModeNotch.right)
+            .offset(y: -LentilleMetrics.ModeNotch.top)
         }
     }
 
@@ -226,7 +229,12 @@ struct LentilleFocusCard: View, Equatable {
                 .font(LentilleMetrics.FocusCard.nameFont)
                 .foregroundColor(textPrimary)
                 .lineLimit(1)
-                .layoutPriority(1)
+                // L'IDENTITÉ gagne toujours la ligne (2026-08-22). La date
+                // avait la priorité la plus forte : c'était le NOM qui
+                // tronquait en premier, sur une carte dont le seul métier est
+                // de montrer de qui il s'agit, en plus gros. La magnification
+                // rétrécissait l'identité.
+                .layoutPriority(2)
             if conversation.userState.isMuted {
                 Text("🔕")
                     .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
@@ -239,7 +247,9 @@ struct LentilleFocusCard: View, Equatable {
                 .font(LentilleMetrics.Time.font)
                 .foregroundColor(textMuted)
                 .lineLimit(1)
-                .layoutPriority(2)
+                // La date complète reste — c'est une vraie valeur ajoutée de
+                // la magnification — mais elle cède la place la première.
+                .layoutPriority(0)
             Spacer(minLength: 0)
             if conversation.userState.unreadCount > 0 {
                 // Jamais comprimé : c'est le NOM qui tronque, pas le badge.
@@ -318,54 +328,40 @@ struct LentilleFocusCard: View, Equatable {
     }
 
     // MARK: - Chip de type + memberCount (behaviour-matrix:L08) — sur la ligne
+    // `originalName` a vécu ici jusqu'au 2026-08-22 : une chip purement
+    // décorative (aucune action) au CENTRE du bord haut, la place la plus
+    // premium de la carte, pour une information de second ordre. Retirée :
+    // elle vit dans la feuille d'infos et à côté du champ Renommer.
 
-    /// Le nom ORIGINAL quand un nom personnalisé est affiché à sa place.
-    nonisolated static func originalName(conversation: Conversation) -> String? {
-        guard let custom = conversation.userState.customName, !custom.isEmpty else { return nil }
-        let original = conversation.title ?? conversation.identifier
-        return original == custom ? nil : original
-    }
-
-    /// L'effectif est un BOUTON : l'appui ouvre la feuille des participants.
+    /// L'effectif est une INFORMATION, pas un contrôle (2026-08-22).
+    ///
+    /// C'était un bouton vers la feuille des participants — que l'avatar de la
+    /// rangée SOUS la carte ouvre déjà, et qui reste touchable puisque la
+    /// carte ne capte pas les touches. Un doublon de tap, au prix d'une
+    /// capsule bordée d'accent de plus sur un bord déjà chargé. Ce qu'il
+    /// apportait vraiment, c'est le NOMBRE, qui n'existe nulle part ailleurs
+    /// dans la liste : il reste, en label nu et muet.
     private var typeBadge: some View {
-        Button(action: onShowParticipants) {
-            HStack(spacing: 3) {
-                Image(systemName: Self.typeBadgeIcon(for: conversation.type))
+        HStack(spacing: 3) {
+            Image(systemName: Self.typeBadgeIcon(for: conversation.type))
+                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                .imageScale(.small)
+            if conversation.memberCount > 1 {
+                Text(conversation.memberCountDisplay)
                     .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                    .imageScale(.small)
-                if conversation.memberCount > 1 {
-                    Text(conversation.memberCountDisplay)
-                        .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                }
             }
-            .foregroundColor(accent)
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule(style: .continuous).fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
-            .overlay(Capsule(style: .continuous).strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1))
-            .contentShape(Capsule(style: .continuous))
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "conversations.focus.show_participants", defaultValue: "Voir les participants", bundle: .main))
+        .foregroundColor(textMuted)
+        .accessibilityElement(children: .combine)
         .accessibilityValue(conversation.memberCountDisplay)
     }
 
-    /// Synchronisation en cours : même glyphe que la rangée plate, mais un
-    /// BOUTON — l'appui force la synchronisation immédiatement.
-    private var syncChip: some View {
-        Button(action: onForceSync) {
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
-                .foregroundColor(accent)
-                .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, MeeshySpacing.xs)
-                .background(Capsule(style: .continuous).fill(MeeshyColors.backgroundSecondary(isDark: isDark)))
-                .overlay(Capsule(style: .continuous).strokeBorder(accent.opacity(LentilleMetrics.Avatar.ringOpacity), lineWidth: 1))
-                .contentShape(Capsule(style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "conversations.focus.sync_now", defaultValue: "Synchroniser maintenant", bundle: .main))
-    }
+    // `syncChip` a vécu ici jusqu'au 2026-08-22 : un BOUTON « synchroniser
+    // maintenant » sur le bord bas. Retiré — `flushOutbox()` est DÉJÀ appelé
+    // automatiquement à la reconnexion socket et au retour au premier plan,
+    // et la rangée plate sous la carte peint déjà le même glyphe, sans
+    // capsule. C'était un déclencheur manuel pour ce que l'app fait seule sur
+    // deux fronts, au prix d'une 6e capsule bordée d'accent.
 
     private static func typeBadgeIcon(for type: MeeshyConversation.ConversationType) -> String {
         switch type {
@@ -424,56 +420,12 @@ struct LentilleFocusCard: View, Equatable {
     }
 
     // MARK: - Encoche CATÉGORIE (haut-gauche, 2026-08-21)
-
-    private var currentCategory: ConversationSection? {
-        categories.first { $0.id == conversation.userState.sectionId }
-    }
-
-    nonisolated static func categoryText(current: String?, fallback: String) -> String {
-        (current ?? fallback).uppercased()
-    }
-
-    private var categoryText: String {
-        Self.categoryText(
-            current: currentCategory?.name,
-            fallback: String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main)
-        )
-    }
-
-    /// Toucher ⇒ le catalogue des catégories pour DÉPLACER la conversation —
-    /// même contenu que le sous-menu « Déplacer vers… » du menu contextuel.
-    private var categoryNotch: some View {
-        Menu {
-            ForEach(categories) { category in
-                let isCurrent = category.id == conversation.userState.sectionId
-                Button {
-                    onMoveToSection(isCurrent ? "" : category.id)
-                } label: {
-                    if isCurrent {
-                        Label("\(category.name) \u{2713}", systemImage: category.icon)
-                    } else {
-                        Label(category.name, systemImage: category.icon)
-                    }
-                }
-            }
-            if !categories.isEmpty {
-                Divider()
-            }
-            Button {
-                onMoveToSection("")
-            } label: {
-                Label(
-                    String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
-                    systemImage: "tray.fill"
-                )
-            }
-        } label: {
-            notchChip(categoryText)
-        }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .accessibilityLabel(categoryText)
-    }
+    // `categoryNotch` a vécu ici jusqu'au 2026-08-22 : une 4e porte vers
+    // « Déplacer vers… », en capsule permanente au coin haut-gauche — visible
+    // même sans catégorie, où elle affichait le mot générique « CATÉGORIE »
+    // bordé d'accent. Retirée : l'action a déjà TROIS domiciles (menu
+    // contextuel de la rangée, panneau d'overlay, glisser-déposer sur les
+    // chips de section).
 
     // MARK: - Étiquettes en chips sur le bord BAS (2026-08-21)
 
@@ -532,11 +484,17 @@ struct LentilleFocusCard: View, Equatable {
                 .padding(.horizontal, LentilleMetrics.Tags.chipPaddingHorizontal)
                 .padding(.vertical, LentilleMetrics.Tags.chipPaddingVertical)
                 .background(Capsule(style: .continuous).fill(Color(hex: tag.color)))
+                // L'élément le MOINS important portait le trait le plus fort
+                // de la carte : contour d'accent PLEIN, doublé quand il
+                // filtre. Le contour d'accent redevient l'exclusivité de
+                // l'anneau de la carte et de l'encoche de mode ; le filtre
+                // actif se dit par l'épaisseur d'un liseré BLANC, dans le
+                // vocabulaire de la pastille elle-même.
                 .overlay(
                     Capsule(style: .continuous)
                         .strokeBorder(
-                            accent,
-                            lineWidth: isFiltering ? LentilleMetrics.FocusCard.ringSize * 2 : LentilleMetrics.FocusCard.ringSize
+                            Color.white.opacity(isFiltering ? 0.95 : 0),
+                            lineWidth: LentilleMetrics.FocusCard.ringSize
                         )
                 )
                 .contentShape(Capsule(style: .continuous))

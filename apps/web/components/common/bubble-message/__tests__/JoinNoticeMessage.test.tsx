@@ -98,3 +98,50 @@ describe('JoinNoticeMessage', () => {
     expect(screen.getByTestId('join-notice').textContent).toContain('joinNotice.joined');
   });
 });
+
+// ─── L'avis MÈNE à la personne qu'il annonce ─────────────────────────────────
+//
+// La notice nomme quelqu'un et porte son `participantId` : c'est le moment
+// exact où l'on veut savoir qui vient d'entrer, et sous quelles conditions.
+// Elle restait pourtant le seul endroit du fil où ce nom ne menait nulle part.
+//
+// La pastille entière porte le clic, et non le seul `@handle` : celui-ci n'est
+// rendu que lorsqu'il diffère du nom affiché, donc la moitié des arrivants n'en
+// ont aucun — l'affordance aurait disparu sans raison lisible.
+
+import { fireEvent } from '@testing-library/react';
+import { ParticipantProfileContext } from '@/components/conversations/participant-profile-context';
+
+const renderWithProfile = (open: (id: string) => void, overrides: Record<string, unknown> = {}) =>
+  render(
+    <ParticipantProfileContext.Provider value={open}>
+      <JoinNoticeMessage metadata={notice(overrides) as never} />
+    </ParticipantProfileContext.Provider>
+  );
+
+describe('JoinNoticeMessage — l’avis ouvre la fiche de l’arrivant', () => {
+  it('ouvre la fiche sur le participant annoncé', () => {
+    const open = jest.fn();
+    renderWithProfile(open, { participantId: 'participant-77' });
+
+    fireEvent.click(screen.getByTestId('join-notice-open-profile'));
+
+    expect(open).toHaveBeenCalledWith('participant-77');
+  });
+
+  it('ouvre aussi la fiche d’un arrivant QUI A UN COMPTE — l’avis nomme les quatre portes', () => {
+    const open = jest.fn();
+    renderWithProfile(open, { participantId: 'participant-9', isAnonymous: false });
+
+    fireEvent.click(screen.getByTestId('join-notice-open-profile'));
+
+    expect(open).toHaveBeenCalledWith('participant-9');
+  });
+
+  it('reste une notice lisible hors conversation — pas de bouton mort', () => {
+    render(<JoinNoticeMessage metadata={notice() as never} />);
+
+    expect(screen.queryByTestId('join-notice-open-profile')).toBeNull();
+    expect(screen.getByTestId('join-notice')).toBeTruthy();
+  });
+});

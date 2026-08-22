@@ -18,32 +18,27 @@ import XCTest
 /// pour le comportement complet (grisée drapeau OFF, dégrisée drapeau ON +
 /// éligible, grisée sous seuil, grisée en `direct`).
 ///
-/// **Position B — l'ÉCRAN reste NON MONTÉ (inchangé).** `RiverStreamHost`
-/// (l'hôte qui PEINT réellement les couloirs) n'a toujours AUCUN site de
-/// montage : ni `ConversationView.swift` (dont le propre appel à
-/// `resolveCapabilities`, dans son `init`, ne passe TOUJOURS PAS
-/// `isRiverFlagEnabled` — re-vérifié par
-/// `test_conversationView_stillDoesNotWireTheRiverFlag` ci-dessous), ni
-/// aucun autre fichier du dépôt. Recalibrer le menu ne mène PAS,
-/// mécaniquement, à monter l'écran : ce sont deux fichiers différents
-/// (`LentilleReadingModeContext` pour la liste, `ConversationView` pour le
-/// fil ouvert), et seul le premier a été touché par R-135. Une sélection
-/// « Rivière » reste donc CLAMPÉE (`clamped-unavailable`,
-/// `resolveOrchestratorDecision` rend `.focal`, que le clamp du RETRAIT
-/// FOCAL iOS 2026-08-18 rabat sur `.script`) dès l'ouverture d'une conversation — la
-/// loi documente elle-même ce cas : « un choix collant `riviere` mémorisé
-/// avant l'extinction du drapeau Rivière rendrait un mode que personne ne
-/// sait dessiner ». Monter `RiverStreamHost` (calculer une
-/// `RiverLaneResolver.RiverGeometry` + un `[RiverBubbleContent]` depuis
-/// `ConversationViewModel.messages`, brancher `RiverNavigationController`)
-/// est un chantier de conteneur à part entière — hors périmètre « mux
-/// menus » de R-135, réservé à un futur lot, documenté dans le rapport R-135.
+/// **Position B — l'ÉCRAN EST MONTÉ, et les deux gestes vont ENSEMBLE**
+/// (chantier Rivière iOS, lot 1 — 2026-08-21). La version antérieure de
+/// cette position affirmait le contraire (« `RiverStreamHost` n'a AUCUN site
+/// de montage », « `ConversationView.init` ne câble TOUJOURS PAS
+/// `isRiverFlagEnabled` ») et se terminait par une consigne explicite : le
+/// lot qui monterait l'écran devrait mettre cette suite à jour EN LA
+/// DOCUMENTANT plutôt que de la supprimer. C'est ce qui est fait ici.
 ///
-/// Ce témoin verrouille les DEUX positions : si un futur lot monte
-/// effectivement l'écran ET/OU rebranche `isRiverFlagEnabled` dans
-/// `ConversationView`, il doit AUSSI mettre à jour/retirer la partie
-/// concernée de cette suite — jamais la laisser rougir en silence en
-/// croyant à une régression.
+/// Ce que la position B vérifie désormais, et pourquoi c'est la MÊME
+/// exigence, pas une plus faible : le danger qu'elle nommait n'a jamais été
+/// « monter l'écran », c'était la DISSOCIATION des deux gestes — un drapeau
+/// câblé sans écran (Rivière choisie, bulles rendues : une promesse
+/// silencieusement rompue, `clamped-unavailable`), ou un écran monté que
+/// rien ne rend joignable. Le témoin exige donc les deux DANS LE MÊME
+/// fichier : `ConversationView.init` câble `isRiverFlagEnabled` ET
+/// `ConversationView.body` monte `RiverConversationHost` derrière
+/// `mode == .river`, en UN seul site. Retirer l'un des deux fait rougir.
+///
+/// `RiverStreamHost` — la PEAU qui peint les couloirs — reste, lui,
+/// référencé nulle part hors de `Riviere/` : le fil ne connaît que la porte
+/// (`RiverConversationHost`), jamais la peinture.
 final class RiverScreenNotMountedTests: XCTestCase {
 
     private static var meeshyRoot: URL {
@@ -149,9 +144,24 @@ final class RiverScreenNotMountedTests: XCTestCase {
             "`ConversationView.init` câble `isRiverFlagEnabled` depuis le drapeau `riviere_mode` — la " +
             "sélection de Rivière à l'ouverture du fil suit désormais le drapeau ET l'éligibilité."
         )
+        // Le TEST porte sur le FAIT (un hôte est monté derrière `mode ==
+        // .river`), pas sur son emballage : la forme littérale
+        // `{ AnyView(RiverConversationHost(` a vécu un jour, puis le pane a dû
+        // être borné à l'écran (`Color.clear.overlay { … }`, sans quoi la
+        // largeur de la Rivière poussait l'en-tête du fil hors écran). Épingler
+        // l'emballage aurait fait rougir une garde qui n'avait rien à
+        // reprocher. On exige donc les deux ancres, dans l'ordre, à courte
+        // distance l'une de l'autre.
+        let riverBranch = try XCTUnwrap(
+            code.range(of: "if readingModeController.mode == .river {"),
+            "La branche de montage `mode == .river` a disparu de `ConversationView` — Rivière " +
+            "redeviendrait une promesse rompue (choisie au menu, jamais rendue)."
+        )
+        let windowEnd = code.index(riverBranch.upperBound, offsetBy: 220, limitedBy: code.endIndex) ?? code.endIndex
         XCTAssertTrue(
-            code.contains("if readingModeController.mode == .river { AnyView(RiverConversationHost("),
-            "Un hôte de rendu est monté derrière `mode == .river` — jamais une sélection sans écran."
+            code[riverBranch.upperBound..<windowEnd].contains("RiverConversationHost("),
+            "La branche `mode == .river` ne monte plus d'hôte de rendu — jamais une sélection " +
+            "sans écran."
         )
         XCTAssertEqual(
             code.components(separatedBy: "RiverConversationHost(").count - 1, 1,
