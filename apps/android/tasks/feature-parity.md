@@ -3037,7 +3037,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       path — `conversation:participant-left`/`conversation:deleted`). delete-for-all still
       unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
-- [~] Anonymous-session conversation mode; guest join-via-share-link flow — the
+- [x] Anonymous-session conversation mode; guest join-via-share-link flow — the
       **entry-decision brain landed** (slice `sharelink-entry-policy`, 2026-08-22): pure
       `ShareLinkEntryPolicy.intent(ShareLinkEntryFacts) → ShareLinkEntryIntent` (`:core:model`,
       faithful port of iOS `ShareLinkEntryPolicy.swift`) — five facts in (conversationId,
@@ -3069,9 +3069,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       single-value guest store means "stored session for THIS link" = `store.load()?.linkId == identifier`
       — a session opened on a different link never resumes here. +15 behavioural tests, 2 mutation RED
       proofs (linkId-equality guard, identifier-trim-before-preview).
-      **Remaining before `[x]`:** rewire `MeeshyApp.kt`'s deep-link route to call the resolver and branch
-      the navigation on the intent (open conversation / silent account-join / resume guest / choose-identity
-      sheet / requires-account) instead of always presenting the anonymous guest form.
+      **Deep-link route rewired — box now `[x]`** (slice `guest-join-entry-navigation`, 2026-08-22):
+      `ShareLinkEntryViewModel` (`:feature:auth`) is the app-side brain the route now consults before
+      presenting anything. On entry it reads the auth flag (seam over `AuthRepository`), gathers known
+      conversation ids only when authenticated (seam over `ConversationRepository.cachedConversations`),
+      runs the `ShareLinkEntryResolver`, and reduces the resulting `ShareLinkEntryIntent` to one
+      `ShareLinkEntryUiState`: `OpenConversation` (already a member / joined-with-account / resumed guest)
+      / `ChooseIdentity` (account vs anonymous, flagging a resumable guest session) / `RequiresAccount`
+      (steer to sign-in) / `GuestForm` (the existing anonymous form) / `Failed` (a join failure, with
+      retry) / `Resolving`. Two intents drive a network join the VM performs itself (`JoinWithAccount`,
+      and the fallback when an authenticated link cannot be resolved at all) via an
+      `AuthenticatedShareLinkJoining` seam over `ShareLinkJoinRepository.joinAuthenticated`. The
+      `ChooseIdentity` prompt is actionable (no dead end): `chooseAccount()` joins + opens,
+      `chooseAnonymous()` resumes the stored guest session or opens the form. `MeeshyApp.kt`'s
+      `GUEST_JOIN` route now hosts `ShareLinkEntryScreen` (Compose glue) instead of jumping straight to
+      the guest form. SOTA over iOS, which routes authenticated vs unauthenticated entry through two
+      separate views: Android unifies both behind one VM, and a blank stored `conversationId` degrades to
+      the form instead of navigating to an empty id. +19 behavioural tests (real resolver over faked leaf
+      seams), 1 mutation RED proof (resume blank-conversationId guard). Local gate
+      `assembleDebug testDebugUnitTest` green (973 tasks).
 - [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
       **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
       `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns

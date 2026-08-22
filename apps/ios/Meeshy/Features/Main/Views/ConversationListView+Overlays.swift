@@ -285,8 +285,8 @@ extension ConversationListView {
             // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
             // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
             // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
-            // utilisateur « Activer les bêta », défaut ON — réglages,
-            // SettingsView) — indépendant de `reading_modes` : allumer ce
+            // utilisateur « Activer les bêta » — réglages, SettingsView)
+            // — indépendant de `reading_modes` : allumer ce
             // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
             // conversations (mode AUTO), ce que ce chantier interdit.
             // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
@@ -555,7 +555,6 @@ extension ConversationListView {
                         isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                         isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
                         canRename: conversation.type != .direct,
-                        isFocalBetaPreviewEnabled: BetaFeaturesPreference.isEnabled,
                         onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
                         onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
                         onMarkReadToggle: {

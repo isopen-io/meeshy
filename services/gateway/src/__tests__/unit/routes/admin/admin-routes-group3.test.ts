@@ -43,6 +43,14 @@ jest.mock('../../../../jobs/broadcast-sender', () => ({
   })),
 }));
 
+// Mock BroadcastInAppSenderJob (canal in-app)
+const mockInAppJobExecute = jest.fn<any>();
+jest.mock('../../../../jobs/broadcast-inapp-sender', () => ({
+  BroadcastInAppSenderJob: jest.fn<any>().mockImplementation(() => ({
+    execute: mockInAppJobExecute,
+  })),
+}));
+
 // Mock EmailService
 jest.mock('../../../../services/EmailService', () => ({
   EmailService: jest.fn<any>().mockImplementation(() => ({})),
@@ -105,9 +113,12 @@ function makeAuthContext(role: string, id = VALID_ADMIN_ID) {
 // App builders
 // ---------------------------------------------------------------------------
 
+const mockNotificationService = { createSystemNotification: jest.fn<any>() };
+
 function buildBroadcastApp(role = 'ADMIN'): FastifyInstance {
   const app = Fastify({ logger: false });
   app.decorate('prisma', mockPrisma);
+  app.decorate('notificationService', mockNotificationService);
   app.decorate('authenticate', async (request: any) => {
     request.authContext = makeAuthContext(role);
   });
@@ -118,6 +129,7 @@ function buildBroadcastApp(role = 'ADMIN'): FastifyInstance {
 function buildBroadcastAppNoAuth(): FastifyInstance {
   const app = Fastify({ logger: false });
   app.decorate('prisma', mockPrisma);
+  app.decorate('notificationService', mockNotificationService);
   app.decorate('authenticate', async (request: any) => {
     // no authContext set → simulates unauthenticated
     request.authContext = null;
@@ -699,6 +711,75 @@ describe('broadcastRoutes', () => {
       mockPrisma.adminBroadcast.findUnique.mockRejectedValue(new Error('DB error'));
 
       const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
+      expect(res.statusCode).toBe(500);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // POST /:id/send-inapp — canal in-app (notification système à chaque compte ciblé)
+  // -------------------------------------------------------------------------
+
+  describe('POST /:id/send-inapp', () => {
+    it('returns 401 when unauthenticated', async () => {
+      await app.close();
+      const noAuthApp = buildBroadcastAppNoAuth();
+      await noAuthApp.ready();
+
+      const res = await noAuthApp.inject({ method: 'POST', url: `/${VALID_ID}/send-inapp` });
+      expect(res.statusCode).toBe(401);
+      await noAuthApp.close();
+    });
+
+    it('returns 403 for USER role', async () => {
+      await app.close();
+      const userApp = buildBroadcastApp('USER');
+      await userApp.ready();
+
+      const res = await userApp.inject({ method: 'POST', url: `/${VALID_ID}/send-inapp` });
+      expect(res.statusCode).toBe(403);
+      await userApp.close();
+    });
+
+    it('returns 404 when broadcast not found', async () => {
+      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(null);
+
+      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/send-inapp` });
+      expect(res.statusCode).toBe(404);
+    });
+
+    it('returns 400 when translations are not ready (DRAFT)', async () => {
+      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(fakeBroadcast({ status: 'DRAFT' }));
+
+      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/send-inapp` });
+      expect(res.statusCode).toBe(400);
+      expect(mockInAppJobExecute).not.toHaveBeenCalled();
+    });
+
+    it.each(['READY', 'SENT'])('returns 200, stamps inAppSentAt, audits and fires the job for a %s broadcast', async (status) => {
+      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(fakeBroadcast({ status }));
+      mockPrisma.adminBroadcast.update.mockResolvedValue(fakeBroadcast({ status }));
+      mockPrisma.adminAuditLog.create.mockResolvedValue({});
+      mockInAppJobExecute.mockResolvedValue(undefined);
+
+      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/send-inapp` });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body).success).toBe(true);
+      expect(mockPrisma.adminBroadcast.update).toHaveBeenCalledWith(expect.objectContaining({
+        where: { id: VALID_ID },
+        data: expect.objectContaining({ inAppSentAt: expect.any(Date), inAppSentById: VALID_ADMIN_ID }),
+      }));
+      expect(mockPrisma.adminBroadcast.update.mock.calls[0][0].data).not.toHaveProperty('status');
+      expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ action: 'SEND_BROADCAST_INAPP', entityId: VALID_ID }),
+      }));
+      expect(mockInAppJobExecute).toHaveBeenCalledWith(VALID_ID);
+    });
+
+    it('returns 500 when the update throws', async () => {
+      mockPrisma.adminBroadcast.findUnique.mockResolvedValue(fakeBroadcast({ status: 'READY' }));
+      mockPrisma.adminBroadcast.update.mockRejectedValue(new Error('db'));
+
+      const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/send-inapp` });
       expect(res.statusCode).toBe(500);
     });
   });

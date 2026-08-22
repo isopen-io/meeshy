@@ -54,6 +54,11 @@ struct MeeshyApp: App {
         // appareil), ne crashe jamais.
         UILanguageOverride.applyIfNeeded()
 
+        // Programme bêta — lecture au lancement : si « Activer les bêta » est
+        // ON, `UserDefaults` dit quelles fonctionnalités le sont (tout-ou-rien
+        // aujourd'hui, une par une demain). Journal `me.meeshy.app:beta`.
+        BetaFeaturesPreference.resolveAtLaunch()
+
         #if DEBUG
         // Filet de diagnostic dev : capture la stack des SIGSEGV que
         // ReportCrash throttle et que MetricKit tronque (stack overflows du
