@@ -1287,6 +1287,63 @@ la règle, et **rend exactement ce que la prochaine écriture poserait** — ici
 triplet `matchedUserId` / `matchedBy` / `matchedAt` à `null`, soit « à inviter »,
 ce que `sync()` écrirait pour ce contact.
 
+## Une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
+
+`signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la
+clé d'identité, donc la seule chose qui fasse de X3DH un accord AUTHENTIFIÉ. Le
+dépôt la PRODUISAIT (`SignalKeyManager.generateAndStoreSignedPreKey`), la
+PERSISTAIT (`DMAEnrollment.signedPreKeySignature`), la RELISAIT pour la placer
+dans le paquet (`SignalProtocolEngine.initiateNewSession`) et la DÉCLARAIT
+obligatoire (`PreKeyBundle`). Quatre couches irréprochables ; la cinquième —
+celle qui la lit — n'existait pas (cycle 96).
+
+> **Un champ présent à chaque étape se lit comme un champ traité.** Il n'y a rien
+> à trouver : pas de `TODO`, pas de champ manquant, pas de type qui ment. La
+> preuve voyage bien formée jusqu'au bout et personne ne l'ouvre.
+
+La question n'est donc jamais « ce champ est-il là ? » mais **« qui le LIT, et
+que fait-il quand il est faux ? »**. Le nom apparaissait six fois dans le
+sous-arbre, et zéro fois à droite d'une comparaison.
+
+**Et une valeur ABSURDE qu'un témoin fait passer sans broncher nomme la garde qui
+manque** : les six constructions de paquet de la suite du sous-arbre passaient
+`signature: crypto.randomBytes(64)` et l'accord aboutissait. Chercher dans les
+fixtures ce qu'un attaquant n'aurait jamais pu produire est un balayage à part
+entière.
+
+### Une garde conditionnée à la PRÉSENCE de ce qu'elle garde est un no-op
+
+Même sous-arbre, même lot — `decryptMessage` étape 2 :
+
+```ts
+if (senderIdentityKey && encryptedMessage.signature.length > 0) { /* refuser si invalide */ }
+else if (encryptedMessage.signature.length > 0) { /* avertir */ }
+```
+
+Un message SANS signature ne franchit aucune des deux branches : ni vérification,
+ni avertissement, ni refus — sous un commentaire qui déclare la vérification
+« stricte ». Elle l'était contre une signature FAUSSE, jamais contre une
+signature RETIRÉE, et le retrait est strictement moins cher que la forgerie.
+
+> **Une authentification dont l'attaquant décide s'il la subit n'est pas une
+> authentification.** Le discriminant juste est l'INTENTION de l'appelant
+> (« m'a-t-on donné de quoi vérifier ? »), jamais l'obligeance de l'émetteur
+> (« m'a-t-on donné quelque chose à vérifier ? »).
+
+### Un `as any` sur un objet de contrat NOMME le champ qui manque
+
+`SignalProtocolAdapter.performX3DH` portait `recipientBundle as any` parce que
+`ISignalProtocolAdapter` ne transportait pas la signature que `PreKeyBundle`
+déclare obligatoire : le cast faisait taire exactement cette absence-là. Le
+cycle 95 l'avait consigné comme dette cosmétique de dernier rang ; c'était
+l'indice.
+
+Corollaire, vérifié au même endroit : **rouvrir une signature de méthode révèle
+ce qu'elle déclarait faux.** Deux autres mensonges du même contrat sont tombés en
+écrivant honnêtement sa liste de paramètres — `ourEphemeralPrivate` DÉCLARÉ et
+silencieusement ignoré, et un résultat qui jetait la clé éphémère publique sans
+laquelle le pair ne peut rien dériver.
+
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (Fastify, Socket.IO, ZeroMQ, auth unifie, Prisma/MongoDB, Redis fallback, erreurs types, rate limiting, Signal Protocol, logging PII, audio pipeline, push notifications) avec contexte, alternatives rejetes et consquences.
 
