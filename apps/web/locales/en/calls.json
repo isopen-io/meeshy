@@ -87,6 +87,7 @@
     },
     "toasts": {
       "connectionError": "Connection error",
+      "connected": "Connected!",
       "peerConnectionFailed": "Connection failed. Please try again.",
       "iceConnectionFailed": "Connection failed. Retrying...",
       "videoSwitchFailed": "Failed to switch video",

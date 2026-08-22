@@ -10,6 +10,70 @@ import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/pos
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
 
+/**
+ * Ligne de la liste d'administration des posts.
+ *
+ * Elle était déclarée `data: { type: 'array', items: { type: 'object' } }` :
+ * sans `properties`, fast-json-stringify (`additionalProperties: false` par
+ * défaut) sérialisait CHAQUE post en `{}`. La liste sortait de la bonne
+ * longueur, avec sa pagination juste, et toutes ses lignes vides — la forme la
+ * plus trompeuse de ce défaut, parce qu'elle ressemble à une réponse valide.
+ * `UserPostsSection.tsx` la lit.
+ *
+ * Source de vérité de la forme : le `select` du handler, dont la valeur part
+ * telle quelle dans `sendPaginatedSuccess`. `author` suit `authorSelect` et
+ * `media` suit `mediaSelect` (`services/posts/postIncludes`).
+ */
+const adminPostRowSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string', nullable: true },
+    visibility: { type: 'string', nullable: true },
+    content: { type: 'string', nullable: true },
+    originalLanguage: { type: 'string', nullable: true },
+    communityId: { type: 'string', nullable: true },
+    moodEmoji: { type: 'string', nullable: true },
+    isPinned: { type: 'boolean', nullable: true },
+    isEdited: { type: 'boolean', nullable: true },
+    deletedAt: { type: 'string', format: 'date-time', nullable: true },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    likeCount: { type: 'number', nullable: true },
+    commentCount: { type: 'number', nullable: true },
+    repostCount: { type: 'number', nullable: true },
+    viewCount: { type: 'number', nullable: true },
+    bookmarkCount: { type: 'number', nullable: true },
+    shareCount: { type: 'number', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time', nullable: true },
+    author: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true }
+      }
+    },
+    media: {
+      type: 'array',
+      // `mediaSelect` porte dix-neuf champs et suit le pipeline média. Un média
+      // est ici une donnée d'inspection, pas un contrat client : le laisser
+      // passer entier vaut mieux que d'en figer une copie qui dériverait.
+      items: { type: 'object', additionalProperties: true }
+    },
+    _count: {
+      type: 'object',
+      properties: {
+        comments: { type: 'number' },
+        views: { type: 'number' },
+        bookmarks: { type: 'number' }
+      }
+    }
+  }
+} as const;
+
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -231,7 +295,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: adminPostRowSchema },
             pagination: {
               type: 'object',
               properties: {
