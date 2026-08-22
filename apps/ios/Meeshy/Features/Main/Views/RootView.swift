@@ -2067,7 +2067,7 @@ struct RootView: View {
                     // Badge
                     if !showMenu && notificationManager.unreadCount > 0 {
                         NotificationBadge(count: notificationManager.unreadCount)
-                            .accessibilityLabel(String(format: String(localized: "a11y.notifications.unread_count", defaultValue: "%d notifications non lues", bundle: .main), notificationManager.unreadCount))
+                            .accessibilityLabel(UnreadCountLabel.notifications(notificationManager.unreadCount))
                     }
                 }
             }
