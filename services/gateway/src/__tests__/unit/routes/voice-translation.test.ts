@@ -48,42 +48,22 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   },
 }));
 
-// Mock the voice/types module to avoid complex schema deps that pull in shared types.
-// SECURITY: ce double ne doit PAS réintroduire le repli sur l'en-tête client
-// `x-user-id` retiré de la vraie `getUserId()` (voir routes/voice/types.ts) —
-// un test qui mocke la fonction auditée avec l'ancien comportement vulnérable
-// ne prouverait rien et pourrait laisser croire que ce raccourci est encore
-// légitime. L'identité ne provient ici que de `request.user`, posé par le
-// `fastify.authenticate` décoré dans buildApp()/buildAppNoAuth() ci-dessous.
-jest.mock('../../../routes/voice/types', () => ({
-  getUserId: jest.fn((request: any) => request.user?.userId ?? null),
-  voiceTranslationResultSchema: {
-    type: 'object',
-    properties: {
-      translationId: { type: 'string' },
-      originalAudio: { type: 'object' },
-      translations: { type: 'array' },
-    },
-  },
-  translationJobSchema: {
-    type: 'object',
-    properties: {
-      jobId: { type: 'string' },
-      status: { type: 'string' },
-      progress: { type: 'number' },
-    },
-  },
-  errorResponseSchema: {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean' },
-      error: { type: 'string' },
-      message: { type: 'string' },
-      code: { type: 'string' },
-    },
-  },
-}));
-
+// `routes/voice/types` n'est plus REMPLACÉ, il est PROLONGÉ.
+//
+// Ce double listait trois schémas à la main « pour éviter les dépendances
+// complexes ». Un double partiel d'un module perd en silence tout ce que le
+// module GAGNE : quand `voiceAttachmentSchema` / `voiceTranscriptionSchema` y
+// sont apparus (cycle 91), ils sont revenus `undefined`, et les 39 témoins de
+// cette suite sont tombés sur un `schema is invalid: … must be object,boolean`
+// — la route ne se CONSTRUISAIT plus. C'est le pire endroit où mocker : les
+// schémas sont précisément la couche que ces témoins traversent.
+//
+// SECURITY — l'intention d'origine est préservée, et mieux servie : la suite
+// exécute désormais la VRAIE `getUserId()`, celle dont le repli sur l'en-tête
+// client `x-user-id` a été supprimé (usurpation d'identité complète,
+// CWE-290 / CWE-807). Un double ne pouvait qu'ATTESTER l'absence du repli ;
+// le vrai code la PROUVE. L'identité ne vient que de `request.user`, posé par
+// le `fastify.authenticate` décoré dans buildApp()/buildAppNoAuth() ci-dessous.
 // ─── Imports under test ───────────────────────────────────────────────────────
 
 import { registerTranslationRoutes } from '../../../routes/voice/translation';

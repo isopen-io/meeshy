@@ -331,3 +331,68 @@ export function isAdmin(request: FastifyRequest): boolean {
   const user = request.user;
   return user?.role === 'admin';
 }
+
+/**
+ * L'attachement audio servi par les routes de voix.
+ *
+ * Ce fichier portait DÉJÀ la forme juste — `POST /voice/transcribe` la déclarait
+ * en toutes lettres — pendant que trois charges utiles du MÊME fichier, trois
+ * cents lignes plus haut, disaient `attachment: { type: 'object' }` nu, donc
+ * `{}`. Troisième fois de la session que la bonne forme se trouve à portée de
+ * regard du défaut (cycles 84, 89).
+ *
+ * Le **superset** des deux producteurs :
+ *
+ * | producteur | champs |
+ * |---|---|
+ * | `MessageTranslationService.translateAttachment` | `id`, `messageId`, `fileName`, `fileUrl`, `duration`, `mimeType` |
+ * | `…getAttachmentWithTranscription` | les six ci-dessus + `originalName`, `fileSize`, `bitrate`, `sampleRate`, `codec`, `channels`, `createdAt` |
+ *
+ * Déclarer le superset est le seul choix qui ne TRONQUE aucun des deux : une
+ * clé déclarée que l'objet ne porte pas n'est pas fabriquée par le sérialiseur,
+ * alors qu'une clé portée et non déclarée est supprimée.
+ */
+export const voiceAttachmentSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string' },
+    messageId: { type: 'string' },
+    fileName: { type: 'string' },
+    originalName: { type: 'string', nullable: true },
+    fileUrl: { type: 'string' },
+    mimeType: { type: 'string' },
+    fileSize: { type: 'number', nullable: true },
+    duration: { type: 'number', nullable: true },
+    bitrate: { type: 'number', nullable: true },
+    sampleRate: { type: 'number', nullable: true },
+    codec: { type: 'string', nullable: true },
+    channels: { type: 'number', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' }
+  }
+} as const;
+
+/**
+ * La transcription servie à côté de l'attachement — même superset, mêmes
+ * raisons.
+ *
+ * `POST /voice/translate` en construit une INLINE de quatre champs
+ * (`text`, `language`, `confidence`, `durationMs`) sur son chemin base64, quand
+ * `getAttachmentWithTranscription` en rend huit. La forme large couvre les deux :
+ * les quatre champs du chemin court sortent tels quels, les autres n'apparaissent
+ * simplement pas.
+ */
+export const voiceTranscriptionSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string' },
+    text: { type: 'string' },
+    language: { type: 'string' },
+    confidence: { type: 'number' },
+    source: { type: 'string' },
+    segments: { type: 'array' },
+    durationMs: { type: 'number' },
+    createdAt: { type: 'string', format: 'date-time' }
+  }
+} as const;

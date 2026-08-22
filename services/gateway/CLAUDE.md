@@ -497,7 +497,25 @@ défauts.
 
 **Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
 la main** — et ne pas mocker les schémas partagés dans un témoin de
-sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
+sérialisation.
+
+**Un double PARTIEL d'un module perd en silence tout ce que le module GAGNE**,
+et la seule question est de savoir si la perte se voit. Au cycle 86 elle ne se
+voyait pas : le double `additionalProperties: true` désarmait la couche où
+vivaient deux défauts. Au cycle 91 elle s'est vue bruyamment — un double de
+`routes/voice/types` listant trois schémas à la main rendait `undefined` les
+deux constantes que le lot venait d'y ajouter, et **la route ne se construisait
+plus** :
+
+```
+schema is invalid: data/properties/data/properties/attachment must be object,boolean
+```
+
+Deux bouts du même défaut : un double partiel cache un bug, ou empêche un
+correctif de se charger. **Prolonger (`jest.requireActual` + surcharge ciblée)
+plutôt que remplacer** ; et quand le double existait pour garantir un
+comportement de SÉCURITÉ, préférer le vrai code — un double ne peut qu'attester
+l'absence d'un repli vulnérable, le vrai code la prouve. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
 que deux modules concurrents ne partagent pas.
 
 Et **poser au moins un témoin de SURFACE** : « cette route est-elle
@@ -597,54 +615,125 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Un schéma BIEN FORMÉ peut être entièrement faux — la seconde moitié du défaut
+### Cette famille a TROIS formes, et le balayage n'en distingue aucune
 
-La règle ci-dessus (« sans `properties`, ça efface ») décrit la moitié
-RECONNAISSABLE du défaut. L'autre moitié n'a aucune forme suspecte :
+Un schéma de réponse ne décrit pas seulement le CONTENU d'un champ : il décrit
+aussi **sa présence**, et à quel NIVEAU d'enveloppe il prétend la décrire. Les
+trois cas ont la même signature dans le code et des conséquences sans commune
+mesure :
 
-```ts
-// Schéma irréprochable. Il décrit simplement une AUTRE charge utile.
-data: { type: 'object', properties: { message: { type: 'object' } } }
-// …quand le handler fait : sendSuccess(reply, { ...updatedMessage, meta })
-```
+| forme | exemple | effet |
+|---|---|---|
+| **1** — la clé déclarée EXISTE dans la charge | `creator: { type: 'object' }` sur une charge qui porte `creator` | ce champ sort `{}`, **le reste survit** |
+| **2** — la clé déclarée N'EXISTE PAS | `data: { properties: { message } }` sur une charge sans `message` | **le parent ENTIER sort `{}`** |
+| **3** — le schéma décrit la MAUVAISE enveloppe | `GET /messages/:messageId` (voir plus bas) | **rien ne sort vide** — le balayage rend un FAUX POSITIF |
 
-Un bloc `data` qui déclare au moins une propriété **supprime toutes celles
-qu'il ne nomme pas**. Si aucune clé déclarée n'est celle que le handler envoie,
-la réponse sort à `{}` — et le balayage des objets nus ne voit RIEN, puisqu'il
-cherche l'absence de `properties`.
+Le balayage ne voit que le schéma, jamais la charge d'en face. **Avant de
+réparer un site de l'inventaire, poser les deux questions : que passe le
+gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le
+décrire ?**
 
-Trois exemplaires vivaient en production, trouvés au cycle 91 en réparant les
-objets nus :
+La forme 3 est la plus dangereuse, parce que l'outil s'y trompe **dans le sens
+rassurant** : un champ signalé « vidé » peut être servi brut, en fuite. C'est
+exactement ce qui s'est passé sur `messages.ts` (cycle 88) — détail dans
+§ *Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE*.
 
-| route | déclaré | envoyé | effet |
-|---|---|---|---|
-| `POST /auth/login` (2FA) | `user, token, sessionToken, session, expiresIn` | `requires2FA, twoFactorToken, …` | **aucun compte 2FA ne pouvait se connecter** |
-| `POST /auth/register` (conflit) | `user, token, expiresIn` | `phoneOwnershipConflict, phoneOwnerInfo, pendingRegistration` | modale de transfert de numéro morte |
-| `DELETE /…/messages/:id` | `message` (string) | `messageId, deleted, meta` | acquittement vide |
+Trois sites de forme 2 corrigés au cycle 88 bis, tous du même patron : une
+enveloppe `data.message` / `data.link` qu'aucun gestionnaire n'a jamais produite.
+Les deux transports REST d'édition de message rendaient `{"success":true,
+"data":{}}` ; `POST /conversations/:id/new-link` rendait
+`{"success":true,"data":{"link":{}}}` — ni lien, ni code, ni réglages.
 
-**Le second balayage est outillé et en cliquet** :
+**Un défaut de sérialisation, seul, produit une boucle de réémission temps
+réel.** Sur `PATCH /messages/:messageId`, `data: {}` fait échouer le décodage
+Android (`ApiMessage.id`/`.conversationId` n'ont pas de défaut) ; `apiCall` rend
+`Failure(PARSE)` ; `OutboxFlushWorker` traduit tout `Failure` d'une
+`EDIT_MESSAGE` en `TransientFailure`, donc en RÉESSAI. La ligne d'outbox ne
+draine jamais, et chaque vidange rejoue l'édition que le serveur rediffuse en
+`message:edited` à toute la room. Chaque maillon est correct ; c'est la réponse
+vide qui les compose en boucle. **Chercher la cause d'une boucle de réessai dans
+la file d'attente, c'est chercher là où la lumière est meilleure.**
+
+### Une forme écrite dans du CODE MORT n'est pas maintenue, et se propage
+
+`messageResponseSchema` portait l'enveloppe fantôme `data.message` et n'était
+**utilisé nulle part** — ce qui l'a mis hors de portée de toute correction, et
+n'a rien empêché : ses deux copies inline vivaient dans les routes servies. Un
+schéma mort n'est pas neutre, il est un **patron**.
+
+Le correctif n'est pas de le supprimer, c'est de le rendre VIVANT : corrigé en
+`data: messageSchema` et CONSOMMÉ par les deux routes, il n'y a plus de forme à
+copier, il y a un import.
+
+Corollaire : **un contrat déclaré doit être EXERCÉ.** Des trois transports
+d'édition de message, le seul qui servait la charge entière est
+`PUT /messages/:messageId` — celui qui ne déclare AUCUN schéma de réponse. Un
+schéma faux est strictement pire que pas de schéma ; la conclusion n'est pas
+d'en retirer, c'est d'en tester la sortie.
+
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 4
+
+### La forme 2 est OUTILLÉE — le second balayage
+
+La taxonomie ci-dessus dit que « le balayage n'en distingue aucune ». C'est vrai
+du balayage des objets NUS, qui cherche l'absence de `properties`. La **forme 2**
+— la clé déclarée n'existe pas dans la charge — est désormais outillée à son
+tour, et en cliquet :
 `routes/__tests__/response-payload-mismatch.ts`, gardé par
-`response-payload-mismatch.test.ts`. Il apparie chaque bloc `response:` avec
-les `sendSuccess(reply, { … })` qui le suivent et compare les jeux de clés —
-`total` (réponse vidée) vs `partial` (clés supprimées, nommées). Il ne conclut
-jamais au vide quand la charge utile porte un `...spread`, qui peut apporter
+`response-payload-mismatch.test.ts` (cycle 91 bis).
+
+Il apparie chaque bloc `response:` avec les `sendSuccess(reply, { … })` qui le
+SUIVENT — le gestionnaire d'une route vit entre son schéma et le schéma suivant
+— et compare les jeux de clés : `total` (aucune clé envoyée n'est déclarée ⇒
+`data` sort à `{}`) contre `partial` (les clés supprimées, nommées). Il ne
+conclut jamais au vide quand la charge porte un `...spread`, qui peut apporter
 les clés déclarées.
 
 Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
-jusqu'à la variable demanderait un typeur.
+jusqu'à la variable demanderait un typeur, pas un balayage.
 
-**Les deux balayages sont nécessaires** : le premier trouve les objets nus, le
-second les schémas bien formés qui décrivent la mauvaise charge utile. Aucun ne
-subsume l'autre.
+**Pourquoi il fallait l'outiller, et pas seulement poser la question.** Le
+cycle 88 bis a réparé trois sites de forme 2 en les cherchant à la main. Le
+`DELETE /…/messages/:messageId` — dans le MÊME fichier, entre les deux
+transports d'édition réparés — est passé au travers : son
+`message: { type: 'string' }` est irréprochable, et il décrit
+`{messageId, deleted, meta}`. Il rendait `data: {}` depuis toujours, et personne
+ne l'a vu en corrigeant ses deux voisins.
 
-Corollaire de méthode, et c'est ce qui a laissé ces trois-là vivre : **un
-témoin qui n'assert que `statusCode` couvre une route morte sans jamais
-rougir.** Pire, quand quelqu'un REMARQUE le retrait et l'écrit en commentaire
-au lieu de le traiter comme un défaut, il scelle la panne — le commentaire
-`// 2FA case returns 200 (response schema strips requires2FA from serialized
-output)` a tenu la connexion à deux facteurs fermée en le disant à voix haute.
+Trois autres exemplaires vivaient en production, tous en forme 2, et deux
+touchaient l'AUTHENTIFICATION :
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il n'en reste qu'UN
+| route | déclaré | envoyé | effet |
+|---|---|---|---|
+| `POST /auth/login` (branche 2FA) | `user, token, sessionToken, session, expiresIn` | `requires2FA, twoFactorToken, …` | **aucun compte 2FA ne pouvait se connecter** |
+| `POST /auth/register` (conflit de numéro) | `user, token, expiresIn` | `phoneOwnershipConflict, phoneOwnerInfo, pendingRegistration` | modale de transfert morte |
+| `DELETE /…/messages/:id` | `message` (string) | `messageId, deleted, meta` | acquittement vide |
+
+**Une route qui sert DEUX charges utiles sous le même code de statut doit
+déclarer les deux.** C'est le patron des deux routes d'auth : une branche
+nominale et une branche « il manque quelque chose », le schéma n'ayant été écrit
+que pour la première.
+
+Corollaire de méthode, et c'est ce qui a laissé ces trois-là vivre : **un témoin
+qui n'assert que `statusCode` couvre une route morte sans jamais rougir.** Pire,
+quand quelqu'un REMARQUE le retrait et l'écrit en commentaire au lieu de le
+traiter comme un défaut, il scelle la panne :
+
+```ts
+// 2FA case returns 200 (response schema strips requires2FA from serialized output)
+```
+
+Ce commentaire a tenu la connexion à deux facteurs fermée en le disant à voix
+haute. Devant toute phrase de cette forme — « le schéma retire X », « ce champ
+ne sort pas » — la question est : *et c'est bien ?*
+
+**Et réparer un schéma peut OUVRIR ce que la panne retenait.** La charge du
+conflit de numéro portait le mot de passe EN CLAIR ; il ne sortait pas, le
+schéma le retirant avec tout le reste. Déclarer la branche sans y penser aurait
+publié le secret sans faire tomber un témoin. Le retrait se fait à la SOURCE —
+compter sur une omission de schéma pour retenir un secret est un piège armé,
+pas une protection (règle du cycle 84).
+
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -681,21 +770,32 @@ au cliquet comme dette de FORME, plus comme fuite.
 
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
-main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
-`voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient.
+main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
+cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `voice/translation.ts`
+au cycle 91, avec la TRONCATURE que portait la forme « juste » du même fichier ;
+les trois enveloppes fantômes au cycle 88 bis.
 
-**Les neuf derniers sites nus sont partis au cycle 91** (édition et suppression
-de message, les deux routes de traduction vocale, la création de lien de
-partage, le `creator` d'administration, le 400 de `calls.ts`, et
-`users/profile.ts|permissions` RETIRÉ faute de producteur). Détail et preuves de
-sérialisation : `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
+**Les trois derniers sont partis au cycle 91 bis** — `calls.ts|details|400`
+(schéma d'erreur écrit à la main, faux sur l'enveloppe dans les trois sens),
+`links/admin.ts|creator|200` (déclaré depuis ses deux émetteurs), et
+`users/profile.ts|permissions|200`, **RETIRÉ** plutôt que déclaré : son
+gestionnaire posait `permissions: undefined` délibérément, le champ n'avait
+aucun producteur.
 
 **Il ne reste qu'UNE ligne au cliquet, et ce n'est pas une fuite** :
-`messages.ts|sender|200`, dette de FORME décrite au § suivant — la déclaration y
-est INERTE, le champ traverse entier. `FROZEN_INVENTORY` doit rester à une ligne.
+`messages.ts|sender|200`, dette de FORME (forme 3 de la taxonomie ci-dessus) —
+la déclaration y est INERTE, le champ traverse entier. `FROZEN_INVENTORY` doit
+rester à une ligne. Inventaires raisonnés :
+`tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`,
+`…-cycle91.md` §8 et `…-cycle88-bis.md` §5 — ce dernier pose les deux questions
+à instruire AVANT de réparer : que passe le gestionnaire à `sendSuccess`, et à
+quel niveau le schéma prétend-il le décrire ?
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
-`packages/shared`, dont un défaut se propage le plus loin, lui échappent.
+`packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
+il ne détecte qu'une déclaration ABSENTE, jamais une déclaration INCOMPLÈTE**
+(§ Une déclaration n'est juste que contre son PRODUCTEUR) — un vert au cliquet
+n'atteste donc pas qu'un schéma dit vrai.
 
 ### Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE
 
@@ -754,6 +854,44 @@ Constat non corrigé : **`errorResponseSchema` ne déclare pas `message`.** Rien
 ne casse tant que les clients lisent les deux clés, mais l'ajouter est un
 changement de contrat sur des centaines de routes — une décision, pas une
 initiative. Figé par `error-envelope-serialization.test.ts`.
+
+### Une déclaration n'est juste que contre son PRODUCTEUR
+
+Le cliquet garde contre l'**absence** de déclaration. Rien ne garde contre une
+déclaration qui dit **faux** — et une déclaration fausse tronque exactement
+comme un objet nu vide, sans qu'aucun outil ne la signale, puisqu'elle porte
+des `properties`.
+
+Cas mesuré (cycle 91) : `routes/voice/translation.ts` portait trois
+`attachment: { type: 'object' }` nus **et**, trois cents lignes plus bas, la
+forme « juste » qu'on aurait voulu leur copier. Elle déclarait les six champs du
+producteur COURT (`translateAttachment`) sur une route qui sert le producteur
+LONG (`getAttachmentWithTranscription`, treize champs) :
+
+```
+out : {"id","messageId","fileName","fileUrl","duration","mimeType"}
+      ← originalName, fileSize, bitrate, sampleRate, codec, channels, createdAt PERDUS
+```
+
+Plus `translatedAudios`, produit par les trois chemins de la route et jamais
+déclaré, donc supprimé sur les trois.
+
+> **Copier la forme juste d'à côté ne suffit pas : il faut l'ouvrir contre le
+> producteur de CETTE route.** Trois fois de suite (cycles 84, 89, 91) la bonne
+> forme se trouvait à portée de regard du défaut ; la troisième fois, elle était
+> fausse aussi.
+
+**Entre deux producteurs, déclarer le SUPERSET.** L'asymétrie du sérialiseur le
+permet et le commande : une clé déclarée qu'un objet ne porte pas n'est pas
+fabriquée, une clé portée et non déclarée est supprimée. Le superset est donc
+sans risque dans un sens et le seul correct dans l'autre.
+
+**Et quand les deux producteurs se CONTREDISENT** au lieu de s'emboîter — sur
+`translatedAudios`, l'un rend `audioBase64`, l'autre `audioPath`/`id`/`createdAt` —
+il n'y a pas de superset. Ne rien déclarer (`{ type: 'array' }` sans `items`,
+qui laisse passer) est alors plus honnête que d'en choisir un ; l'écrire en
+commentaire sur place, pour que ça se lise comme une décision et non comme un
+oubli.
 
 ### Un tableau sans `items` est PERMISSIF ; un objet sans `properties` EFFACE
 

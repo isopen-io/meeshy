@@ -10,60 +10,11 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import {
   voiceTranslationResultSchema,
   translationJobSchema,
+  voiceAttachmentSchema,
+  voiceTranscriptionSchema,
   errorResponseSchema,
   getUserId
 } from './types';
-
-/**
- * L'attachement audio et sa transcription, DÉCLARÉS.
- *
- * Les deux routes de traduction portaient `attachment: { type: 'object' }` et
- * `transcription: { type: 'object' }` NUS, quand la route de transcription du
- * MÊME fichier déclarait déjà les deux entièrement, trois cents lignes plus
- * bas. fast-json-stringify appliquant `additionalProperties: false` par défaut,
- * les clients recevaient `attachment: {}` et `transcription: {}` : ni URL de
- * lecture, ni durée, ni texte transcrit.
- *
- * Les champs sont ceux que les émetteurs produisent RÉELLEMENT —
- * `MessageTranslationService.getAttachmentWithTranscription` (le sur-ensemble)
- * et `translateAttachment` (les six premiers). Les blobs `transcription` /
- * `translations` que le `select` du premier ramène ne sont pas déclarés ici :
- * ils sont déjà servis à côté, sous leurs propres clés.
- */
-const audioAttachmentSchema = {
-  type: 'object',
-  nullable: true,
-  properties: {
-    id: { type: 'string' },
-    messageId: { type: 'string' },
-    fileName: { type: 'string' },
-    originalName: { type: 'string' },
-    fileUrl: { type: 'string' },
-    mimeType: { type: 'string' },
-    fileSize: { type: 'number', nullable: true },
-    duration: { type: 'number', nullable: true },
-    bitrate: { type: 'number', nullable: true },
-    sampleRate: { type: 'number', nullable: true },
-    codec: { type: 'string', nullable: true },
-    channels: { type: 'number', nullable: true },
-    createdAt: { type: 'string', format: 'date-time' }
-  }
-} as const;
-
-const audioTranscriptionSchema = {
-  type: 'object',
-  nullable: true,
-  properties: {
-    id: { type: 'string' },
-    text: { type: 'string' },
-    language: { type: 'string' },
-    confidence: { type: 'number', nullable: true },
-    source: { type: 'string' },
-    segments: { type: 'array' },
-    durationMs: { type: 'number', nullable: true },
-    createdAt: { type: 'string', format: 'date-time' }
-  }
-} as const;
 
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
   if (error instanceof AudioTranslateError) {
@@ -147,8 +98,8 @@ export function registerTranslationRoutes(
               properties: {
                 taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if already completed)' },
                 status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
-                attachment: audioAttachmentSchema,
-                transcription: audioTranscriptionSchema,
+                attachment: voiceAttachmentSchema,
+                transcription: voiceTranscriptionSchema,
                 translatedAudios: { type: 'array' },
                 result: voiceTranslationResultSchema
               }
@@ -333,7 +284,7 @@ export function registerTranslationRoutes(
                 jobId: { type: 'string', description: 'Unique job identifier for status tracking' },
                 taskId: { type: 'string', description: 'Task ID (alias for jobId)' },
                 status: { type: 'string', enum: ['pending', 'processing'], description: 'Initial job status' },
-                attachment: audioAttachmentSchema
+                attachment: voiceAttachmentSchema
               }
             }
           }
@@ -627,12 +578,15 @@ export function registerTranslationRoutes(
               properties: {
                 taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if completed)' },
                 status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
-                attachment: audioAttachmentSchema,
-                transcription: audioTranscriptionSchema,
-                // Les trois sorties de cette route servent `translatedAudios`
-                // quand l'attachement en porte déjà ; non déclaré, il était
-                // retiré, et un audio déjà traduit paraissait ne pas l'être.
-                translatedAudios: { type: 'array', description: 'Existing translated audios, when the attachment already carries some' }
+                attachment: voiceAttachmentSchema,
+                transcription: voiceTranscriptionSchema,
+                // Volontairement SANS `items` : les deux producteurs de cette
+                // clé n'ont pas la même forme (`translateSync` rend
+                // `audioBase64`, `getAttachmentWithTranscription` rend
+                // `audioPath`/`id`/`createdAt`), et un tableau sans `items`
+                // laisse passer ses éléments INTACTS — vérifié au compilateur.
+                // Déclarer l'une des deux formes en tronquerait l'autre.
+                translatedAudios: { type: 'array' }
               }
             }
           }
