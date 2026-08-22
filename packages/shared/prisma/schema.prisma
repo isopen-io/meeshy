@@ -1841,6 +1841,13 @@ model AdminBroadcast {
   sentAt             DateTime?
   completedAt        DateTime?
   errorMessage       String?
+  /// Canal IN-APP (notification système à chaque compte ciblé) — distinct du
+  /// canal e-mail ci-dessus, les deux se cumulent sur une même diffusion.
+  inAppSentById      String?  @db.ObjectId
+  inAppSentAt        DateTime?
+  inAppCompletedAt   DateTime?
+  inAppSentCount     Int      @default(0)
+  inAppFailedCount   Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

@@ -949,13 +949,17 @@ export class NotificationService {
       const persistedSubtitle = (params.subtitle && params.subtitle.trim() !== '')
         ? params.subtitle.trim().slice(0, 160)
         : (display.subtitle ?? null);
+      // Titre persisté : le builder localisé quand il en a un (types sociaux),
+      // sinon le titre explicite de l'appelant (annonce système : son sujet).
+      const persistedTitle = display.title
+        ?? ((params.title && params.title.trim() !== '') ? params.title.trim().slice(0, 160) : null);
 
       const notification = await this.prisma.notification.create({
         data: {
           userId: params.userId,
           type: params.type,
           priority: params.priority,
-          title: display.title,
+          title: persistedTitle,
           subtitle: persistedSubtitle,
           content: sanitizedContent,
 
@@ -3249,14 +3253,22 @@ export class NotificationService {
   async createSystemNotification(params: {
     recipientUserId: string;
     content: string;
+    /** Titre explicite (sujet d'une annonce admin) — persisté, le builder n'en produit pas pour `system`. */
+    title?: string;
     systemType?: 'maintenance' | 'security' | 'announcement' | 'feature';
     priority?: NotificationPriority;
+    /** Langue déjà résolue du destinataire — évite une lecture en base. */
+    lang?: string;
+    expiresAt?: Date;
   }): Promise<Notification | null> {
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'system',
       priority: params.priority || 'normal',
       content: params.content,
+      title: params.title,
+      lang: params.lang,
+      expiresAt: params.expiresAt,
 
       context: {},
 
