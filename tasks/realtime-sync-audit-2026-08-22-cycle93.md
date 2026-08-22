@@ -146,10 +146,12 @@ exige prisma, le service de traduction, l'auth et Socket.IO ; un témoin qui les
 monterait tous n'observerait plus le schéma mais le harnais. La mesure est au
 compilateur (§1).
 
-### Pourquoi 152 témoins existants ne voyaient rien
+### Pourquoi 154 témoins existants ne voyaient rien
 
-`conversation-messages-advanced.test.ts` couvre ces routes avec 152 témoins. Il
-**mocke `sendSuccess`** :
+`conversation-messages-advanced.test.ts` couvre ces routes avec 154 témoins —
+**compté à l'exécution, pas en comptant les blocs `it(`** : le fichier en porte
+152, dont un `it.each` de trois cas. La règle du §7 s'applique à ce chiffre-là
+comme aux autres. Il **mocke `sendSuccess`** :
 
 ```ts
 const mockSendSuccess = jest.fn((reply, data) => { reply._body = { success: true, data }; return reply; });
@@ -205,7 +207,7 @@ façon. 154/154 verts.
 Et, propre à ce cycle :
 
 - **`conversation-messages-advanced.test.ts` mocke `sendSuccess`** (§6). Le
-  défaire est un lot en soi — 152 témoins en dépendent — mais tant qu'il tient,
+  défaire est un lot en soi — 154 témoins en dépendent — mais tant qu'il tient,
   aucune de ces routes n'a de garde sur ce qu'elle SERT.
 - **Le grain de `userMinimalSchema`** : ce cycle a choisi la déclaration locale.
   À une troisième route qui charge le même participant élargi, la réponse

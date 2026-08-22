@@ -518,7 +518,7 @@ correctif de se charger.
 l'incident sur `conversation-messages-advanced.test.ts`, dont le double de
 `api-schemas` listait deux schémas à la main : une composition de
 `messageResponseSchema` au chargement du module y a trouvé `undefined`, et
-152 témoins ont cessé de se charger. La règle du cycle 91 était déjà écrite et
+154 témoins ont cessé de se charger. La règle du cycle 91 était déjà écrite et
 n'a pas suffi — **un double partiel ne se signale qu'au moment où le module
 grandit**, donc jamais avant. Ce n'est plus un incident, c'est un patron de
 harnais à cesser d'écrire : `jest.requireActual` par défaut, surcharge ciblée
