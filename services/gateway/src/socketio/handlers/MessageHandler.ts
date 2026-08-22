@@ -58,6 +58,7 @@ import type {
 } from '@meeshy/shared/types/messaging';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
+import { buildMessageNewPayload } from '../messageNewPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
@@ -1887,88 +1888,48 @@ export class MessageHandler {
   }
 
   /**
-   * Construit le payload de message pour broadcast
-   * Unified Participant: senderId is Participant.id, sender is Participant object
+   * Construit le payload `message:new` du transport socket.
+   *
+   * Les champs DÉRIVÉS DE LA LIGNE MESSAGE viennent de `buildMessageNewPayload`
+   * — la source unique partagée avec le transport REST/ZMQ
+   * (`MeeshySocketIOManager._broadcastNewMessage`). Ce handler en portait une
+   * copie manuscrite, et les deux ont divergé sur SIX familles de champs
+   * (l'enveloppe E2EE, le plafond de vue-unique, la provenance d'un transfert,
+   * la réponse à un post, `messageSource`/`updatedAt`, le pseudo d'un
+   * expéditeur sans compte) — cf. l'en-tête de `messageNewPayload.ts`.
+   *
+   * Ne restent ici que les deux projections dont la forme est DÉLIBÉRÉMENT
+   * propre à ce transport :
+   *
+   * - `attachments` : normalisés par `serializeAttachmentForSocket`, qui
+   *   garantit que `transcription` et `translations` voyagent quelle que soit
+   *   la requête amont ;
+   * - `replyTo` : passthrough BRUT (sender imbriqué, non aplati), là où le
+   *   chemin REST reconstruit et aplatit le sien. Les fusionner changerait la
+   *   forme consommée par un client sans certitude sur lequel des deux en
+   *   dépend — d'où la note, ici comme là-bas, plutôt que la fusion.
+   *
+   * `postReplyTo` (snapshot figé) et `forwardedFrom` sont ajoutés par
+   * `broadcastNewMessage` après ce build, comme les autres enrichissements qui
+   * demandent une lecture en base.
    */
   private _buildMessagePayload(
     message: Message,
     conversationId: string,
     translations: unknown[]
   ): unknown {
-    // Build a backward-compatible sender object from Participant
-    const senderParticipant = message.sender;
-    const senderUser = senderParticipant?.user;
-
-    return {
-      id: message.id,
+    return buildMessageNewPayload(message, {
       conversationId,
-      // `message.senderId` is a Participant.id, but clients compare the wire
-      // `senderId` against their own User.id (apps/web use-socket-cache-sync.ts)
-      // to detect own messages and reconcile the optimistic bubble across
-      // devices. Resolve to the sender's User.id — mirroring the REST/ZMQ
-      // writer (MeeshySocketIOManager.broadcastMessage) — so both transports
-      // emit the same id-space. Falls back to Participant.id for anonymous
-      // senders (no userId), matching the anonymous room convention.
-      senderId: senderParticipant?.userId ?? senderUser?.id ?? message.senderId,
-      content: message.content,
-      originalLanguage: message.originalLanguage || 'fr',
-      messageType: message.messageType || 'text',
-      // Phase 4 §6.2 — `clientMessageId` doit voyager dans le payload
-      // `message:new` cible vers le sender pour que la réconciliation
-      // by-cid (iOS / web) promote l'optimistic même quand l'ACK socket
-      // a été perdu (crash app après le send, multi-device). Le caller
-      // `broadcastNewMessage` strip ce champ pour les autres
-      // participants (`delete broadcastPayload.clientMessageId`).
-      clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
-      isBlurred: Boolean(message.isBlurred),
-      isViewOnce: Boolean(message.isViewOnce),
-      maxViewOnceCount: message.maxViewOnceCount ?? undefined,
-      effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
-      expiresAt: message.expiresAt || undefined,
-      isEdited: Boolean(message.isEdited),
-      deletedAt: message.deletedAt || undefined,
-      createdAt: message.createdAt,
-      validatedMentions: message.validatedMentions ?? [],
       translations,
-      // Unified sender from Participant
-      sender: senderParticipant ? {
-        id: senderParticipant.id,
-        displayName: senderParticipant.nickname || senderParticipant.displayName,
-        avatar: senderParticipant.avatar || senderUser?.avatar,
-        type: senderParticipant.type,
-        userId: senderParticipant.userId,
-        // Backward compat: flatten user fields
-        username: senderUser?.username,
-        firstName: senderUser?.firstName,
-        lastName: senderUser?.lastName,
-      } : undefined,
       attachments: this._serializeAttachmentsField(message),
-      replyToId: message.replyToId,
       // Lot 2 : `MessageProcessor.saveMessage` récupère déjà `metadata` du
       // message CITÉ (include, pas select restrictif), donc la donnée brute
       // voyageait déjà — mais sans ce hoist elle restait invisible sous
       // `replyTo.metadata.location` au lieu de `replyTo.location`.
-      // DUPLICATION CONNUE avec MeeshySocketIOManager._broadcastNewMessage
-      // (son bloc `replyTo`, qui reconstruit/aplatit le sender à la main) —
-      // voir le commentaire à cet endroit précis. Tout champ ajouté ici doit
-      // y être répliqué à la main, et inversement.
       replyTo: message.replyTo
         ? hoistLocationOnto(message.replyTo as unknown as Record<string, unknown>)
         : message.replyTo,
-      // Réponse à un post : `postReplyTo` (snapshot figé) est ajouté par
-      // `broadcastNewMessage` après ce build, en miroir de `forwardedFrom`.
-      storyReplyToId: message.storyReplyToId || undefined,
-      forwardedFromId: message.forwardedFromId || undefined,
-      forwardedFromConversationId: message.forwardedFromConversationId || undefined,
-      isEncrypted: message.isEncrypted,
-      encryptionMode: message.encryptionMode,
-      encryptedContent: message.encryptedContent,
-      encryptionMetadata: message.encryptionMetadata,
-      encryptedPayload: message.isEncrypted && message.encryptionMode === 'e2ee' && message.encryptedContent ? {
-        ciphertext: message.encryptedContent,
-        ...(typeof message.encryptionMetadata === 'object' && message.encryptionMetadata ? message.encryptionMetadata : {})
-      } : undefined,
-    };
+    });
   }
 
   /**

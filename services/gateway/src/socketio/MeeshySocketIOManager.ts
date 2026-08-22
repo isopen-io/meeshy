@@ -78,6 +78,7 @@ import type {
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
+import { buildMessageNewPayload } from './messageNewPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
@@ -2568,84 +2569,62 @@ export class MeeshySocketIOManager {
       // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
       // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
       const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      // Charge utile `message:new` : les champs DÉRIVÉS DE LA LIGNE MESSAGE
+      // viennent de `buildMessageNewPayload`, la source unique partagée avec le
+      // transport socket (`MessageHandler._buildMessagePayload`). Ce chemin-ci
+      // en portait une copie manuscrite qui avait perdu quatre familles de
+      // champs — l'enveloppe E2EE, le plafond de vue-unique, la provenance d'un
+      // transfert et la réponse à un post — soit exactement celles des messages
+      // qu'il est SEUL à porter côté iOS (`socketFirstEligible` envoie par REST
+      // toute pièce jointe, tout DM chiffré, toute vue-unique, tout éphémère,
+      // tout message à effets). Cf. l'en-tête de `messageNewPayload.ts`.
+      //
+      // `originalContent` et `metadata` restent propres à ce transport :
+      //   - `originalContent` n'est PAS une colonne — il duplique `content` sur
+      //     le fil, et le web le lit en second (`content || originalContent`).
+      //     L'ajouter au chemin socket doublerait le poids texte du chemin le
+      //     plus chaud du service pour un alias hérité ; le retirer d'ici est un
+      //     RETRAIT, qui demande d'abord de relever ses consommateurs web.
+      //   - `metadata` est l'enveloppe brute d'où le chemin socket HISSE ce dont
+      //     les clients ont besoin (`location`, `trackingLinks`, `postReplyTo`).
+      //     iOS y lit encore `callSummary` et `joinNotice`, deux familles de
+      //     messages système que seul ce transport-ci produit.
       const messagePayload = {
-        id: message.id,
-        conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
-        senderId: resolvedSenderId,
-        content: message.content,
-        originalLanguage: message.originalLanguage || 'fr',
-        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
-        messageType: (message.messageType || 'text') as MessageType,
-        messageSource: message.messageSource || undefined,
-        metadata: message.metadata || undefined,
-        isEdited: Boolean(message.isEdited),
-        deletedAt: message.deletedAt || undefined,
-        isBlurred: Boolean(message.isBlurred),
-        isViewOnce: Boolean(message.isViewOnce),
-        effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
-        expiresAt: message.expiresAt || undefined,
-        createdAt: message.createdAt || new Date(),
-        updatedAt: message.updatedAt || new Date(),
-        validatedMentions: message.validatedMentions ?? [],
-        // Phase 4 §6.2 — le `clientMessageId` doit voyager jusqu'aux appareils
-        // de l'EXPÉDITEUR, et à eux seuls. Il est retiré du payload des pairs
-        // par `stripClientMessageId` juste avant l'émission (même helper, même
-        // règle que le chemin socket et que les routes de lien). Sans lui, la
-        // ligne optimiste ne peut être promue que par la réponse HTTP — voir le
-        // commentaire du split d'émission plus bas.
-        clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
-        translations: messageTranslations,
-        sender: senderParticipant ? {
-          id: senderParticipant.id,
-          displayName: senderParticipant.nickname || senderParticipant.displayName,
-          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
-          type: senderParticipant.type,
-          userId: senderParticipant.userId,
-          // Auteur sans compte : le pseudo `ano_…` sert de handle — sans lui,
-          // la bulle temps réel affichait un « @ » vide. Le REST sert en plus
-          // le nom donné au formulaire (le profil de session n'est pas chargé
-          // sur ce chemin).
-          username: senderParticipant.user?.username
-            ?? (senderParticipant.type === 'anonymous' ? senderParticipant.displayName : undefined),
-          firstName: senderParticipant.user?.firstName || '',
-          lastName: senderParticipant.user?.lastName || '',
-        } : undefined,
-        attachments: message.attachments ?? [],
-        replyToId: message.replyToId || undefined,
-        // DUPLICATION CONNUE — pas unifiée avec MessageHandler._buildMessagePayload
-        // (services/gateway/src/socketio/handlers/MessageHandler.ts, champ
-        // `replyTo`) : ce bloc RECONSTRUIT et APLATIT le sender (username/
-        // firstName/lastName remontés depuis `sender.user`), alors que
-        // `_buildMessagePayload` fait un passthrough BRUT de `message.replyTo`
-        // (sender imbriqué, non aplati). Les deux formes de fil sont donc
-        // DÉLIBÉRÉMENT différentes aujourd'hui (chemin socket `message:send`
-        // vs chemin REST/agent de ce fichier) — les fusionner changerait la
-        // forme du payload consommée par un client sans certitude sur lequel
-        // des deux client iOS/web dépend. D'où le commentaire plutôt que la
-        // fusion demandée : **tout champ ajouté ici sur `replyTo` (dont
-        // `location`) doit être répliqué à la main dans `_buildMessagePayload`**,
-        // et inversement — c'est la 3e fois que cette duplication cause un
-        // bug de parité (cf. `location` ci-dessous).
-        replyTo: message.replyTo ? hoistLocationOnto({
-          id: message.replyTo.id,
+        ...buildMessageNewPayload(message, {
           conversationId: normalizedId,
-          senderId: message.replyTo.senderId || undefined,
-          content: message.replyTo.content,
-          originalLanguage: message.replyTo.originalLanguage || 'fr',
-          messageType: (message.replyTo.messageType || 'text') as MessageType,
-          createdAt: message.replyTo.createdAt || new Date(),
-          metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
-          sender: message.replyTo.sender ? {
-            id: message.replyTo.sender.id,
-            displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
-            avatar: message.replyTo.sender.avatar,
-            type: message.replyTo.sender.type,
-            userId: message.replyTo.sender.userId,
-            username: message.replyTo.sender.user?.username,
-            firstName: message.replyTo.sender.user?.firstName || '',
-            lastName: message.replyTo.sender.user?.lastName || '',
-          } : undefined
-        } as unknown as Record<string, unknown>) : undefined,
+          translations: messageTranslations,
+          // Le `select` du chemin REST livre déjà les pièces jointes à la forme
+          // rendue ; le chemin socket, lui, les normalise (cf. la note jumelle).
+          attachments: message.attachments ?? [],
+          // DUPLICATION ASSUMÉE avec MessageHandler._buildMessagePayload : ce
+          // bloc RECONSTRUIT et APLATIT le sender (username/firstName/lastName
+          // remontés depuis `sender.user`), alors que le chemin socket fait un
+          // passthrough BRUT. Les deux formes de fil sont DÉLIBÉRÉMENT
+          // différentes — les fusionner changerait la forme consommée par un
+          // client sans certitude sur lequel des deux en dépend.
+          replyTo: message.replyTo ? hoistLocationOnto({
+            id: message.replyTo.id,
+            conversationId: normalizedId,
+            senderId: message.replyTo.senderId || undefined,
+            content: message.replyTo.content,
+            originalLanguage: message.replyTo.originalLanguage || 'fr',
+            messageType: (message.replyTo.messageType || 'text') as MessageType,
+            createdAt: message.replyTo.createdAt || new Date(),
+            metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
+            sender: message.replyTo.sender ? {
+              id: message.replyTo.sender.id,
+              displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
+              avatar: message.replyTo.sender.avatar,
+              type: message.replyTo.sender.type,
+              userId: message.replyTo.sender.userId,
+              username: message.replyTo.sender.user?.username,
+              firstName: message.replyTo.sender.user?.firstName || '',
+              lastName: message.replyTo.sender.user?.lastName || '',
+            } : undefined
+          } as unknown as Record<string, unknown>) : undefined,
+        }),
+        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
+        metadata: message.metadata || undefined,
       };
 
       // Lieu partagé : hisser `metadata.location` en top-level `location`.

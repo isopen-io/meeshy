@@ -785,3 +785,53 @@ traces de la bordure et jamais dans le contenu, même au repos ».
 **Leçon** : une garde de forme vise le BLOC, jamais le FICHIER. Mes deux premières assertions
 interdisaient `strokeBorder` et `Capsule(` dans tout `LentilleConversationRow.swift` et condamnaient
 l'anneau d'avatar et le bouton « Rejoindre » d'un appel en cours (2 rouges sur 112).
+
+## Cycle 99 bis (2026-08-22) — `message:new` a deux producteurs, et ils avaient cessé de dire la même chose
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle99-bis.md`.
+(Numéroté **bis** : un autre lot a porté le numéro 99 le même jour — voir la
+section ci-dessus. Les deux sont indépendants.)
+
+- [x] Pris la cible que le cycle 98 nommait en premier parmi les restantes de la
+      « quatrième famille » : le **sérialiseur/décodeur Socket.IO**.
+- [x] Constat : `message:new` a **DEUX producteurs** — `MessageHandler`
+      (transport socket) et `MeeshySocketIOManager` (transport REST/ZMQ) — qui
+      construisaient leur charge utile À LA MAIN, chacun dans son fichier, sous
+      deux commentaires jumeaux avertissant que « c'est la 3e fois que cette
+      duplication cause un bug de parité ». Chaque commentaire n'a gardé que
+      l'exemplaire qui le portait (leçon du cycle 85, une couche plus haut).
+- [x] **SIX familles de champs divergeaient.** Le chemin REST perdait l'enveloppe
+      E2EE entière, le plafond de vue-unique, la provenance d'un transfert et la
+      réponse à un post ; le chemin socket perdait `messageSource`, `updatedAt`
+      et le pseudo d'un expéditeur sans compte.
+- [x] **Ce n'est pas un piège armé, c'est une panne en production.** Le chemin
+      REST porte, côté iOS, TOUT envoi non éligible au socket-first — dont les DM
+      chiffrés. `MessageProcessor` écrit `content: ''` pour un message chiffré ;
+      le web décrypte en lisant `socketMsg.encryptedContent` +
+      `encryptionMetadata`, absents du fil REST, et sort au premier garde.
+      **web → web marchait, iOS → web non : bulle VIDE, sans erreur.** Côté iOS
+      la garde `apiMsg.isEncrypted == true` de `ConversationSocketHandler` — dont
+      le commentaire dit qu'elle existe pour empêcher exactement ce symptôme —
+      ne se déclenchait jamais sur ce transport.
+- [x] RED : `message-new-producer-parity.test.ts` (6 témoins) fait se rencontrer
+      les DEUX PRODUCTIONS RÉELLES (un manager construit, on lui prend le vrai
+      `MessageHandler` qu'il porte). **6/6 tombent** contre la production d'avant.
+- [x] **ROUGE prouvé séparément pour chacune des 6 mutations** — chaque mutation
+      en fait tomber EXACTEMENT UN, et c'est celui qui nomme sa famille.
+- [x] Correctif : `socketio/messageNewPayload.ts` — `buildMessageNewPayload`,
+      source UNIQUE des champs dérivés de la ligne message, appelée par les deux.
+      `replyTo` / `attachments` / `translations` restent paramètres (formes
+      délibérément différentes) ; `originalContent` et `metadata` restent hors
+      contrat PAR DÉCISION écrite. **Le lot entier est ADDITIF** — aucun champ ne
+      disparaît d'aucun transport.
+- [x] Gates : `tsc --noEmit` passerelle 0 erreur · suite complète passerelle.
+- [ ] Suivi — **iOS ne lit PAS `encryptedContent` du fil** (il tire le chiffré de
+      `content`, que la passerelle laisse vide). Le correctif de ce cycle est une
+      PRÉCONDITION, pas une garantie côté iOS. C'est la quatrième famille sur le
+      couple producteur passerelle / décodeur iOS — le second que le cycle 98
+      nommait, et il reste ouvert.
+- [ ] Suivi — `originalContent` : alias hérité qui DUPLIQUE `content` sur chaque
+      message du chemin REST. À retirer après relevé de ses consommateurs web.
+- [ ] Suivi — `attachments` normalisés d'un côté, bruts de l'autre : unifier est
+      un CHANGEMENT de forme, à instruire contre les trois clients.
+- [ ] Suivi — quatrième famille : reste le couple passerelle / décodeurs Android.
