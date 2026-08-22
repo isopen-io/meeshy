@@ -240,10 +240,13 @@ struct ThemedConversationRow: View {
         .animation(.easeOut(duration: 0.15), value: isDragging)
         .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityElement(children: .combine)
+        // Pas d'`accessibilityValue` pour les non-lus : le compte vit DÉJÀ dans
+        // le libellé, via `accessibility.unread_count` — la seule clé de la
+        // famille qui porte ses `variations.plural`. La valeur posée ici
+        // rendait `accessibility.unread_messages` SANS `String(format:)`, alors
+        // que la chaîne du catalogue contient `%lld` : VoiceOver énonçait donc
+        // le spécificateur brut, et répétait une information déjà annoncée.
         .accessibilityLabel(conversationAccessibilityLabel)
-        .accessibilityValue(conversation.userState.unreadCount > 0
-            ? String(localized: "accessibility.unread_messages", bundle: .main)
-            : "")
         .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
         .accessibilityAddTraits(.isButton)
         // iPad/macOS split-view : la ligne active est signalée par le VISUEL seul
