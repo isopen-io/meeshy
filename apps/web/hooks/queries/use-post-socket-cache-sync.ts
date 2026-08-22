@@ -30,6 +30,7 @@ import type {
   CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  CommentUnlikedEventData,
   CommentMediaUpdatedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
@@ -321,6 +322,17 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       }));
     }
 
+    // Jumelle DESCENDANTE, strictement symétrique : les deux charges portent le
+    // total ABSOLU, donc le même écrasement convient aux deux sens. Un `−1`
+    // aveugle serait ici doublement faux — non idempotent sous double livraison,
+    // et incapable de rattraper un événement manqué.
+    function handleCommentUnliked(data: CommentUnlikedEventData) {
+      patchCommentInPostCaches(queryClient, data.postId, data.commentId, (c) => ({
+        ...c,
+        likeCount: data.likeCount,
+      }));
+    }
+
     // ── Post reaction events (Phase 3B) ─────────────────────────────────
 
     function handlePostReactionAdded(data: PostReactionUpdateEventData) {
@@ -586,6 +598,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     socket.on(SERVER_EVENTS.COMMENT_UPDATED, handleCommentUpdated);
     socket.on(SERVER_EVENTS.COMMENT_DELETED, handleCommentDeleted);
     socket.on(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
+    socket.on(SERVER_EVENTS.COMMENT_UNLIKED, handleCommentUnliked);
     socket.on(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
     socket.on(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
     socket.on(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, handleCommentMediaUpdated);
@@ -619,6 +632,7 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.COMMENT_UPDATED, handleCommentUpdated);
       socket.off(SERVER_EVENTS.COMMENT_DELETED, handleCommentDeleted);
       socket.off(SERVER_EVENTS.COMMENT_LIKED, handleCommentLiked);
+      socket.off(SERVER_EVENTS.COMMENT_UNLIKED, handleCommentUnliked);
       socket.off(SERVER_EVENTS.POST_TRANSLATION_UPDATED, handlePostTranslationUpdated);
       socket.off(SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED, handleCommentTranslationUpdated);
       socket.off(SERVER_EVENTS.COMMENT_MEDIA_UPDATED, handleCommentMediaUpdated);

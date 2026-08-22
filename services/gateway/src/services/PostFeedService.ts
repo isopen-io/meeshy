@@ -15,6 +15,9 @@ import { getCommunityCoMemberIds, isActiveCommunityMember } from './posts/commun
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { hoistLocationDeep } from './location/sharedPlace';
 import { verdictFor, type ReferenceAccessVerdict } from './posts/referenceAccess';
+import { getPresenceVisibilityService } from './PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
@@ -478,6 +481,12 @@ export class PostFeedService {
     }
     const referenceByPost = new Map(referenceRows.map((row) => [row.postId, row.expiredViewAt]));
 
+    // Gate de présence de l'auteur. Les deux projections chargent
+    // `isOnline`/`lastActiveAt` (décision produit : l'interstitiel d'identité
+    // doit être complet à l'instant du switch de groupe) — les SERVIR bruts
+    // n'en est pas une.
+    const authorVisibility = await this.resolveStoryAuthorPresence(stories, userId);
+
     // hoistLocationDeep est un no-op sûr sur la projection tray (ni `metadata`
     // ni `comments` sélectionnés — cf. trayStorySelect) : elle ne rend de
     // toute façon pas de badge de lieu (anneaux + miniature seuls).
@@ -489,8 +498,10 @@ export class PostFeedService {
       const referenceAccess: ReferenceAccessVerdict = referenceByPost.has(s.id)
         ? verdictFor(s.expiresAt, referenceByPost.get(s.id), now)
         : 'none';
+      const author = (s as { author?: { id: string; isOnline: boolean | null; lastActiveAt: Date | null } | null }).author;
       return withMentions(hoistLocationDeep({
         ...this.enrichWithLikeStatus(s, userReactionsMap.get(s.id) ?? []),
+        ...(author ? { author: applyPresenceVisibilityAsOffline(author, authorVisibility.get(author.id)) } : {}),
         isViewedByMe: viewedSet.has(s.id),
         currentUserReactions: userReactionsMap.get(s.id) ?? [],
         referenceAccess,
@@ -1077,6 +1088,59 @@ export class PostFeedService {
   /// Source UNIQUE et alignée avec `currentUserReactions` que les surfaces lisent.
   private enrichWithLikeStatus(post: any, currentUserReactions: string[]) {
     return { ...post, isLikedByMe: currentUserReactions.length > 0 };
+  }
+
+  /**
+   * Visibilité de la présence des AUTEURS d'une page de stories.
+   *
+   * Le régime se décide par AUTEUR, sur ce que ses stories de la page prouvent
+   * du lien — c'est la question qui départage les deux régimes de la
+   * passerelle (« le lecteur a-t-il un DROIT sur cette donnée, ou seulement un
+   * lien qu'il a posé tout seul ? ») appliquée ici :
+   *
+   *  - une story PUBLIQUE ne prouve RIEN. `buildPostVisibilityOrFilter` porte
+   *    `{ visibility: PUBLIC }` sans condition d'audience : n'importe quel
+   *    compte authentifié la voit. Critère STRICT.
+   *  - toute AUTRE visibilité prouve un lien posé des deux côtés — amitié,
+   *    contact DM, co-appartenance de communauté, ou une désignation
+   *    nominative par l'auteur (`ONLY`). Contexte acquis : préférences seules.
+   *
+   * Un auteur qui prouve le lien par UNE de ses stories le prouve pour toutes :
+   * masquer sa présence sur sa story publique pendant qu'elle s'affiche sur sa
+   * story d'amis, dans la même page, n'aurait aucun sens.
+   *
+   * Le viewer est construit en rôle `USER`, jamais celui de l'appelant : le fil
+   * de stories est une surface de CONSOMMATION, pas de modération. Le bypass
+   * modérateur n'y a rien à faire, et fixer le rôle garantit que ce gate ne
+   * peut qu'en montrer MOINS.
+   */
+  private async resolveStoryAuthorPresence(
+    stories: Array<Record<string, any>>,
+    viewerId: string,
+  ): Promise<Map<string, PresenceVisibility>> {
+    const contextIds = new Set<string>();
+    const publicOnlyIds = new Set<string>();
+    for (const story of stories) {
+      const authorId = story.author?.id as string | undefined;
+      if (!authorId) continue;
+      if (story.visibility === PostVisibility.PUBLIC && authorId !== viewerId) publicOnlyIds.add(authorId);
+      else contextIds.add(authorId);
+    }
+    for (const id of contextIds) publicOnlyIds.delete(id);
+    if (contextIds.size === 0 && publicOnlyIds.size === 0) return new Map();
+
+    const presence = getPresenceVisibilityService(this.prisma);
+    const [context, strict] = await Promise.all([
+      contextIds.size > 0
+        ? presence.resolvePrefsOnly([...contextIds])
+        : Promise.resolve(new Map<string, PresenceVisibility>()),
+      publicOnlyIds.size > 0
+        ? presence.resolveForTargets({ userId: viewerId, role: 'USER' }, [...publicOnlyIds], {
+            allowConversationContext: true,
+          })
+        : Promise.resolve(new Map<string, PresenceVisibility>()),
+    ]);
+    return new Map([...context, ...strict]);
   }
 
   /**

@@ -196,6 +196,66 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// Calling-stack audit (2026-08-22) — the interruption-ended reactivation
+    /// block (asserted above) re-checks `isAudioSessionExpectedActive` INSIDE
+    /// `audioSessionQueue.async` because a hangup can race the async dispatch
+    /// from a different thread (MainActor teardown, or CallKit's own
+    /// `didDeactivate`/`providerDidReset` on its private delegate queue).
+    /// `handleMediaServicesReset` enqueues the identical mutation
+    /// (`setActive(true)` → `audioSessionDidActivate` → `isAudioEnabled = true`)
+    /// but skipped that re-check — a media-services reset racing a concurrent
+    /// teardown left the microphone re-armed and AVAudioSession re-activated
+    /// (other apps ducked) after the call had already ended.
+    func test_handleMediaServicesReset_reactivation_guardsOnAudioSessionExpectedActiveFlag() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func handleMediaServicesReset() {") else {
+            XCTFail("handleMediaServicesReset not found"); return
+        }
+        let end = source.range(of: "\n    }", range: fnRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound..<end])
+
+        guard let asyncRange = fnBody.range(of: "audioSessionQueue.async") else {
+            XCTFail("audioSessionQueue.async not found in handleMediaServicesReset"); return
+        }
+        let asyncBody = String(fnBody[asyncRange.lowerBound...])
+
+        XCTAssertTrue(
+            asyncBody.contains("isAudioSessionExpectedActive"),
+            "handleMediaServicesReset's audioSessionQueue.async block must re-check " +
+            "CallManager.isAudioSessionExpectedActive INSIDE the dispatch, mirroring " +
+            "handleAudioInterruption's reactivation — a hangup racing the async media-" +
+            "services-reset recovery must not resurrect RTCAudioSession post-teardown."
+        )
+    }
+
+    /// Same family as the media-services-reset check above:
+    /// `scheduleStuckMutedFallback`'s deferred `audioSessionQueue.async` block
+    /// enqueues the identical activation sequence and must re-check the flag
+    /// inside the queue for the same reason — its outer `callIsActive` check
+    /// (via `CallReliabilityPolicy.shouldForceAudioSessionActivation`) is read
+    /// before the dispatch, not inside it, so it can go stale against a
+    /// concurrent teardown on CallKit's delegate queue.
+    func test_scheduleStuckMutedFallback_reactivation_guardsOnAudioSessionExpectedActiveFlag() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func scheduleStuckMutedFallback() {") else {
+            XCTFail("scheduleStuckMutedFallback not found"); return
+        }
+        let end = source.range(of: "\n    }", range: fnRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound..<end])
+
+        guard let asyncRange = fnBody.range(of: "audioSessionQueue.async") else {
+            XCTFail("audioSessionQueue.async not found in scheduleStuckMutedFallback"); return
+        }
+        let asyncBody = String(fnBody[asyncRange.lowerBound...])
+
+        XCTAssertTrue(
+            asyncBody.contains("isAudioSessionExpectedActive"),
+            "scheduleStuckMutedFallback's audioSessionQueue.async block must re-check " +
+            "CallManager.isAudioSessionExpectedActive INSIDE the dispatch, mirroring " +
+            "handleAudioInterruption's reactivation."
+        )
+    }
+
     func test_configureAudioSession_setsAudioSessionExpectedActiveTrue() throws {
         let source = try callManagerSource()
         guard let fnRange = source.range(of: "private func configureAudioSession() {") else {
@@ -4055,19 +4115,26 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
         )
     }
 
+    /// Corps ENTIER de `startNetworkMonitoring`, accolades équilibrées — pas une
+    /// fenêtre de N caractères devinée. Les quatre tests ci-dessous portaient
+    /// chacun leur propre fenêtre fixe (2000/3000 car.) depuis
+    /// "networkMonitor.pathUpdateHandler" ; l'un d'eux a viré au rouge quand un
+    /// commentaire ajouté PLUS HAUT dans le handler a repoussé son assertion
+    /// hors fenêtre alors qu'aucun comportement n'avait changé — exactement le
+    /// défaut que `DeclarationBodyScanner` existe pour éliminer (cf. son en-tête).
+    private func startNetworkMonitoringBody(_ source: String) throws -> String {
+        guard let body = DeclarationBodyScanner.body(containing: "private func startNetworkMonitoring()", in: source) else {
+            XCTFail("startNetworkMonitoring not found"); return ""
+        }
+        return body
+    }
+
     /// An interface change while a call is active must trigger ICE restart
     /// (`attemptReconnection`).  Without this, a WiFi → cellular switch leaves
     /// the call silently dead: the local IP address changes so all existing ICE
     /// candidates become unreachable, but the call state stays `.connected`.
     func test_callManager_interfaceChange_triggersIceRestart() throws {
-        let source = try callManagerSource()
-
-        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
-            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
-        }
-        // Scan forward far enough to cover the full handler block.
-        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 3000, limitedBy: source.endIndex) ?? source.endIndex
-        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+        let handlerBody = try startNetworkMonitoringBody(try callManagerSource())
 
         XCTAssertTrue(
             handlerBody.contains("interfaceChanged"),
@@ -4087,13 +4154,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// fires within 1 ms of the OS detecting the outage; waiting for heartbeat
     /// expiry (30 s) delays recovery by up to 30 seconds on a short network blip.
     func test_callManager_networkLoss_triggersReconnection() throws {
-        let source = try callManagerSource()
-
-        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
-            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
-        }
-        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
-        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+        let handlerBody = try startNetworkMonitoringBody(try callManagerSource())
 
         XCTAssertTrue(
             handlerBody.contains("path.status != .satisfied") || handlerBody.contains("status != .satisfied"),
@@ -4107,13 +4168,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// ICE restart.  Without this, a call that survives a brief network outage
     /// stays in the reconnecting/failed state even after connectivity returns.
     func test_callManager_networkRecovery_triggersIceRestart() throws {
-        let source = try callManagerSource()
-
-        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
-            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
-        }
-        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
-        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+        let handlerBody = try startNetworkMonitoringBody(try callManagerSource())
 
         XCTAssertTrue(
             handlerBody.contains("wasUnsatisfied") && handlerBody.contains("isNowSatisfied"),
@@ -4127,13 +4182,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// Firing ICE restart while idle (e.g. on app launch in an elevator) wastes
     /// CPU and corrupts the `pendingIceCandidates` buffer for the next call.
     func test_callManager_networkMonitor_guardsOnCallActive() throws {
-        let source = try callManagerSource()
-
-        guard let pathHandlerRange = source.range(of: "networkMonitor.pathUpdateHandler") else {
-            XCTFail("networkMonitor.pathUpdateHandler not found in CallManager.swift"); return
-        }
-        let endIdx = source.index(pathHandlerRange.lowerBound, offsetBy: 2000, limitedBy: source.endIndex) ?? source.endIndex
-        let handlerBody = String(source[pathHandlerRange.lowerBound ..< endIdx])
+        let handlerBody = try startNetworkMonitoringBody(try callManagerSource())
 
         XCTAssertTrue(
             handlerBody.contains("isInActiveCall") || handlerBody.contains("callState.isActive"),
@@ -4180,14 +4229,23 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
         )
     }
 
-    func test_callManager_sourceCode_handleMediaServicesReset_callsConfigureAudioSession() throws {
-        let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
-            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
-            return
+    /// Corps ENTIER de `handleMediaServicesReset`, accolades équilibrées — pas
+    /// une fenêtre de N caractères devinée. Les deux tests ci-dessous portaient
+    /// chacun une fenêtre fixe de 1500 caractères depuis la signature ; le guard
+    /// `isAudioSessionExpectedActive` ajouté (audit calling-stack 2026-08-22) a
+    /// repoussé `audioSessionDidActivate` hors fenêtre et fait virer
+    /// `_cyclesRTCAudioSession` au rouge alors qu'aucun comportement surveillé
+    /// n'avait changé — exactement le défaut que `DeclarationBodyScanner` existe
+    /// pour éliminer (cf. son en-tête).
+    private func handleMediaServicesResetBody(_ source: String) throws -> String {
+        guard let body = DeclarationBodyScanner.body(containing: "private func handleMediaServicesReset()", in: source) else {
+            XCTFail("handleMediaServicesReset() not found in CallManager.swift"); return ""
         }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+        return body
+    }
+
+    func test_callManager_sourceCode_handleMediaServicesReset_callsConfigureAudioSession() throws {
+        let fnBody = try handleMediaServicesResetBody(try callManagerSource())
 
         XCTAssertTrue(
             fnBody.contains("configureAudioSession()"),
@@ -4197,13 +4255,7 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
     }
 
     func test_callManager_sourceCode_handleMediaServicesReset_cyclesRTCAudioSession() throws {
-        let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func handleMediaServicesReset()") else {
-            XCTFail("handleMediaServicesReset() not found in CallManager.swift")
-            return
-        }
-        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
-        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+        let fnBody = try handleMediaServicesResetBody(try callManagerSource())
 
         XCTAssertTrue(
             fnBody.contains("audioSessionDidDeactivate"),

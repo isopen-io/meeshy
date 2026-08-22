@@ -77,6 +77,16 @@ jest.mock('@meeshy/shared/utils/errors', () => ({
   sendErrorResponse: jest.fn<any>(),
 }));
 
+// Gate de présence — les profils servis par ces deux routes sont des
+// CO-PARTICIPANTS de la conversation : contexte d'accès déjà garanti des deux
+// côtés, donc `resolvePrefsOnly` (et non le critère strict).
+const mockResolvePrefsOnly = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+  }),
+}));
+
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   conversationSchema: { type: 'object' },
   conversationParticipantSchema: { type: 'object' },
@@ -93,6 +103,17 @@ import { registerSharingRoutes } from '../../../routes/conversations/sharing';
 const CONV_ID = '507f1f77bcf86cd799439011';
 const USER_ID = '507f1f77bcf86cd799439022';
 const INVITEE_ID = '507f1f77bcf86cd799439033';
+
+const PREFS_FULL = { showOnline: true, showLastSeenTimestamp: true };
+const PREFS_HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+// Défaut du double : tout montrable, pour que les cas de ce fichier qui ne
+// parlent pas de présence restent inchangés.
+beforeEach(() => {
+  mockResolvePrefsOnly.mockImplementation(async (ids: string[]) =>
+    new Map((ids ?? []).map((id) => [id, PREFS_FULL])),
+  );
+});
 const PART_ID = '507f1f77bcf86cd799439044';
 const LINK_ID = '507f1f77bcf86cd799439055';
 
@@ -1399,5 +1420,158 @@ describe('Avis d’arrivée — POST /conversations/join/:linkId', () => {
     await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
 
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ conversationId: CONV_ID }));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gate de présence — PATCH /conversations/:id et POST /conversations/:id/invite
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Les deux routes servent des profils de CO-PARTICIPANTS avec la présence
+// portée par la ligne `Participant` elle-même (`isOnline` / `lastActiveAt`),
+// que `conversationParticipantSchema` déclare — donc qui atteint le fil. Aucune
+// des deux ne passait par `PresenceVisibilityService`, quand la liste de
+// participants (`routes/conversations/participants.ts`) le fait depuis
+// longtemps, à trois lignes de distance dans le même domaine.
+//
+// Régime : `resolvePrefsOnly`. La co-participation est un contexte d'accès
+// garanti des DEUX côtés — seules les préférences s'appliquent. Et un id
+// ABSENT de la carte vaut MONTRABLE, à l'inverse du critère strict : les
+// participants anonymes n'ont pas de `userId`, donc pas de préférences, et ils
+// doivent rester visibles.
+
+describe('PATCH /conversations/:id — gate de présence des participants', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function participantRow(over: Record<string, any> = {}) {
+    return {
+      id: PART_ID,
+      displayName: 'Alice',
+      avatar: null,
+      type: 'user',
+      role: 'member',
+      language: 'fr',
+      userId: USER_ID,
+      isOnline: true,
+      lastActiveAt: new Date('2026-08-22T10:00:00.000Z'),
+      user: { id: USER_ID, username: 'alice', isOnline: true, lastActiveAt: new Date('2026-08-22T10:00:00.000Z') },
+      ...over,
+    };
+  }
+
+  async function patchWith(participants: any[]) {
+    const { fastify, prisma, reply } = setup();
+    const route = getRoute(fastify, 'PATCH', '/conversations/:id');
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'admin' }));
+    prisma.conversation.update.mockResolvedValue({ id: CONV_ID, title: 'T', participants });
+    await route.handler(
+      makeRequest({ params: { id: CONV_ID }, body: { title: 'New Title' } }),
+      reply,
+    );
+    const [, served] = mockSendSuccess.mock.calls[0];
+    return served as any;
+  }
+
+  it('masque la présence d un participant qui l a coupée', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[USER_ID, PREFS_HIDDEN]]));
+
+    const served = await patchWith([participantRow()]);
+
+    expect(served.participants[0].isOnline).toBe(false);
+    expect(served.participants[0].lastActiveAt).toBeNull();
+  });
+
+  it('conserve la présence quand les préférences l autorisent', async () => {
+    const served = await patchWith([participantRow()]);
+
+    expect(served.participants[0].isOnline).toBe(true);
+    expect(served.participants[0].lastActiveAt).not.toBeNull();
+  });
+
+  it('résout les userId des participants enregistrés', async () => {
+    await patchWith([participantRow()]);
+
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([USER_ID]);
+  });
+
+  // Un anonyme n'a pas de compte : aucune préférence à appliquer, et il reste
+  // visible. C'est l'inverse du défaut du critère strict, et c'est voulu.
+  it('laisse un participant anonyme visible malgré l absence de préférences', async () => {
+    const served = await patchWith([
+      participantRow({ id: 'part-anon', userId: null, type: 'anonymous' }),
+    ]);
+
+    expect(served.participants[0].isOnline).toBe(true);
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([]);
+  });
+});
+
+// Les deux préférences sont INDÉPENDANTES : couper le seul horodatage laisse la
+// pastille. Un collapse qui les traiterait comme un seul drapeau passerait les
+// témoins ci-dessus sans que celui-ci tienne.
+describe('PATCH /conversations/:id — showLastSeen coupé seul', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('retire l horodatage et garde la pastille', async () => {
+    const { fastify, prisma, reply } = setup();
+    const route = getRoute(fastify, 'PATCH', '/conversations/:id');
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'admin' }));
+    prisma.conversation.update.mockResolvedValue({
+      id: CONV_ID,
+      title: 'T',
+      participants: [{
+        id: PART_ID,
+        userId: USER_ID,
+        displayName: 'Alice',
+        isOnline: true,
+        lastActiveAt: new Date('2026-08-22T10:00:00.000Z'),
+      }],
+    });
+    mockResolvePrefsOnly.mockResolvedValue(
+      new Map([[USER_ID, { showOnline: true, showLastSeenTimestamp: false }]])
+    );
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    const [, served] = mockSendSuccess.mock.calls[0] as [unknown, any];
+    expect(served.participants[0].isOnline).toBe(true);
+    expect(served.participants[0].lastActiveAt).toBeNull();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /conversations/:id/invite — ne charger que ce qui a un destinataire
+//
+// Le schéma de réponse déclare `data.membership` quand le handler renvoie
+// `data.member` : fast-json-stringify supprime l'objet en entier, et `isOnline`
+// n'a donc jamais eu de lecteur. Ce témoin garde une décision de CHARGEMENT —
+// il n'atteste pas la réponse, et c'est assumé : le jour où la dérive
+// `member`/`membership` est corrigée, un champ qu'on ne charge pas ne peut pas
+// fuir par cette réparation-là.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /conversations/:id/invite — profil de l invité', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('ne charge pas la présence brute de l invité', async () => {
+    const { fastify, reply } = setup();
+    const route = getRoute(fastify, 'POST', '/invite');
+    fastify.prisma.conversation.findUnique.mockResolvedValue({
+      id: CONV_ID,
+      title: 'Test',
+      type: 'group',
+      participants: [{ id: PART_ID, userId: USER_ID, role: 'admin', user: { id: USER_ID, username: 'alice', role: 'USER' } }],
+    });
+    fastify.prisma.user.findUnique.mockResolvedValue({
+      id: INVITEE_ID, username: 'bob', displayName: 'Bob', firstName: 'Bob', lastName: 'B',
+    });
+    fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', userId: INVITEE_ID, user: { id: INVITEE_ID } });
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } }), reply);
+
+    const include = fastify.prisma.participant.create.mock.calls[0][0].include;
+    expect(include.user.select.isOnline).toBeUndefined();
   });
 });

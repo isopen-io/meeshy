@@ -14,8 +14,12 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { NormalizedContact } from '../utils/contact-identifiers.js';
+import { getBlockedUserIdsAmong } from '../utils/blocking.js';
+import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService.js';
 
 const logger = enhancedLogger.child({ module: 'ContactDirectory' });
 
@@ -231,15 +235,30 @@ export class ContactDirectoryService {
     return { synced: contacts.length, matched: matches.size, removed };
   }
 
-  /** Page du répertoire, profil Meeshy rapproché inclus. */
+  /**
+   * Page du répertoire, profil Meeshy rapproché inclus.
+   *
+   * `match()` applique le blocage bidirectionnel à l'ÉCRITURE, une fois par
+   * synchronisation d'appareil. La lecture doit le rejouer, parce que le blocage
+   * bouge entre deux synchronisations et qu'aucune d'elles ne le rattrape : sans
+   * ça, un compte bloqué APRÈS le dernier `sync` gardait son lien Meeshy — donc
+   * le bouton « Lui écrire », vers un envoi que la passerelle rejette en
+   * `USER_BLOCKED` — jusqu'au prochain scan du carnet.
+   *
+   * `viewer` est requis (et non optionnel) parce que la présence servie ici est
+   * la MÊME donnée que partout ailleurs : elle passe par le gate STRICT de
+   * `PresenceVisibilityService`, comme `/users/search`. Un appelant sans viewer
+   * passe `null`, ce qui masque — la porte est fermée par défaut.
+   */
   async list(options: {
     ownerId: string;
+    viewer: PresenceViewer;
     offset: number;
     limit: number;
     filter?: DirectoryFilter;
     query?: string;
   }): Promise<{ contacts: DirectoryEntry[]; total: number }> {
-    const { ownerId, offset, limit, filter = 'all', query } = options;
+    const { ownerId, viewer, offset, limit, filter = 'all', query } = options;
     const take = Math.min(Math.max(limit, 1), MAX_PAGE_SIZE);
     const search = query?.trim();
 
@@ -283,9 +302,34 @@ export class ContactDirectoryService {
       this.prisma.userContact.count({ where }),
     ]);
 
+    const matchedIds = [
+      ...new Set(
+        rows
+          .map((row: Record<string, any>) => row.matchedUser?.id as string | undefined)
+          .filter((id: string | undefined): id is string => typeof id === 'string'),
+      ),
+    ];
+    // Une page sans aucun compte rapproché ne pose aucune question de blocage ni
+    // de présence : ne pas ouvrir les requêtes pour rien.
+    const blocked = matchedIds.length > 0
+      ? await getBlockedUserIdsAmong(this.prisma, ownerId, matchedIds)
+      : new Set<string>();
+    const visibleIds = matchedIds.filter((id) => !blocked.has(id));
+    const visibility = visibleIds.length > 0
+      ? await getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, visibleIds)
+      : new Map<string, PresenceVisibility>();
+
     return {
       contacts: rows.map((row: Record<string, any>) => {
-        const matchedUser = toPublicProfile(row.matchedUser ?? null);
+        const profile = toPublicProfile(row.matchedUser ?? null);
+        // Un lien coupé rend EXACTEMENT ce qu'une re-synchronisation écrirait
+        // pour ce contact (`matchedUserId`/`matchedBy`/`matchedAt` à null) : la
+        // ligne du carnet reste — c'est l'entrée de l'utilisateur, pas celle du
+        // compte bloqué — mais elle redevient « à inviter ».
+        const severed = profile !== null && blocked.has(profile.id);
+        const matchedUser = profile === null || severed
+          ? null
+          : applyPresenceVisibilityAsOffline(profile, visibility.get(profile.id));
         return {
           id: row.id,
           contactKey: row.contactKey,
@@ -294,8 +338,8 @@ export class ContactDirectoryService {
           emails: row.emails ?? [],
           usernames: row.usernames ?? [],
           isOnMeeshy: matchedUser !== null,
-          matchedBy: row.matchedBy ?? null,
-          matchedAt: row.matchedAt ?? null,
+          matchedBy: matchedUser === null ? null : (row.matchedBy ?? null),
+          matchedAt: matchedUser === null ? null : (row.matchedAt ?? null),
           lastSyncedAt: row.lastSyncedAt ?? null,
           matchedUser,
         };

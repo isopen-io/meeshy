@@ -49,10 +49,22 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
  * The story viewer presents an identity interstitial (avatar, name, presence
  * badge) at every author switch; presence must ship WITH the feed payload so
  * the interstitial is complete the instant the switch happens (no lazy
- * resolution after the slide is already on screen). Presence stays scoped to
- * the stories path: story visibility already gates the audience (friends /
- * DM contacts / community co-members), whereas the general post feed keeps
- * the lean `authorSelect`.
+ * resolution after the slide is already on screen). The general post feed
+ * keeps the lean `authorSelect`.
+ *
+ * CHARGER ces deux champs est une décision produit ; les SERVIR bruts n'en est
+ * pas une. Cette note a longtemps dit que « la visibilité de story gate déjà
+ * l'audience (amis / contacts DM / co-membres de communauté) », ce qui est
+ * FAUX de la branche la plus large : `buildPostVisibilityOrFilter` porte
+ * `{ visibility: PUBLIC }` sans aucune condition d'audience — une story
+ * publique est visible de n'importe quel compte authentifié, qui n'a posé
+ * aucun lien. C'est cette phrase, pas le code, qui a laissé la présence sortir
+ * brute pendant des mois (cycle 83).
+ *
+ * Le filtrage vit chez le SERVEUR de la donnée, pas chez sa forme :
+ * `PostFeedService.resolveStoryAuthorPresence` tranche par auteur — strict pour
+ * qui n'est vu qu'en PUBLIC, préférences seules dès qu'une story de la page
+ * prouve un lien posé des deux côtés.
  *
  * Derived by spread so any future `authorSelect` field flows through.
  */

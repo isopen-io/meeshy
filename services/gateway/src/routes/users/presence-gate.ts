@@ -27,6 +27,17 @@ export function viewerFromAuthContext(authContext: ProfilePresenceAuthContext): 
 }
 
 /**
+ * Même chose depuis la requête. `AuthenticatedRequest` (`routes/users/types.ts`)
+ * type `registeredUser` en `boolean`, ce que la production ne respecte pas — le
+ * viewer se lit donc sur la forme RÉELLE de l'authContext, jamais sur ce type-là.
+ */
+export function viewerFromRequest(request: FastifyRequest): PresenceViewer {
+  return viewerFromAuthContext(
+    (request as FastifyRequest & { authContext?: ProfilePresenceAuthContext }).authContext,
+  );
+}
+
+/**
  * Applique le gate de présence (critère STRICT : self/modo/ami/affilié) sur un
  * objet profil, en masquant isOnline/lastActiveAt selon la visibilité résolue.
  */

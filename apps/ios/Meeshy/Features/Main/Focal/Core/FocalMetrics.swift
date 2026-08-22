@@ -319,30 +319,10 @@ nonisolated public enum FocalMetrics {
         public static let darkFill: Double = 0.06
     }
 
-    // MARK: - Contour des chips de la carte de focus
-
-    /// Opacités du CONTOUR des chips posées sur la carte du message en focus
-    /// (`Focal/Row/FocalRow.swift` — bande de chips, puce d'identité, chips
-    /// de réaction), arrivées avec le retour de Focal (2026-08-21).
-    ///
-    /// Nommées ici plutôt que laissées en littéraux orphelins dans un fichier
-    /// de peau, pour la MÊME raison que `SurfaceTint` (garde R15) — et pour
-    /// une raison de plus, propre à ces valeurs : `0.45` et `0.40` figurent
-    /// TELS QUELS dans la liste des littéraux de LOI que la garde surveille,
-    /// et « 0.45 » contient de surcroît le jeton isolé `45`. La garde n'avait
-    /// donc AUCUN moyen de distinguer une opacité de peau d'une cote de loi
-    /// dérobée : elle rougissait, à raison, sur les deux.
-    ///
-    /// AUCUNE cote `thread.*` de `lentille-tokens.json` ne porte ces valeurs —
-    /// même statut que `SurfaceTint` : teinte décorative interne à la carte de
-    /// focus, pas cote normative du fil, donc centralisée ici sans revendiquer
-    /// de miroir.
-    nonisolated public enum FocusChip {
-        /// Contour d'une chip au repos — pleine quand la chip est active ou
-        /// remplie, atténuée sinon.
-        public static let idleBorderOpacity: Double = 0.45
-        /// Contour de la bande de chips, par thème.
-        public static let borderOpacityLight: Double = 0.40
-        public static let borderOpacityDark: Double = 0.55
-    }
+    // `FocusChip` a vécu ici quelques heures le 2026-08-22 : j'y avais nommé
+    // les opacités de contour des chips de la carte de focus pour satisfaire la
+    // garde R15. Le tronc avait fait le MÊME travail au même moment, dans
+    // `FocalScrollPerspective` (`focusChipRingOpacity`,
+    // `focusCardBorderOpacity*`) — c'est SA maison qui fait foi : deux domiciles
+    // pour une même cote, c'est exactement ce que la garde R15 interdit.
 }

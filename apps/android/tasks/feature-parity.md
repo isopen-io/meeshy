@@ -3028,9 +3028,53 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
-- [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
-- [ ] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown
-- [ ] AI participant persona profiles + per-participant activity breakdown + trait bars
+- [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
+      **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
+      `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns
+      the **summary arm** real. Pure `ConversationAnalysisProjection` (`:core:model`, SSOT) ports
+      iOS's `heroHealthCard` derivations: `healthTier` (>70 good / >40 fair / else poor, parity
+      `healthScoreColor`), `conflictTier` (case-insensitive high/medium keyword match, parity
+      `conflictLevelColor`), `cleanLabels` (trim / drop-blank / case-insensitive dedupe for topics +
+      emotions — SOTA over iOS's raw list), and `summary()` → a render-ready `AnalysisSummaryView`
+      or null (the Empty state) when nothing renders. The health score is **clamped 0..100** before
+      the tier is derived (SOTA — iOS trusts the raw server value). `ConversationAnalysisRepository`
+      (`:sdk-core`) fetches `GET /conversations/{id}/analysis`; `ConversationAnalysisViewModel` +
+      `ConversationAnalysisSheet` (`:feature:chat`) render it behind a new header `AutoAwesome`
+      action (any member): health badge, engagement/conflict chips, tone, topics + emotions chip
+      rows, summary narrative, dynamic. Strings en/fr/es/pt. **Persona profiles + trait bars landed
+      2026-08-22** (slice `conversation-analysis-personas`) — same endpoint/ViewModel, rendered under
+      the summary in the same sheet (no third header button): see the persona box below.
+- [~] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown —
+      **stats dashboard shipped 2026-08-21** (slice `conversation-stats-core`). The
+      `ConversationMessageStatsResponse` model shipped orphaned (no consumer); this slice turns it
+      real. Pure `ConversationStatsProjection` (`:core:model`, SSOT) derives the content-type
+      breakdown from the server `ContentTypeCounts` (SOTA over iOS's client-side message re-count),
+      the trailing-window activity series (`today` injected — deterministic, unlike iOS's
+      wall-clock view getter), per-participant + per-language shares, and a 24-slot hourly
+      histogram. `ConversationStatsRepository` (`:sdk-core`) fetches `GET /conversations/{id}/stats`;
+      `ConversationStatsViewModel` + `ConversationStatsSheet` (`:feature:chat`) render it behind a
+      new header `Insights` action (any member; period picker re-derives locally, no refetch).
+      **AI-summary arm landed 2026-08-22** (slice `conversation-analysis-summary`, the
+      `AI conversation analysis` box above — `GET /conversations/{id}/analysis` → health / tone /
+      topics / emotions). **Still open here — the sentiment three-way bar** the stats dashboard's
+      own `sentimentAnalysis` computes, and the `AI participant persona` box below (same endpoint,
+      `ParticipantProfile`/`ParticipantTraits`). Box stays `[~]` until the sentiment bar lands.
+- [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
+      `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
+      orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
+      `ParticipantProfileProjection` (`:core:model`, SSOT) mirrors iOS's `agentParticipantProfilesSection`
+      + `traitBarsView` + `traitScoreColor`: per-persona name (displayName › username › userId — a single
+      seed for label AND colour, SOTA over iOS's `"?"`-vs-userId fork), a clamped-0..1 confidence percent
+      (SOTA — iOS renders `Int(confidence*100)` raw), trimmed persona/tone/vocabulary, the four trait axes
+      (communication/personality/interpersonal/emotional) each extracted by **explicit field access, not
+      reflection** (SOTA over iOS's `Mirror`), clamped 0..100, **stably** sorted desc, top 4, with a
+      GOOD≥70 / MID≥40 / LOW tier; deduped topics (top 3) / catchphrases (top 3) / emojis (top 6). Rendered
+      **inside the existing `ConversationAnalysisSheet`** below the summary (the `ConversationAnalysisViewModel`
+      now projects both halves of `/analysis`; Empty only when summary AND personas are both empty) — no
+      extra header action, matching iOS's single dashboard. Strings en/fr/es/pt. +25 tests (projection ×22,
+      ViewModel ×3), 2 mutation RED proofs. (The per-participant *activity* breakdown — message-count bars —
+      is the stats sheet's busiest-participant list, shipped with `conversation-stats-core`.)
+      **Still open on this endpoint — the stats dashboard's sentiment three-way bar.**
 
 ## D. Translation — Prisme Linguistique
 - [~] Automatic per-user translation display (resolution: system → regional → custom → original) —
@@ -3180,7 +3224,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       +3 `CommentThreadStateTest`/`CommentRepliesStateTest`, +1 `CommentProjectionTest`, +4 `PostCommentsViewModelTest`;
       1 obsolete dead-arm test rewritten to the new contract; mutation-proved ×2 — in-flight guard, active-language
       switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL (local, SDK 37 bootstrapped).
-      **Follow-up:** the per-story timeline strip.
+      **Story request arm shipped** (slice `story-viewer-translation-request`, 2026-08-21): the story viewer's
+      language quick bar (`StoryViewerViewModel.availableLanguagesFor`) previously listed only present
+      `StoryItem.translations`, so a configured-but-absent language was never requestable. It now appends each
+      configured content language (`LanguageResolver.preferredContentLanguages`) absent from the present set as a
+      translatable chip — gated on the story already carrying ≥1 translation (a pure-original story never dumps
+      every preferred language) and on a real logged-in viewer. `StoryLanguageOption`/`LanguageQuickOption` gain
+      `isTranslatable`/`isTranslating` (dimmed flag + "+" affordance, "…" in flight); `StoryViewerScreen` routes a
+      translatable tap to the new `requestStoryTranslation(code)` (in-flight guard via `translatingLanguages` keyed
+      `storyId|lang`), which blocking-translates through the new stateless `StoryRepository.translateStory(item,
+      target): StoryItem?` (story-shaped sibling of `translatePost`; `TranslationApi` now injected) and folds via
+      the new `:core:model` `StoryTranslationMerge` (list-keyed sibling of `PostTranslationMerge` — upsert into
+      `List<StoryTranslation>`, blank/idempotent guards, in-place-or-append), then switches the Exploration
+      `languageOverride` to the target so the slide re-renders even when a higher-priority language is already
+      present. Failed/blank/idempotent leaves the strip to retry; a second in-flight tap is ignored. +21 tests
+      (+8 `StoryTranslationMergeTest`, +7 `StoryRepositoryTest`, +6 `StoryViewerViewModelTest`; mutation-proved ×2 —
+      in-flight guard, override switch). Full `assembleDebug` + all-module `testDebugUnitTest` → BUILD SUCCESSFUL
+      (local, SDK 37 bootstrapped). **The `request-missing-languages` follow-up is now COMPLETE on every surface
+      (feed card / post-detail / comments / story).**
 - [ ] Persisted translations / transcriptions / audio translations (offline Prisme)
 - [~] Real-time progressive translation/transcription socket updates — **text translations + transcription done**
       (slice `chat-live-translation-merge`, 2026-07-10): the dead `MessageSocketManager.translationCompleted`

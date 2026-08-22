@@ -65,7 +65,7 @@ final class OfflineEditFlowTests: XCTestCase {
 
         // Drag clip to generate a command
         vm.beginClipDrag(clipId: "clip-1")
-        vm.dragClipMoved(rawTime: 2.0, snapCandidates: [])
+        vm.dragClipMoved(rawTime: 2.0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         vm.endClipDrag()
         XCTAssertTrue(vm.canUndo, "Must be able to undo while offline")
 

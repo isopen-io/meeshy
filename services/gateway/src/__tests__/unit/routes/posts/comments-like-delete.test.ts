@@ -303,6 +303,84 @@ describe('DELETE /posts/:postId/comments/:commentId/like (authenticated)', () =>
   });
 });
 
+// ─── La jumelle DESCENDANTE de `comment:liked` ────────────────────────────────
+//
+// La pose diffuse `comment:liked` (compteur ABSOLU) au commentateur et à la
+// room du post ; le retrait ne diffusait RIEN. Le compteur d'un commentaire ne
+// savait donc que monter en direct : un lecteur du fil voyait le « 1 » arriver
+// et ne le voyait jamais repartir. Pire côté iOS, où `FeedSocketHandler`
+// PERSISTE la valeur reçue — le compte gonflé survivait au redémarrage jusqu'au
+// prochain REST.
+//
+// Même grille close que `post:liked` / `post:unliked`, dont ce couple est le
+// calque exact (mêmes rooms, même charge absolue, mêmes clients).
+
+describe('DELETE /posts/:postId/comments/:commentId/like — diffusion', () => {
+  const REAL_POST_ID = '507f1f77bcf86cd7994390aa';
+  const UNLIKE_RESULT = { likeCount: 0, reactionSummary: {}, authorId: 'other-user' };
+  let app: FastifyInstance;
+  let broadcastCommentUnliked: jest.Mock;
+
+  beforeAll(async () => {
+    app = Fastify({ logger: false });
+    const publicAcl = { authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] };
+    const prisma = {
+      postComment: {
+        findUnique: jest.fn().mockResolvedValue({ content: 'hi' }),
+        // Le commentaire appartient à REAL_POST_ID, pas au `:postId` de l'URL.
+        findFirst: jest.fn().mockResolvedValue({ postId: REAL_POST_ID, post: publicAcl }),
+      },
+      post: {
+        findUnique: jest.fn().mockResolvedValue({ type: 'REEL' }),
+        findFirst: jest.fn().mockResolvedValue(publicAcl),
+      },
+    } as any;
+    broadcastCommentUnliked = jest.fn() as jest.Mock;
+    app.decorate('prisma', prisma);
+    app.decorate('socialEvents', { broadcastCommentUnliked } as any);
+    registerCommentRoutes(app, prisma, makeRequiredAuth(true));
+    await app.ready();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('broadcasts the new absolute count so the like can come back DOWN live', async () => {
+    mockUnlikeComment.mockResolvedValueOnce(UNLIKE_RESULT);
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    // `postId` = celui du COMMENTAIRE (jamais l'URL) — même invariant que la
+    // pose : il adresse `ROOMS.post(...)` et sert de clé de cache client.
+    expect(broadcastCommentUnliked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postId: REAL_POST_ID,
+        commentId: COMMENT_ID,
+        userId: USER_ID,
+        likeCount: 0,
+      }),
+      UNLIKE_RESULT.authorId,
+    );
+  });
+
+  it('does not broadcast when the service could not resolve a comment author', async () => {
+    // Même garde que la pose : sans destinataire nommé, la diffusion ciblée
+    // n'a pas d'adresse. Rien ne part plutôt qu'un `emitToUser(undefined)`.
+    mockUnlikeComment.mockResolvedValueOnce({ likeCount: 0, reactionSummary: {}, authorId: null });
+    broadcastCommentUnliked.mockClear();
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(broadcastCommentUnliked).not.toHaveBeenCalled();
+  });
+});
+
 // ─── DELETE /posts/:postId/comments/:commentId ────────────────────────────────
 
 describe('DELETE /posts/:postId/comments/:commentId (unauthenticated)', () => {

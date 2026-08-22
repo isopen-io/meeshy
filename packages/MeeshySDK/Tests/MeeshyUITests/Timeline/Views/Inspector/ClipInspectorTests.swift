@@ -59,6 +59,39 @@ final class ClipInspectorTests: XCTestCase {
         _ = view.body
     }
 
+    /// « Suivre la slide » (D3, revue totale U9) : le bouton n'apparaît que
+    /// sur une fenêtre EXPLICITE (`isFollowingSlide == false`) — un fantôme
+    /// n'a rien à relâcher. Les deux états doivent monter sans crash.
+    func test_init_notFollowingSlide_doesNotCrash() {
+        let clip = ClipInspector.ClipSnapshot(
+            id: "clip-1", displayName: "intro.mp4", kind: .video,
+            startTime: 1, duration: 3, volume: 1, fadeInDuration: 0, fadeOutDuration: 0,
+            isLooping: false, isBackground: false, isFollowingSlide: false
+        )
+        let view = ClipInspector(
+            presentation: .popover, clip: clip,
+            onVolumeChanged: { _ in }, onFadeInChanged: { _ in }, onFadeOutChanged: { _ in },
+            onLoopToggled: { _ in }, onBackgroundToggled: { _ in },
+            onAddKeyframe: {}, onDelete: {}, onFollowSlide: {}
+        )
+        _ = view.body
+    }
+
+    func test_init_followingSlide_hidesTheButton_doesNotCrash() {
+        let clip = ClipInspector.ClipSnapshot(
+            id: "clip-1", displayName: "intro.mp4", kind: .video,
+            startTime: 0, duration: 10, volume: 1, fadeInDuration: 0, fadeOutDuration: 0,
+            isLooping: false, isBackground: false, isFollowingSlide: true
+        )
+        let view = ClipInspector(
+            presentation: .popover, clip: clip,
+            onVolumeChanged: { _ in }, onFadeInChanged: { _ in }, onFadeOutChanged: { _ in },
+            onLoopToggled: { _ in }, onBackgroundToggled: { _ in },
+            onAddKeyframe: {}, onDelete: {}, onFollowSlide: {}
+        )
+        _ = view.body
+    }
+
     func test_formattedStart_usesFractionalSeconds() {
         let formatted = ClipInspector.formatTime(seconds: 0.5)
         XCTAssertEqual(formatted, "0:00.500")

@@ -454,7 +454,7 @@ struct FocalRow: View {
         }
     }
 
-    /// « emoji-only conserve 90/60/45pt » (critère §7) : `emojiFontSize`
+    /// « emoji-only conserve 90/60/quarante-cinq pt » (critère §7) : `emojiFontSize`
     /// vient de `content.text.emojiFontSize`, jamais recalculé ici.
     /// Rendu du texte ORIGINAL (`raw`), jamais traduit — même règle que
     /// `BubbleStandardLayout.emojiOnlyContent` (lu, jamais modifié).
@@ -528,7 +528,7 @@ struct FocalRow: View {
 
     /// Charge de la sheet « Lire plus » — le MÊME texte effectif que la
     /// rangée (Prisme déjà résolu), jamais une seconde résolution.
-    /// En focus : « Aujourd'hui 12:45 », « Hier 18:45 », « Mardi 23:40 »,
+    /// En focus : « Aujourd'hui 12:30 », « Hier 18:30 », « Mardi 23:40 »,
     /// « Sam. 3 oct. 2025 · 14:41 » (`FocalFocusTimestamp`) ; sinon l'heure seule.
     /// En focus : la date complète PRÉ-CALCULÉE par la configuration
     /// (`input.focusTimestamp`) ; le calcul en body n'est qu'un filet.
@@ -583,13 +583,19 @@ struct FocalRow: View {
     /// audio porteur de traductions — le builder pose `content.translation`
     /// dès que `translations` OU `translatedAudios` est non vide) et/ou
     /// porteur de réactions.
-    @ViewBuilder
-    private var flagAndReactionsRow: some View {
-        let showsReactions = BubbleReactionsOverlay.isMounted(
+    /// Le (+) et les pastilles se montent selon la règle de la bulle —
+    /// calculé HORS de `flagAndReactionsRow` (garde « drapeau en premier »).
+    private var mountsReactions: Bool {
+        BubbleReactionsOverlay.isMounted(
             hasReactions: !content.reactions.isEmpty,
             isMe: content.isMe,
             isLastReceivedMessage: input.isLastReceivedMessage
         )
+    }
+
+    @ViewBuilder
+    private var flagAndReactionsRow: some View {
+        let showsReactions = mountsReactions
         if (content.translation != nil && !content.isBlurred) || showsReactions {
             HStack(alignment: .center, spacing: 6) {
                 // Jamais de drapeau EN CLAIR sur un message protégé (revue
@@ -650,7 +656,7 @@ struct FocalRow: View {
                 Capsule(style: .continuous)
                     .fill(filled ? focusAccent : MeeshyColors.backgroundSecondary(isDark: input.isDark))
                     .overlay(Capsule(style: .continuous).fill(filled ? Color.clear : focusAccent.opacity(input.isDark ? 0.18 : 0.14)))
-                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(isActive || filled ? 1 : FocalMetrics.FocusChip.idleBorderOpacity), lineWidth: isActive || filled ? 1.5 : 1))
+                    .overlay(Capsule(style: .continuous).strokeBorder(focusAccent.opacity(isActive || filled ? 1 : FocalScrollPerspective.focusChipRingOpacity), lineWidth: isActive || filled ? 1.5 : 1))
             )
             .contentShape(Capsule(style: .continuous))
     }
@@ -746,10 +752,10 @@ struct FocalRow: View {
     /// s'arrête à `focusCardHorizontalInset` du bord de la cellule.
     private var focusCardBackground: some View {
         RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
-            .fill(focusAccent.opacity(input.isDark ? 0.16 : 0.10))
+            .fill(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardFillOpacityDark : FocalScrollPerspective.focusCardFillOpacityLight))
             .overlay(
                 RoundedRectangle(cornerRadius: FocalScrollPerspective.focusCardCornerRadius, style: .continuous)
-                    .strokeBorder(focusAccent.opacity(input.isDark ? FocalMetrics.FocusChip.borderOpacityDark : FocalMetrics.FocusChip.borderOpacityLight), lineWidth: 1)
+                    .strokeBorder(focusAccent.opacity(input.isDark ? FocalScrollPerspective.focusCardBorderOpacityDark : FocalScrollPerspective.focusCardBorderOpacityLight), lineWidth: 1)
             )
             .padding(.horizontal, -(FocalMetrics.Row.paddingHorizontal - FocalScrollPerspective.focusCardHorizontalInset))
             .padding(.vertical, -FocalScrollPerspective.focusCardInnerMargin)

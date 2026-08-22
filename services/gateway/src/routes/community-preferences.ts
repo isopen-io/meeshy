@@ -487,20 +487,51 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
         const userId = authContext.userId;
         const { updates } = request.body;
 
-        // Batch update
-        await Promise.all(
-          updates.map(update =>
-            fastify.prisma.userCommunityPreferences.updateMany({
-              where: {
-                userId,
-                communityId: update.communityId
-              },
-              data: {
-                orderInCategory: update.orderInCategory
-              }
-            })
-          )
-        );
+        // `updateMany` ne touche QUE les lignes existantes, et la ligne
+        // `UserCommunityPreferences` n'est créée que par le PUT : une
+        // communauté jamais épinglée, mise en sourdine ou renommée n'en a pas.
+        // Le glisser-déposer d'une liste fraîche rendait donc 200 sans rien
+        // persister, et l'ordre revenait au chargement suivant.
+        //
+        // L'`upsert` corrige cela et EXIGE en retour le filtre d'appartenance —
+        // c'est la raison que porte le jumeau conversation
+        // (`reorderConversationPreferences`) : un lot non borné laisserait
+        // n'importe quel appelant authentifié fabriquer des lignes de
+        // préférences contre des ids arbitraires. `updateMany` absorbait ce
+        // risque pour la mauvaise raison : il ne matchait rien, pour personne.
+        //
+        // Déduplication dernier-gagnant, comme le jumeau : deux upserts
+        // concurrents sur la même clé unique se courent après.
+        const deduped = [...new Map(updates.map((u) => [u.communityId, u])).values()];
+        if (deduped.length > 0) {
+          const memberships = await fastify.prisma.communityMember.findMany({
+            where: {
+              userId,
+              communityId: { in: deduped.map((u) => u.communityId) },
+              isActive: true,
+            },
+            select: { communityId: true },
+          });
+          const joined = new Set(memberships.map((m: { communityId: string }) => m.communityId));
+
+          await Promise.all(
+            deduped
+              .filter((update) => joined.has(update.communityId))
+              .map((update) =>
+                fastify.prisma.userCommunityPreferences.upsert({
+                  where: {
+                    userId_communityId: { userId, communityId: update.communityId }
+                  },
+                  create: {
+                    userId,
+                    communityId: update.communityId,
+                    orderInCategory: update.orderInCategory
+                  },
+                  update: { orderInCategory: update.orderInCategory }
+                })
+              )
+          );
+        }
 
         return sendSuccess(reply, { message: 'Communities reordered successfully' });
       } catch (error) {

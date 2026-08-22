@@ -570,11 +570,21 @@ fun StoryViewerScreen(
         ) {
             LanguageQuickStrip(
                 options = state.availableLanguages.map {
-                    LanguageQuickOption(code = it.code, flag = it.flag, label = it.label)
+                    LanguageQuickOption(
+                        code = it.code,
+                        flag = it.flag,
+                        label = it.label,
+                        isTranslatable = it.isTranslatable,
+                        isTranslating = it.isTranslating,
+                    )
                 },
                 onSelect = { option ->
-                    viewModel.toggleLanguageOverride(option.code)
-                    closeRailBars()
+                    if (option.isTranslatable) {
+                        viewModel.requestStoryTranslation(option.code)
+                    } else {
+                        viewModel.toggleLanguageOverride(option.code)
+                        closeRailBars()
+                    }
                 },
                 activeCode = languageBadge,
                 highlightedIndex = if (scrubKind == StoryScrubKind.Languages) hoveredIndex else null,

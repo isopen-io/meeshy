@@ -41,10 +41,15 @@ nonisolated enum FocalFocusTimestamp {
         case 3...weekdayWindowDays:
             var style = Date.FormatStyle.dateTime.weekday(.wide).locale(locale)
             style.calendar = calendar
+            // Même fuseau que le calendrier qui a compté les jours : sans
+            // cela, 23:40 UTC un mardi s'imprimait « Mercredi » sur une
+            // machine à Paris et « Mardi » sur le runner UTC (CI rouge).
+            style.timeZone = calendar.timeZone
             return "\(capitalized(sentAt.formatted(style), locale: locale))\(joiner)\(timeString)"
         default:
             var style = Date.FormatStyle.dateTime.weekday(.abbreviated).day(.defaultDigits).month(.abbreviated).locale(locale)
             style.calendar = calendar
+            style.timeZone = calendar.timeZone
             let sameYear = calendar.component(.year, from: sentAt) == calendar.component(.year, from: now)
             let day = sameYear ? sentAt.formatted(style) : sentAt.formatted(style.year(.defaultDigits))
             return "\(capitalized(day, locale: locale))\(dateJoiner)\(timeString)"

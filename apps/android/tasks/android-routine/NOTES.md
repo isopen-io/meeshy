@@ -5,6 +5,59 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — Two test files in one package can't both declare the same `private class` name
+- When adding a new sibling repository test (`ConversationAnalysisRepositoryTest`) modelled on an
+  existing one (`ConversationStatsRepositoryTest`) in the SAME package
+  (`me.meeshy.sdk.conversation`), a `private class EnvelopeFailureApi` in each file collided:
+  Kotlin reported `Redeclaration` + a cascading `Cannot access '…': it is private in file` on the
+  OTHER file. File-private top-level classes still share the package's file-facade namespace for
+  this name check. Fix: give reused test-double names a per-slice prefix
+  (`EnvelopeFailureAnalysisApi`, `StubAnalysisApi`, …) rather than copying the stats test's names
+  verbatim. The unique names (`Stub…Api`, `Success…Api`, `Throwing…Api`) were already fine; only the
+  generic `EnvelopeFailureApi` clashed.
+- Also: when `ConversationApi` gains a method, EVERY hand-written stub of it must implement it — there
+  are three in `:sdk-core` tests (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+  and the new one). Grep `override suspend fun stats(` to find them all.
+
+## 2026-08-21 — SDK platform: `compileSdk = 37` wants `android-37.0`, install ordering matters
+- The repo is on `compileSdk = 37` = **Android 17**, whose platform package is `platforms;android-37.0`
+  (`AndroidVersion.ApiLevel=37.0`), NOT `android-37`. The ROUTINE §Environment recipe still installs
+  `platforms;android-35`; that is not enough — add `android-37.0`. `sdkmanager "platforms;android-37"`
+  fails (`Failed to find package`); the cmdline-tools bundle only speaks SDK XML v3 and can't see the
+  v4-only stable name.
+- **Let AGP auto-download it, but wait for it.** With `local.properties` pointing at the SDK, the first
+  Gradle invocation auto-installs `android-37.0` — but if dependency resolution runs while that install is
+  still in flight it dies with `Failed to find target with hash string 'android-37'`. Re-run once the
+  install line prints complete (or pre-run `./gradlew :core:model:compileDebugKotlin` to force the download),
+  then the real build/test resolves cleanly. AGP 8.13.0 maps `compileSdk 37` → the `android-37.0` platform.
+- **Orphaned models are the frontier.** `AgentAnalysis.kt` (`ConversationMessageStatsResponse`,
+  `ConversationAnalysis`, `ParticipantProfile`…) shipped with ZERO consumers (grep outside the model file =
+  nothing). When a parity area looks "already started", grep for consumers before assuming — a defined-but-
+  unconsumed DTO is unbuilt, and wiring it (repository + pure projection + VM + sheet) is a clean vertical slice.
+- **Inject `today` for any windowed/time-bucketed projection.** iOS computes `activityData` off `Date()`
+  inside a view getter (untestable). The Android SSOT takes `today: LocalDate` as a parameter and the
+  Composable passes `LocalDate.now()` in — the same "pass time in" doctrine the chat header uses for presence
+  (`System.currentTimeMillis()`). Makes the cutoff-window mutation catchable in a plain JVM test.
+
+## 2026-08-21 — story on-demand translation: gotchas
+- **Mutation-proving an "override" line needs a scenario Prisme can't auto-resolve.** The story
+  request arm sets `languageOverride = storyId to target` after merging the pulled translation. If
+  the test requests the viewer's PRIMARY language, `emit()`'s auto-resolution
+  (`StoryContentResolver` → `preferredTranslation`) lands on that same freshly-merged translation on
+  its own, so **dropping the override still passes** — the mutation is not caught. Use a scenario
+  where a HIGHER-priority language is already present (prefs `en>de`, story present `en`, request
+  `de`): without the override, auto-resolution keeps showing `en`, so the test only goes green with
+  the override. Rule: to prove a display-switch line, pick inputs where the default resolution would
+  choose *something else*.
+- **Stories carry no `originalLanguage`.** `StoryItem` has `content` + `translations` but no source-
+  language field (unlike `ApiPost`). `translateStory` passes an empty `sourceLanguage` to the
+  translator (auto-detect), which is the same thing `translateSource` does for a post with a null
+  original. Don't invent a source-language field on the story model for this.
+- **`StoryItem.translations` is a `List<StoryTranslation>`, not a map.** The post/comment merges upsert
+  a `Map<code, entry>`; the story merge upserts a list (match by `indexOfFirst`, replace by
+  `mapIndexed`, else `+`). Same laws (blank/idempotent/in-place-or-append), different container — hence
+  a separate `StoryTranslationMerge` rather than reusing `PostTranslationMerge`.
+
 ## 2026-08-21 — comment on-demand translation: gotchas
 - **MockK `coAnswers` is a member infix, NOT a top-level import.** `import io.mockk.coAnswers`
   → *Unresolved reference*. Write `coEvery { … } coAnswers { gate.await() }` and import nothing
@@ -1296,3 +1349,19 @@ hand-made `android-37` / malformed `android-37.0` and `rm -rf` it, reinstall pri
 daemon (`./gradlew --stop`), and run WITHOUT `sdkDownload=false`. Also: the Bash tool cwd persists
 across calls — a `cd /home/user/meeshy` earlier will make `./gradlew` (which lives in `apps/android`)
 "No such file or directory"; always `cd /home/user/meeshy/apps/android &&` in the gradle command.
+
+## 2026-08-22 — Port iOS `Mirror`-based trait extraction as explicit field access, and grow an existing sheet rather than add a header button
+- iOS `ConversationDashboardView.extractTraitScores<T>(from:)` uses `Mirror(reflecting:)` to pull the
+  non-nil `TraitScore` fields out of each trait struct. Kotlin/JVM reflection over data-class members is
+  fragile (needs `kotlin-reflect`, order not guaranteed) and slow — the faithful port is **explicit
+  `listOfNotNull(traits.verbosity, traits.formality, …)`** per axis. Same behaviour, deterministic order,
+  zero reflection dependency, and it doubles as the SOTA note (stable tie-break, unlike Swift's unstable
+  `sorted`). Pattern to reuse for any iOS `Mirror` extraction.
+- When a second render section belongs to the SAME endpoint/response as an already-shipped sheet
+  (persona profiles live in the same `GET /analysis` payload as the summary), **grow the existing
+  ViewModel + sheet** instead of minting a parallel ViewModel + a third header button. Add the new
+  projection field to the UiState (default `emptyList()` keeps old tests green), recompute the Empty
+  gate as "both halves empty", and render the new block under the old one. This matches iOS's single
+  dashboard, avoids a double-fetch of the same endpoint, and keeps the chat header uncluttered. The
+  existing Empty tests stayed green precisely because they carried no profiles — verify that before
+  relying on it.

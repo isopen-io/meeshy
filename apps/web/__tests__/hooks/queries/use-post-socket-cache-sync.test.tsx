@@ -37,6 +37,7 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     COMMENT_UPDATED: 'comment:updated',
     COMMENT_DELETED: 'comment:deleted',
     COMMENT_LIKED: 'comment:liked',
+    COMMENT_UNLIKED: 'comment:unliked',
     POST_TRANSLATION_UPDATED: 'post:translation-updated',
     COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
     COMMENT_MEDIA_UPDATED: 'comment:media-updated',
@@ -167,17 +168,17 @@ describe('usePostSocketCacheSync', () => {
     Object.keys(listeners).forEach((k) => delete listeners[k]);
   });
 
-  it('registers 29 socket listeners on mount (14 post/comment + 11 story/status + 4 reaction)', () => {
+  it('registers 30 socket listeners on mount (15 post/comment + 11 story/status + 4 reaction)', () => {
     const qc = createQueryClient();
     renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-    expect(mockSocket.on).toHaveBeenCalledTimes(29);
+    expect(mockSocket.on).toHaveBeenCalledTimes(30);
   });
 
-  it('unregisters all 29 listeners on unmount', () => {
+  it('unregisters all 30 listeners on unmount', () => {
     const qc = createQueryClient();
     const { unmount } = renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(29);
+    expect(mockSocket.off).toHaveBeenCalledTimes(30);
   });
 
   it('does not register when enabled=false', () => {
@@ -840,6 +841,93 @@ describe('usePostSocketCacheSync', () => {
       }));
 
       expect(qc.getQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'])).toBeUndefined();
+    });
+  });
+
+  describe('comment:unliked', () => {
+    // La jumelle DESCENDANTE. Sans elle le compteur d'un commentaire ne savait
+    // que monter : `comment:liked` arrivait, le retrait ne diffusait rien.
+    it('writes the new absolute likeCount back DOWN on the matching comment', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 3, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:unliked', {
+        postId: 'post-1',
+        commentId: 'c-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 2,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { id: string; likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(2);
+    });
+
+    // La charge est ABSOLUE, donc une seconde livraison du MÊME événement ne
+    // doit rien retirer de plus — c'est ce qui rend la jumelle rejouable après
+    // une reconnexion, contrairement à un `−1` aveugle.
+    it('is idempotent under a duplicate delivery', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 3, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      const payload = { postId: 'post-1', commentId: 'c-1', userId: 'user-2', emoji: '❤️', likeCount: 2 };
+      act(() => emit('comment:unliked', payload));
+      act(() => emit('comment:unliked', payload));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(2);
+    });
+
+    it('reaches a comment living in the replies cache too', () => {
+      const qc = createQueryClient();
+      const reply = { id: 'r-1', content: 'Re', likeCount: 1, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-1'], {
+        pages: [{ data: [reply], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:unliked', {
+        postId: 'post-1',
+        commentId: 'r-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 0,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'replies', 'c-1']);
+      expect(data?.pages[0].data[0].likeCount).toBe(0);
+    });
+
+    it('no-op when comment id does not match', () => {
+      const qc = createQueryClient();
+      const comment = { id: 'c-1', content: 'Hi', likeCount: 3, replyCount: 0, createdAt: new Date().toISOString() };
+      qc.setQueryData(['posts', 'detail', 'post-1', 'comments', 'infinite'], {
+        pages: [{ data: [comment], meta: {} }],
+        pageParams: [undefined],
+      });
+      renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
+
+      act(() => emit('comment:unliked', {
+        postId: 'post-1',
+        commentId: 'other-comment',
+        userId: 'user-2',
+        emoji: '❤️',
+        likeCount: 0,
+      }));
+
+      const data = qc.getQueryData<{ pages: { data: { likeCount: number }[] }[] }>(['posts', 'detail', 'post-1', 'comments', 'infinite']);
+      expect(data?.pages[0].data[0].likeCount).toBe(3);
     });
   });
 
