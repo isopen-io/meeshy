@@ -1,4 +1,4 @@
-import { NAME_BOUNDARY_LEFT } from './mention-parser.js';
+import { NAME_BOUNDARY_LEFT, escapeRegex } from './mention-parser.js';
 import type {
   ComposerReference,
   PostReferenceDisplay,
@@ -76,9 +76,16 @@ export function referencePayload(
  * se place APRÈS `\s*` (à hauteur du `@`) : quand une espace précède le handle,
  * le caractère testé est cette espace (frontière propre) ; sans espace, c'est le
  * caractère réellement collé au `@` (lettre d'e-mail ⇒ pas de retrait).
+ *
+ * `escapeRegex` vient de {@link escapeRegex} (mention-parser) — MÊME source que
+ * la détection. La copie locale ajoutait `-` à sa classe d'échappement ; comme
+ * le résultat est interpolé HORS d'une classe de caractères et que la regex
+ * porte le flag `u`, un `\-` levait `Invalid escape` — `removingHandle` crashait
+ * sur TOUT username à tiret (`@marie-claire`), pourtant valide (cf. la regex
+ * `/^[a-zA-Z0-9_-]+$/`). Réutiliser le SSOT ferme le drift à sa racine.
  */
 export function removingHandle(username: string, text: string): string {
-  const escaped = username.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+  const escaped = escapeRegex(username);
   const pattern = new RegExp(`\\s*${NAME_BOUNDARY_LEFT}@${escaped}(?![\\p{L}\\p{N}_.-])`, 'giu');
   return text.replace(pattern, '').trim();
 }
