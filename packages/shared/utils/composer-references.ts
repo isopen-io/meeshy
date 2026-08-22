@@ -1,3 +1,4 @@
+import { escapeRegex } from './mention-parser.js';
 import type {
   ComposerReference,
   PostReferenceDisplay,
@@ -65,9 +66,16 @@ export function referencePayload(
  * C'est la transition INLINE → autre chose : passer une référence en note ou en
  * silence n'a de sens que si le pseudo quitte la phrase. Frontière de mot à
  * droite : `@alice` ne doit pas emporter `@alicia`.
+ *
+ * `escapeRegex` vient de {@link escapeRegex} (mention-parser) — MÊME source que
+ * la détection. La copie locale ajoutait `-` à sa classe d'échappement ; comme
+ * le résultat est interpolé HORS d'une classe de caractères et que la regex
+ * porte le flag `u`, un `\-` levait `Invalid escape` — `removingHandle` crashait
+ * sur TOUT username à tiret (`@marie-claire`), pourtant valide (cf. la regex
+ * `/^[a-zA-Z0-9_-]+$/`). Réutiliser le SSOT ferme le drift à sa racine.
  */
 export function removingHandle(username: string, text: string): string {
-  const escaped = username.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+  const escaped = escapeRegex(username);
   const pattern = new RegExp(`\\s*@${escaped}(?![\\p{L}\\p{N}_.-])`, 'giu');
   return text.replace(pattern, '').trim();
 }

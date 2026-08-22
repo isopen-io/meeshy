@@ -70,6 +70,20 @@ describe('removingHandle', () => {
   it('laisse les autres handles tranquilles', () => {
     expect(removingHandle('alice', '@alice et @alicia')).toBe('et @alicia');
   });
+
+  it('retire un handle à tiret sans crasher (usernames type `@marie-claire`)', () => {
+    // Le tiret est un caractère de username valide (`/^[a-zA-Z0-9_-]+$/`, cf.
+    // mention-parser.ts). L'échappement local ajoutait `-` à sa classe, produisant
+    // `\-` — un escape INVALIDE sous le flag `u`, donc `new RegExp` throwait un
+    // SyntaxError sur TOUT username à tiret. La composition (transition INLINE →
+    // note/silence) plantait au lieu de retirer le handle.
+    expect(removingHandle('marie-claire', 'Bonjour @marie-claire !')).toBe('Bonjour !');
+    expect(removingHandle('jean-pierre', '@jean-pierre')).toBe('');
+  });
+
+  it('ne confond pas un handle à tiret avec son préfixe (frontière droite)', () => {
+    expect(removingHandle('marie', '@marie et @marie-claire')).toBe('et @marie-claire');
+  });
 });
 
 describe('DECLARABLE_DISPLAYS', () => {
