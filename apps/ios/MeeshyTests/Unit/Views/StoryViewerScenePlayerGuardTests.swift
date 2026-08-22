@@ -119,23 +119,28 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
     /// **Amendement du 2026-08-22 (rejet DoD C0c, constat 1).** Le swap E4 n'a
     /// pas REMPLACÉ l'hôte direct : il l'a mis derrière une porte. `MeeshyScenePlayer`
     /// ne prend la main que pour une story qui porte un document v3 NATIF ;
-    /// l'archive v1 garde son hôte direct. La raison est mécanique, pas
-    /// prudentielle : iOS ne pose AUCUN `X-Canvas-Caps` (tâche C4, ouverte), donc
-    /// `resolveWireForm` lui sert du v1 tel quel, `StoryEffects.canvasV3` vaut
-    /// `nil` pour CENT POUR CENT des stories, et un montage inconditionnel
-    /// peindrait toute l'archive à travers `CanvasV3(migrating:)` →
-    /// `StoryEffects(rendering:)`. Cet aller-retour est LOSSY : la migration
-    /// letterboxe les ancres libres dans l'espace de scène fixe 9:16
-    /// (`remapFreeAnchor`), pendant que le cadre du viewer (`readerCanvasRatio`)
-    /// garde, lui, le ratio RÉEL. Un texte écrit à y = 0,90 sur un fond 16:9 se
-    /// peignait à y ≈ 0,63.
+    /// l'archive v1 garde son hôte direct. À l'origine la raison était
+    /// mécanique, pas prudentielle : avant `cf05538d9` (2026-08-22), iOS ne
+    /// posait AUCUN `X-Canvas-Caps`, donc `resolveWireForm` servait du v1 tel
+    /// quel, `StoryEffects.canvasV3` valait `nil` pour CENT POUR CENT des
+    /// stories, et un montage inconditionnel aurait peint toute l'archive à
+    /// travers `CanvasV3(migrating:)` → `StoryEffects(rendering:)`. Cet
+    /// aller-retour était alors LOSSY : la migration letterboxait les ancres
+    /// libres dans l'espace de scène fixe 9:16 (`remapFreeAnchor`), pendant
+    /// que le cadre du viewer (`readerCanvasRatio`) gardait, lui, le ratio
+    /// RÉEL. Un texte écrit à y = 0,90 sur un fond 16:9 se peignait à y ≈ 0,63.
     ///
-    /// Cette perte est RÉPARÉE depuis 2026-08-22 — la scène loge son
-    /// `carrierAspect` et le retour applique le remap inverse
-    /// (`CanvasV3MigrationTests`
+    /// Les DEUX raisons sont tombées depuis. L'en-tête `X-Canvas-Caps: 3` est
+    /// posé depuis `cf05538d9` (`ClientInfoProvider.swift:77`, appelé par
+    /// `APIClient.swift:603` et `:903`) — `StoryEffects.canvasV3` n'est donc
+    /// plus systématiquement `nil`. Et la perte de ratio est RÉPARÉE depuis
+    /// `b82ebbc17` — la scène loge son `carrierAspect` et le retour applique
+    /// le remap inverse (`CanvasV3MigrationTests`
     /// `.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`).
-    /// La porte reste en place parce que la retirer change ce que le lecteur
-    /// PEINT pour toute l'archive : ça se mesure et se livre à part.
+    /// La porte reste en place aujourd'hui par PRUDENCE, pas par nécessité
+    /// mécanique : la retirer change ce que le lecteur PEINT pour toute
+    /// l'archive v1 restante — ce changement de rendu se mesure et se livre à
+    /// part (reste ouvert dans C4 : le 426 et la porte de mise à jour).
     ///
     /// Chaque canvas a donc DEUX montages, et les deux doivent porter TOUS les
     /// fils du viewer : une porte qui coupe un fil d'un seul côté est exactement

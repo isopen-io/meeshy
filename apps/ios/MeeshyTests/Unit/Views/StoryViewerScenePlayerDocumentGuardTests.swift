@@ -27,10 +27,14 @@ import XCTest
 ///    et rend faux.
 ///
 /// 3. **Le lecteur ne peint que ce qu'on lui a servi NATIF.** La porte v3 est le
-///    correctif du rejet DoD C0c : `canvasV3` valant `nil` pour 100 % des stories
-///    tant que `X-Canvas-Caps: 3` n'est pas posé (tâche C4, ouverte), un montage
-///    inconditionnel ferait passer TOUTE l'archive par un aller-retour v1→v3→v1
-///    qui letterboxe les ancres libres sans jamais les rendre au cadre réel.
+///    correctif du rejet DoD C0c : à l'origine, `canvasV3` valait `nil` pour
+///    100 % des stories tant que `X-Canvas-Caps: 3` n'était pas posé. L'en-tête
+///    est posé depuis `cf05538d9` (2026-08-22) et l'aller-retour v1→v3→v1 n'est
+///    plus lossy depuis `b82ebbc17` (`carrierAspect`) — mais la porte reste en
+///    place par PRUDENCE : un montage inconditionnel changerait ce que le
+///    lecteur PEINT pour toute l'archive v1 restante (`CANVAS_V3_READ` reste
+///    OFF, cf. `tasks/todo-c4-canvas-caps-ouvre-la-porte-du-lecteur-2026-08-22.md`),
+///    un changement de rendu qui se mesure et se livre à part.
 ///
 /// Comme la garde de couture, ces assertions visent la fenêtre ÉQUILIBRÉE de
 /// l'appel — ou, depuis la porte, le corps ÉQUILIBRÉ de la fonction hôte : ce qui
@@ -95,14 +99,14 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
 
     // MARK: - La porte : le lecteur ne prend la main que sur un v3 NATIF
 
-    /// **Le fait qui commande cette garde (rejet DoD C0c, constat 1).** iOS ne
-    /// pose AUCUN en-tête `X-Canvas-Caps` — le relevé exhaustif du funnel n'en
-    /// compte que treize, aucun `caps`, et le plan lot C:159 le liste encore
-    /// comme À FAIRE. Côté gateway, `resolveWireForm` (`storyEffectsV3.ts`) rend
+    /// **Le fait qui commandait cette garde à l'origine (rejet DoD C0c, constat
+    /// 1).** Avant `cf05538d9` (2026-08-22), iOS ne posait AUCUN en-tête
+    /// `X-Canvas-Caps` — le relevé exhaustif du funnel n'en comptait que treize,
+    /// aucun `caps`. Côté gateway, `resolveWireForm` (`storyEffectsV3.ts`) rendait
     /// donc `'as-is'` pour un blob v1 et `'sentinel'` (v1 !) pour un v3-natif :
-    /// **iOS ne reçoit jamais de v3 aujourd'hui**, et `StoryEffects.canvasV3`
-    /// — posé au décodage sous la seule condition `v >= 3` — vaut `nil` pour
-    /// CENT POUR CENT des stories affichées.
+    /// **iOS ne recevait jamais de v3**, et `StoryEffects.canvasV3` — posé au
+    /// décodage sous la seule condition `v >= 3` — valait `nil` pour CENT POUR
+    /// CENT des stories affichées.
     ///
     /// Un montage inconditionnel du lecteur ferait donc passer TOUTE l'archive
     /// par `CanvasV3(migrating:)` → `StoryEffects(rendering:)`. Cet aller-retour
@@ -128,10 +132,14 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
     ///
     /// La porte rend les deux branches SELF-COHÉRENTES : l'archive v1 se peint
     /// dans son propre cadre comme avant le swap, et une story v3-native se
-    /// peint dans un cadre 9:16 — car son `StoryEffects` décodé est LUI AUSSI
-    /// produit par `StoryEffects(rendering:)`, donc sans ratio, donc portrait.
-    /// Le lecteur prendra la main tout seul le jour où C4 posera
-    /// `X-Canvas-Caps: 3`.
+    /// peint elle aussi dans son cadre RÉEL — `StoryEffects(rendering:)` restaure
+    /// `canvasAspectRatio` depuis `scene.carrierAspect` quand la scène l'a logé
+    /// (`CanvasV3Migration.swift:543`), donc un fond paysage composé nativement
+    /// en v3 garde son 16:9 ; seule une scène sans `carrierAspect` (fond déjà
+    /// portrait) retombe sur le défaut portrait, à raison. Le lecteur a déjà la
+    /// main sur ce cas depuis que l'en-tête `X-Canvas-Caps: 3` est posé
+    /// (`cf05538d9`) ; ce qui reste fermé, c'est la porte de l'ARCHIVE v1
+    /// (ci-dessus), par prudence.
     func test_theArchiveIsNeverPaintedThroughAMigration() throws {
         let text = try source()
         let migrations = text.components(separatedBy: "CanvasV3(migrating:").count - 1
@@ -182,8 +190,10 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
         XCTAssertTrue(
             text.contains("StoryReaderRepresentable("),
             "L'hôte canvas direct doit RESTER construit ici : c'est la branche que prend " +
-            "l'archive v1, soit 100 % des stories tant que X-Canvas-Caps: 3 n'est pas posé " +
-            "(tâche C4, ouverte). Sans elle, toute l'archive repasse par la migration."
+            "l'archive v1 (les blobs v1 non convertis — CANVAS_V3_READ reste OFF). " +
+            "X-Canvas-Caps: 3 est posé depuis cf05538d9, donc ce n'est plus la totalité des " +
+            "stories : une composition v3-native passe désormais par MeeshyScenePlayer. Sans " +
+            "cet hôte direct, l'archive v1 repasserait par la migration."
         )
     }
 
