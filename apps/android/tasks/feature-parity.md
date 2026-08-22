@@ -3028,7 +3028,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
 - [ ] Anonymous-session conversation mode; guest join-via-share-link flow
-- [ ] AI conversation analysis (health score, summary, topics, tone, emotions)
+- [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
+      **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
+      `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns
+      the **summary arm** real. Pure `ConversationAnalysisProjection` (`:core:model`, SSOT) ports
+      iOS's `heroHealthCard` derivations: `healthTier` (>70 good / >40 fair / else poor, parity
+      `healthScoreColor`), `conflictTier` (case-insensitive high/medium keyword match, parity
+      `conflictLevelColor`), `cleanLabels` (trim / drop-blank / case-insensitive dedupe for topics +
+      emotions — SOTA over iOS's raw list), and `summary()` → a render-ready `AnalysisSummaryView`
+      or null (the Empty state) when nothing renders. The health score is **clamped 0..100** before
+      the tier is derived (SOTA — iOS trusts the raw server value). `ConversationAnalysisRepository`
+      (`:sdk-core`) fetches `GET /conversations/{id}/analysis`; `ConversationAnalysisViewModel` +
+      `ConversationAnalysisSheet` (`:feature:chat`) render it behind a new header `AutoAwesome`
+      action (any member): health badge, engagement/conflict chips, tone, topics + emotions chip
+      rows, summary narrative, dynamic. Strings en/fr/es/pt. **Still open — participant persona
+      profiles + trait bars** (same endpoint, `ParticipantProfile`/`ParticipantTraits`): the box below.
 - [~] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown —
       **stats dashboard shipped 2026-08-21** (slice `conversation-stats-core`). The
       `ConversationMessageStatsResponse` model shipped orphaned (no consumer); this slice turns it
@@ -3039,10 +3053,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       histogram. `ConversationStatsRepository` (`:sdk-core`) fetches `GET /conversations/{id}/stats`;
       `ConversationStatsViewModel` + `ConversationStatsSheet` (`:feature:chat`) render it behind a
       new header `Insights` action (any member; period picker re-derives locally, no refetch).
-      **Still open — sentiment / AI analysis** (`GET /conversations/{id}/analysis`,
-      `ConversationAnalysis` health score / persona profiles / emotions): that is the separate
-      `AI conversation analysis` + `AI participant persona` boxes below and a distinct endpoint.
-      Box stays `[~]` until the sentiment/analysis arm lands.
+      **AI-summary arm landed 2026-08-22** (slice `conversation-analysis-summary`, the
+      `AI conversation analysis` box above — `GET /conversations/{id}/analysis` → health / tone /
+      topics / emotions). **Still open here — the sentiment three-way bar** the stats dashboard's
+      own `sentimentAnalysis` computes, and the `AI participant persona` box below (same endpoint,
+      `ParticipantProfile`/`ParticipantTraits`). Box stays `[~]` until the sentiment bar lands.
 - [ ] AI participant persona profiles + per-participant activity breakdown + trait bars
 
 ## D. Translation — Prisme Linguistique
