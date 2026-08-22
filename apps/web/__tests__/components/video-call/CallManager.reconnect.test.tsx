@@ -198,6 +198,53 @@ describe('CallManager — reconnect re-join', () => {
 
     expect(useCallStore.getState().isInCall).toBe(false);
   });
+
+  // Vague 161 — before this fix, the synthetic CallEndedEvent this branch
+  // builds always hardcoded reason: 'completed', regardless of the ack's
+  // real cause. 'completed' is explicitly NON-retryable
+  // (isRetryableCallFailure, lib/calls/call-retry-policy.ts), so a reconnect
+  // that actually lost the race against the gateway's disconnect-grace
+  // window (endReason: connectionLost/heartbeatTimeout — the one case a
+  // "Retry" offer is correct for) silently got no retry offer at all.
+  it('forwards the ack\'s real endReason so a connectionLost drop offers a retry, not a silent hangup', () => {
+    const socket = makeFakeSocket(true);
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    socket.emit.mockImplementation((event: string, _payload: unknown, ack?: Handler) => {
+      if (event === CLIENT_EVENTS.CALL_JOIN && ack) {
+        ack({ success: false, error: { code: 'CALL_ENDED', message: 'ended', endReason: 'connectionLost' } });
+      }
+    });
+
+    render(<CallManager />);
+    setActiveCall(CALL_ID);
+
+    act(() => {
+      socket.fire('connect');
+    });
+
+    expect(useCallStore.getState().isInCall).toBe(false);
+    expect(useCallStore.getState().pendingRetry['conv-1']).toBeDefined();
+  });
+
+  it('offers no retry when the ack names a benign endReason (e.g. missed)', () => {
+    const socket = makeFakeSocket(true);
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+    socket.emit.mockImplementation((event: string, _payload: unknown, ack?: Handler) => {
+      if (event === CLIENT_EVENTS.CALL_JOIN && ack) {
+        ack({ success: false, error: { code: 'CALL_ENDED', message: 'ended', endReason: 'missed' } });
+      }
+    });
+
+    render(<CallManager />);
+    setActiveCall(CALL_ID);
+
+    act(() => {
+      socket.fire('connect');
+    });
+
+    expect(useCallStore.getState().isInCall).toBe(false);
+    expect(useCallStore.getState().pendingRetry['conv-1']).toBeUndefined();
+  });
 });
 
 // Regression: `attachListeners`'s cleanup used `socket.off(EVENT)` with no

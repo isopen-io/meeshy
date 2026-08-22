@@ -21,6 +21,7 @@ import type {
   CallParticipantJoinedEvent,
   CallParticipantLeftEvent,
   CallEndedEvent,
+  CallEndReason,
   CallMediaToggleEvent,
   CallError,
   CallSession,
@@ -987,15 +988,22 @@ export function CallManager() {
     (socket as unknown).emit(
       CLIENT_EVENTS.CALL_JOIN,
       { callId, settings: { audioEnabled: true, videoEnabled: true } },
-      (ack: { success?: boolean; error?: { code?: string; message?: string } }) => {
+      (ack: { success?: boolean; error?: { code?: string; message?: string; endReason?: CallEndReason } }) => {
         if (ack?.success) return;
         if (ack?.error?.code === 'CALL_ENDED') {
           logger.warn('[CallManager]', 'Call ended while disconnected — tearing down', { callId });
+          // Vague 161 — forward the server's REAL endReason when the gateway
+          // sends one (CallAlreadyEndedError, CallService.joinCallAttempt)
+          // instead of hardcoding 'completed'. Hardcoding it silently
+          // defeated isRetryableCallFailure's offer for the one case this
+          // reconnect path exists for: a genuine connectionLost/
+          // heartbeatTimeout that lost the race against the gateway's
+          // disconnect-grace window while this socket was down.
           handleCallEndedRef.current({
             callId,
             duration: 0,
             endedBy: '',
-            reason: 'completed',
+            reason: ack.error?.endReason ?? 'completed',
           } as CallEndedEvent);
           return;
         }

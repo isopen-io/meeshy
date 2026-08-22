@@ -12,7 +12,7 @@
 import { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
-import { CallService } from '../services/CallService';
+import { CallService, CallAlreadyEndedError } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
@@ -3007,6 +3007,17 @@ export class CallEventsHandler {
 
         const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to join call');
 
+        // Vague 161 — `CallAlreadyEndedError` carries the call's REAL
+        // `endReason` (Prisma) on top of the generic code/message pair above.
+        // Forwarded on the ack only: `rejoinActiveCallAfterReconnect` (web)
+        // used to hardcode `reason: 'completed'` on its synthetic
+        // `CallEndedEvent` for EVERY CALL_ENDED ack, including one whose real
+        // cause was `connectionLost`/`heartbeatTimeout` — silently defeating
+        // the retry-on-transient-failure offer for the one case it exists for
+        // (a reconnect that lost the race against the disconnect-grace
+        // window). See tasks/calls-fonctionnel-todo.md Vague 160 follow-up.
+        const endReason = error instanceof CallAlreadyEndedError ? error.endReason : undefined;
+
         // Audit gateway (2026-07-28) — this ack previously sent only the bare
         // `message` string despite `errorCode` already being computed above,
         // violating the documented `CallJoinAck.error: {code, message}` shape
@@ -3014,7 +3025,7 @@ export class CallEventsHandler {
         // reconnect-rejoin cleanup path, which gates on `ack.error.code ===
         // 'CALL_ENDED'` (apps/web/components/video-call/CallManager.tsx) —
         // that branch could never fire because `code` was always undefined.
-        ack?.({ success: false, error: { code: errorCode, message } });
+        ack?.({ success: false, error: { code: errorCode, message, ...(endReason ? { endReason } : {}) } });
         // callId systématique : sans lui, le garde de scoping par appel côté
         // client (CallError.callId, audit iOS 2026-07-08) ne peut pas
         // s'appliquer — un CALL_ENDED de rejoin tardif doit nommer SON appel.
