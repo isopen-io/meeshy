@@ -2,6 +2,70 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **conversation-stats sentiment three-way bar shipped** (slice
+> `conversation-stats-sentiment-bar`, feature-parity §Chat — "Conversation stats rings + activity +
+> content-type / **sentiment** breakdown", box flipped `[~]` → `[x]`). This closes the last open arm of
+> the stats/analysis dashboard; the conversation-analysis surface is now at full iOS parity.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR at branch time (the 20 open PRs — #3301/#3299/
+> #3298/#3289/#3281/#3280/#3279/#3275/#3270/#3266/#3263/#3262/#3259/#3255/#3253/#3250/#3249/#3247/
+> #3245/#3243 — are all web/shared/gateway/ios/sdk, none android-routine). Prior android iteration
+> (`conversation-analysis-personas`, #3287-lineage) already merged. Branched off freshly-fetched
+> `origin/main` (`f2ebc819`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Note: `compileSdk = 37` resolves
+> to platform hash `android-37`, served by `platforms;android-37.0` (canary `--channel=3`); the FIRST
+> gradle invocation raced its own auto-install of `android-37.0` and died with *"Failed to find target
+> with hash string 'android-37'"* — a one-shot install race, NOT a real toolchain gap. Re-running once
+> the platform finished installing built clean. Ran the full `assembleDebug testDebugUnitTest`
+> (= `./apps/android/meeshy.sh check`) locally: **BUILD SUCCESSFUL** (973 tasks).
+>
+> **The gap (read-only recon over iOS + Android)**: iOS `ConversationDashboardView.sentimentSection`
+> renders a three-way sentiment split (positive/neutral/negative counts → % columns + a segmented
+> success/warning/error bar) computed **client-side** via Apple `NLTagger` over the loaded `messages`
+> (±0.15 thresholds, `shuffled().prefix(200)` sampling). Android had `SentimentAnalyzer` (`:core:model`,
+> the composer's dictionary scorer from `composer-live-sentiment`) but no three-way projection and no
+> stats-sheet consumer. This slice reuses that scorer — **no `NLTagger` equivalent, no new model** — so
+> the earlier open question ("does this need an on-device NL model?") is answered: no.
+>
+> **`:core:model` `SentimentBreakdownProjection`** (new, pure SSOT): `toneOf(score)` collapses the
+> seven-bucket `SentimentLevel` SSOT into `SentimentTone.{POSITIVE,NEUTRAL,NEGATIVE}` (reusing
+> `SentimentLevel.from` rather than a parallel ±0.15 threshold — one sentiment SSOT, not two);
+> `sample(list,max)` is a **deterministic even stride** (`i*size/max`, head-to-tail) — SOTA over iOS's
+> RNG `shuffled().prefix(200)`; `breakdown(contents)` trims/drops-blank, samples to `MAX_SAMPLE=200`,
+> scores each via `SentimentAnalyzer`, and tallies with `groupingBy().eachCount()`. `SentimentBreakdown`
+> exposes `count`/`fraction`/`percent` (truncated, iOS `Int(frac*100)` parity), `segments()`
+> (present-tones-only, pos→neu→neg order, zero dropped), and `dominant` (explicit tie-break
+> positive ≥ neutral ≥ negative — port of iOS `dominantColor`; null when nothing scored).
+>
+> **`:feature:chat` `ConversationStatsViewModel`**: `load(conversationId, messageContents)` scores the
+> texts on-device at load and stores `sentiment: SentimentBreakdown?` (null when nothing scorable). The
+> score is **independent of the `/stats` network fetch** — it seeds the fresh state in `fetch(...)` and
+> survives a fetch failure (Error phase still carries the sentiment); `retry()` keeps the already-scored
+> value. **`ConversationStatsSheet`** renders it under the language section: three emoji/percent columns
+> (😄/😐/😔, success/warning/error tints) + a segmented bar. `ChatScreen` passes the non-deleted message
+> texts. Strings en/fr/es/pt.
+>
+> **Tests: +28** — `SentimentBreakdownProjectionTest` +24 (toneOf: zero / both neutral boundaries / just
+> above / just below / strong ±; sample: fits / at-cap / even-stride / first-kept-never-rolls-past-last /
+> non-positive-cap; breakdown: mixed-three-tones / drop-blank / trim / MAX_SAMPLE-cap / empty; breakdown
+> derived: count / fraction / fraction-zero-total / percent-truncation / percent-zero-total / segments
+> order+drop-zero / segments count+fraction / segments-empty / dominant-null / dominant-plurality×3 /
+> dominant-tie-cascade), `ConversationStatsViewModelTest` +4 (scores-into-split / null-when-unscorable /
+> survives-fetch-failure / retry-keeps-sentiment; the existing 7 still green). **Mutation (RED proof)
+> ×2**: (a) `sample` stride → `list.take(max)` → **exactly** `sample strides evenly across an oversized
+> list spanning head to tail` fails (1 of 28); (b) `dominant` tie-break arms swapped (neutral before
+> positive) → **exactly** `dominant tie resolves positive before neutral before negative` fails (1 of
+> 28). Both restored; production diff is clean.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (2 new code+test in `:core:model` + ViewModel/Sheet/ChatScreen wiring + strings×4 +
+> tracking docs).
+>
+> **Next**: the conversation-analysis + stats dashboards are now at full parity — pick the next
+> highest-value unchecked §Chat or §Feed box in `feature-parity.md` for the current build-order area.
+> Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **AI participant persona profiles + trait bars shipped** (slice
 > `conversation-analysis-personas`, feature-parity §Chat — "AI participant persona profiles + trait
 > bars", now `[x]`). This closes the second half of the `/analysis` dashboard begun by

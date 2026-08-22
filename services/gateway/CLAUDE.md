@@ -465,7 +465,7 @@ export { userRoutes } from './users/index';
 
 `routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portaient.
 `routes/communities.ts` ne l'a jamais reçue, et son répertoire (~1 900 lignes,
-gates de présence compris) est resté injoignable de sa création au cycle 86, qui
+gates de présence compris) est resté injoignable de sa création au cycle 86-bis, qui
 l'a consolidé — les quatre routes que seul le legacy portait (`/mine`,
 `/:id/join`, `/:id/leave`, `/:id/invite`) portées dans le répertoire, puis le
 fichier basculé en coquille. **Les quatre scissions du dépôt sont désormais
@@ -478,7 +478,7 @@ confidentialité, personne ne le mesure. `module-shadowing.test.ts` garde les
 paires par deux voies (balayage des coquilles, et routes RÉELLEMENT
 enregistrées) ; toute nouvelle paire non-coquille le fait tomber.
 
-Coût mesuré avant consolidation (cycle 86) : **trois cycles de correctifs
+Coût mesuré avant consolidation (cycle 86-bis) : **trois cycles de correctifs
 atterris dans le répertoire sans jamais atteindre la production**. Le cycle 84 y
 a diagnostiqué, corrigé et CLOS « la recherche de communautés iOS était morte » ;
 le fichier vivant portait encore le défaut mot pour mot. Avec lui, en
