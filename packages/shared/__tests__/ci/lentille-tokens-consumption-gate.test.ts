@@ -139,6 +139,7 @@ const SWIFT_SYMBOL_BY_FAMILY: Record<string, string> = {
   'river.lane': 'RiverMetrics.Lane',
   'river.bubble': 'RiverMetrics.Bubble',
   'river.connector': 'RiverMetrics.Connector',
+  'river.row': 'RiverMetrics.Row',
   'river.laneHeader': 'RiverMetrics.LaneHeader',
 };
 

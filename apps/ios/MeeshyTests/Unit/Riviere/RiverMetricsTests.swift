@@ -160,4 +160,44 @@ final class RiverMetricsTests: XCTestCase {
             "RiverMetrics.swift ne doit jamais dupliquer laneSilenceWindowMs (garde R15) — cette constante de loi vit uniquement dans RiverLaneResolver"
         )
     }
+    /// Bornes du pince — le plancher DOIT rester sous la référence et le
+    /// plafond au-dessus, sinon le geste n'aurait aucune course.
+    func test_lane_zoomBounds_matchTokens() throws {
+        XCTAssertEqual(RiverMetrics.Lane.widthMin, try CGFloat(tokenNumber("lane", "widthMin")))
+        XCTAssertEqual(RiverMetrics.Lane.widthMax, try CGFloat(tokenNumber("lane", "widthMax")))
+        XCTAssertLessThan(RiverMetrics.Lane.widthMin, RiverMetrics.Lane.widthReference)
+        XCTAssertGreaterThan(RiverMetrics.Lane.widthMax, RiverMetrics.Lane.widthReference)
+    }
+
+    // MARK: - `river.row` (retour produit 2026-08-21)
+
+    /// L'écart entre deux RANGS et les tirets de la couture de continuation —
+    /// posés le jour où le retour produit a dit « les messages s'empilent bord
+    /// à bord sans espace ». Même règle que les autres familles : on répare le
+    /// token, jamais le test.
+    /// Le retrait INTÉRIEUR de la bulle a son propre token : le confondre avec
+    /// `baseGap` (écart de pile) laissait le texte coller au contour.
+    func test_bubble_contentPadding_matchesTokens() throws {
+        XCTAssertEqual(
+            RiverMetrics.Bubble.contentPadding,
+            try CGFloat(tokenNumber("bubble", "contentPadding"))
+        )
+        XCTAssertNotEqual(
+            RiverMetrics.Bubble.contentPadding,
+            RiverMetrics.Bubble.baseGap,
+            "Deux cotes DISTINCTES : une marge n'est pas un écart de pile."
+        )
+    }
+
+    func test_row_matchesTokens() throws {
+        XCTAssertEqual(RiverMetrics.Row.gap, try CGFloat(tokenNumber("row", "gap")))
+        XCTAssertEqual(
+            RiverMetrics.Row.continuationDashLength,
+            try CGFloat(tokenNumber("row", "continuationDashLength"))
+        )
+        XCTAssertEqual(
+            RiverMetrics.Row.continuationDashGap,
+            try CGFloat(tokenNumber("row", "continuationDashGap"))
+        )
+    }
 }

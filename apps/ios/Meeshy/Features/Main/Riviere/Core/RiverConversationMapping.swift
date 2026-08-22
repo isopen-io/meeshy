@@ -7,34 +7,132 @@ import MeeshySDK
 ///
 /// Règle produit relayée le 2026-08-20 : les messages SYSTÈME (avis
 /// d'arrivée, résumés d'appel — `messageSource == .system`) ne sont la voix
-/// de personne. Ils sortent du calcul des couloirs AVANT la loi — sinon
-/// l'arrivant obtenait une lane fantôme et l'avis un rang dans sa colonne.
-/// Leur rendu « gravé » pleine largeur dans la Rivière est le lot 2.
+/// de personne — sinon l'arrivant obtenait une lane fantôme et l'avis un rang
+/// dans sa colonne.
+///
+/// **Lot 2 (2026-08-21) — ils ne sortent plus de la loi, ils y entrent
+/// MARQUÉS.** Le lot 1 les écartait AVANT `resolveRiverLanes` : la lane
+/// fantôme disparaissait, mais l'avis avec elle — un lecteur en Rivière ne
+/// voyait jamais « X a rejoint la conversation ». La loi partagée sait faire
+/// mieux depuis `RiverMessageInput.isSystem` : un avis marqué descend l'axe du
+/// TEMPS avec les autres (il garde son rang, il est servi dans
+/// `geometry.bubbles`) et n'entre dans AUCUN des deux autres axes — ni voix,
+/// ni couloir, ni connecteur, ni groupe (`RiverLaneResolver.spokenOnly`). La
+/// peau le rend alors GRAVÉ, pleine largeur, heure en tête
+/// (`RiverSystemNotice`, `RiverBubbleView`, `RiverStreamHost`) : exactement ce
+/// que le Fil et Focal en font, avec les mêmes vues et les mêmes clés i18n.
 nonisolated enum RiverConversationMapping {
 
-    /// Ce que la loi doit voir. Les participants sont les VOIX du fil :
-    /// dérivés des expéditeurs (dernier nom connu), jamais d'un second fetch.
-    static func lanesInput(messages: [MeeshyMessage], viewerId: String) -> RiverLaneResolver.ResolveRiverLanesInput {
-        let voiced = messages.filter { isVoice($0) }
+    /// Le libellé du lecteur — EXACTEMENT celui de l'en-tête de couloir
+    /// (`RiverLaneHeaderStrip`, clé `riviere.header.you`).
+    @MainActor
+    static var viewerLabel: String {
+        String(localized: "riviere.header.you", defaultValue: "Toi", bundle: .main)
+    }
+
+    /// Ce que la loi doit voir : TOUT ce qui a un rang dans le temps — les
+    /// voix ET les avis, ces derniers MARQUÉS `isSystem` (lot 2). Seuls les
+    /// messages supprimés restent dehors : une bulle vide ferait un rang vide.
+    ///
+    /// Les participants, eux, sont les VOIX seules — dérivés des expéditeurs
+    /// (dernier nom connu), jamais d'un second fetch. Un auteur d'avis qui
+    /// n'a jamais parlé n'y figure donc pas : la loi ne lui fera naître
+    /// aucune branche, et sa graine de couleur n'aurait servi à rien.
+    static func lanesInput(
+        messages: [MeeshyMessage],
+        viewerId: String,
+        silenceWindowMs: Double? = nil
+    ) -> RiverLaneResolver.ResolveRiverLanesInput {
+        let ranked = messages.filter { !$0.isDeleted }
         var namesById: [String: String] = [:]
         var order: [String] = []
-        for message in voiced {
+        for message in ranked where isVoice(message) {
             if namesById[message.senderId] == nil { order.append(message.senderId) }
             namesById[message.senderId] = displayName(of: message)
         }
         return RiverLaneResolver.ResolveRiverLanesInput(
-            messages: voiced.map {
+            messages: ranked.map {
                 RiverLaneResolver.RiverMessageInput(
                     id: $0.id,
                     senderId: $0.senderId,
                     createdAt: .date($0.createdAt),
-                    replyToMessageId: $0.replyToId
+                    replyToMessageId: $0.replyToId,
+                    // La marque que `senderId` ne peut pas porter : l'avis
+                    // d'arrivée est écrit avec l'ARRIVANT pour auteur
+                    // (`packages/shared/utils/join-notice.ts`).
+                    isSystem: $0.messageSource == .system
                 )
             },
             participants: order.map { RiverLaneResolver.RiverParticipantInput(id: $0, displayName: namesById[$0] ?? $0) },
-            viewerId: viewerId
+            viewerId: viewerId,
+            silenceWindowMs: silenceWindowMs
         )
     }
+
+    /// **La fenêtre de silence ne peut pas être une constante — et elle ne
+    /// peut pas non plus être devinée.**
+    ///
+    /// Elle décide combien de temps une branche survit à sa dernière prise de
+    /// parole, donc combien de voix tiennent SIMULTANÉMENT dans le plan.
+    /// Arbitrage produit 2026-08-21 : « il devrait aller jusqu'à 7 personnes
+    /// alignées sur l'horizontal pour les communications de l'ordre des dix
+    /// minutes — valeur configurable : dans une conversation peu causante on
+    /// peut monter en heures ou en jours, là où dans une conversation très
+    /// dynamique on peut passer en minutes voire en dessous ».
+    ///
+    /// Deux essais l'ont montré au simulateur : une fenêtre TROP LARGE fait
+    /// déborder l'axe (plus de `maxLanes` branches vivantes au même instant ⇒
+    /// `.aboveMaximum`), une fenêtre TROP COURTE le vide (moins de `minVoices`
+    /// ⇒ `.belowMinimum`) — les deux rabattent le plan sur une colonne unique.
+    /// Le bon réglage dépend de la conversation, et aucune formule fermée ne
+    /// le donne : il se CHERCHE.
+    ///
+    /// La recherche est bornée et pure — on rejoue la loi (fonction pure, sans
+    /// I/O) sur une échelle de fenêtres allant du jour à la minute, et on
+    /// garde celle qui aligne le PLUS de voix sans déborder. Aucun seuil n'est
+    /// deviné, aucune constante de loi n'est recopiée
+    /// (`RiverLaneResolver.laneSilenceWindowMs` sert de premier barreau).
+    /// Si aucune ne donne un plan à couloirs, on rend `nil` : la loi applique
+    /// son défaut et prononce elle-même sa sérialisation, plutôt qu'un nombre
+    /// fabriqué qui prétendrait avoir essayé.
+    static func resolveGeometry(
+        messages: [MeeshyMessage],
+        viewerId: String
+    ) -> RiverLaneResolver.RiverGeometry {
+        let base = lanesInput(messages: messages, viewerId: viewerId, silenceWindowMs: nil)
+        var best: RiverLaneResolver.RiverGeometry?
+
+        for window in silenceWindowLadder {
+            let candidate = RiverLaneResolver.resolveRiverLanes(
+                lanesInput(messages: messages, viewerId: viewerId, silenceWindowMs: window)
+            )
+            guard candidate.layout == .lanes else { continue }
+            if best == nil || candidate.laneCount > best!.laneCount {
+                best = candidate
+            }
+            if candidate.laneCount >= RiverLaneResolver.maxLanes { break }
+        }
+
+        return best ?? RiverLaneResolver.resolveRiverLanes(base)
+    }
+
+    /// L'échelle des fenêtres essayées, du plus large au plus serré : une
+    /// conversation qui s'étale sur des jours garde ses voix côte à côte, une
+    /// conversation en rafale se resserre jusqu'à la minute. Le défaut de la
+    /// loi y figure comme un barreau parmi d'autres — jamais comme un plancher
+    /// caché.
+    static let silenceWindowLadder: [Double] = [
+        7 * 24 * 60 * 60 * 1000,
+        24 * 60 * 60 * 1000,
+        6 * 60 * 60 * 1000,
+        60 * 60 * 1000,
+        RiverLaneResolver.laneSilenceWindowMs,
+        10 * 60 * 1000,
+        5 * 60 * 1000,
+        2 * 60 * 1000,
+        60 * 1000,
+        30 * 1000,
+    ]
 
     /// Un message est une VOIX s'il vient d'un humain ou d'un agent — jamais du
     /// système, jamais supprimé (une bulle vide ferait un rang vide).
@@ -54,22 +152,56 @@ nonisolated enum RiverConversationMapping {
     static func contents(
         geometry: RiverLaneResolver.RiverGeometry,
         messages: [MeeshyMessage],
+        viewerId: String,
         text: (MeeshyMessage) -> String,
         time: (Date) -> String
     ) -> [RiverBubbleContent] {
         let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return geometry.bubbles.compactMap { bubble in
             guard let message = byId[bubble.messageId] else { return nil }
+            let resolvedTime = time(message.createdAt)
             return RiverBubbleContent(
                 bubble: bubble,
                 senderDisplayName: displayName(of: message),
-                colorSeed: message.senderName ?? message.senderId,
-                timeString: time(message.createdAt),
+                // MÊME valeur que `RiverParticipantInput.displayName` ci-dessus
+                // — c'est elle que la loi a donnée à la branche
+                // (`RiverLane.colorSeed`). `senderName ?? senderId` sautait le
+                // repli par pseudo : un auteur sans `senderName` peignait sa
+                // bulle d'une couleur et son trait d'une autre.
+                colorSeed: displayName(of: message),
+                timeString: resolvedTime,
                 text: text(message),
                 layout: geometry.layout,
-                replyPreview: message.replyTo.map { RiverReplyPreview(authorDisplayName: $0.authorName, text: $0.previewText) }
+                replyPreview: message.replyTo.map { RiverReplyPreview(authorDisplayName: $0.authorName, text: $0.previewText) },
+                systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text)
             )
         }
+    }
+
+    /// L'avis, prêt à peindre — non-nil UNIQUEMENT pour un message système.
+    ///
+    /// Le libellé ne se réécrit PAS ici : `BubbleContent` (le MÊME
+    /// constructeur que `ThemedMessageBubble` et `MessageListViewController`)
+    /// résout déjà l'arrivée et le résumé d'appel, avec leurs clés i18n et
+    /// leur direction par lecteur. La Rivière n'en fait que le décor.
+    @MainActor
+    static func systemNotice(
+        for message: MeeshyMessage,
+        viewerId: String,
+        timeString: String,
+        text: (MeeshyMessage) -> String
+    ) -> RiverSystemNotice? {
+        guard message.messageSource == .system else { return nil }
+        let content = BubbleContent(
+            message: message,
+            translations: [],
+            preferredTranslation: nil,
+            currentUserId: viewerId,
+            timeString: timeString
+        )
+        if let joinNotice = content.joinNotice { return .join(joinNotice) }
+        if let callNotice = content.callNotice { return .call(callNotice) }
+        return .plain(text(message))
     }
 
     /// Curseur d'ouverture : la bulle la plus RÉCENTE — là où le lecteur
@@ -82,8 +214,14 @@ nonisolated enum RiverConversationMapping {
     }
 
     /// Empreinte du fil pour ne recalculer la géométrie que si les messages
-    /// « voix » ont changé (ids + compte) — jamais à chaque passe de body.
+    /// QUI ONT UN RANG ont changé (ids + compte) — jamais à chaque passe de
+    /// body.
+    ///
+    /// Lot 2 : les avis système en font désormais partie. Tant qu'ils étaient
+    /// écartés de la loi, les ignorer ici était juste ; maintenant qu'ils
+    /// occupent un rang, une arrivée qui n'aurait pas changé l'empreinte
+    /// n'aurait jamais été redessinée.
     static func fingerprint(messages: [MeeshyMessage]) -> String {
-        messages.lazy.filter { isVoice($0) }.map(\.id).joined(separator: "|")
+        messages.lazy.filter { !$0.isDeleted }.map(\.id).joined(separator: "|")
     }
 }

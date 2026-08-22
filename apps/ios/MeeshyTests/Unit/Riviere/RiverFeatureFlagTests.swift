@@ -19,17 +19,37 @@ final class RiverFeatureFlagTests: XCTestCase {
         XCTAssertFalse(LentilleFeatureFlag.riviereMode.isEnabled(defaults: defaults, environment: [:]))
     }
 
-    /// Contrairement à `readingModes`, `riviereMode` ne cascade JAMAIS vers
-    /// `BetaFeaturesPreference` — activer le programme bêta n'ouvre pas la
-    /// Rivière tout seul, c'est un choix séparé (docstring de tête).
-    func test_riviereMode_betaOn_stillDefaultsToFalse() {
-        let defaults = makeIsolatedDefaults()
+    /// **Recalibré EN CONSCIENCE le 2026-08-21.** Ce témoin affirmait que
+    /// `riviereMode` ne cascade JAMAIS vers `BetaFeaturesPreference` — vrai
+    /// tant que la Rivière n'avait pas d'écran monté, intenable ensuite :
+    /// la bascule « Activer les bêta » est le seul interrupteur offert à
+    /// l'utilisateur, et sans elle la Rivière n'était joignable que par une
+    /// variable d'environnement de processus. Ce que le témoin d'origine
+    /// protégeait — « une installation qui n'a RIEN demandé n'ouvre pas la
+    /// Rivière » — reste vérifié, par le premier test de cette suite
+    /// (absence de tout choix ⇒ `false`, retrait I-075 du 2026-08-18).
+    func test_riviereMode_followsTheBetaSwitch_onlyWhenItHasBeenExpressed() {
+        let notExpressed = makeIsolatedDefaults()
         XCTAssertTrue(
-            BetaFeaturesPreference.isEnabled(defaults: defaults, environment: [:]),
-            "Décor : la bêta doit être ON (défaut) pour que ce test soit discriminant."
+            BetaFeaturesPreference.isEnabled(defaults: notExpressed, environment: [:]),
+            "Décor : le DÉFAUT de la préférence bêta est ON — c'est ce qui rend le cas discriminant."
+        )
+        XCTAssertFalse(
+            LentilleFeatureFlag.riviereMode.isEnabled(defaults: notExpressed, environment: [:]),
+            "Une bêta jamais TOUCHÉE ne vaut pas opt-in : absence ⇒ OFF."
         )
 
-        XCTAssertFalse(LentilleFeatureFlag.riviereMode.isEnabled(defaults: defaults, environment: [:]))
+        let expressed = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(true, defaults: expressed)
+        XCTAssertTrue(
+            LentilleFeatureFlag.riviereMode.isEnabled(defaults: expressed, environment: [:]),
+            "Bêta explicitement ON ⇒ la Rivière devient sélectionnable — sous réserve de la LOI " +
+            "(≥ 5 participants actifs, jamais en `direct`), qui reste la seule porte."
+        )
+
+        let refused = makeIsolatedDefaults()
+        BetaFeaturesPreference.setEnabled(false, defaults: refused)
+        XCTAssertFalse(LentilleFeatureFlag.riviereMode.isEnabled(defaults: refused, environment: [:]))
     }
 
     // MARK: - UserDefaults seul

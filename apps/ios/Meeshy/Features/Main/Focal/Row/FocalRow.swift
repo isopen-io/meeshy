@@ -134,6 +134,13 @@ struct FocalRow: View {
                     senderMoodEmoji: input.senderMoodEmoji,
                     senderIsAnonymous: input.senderIsAnonymous,
                     profileUser: input.profileSheetUser,
+                    // UNION des deux côtés, vérifiée : `FocalIdentityHeader`
+                    // (auto-fusionné) porte BIEN les trois paramètres, et
+                    // `headerTimeString` est un SUR-ENSEMBLE de
+                    // `content.meta.timeString` — il y retombe hors focus.
+                    // Prendre un seul côté aurait perdu soit la fiche de
+                    // profil (main), soit la date complète du message en
+                    // focus (branche liste).
                     timeString: headerTimeString,
                     revealsTimeAlways: input.isFocused,
                     deliveryStatus: content.meta.deliveryStatus,
@@ -758,8 +765,21 @@ struct FocalRow: View {
     /// pour TOUTES les bulles en focus (2026-08-22). Toucher = profil.
     private var focusIdentityChip: some View {
         Button {
-            // Identité DÉJÀ résolue par la configuration (main, 0ce61d251) —
-            // la rangée ne la compose plus.
+            // **Identité DÉJÀ RÉSOLUE, jamais recomposée ici.** Cette puce est
+            // arrivée d'une branche partie d'un tronc ANTÉRIEUR à deux
+            // correctifs (« la rangée Focal transmet une identité déjà
+            // résolue » puis « un visiteur sans compte ouvre sa fiche, non une
+            // page de profil vide ») : elle rebâtissait un `ProfileSheetUser`
+            // à la main, SANS `participantId`, SANS `isAnonymous`, SANS
+            // `accentColor`. La fusion n'a rien signalé — l'autre point
+            // d'entrée était en conflit, celui-ci non.
+            //
+            // Conséquence mesurée : `openProfileHandler` route sur
+            // `isAnonymous && participantId != nil` ; sans ces deux champs, le
+            // message d'un visiteur SANS COMPTE en focus tombait dans la
+            // branche « compte » avec `userId == nil` et ouvrait une fiche
+            // vide. Et la garde §5.1 restait VERTE par OMISSION (la puce ne
+            // nomme aucun des jetons qu'elle surveille) : rien ne l'aurait dit.
             actions.onOpenProfile?(input.profileSheetUser)
         } label: {
             focusChip {

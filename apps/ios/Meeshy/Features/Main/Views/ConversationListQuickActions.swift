@@ -147,6 +147,9 @@ struct ConversationListQuickActions: View, Equatable {
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
                 Spacer(minLength: 0)
+                // Chevron de DIVULGATION : il dit « ceci mène plus loin », pas
+                // « à main droite » — en arabe la rangée se retourne et lui
+                // avec (`RightToLeftLayoutGuardTests`).
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(14, weight: .bold))
                     .opacity(0.8)
