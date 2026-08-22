@@ -1472,6 +1472,282 @@
         },
         "reason": "moved"
       }
+    },
+    {
+      "_label": "colonne-partagee-pas-a-droite-atteint-la-colonne-voisine",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "v0",
+              "senderId": "V",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "a",
+              "senderId": "A",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "B",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "C",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d0",
+              "senderId": "D",
+              "createdAt": "2026-08-17T09:04:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d1",
+              "senderId": "D",
+              "createdAt": "2026-08-17T09:30:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "e",
+              "senderId": "E",
+              "createdAt": "2026-08-17T09:50:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "f",
+              "senderId": "F",
+              "createdAt": "2026-08-17T09:51:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "g",
+              "senderId": "G",
+              "createdAt": "2026-08-17T09:52:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "h",
+              "senderId": "H",
+              "createdAt": "2026-08-17T09:53:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d2",
+              "senderId": "D",
+              "createdAt": "2026-08-17T09:55:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "v1",
+              "senderId": "V",
+              "createdAt": "2026-08-17T09:56:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "v2",
+              "senderId": "V",
+              "createdAt": "2026-08-17T10:20:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "V",
+              "displayName": "V"
+            },
+            {
+              "id": "A",
+              "displayName": "A"
+            },
+            {
+              "id": "B",
+              "displayName": "B"
+            },
+            {
+              "id": "C",
+              "displayName": "C"
+            },
+            {
+              "id": "D",
+              "displayName": "D"
+            },
+            {
+              "id": "E",
+              "displayName": "E"
+            },
+            {
+              "id": "F",
+              "displayName": "F"
+            },
+            {
+              "id": "G",
+              "displayName": "G"
+            },
+            {
+              "id": "H",
+              "displayName": "H"
+            }
+          ],
+          "viewerId": "V"
+        },
+        "cursor": {
+          "laneIndex": 1,
+          "rank": 9
+        },
+        "direction": "right"
+      },
+      "expected": {
+        "cursor": {
+          "laneIndex": 2,
+          "rank": 7
+        },
+        "reason": "moved"
+      }
+    },
+    {
+      "_label": "colonne-partagee-pas-a-gauche-atteint-la-plus-proche",
+      "input": {
+        "lanes": {
+          "messages": [
+            {
+              "id": "v0",
+              "senderId": "V",
+              "createdAt": "2026-08-17T09:00:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "a",
+              "senderId": "A",
+              "createdAt": "2026-08-17T09:01:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "b",
+              "senderId": "B",
+              "createdAt": "2026-08-17T09:02:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "c",
+              "senderId": "C",
+              "createdAt": "2026-08-17T09:03:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d0",
+              "senderId": "D",
+              "createdAt": "2026-08-17T09:04:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d1",
+              "senderId": "D",
+              "createdAt": "2026-08-17T09:30:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "e",
+              "senderId": "E",
+              "createdAt": "2026-08-17T09:50:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "f",
+              "senderId": "F",
+              "createdAt": "2026-08-17T09:51:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "g",
+              "senderId": "G",
+              "createdAt": "2026-08-17T09:52:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "h",
+              "senderId": "H",
+              "createdAt": "2026-08-17T09:53:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "d2",
+              "senderId": "D",
+              "createdAt": "2026-08-17T09:55:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "v1",
+              "senderId": "V",
+              "createdAt": "2026-08-17T09:56:00.000Z",
+              "replyToMessageId": null
+            },
+            {
+              "id": "v2",
+              "senderId": "V",
+              "createdAt": "2026-08-17T10:20:00.000Z",
+              "replyToMessageId": null
+            }
+          ],
+          "participants": [
+            {
+              "id": "V",
+              "displayName": "V"
+            },
+            {
+              "id": "A",
+              "displayName": "A"
+            },
+            {
+              "id": "B",
+              "displayName": "B"
+            },
+            {
+              "id": "C",
+              "displayName": "C"
+            },
+            {
+              "id": "D",
+              "displayName": "D"
+            },
+            {
+              "id": "E",
+              "displayName": "E"
+            },
+            {
+              "id": "F",
+              "displayName": "F"
+            },
+            {
+              "id": "G",
+              "displayName": "G"
+            },
+            {
+              "id": "H",
+              "displayName": "H"
+            }
+          ],
+          "viewerId": "V"
+        },
+        "cursor": {
+          "laneIndex": 5,
+          "rank": 9
+        },
+        "direction": "left"
+      },
+      "expected": {
+        "cursor": {
+          "laneIndex": 4,
+          "rank": 10
+        },
+        "reason": "moved"
+      }
     }
   ]
 }

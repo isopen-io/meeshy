@@ -731,7 +731,8 @@ export function resolveRiverLivingLanes(geometry: RiverGeometry, rank: number): 
 
   return geometry.lanes
     .filter((lane) => spanCovering(lane, rank) !== undefined)
-    .map((lane) => lane.laneIndex);
+    .map((lane) => lane.laneIndex)
+    .sort((a, b) => a - b);
 }
 
 /**
