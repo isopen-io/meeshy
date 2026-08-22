@@ -61,6 +61,10 @@
         <item quantity="one">%1$d publicación nueva</item>
         <item quantity="other">%1$d publicaciones nuevas</item>
     </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d me gusta</item>
+        <item quantity="other">%1$d me gusta</item>
+    </plurals>
     <!-- Mood status bar (Prisme: ES) -->
     <string name="status_bar_me">Yo</string>
     <string name="status_bar_add">Estado</string>

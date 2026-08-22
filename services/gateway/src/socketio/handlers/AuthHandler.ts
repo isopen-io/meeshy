@@ -1,4 +1,4 @@
-import type { Socket } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';

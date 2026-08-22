@@ -18,6 +18,7 @@ import { verdictFor, type ReferenceAccessVerdict } from './posts/referenceAccess
 import { getPresenceVisibilityService } from './PresenceVisibilityService';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 
 const logger = enhancedLogger.child({ module: 'PostFeedService' });
 
@@ -774,7 +775,8 @@ export class PostFeedService {
         },
       });
       const langs = [u?.systemLanguage, u?.regionalLanguage, u?.customDestinationLanguage]
-        .filter((l): l is string => !!l && l.trim() !== '');
+        .filter((l): l is string => !!l && l.trim() !== '')
+        .map((l) => normalizeLanguageForDedup(l));
       return new Set(langs);
     } catch {
       return new Set();
