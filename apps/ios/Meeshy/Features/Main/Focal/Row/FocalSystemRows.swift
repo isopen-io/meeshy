@@ -125,7 +125,12 @@ enum FocalSystemRows {
         accentHex: String,
         isDark: Bool,
         onCallBack: ((CallSummaryMetadata) -> Void)? = nil,
-        onLongPress: (() -> Void)? = nil
+        onLongPress: (() -> Void)? = nil,
+        /// Appui long sur un avis d'arrivée — ouvre la fiche de l'arrivant, par
+        /// son `Participant.id`. La fiche de PARTICIPATION vaut pour les quatre
+        /// portes : un arrivant qui a un compte y a son identité comme les
+        /// autres, simplement sans conditions d'entrée.
+        onOpenParticipantProfile: ((String) -> Void)? = nil
     ) -> some View {
         switch content.kind {
         case .deleted:
@@ -141,7 +146,7 @@ enum FocalSystemRows {
                 // gateway (français), sans marquer que l'arrivant n'a pas de
                 // compte. La vue Bulles porte la même branche — les deux modes
                 // de lecture disent la même chose.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, timeString: content.meta.timeString)
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile, timeString: content.meta.timeString)
             } else if let text = content.text?.raw, !text.isEmpty {
                 FocalSystemNoticeRow(text: text, isDark: isDark, timeString: content.meta.timeString)
             } else {

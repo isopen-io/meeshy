@@ -349,3 +349,47 @@ describe('GET …/profile — les réglages du lien', () => {
     expect(data.entryLink).toBeNull();
   });
 });
+
+/**
+ * Un avis d'arrivée reste dans le fil POUR TOUJOURS, y compris des mois après
+ * que la personne est partie. Il porte son `participantId`, donc il peut mener
+ * à sa fiche — mais la fiche, elle, ne sert que les participants ACTIFS.
+ *
+ * « Inconnu » et « parti » ne sont alors pas la même réponse. Les confondre
+ * sous un 404 nu force le client à écrire « Fiche indisponible », qui se lit
+ * comme une panne, là où la vérité est un fait de conversation : cette personne
+ * n'est plus là. Le code de l'erreur est le seul endroit où cette distinction
+ * peut voyager — le corps, lui, ne doit toujours rien livrer.
+ */
+describe('GET …/profile — la personne a quitté la conversation', () => {
+  const departedRow = { ...anonymousRow, isActive: false };
+
+  it('refuse toujours de servir la fiche', async () => {
+    const ctx = setup('member', departedRow);
+
+    const data = await fetchProfile(ctx);
+
+    expect(ctx.reply._status).toBe(404);
+    expect(data).toBeUndefined();
+  });
+
+  it('dit que la personne est PARTIE, et non qu’elle est introuvable', async () => {
+    const ctx = setup('member', departedRow);
+
+    await fetchProfile(ctx);
+
+    // `code` vit à la RACINE de l'enveloppe, pas sous `error` — `sendError`
+    // (`utils/response.ts`) rend `{ success, error, message, code }`, et
+    // c'est là que les clients le lisent.
+    expect(ctx.reply._body?.code).toBe('PARTICIPANT_LEFT');
+  });
+
+  it('garde un 404 nu pour un participant qui n’a jamais existé', async () => {
+    const ctx = setup('member');
+
+    await fetchProfile(ctx, '507f1f77bcf86cd799439099');
+
+    expect(ctx.reply._status).toBe(404);
+    expect(ctx.reply._body?.code).not.toBe('PARTICIPANT_LEFT');
+  });
+});

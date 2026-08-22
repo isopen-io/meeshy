@@ -834,7 +834,8 @@
         "canSendLinks": "Send links",
         "canSendLocations": "Share their location"
       },
-      "unavailable": "Profile unavailable"
+      "unavailable": "Profile unavailable",
+      "hasLeft": "This person has left the conversation"
     },
     "forward": {
       "title": "Forward message",

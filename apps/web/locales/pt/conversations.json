@@ -836,7 +836,8 @@
         "canSendLinks": "Enviar ligações",
         "canSendLocations": "Partilhar a sua localização"
       },
-      "unavailable": "Ficha indisponível"
+      "unavailable": "Ficha indisponível",
+      "hasLeft": "Esta pessoa saiu da conversa"
     },
     "forward": {
       "title": "Encaminhar mensagem",

@@ -838,7 +838,8 @@
         "canSendLinks": "Envoyer des liens",
         "canSendLocations": "Partager sa position"
       },
-      "unavailable": "Fiche indisponible"
+      "unavailable": "Fiche indisponible",
+      "hasLeft": "Cette personne a quitté la conversation"
     },
     "forward": {
       "title": "Transférer le message",

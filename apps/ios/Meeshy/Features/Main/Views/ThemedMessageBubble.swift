@@ -136,6 +136,11 @@ struct ThemedMessageBubble: View {
     /// former `@EnvironmentObject Router` dependency, which made EVERY visible
     /// bubble re-render on EVERY Router publish (navigation, deep links).
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    /// Appui long sur un avis d'arrivée — ouvre la fiche de l'arrivant par son
+    /// `Participant.id`. Distinct de `onOpenProfile`, qui présente un COMPTE :
+    /// l'avis mène toujours à la fiche de participation, quelle que soit la
+    /// porte empruntée.
+    var onOpenParticipantProfile: ((String) -> Void)? = nil
     var voiceConsentMissing: Bool = false
     var onTapConsentNotice: (() -> Void)? = nil
     /// Rendu « standalone » (aperçu du `.contextMenu` natif) : supprime les
@@ -226,7 +231,7 @@ struct ThemedMessageBubble: View {
                 // Avant cette branche, une arrivée retombait sur la notice
                 // générique — dont l'icône est un TÉLÉPHONE, héritée des
                 // résumés d'appel.
-                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, timeString: content.meta.timeString)
+                BubbleJoinNoticeView(notice: joinNotice, isDark: isDark, onOpenProfile: onOpenParticipantProfile, timeString: content.meta.timeString)
             } else {
                 BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark, timeString: content.meta.timeString)
             }

@@ -173,8 +173,24 @@ struct JoinNoticePresentation: Equatable {
 }
 
 struct BubbleJoinNoticeView: View, Equatable {
+    /// L'avis nomme quelqu'un ET porte son identité de participation : c'est le
+    /// moment exact où l'on veut savoir qui vient d'entrer, et sous quelles
+    /// conditions. Un APPUI LONG ouvre sa fiche — pas un tap : la rangée occupe
+    /// toute la largeur du fil, et une cible de cette taille se déclencherait
+    /// au moindre défilement.
+    ///
+    /// `==` est écrit à la main : une closure n'est pas `Equatable`, et la
+    /// synthèse automatique refuserait de compiler. Elle est exclue de la
+    /// comparaison — elle ne porte aucun état, seulement une destination.
+    static func == (lhs: BubbleJoinNoticeView, rhs: BubbleJoinNoticeView) -> Bool {
+        lhs.notice == rhs.notice
+            && lhs.isDark == rhs.isDark
+            && lhs.timeString == rhs.timeString
+    }
+
     let notice: BubbleContent.JoinNotice
     let isDark: Bool
+    var onOpenProfile: ((String) -> Void)? = nil
     /// Heure du fil (« 08:26 ») — gravée EN PREMIER, centrée, même sémantique
     /// que les stickers de date : l'avis est un jalon du fil, pas une parole.
     var timeString: String? = nil
@@ -248,12 +264,37 @@ struct BubbleJoinNoticeView: View, Equatable {
                             .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
                     )
             )
+            .contentShape(RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous))
+            // L'appui long est posé sur la PASTILLE seule, pas sur la rangée :
+            // celle-ci s'étend d'un bord à l'autre du fil, et une zone active de
+            // cette largeur se déclencherait pendant un défilement. Le retour
+            // haptique confirme la prise avant que la feuille ne monte.
+            .onLongPressGesture(minimumDuration: 0.4) {
+                guard let onOpenProfile, !notice.participantId.isEmpty else { return }
+                HapticFeedback.medium()
+                onOpenProfile(notice.participantId)
+            }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("bubble-join-notice")
+            .accessibilityAddTraits(onOpenProfile == nil ? [] : .isButton)
+            // VoiceOver n'a pas d'appui long : l'action lui est offerte
+            // explicitement, sinon la fiche lui reste inaccessible.
+            .accessibilityAction(named: Text(openProfileActionLabel)) {
+                guard let onOpenProfile, !notice.participantId.isEmpty else { return }
+                onOpenProfile(notice.participantId)
+            }
 
             Spacer(minLength: 24)
         }
         .padding(.vertical, 4)
+    }
+
+    private var openProfileActionLabel: String {
+        String(
+            localized: "bubble.joinNotice.openProfile",
+            defaultValue: "Voir la fiche",
+            bundle: .main
+        )
     }
 
     private func label(for presentation: JoinNoticePresentation) -> String {
