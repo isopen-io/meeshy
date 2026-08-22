@@ -19,6 +19,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 import {
   errorResponseSchema,
+  validationErrorResponseSchema,
   signalPreKeyBundleSchema,
   generatePreKeyBundleRequestSchema,
   generatePreKeyBundleResponseSchema,
@@ -171,14 +172,11 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         },
         response: {
           200: getPreKeyBundleResponseSchema,
-          400: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: false },
-              error: { type: 'string', description: 'Validation error message' },
-              details: { type: 'array', items: { type: 'object' } }
-            }
-          },
+          // Les autres 400 de ce fichier utilisent deja le schema partage.
+          // Celui-ci, ecrit a la main, supprimait `message` et `code`, et
+          // declarait un tableau `details` que l'enveloppe ne pose pas comme
+          // cle (elle l'ETALE a la racine) — `violations` est le sien.
+          400: { description: 'Validation error', ...validationErrorResponseSchema },
           401: errorResponseSchema,
           403: {
             type: 'object',
@@ -323,19 +321,8 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         response: {
           200: establishSessionResponseSchema,
           400: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: false },
-              error: {
-                type: 'string',
-                description: 'Validation error or recipient not in conversation',
-                examples: [
-                  'Invalid request body',
-                  'Recipient is not a participant in this conversation'
-                ]
-              },
-              details: { type: 'array', items: { type: 'object' }, description: 'Validation error details' }
-            }
+            description: 'Validation error or recipient not in conversation',
+            ...validationErrorResponseSchema
           },
           401: errorResponseSchema,
           403: {

@@ -597,9 +597,7 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 31
-
-### Le balayage a été fait : 38 sites, et il reste 26
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 15
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -621,20 +619,27 @@ retirer sa ligne fait partie du correctif. L'inventaire est clé par fichier +
 champ + code de statut, **jamais** par numéro de ligne — une clé de ligne dérive
 à la première édition et transforme le cliquet en bruit.
 
-**Lister un champ avec un schéma VIDE est pire que ne pas le lister du tout.**
-`messages.ts:113` : le parent porte `additionalProperties: true` (posé contre la
-troncature), mais `sender` y est déclaré explicitement `{ type: 'object' }` — et
-un parent permissif ne rattrape pas un enfant déclaré vide, puisque la clé est
-LISTÉE. Le champ sort à `{}` là où l'omettre l'aurait laissé passer entier.
+**Lister un champ avec un schéma VIDE est pire que ne pas le lister du tout** —
+un parent `additionalProperties: true` ne rattrape pas un enfant déclaré vide,
+puisque la clé est LISTÉE : le champ sort à `{}` là où l'omettre l'aurait laissé
+passer entier. La règle est juste et vérifiée au compilateur.
 
-Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
-**l'inventaire trié des 26 restants est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle88.md` §8** (le tri du cycle 86 bis
-était FAUX — voir plus bas). **Les cinq sites de PRÉSENCE sont traités**
-(cycle 88) ; le seul restant, `communities/core.ts:524`, vit dans le module
-OMBRÉ et n'a aucun effet tant que rien ne l'enregistre. Restent 11 champs
-`details`/`errors` de réponses 400 **sans producteur** — à RETIRER plutôt qu'à
-déclarer — et une quinzaine de charges utiles à instruire une par une.
+**Mais elle ne s'applique PAS à `messages.ts:113`**, que ce paragraphe citait en
+exemple. Sur cette route, le schéma décrit le MESSAGE quand `sendSuccess` répond
+`{ success, data }` : `sender` n'est pas une clé de l'objet réel, la déclaration
+est donc INERTE et le champ traverse entier (§ Une déclaration n'agit que si le
+schéma décrit la bonne ENVELOPPE). Ce site ne vidait rien — il portait une fuite
+de présence ACTIVE, fermée au cycle 88 par un gate à la source. Sa ligne reste
+au cliquet comme dette de FORME, plus comme fuite.
+
+**État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
+les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
+main sont repris au cycle 89 (voir plus bas). **L'inventaire trié des 15
+restants — tous sur des charges utiles `200`/`202` — est dans
+`tasks/realtime-sync-audit-2026-08-22-cycle89.md` §7.**
+
+**Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
+`packages/shared`, dont un défaut se propage le plus loin, lui échappent.
 
 ### Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE
 
@@ -666,6 +671,41 @@ PRIVÉES (ce qui appellerait le strict), mais le `where` porte
 dont l'appelant est lui-même participant, donc tout profil servi est un
 CO-PARTICIPANT ⇒ `resolvePrefsOnly`, sans condition. Choisir sur le contrôle
 d'accès aurait retiré des pastilles légitimes (cycle 88).
+
+### Un schéma d'ERREUR se confronte à l'enveloppe, pas à l'intuition
+
+`utils/response.ts` produit `{ ...details, success, error, message, code,
+violations? }`. Deux faits que onze schémas écrits à la main ignoraient
+(cycle 89) :
+
+- **`details` n'est PAS une clé** — il est ÉTALÉ à la racine (c'est ainsi que
+  `suggestedNickname` remonte sur un 409). Un schéma qui déclare
+  `details: { type: 'array' }` décrit un champ qui n'existe jamais.
+- **Le seul tableau que l'enveloppe porte s'appelle `violations`**, dont les
+  éléments sont `{ path, message }`.
+
+Ces onze blocs supprimaient en prime, selon leur forme, `error` ou `message`, et
+**`code` sur les onze** — que `api.service.ts` lit pour son `ApiServiceError`.
+Le TEXTE survivait toujours (le client lit `data.message || data.error`), et
+aucun de ces chemins ne pose de `code` aujourd'hui : **piège armé, pas panne.**
+
+**Ne pas écrire de schéma d'erreur à la main.** `errorResponseSchema` pour un
+échec simple, `validationErrorResponseSchema` quand il y a des `violations`.
+Les deux étaient déjà utilisés à quelques lignes des blocs fautifs, dans les
+mêmes fichiers.
+
+Constat non corrigé : **`errorResponseSchema` ne déclare pas `message`.** Rien
+ne casse tant que les clients lisent les deux clés, mais l'ajouter est un
+changement de contrat sur des centaines de routes — une décision, pas une
+initiative. Figé par `error-envelope-serialization.test.ts`.
+
+### « Sans producteur » ne veut pas dire « à supprimer »
+
+Le cycle 88 avait classé ces onze champs comme du bruit à retirer. Ils
+l'étaient — mais le schéma qui les portait supprimait aussi des champs que
+l'émetteur PRODUIT. Retirer le mort et s'arrêter là aurait laissé `code` tomber
+pour toujours. **Un schéma faux se répare en le confrontant à ce que l'émetteur
+émet, jamais en retranchant seulement ce qu'on sait faux.**
 
 ### Un tri est une AFFIRMATION, et se vérifie comme telle
 
