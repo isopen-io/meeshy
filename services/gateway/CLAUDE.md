@@ -597,23 +597,30 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Cette famille a DEUX gravités, et la seconde vide la réponse entière
+### Cette famille a TROIS formes, et le balayage n'en distingue aucune
 
 Un schéma de réponse ne décrit pas seulement le CONTENU d'un champ : il décrit
-aussi **sa présence**. Les deux cas ont la même forme dans le code et des
-conséquences sans commune mesure :
+aussi **sa présence**, et à quel NIVEAU d'enveloppe il prétend la décrire. Les
+trois cas ont la même signature dans le code et des conséquences sans commune
+mesure :
 
-| gravité | forme | effet |
+| forme | exemple | effet |
 |---|---|---|
-| **1** — la clé déclarée EXISTE dans la charge | `sender: { type: 'object' }` sur une charge qui porte `sender` | `sender` sort `{}`, **le reste survit** |
-| **2** — la clé déclarée N'EXISTE PAS | `data: { properties: { message } }` sur une charge qui n'a pas de `message` | **`data` ENTIER sort `{}`** |
+| **1** — la clé déclarée EXISTE dans la charge | `creator: { type: 'object' }` sur une charge qui porte `creator` | ce champ sort `{}`, **le reste survit** |
+| **2** — la clé déclarée N'EXISTE PAS | `data: { properties: { message } }` sur une charge sans `message` | **le parent ENTIER sort `{}`** |
+| **3** — le schéma décrit la MAUVAISE enveloppe | `GET /messages/:messageId` (voir plus bas) | **rien ne sort vide** — le balayage rend un FAUX POSITIF |
 
-Le balayage ne voit que la forme du schéma, jamais la charge d'en face : il ne
-peut donc pas les distinguer. **Avant de réparer un site de l'inventaire, poser
-la question — la clé déclarée existe-t-elle dans ce que le gestionnaire passe à
-`sendSuccess` ?**
+Le balayage ne voit que le schéma, jamais la charge d'en face. **Avant de
+réparer un site de l'inventaire, poser les deux questions : que passe le
+gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le
+décrire ?**
 
-Trois sites de gravité 2 corrigés au cycle 88, tous de la même forme : une
+La forme 3 est la plus dangereuse, parce que l'outil s'y trompe **dans le sens
+rassurant** : un champ signalé « vidé » peut être servi brut, en fuite. C'est
+exactement ce qui s'est passé sur `messages.ts` (cycle 88) — détail dans
+§ *Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE*.
+
+Trois sites de forme 2 corrigés au cycle 88 bis, tous du même patron : une
 enveloppe `data.message` / `data.link` qu'aucun gestionnaire n'a jamais produite.
 Les deux transports REST d'édition de message rendaient `{"success":true,
 "data":{}}` ; `POST /conversations/:id/new-link` rendait
@@ -668,11 +675,18 @@ retirer sa ligne fait partie du correctif. L'inventaire est clé par fichier +
 champ + code de statut, **jamais** par numéro de ligne — une clé de ligne dérive
 à la première édition et transforme le cliquet en bruit.
 
-**Lister un champ avec un schéma VIDE est pire que ne pas le lister du tout.**
-`messages.ts:113` : le parent porte `additionalProperties: true` (posé contre la
-troncature), mais `sender` y est déclaré explicitement `{ type: 'object' }` — et
-un parent permissif ne rattrape pas un enfant déclaré vide, puisque la clé est
-LISTÉE. Le champ sort à `{}` là où l'omettre l'aurait laissé passer entier.
+**Lister un champ avec un schéma VIDE est pire que ne pas le lister du tout** —
+un parent en `additionalProperties: true` ne rattrape pas un enfant déclaré
+vide, puisque la clé est LISTÉE : le champ sort à `{}` là où l'omettre l'aurait
+laissé passer entier.
+
+`messages.ts:113` a longtemps servi d'exemple à cette règle, **et c'était faux**.
+La règle vaut ; ce site-là n'en relève pas, parce que son schéma décrit la
+mauvaise enveloppe et que TOUTES ses déclarations sont inertes (forme 3, cycle
+88 — voir la section suivante). Il n'y avait pas un `sender` vidé, il y avait un
+`sender` servi BRUT, présence comprise. **Chercher un exemple d'une règle dans
+un site qu'on n'a pas traversé jusqu'à la sortie sérialisée, c'est risquer d'en
+faire la vitrine de son contraire.**
 
 Tous les sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés — les deux
 du cycle 87, puis les trois du cycle 88 bis dont la clé déclarée n'existait pas
