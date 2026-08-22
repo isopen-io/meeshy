@@ -290,18 +290,14 @@ describe('POST /communities/:id/join — la cible est le lecteur', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /communities/search — le correctif du cycle 84 bis, sur la route SERVIE
+// GET /communities/search — le ROUTAGE des deux régimes
 //
-// Le cycle 84 bis a corrigé `routes/communities/search.ts` : schéma déclaré
-// (`{ type: 'object' }` nu sérialisait `creator` et `members[i]` en `{}`, ce qui
-// faisait échouer le décodage iOS de TOUTE la réponse), gate de présence à deux
-// régimes, et `isActive: true` sur l'aperçu des membres.
-//
-// Ce fichier-là est le module OMBRÉ : `route-registration.ts` importe
-// `'./routes/communities'`, Node résout LOAD_AS_FILE avant LOAD_AS_DIRECTORY, et
-// c'est `routes/communities.ts` qui sert. **Le correctif n'a donc jamais atteint
-// la production** — un correctif sans effet, exactement ce que le cycle 85-bis
-// décrit. Ces témoins montent le module RÉELLEMENT enregistré.
+// `communities-search-live.test.ts` (cycle 86, PR #3302) garde déjà ce que la
+// route SERT : `creator` et `members[]` porteurs de leurs champs, masquage sous
+// le critère strict, bascule prefs-only pour un membre, aperçu limité aux
+// appartenances actives. Ces témoins-ci ne les redoublent pas — ils gardent ce
+// que cette suite-là n'observe pas : vers QUEL résolveur chaque ligne part, et
+// la règle de page qui en découle.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const searchCommunity = (id: string, members: ReadonlyArray<ReturnType<typeof memberRow>>) => ({
@@ -317,16 +313,15 @@ const searchCommunity = (id: string, members: ReadonlyArray<ReturnType<typeof me
   _count: { members: members.length, Conversation: 0 },
 });
 
-async function buildSearchApp(opts: {
+async function search(opts: {
   communities: ReadonlyArray<ReturnType<typeof searchCommunity>>;
   viewerCommunityIds?: ReadonlyArray<string>;
 }) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: any) => { req.authContext = authContextFor(VIEWER_ID); });
-  const communityFindMany = jest.fn<any>().mockResolvedValue(opts.communities);
   app.decorate('prisma', {
     community: {
-      findMany: communityFindMany,
+      findMany: jest.fn<any>().mockResolvedValue(opts.communities),
       count: jest.fn<any>().mockResolvedValue(opts.communities.length),
       findFirst: jest.fn<any>().mockResolvedValue(null),
     },
@@ -338,58 +333,13 @@ async function buildSearchApp(opts: {
   } as any);
   await communityRoutes(app);
   await app.ready();
-  return { app, communityFindMany };
-}
-
-async function search(opts: Parameters<typeof buildSearchApp>[0]) {
-  const { app, communityFindMany } = await buildSearchApp(opts);
   const res = await app.inject({ method: 'GET', url: '/communities/search?q=tech' });
   await app.close();
-  return { body: res.json(), communityFindMany };
+  return res.json();
 }
 
-describe('GET /communities/search — la charge utile atteint le fil', () => {
-  it('sert le créateur avec ses champs d’identité', async () => {
-    mockResolveForTargets.mockResolvedValue(new Map([[SHY_ID, VISIBLE]]));
-    const { body } = await search({ communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])] });
-
-    expect(body.data[0].creator).toMatchObject({ id: VIEWER_ID, username: 'alice', displayName: 'Alice' });
-  });
-
-  it('sert chaque membre avec ses champs d’appartenance et son user', async () => {
-    mockResolveForTargets.mockResolvedValue(new Map([[SHY_ID, VISIBLE]]));
-    const { body } = await search({ communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])] });
-
-    const member = body.data[0].members[0];
-    expect(member).toMatchObject({ id: `mem-${SHY_ID}`, communityId: COMM_ID, userId: SHY_ID, role: 'member' });
-    expect(member.user).toMatchObject({ id: SHY_ID, username: SHY_ID });
-  });
-
-  it('n’aperçoit que les appartenances ACTIVES', async () => {
-    const { communityFindMany } = await search({
-      communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])],
-    });
-
-    expect(communityFindMany.mock.calls[0][0].include.members.where).toEqual({ isActive: true });
-  });
-});
-
-describe('GET /communities/search — régime tranché par LIGNE', () => {
-  it('masque la présence d’un membre vu en pure DÉCOUVERTE', async () => {
-    mockResolveForTargets.mockResolvedValue(new Map([[SHY_ID, HIDDEN]]));
-    const { body } = await search({ communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])] });
-
-    expect(body.data[0].members[0].user.isOnline).toBe(false);
-  });
-
-  it('conserve la présence que le résolveur strict autorise', async () => {
-    mockResolveForTargets.mockResolvedValue(new Map([[OPEN_ID, VISIBLE]]));
-    const { body } = await search({ communities: [searchCommunity(COMM_ID, [memberRow(OPEN_ID, true)])] });
-
-    expect(body.data[0].members[0].user.isOnline).toBe(true);
-  });
-
-  it('route une communauté NON partagée vers le critère strict', async () => {
+describe('GET /communities/search — routage des deux régimes', () => {
+  it('envoie une communauté NON partagée au critère strict, avec le viewer réel', async () => {
     await search({ communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])] });
 
     expect(mockResolveForTargets).toHaveBeenCalledWith(
@@ -399,17 +349,11 @@ describe('GET /communities/search — régime tranché par LIGNE', () => {
     expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
   });
 
-  it('route une communauté PARTAGÉE vers le contexte acquis', async () => {
-    await search({
-      communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])],
-      viewerCommunityIds: [COMM_ID],
-    });
-
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([SHY_ID]);
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
-  });
-
-  it('un membre qui prouve le lien par UNE communauté le prouve pour toute la page', async () => {
+  // Le corollaire de page, et la partie la plus subtile du régime par LIGNE :
+  // masquer la pastille de quelqu'un sur une ligne pendant qu'elle s'affiche
+  // sur la suivante, dans la même réponse, ne décrirait rien. Un membre qui
+  // prouve le lien par UNE communauté de la page le prouve pour TOUTES.
+  it('classe un membre rencontré dans une communauté partagée en prefs-only sur toute la page', async () => {
     await search({
       communities: [
         searchCommunity(COMM_ID, [memberRow(SHY_ID, true)]),
@@ -420,13 +364,6 @@ describe('GET /communities/search — régime tranché par LIGNE', () => {
 
     expect(mockResolvePrefsOnly).toHaveBeenCalledWith([SHY_ID]);
     expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: VIEWER_ID, role: 'USER' }, [OPEN_ID]);
-  });
-
-  it('masque un membre que le résolveur n’a pas rendu', async () => {
-    mockResolveForTargets.mockResolvedValue(new Map());
-    const { body } = await search({ communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])] });
-
-    expect(body.data[0].members[0].user.isOnline).toBe(false);
   });
 
   it('n’ouvre aucune résolution sur une page sans membre', async () => {

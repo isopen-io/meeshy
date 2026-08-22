@@ -1,264 +1,179 @@
-# Cycle 86 — Le balayage : 38 schémas de réponse vident ce qu'ils déclarent
+# Cycle 86 — Le correctif du cycle 84-bis était juste, et il ne s'exécutait pas
 
 **Date** : 2026-08-22
-**Branche** : `claude/keen-hamilton-inwn81`
-**Périmètre** : passerelle — `routes/communities.ts` (le module SERVI),
-`routes/conversations/stats.ts`, `routes/affiliate.ts`, et l'inventaire complet
-de la famille
+**Branche** : `claude/keen-hamilton-761vij`
+**Périmètre** : passerelle (`routes/communities.ts`, `routes/communities/search.ts`,
+un module d'aide neuf) et une suite neuve
 
-**Clients touchés** : aucun changement de code client. Aucun nom d'événement
-ajouté ni retiré, aucune charge utile temps réel modifiée, aucune ligne de
-Socket.IO touchée. Trois réponses REST cessent d'être vides — voir §4 — dont
-une qui était réputée corrigée depuis le cycle 84 bis et ne l'était pas (§0).
+**Clients touchés** : aucun changement de code client. Une réponse REST change de
+contenu — et c'est tout l'objet du lot (§4).
 
 ---
 
-## 0. Correction : le correctif du cycle 84 bis n'avait JAMAIS atteint la production
-
-À l'intégration de `main`, le cycle 85-bis a livré un fait qui invalide une
-partie de ce que le cycle 84 bis (PR #3294) a annoncé :
-
-> `route-registration.ts` importe `'./routes/communities'`, et Node résout
-> **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**. C'est donc `routes/communities.ts`
-> qui sert, et le répertoire voisin est injoignable.
-
-**`GET /communities/search` est défini DEUX fois** : dans le legacy
-`routes/communities.ts:357` — celui que Fastify enregistre — et dans
-`routes/communities/search.ts`, que rien ne charge. Le cycle 84 bis a corrigé
-**le second**. Vérifié sur `main` avant ce lot : la route servie portait encore,
-mot pour mot, `creator: { type: 'object' }`, `members: { items: { type:
-'object' } }`, `isOnline: true` sans gate, et aucun `where: { isActive: true }`.
-
-Donc, pour être exact sur ce que #3294 a réellement livré :
-
-| ce que #3294 annonçait | statut réel |
-|---|---|
-| schéma déclaré ⇒ le décodage iOS refonctionne | **non livré** — le module est ombré |
-| gate de présence à deux régimes | **non livré** — idem |
-| `isActive: true` sur l'aperçu | **non livré** — idem |
-| `PATCH /conversations/:id` (repris du cycle 84) | livré — autre fichier, non ombré |
-| retenue `isOnline` sur l'invitation | livré — `routes/conversations/sharing.ts`, non ombré |
-| la règle dans `CLAUDE.md`, le journal | livrés |
-
-**La recherche de communautés iOS est donc restée cassée** entre #3294 et ce
-lot. Ce cycle porte le correctif sur la route RÉELLEMENT enregistrée, avec des
-témoins qui montent le module servi (`communityRoutes` depuis
-`routes/communities`) et traversent les VRAIS schémas — **9 des 10 tombent sur
-`main`**, ce qui est la preuve que la production était bien restée en l'état.
-
-La leçon est celle que le cycle 85-bis a inscrite, et je l'ai apprise en la
-subissant : **une scission de module inachevée ne ressemble à rien.** Le
-répertoire compile, ses suites passent, sa couverture monte, aucun
-avertissement ne se lève — et le seul symptôme est un correctif sans effet.
-`module-shadowing.test.ts` garde désormais les paires ; il n'existait pas quand
-#3294 a été écrit.
-
-Corollaire pour cette routine : **avant de corriger une route, vérifier quel
-fichier l'enregistre.** `grep` sur le CHEMIN de la route (`'/communities/search'`)
-plutôt que sur le fichier qu'on croit être le sien — deux définitions du même
-chemin est le signal, et la première passe du balayage §6 en portait déjà la
-trace sans que je la lise : `communities.ts:370,371` ET `communities/search.ts`
-figuraient tous deux dans l'inventaire.
-
 ## 1. D'où vient ce cycle
 
-Le cycle 84 bis a fermé `GET /communities/search` et a nommé sa marche
-suivante en toutes lettres :
+Le cycle 85-bis a montré que `routes/communities/` est injoignable :
+`route-registration.ts` importe `'./routes/communities'` sans extension, Node
+résout LOAD_AS_FILE avant LOAD_AS_DIRECTORY, et c'est `routes/communities.ts`
+qui sert. Il a gaté les trois fuites de présence du fichier LIVE et posé
+`module-shadowing.test.ts` pour que le piège ne se réarme pas en silence.
 
-> **Le balayage `{ type: 'object' }` n'a pas été fait.** Ce cycle a corrigé les
-> deux occurrences de la route qu'il visitait. La même déclaration existe
-> peut-être ailleurs, et chacune vide silencieusement un objet de réponse.
-> C'est la marche suivante la plus rentable de la famille.
+Deux heures plus tard, le piège s'est refermé sur quelqu'un d'autre — avant même
+que le témoin ne soit sur `main`.
 
-Elle l'était. **Le balayage rend 38 sites**, sur 25 fichiers de routes.
+**La PR #3294 (« la recherche de communautés iOS était morte », cycle 84-bis) a
+corrigé `routes/communities/search.ts`.** Le module mort. Ses DEUX fichiers de
+témoins — `communities-search.test.ts` et `communities/search.test.ts` —
+importent eux aussi le module mort. La suite est verte, cohérente avec
+elle-même, et sans le moindre effet sur la production.
 
-## 2. Ce que le balayage cherche, et pourquoi il fallait l'outiller
+## 2. Le diagnostic du cycle 84-bis est JUSTE
 
-Un `grep "type: 'object'"` rend 47 occurrences dans le gateway et ne dit rien :
-la quasi-totalité sont légitimes (elles portent `properties`), et la moitié des
-autres sont des schémas de REQUÊTE, où l'absence de `properties` est
-permissive et non destructrice — AJV valide, il ne sérialise pas.
+Rien à reprendre sur le fond. `creator: { type: 'object' }` et
+`members: { items: { type: 'object' } }`, sans `properties`, ne décrivent pas un
+objet libre : fast-json-stringify applique `additionalProperties: false` par
+défaut et sérialise ces formes en `{}`.
 
-Le balayage utile discrimine trois choses que `grep` ne voit pas :
+Et la conséquence côté client est plus violente qu'une donnée manquante.
+Vérifié sur `packages/MeeshySDK/Sources/MeeshySDK/Models/CommunityModels.swift` :
 
-1. **Le bloc a-t-il `properties` / `additionalProperties` / `patternProperties` ?**
-   Il faut donc résoudre l'objet littéral englobant, en comptant les accolades.
-2. **Est-il sous `response:` ou sous `body` / `querystring` / `params` ?**
-   Seul le premier passe par fast-json-stringify. Il faut donc calculer la
-   portée de chaque clé `response:`.
-3. **Le texte est-il du CODE ?** La première passe a rendu un faux positif :
-   `routes/communities/search.ts:130` — le commentaire que le cycle 84 bis y a
-   laissé pour EXPLIQUER le défaut. Un balayage qui ne dépouille pas les
-   commentaires trouve les cycles précédents.
-
-L'outil est jetable et vit dans le journal, pas dans le dépôt — mais la
-procédure, elle, est reproductible et c'est ce qui compte.
-
-## 3. La confirmation : le même bug, le même coût, une seconde fois
-
-`GET /conversations/:id/stats` déclarait :
-
-```ts
-response: { 200: { type: 'object', properties: {
-  success: { type: 'boolean' },
-  data: { type: 'object' }            // ← la charge utile ENTIÈRE
-} } }
+```swift
+public struct APICommunityUser: Codable, Sendable {
+    public let id: String        // NON optionnel
+    public let username: String  // NON optionnel
 ```
 
-Le handler calcule pourtant une charge utile riche : compteurs de tête, six
-compteurs de type de contenu, `participantStats` aplati **et enrichi d'une
-requête `user.findMany`** (nom, avatar), `dailyActivity` et
-`languageDistribution` triés, `hourlyDistribution`. Tout cela sortait en `{}`.
+`APICommunitySearchResult.creator` est bien `APICommunityUser?` — mais une
+propriété Swift optionnelle ne tolère que la clé **ABSENTE** ou **`null`**, jamais
+un objet MALFORMÉ. Un `"creator": {}` présent fait donc échouer le décodage de
+`APICommunitySearchResult` **en entier**, et avec lui le tableau entier. Idem
+pour `members: [APICommunityMember]?` face à `[{}, {}]`.
 
-**Et les deux clients qui l'appellent typent tous ces champs NON-optionnels** —
-`ConversationMessageStatsResponse`, en Swift (`AgentAnalysisModels.swift`) et en
-Kotlin (`ConversationStatsRepository`). Le `{}` ne dégradait donc pas
-l'affichage : il levait `keyNotFound("conversationId")`.
-**`fetchStats()` ne pouvait rendre qu'une erreur.** C'est le scénario exact du
-cycle 84 bis sur `APICommunityUser`, à un cycle d'intervalle, sur une autre
-route, avec un client de plus.
+**La recherche de communautés iOS ne renvoie donc rien du tout** — pas « des
+communautés sans aperçu », rien. Et elle le fait toujours au moment où ce cycle
+commence, la correction vivant dans un fichier que rien n'importe.
 
-`POST /affiliate/register` porte le même défaut au même niveau (`data:`), pour
-un coût moindre : les deux sorties de `convertAffiliateVisit` rendent la paire
-`{ id, status }`, et l'appelant web (`use-registration-submit.ts`) ne lit pas le
-corps. Réel, mais sans victime aujourd'hui.
+## 3. Ce que ce cycle fait
 
-### Pourquoi personne ne l'a vu : cinq témoins verts qui n'assertaient rien
+Il **porte** le correctif du cycle 84-bis sur la route servie, sans en changer
+une décision. Trois éléments, tous repris tels quels :
 
-`conversations/stats.test.ts` portait cinq témoins. Ils vérifient un 404, un
-403, un 500, et deux fois `statusCode === 200` avec `body.success === true`.
+1. **Les propriétés déclarées** : `creator: { ...userMinimalSchema, nullable: true }`
+   et `members: { type: 'array', items: communityMemberSchema }`.
+2. **Le filtre `isActive: true`** sur l'aperçu de 5 membres — sans lui, l'aperçu
+   peut présenter comme membre quelqu'un qui a quitté la communauté. Défaut
+   invisible tant que le schéma vidait `members[]` en `{}` ; servi dès que la
+   réponse porte vraiment ses champs.
+3. **Le gate de présence à régime PAR LIGNE.**
 
-**Pas un seul champ de `data`.** La route a servi `{}` pendant toute sa vie avec
-une suite verte, parce que ses témoins attestaient qu'elle RÉPOND, jamais
-qu'elle DIT quelque chose.
+Et il **dé-duplique** plutôt que de recopier. Le résolveur de présence était une
+fonction locale de `routes/communities/search.ts` ; il devient
+`routes/community-member-presence.ts`, et les DEUX modules l'importent — le
+mort comme le vivant.
 
-C'est le jumeau, côté lecture, de la règle que le cycle 85 vient d'inscrire pour
-l'écriture — « un témoin d'écriture assert sur l'EFFET, jamais sur le statut ».
-Les deux moitiés se rejoignent en une phrase : **`statusCode` n'est pas une
-observation de la charge utile.**
+Ce choix n'est pas cosmétique : les deux fichiers servent la même recherche, et
+la consolidation à venir (cycle 85-bis §7) devra choisir un FICHIER. Elle n'aura
+pas en plus à arbitrer entre deux lois de présence qui auraient divergé entre
+temps.
 
-## 4. Ce qui change dans les réponses
+## 4. Le régime de présence, et pourquoi il se tranche par ligne
 
-`GET /conversations/:id/stats` sert enfin sa charge utile. Le schéma la déclare
-en distinguant les trois formes que `{ type: 'object' }` confondait :
+La recherche sert `isPrivate: false` **sans aucune condition d'appartenance** :
+c'est une surface de DÉCOUVERTE, donc critère STRICT par défaut. Mais une
+communauté dont le lecteur EST membre prouve un lien posé des DEUX côtés, et
+relève du contexte acquis.
 
-| champ | forme | déclaration |
-|---|---|---|
-| `contentTypes` | objet FERMÉ, six compteurs nommés | `properties` |
-| `hourlyDistribution` | vraie CARTE (`[String: Int]` iOS), clés = données | **`additionalProperties`** |
-| `participantStats`, `dailyActivity`, `languageDistribution` | TABLEAUX aplatis par le handler | `items` + `properties` |
+D'où la loi, identique à celle du fil de stories (cycle 83) : le régime se
+tranche par LIGNE, pas par route. Une requête groupée résout l'appartenance du
+lecteur aux communautés de la page ; les membres des communautés qu'il partage
+passent par `resolvePrefsOnly`, les autres par `resolveForTargets`.
 
-Cette ligne du milieu est la nuance que le cycle 84 bis n'avait pas eu à
-trancher, et c'est la seule défense honnête de `{ type: 'object' }` : *« mais
-c'est un objet libre ! »*. Il l'est parfois — et la déclaration qui le dit
-s'appelle `additionalProperties`, pas le silence. **« Objet libre » n'est pas
-synonyme de « pas de déclaration » ;** l'un laisse passer les clés inconnues,
-l'autre les supprime toutes.
+**Et un membre qui prouve le lien par UNE communauté de la page le prouve pour
+toutes** : masquer sa pastille sur une ligne pendant qu'elle s'affiche sur la
+suivante, dans la même page, ne décrirait rien.
 
-Les noms suivent les décodeurs clients (`ParticipantStatEntry`,
-`DailyActivityEntry`, `LanguageEntry`), et le champ `name` y coexiste avec
-`username` / `displayName` / `avatar` que le handler ajoute — les deux sont
-servis, aucun n'est deviné.
+## 5. Ce qui change
 
-`POST /affiliate/register` sert `{ id, status }` au lieu de `{}`.
+`GET /communities/search` : `data[].creator` porte enfin ses champs
+(`id`, `username`, `displayName`, `avatar`) au lieu de `{}`, et
+`data[].members[]` porte l'adhésion et son profil au lieu de `[{}, …]`.
+`members[].user.isOnline` est filtré selon le régime du §4. L'aperçu ne
+présente plus les membres partis.
 
-## 5. Témoins
+**C'est un changement de CHARGE UTILE, assumé comme tel.** Le cycle 84 l'avait
+nommé en §7 : faire vivre cet aperçu fait apparaître des profils de tiers sur
+une porte de découverte, et exige donc le critère strict. Le cycle 84-bis a pris
+cette décision produit et l'a implémentée correctement ; ce cycle ne fait que
+l'amener là où elle s'exécute.
 
-`conversations/stats.test.ts` : **5 → 11**. Six neufs sur la valeur SERVIE, tous
-à travers `app.inject()` — donc à travers le vrai sérialiseur, seul endroit où
-la panne est observable : compteurs de tête, `contentTypes` complet,
-`participantStats` aplati et enrichi, les deux tableaux triés,
-`hourlyDistribution` rendu comme carte aux clés inconnues, `updatedAt`.
+Web : `SearchPageContent.tsx` et `communities.service.ts` ne lisent ni `creator`
+ni `members` — la réponse gagne des champs qu'ils ignorent, sans rupture
+(21 témoins web verts).
 
-`affiliate.test.ts` : **22 → 23**. Un neuf sur la relation servie.
+## 6. Témoins
 
-**ROUGE prouvé : les 7 tombent sur le code d'avant.** Aucun ne borne
-seulement la correction — contrairement aux cycles 83 et 84 bis, où un témoin
-sur douze passait des deux côtés. Ici, chaque témoin neuf nomme un champ que le
-sérialiseur supprimait.
+**`communities-search-live.test.ts` (neuf, +8).** Il monte le module RÉELLEMENT
+servi — `routes/communities.ts` — avec les VRAIS schémas, et traverse la
+sérialisation réelle. Il assert :
 
-## 6. L'inventaire — 36 sites restants, triés
+- `creator` porte ses champs, jamais `{}` ;
+- `members[]` porte l'adhésion ET le profil, jamais `[{}]` ;
+- **`id` et `username` sont présents sur chaque profil servi** — le témoin
+  exprimé comme le client le vit, puisque ce sont exactement les deux champs
+  non optionnels dont l'absence faisait échouer la réponse entière ;
+- les compteurs plats `memberCount` / `conversationCount` survivent ;
+- le critère strict masque, et masque AUSSI un id que le résolveur n'a pas rendu ;
+- une communauté dont le lecteur est membre bascule sur `resolvePrefsOnly` ;
+- le `select` porte `where: { isActive: true }` sur l'aperçu.
 
-Ce cycle corrige les deux sites de niveau `data:` (charge utile ENTIÈRE). Les 36
-autres sont nommés ici, et **ne sont pas corrigés** : chacun demande la même
-enquête que le §3 — quelle est la vraie forme, quel client la décode, que
-casse-t-elle — et les traiter en lot sans cette enquête produirait des schémas
-devinés, ce qui est un défaut de la même famille dans l'autre sens.
+**ROUGE prouvé** : 7 des 8 tombent sur le code d'avant. Le huitième (compteurs
+plats) passe trivialement et borne la correction.
 
-| champ vidé | sites | fichiers |
-|---|---|---|
-| `items` | 15 | `signal-protocol.ts:179,337` · `anonymous.ts:209,569` · `communities.ts:371` · `admin/roles.ts:82,212` · `admin/content.ts:56,206` · `admin/posts.ts:234` · `users/profile.ts:116,335,448,554,667` |
-| `analysis` | 4 | `voice-analysis.ts:147,341,411,468` |
-| `user` | 4 | `magic-link.ts:151,241` · `communities.ts:1604` · `communities/core.ts:524` |
-| `attachment` | 2 | `voice/translation.ts:99,285` |
-| `creator` | 2 | `communities.ts:370` · `links/admin.ts:74` |
-| `message` | 2 | `conversations/messages-advanced.ts:119,715` |
-| `session` | 2 | `magic-link.ts:154,244` |
-| `details` | 1 | `calls.ts:159` |
-| `link` | 1 | `conversations/sharing.ts:99` |
-| `permissions` | 1 | `users/profile.ts:966` |
-| `sender` | 1 | `messages.ts:113` |
-| `transcription` | 1 | `voice/translation.ts:100` |
+**Suites rejouées** : gateway **809 suites / 18 896 témoins verts**, web
+`communities.service` 21 verts, `tsc --noEmit` propre.
 
-**Priorité suggérée, par gravité décroissante :**
+## 7. Ce que ce cycle ne fait PAS
 
-1. **`items` × 15** — ce sont des LISTES : la réponse est un tableau de `{}`,
-   autant d'éléments que d'entrées, tous vides. `users/profile.ts` en porte
-   cinq à lui seul. Gravité maximale après `data:`, parce qu'un tableau non
-   vide d'objets vides ressemble à une réponse valide.
-2. **`user` × 4 et `sender`** — profils. Ils touchent la famille de la présence
-   que les cycles 81–84 viennent de fermer : `communities/core.ts:524` et
-   `communities.ts:1604` sont exactement le schéma qui a caché la fuite du
-   cycle 84 bis. **Traiter chacun comme le cycle 84 bis a traité le sien** :
-   déclarer le schéma ET poser le gate de présence dans le même lot, sans quoi
-   la réparation publie la fuite.
-3. **`message` × 2 et `attachment` / `transcription`** — charges utiles de
-   messagerie, à confronter aux décodeurs iOS/Android avant de déclarer.
-4. Le reste, un par un.
+**Il ne consolide toujours pas `communities`.** Basculer `communities.ts` en
+coquille supprimerait quatre routes de production (`/mine`, `/:id/join`,
+`/leave`, `/invite`) absentes du répertoire. Inchangé depuis le cycle 85-bis, et
+toujours une décision de domaine.
 
-**Aucun de ces 36 n'est un « objet libre » présumé.** La question à poser à
-chacun est celle du §4 : *carte à clés inconnues ⇒ `additionalProperties` ;
-sinon ⇒ `properties`.* Le silence n'est jamais la réponse.
+Mais ce cycle en réduit le coût : la loi de présence de l'aperçu est désormais
+partagée, donc un seul comportement à porter au lieu de deux à réconcilier.
 
-## 7. Coût
+**Il ne touche pas aux témoins du cycle 84-bis.** Ils gardent le module mort, ce
+qui reste utile le jour où il deviendra vivant. Le témoin neuf garde la route
+servie. Les deux coexistent sans se contredire.
 
-Nul. Deux schémas de sérialisation déclarés ; aucune requête ajoutée, aucun
-appel de service modifié, aucun chemin de code touché. La sérialisation d'une
-charge utile déclarée est plus rapide que celle d'un objet libre — c'est la
-raison d'être de fast-json-stringify.
+## 8. Ce qui reste ouvert
 
-## 8. Ce que ce cycle laisse ouvert
-
-- **Les 36 sites du §6**, triés mais non corrigés, avec pour chacun l'enquête
-  du §3 à mener.
-- **Le balayage n'a couvert que le gateway.** Aucune autre surface n'a été
-  examinée pour cette famille.
-- **Dérive `member` / `membership`** (`POST /conversations/:id/invite`) : le
-  cousin de cette famille — un schéma qui déclare un champ que le handler ne
-  pose pas. Gardée par un témoin depuis le cycle 84 ; la corriger reste un
-  changement de forme de réponse qui appelle une demande.
-- **Redondance `resolveForTargets` / `getFriendIds`** (pressentie cycle 82),
-  désormais sur une branche fréquente.
-- **Dette d'environnement, inchangée depuis le cycle 79.** `npx eslint` échoue
-  dans ce conteneur (un ESLint global sous `/opt/node22` est résolu à la place
-  de celui du dépôt). C'est l'environnement, pas le diff.
+- **Consolidation `communities`** : brancher le répertoire (en y portant les
+  quatre routes manquantes) OU le supprimer. Décision de domaine.
+- **Convergence prefs-only** : huit sites recopiés à la main, applicateur prêt
+  depuis le cycle 85-bis.
+- **Les deux domaines voisins du cycle 80** : appartenance à une communauté,
+  épinglage / archivage de conversation.
+- **Dette d'environnement**, inchangée : `npx eslint` échoue dans ce conteneur
+  (ESLint global v9 résolu à la place de celui du dépôt, qui attend un
+  `.eslintrc`). C'est l'environnement, pas le diff.
 
 ## 9. La leçon
 
-> **Un défaut trouvé une fois est une anecdote ; le balayage dit s'il est une
-> espèce.** Le cycle 84 bis a corrigé deux `{ type: 'object' }` sur la route
-> qu'il visitait et a nommé le balayage comme marche suivante. Ce balayage rend
-> **38 sites sur 25 fichiers**, dont un qui casse le décodage de deux clients
-> exactement comme le premier. La règle vaut donc d'être outillée plutôt que
-> mémorisée — et le balayage doit dépouiller les commentaires, sans quoi il
-> retrouve les cycles précédents au lieu des défauts.
+> **Un témoin qui arrive après le correctif qu'il aurait sauvé n'est pas en
+> retard : il est la preuve que le piège était réel.** Le cycle 85-bis a
+> documenté l'ombrage et posé sa garde. Pendant que sa PR attendait la CI,
+> quelqu'un d'autre est tombé exactement dedans — bon diagnostic, bon correctif,
+> bon régime de présence, mauvais fichier. Rien dans son outillage ne pouvait le
+> lui dire : le module compile, ses suites sont vertes, et elles importent le
+> même fichier que lui.
 
-Et le corollaire, sur ce qui a laissé le défaut vivre :
+Et le corollaire, qui est ce que ce cycle livre vraiment :
 
-> **`statusCode` n'est pas une observation de la charge utile.** Cinq témoins
-> verts couvraient une route qui servait `{}` : ils vérifiaient un 404, un 403,
-> un 500, et deux fois `success === true`. Aucun ne nommait un champ de `data`.
-> C'est le jumeau, côté lecture, de la règle inscrite au cycle 85 pour
-> l'écriture — un témoin d'écriture assert sur l'effet, jamais sur le statut.
-> Les deux moitiés tiennent ensemble : **une réponse se garde sur ce qu'elle
-> DIT, et seul un témoin qui traverse le sérialiseur peut le voir.**
+> **Quand deux fichiers servent la même route, la dé-duplication est plus urgente
+> que le choix entre eux.** On peut vivre longtemps avec un doublon dont un seul
+> côté s'exécute ; on ne peut pas vivre avec deux LOIS différentes sur la même
+> porte, parce que le jour où il faudra n'en garder qu'une, personne ne saura
+> laquelle était la bonne. Sortir la règle partagée dans un module tiers ne
+> tranche pas le doublon — mais elle garantit qu'il n'y a plus qu'une seule
+> réponse à porter quand on le tranchera.

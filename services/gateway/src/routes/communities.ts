@@ -10,7 +10,7 @@
  * - Les conversations d'une communaute sont exposees via `GET /communities/:id/conversations`.
  * - Le schema Prisma definit une relation Community -> Conversation.
  */
-import { FastifyInstance, FastifyRequest } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   communitySchema,
@@ -27,8 +27,8 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import { validatePagination } from '../utils/pagination';
 import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
 import { viewerFromRequest } from './users/presence-gate';
+import { resolveCommunityMemberPresence } from './community-member-presence';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
 
@@ -62,63 +62,6 @@ async function gateCoMemberPresence<T extends { user?: MemberUser | null }>(
       onMissingEntry: 'reveal',
     }),
   };
-}
-
-type SearchMemberRow = { user?: MemberUser | null };
-type SearchCommunityRow = { id: string; members: SearchMemberRow[] };
-
-/**
- * Présence des membres rendus par la recherche PUBLIQUE de communautés.
- *
- * Le régime se tranche par LIGNE, pas par route : une communauté dont le
- * lecteur EST membre actif prouve un lien posé des DEUX côtés (appartenance
- * commune) et relève du contexte acquis ; une communauté publique qu'il ne fait
- * que découvrir n'en prouve aucun. Cette route sert `isPrivate: false` sans
- * aucune condition d'appartenance — la recherche est une surface de DÉCOUVERTE,
- * et son régime par défaut est donc strict, avec le `onMissingEntry: 'hide'`
- * qui va avec (le défaut de `applyPresenceVisibilityAsOffline`).
- *
- * Et un membre qui prouve le lien par UNE communauté de la page le prouve pour
- * toutes : masquer sa pastille sur une ligne pendant qu'elle s'affiche sur la
- * suivante, dans la même page, ne décrirait rien.
- */
-async function resolveSearchMemberPresence(
-  prisma: PresencePrisma,
-  request: FastifyRequest,
-  communities: SearchCommunityRow[],
-): Promise<Map<string, PresenceVisibility>> {
-  const memberIdsOf = (community: SearchCommunityRow) =>
-    community.members.map(m => m.user?.id).filter((id): id is string => typeof id === 'string');
-
-  const allIds = new Set(communities.flatMap(memberIdsOf));
-  if (allIds.size === 0) return new Map();
-
-  const viewer = viewerFromRequest(request);
-  const viewerCommunityIds = viewer
-    ? new Set(
-        (
-          await prisma.communityMember.findMany({
-            where: {
-              communityId: { in: communities.map(c => c.id) },
-              userId: viewer.userId,
-              isActive: true
-            },
-            select: { communityId: true }
-          })
-        ).map((row: { communityId: string }) => row.communityId)
-      )
-    : new Set<string>();
-
-  const contextIds = new Set(communities.filter(c => viewerCommunityIds.has(c.id)).flatMap(memberIdsOf));
-  const strictIds = [...allIds].filter(id => !contextIds.has(id));
-
-  const presence = getPresenceVisibilityService(prisma);
-  const [contextVisibility, strictVisibility] = await Promise.all([
-    contextIds.size > 0 ? presence.resolvePrefsOnly([...contextIds]) : new Map<string, PresenceVisibility>(),
-    strictIds.length > 0 ? presence.resolveForTargets(viewer, strictIds) : new Map<string, PresenceVisibility>()
-  ]);
-
-  return new Map([...contextVisibility, ...strictVisibility]);
 }
 
 // Enum des roles de communaute (aligne avec shared/types/community.ts)
@@ -465,14 +408,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
                   // libre : fast-json-stringify applique
                   // `additionalProperties: false` par défaut et sérialisait
                   // `creator` et chaque `members[i]` en `{}`. iOS type
-                  // `APICommunityUser.id`/`.username` non-optionnels — le `{}`
-                  // faisait échouer le décodage de TOUTE la réponse.
-                  //
-                  // Le cycle 84 bis avait posé ce correctif dans
-                  // `routes/communities/search.ts` — le module OMBRÉ, que Node
-                  // ne charge jamais (§ « Un fichier X.ts à côté d'un
-                  // répertoire X/ »). Il n'a donc jamais atteint la production.
-                  // Le voici sur la route RÉELLEMENT enregistrée.
+                  // `APICommunityUser.id` / `.username` NON optionnels, et une
+                  // propriété Swift optionnelle ne tolère que la clé ABSENTE ou
+                  // `null`, jamais un objet malformé — le `{}` faisait échouer
+                  // le décodage de TOUTE la réponse.
                   creator: { ...userMinimalSchema, nullable: true, description: 'Community creator' },
                   members: {
                     type: 'array',
@@ -583,7 +522,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      const memberVisibility = await resolveSearchMemberPresence(fastify.prisma, request, communities);
+      const memberVisibility = await resolveCommunityMemberPresence(fastify, request, communities);
 
       // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({
@@ -597,12 +536,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
         conversationCount: community._count.Conversation,
         createdAt: community.createdAt,
         creator: community.creator,
-        members: community.members.map(member =>
+        members: community.members.map((member: { user?: MemberUser | null }) =>
           member.user
-            ? {
-                ...member,
-                user: applyPresenceVisibilityAsOffline(member.user, memberVisibility.get(member.user.id))
-              }
+            ? { ...member, user: applyPresenceVisibilityAsOffline(member.user, memberVisibility.get(member.user.id)) }
             : member
         )
       }));
