@@ -1311,8 +1311,9 @@ describe('useWebRTCP2P', () => {
 
     const connectTwoPeers = async () => {
       const onError = jest.fn();
+      const onConnected = jest.fn();
       const { result } = renderHook(() =>
-        useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError })
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId, onError, onConnected })
       );
       await act(async () => {
         await result.current.createOffer(mockTargetUserId);
@@ -1320,7 +1321,7 @@ describe('useWebRTCP2P', () => {
       await act(async () => {
         await result.current.createOffer(secondTargetUserId);
       });
-      return { result, onError, peer1: peerCallOptions(0), peer2: peerCallOptions(1) };
+      return { result, onError, onConnected, peer1: peerCallOptions(0), peer2: peerCallOptions(1) };
     };
 
     it('reports the call connected once ANY peer connects, and stays connected when a second peer later fails', async () => {
@@ -1370,13 +1371,17 @@ describe('useWebRTCP2P', () => {
       expect(result.current.connectionState).toBe('connected');
     });
 
-    it('fires the "Connected!" toast once for the call, not once per participant', async () => {
-      const { peer1, peer2 } = await connectTwoPeers();
+    it('fires onConnected once for the call, not once per participant, and never toasts directly', async () => {
+      const { onConnected, peer1, peer2 } = await connectTwoPeers();
 
       act(() => peer1.onConnectionStateChange('connected'));
       act(() => peer2.onConnectionStateChange('connected'));
 
-      expect(toast.success).toHaveBeenCalledTimes(1);
+      // No toast.success here (Vague 153) — mirrors the onError forwarding
+      // fixed in Vague 151: the hook forwards the signal, the consumer
+      // (VideoCallInterface.handleWebRTCConnected) owns the translated toast.
+      expect(onConnected).toHaveBeenCalledTimes(1);
+      expect(toast.success).not.toHaveBeenCalled();
     });
 
     it('drops a departed failed peer out of the aggregate instead of leaving the call stuck failed', async () => {

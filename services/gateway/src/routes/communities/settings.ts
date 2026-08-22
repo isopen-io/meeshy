@@ -15,6 +15,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { flattenCommunityCounts } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -143,7 +144,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return sendSuccess(reply, updatedCommunity);
+      return sendSuccess(reply, flattenCommunityCounts(updatedCommunity));
     } catch (error) {
       logger.error('Error updating community', error as Error);
       sendInternalError(reply, 'Failed to update community');

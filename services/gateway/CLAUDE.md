@@ -463,10 +463,13 @@ devient une **coquille de ré-export**.
 export { userRoutes } from './users/index';
 ```
 
-`routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portent.
-`routes/communities.ts` ne l'a jamais reçue : son répertoire (~1 900 lignes,
-gates de présence compris) est injoignable, et le legacy sert seul la production
-— où trois routes servaient `isOnline` brut (cycle 85-bis).
+`routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portaient.
+`routes/communities.ts` ne l'a jamais reçue, et son répertoire (~1 900 lignes,
+gates de présence compris) est resté injoignable de sa création au cycle 86-ter, qui
+l'a consolidé — les quatre routes que seul le legacy portait (`/mine`,
+`/:id/join`, `/:id/leave`, `/:id/invite`) portées dans le répertoire, puis le
+fichier basculé en coquille. **Les quatre scissions du dépôt sont désormais
+branchées, et `KNOWN_UNREACHABLE` doit rester vide.**
 
 **Une scission inachevée ne ressemble à rien** : le répertoire compile, ses
 suites passent, sa couverture monte, aucun avertissement ne se lève. Le seul
@@ -474,6 +477,38 @@ symptôme est un correctif sans effet — et l'effet d'un correctif de
 confidentialité, personne ne le mesure. `module-shadowing.test.ts` garde les
 paires par deux voies (balayage des coquilles, et routes RÉELLEMENT
 enregistrées) ; toute nouvelle paire non-coquille le fait tomber.
+
+Coût mesuré avant consolidation (cycle 86-ter) : **trois cycles de correctifs
+atterris dans le répertoire sans jamais atteindre la production**. Le cycle 84 y
+a diagnostiqué, corrigé et CLOS « la recherche de communautés iOS était morte » ;
+le fichier vivant portait encore le défaut mot pour mot. Avec lui, en
+production : les noms de communauté non assainis, `memberCount` correct mais
+`creator`/`members[]` vidés en `{}`, et `POST /communities/:id/conversations/:conversationId`
+— qu'iOS appelle — en `404`.
+
+### Corollaire : un témoin s'importe par le chemin de la PRODUCTION
+
+Six des huit suites communauté importaient `routes/communities/search` ou
+`routes/communities/index` — des chemins explicites vers le module mort. Une
+septième visait bien le spécificateur de production mais mockait
+`@meeshy/shared/types/api-schemas` en `{ additionalProperties: true }`, ce qui
+désarme fast-json-stringify, soit exactement la couche où vivaient deux des
+défauts.
+
+**Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
+la main** — et ne pas mocker les schémas partagés dans un témoin de
+sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
+que deux modules concurrents ne partagent pas.
+
+Et **poser au moins un témoin de SURFACE** : « cette route est-elle
+enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
+appelle depuis toujours n'était vu par personne.
+
+Corollaire de manœuvre : **basculer vers la jumelle exige de porter d'abord ce
+que l'exemplaire VIVANT avait de plus.** Le répertoire ignorait
+`flattenCommunityCounts` et quatre routes ; basculer sans les porter aurait
+servi `memberCount: 0` partout. Les témoins qui PASSENT déjà avant la bascule
+valent autant que ceux qui échouent — on les écrit dans le même lot.
 
 ## Cette entité a-t-elle une JUMELLE ?
 
