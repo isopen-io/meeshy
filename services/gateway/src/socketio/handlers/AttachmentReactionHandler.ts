@@ -3,7 +3,7 @@
  * Gère les réactions par-image (ajout / suppression). Miroir de ReactionHandler,
  * substituant la clé attachment + réutilisant `resolveParticipantFromMessage`.
  */
-import type { Socket, Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';

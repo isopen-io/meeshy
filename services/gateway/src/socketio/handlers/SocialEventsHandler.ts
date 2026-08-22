@@ -4,9 +4,10 @@
  * vers les rooms feed:{userId} des amis
  */
 
-import type { Server as SocketIOServer, Socket } from 'socket.io';
+import type { MeeshyIOServer as SocketIOServer, MeeshySocket as Socket } from '../typed-socket';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ServerToClientEvents } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import type {
@@ -36,6 +37,53 @@ import type {
 // Sans ce logger dédié, le fanout social était totalement invisible côté
 // production et empêchait tout diagnostic en cas de "ma story n'arrive pas".
 const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
+
+/**
+ * Cycle 100 — les quatre seams de diffusion sociale, CONTRAINTS par le contrat.
+ *
+ * Le cycle 99 a typé le `Socket` d'un handler et rendu impossibles, à la
+ * compilation, deux fautes : émettre un nom absent de `ServerToClientEvents`, et
+ * émettre un payload d'une autre forme que celle déclarée pour ce nom.
+ *
+ * Ce handler échappait ENTIÈREMENT à cette garde, et pas par oubli d'import :
+ * ses vingt-et-un sites d'émission ne touchent jamais `io.emit` directement.
+ * Ils passent par quatre helpers privés déclarés `(event: string, data: unknown)`
+ * — une signature qui BLANCHIT le couple. Typer `this.io` ne changeait rien :
+ * à l'intérieur du helper, `event` est un `string` quelconque et `data` un
+ * `unknown`, donc le contrat ne peut rien exiger, et au site d'appel il n'y a
+ * plus rien à vérifier.
+ *
+ * > Un seam qui prend `(string, unknown)` annule le contrat de tout ce qui passe
+ * > par lui. La garde ne vaut que jusqu'au premier paramètre non typé.
+ *
+ * C'est le chemin le PLUS exposé du dépôt : une diffusion Socket.IO n'a aucun
+ * sérialiseur — pas de `fast-json-stringify` pour retirer un champ de trop, pas
+ * de schéma de réponse pour signaler un champ manquant. Le typage de l'émission
+ * est ici la SEULE garde qui existe entre le producteur et les décodeurs
+ * iOS/Android/web, qui sont tous les trois écrits contre `ServerToClientEvents`.
+ */
+type SocialEventName = keyof ServerToClientEvents;
+type SocialEventPayload<E extends SocialEventName> = Parameters<ServerToClientEvents[E]>[0];
+
+/**
+ * L'UNIQUE cast de ce fichier, et il ne blanchit rien.
+ *
+ * `socket.io` enveloppe sa map d'événements dans
+ * `DecorateAcknowledgementsWithMultipleResponses<…>` avant d'en dériver la
+ * signature d'`emit`. Sur un `E` GÉNÉRIQUE, TypeScript ne peut pas prouver que
+ * cette enveloppe laisse le paramètre inchangé — alors qu'elle le fait pour tout
+ * `E` concret, aucun de nos événements serveur→client ne portant d'accusé de
+ * réception. L'erreur est une limite de l'inférence sur type mappé, pas un
+ * désaccord de forme.
+ *
+ * Le cast est donc placé ICI, une fois, et il porte sur le point exact que le
+ * compilateur ne sait pas résoudre. Ce qu'il ne touche PAS : le couple
+ * `(event, data)` a déjà été vérifié contre `ServerToClientEvents` à la
+ * frontière des quatre helpers publics, donc à chacun des vingt-et-un sites
+ * d'appel. Écrire le cast dans les helpers eux-mêmes aurait rouvert le seam
+ * `(string, unknown)` qu'on vient de fermer — quatre fois.
+ */
+type EmitTarget = { emit: (event: string, ...args: unknown[]) => unknown };
 
 export interface SocialEventsHandlerDependencies {
   io: SocketIOServer;
@@ -101,11 +149,16 @@ export class SocialEventsHandler {
   /**
    * Broadcast vers les feed rooms des amis + l'auteur lui-même
    */
-  private emitToFriends(friendIds: string[], authorId: string, event: string, data: unknown): void {
+  private emitToFriends<E extends SocialEventName>(
+    friendIds: string[],
+    authorId: string,
+    event: E,
+    data: SocialEventPayload<E>,
+  ): void {
     // Inclure l'auteur pour feedback immédiat
     const targetIds = [...friendIds, authorId];
     for (const id of targetIds) {
-      this.io.to(ROOMS.feed(id)).emit(event, data);
+      (this.io.to(ROOMS.feed(id)) as EmitTarget).emit(event, data);
     }
   }
 
@@ -116,23 +169,27 @@ export class SocialEventsHandler {
    * la double-livraison du modèle « boucle feed + emit post room séparé » (un
    * ami-viewer était dans sa feed room ET la post room). Cf. `commentBroadcastRooms`.
    */
-  private emitToFeedsAndPostRoom(
+  private emitToFeedsAndPostRoom<E extends SocialEventName>(
     recipientIds: string[],
     authorId: string,
     postId: string,
-    event: string,
-    data: unknown,
+    event: E,
+    data: SocialEventPayload<E>,
   ): void {
     const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
     rooms.push(ROOMS.post(postId));
-    this.io.to(rooms).emit(event, data);
+    (this.io.to(rooms) as EmitTarget).emit(event, data);
   }
 
   /**
    * Broadcast uniquement vers l'auteur du post (notifs personnelles)
    */
-  private emitToUser(userId: string, event: string, data: unknown): void {
-    this.io.to(ROOMS.feed(userId)).emit(event, data);
+  private emitToUser<E extends SocialEventName>(
+    userId: string,
+    event: E,
+    data: SocialEventPayload<E>,
+  ): void {
+    (this.io.to(ROOMS.feed(userId)) as EmitTarget).emit(event, data);
   }
 
   /**
@@ -147,8 +204,13 @@ export class SocialEventsHandler {
    * `story:reacted` DEUX fois → le delta `+1` côté iOS s'appliquait deux fois →
    * compteur de réactions affiché en `+2`. Miroir de `emitToFeedsAndPostRoom`.
    */
-  private emitToUserFeedAndPostRoom(userId: string, postId: string, event: string, data: unknown): void {
-    this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]).emit(event, data);
+  private emitToUserFeedAndPostRoom<E extends SocialEventName>(
+    userId: string,
+    postId: string,
+    event: E,
+    data: SocialEventPayload<E>,
+  ): void {
+    (this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]) as EmitTarget).emit(event, data);
   }
 
   // ==============================================

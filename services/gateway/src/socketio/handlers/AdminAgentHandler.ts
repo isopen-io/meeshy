@@ -1,4 +1,4 @@
-import type { Socket } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { ROOMS, type SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { logger } from '../../utils/logger';
