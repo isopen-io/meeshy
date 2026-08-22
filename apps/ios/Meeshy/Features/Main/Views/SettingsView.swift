@@ -40,7 +40,7 @@ struct SettingsView: View {
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
     /// Préférence « Activer les bêta » (`BetaFeaturesPreference`, défaut OFF
     /// depuis le 2026-08-22). Lu UNE fois au montage (le même patron que
     /// `interfaceLanguageChoice` ci-dessus) ; le toggle écrit
@@ -149,14 +149,18 @@ struct SettingsView: View {
     // MARK: - Header
 
     private var header: some View {
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
         CollapsibleHeader(
             title: String(localized: "settings.title", bundle: .main),
-            scrollOffset: scrollOffset,
+            scrollOffset: offset,
             onBack: { router.pop() },
             titleColor: theme.textPrimary,
             backArrowColor: Color(hex: accentColor),
             backgroundColor: theme.backgroundPrimary
         )
+        }
     }
 
     // MARK: - Scroll Content
@@ -193,8 +197,8 @@ struct SettingsView: View {
             .padding(.top, MeeshySpacing.sm)
         }
         .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }      // iOS 16–17
-        .trackScrollContentOffset { scrollOffset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 
     // MARK: - Account Section

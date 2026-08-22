@@ -12,7 +12,7 @@ public struct CommunityListView: View {
     public var onCreateCommunity: (() -> Void)?
     public var onDismiss: (() -> Void)?
 
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     public init(
         onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil,
@@ -53,9 +53,12 @@ public struct CommunityListView: View {
     // MARK: - Navigation Header
 
     private var navigationHeader: some View {
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
         CollapsibleHeader(
             title: String(localized: "community.list.title", defaultValue: "Communautes", bundle: .module),
-            scrollOffset: scrollOffset,
+            scrollOffset: offset,
             onBack: {
                 if let onDismiss {
                     onDismiss()
@@ -81,6 +84,7 @@ public struct CommunityListView: View {
                 .accessibilityLabel(String(localized: "community.list.create.accessibilityLabel", defaultValue: "Creer une communaute", bundle: .module))
             }
         )
+        }
     }
 
     // MARK: - Search Bar
@@ -197,8 +201,8 @@ public struct CommunityListView: View {
             .padding(.bottom, 20)
         }
         .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }      // iOS 16–17
-        .trackScrollContentOffset { scrollOffset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 }
 
