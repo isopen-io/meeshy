@@ -488,3 +488,46 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle94-bis.md`.
   `APIMessage.translations` en `try` non tolérant quand ses trois voisins sont en `try?` (lot
   iOS) ; **le quatrième balayage n'existe pas** — rien ne garde contre une déclaration présente,
   bien formée et FAUSSE contre son producteur, ce qu'étaient les deux défauts de ce cycle.
+
+## Bêta OFF par défaut · story legacy lisible · diffusion in-app admin (2026-08-22, branche feat/ios-beta-off-legacy-story)
+
+Demande : (1) « Activer les bêta » naît OFF ; (2) au lancement, si ON, lire les UserDefaults pour savoir
+quelles fonctionnalités bêta sont actives (tout-ou-rien aujourd'hui, une par une demain, la section
+n'affichant les fonctionnalités qu'une fois l'option validée) ; (3) depuis l'espace admin, envoyer une
+notification à toutes les applications connectées ; (4) l'app iOS doit pouvoir LIRE la forme « legacy
+simple » d'une story (média seul, sans `storyEffects`) — code transitoire, à retirer au fil des mises à
+jour jusqu'au modèle unique (canvas v3).
+
+### Lot A — iOS, programme bêta
+- [ ] RED : `BetaFeaturesPreferenceGateTests` — clé absente ⇒ `false` ; `enabledFeatures` vide quand OFF,
+      les 3 drapeaux couverts quand ON, un drapeau coupé par sa clé propre reste hors de la liste.
+- [ ] GREEN : `BetaFeaturesPreference.isEnabled` absence ⇒ OFF ; `isExplicitlySet` RETIRÉ (n'avait de sens
+      que sous défaut ON) ; cascade `LentilleFeatureFlag` étage 3 = `BetaFeaturesPreference.isEnabled`.
+- [ ] `BetaFeaturesPreference.enabledFeatures(defaults:environment:)` + `resolveAtLaunch()` (journal
+      `me.meeshy.app:beta`) appelé dans `MeeshyApp.init`.
+- [ ] Réglages : sous le toggle, la liste des fonctionnalités du programme n'apparaît QUE si ON
+      (3 lignes : modes de lecture, liste Lentille, Rivière) — clés neuves ×7 langues, dump à blanc d'abord.
+- [ ] Retrait du paramètre mort `isFocalBetaPreviewEnabled` (Focal retiré le 2026-08-18).
+- [ ] Décors de tests qui figeaient le défaut ON : `LentilleFlagGateTests:282`, `RiverFeatureFlagTests:33`.
+
+### Lot B — SDK, story legacy « média seul »
+- [ ] RED : `StoryItemRenderableSlideTests` — média[0] vidéo sans `mediaObjects` ⇒ un `StoryMediaObject`
+      de fond (`kind .video`, `isBackground`, `mediaURL`, `thumbHash`, durée) et `slide.mediaURL == nil` ;
+      `.mov` déclaré image ⇒ vidéo (extension = vérité) ; image legacy ⇒ route inchangée.
+- [ ] GREEN : adaptateur de lecture dans `StoryItem.toRenderableSlide` — commenté TRANSITOIRE, à supprimer
+      quand le parc ne sert plus que le canvas v3 (règle 5 du gateway + `X-Canvas-Caps`).
+- [ ] Marquer de même la branche legacy `slide.mediaURL` de `StoryRenderer.renderBackground`.
+- [ ] Build + install sur `Meeshy-iOS26` pour constater la story `6a894bd8…`.
+
+### Lot C — gateway + web, canal in-app des diffusions admin
+- [ ] RED : job `broadcast-inapp-sender` — pour chaque destinataire ciblé, `createSystemNotification`
+      (`systemType: 'announcement'`, sujet/corps dans la langue du destinataire via `translated*`),
+      compteurs `sentCount`/`failedCount`, statut.
+- [ ] Route `POST /api/admin/broadcasts/:id/send-inapp` (garde existante, audit log) ; web : bouton
+      « Envoyer en notification » + méthode `adminService.sendBroadcastInApp` + i18n 4 langues.
+- [ ] Réception : web/iOS déjà branchés sur `notification:new` (toast + centre + push) — Android : trou
+      connu (pas d'hôte de toast global), consigné.
+
+### Gates
+- [ ] SDK : `xcodebuild test -scheme MeeshySDK-Package` (suites ciblées puis complètes) · iOS :
+      `meeshy.sh test` complet · gateway : suites ciblées + tsc · web : suites ciblées + tsc.
