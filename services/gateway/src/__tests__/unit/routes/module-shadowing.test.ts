@@ -6,7 +6,7 @@
  * gagne, et `X/index.ts` n'est jamais chargé — sauf si `X.ts` le ré-exporte.
  *
  * Les QUATRE scissions du dépôt (`users`, `voice`, `attachments`, et
- * `communities` depuis le cycle 86-bis) portent désormais cette coquille de
+ * `communities` depuis le cycle 86-ter) portent désormais cette coquille de
  * ré-export. Aucun répertoire n'est plus injoignable.
  *
  * `communities` était la seule à ne l'avoir jamais reçue : son répertoire est
@@ -52,7 +52,7 @@ const isReExportShim = (name: string): boolean =>
 
 // Répertoires que le fichier voisin N'ATTEINT PAS. Toute entrée ici serait du
 // code mort au sens strict : il compile, ses tests passent, et il ne s'exécute
-// jamais. La liste est VIDE depuis le cycle 86-bis, et doit le rester.
+// jamais. La liste est VIDE depuis le cycle 86-ter, et doit le rester.
 const KNOWN_UNREACHABLE: string[] = [];
 
 describe('ombrage fichier/répertoire dans routes/', () => {

@@ -7,7 +7,7 @@
  * rester la MÊME des deux côtés, pour que la consolidation à venir ait à
  * choisir un fichier et non à arbitrer entre deux comportements.
  *
- * Cette consolidation a eu lieu (cycle 86-bis) : `routes/communities.ts` est
+ * Cette consolidation a eu lieu (cycle 86-ter) : `routes/communities.ts` est
  * une coquille de ré-export, et `routes/communities/search.ts` est l'unique
  * appelant. Le module reste ici — le déplacer serait de la churn pure — mais sa
  * raison d'être est désormais la mutualisation ordinaire, plus l'ombrage.

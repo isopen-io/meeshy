@@ -11749,7 +11749,7 @@ la production :
 
 ---
 
-## Cycle 86-bis — Un module complet, testé, et sans appelant
+## Cycle 86-ter — Un module complet, testé, et sans appelant
 
 Quatrième forme de la famille ouverte au 77-bis, et la première qu'aucune
 lecture du code source ne peut trouver.

@@ -465,7 +465,7 @@ export { userRoutes } from './users/index';
 
 `routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portaient.
 `routes/communities.ts` ne l'a jamais reçue, et son répertoire (~1 900 lignes,
-gates de présence compris) est resté injoignable de sa création au cycle 86-bis, qui
+gates de présence compris) est resté injoignable de sa création au cycle 86-ter, qui
 l'a consolidé — les quatre routes que seul le legacy portait (`/mine`,
 `/:id/join`, `/:id/leave`, `/:id/invite`) portées dans le répertoire, puis le
 fichier basculé en coquille. **Les quatre scissions du dépôt sont désormais
@@ -478,7 +478,7 @@ confidentialité, personne ne le mesure. `module-shadowing.test.ts` garde les
 paires par deux voies (balayage des coquilles, et routes RÉELLEMENT
 enregistrées) ; toute nouvelle paire non-coquille le fait tomber.
 
-Coût mesuré avant consolidation (cycle 86-bis) : **trois cycles de correctifs
+Coût mesuré avant consolidation (cycle 86-ter) : **trois cycles de correctifs
 atterris dans le répertoire sans jamais atteindre la production**. Le cycle 84 y
 a diagnostiqué, corrigé et CLOS « la recherche de communautés iOS était morte » ;
 le fichier vivant portait encore le défaut mot pour mot. Avec lui, en
@@ -535,6 +535,14 @@ l'événement émis. Et quand on change la méthode Prisma qu'un handler appelle
 la route n'appelle plus passe au vert par le chemin nominal en croyant tenir le
 chemin d'erreur.
 
+**Le jumeau, côté LECTURE : un témoin de lecture assert sur ce que la réponse
+DIT.** `conversations/stats.test.ts` portait cinq témoins verts — un 404, un
+403, un 500, deux fois `statusCode === 200` avec `body.success === true` — sur
+une route qui servait `{}` (cycle 86). Aucun ne nommait un champ de `data`.
+Les deux moitiés tiennent en une phrase : **`statusCode` n'est pas une
+observation de la charge utile**, et seul un témoin qui traverse le sérialiseur
+(`app.inject()`, jamais un double du handler) peut voir ce qui en sort.
+
 **Une PANNE peut tenir la porte, et la réparer l'ouvre.**
 `GET /communities/search` chargeait `isOnline` sur ses membres sans le gater ;
 rien ne fuyait, parce que son schéma déclarait `creator: { type: 'object' }` et
@@ -571,6 +579,40 @@ Corollaire : **un champ que le schéma déclare et que la requête ne charge pas
 est la même dérive, dans l'autre sens.** `PATCH /conversations/:id` déclarait
 `participants[].userId` sans jamais le `select` — la réponse sortait sans, et
 sans lui aucune carte de visibilité de présence n'est adressable.
+
+### « Objet libre » ≠ « pas de déclaration » — c'est `additionalProperties`
+
+La seule défense honnête de `{ type: 'object' }` est *« mais c'est une carte,
+je ne connais pas ses clés »*. Elle est parfois vraie — et la déclaration qui
+la dit s'appelle `additionalProperties`, pas le silence :
+
+```ts
+hourlyDistribution: { type: 'object', additionalProperties: { type: 'number' } }
+```
+
+L'une laisse passer les clés inconnues, l'autre les supprime toutes. La
+question à poser à chaque objet de réponse est binaire : **carte à clés
+inconnues ⇒ `additionalProperties` ; sinon ⇒ `properties`.** Le silence n'est
+jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte à
+côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
+tableaux — cycle 86.)
+
+### Le balayage a été fait : 38 sites, et il reste 36
+
+Le cycle 86 a outillé le balayage du gateway. Un `grep` ne suffit pas — il faut
+résoudre l'objet littéral englobant (a-t-il `properties` ?), calculer la portée
+des clés `response:` (un schéma de REQUÊTE sans `properties` est permissif, pas
+destructeur), et **dépouiller les commentaires**, sans quoi on retrouve les
+commentaires des cycles précédents au lieu des défauts.
+
+Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
+**l'inventaire trié des 36 restants est dans
+`tasks/realtime-sync-audit-2026-08-22-cycle86.md` §6.** Les plus graves sont
+les 15 `items:` — des LISTES qui sortent en tableaux de `{}`, ce qui ressemble
+à une réponse valide. Et les 4 `user:` / 1 `sender:` touchent la famille de la
+présence : **les traiter comme le cycle 84 bis a traité le sien** — déclarer le
+schéma ET poser le gate dans le même lot, sans quoi la réparation publie la
+fuite (§ Une PANNE peut tenir la porte).
 
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
