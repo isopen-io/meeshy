@@ -63,6 +63,7 @@ L'analyse identifie **18 problèmes** de consommation de bande passante dans le 
 | `post:updated` | Post modifié | `ROOMS.feed(id)` × amis | 2–20 KB |
 | `post:deleted` | Post supprimé | `ROOMS.feed(id)` × amis | ~100 B |
 | `post:liked` / `post:unliked` | Like/unlike | `ROOMS.feed(id)` × amis | ~300 B |
+| `comment:liked` / `comment:unliked` | Like/unlike d'un commentaire | `ROOMS.feed(auteur)` + `ROOMS.post(id)` | ~200 B |
 | `story:created` / `story:updated` | Story | `ROOMS.feed(id)` × amis filtrés | 2–30 KB |
 | `user:preferences-updated` | Préfs mises à jour | `ROOMS.user(id)` | ~100 B |
 

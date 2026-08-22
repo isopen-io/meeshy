@@ -101,6 +101,16 @@ final class FeedSocketHandler {
             }
             .store(in: &cancellables)
 
+        // Jumelle DESCENDANTE : même écriture, parce que les deux charges
+        // portent le total ABSOLU. Sans cet abonnement, un compteur de
+        // commentaire ne savait que monter — et comme la valeur est PERSISTÉE
+        // ici, le compte gonflé survivait au redémarrage jusqu'au prochain REST.
+        socialSocket.commentUnliked
+            .sink { [weak self] data in
+                Task { await self?.handleCommentLiked(data) }
+            }
+            .store(in: &cancellables)
+
         // Comment emoji reactions — persist the ABSOLUTE per-emoji count so it
         // survives a cold start. The live UI (PostDetailViewModel) only tracks the
         // current user's heart state in-memory; without this bridge the aggregate
@@ -202,6 +212,9 @@ final class FeedSocketHandler {
         try? await persistence.updateCommentCount(postId: data.postId, count: data.commentCount)
     }
 
+    /// Sert `comment:liked` ET `comment:unliked` — un seul écrasement idempotent
+    /// couvre les deux sens, la charge portant le total absolu (miroir de
+    /// `handleCommentReaction` ci-dessous).
     private func handleCommentLiked(_ data: SocketCommentLikedData) async {
         try? await persistence.updateCommentLikeCount(
             commentId: data.commentId,
