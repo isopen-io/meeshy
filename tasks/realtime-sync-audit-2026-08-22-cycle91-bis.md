@@ -127,36 +127,29 @@ assert `res.payload` ne contient pas le mot de passe.
 
 ---
 
-## 4. L'inventaire, site par site
+## 4. L'inventaire, site par site — APRÈS réconciliation
 
-**Balayage des objets nus : 10 → 1.**
+Ce cycle a été mené en parallèle de deux autres sessions travaillant la même
+famille. Le tableau ci-dessous distingue donc ce que **ce lot** apporte de ce
+que `main` portait déjà quand il a été réconcilié (voir §11).
 
-| site | traitement |
-|---|---|
-| `auth/login.ts` (2FA) | branche déclarée — `requires2FA`, `twoFactorToken`, `rememberDevice`, `message` |
-| `auth/register.ts` (conflit) | branche déclarée ; `password` retiré de l'émetteur |
-| `messages-advanced.ts` PUT / PATCH | `data` = `messageSchema` + `meta`, servi à plat |
-| `messages-advanced.ts` DELETE | `messageId`, `deleted`, `meta` |
-| `messages-advanced.ts` réactions / statuts | `total`, qui était supprimé |
-| `voice/translation.ts` ×3 | `attachment` / `transcription` déclarés depuis leurs ÉMETTEURS ; `translatedAudios` ajouté |
-| `conversations/sharing.ts` (création de lien) | `link` était déclaré OBJET là où le handler met une URL (string) ; `code` et `shareLink` supprimés avec |
-| `calls.ts` 400 | schéma d'erreur écrit à la main → `errorResponseSchema` |
-| `links/admin.ts` `creator` | déclaré depuis ses deux émetteurs — aucun champ de présence, donc aucune porte ouverte |
-| `conversations/participants.ts` | `userId` et `role`, que le schéma supprimait |
-| `users/profile.ts` `permissions` | **RETIRÉ** plutôt que déclaré (voir §5) |
+| site | traitement | qui |
+|---|---|---|
+| `auth/login.ts` (2FA) | branche déclarée — `requires2FA`, `twoFactorToken`, `rememberDevice`, `message` | **ce lot** |
+| `auth/register.ts` (conflit) | branche déclarée ; `password` retiré de l'émetteur | **ce lot** |
+| `messages-advanced.ts` DELETE | `messageId`, `deleted`, `meta` | **ce lot** |
+| `messages-advanced.ts` PUT — `meta.conversationStats` | `messageResponseSchema` ne le déclare pas ; ajouté | **ce lot** |
+| `messages-advanced.ts` réactions / statuts | `total`, qui était supprimé | **ce lot** |
+| `calls.ts` 400 | schéma d'erreur écrit à la main → `errorResponseSchema` | **ce lot** |
+| `links/admin.ts` `creator` | déclaré depuis ses deux émetteurs — aucun champ de présence | **ce lot** |
+| `conversations/participants.ts` | `userId` et `role`, que le schéma supprimait | **ce lot** |
+| `users/profile.ts` `permissions` | **RETIRÉ** plutôt que déclaré (voir §5) | **ce lot** |
+| `messages-advanced.ts` PUT / PATCH | pointés sur `messageResponseSchema` | cycle 88 bis (PR #3316) |
+| `conversations/sharing.ts` (création de lien) | `conversationShareLinkResponseSchema` exporté | cycle 88 bis (PR #3316) |
+| `voice/translation.ts` ×3 + `translatedAudios` | `voiceAttachmentSchema` / `voiceTranscriptionSchema` factorisés dans `./types` | cycle 91 concurrent (PR #3319) |
 
-**Balayage des désaccords : 11 → 1** (voir §6).
-
-### Sur `voice/translation.ts` — la forme juste était dans le même fichier
-
-Les deux routes de traduction portaient `attachment` et `transcription` NUS
-quand la route de transcription du **même fichier** les déclarait entièrement,
-trois cents lignes plus bas. Les champs retenus viennent des émetteurs réels
-(`getAttachmentWithTranscription`, le sur-ensemble ; `translateAttachment`, les
-six premiers), pas de la copie voisine — et la copie voisine a été remplacée
-par la déclaration partagée, pour qu'il n'y ait plus deux vérités.
-
----
+**Balayage des objets nus : 4 (état de `main`) → 1.**
+**Balayage des désaccords : → 1** (voir §6).
 
 ## 5. Deux sites où « déclarer » n'était pas la réponse
 
@@ -292,3 +285,65 @@ longtemps :
 > particularité : il scelle la panne. Le commentaire
 > `// response schema strips requires2FA from serialized output` a tenu la
 > connexion à deux facteurs fermée en le disant à voix haute.
+
+---
+
+## 11. La réconciliation — trois sessions sur la même famille
+
+Ce cycle a été mené pendant que **deux autres sessions** travaillaient la même
+famille de défauts, sans que l'une sache des autres :
+
+| | cycle | apport |
+|---|---|---|
+| PR #3316 | 88 bis | les deux transports d'ÉDITION + la création de lien de partage |
+| PR #3319 | 91 | les trois sites de `voice/translation.ts`, factorisés dans `./types` |
+| ce lot | 91 bis | 2FA, register, DELETE, `calls`/`links`/`profile`/`participants`, et l'OUTIL |
+
+Le merge a été fait **à la main**, en gardant systématiquement le travail de
+`main` là où il couvre le même site — leur factorisation de `voice/types.ts` et
+leur `conversationShareLinkResponseSchema` exporté sont meilleurs que mes
+constantes locales, et le commentaire du PATCH (la boucle d'outbox Android)
+valait d'être conservé mot pour mot.
+
+Le journal a été renommé en `cycle91-bis` : le cycle 91 était déjà pris.
+
+### Ce que la collision a prouvé, et qu'aucune session ne pouvait voir seule
+
+Le cycle 88 bis a réparé `PUT` et `PATCH` de `messages-advanced.ts` en les
+cherchant à la main, avec une taxonomie juste (« la clé déclarée n'existe pas
+⇒ le parent entier sort `{}` ») et une méthode explicite. **Il a manqué le
+`DELETE` du même fichier, entre les deux.**
+
+Ce n'est pas de l'inattention. Son schéma est **irréprochable** —
+`message: { type: 'string' }` — et il décrit `{messageId, deleted, meta}`. Rien
+dans sa forme ne le distingue d'un schéma juste ; seule la comparaison avec
+l'émetteur le trahit. Il rendait encore `data: {}` sur `main` au moment de ce
+merge.
+
+> **Une règle exacte, appliquée à la main par quelqu'un qui la comprend, sur le
+> fichier même où il travaille, rate quand même le site d'à côté.** C'est
+> l'argument le plus fort qu'on puisse produire pour outiller une famille
+> plutôt que la mémoriser — et il n'apparaît que quand deux passes
+> indépendantes se croisent.
+
+C'est la même leçon que le cycle 87 avait tirée du balayage laissé dans un
+journal (« le coût d'un outil hors du dépôt ne se paie pas en mémoire, mais en
+travail fait deux fois »), poussée d'un cran : ici l'outil manquant ne coûte pas
+du travail refait, il coûte un défaut **conservé** au milieu de ses jumeaux
+réparés.
+
+### Une note d'intégration qui vaut règle
+
+`editedMessageResponseSchema` est composé depuis `messageSchema`, et **non** en
+descendant dans `messageResponseSchema.properties.data`. Plusieurs suites
+mockent `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports :
+une chaîne d'accès y lève **à l'IMPORT** et tue la suite entière
+(`conversation-messages-advanced.test.ts`, 154 témoins), là où un
+`...spread` d'`undefined` est légal et inerte.
+
+> **Un schéma de module ne doit pas pouvoir casser le chargement d'un fichier de
+> routes.** Composer par spread, jamais par chaîne d'accès.
+
+(Le mock incomplet reste, lui, l'anti-patron que le cycle 86-ter a nommé — c'est
+lui qui rendait ces 154 témoins aveugles au défaut. Le corriger est un lot en
+soi : il faudrait vérifier ce que chacune de ses assertions tient réellement.)
