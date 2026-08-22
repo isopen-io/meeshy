@@ -41,6 +41,61 @@ interface PostListQuery {
 // shared select) closes the Prisme Linguistique drift that previously affected
 // the admin views.
 
+// Schéma d'ÉLÉMENT de la liste de posts servie à la console.
+//
+// `items: { type: 'object' }` supprime toute clé de chaque élément :
+// `UserPostsSection` recevait une carte par post, toutes muettes. Les champs
+// consommés sont nommés ici, et `additionalProperties: true` garantit qu'un
+// ajout au `select` du handler ne redevienne pas invisible en silence.
+const adminPostItemSchema = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    id: { type: 'string' },
+    type: { type: 'string' },
+    visibility: { type: 'string' },
+    content: { type: 'string' },
+    originalLanguage: { type: 'string' },
+    communityId: { type: 'string' },
+    moodEmoji: { type: 'string' },
+    isPinned: { type: 'boolean' },
+    isEdited: { type: 'boolean' },
+    deletedAt: { type: 'string', format: 'date-time', nullable: true },
+    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+    likeCount: { type: 'number' },
+    commentCount: { type: 'number' },
+    repostCount: { type: 'number' },
+    viewCount: { type: 'number' },
+    bookmarkCount: { type: 'number' },
+    shareCount: { type: 'number' },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+    author: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        displayName: { type: 'string' },
+        avatar: { type: 'string' }
+      }
+    },
+    media: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: true }
+    },
+    _count: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        comments: { type: 'number' },
+        views: { type: 'number' },
+        bookmarks: { type: 'number' }
+      }
+    }
+  }
+} as const;
+
 function buildPeriodFilter(period: string): Date {
   const startDate = new Date();
 
@@ -231,7 +286,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: adminPostItemSchema },
             pagination: {
               type: 'object',
               properties: {

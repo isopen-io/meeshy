@@ -15,6 +15,106 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 
+// Schémas d'ÉLÉMENT des listes de modération.
+//
+// `items: { type: 'object' }` — sans `properties` ni `additionalProperties` —
+// n'est pas permissif : fast-json-stringify supprime toute clé de chaque
+// élément. La liste garde son cardinal et perd tout son contenu.
+//
+// Ces schémas nomment les champs que la console consomme ET portent
+// `additionalProperties: true`, pour qu'un champ ajouté au `select` du handler
+// ne redevienne pas muet en silence. C'est l'idiome déjà retenu par
+// `routes/messages.ts` pour la même raison.
+const adminMessageItemSchema = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    id: { type: 'string' },
+    content: { type: 'string' },
+    messageType: { type: 'string' },
+    originalLanguage: { type: 'string' },
+    isEdited: { type: 'boolean' },
+    createdAt: { type: 'string', format: 'date-time' },
+    sender: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        id: { type: 'string' },
+        userId: { type: 'string' },
+        displayName: { type: 'string' },
+        avatar: { type: 'string' },
+        type: { type: 'string' },
+        language: { type: 'string' },
+        user: {
+          type: 'object',
+          additionalProperties: true,
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            displayName: { type: 'string' },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+            avatar: { type: 'string' }
+          }
+        }
+      }
+    },
+    conversation: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        id: { type: 'string' },
+        identifier: { type: 'string' },
+        title: { type: 'string' },
+        type: { type: 'string' }
+      }
+    },
+    attachments: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: true }
+    },
+    _count: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        replies: { type: 'number' }
+      }
+    }
+  }
+} as const;
+
+const adminCommunityItemSchema = {
+  type: 'object',
+  additionalProperties: true,
+  properties: {
+    id: { type: 'string' },
+    identifier: { type: 'string' },
+    name: { type: 'string' },
+    description: { type: 'string' },
+    avatar: { type: 'string' },
+    isPrivate: { type: 'boolean' },
+    createdAt: { type: 'string', format: 'date-time' },
+    creator: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        displayName: { type: 'string' },
+        avatar: { type: 'string' }
+      }
+    },
+    _count: {
+      type: 'object',
+      additionalProperties: true,
+      properties: {
+        members: { type: 'number' },
+        Conversation: { type: 'number' }
+      }
+    }
+  }
+} as const;
+
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -53,7 +153,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: adminMessageItemSchema },
             pagination: {
               type: 'object',
               properties: {
@@ -203,7 +303,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: { type: 'object' } },
+            data: { type: 'array', items: adminCommunityItemSchema },
             pagination: {
               type: 'object',
               properties: {
