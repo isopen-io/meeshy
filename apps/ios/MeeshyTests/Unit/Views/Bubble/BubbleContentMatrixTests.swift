@@ -786,6 +786,7 @@ final class BubbleContentMatrixTests: XCTestCase {
     /// disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
     func test_joinNoticePresentation_putsGivenNameFirstAndPseudoAsHandle() {
         let notice = BubbleContent.JoinNotice(
+            participantId: "participant-1",
             displayName: "ano_Jc_n045",
             isAnonymous: true,
             viaShareLink: true,
@@ -804,6 +805,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     func test_joinNoticePresentation_withoutGivenName_showsNoRedundantHandle() {
         let notice = BubbleContent.JoinNotice(
+            participantId: "participant-1",
             displayName: "ano_bob",
             isAnonymous: true,
             viaShareLink: true,
@@ -821,6 +823,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     func test_joinNoticePresentation_registeredMember_hasNoBadgeAndNoRules() {
         let notice = BubbleContent.JoinNotice(
+            participantId: "participant-1",
             displayName: "Alice Smith",
             isAnonymous: false,
             viaShareLink: false,
@@ -841,6 +844,7 @@ final class BubbleContentMatrixTests: XCTestCase {
     func test_joinNoticePresentation_carriesLinkRules() {
         let rules = JoinNoticeMetadata.LinkRules(canSendMessages: true, canSendFiles: false, canSendImages: true)
         let notice = BubbleContent.JoinNotice(
+            participantId: "participant-1",
             displayName: "ano_bob",
             isAnonymous: true,
             viaShareLink: true,
