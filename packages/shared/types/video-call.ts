@@ -705,7 +705,14 @@ export interface CallInitiateAck {
 export interface CallJoinAck {
   readonly success: boolean;
   readonly data?: { callSession: CallSession; iceServers: RTCIceServer[] };
-  readonly error?: { code: string; message: string };
+  /**
+   * `endReason` is populated only when `code === 'CALL_ENDED'` — the real
+   * reason the call already ended server-side (Prisma `CallSession.endReason`),
+   * so a caller rejoining after a reconnect can distinguish a benign hangup
+   * from a transient failure (`connectionLost`/`heartbeatTimeout`) instead of
+   * assuming `completed`. @see CallService.joinCallAttempt
+   */
+  readonly error?: { code: string; message: string; endReason?: CallEndReason };
 }
 
 /**
