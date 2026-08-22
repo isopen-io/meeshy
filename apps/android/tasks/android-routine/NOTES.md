@@ -5,6 +5,28 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — SDK bootstrap: the `android-37` symlink is NO LONGER enough — copy + rewrite ApiLevel
+
+The prior note's symlink fix (`ln -sf android-37.0 android-37`) **stopped working** this run. AGP does not
+derive the platform hash from the directory *name*: it reads `AndroidVersion.ApiLevel` from the platform's
+`source.properties`. The `platforms;android-37.0` package ships `AndroidVersion.ApiLevel=37.0`, so AGP computes
+the hash `android-37.0` regardless of a dir renamed/symlinked to `android-37`, and `compileSdk = 37` still dies:
+```
+> Failed to find target with hash string 'android-37' in: /root/android-sdk
+```
+(Confirmed: a baseline `assembleDebug` failed on exactly this **with the symlink in place**.) The fix that
+actually works — make a **real** `android-37` platform whose `source.properties` claims the integer API level:
+```bash
+cd "$HOME/android-sdk/platforms"
+rm -f android-37                       # drop the symlink if present
+cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+```
+After that, full `assembleDebug testDebugUnitTest` = BUILD SUCCESSFUL (973 tasks). This is a **local-env only**
+fix (`$HOME/android-sdk`, never committed; `local.properties` stays gitignored). CI is unaffected — it runs
+`android-actions/setup-android` and lets AGP resolve/download the platform it wants, so this hand-patch is only
+for the reachable-`dl.google.com` local gate.
+
 ## 2026-08-22 — SDK bootstrap: `android-37` is now MINOR-versioned; symlink after install
 
 The routine's recipe `sdkmanager --channel=3 "platforms;android-37.0"` now installs a **minor-versioned**
