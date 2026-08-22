@@ -1,6 +1,28 @@
 import Foundation
 import Combine
 import MeeshySDK
+import MeeshyUI
+
+/// Minimal player surface `ReelFeedSoundButtonPolicy.apply(soundOn:to:)`
+/// needs — narrow enough to double in tests AND to let `SharedAVPlayerManager`
+/// conform AS-IS (see extension below), so ONE test exercises the exact
+/// assignment `ReelFeedVideoSurface.drive()` performs against the REAL
+/// production singleton, not just a pure predicate checked in isolation.
+///
+/// Correctif DoD S2 rejet (constat majeur #1) : la mutation qui a démoli la
+/// suite de câblage retirait la SEULE ligne qui écrivait `isForceMuted` au
+/// lecteur tout en gardant l'appel au prédicat pur intact — aucun test ne
+/// l'a vu, car aucun test n'observait le lecteur lui-même. `apply` est
+/// désormais le SEUL point d'écriture ; `drive()` ne recompose plus jamais
+/// séparément un `let forceMuted = …` puis une affectation à la main.
+@MainActor
+protocol FeedMutablePlayer: AnyObject {
+    var isMuted: Bool { get set }
+    var isForceMuted: Bool { get set }
+    var effectiveMuted: Bool { get }
+}
+
+extension SharedAVPlayerManager: FeedMutablePlayer {}
 
 /// Pure decisions for the feed's video sound toggle (exigence produit
 /// 2026-08-22, S2). Extracted so BOTH `ReelFeedCard` (réel natif) and
@@ -36,18 +58,44 @@ enum ReelFeedSoundButtonPolicy {
     nonisolated static func isForceMuted(soundOn: Bool) -> Bool {
         !soundOn
     }
+
+    /// Imperative counterpart of `isForceMuted(soundOn:)` — the ONLY place
+    /// that writes mute state for the feed's sound button. `drive()` MUST
+    /// call this (never re-derive `isForceMuted` and assign it separately).
+    ///
+    /// When the user asks for sound (`soundOn == true`) this ALSO clears the
+    /// global `isMuted` preference — otherwise a `true` left by an unrelated
+    /// surface (conversation gallery mute button, `VideoTransportControls
+    /// .muteButton`; never reset by `cleanup()`, by design) keeps
+    /// `effectiveMuted` true and the tap becomes a no-op: the icon flips to
+    /// "sound on" while the player stays silent (DoD S2 rejet, constat
+    /// majeur #2). This is the SAME arbitration `ReelsPlayerView.drive()`
+    /// already makes on every fullscreen entry (`manager.isMuted = false`
+    /// unconditionally) — an explicit request for sound is unambiguous.
+    ///
+    /// Muting the feed back OFF never touches `isMuted` — only
+    /// `isForceMuted` — so the feed can never leak a forced-silence
+    /// preference to the next surface (the leak `isForceMuted` was built to
+    /// close in the first place).
+    @MainActor
+    static func apply(soundOn: Bool, to player: FeedMutablePlayer) {
+        if soundOn {
+            player.isMuted = false
+        }
+        player.isForceMuted = isForceMuted(soundOn: soundOn)
+    }
 }
 
 /// Session-scoped intention of the FEED's own sound — survives scroll and the
 /// next elected card, never persisted across launches (the feed reopens
 /// muted at the next cold start, honoring "démarrent en muet"). Deliberately
-/// SEPARATE from `SharedAVPlayerManager.isMuted` (the fullscreen viewer's
-/// GLOBAL preference): writing `isMuted` from the feed would reopen the exact
-/// leak `isForceMuted` was built to close — `ReelsPlayerView.drive()` forces
-/// `manager.isMuted = false` unconditionally on every fullscreen entry (no
-/// restore on exit), and a conversation gallery would inherit a feed-authored
-/// `isMuted = true` it never asked for. The feed instead flips
-/// `isForceMuted` — see `ReelFeedSoundButtonPolicy.isForceMuted(soundOn:)`.
+/// DISTINCT from `SharedAVPlayerManager.isMuted` (the fullscreen viewer's
+/// GLOBAL preference): silencing the feed (`soundOn == false`) never writes
+/// `isMuted` — only `isForceMuted` — which is what closes the leak this type
+/// was built to avoid (a conversation gallery inheriting a feed-authored
+/// silence it never asked for). Activating the feed's sound is the opposite
+/// case: an explicit, unambiguous user request, so it DOES clear `isMuted`
+/// too when needed — see `ReelFeedSoundButtonPolicy.apply(soundOn:to:)`.
 ///
 /// Also holds the per-media audio-track probe cache, keyed by `FeedMedia.id`,
 /// shared across the native card and any repost cell showing the same reel.

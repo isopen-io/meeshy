@@ -138,7 +138,12 @@ struct ReelFeedCard: View, Equatable {
     /// Reporté par `ReelFeedVideoSurface` : vrai seulement quand CETTE carte
     /// possède réellement le moteur partagé (D3) — jamais dérivé localement.
     @State private var isEngineOwned = false
-    @State private var soundIsOn: Bool = ReelFeedSoundIntent.shared.isSoundOn
+    /// Reporté par `ReelFeedVideoSurface` : vérité du lecteur RÉEL
+    /// (`!effectiveMuted`) — remplace un ancien miroir de
+    /// `ReelFeedSoundIntent.isSoundOn` seul, qui pouvait mentir (DoD S2
+    /// rejet, constat majeur #2 : voir doc sur `ReelFeedVideoSurface
+    /// .isSoundAudible`).
+    @State private var isSoundAudible = false
     @State private var soundTrackPresence: [String: Bool] = ReelFeedSoundIntent.shared.audioTrackPresence
 
     private var hasAudioTrack: Bool {
@@ -192,7 +197,6 @@ struct ReelFeedCard: View, Equatable {
         .reportReelFrame(id: post.id, kind: kind)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
-        .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundIsOn = $0 }
         .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
         .fullScreenCover(item: $reelCardFullscreenPlace) { item in
             LocationFullscreenView(
@@ -221,7 +225,7 @@ struct ReelFeedCard: View, Equatable {
         switch kind {
         case .video:
             if let media {
-                ReelFeedVideoSurface(media: media, isActive: isActive, isEngineOwned: $isEngineOwned)
+                ReelFeedVideoSurface(media: media, isActive: isActive, isEngineOwned: $isEngineOwned, isSoundAudible: $isSoundAudible)
                     .frame(width: width, height: height)
                     .clipped()
             } else {
@@ -308,7 +312,7 @@ struct ReelFeedCard: View, Equatable {
         if ReelFeedSoundButtonPolicy.showsSoundButton(isActive: isActive, isEngineOwned: isEngineOwned, hasAudioTrack: hasAudioTrack) {
             VStack {
                 HStack {
-                    ReelFeedSoundButton(isSoundOn: soundIsOn) {
+                    ReelFeedSoundButton(isSoundAudible: isSoundAudible) {
                         ReelFeedSoundIntent.shared.toggleSound()
                         HapticFeedback.light()
                     }

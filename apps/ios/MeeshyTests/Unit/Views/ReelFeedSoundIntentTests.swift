@@ -124,51 +124,132 @@ final class ReelFeedSoundIntentTests: XCTestCase {
         XCTAssertTrue(intent.hasAudioTrack(mediaId: "m4"), "Une entrée déjà résolue à VRAI ne doit plus être écrasée.")
     }
 
-    // MARK: - ÉTAT DU LECTEUR : la bascule atteint réellement SharedAVPlayerManager
+    // MARK: - ReelFeedSoundButtonPolicy.apply(soundOn:to:) — double
     //
-    // Le défaut le plus probable de cette feature (souligné par l'orchestrateur) :
-    // une icône qui bascule sans qu'aucun son ne sorte. Ce test ferme la boucle
-    // bout en bout jusqu'au lecteur RÉEL — exactement ce que `drive()` doit
-    // reproduire en production.
+    // Correctif DoD S2 rejet, constat majeur #1 : `drive()` recomposait
+    // séparément un `let forceMuted = isForceMuted(soundOn:)` puis une
+    // affectation `manager.isForceMuted = forceMuted` — la mutation M5
+    // (retrait de la seule affectation, prédicat conservé) laissait la
+    // fonctionnalité MORTE sans qu'aucun test ne rougisse. `apply` est
+    // désormais le SEUL point d'écriture ; ce test verrouille la valeur
+    // ÉCRITE sur un double, indépendamment de tout accès au singleton réel.
+
+    private final class SpyFeedPlayer: FeedMutablePlayer {
+        var isMuted = false
+        var isForceMuted = false
+        var effectiveMuted: Bool { isMuted || isForceMuted }
+    }
 
     @MainActor
-    func test_soundIntentAppliedToRealManager_actuallyChangesEffectiveMuted() {
+    func test_apply_soundOff_forceMutesAndLeavesGlobalMuteUntouched() {
+        let player = SpyFeedPlayer()
+        player.isMuted = false
+        ReelFeedSoundButtonPolicy.apply(soundOn: false, to: player)
+        XCTAssertTrue(player.isForceMuted)
+        XCTAssertFalse(player.isMuted, "soundOn: false ne doit JAMAIS écrire isMuted — seul isForceMuted porte le silence du fil.")
+    }
+
+    @MainActor
+    func test_apply_soundOn_clearsForceMuteAndGlobalMute_evenWhenGlobalMuteWasTrue() {
+        // Correctif DoD S2 rejet, constat majeur #2 : `isMuted` peut avoir été
+        // laissé à `true` par une AUTRE surface (bouton mute de la galerie de
+        // conversation) — `cleanup()` ne le remet délibérément PAS à zéro.
+        // Sans clarifier `isMuted` ici, `effectiveMuted` resterait vrai après
+        // activation : le bouton bascule une icône, aucun son ne sort.
+        let player = SpyFeedPlayer()
+        player.isMuted = true
+        player.isForceMuted = true
+        ReelFeedSoundButtonPolicy.apply(soundOn: true, to: player)
+        XCTAssertFalse(player.isForceMuted)
+        XCTAssertFalse(player.isMuted)
+        XCTAssertFalse(player.effectiveMuted, "Après activation, le lecteur DOIT devenir audible même si isMuted valait déjà true.")
+    }
+
+    // MARK: - ReelFeedSoundButtonPolicy.apply(soundOn:to:) — SharedAVPlayerManager RÉEL
+    //
+    // Le double ci-dessus prouve que `apply` écrit la bonne valeur ; ce test
+    // ferme la boucle jusqu'au singleton de PRODUCTION — le chemin exact que
+    // `drive()` emprunte. Isolation (correctif DoD S2 rejet, constat mineur
+    // #5) : `isMuted` et `isForceMuted` sont explicitement remis à `false`
+    // en ENTRÉE et en `defer`, `cleanup()` (via `stop()`) ne remettant
+    // délibérément PAS `isMuted` à zéro — un test antérieur du même process
+    // qui le laisserait à `true` ferait échouer celui-ci sans cette garde.
+
+    @MainActor
+    func test_apply_appliedToRealManager_actuallyChangesEffectiveMuted() {
         let manager = SharedAVPlayerManager.shared
         manager.stop()
-        defer { manager.stop() }
+        manager.isMuted = false
+        manager.isForceMuted = false
+        defer {
+            manager.stop()
+            manager.isMuted = false
+            manager.isForceMuted = false
+        }
 
         let intent = ReelFeedSoundIntent.makeForTesting()
 
         // Fil au repos (D4 : démarre muet) — le moteur doit rester silencieux.
-        manager.isForceMuted = ReelFeedSoundButtonPolicy.isForceMuted(soundOn: intent.isSoundOn)
+        ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
         XCTAssertTrue(manager.effectiveMuted, "Sans son activé, le lecteur RÉEL doit rester muet.")
 
         // Tap utilisateur → intention son ON.
         intent.toggleSound()
-        manager.isForceMuted = ReelFeedSoundButtonPolicy.isForceMuted(soundOn: intent.isSoundOn)
+        ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
         XCTAssertFalse(manager.effectiveMuted, "Après activation, le lecteur RÉEL doit devenir audible.")
 
         // Bascule retour.
         intent.toggleSound()
-        manager.isForceMuted = ReelFeedSoundButtonPolicy.isForceMuted(soundOn: intent.isSoundOn)
+        ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
         XCTAssertTrue(manager.effectiveMuted, "Retour au muet : le lecteur RÉEL doit redevenir silencieux.")
     }
 
     @MainActor
-    func test_soundIntent_neverWritesGlobalIsMutedPreference() {
-        // D4 : le fil ne doit JAMAIS écrire isMuted (préférence globale
-        // session) — seulement isForceMuted. Sans cette garantie, la fuite que
-        // isForceMuted a été créée pour fermer (galerie héritant du silence)
-        // se rouvrirait.
+    func test_apply_appliedToRealManager_unmutesEvenWhenGlobalIsMutedWasLeftTrueByAnotherSurface() {
+        // Reproduction directe du constat majeur #2 de la revue DoD : couper
+        // le son d'une vidéo dans la galerie (VideoTransportControls.muteButton)
+        // laisse `isMuted == true` — jamais remis à zéro par `cleanup()`, par
+        // conception. Revenir au fil et activer son bouton DOIT rendre le
+        // lecteur RÉEL audible malgré cela.
         let manager = SharedAVPlayerManager.shared
+        manager.stop()
+        manager.isForceMuted = false
+        defer {
+            manager.stop()
+            manager.isMuted = false
+            manager.isForceMuted = false
+        }
+        manager.isMuted = true // laissé par la galerie de conversation
+
+        let intent = ReelFeedSoundIntent.makeForTesting()
+        intent.setSoundOn(true)
+        ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
+
+        XCTAssertFalse(manager.effectiveMuted, "L'icône affiche « son actif » : le lecteur doit vraiment l'être, même si isMuted valait true.")
+        XCTAssertTrue(SharedAVPlayerManager.shouldDuckOthersOnPlay(effectiveMuted: manager.effectiveMuted), "play() doit armer .duckOthers pour cette vidéo désormais audible.")
+    }
+
+    @MainActor
+    func test_apply_soundOff_neverForcesGlobalIsMutedToTrue() {
+        // Direction opposée : couper le son du FIL ne doit jamais écrire
+        // isMuted (préférence globale) — seulement isForceMuted, sous peine
+        // de rouvrir la fuite documentée (galerie héritant du silence du feed).
+        let manager = SharedAVPlayerManager.shared
+        manager.stop()
         manager.isMuted = false
-        defer { manager.stop() }
+        manager.isForceMuted = false
+        defer {
+            manager.stop()
+            manager.isMuted = false
+            manager.isForceMuted = false
+        }
 
         let intent = ReelFeedSoundIntent.makeForTesting()
         intent.setSoundOn(false)
-        manager.isForceMuted = ReelFeedSoundButtonPolicy.isForceMuted(soundOn: intent.isSoundOn)
+        ReelFeedSoundButtonPolicy.apply(soundOn: intent.isSoundOn, to: manager)
 
-        XCTAssertFalse(manager.isMuted, "isMuted (préférence globale) ne doit jamais être touché par le fil.")
+        XCTAssertFalse(manager.isMuted, "isMuted (préférence globale) ne doit jamais être touché en direction ON par le fil.")
         XCTAssertTrue(manager.isForceMuted)
     }
+
 }

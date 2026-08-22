@@ -34,7 +34,12 @@ struct ReelRepostEmbedCell: View {
     /// Reporté par `ReelFeedVideoSurface` : vrai seulement quand CETTE cellule
     /// possède réellement le moteur partagé (D3) — jamais dérivé localement.
     @State private var isEngineOwned = false
-    @State private var soundIsOn: Bool = ReelFeedSoundIntent.shared.isSoundOn
+    /// Reporté par `ReelFeedVideoSurface` : vérité du lecteur RÉEL
+    /// (`!effectiveMuted`) — remplace un ancien miroir de
+    /// `ReelFeedSoundIntent.isSoundOn` seul, qui pouvait mentir (DoD S2
+    /// rejet, constat majeur #2 : voir doc sur `ReelFeedVideoSurface
+    /// .isSoundAudible`).
+    @State private var isSoundAudible = false
     @State private var soundTrackPresence: [String: Bool] = ReelFeedSoundIntent.shared.audioTrackPresence
 
     /// Election identity reported to `ReelFeedAutoplayCoordinator`: the CONTAINING
@@ -113,7 +118,6 @@ struct ReelRepostEmbedCell: View {
                 }
             }
         }
-        .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundIsOn = $0 }
         .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
     }
 
@@ -125,7 +129,7 @@ struct ReelRepostEmbedCell: View {
                isEngineOwned: isEngineOwned,
                hasAudioTrack: soundTrackPresence[media.id] ?? false
            ) {
-            ReelFeedSoundButton(isSoundOn: soundIsOn) {
+            ReelFeedSoundButton(isSoundAudible: isSoundAudible) {
                 ReelFeedSoundIntent.shared.toggleSound()
                 HapticFeedback.light()
             }
@@ -225,7 +229,7 @@ struct ReelRepostEmbedCell: View {
             // `SharedAVPlayerManager` (no 2nd player), call-gated, force-muted (feed
             // policy). It renders its own poster beneath until the first frame, and
             // shows only the poster while inactive.
-            ReelFeedVideoSurface(media: videoMedia, isActive: isActive, isEngineOwned: $isEngineOwned)
+            ReelFeedVideoSurface(media: videoMedia, isActive: isActive, isEngineOwned: $isEngineOwned, isSoundAudible: $isSoundAudible)
                 .aspectRatio(contentMode: .fill)
         } else if let media = repost.primaryReelMedia, media.type != .audio, posterURL(media) != nil {
             ProgressiveCachedImage(

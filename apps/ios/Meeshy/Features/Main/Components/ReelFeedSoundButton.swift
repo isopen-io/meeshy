@@ -13,13 +13,20 @@ import MeeshyUI
 /// will perform (unanimous convention across the four existing sound-toggle
 /// `accessibilityLabel`s in this repo — `CallView`, `PostDetailView`,
 /// `ReelsPlayerView`, SDK `VideoTransportControls`), not the current state.
+///
+/// `isSoundAudible` is the REAL player state (`!SharedAVPlayerManager
+/// .shared.effectiveMuted`), never the raw session intention
+/// (`ReelFeedSoundIntent.isSoundOn`) alone — DoD S2 rejet, constat majeur
+/// #2 : a global `isMuted` left `true` by an unrelated surface (conversation
+/// gallery mute button) keeps the player silent regardless of the feed's own
+/// intent, and an icon driven by intent alone would lie about it.
 struct ReelFeedSoundButton: View {
-    let isSoundOn: Bool
+    let isSoundAudible: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !isSoundOn))
+            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !isSoundAudible))
                 .font(MeeshyFont.relative(13, weight: .bold))
                 .foregroundColor(.white)
                 .padding(8)
@@ -34,7 +41,7 @@ struct ReelFeedSoundButton: View {
         .frame(minWidth: 44, minHeight: 44)
         .contentShape(Rectangle())
         .buttonStyle(.plain)
-        .accessibilityLabel(isSoundOn
+        .accessibilityLabel(isSoundAudible
             ? String(localized: "a11y.feed.video.sound.mute", defaultValue: "Couper le son de la vidéo", bundle: .main)
             : String(localized: "a11y.feed.video.sound.unmute", defaultValue: "Activer le son de la vidéo", bundle: .main))
     }

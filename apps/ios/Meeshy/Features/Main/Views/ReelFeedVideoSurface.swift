@@ -15,6 +15,22 @@ nonisolated enum ReelEngineOwnershipPolicy {
     static func shouldRelease(ownsEngine: Bool, isShowingThis: Bool) -> Bool {
         ownsEngine && isShowingThis
     }
+
+    /// Should the button-mounting flag reported to the parent be `true`?
+    /// Deliberately takes the manager's OWN `player`/`activeURL` as explicit
+    /// arguments rather than reading a caller's local `@State` mirror of
+    /// them — the previous implementation computed this from `self.player`/
+    /// `self.activeURL` (mirrors kept in sync by a DIFFERENT view's
+    /// `.onReceive`), which a same-instant read right after `manager.load()`
+    /// could observe before that other subscription's closure had actually
+    /// run. Reading `manager.player`/`manager.activeURL` directly removes
+    /// the dependency on subscription ordering entirely — there is no
+    /// "other view" to race (DoD S2 rejet, constat majeur #3). The `@State`
+    /// mirrors keep their role for RENDER (`isShowingThis` below, unchanged)
+    /// — only this MOUNTING decision reads the authoritative source.
+    static func isEngineOwned(owns: Bool, player: AVPlayer?, activeURL: String, expectedURL: String) -> Bool {
+        owns && player != nil && activeURL == expectedURL
+    }
 }
 
 /// Joue un réel vidéo MUET en fond de carte tant qu'il est actif (le plus
@@ -29,8 +45,11 @@ nonisolated enum ReelEngineOwnershipPolicy {
 ///
 /// Différence avec le viewer : le son suit l'intention de SESSION du fil
 /// (`ReelFeedSoundIntent`, S2 — bouton de son du fil, exigence produit
-/// 2026-08-22), jamais `isMuted` (préférence globale, cf. commentaire dans
-/// `drive`) — muet par défaut, activable par carte via le bouton de son.
+/// 2026-08-22) — muet par défaut, activable par carte via le bouton de son.
+/// L'écriture du mute passe par `ReelFeedSoundButtonPolicy.apply(soundOn:to:)`
+/// (cf. `drive`) : couper le son du fil ne touche jamais `isMuted`
+/// (préférence globale), mais l'ACTIVER le clarifie explicitement à `false`
+/// si besoin — un tap est une demande de son sans ambiguïté.
 struct ReelFeedVideoSurface: View {
     let media: FeedMedia
     let isActive: Bool
@@ -46,6 +65,16 @@ struct ReelFeedVideoSurface: View {
     /// du lot E (`MuteButtonExistenceGuardTests`).
     var isEngineOwned: Binding<Bool> = .constant(false)
 
+    /// Reporté au parent (S2, correctif DoD rejet constat majeur #2) :
+    /// miroir NÉGUÉ de `manager.effectiveMuted` — jamais dérivé de
+    /// `ReelFeedSoundIntent.isSoundOn` seul, qui MENT dès que la préférence
+    /// globale `isMuted` reste vraie (posée par une AUTRE surface, ex.
+    /// `VideoTransportControls.muteButton` dans la galerie de conversation,
+    /// jamais remise à zéro par `cleanup()` par conception). `false` par
+    /// défaut (binding non câblé) : sûr, l'icône affiche « muet » tant
+    /// qu'aucune vérité réelle n'est fournie.
+    var isSoundAudible: Binding<Bool> = .constant(false)
+
     // Plain reference (NOT @ObservedObject): this card only needs `player`
     // identity and `activeURL` to decide what to render — the manager also
     // publishes `currentTime` at 5-10Hz (thermal-aware heartbeat), which used
@@ -60,6 +89,15 @@ struct ReelFeedVideoSurface: View {
     /// `activeURL`/`player` ci-dessus : @State scopé + `.onReceive`, jamais
     /// `@ObservedObject` sur un singleton global dans une feuille de liste).
     @State private var soundOn: Bool = ReelFeedSoundIntent.shared.isSoundOn
+
+    /// Miroirs locaux de l'état RÉEL du lecteur (même discipline que
+    /// ci-dessus) — alimentent `isSoundAudible` ci-dessus. Distincts de
+    /// `soundOn` : `soundOn` est l'INTENTION, ces deux-là sont ce que le
+    /// lecteur applique VRAIMENT (`isMuted` OU `isForceMuted`), qui peut
+    /// diverger de l'intention quand une autre surface a laissé `isMuted`
+    /// à `true` (DoD S2 rejet, constat majeur #2).
+    @State private var isMutedMirror: Bool = SharedAVPlayerManager.shared.isMuted
+    @State private var isForceMutedMirror: Bool = SharedAVPlayerManager.shared.isForceMuted
 
     /// `true` once THIS card instance has actually driven the shared engine
     /// (called `load()`/`play()` while active) and not yet relinquished it.
@@ -83,6 +121,8 @@ struct ReelFeedVideoSurface: View {
         .onReceive(manager.$activeURL) { activeURL = $0 }
         .onReceive(manager.$player) { player = $0 }
         .onReceive(ReelFeedSoundIntent.shared.$isSoundOn) { soundOn = $0 }
+        .onReceive(manager.$isMuted) { isMutedMirror = $0; isSoundAudible.wrappedValue = !($0 || isForceMutedMirror) }
+        .onReceive(manager.$isForceMuted) { isForceMutedMirror = $0; isSoundAudible.wrappedValue = !(isMutedMirror || $0) }
     }
 
     @ViewBuilder
@@ -103,6 +143,13 @@ struct ReelFeedVideoSurface: View {
         .onAppear { drive(ready: ready) }
         .adaptiveOnChange(of: isActive) { _, _ in drive(ready: ready) }
         .adaptiveOnChange(of: ready) { _, _ in drive(ready: ready) }
+        // Filet de sécurité (DoD S2 rejet, constat majeur #3) : `manager.player`
+        // arrive normalement DANS le même appel synchrone que `load()` ci-dessous
+        // (cache prérempli/disque), mais si un chemin futur le rendait
+        // asynchrone, cette relance rattrape le montage du bouton dès que le
+        // player autoritaire apparaît — sans elle, `isEngineOwned` resterait
+        // figé à `false` jusqu'au prochain `isActive`/`ready`.
+        .adaptiveOnChange(of: player) { _, _ in drive(ready: ready) }
         // Le tap sur le bouton de son (S2) flippe `ReelFeedSoundIntent.shared
         // .isSoundOn` — sans cette bascule, la prochaine passe de `drive()`
         // (carte suivante, ou simple re-render sur CETTE carte) réaffirmerait
@@ -157,29 +204,27 @@ struct ReelFeedVideoSurface: View {
         updateEngineOwnership(true)
         // Loop DOIT être (ré)affirmé APRÈS `load()` : `load()` appelle `cleanup()`
         // en interne, qui remet `shouldLoop = false` ; le poser avant serait
-        // silencieusement écrasé. `isForceMuted` (idem transitoire, reset par
-        // `cleanup()`) est réaffirmé pour la même raison.
+        // silencieusement écrasé. Le mute du fil est réaffirmé pour la même
+        // raison (`cleanup()` remet `isForceMuted` à `false` — jamais `isMuted`,
+        // préférence globale volontairement préservée).
         //
-        // Résolu via le prédicat pur (S2, D4) — jamais un littéral figé :
-        // `isForceMuted` exprime l'intention de SESSION du fil
-        // (`ReelFeedSoundIntent`), PAS `isMuted` (préférence utilisateur
-        // GLOBALE du bouton mute fullscreen, persistée entre vidéos). Y écrire
-        // directement depuis le feed fuiterait cette préférence vers la
-        // surface suivante (la galerie de conversation hériterait d'un
-        // `isMuted = true` jamais remis à zéro et jouerait en silence sans que
-        // l'utilisateur n'ait rien demandé) — exactement la fuite documentée
-        // que `isForceMuted` a été créé pour fermer.
-        let forceMuted = ReelFeedSoundButtonPolicy.isForceMuted(soundOn: soundOn)
-        if !forceMuted {
-            // D5 : `play()` saute délibérément l'armement de la session
-            // `.duckOthers` pour l'autoplay muet (`shouldDuckOthersOnPlay`) —
-            // sans ce rappel explicite au passage au son, la catégorie reste
-            // `.soloAmbient` et le son est inaudible interrupteur Silence
-            // enclenché (précédent documenté : RecentMediaStrip.swift).
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.duckOthers])
-        }
-        manager.isForceMuted = forceMuted
+        // Écrit via `apply(soundOn:to:)` — LE SEUL point d'écriture du mute du
+        // fil (S2, D4) : jamais un `let forceMuted = …` suivi d'une affectation
+        // séparée, qui peut perdre l'affectation sans qu'aucun test string ne
+        // s'en aperçoive (DoD S2 rejet, mutation M5). `apply` clarifie aussi
+        // `isMuted` quand l'utilisateur demande le son — sans quoi un
+        // `isMuted == true` laissé par une AUTRE surface (galerie de
+        // conversation) garderait `effectiveMuted` vrai et l'icône mentirait
+        // (DoD S2 rejet, constat majeur #2).
+        ReelFeedSoundButtonPolicy.apply(soundOn: soundOn, to: manager)
         manager.shouldLoop = true
+        // D5 : aucun armement explicite de `.duckOthers` ici — `apply()`
+        // ci-dessus a déjà résolu `isMuted`/`isForceMuted` AVANT cet appel, et
+        // `manager.play()` (SharedAVPlayerManager) arme lui-même `.duckOthers`,
+        // gated sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
+        // seulement sur `isForceMuted` comme le faisait l'ancien appel explicite
+        // ici, qui pouvait armer la session pour une vidéo restée silencieuse
+        // quand `isMuted` seul valait `true` (DoD S2 rejet, constat majeur #2).
         manager.play()
         probeAudioTrackIfNeeded()
     }
@@ -191,16 +236,19 @@ struct ReelFeedVideoSurface: View {
         manager.isForceMuted = false
     }
 
-    /// Écrit `ownsEngine` ET répercute la combinaison `ownsEngine &&
-    /// isShowingThis` vers le parent (`isEngineOwned`, S2/D3) en UN seul
-    /// point — les deux valeurs ne doivent jamais diverger. Appelé APRÈS
-    /// `manager.load()` : à ce stade `self.player`/`self.activeURL` (les
-    /// miroirs @State) reflètent déjà la nouvelle vidéo, `@Published` livrant
-    /// ses abonnés `.onReceive` de façon synchrone pendant l'affectation —
-    /// `isShowingThis`, calculé ici, est donc exact.
+    /// Écrit `ownsEngine` ET répercute la décision vers le parent
+    /// (`isEngineOwned`, S2/D3) en UN seul point. Appelé APRÈS
+    /// `manager.load()` — la décision passe par `ReelEngineOwnershipPolicy
+    /// .isEngineOwned`, sur `manager.player`/`manager.activeURL` DIRECTS
+    /// (jamais les miroirs `@State` `self.player`/`self.activeURL`, tenus à
+    /// jour par une souscription `.onReceive` DISTINCTE dont l'ordre
+    /// d'exécution relatif à ce point d'appel n'est pas garanti — DoD S2
+    /// rejet, constat majeur #3).
     private func updateEngineOwnership(_ owns: Bool) {
         ownsEngine = owns
-        isEngineOwned.wrappedValue = owns && isShowingThis
+        isEngineOwned.wrappedValue = ReelEngineOwnershipPolicy.isEngineOwned(
+            owns: owns, player: manager.player, activeURL: manager.activeURL, expectedURL: attachment.fileUrl
+        )
     }
 
     /// Sonde la présence d'une piste audio sur LE MOTEUR RÉELLEMENT chargé
