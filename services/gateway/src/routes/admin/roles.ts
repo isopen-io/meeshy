@@ -8,7 +8,7 @@ import {
   updateUserStatusSchema,
   type UserRole
 } from './types';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
@@ -73,15 +73,12 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
             message: { type: 'string', example: 'Role mis a jour vers ADMIN' }
           }
         },
-        400: {
-          description: 'Invalid input data',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Donnees invalides' },
-            errors: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        // Schema partage : l'enveloppe d'erreur produit `error`, `message` ET
+        // `code` (`utils/response.ts`). Ce bloc, ecrit a la main, ne declarait
+        // ni `error` ni `code` — tous deux supprimes a la serialisation — et
+        // annoncait un tableau `errors` que l'enveloppe ne pose jamais (le
+        // champ tableau qu'elle sait porter s'appelle `violations`).
+        400: { description: 'Invalid input data', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         403: {
           description: 'Insufficient permissions or cannot modify this user',
@@ -203,15 +200,12 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
             message: { type: 'string', example: 'Utilisateur active' }
           }
         },
-        400: {
-          description: 'Invalid input data',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Donnees invalides' },
-            errors: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        // Schema partage : l'enveloppe d'erreur produit `error`, `message` ET
+        // `code` (`utils/response.ts`). Ce bloc, ecrit a la main, ne declarait
+        // ni `error` ni `code` — tous deux supprimes a la serialisation — et
+        // annoncait un tableau `errors` que l'enveloppe ne pose jamais (le
+        // champ tableau qu'elle sait porter s'appelle `violations`).
+        400: { description: 'Invalid input data', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         403: {
           description: 'Insufficient permissions or cannot modify this user',

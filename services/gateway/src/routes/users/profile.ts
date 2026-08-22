@@ -16,6 +16,7 @@ import {
   userMinimalSchema,
   updateUserRequestSchema,
   errorResponseSchema,
+  validationErrorResponseSchema,
   usernamePatternSource
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, UsernameParams } from './types';
@@ -108,14 +109,12 @@ export async function updateUserProfile(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Validation error or duplicate email/phone' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        // Schema partage : l'enveloppe pose `error`, `message` ET `code`
+        // (`utils/response.ts`). Les cinq 400 de ce fichier, ecrits a la main,
+        // supprimaient `message` et `code` a la serialisation, et declaraient
+        // un tableau `details` que l'enveloppe ne pose jamais comme cle — elle
+        // l'ETALE a la racine ; son champ tableau s'appelle `violations`.
+        400: { description: 'Validation error or duplicate email/phone', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -327,14 +326,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', example: 'Invalid image format' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Invalid image format', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -440,14 +432,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', example: 'Invalid image format' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Invalid image format', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         500: errorResponseSchema
       }
@@ -546,14 +531,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Validation error or incorrect current password' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Validation error or incorrect current password', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         404: errorResponseSchema,
         500: errorResponseSchema
@@ -659,14 +637,7 @@ export async function updateUsername(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Validation error, username taken, or rate limit' },
-            details: { type: 'array', items: { type: 'object' } }
-          }
-        },
+        400: { description: 'Validation error, username taken, or rate limit', ...validationErrorResponseSchema },
         401: errorResponseSchema,
         404: errorResponseSchema,
         429: {

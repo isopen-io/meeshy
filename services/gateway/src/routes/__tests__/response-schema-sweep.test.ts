@@ -55,8 +55,12 @@ const ROUTES_DIR = join(__dirname, '..');
  * La question qui les départage : **que passe le gestionnaire à `sendSuccess`,
  * et à quel niveau le schéma prétend-il le décrire ?**
  *
- * Les `400` sont des `details` / `errors` de schémas d'ERREUR : ils dégradent
- * un diagnostic, ils ne cassent aucun décodage client. Les `200` / `202` sont
+ * **Les onze `400` ont été retirés au cycle 89** : c'étaient des `details` /
+ * `errors` déclarés en TABLEAU au premier niveau, alors que l'enveloppe
+ * (`utils/response.ts`) ÉTALE `details` à la racine et ne porte de tableau que
+ * sous `violations`. Ces schémas écrits à la main supprimaient en prime
+ * `error`, `message` ou `code` selon les cas. Tous remplacés par
+ * `validationErrorResponseSchema`, qui déclare les cinq champs réels. Les `200` / `202` sont
  * la vraie dette — chacun vide une charge utile SERVIE. Inventaire raisonné et
  * priorisé : `tasks/realtime-sync-audit-2026-08-22-cycle86-bis.md` §6 et
  * `…-cycle87.md` §2.
@@ -76,20 +80,9 @@ const ROUTES_DIR = join(__dirname, '..');
  * ici — elle nomme une dette de FORME, plus une fuite.
  */
 const FROZEN_INVENTORY: readonly string[] = [
-  'admin/roles.ts|items|400',
-  'admin/roles.ts|items|400',
-  'anonymous.ts|items|400',
-  'anonymous.ts|items|400',
   'calls.ts|details|400',
   'links/admin.ts|creator|200',
   'messages.ts|sender|200',
-  'signal-protocol.ts|items|400',
-  'signal-protocol.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
-  'users/profile.ts|items|400',
   'users/profile.ts|permissions|200',
   'voice-analysis.ts|analysis|200',
   'voice-analysis.ts|analysis|200',

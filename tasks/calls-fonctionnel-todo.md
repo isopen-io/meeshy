@@ -10419,3 +10419,41 @@ message du commit qui a motivé la clôture.** Reconduits (inchangés) : dead co
 `CallManager.swift` ; ADR `actor CallEventQueue` ; iOS single-peer côté groupe ; `canCallBack`/
 `BubbleCallNoticeView` anonyme non audité iOS ; fuite `createPeerConnection()` au-delà du site déjà
 patché (Vague 148) ; kick modérateur sans vérification du rôle CONVERSATION de la cible.
+
+## Vague 154 — `callBack`/`joinOngoingCall` gagnent le garde `anonymousSession == nil` (iOS) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling, iOS). Ferme le
+suivi laissé ouvert par la Vague 146 (« le jumeau iOS potentiel … n'a pas été audité jusqu'au bout »)
+— toolchain iOS toujours hors d'atteinte dans ce sandbox Linux (pas de `xcodebuild`/`swift`), mais
+l'audit de LECTURE peut se terminer sans compiler : la chaîne d'enfilage a été tracée jusqu'au bout
+(`BubbleCallNoticeView` → `MessageListView`/`MessageListViewController` → `ConversationViewModel`),
+confirmant que le gate anonyme manquait réellement côté `ConversationViewModel`, exactement comme
+suspecté.
+
+- **Root cause** : `ConversationView`'s header masque déjà tout affordance d'appel pour une session
+  anonyme (`anonymousHeaderBar`), mais `ConversationViewModel.callBack(for:)` et `joinOngoingCall(_:)`
+  — atteints depuis une bulle de résumé d'appel plus bas dans l'historique, PAS depuis l'en-tête —
+  ne portaient aucun garde `anonymousSession`. Un invité anonyme (lien partagé) pouvait donc déclencher
+  le prompt OS de permission microphone (`CallManager.requestPermissionsThenStartCall`) ou un
+  round-trip serveur de rejoin, avant que le gate `isAnonymous` du gateway
+  (`CallEventsHandler.ts:2274`) ne refuse l'appel côté serveur. Même famille de défaut que la Vague
+  146 (web) et la Vague 145 (kick anonyme serveur) : un contrôle qui a l'air présent (en-tête) et
+  absent sur son jumeau (bulle).
+- **Fix** : `guard anonymousSession == nil else { return }` ajouté en tête des deux méthodes —
+  `callBack(for:)` (couvre aussi son branchement `Task { await joinOngoingCall(summary) }` pour le cas
+  `isLive`) et `joinOngoingCall(_:)` (re-assertion défensive, appelable indépendamment). Zéro
+  changement de signature, zéro impact pour un utilisateur inscrit (`anonymousSession == nil` déjà le
+  cas par défaut).
+- **Tests** (TDD — écrits mais non exécutables dans ce sandbox, cf. note toolchain) :
+  `ConversationViewModelTests.swift` — `test_joinOngoingCall_whileAnonymous_neverQueriesServerOrRejoins`
+  (await direct, vérifie `activeCallService.callCount == 0`) et
+  `test_callBack_liveSummaryWhileAnonymous_neverJoinsOrStartsCall` (expectation inversée sur le hook
+  `MockActiveCallService.onCalled`, motif déjà en usage dans ce fichier pour les Task fire-and-forget).
+  Les 5 tests `joinOngoingCall` existants restent verts par construction (`anonymousSession` défaut
+  `nil` dans `makeSUT`, comportement inchangé). Vérification effective déléguée à la CI macOS
+  (`ios.yml`) — aucun `xcodebuild`/`swift` disponible dans cet environnement Linux pour un RED/GREEN
+  local.
+- **Non fait volontairement** (reconduits, inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; fuite
+  `createPeerConnection()` au-delà du site déjà patché (Vague 148, web) ; kick modérateur sans
+  vérification du rôle CONVERSATION de la cible.
