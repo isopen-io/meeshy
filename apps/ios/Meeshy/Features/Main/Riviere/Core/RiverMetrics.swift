@@ -132,6 +132,20 @@ nonisolated public enum RiverMetrics {
         public static let continuationDashGap: CGFloat = 4
     }
 
+    // MARK: - Mouvement (cotes iOS, hors JSON partagé)
+
+    /// Durées de PEAU propres à iOS — aucune cote de mouvement dans le JSON
+    /// partagé à ce jour (même précédent que `FocalMetrics.FocusChip` : nommé
+    /// en `Core` sans revendiquer de token). Nommées ici parce que la garde
+    /// R15 bannit leurs littéraux de `Riviere/View/` (`0.35` est un jeton de
+    /// loi surveillé).
+    nonisolated public enum Motion {
+        /// Glissade d'un cadrage demandé (citation, poignée du temps).
+        public static let landingDuration: TimeInterval = 0.35
+        /// Apparition/effacement de la poignée du temps.
+        public static let handleFadeDuration: TimeInterval = 0.2
+    }
+
     // MARK: - En-tête de couloir
 
     /// `river.laneHeader` — hauteur `38`, en PIXELS. Distincte de

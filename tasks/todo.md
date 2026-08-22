@@ -368,7 +368,7 @@ autorisé si c'est compliqué : deux bulles distinctes.
       posé à la première géométrie peuplée ; offset X explicite) ; canvas dans le repère FIXE du pane + rangs non
       matérialisés (rails/connecteurs visibles cadré au présent) ; citation sur une ligne. Reste : anneau « adressé »
       de tête de segment parfois absent ; bande de couloirs entre deux rangs (non observé vide après mesure).
-- [ ] R-3 — plan à axe du temps avec poignée graduée (jour/semaine/mois/année selon l'amplitude réelle),
+- [x] R-3 — plan à axe du temps avec poignée graduée (jour/semaine/mois/année selon l'amplitude réelle),
       apparaît au défilement, glisser = sauter au rang de la période. Pur : `RiverTimeScale`.
 - [ ] Lot 4 — arbitré : l'ouverture reste gardée par `memberCount` (la LOI sérialise déjà quand les voix
       actives manquent — `.belowMinimum`) ; un seuil sur les messages en cache rendrait le mode

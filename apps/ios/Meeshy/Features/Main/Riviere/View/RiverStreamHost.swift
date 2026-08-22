@@ -84,6 +84,7 @@ struct RiverStreamHost: View {
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var frames: [String: CGRect] = [:]
     @State private var horizontalOffset: CGFloat = 0
@@ -108,6 +109,10 @@ struct RiverStreamHost: View {
     /// L'axe des VOIX se pose par un offset explicite (voir
     /// `RiverHorizontalOffsetWriter`) — `scrollTo` ne bouge que l'axe du temps.
     @State private var horizontalRequest: RiverHorizontalOffsetWriter.Request?
+    /// R-3 — la poignée du temps ne se montre qu'au défilement, et s'efface
+    /// au repos (`RiverTimeHandleMetrics.restDelay`).
+    @State private var isTimeHandleVisible = false
+    @State private var timeHandleRest: Task<Void, Never>?
 
 
     private var laneCount: Int { max(1, geometry.laneCount) }
@@ -163,6 +168,15 @@ struct RiverStreamHost: View {
     /// pose quand il descend une conversation (même parti pris que la bande
     /// de focus du fil).
     private static let readingLineRatio: CGFloat = 0.34
+
+    /// R-3 — l'échelle du temps, RÉSOLUE par la règle pure depuis ce que la
+    /// loi sert (rang + instant) ; `nil` quand il n'y a rien à graduer.
+    private var timeScale: RiverTimeScale? {
+        RiverTimeScale.resolve(
+            ranks: geometry.bubbles.map { RiverTimeScale.RankTime(rank: $0.rank, timeMs: $0.createdAtMs) },
+            calendar: .current
+        )
+    }
 
     private var laneHeaders: [RiverLaneResolver.RiverLaneHeader] {
         RiverLaneResolver.resolveRiverLaneHeaders(
@@ -273,7 +287,7 @@ struct RiverStreamHost: View {
 
     private func scroll(animated: Bool, _ body: () -> Void) {
         if animated {
-            withAnimation(.easeInOut(duration: 0.35)) { body() }
+            withAnimation(.easeInOut(duration: RiverMetrics.Motion.landingDuration)) { body() }
         } else {
             body()
         }
@@ -365,7 +379,52 @@ struct RiverStreamHost: View {
             }
         }
         .simultaneousGesture(swipeGesture)
+        // R-3 — la poignée du temps, au bord droit, entre la bande des
+        // couloirs et le composeur. Posée en overlay du pane : elle ne fait
+        // jamais grandir son hôte et ne dispute pas le pan du contenu
+        // (geste prioritaire sur sa seule bande).
+        .overlay(alignment: .trailing) {
+            if let scale = timeScale {
+                RiverTimeHandle(
+                    scale: scale,
+                    fraction: scale.fraction(ofRank: Int(focusRank.rounded())),
+                    isVisible: isTimeHandleVisible,
+                    isDark: colorScheme == .dark,
+                    onSeek: seek
+                )
+                .frame(width: RiverTimeHandleMetrics.handleWidth * 4)
+                .padding(.top, headerInset + RiverMetrics.LaneHeader.height)
+                .padding(.bottom, bottomInset)
+            }
+        }
+        // Les cadres publiés bougent à chaque défilement : c'est le signal
+        // qui montre la poignée, sans second lecteur d'offset.
+        .adaptiveOnChange(of: frames) { _, _ in noteScrollActivity() }
         .accessibilityElement(children: .contain)
+    }
+
+    // MARK: - R-3 — poignée du temps
+
+    private func noteScrollActivity() {
+        isTimeHandleVisible = true
+        timeHandleRest?.cancel()
+        timeHandleRest = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(RiverTimeHandleMetrics.restDelay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            isTimeHandleVisible = false
+        }
+    }
+
+    /// La poignée lâchée à `fraction` : la règle dit le rang, la loi dit son
+    /// couloir, le pane le cadre sous la ligne de lecture — un choix
+    /// explicite du lecteur, comme un tap.
+    private func seek(_ fraction: Double) {
+        guard let scale = timeScale else { return }
+        let rank = scale.rank(atFraction: fraction)
+        guard let bubble = bubbleByRank[rank] else { return }
+        let cursor = RiverLaneResolver.RiverCursor(laneIndex: bubble.laneIndex, rank: bubble.rank)
+        navigation.moveTo(cursor)
+        requestLanding(on: cursor, anchor: UnitPoint(x: 0.5, y: Self.readingLineRatio), animated: !reduceMotion)
     }
 
     // MARK: - Grille
