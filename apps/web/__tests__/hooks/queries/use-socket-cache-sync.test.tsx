@@ -2133,6 +2133,86 @@ describe('useSocketCacheSync', () => {
       expect(queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite'])).toBeUndefined();
     });
 
+    // Cycle 99 — les deux témoins ci-dessus n'exercent que `banned` et
+    // `not_a_member`, c'est-à-dire les deux seuls motifs où purger est JUSTE.
+    // Le producteur en émet sept, dont quatre transitoires : le gestionnaire
+    // les recevait tous et purgeait pareil, parce qu'aucun témoin ne les
+    // faisait passer. Ceux-ci écrivent l'invariant en NÉGATIF — le cache
+    // SURVIT — pour garder la forme exacte du défaut.
+    it.each([
+      ['rate_limited', 'Trop de requêtes. Veuillez réessayer.'],
+      ['server_error', 'Erreur serveur lors du join'],
+      ['not_authenticated', 'Non authentifié'],
+      ['invalid_payload', 'conversationId invalide'],
+    ])('garde la conversation et ses messages sur un refus TRANSITOIRE (%s)', (reason, message) => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [{ ...mockConversation, id: 'conv-1' }] as Conversation[],
+            pagination: { total: 1, offset: 0, limit: 20, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
+      queryClient.setQueryData(['conversations', 'detail', 'conv-1'], { ...mockConversation });
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [], hasMore: false, total: 0 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason, message });
+      });
+
+      const convs = (queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      }).pages.flatMap((page) => page.conversations);
+      expect(convs.map((c) => c.id)).toContain('conv-1');
+      expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeDefined();
+      expect(queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite'])).toBeDefined();
+    });
+
+    // Ne pas savoir lire n'autorise pas à détruire : une passerelle plus récente
+    // que ce client peut émettre un motif qu'il ne connaît pas.
+    it('garde le cache sur un motif INCONNU', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'detail', 'conv-1'], { ...mockConversation });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({
+          conversationId: 'conv-1',
+          reason: 'a_reason_a_future_gateway_adds',
+          message: '',
+        });
+      });
+
+      expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeDefined();
+    });
+
+    // Le signal reste émis dans TOUS les cas : c'est ce qui permet à l'UI de
+    // dire « réessaie » sur un transitoire. Seule la PURGE est conditionnelle.
+    it('émet quand même le CustomEvent sur un refus transitoire', () => {
+      const { wrapper } = createWrapperWithClient();
+      const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason: 'rate_limited', message: 'slow down' });
+      });
+
+      const call = dispatchSpy.mock.calls.find(([e]) => (e as CustomEvent).type === 'meeshy:conversation-join-error');
+      expect(call).toBeDefined();
+      expect((call![0] as CustomEvent).detail).toMatchObject({ conversationId: 'conv-1', reason: 'rate_limited' });
+    });
+
     it('dispatches meeshy:conversation-join-error CustomEvent on window', () => {
       const { wrapper } = createWrapperWithClient();
       const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
