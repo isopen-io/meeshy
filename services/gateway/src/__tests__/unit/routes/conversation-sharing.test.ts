@@ -1142,6 +1142,103 @@ describe('POST /conversations/:id/invite', () => {
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
+  // ── Cycle 92 : la charge utile de l'invitation ────────────────────────────
+  //
+  // Cette route déclarait `membership` et envoyait `member` : fast-json-stringify
+  // supprimait donc TOUT le participant, et personne ne s'en apercevait — le seul
+  // client (web `invite-user-modal`) ne lit que l'enveloppe `success` et recharge
+  // la liste. Le lot du cycle 91 bis (§6) refusait d'aligner les deux noms SANS
+  // poser le gate dans le même commit, parce que `Participant.isOnline` et
+  // `lastActiveAt` sont DÉCLARÉS par `conversationParticipantSchema` : un rang
+  // brut les aurait publiés sans garde. Les deux arrivent donc ensemble, ici.
+  describe('la charge utile du nouvel adhérent', () => {
+    const invitedRow = (over: Record<string, unknown> = {}) => ({
+      id: 'new-part',
+      conversationId: CONV_ID,
+      userId: INVITEE_ID,
+      type: 'user',
+      displayName: 'Bob',
+      avatar: null,
+      role: 'member',
+      language: 'fr',
+      isActive: true,
+      isOnline: true,
+      lastActiveAt: new Date('2026-08-22T09:00:00.000Z'),
+      joinedAt: new Date('2026-08-22T10:00:00.000Z'),
+      permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true },
+      user: makeTargetUser(),
+      // État privé par paire : le rang Prisma le porte, aucune surface ne le sert.
+      bannedAt: null,
+      leftAt: null,
+      deletedForMe: null,
+      nickname: 'surnom privé',
+      shareLinkId: 'lnk-1',
+      sessionTokenHash: null,
+      ...over,
+    });
+
+    async function invite(row: Record<string, unknown>) {
+      const { fastify, reply, route } = getInviteRoute();
+      fastify.prisma.conversation.findUnique.mockResolvedValue(
+        makeConversation([makeInviterParticipant('admin')]),
+      );
+      fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
+      fastify.prisma.participant.create.mockResolvedValue(row);
+      const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
+      await route.handler(req, reply);
+      return mockSendSuccess.mock.calls.at(-1)?.[1];
+    }
+
+    it('sert le participant sous la clé que le schéma déclare', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant).toBeDefined();
+      expect(payload.participant.participantId).toBe('new-part');
+      expect(payload.participant.userId).toBe(INVITEE_ID);
+    });
+
+    it('sépare le rang de conversation du rôle global', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.conversationRole).toBe('member');
+      expect(payload.participant.role).toBe('USER');
+    });
+
+    it('masque la présence quand l\'invité refuse de montrer son statut', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(
+        new Map([[INVITEE_ID, { showOnline: false, showLastSeenTimestamp: false }]]),
+      );
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.isOnline).toBe(false);
+      expect(payload.participant.lastActiveAt).toBeNull();
+    });
+
+    it('consulte le gate sur l\'invité, pas sur l\'inviteur', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+      await invite(invitedRow());
+
+      expect(mockResolvePrefsOnly).toHaveBeenCalledWith([INVITEE_ID]);
+    });
+
+    it('ne recopie pas l\'état privé par paire du rang Prisma', async () => {
+      mockResolvePrefsOnly.mockResolvedValue(new Map());
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant).not.toHaveProperty('nickname');
+      expect(payload.participant).not.toHaveProperty('shareLinkId');
+      expect(payload.participant).not.toHaveProperty('bannedAt');
+      expect(payload.participant).not.toHaveProperty('deletedForMe');
+    });
+  });
+
   it('returns 404 when user to invite not found', async () => {
     const { fastify, reply, route } = getInviteRoute();
     const inviter = makeInviterParticipant('admin');
@@ -1276,8 +1373,12 @@ describe('POST /conversations/:id/invite', () => {
     fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', user: targetUser });
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
+    // Ce témoin assertait `member` — le nom que le HANDLER employait, et que le
+    // schéma de réponse supprimait. Il était vert parce qu'il mocke `sendSuccess`
+    // et ne traverse donc jamais le sérialiseur : il attestait une clé que le
+    // client n'a jamais reçue. Repointé sur la clé DÉCLARÉE.
     expect(reply._body?.data).toMatchObject({
-      member: expect.objectContaining({ id: 'new-part' }),
+      participant: expect.objectContaining({ participantId: 'new-part' }),
       message: expect.stringContaining('Bob'),
     });
   });
