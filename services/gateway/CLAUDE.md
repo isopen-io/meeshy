@@ -512,7 +512,17 @@ schema is invalid: data/properties/data/properties/attachment must be object,boo
 ```
 
 Deux bouts du même défaut : un double partiel cache un bug, ou empêche un
-correctif de se charger. **Prolonger (`jest.requireActual` + surcharge ciblée)
+correctif de se charger.
+
+**Et c'est arrivé DEUX FOIS EN DEUX CYCLES.** Le cycle 93 a reproduit
+l'incident sur `conversation-messages-advanced.test.ts`, dont le double de
+`api-schemas` listait deux schémas à la main : une composition de
+`messageResponseSchema` au chargement du module y a trouvé `undefined`, et
+154 témoins ont cessé de se charger. La règle du cycle 91 était déjà écrite et
+n'a pas suffi — **un double partiel ne se signale qu'au moment où le module
+grandit**, donc jamais avant. Ce n'est plus un incident, c'est un patron de
+harnais à cesser d'écrire : `jest.requireActual` par défaut, surcharge ciblée
+seulement si nécessaire. **Prolonger (`jest.requireActual` + surcharge ciblée)
 plutôt que remplacer** ; et quand le double existait pour garantir un
 comportement de SÉCURITÉ, préférer le vrai code — un double ne peut qu'attester
 l'absence d'un repli vulnérable, le vrai code la prouve. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
@@ -560,6 +570,27 @@ une route qui servait `{}` (cycle 86). Aucun ne nommait un champ de `data`.
 Les deux moitiés tiennent en une phrase : **`statusCode` n'est pas une
 observation de la charge utile**, et seul un témoin qui traverse le sérialiseur
 (`app.inject()`, jamais un double du handler) peut voir ce qui en sort.
+
+**Réparer une ENVELOPPE arme les déclarations qu'elle contenait.** Tant que
+`data` sortait `{}`, `messageSchema.sender` ne servait rien, et le fait qu'il
+DÉCLARE `isOnline` était sans conséquence. La correction de l'enveloppe
+(cycle 88 bis) l'a rendue vivante : mesuré au compilateur, `isOnline: true`
+posé sur l'objet **est désormais servi**. Rien ne fuit aujourd'hui — les deux
+`select` ne le chargent pas — mais le piège du cycle 84 est ARMÉ pour de bon :
+le prochain `select` qui l'ajoute le met sur le fil, sans gate, sans qu'un
+témoin tombe.
+
+L'expéditeur de ces routes est donc déclaré LOCALEMENT **sans `isOnline`**
+(cycle 93) : c'est fail-closed — si le champ apparaît un jour dans l'objet, le
+sérialiseur le retire — et cela vaut mieux qu'un gate sur une donnée que
+personne ne charge, lequel est du code mort qui se périme. Un témoin garde
+l'omission.
+
+> **La règle du cycle 84 ne dit pas seulement « poser le gate dans le même
+> lot ».** Elle dit que rendre une donnée visible oblige à DÉCIDER, dans le même
+> lot, si elle a le droit de l'être. Et « rendre visible » inclut **réparer
+> l'enveloppe au-dessus** : le lot qui débouche un parent hérite des décisions
+> de visibilité de tous ses enfants.
 
 **Une PANNE peut tenir la porte, et la réparer l'ouvre.**
 `GET /communities/search` chargeait `isOnline` sur ses membres sans le gater ;
@@ -791,6 +822,16 @@ rester à une ligne. Inventaires raisonnés :
 à instruire AVANT de réparer : que passe le gestionnaire à `sendSuccess`, et à
 quel niveau le schéma prétend-il le décrire ?
 
+**Le compte se lit dans le FICHIER, jamais dans le journal précédent.** Les
+cycles 89 à 92 ont publié 15, 11, 8 puis 6 restants quand `FROZEN_INVENTORY` en
+portait 14, 10, 7 puis 5, et leurs tableaux nommaient un champ `user` qui n'y a
+jamais figuré : il vient d'un tableau en prose du cycle 88, recopié de journal
+en journal sans être confronté au fichier, pendant que le compte se propageait
+par soustraction depuis un premier chiffre déjà faux. Le cliquet était vert à
+chaque cycle — le FICHIER a toujours été juste, c'est la prose qui a dérivé.
+**Un compte est une AFFIRMATION, comme un tri (cycle 86 bis) : il se compte,
+il ne s'hérite pas.**
+
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
 il ne détecte qu'une déclaration ABSENTE, jamais une déclaration INCOMPLÈTE**
@@ -880,6 +921,30 @@ déclaré, donc supprimé sur les trois.
 > producteur de CETTE route.** Trois fois de suite (cycles 84, 89, 91) la bonne
 > forme se trouvait à portée de regard du défaut ; la troisième fois, elle était
 > fausse aussi.
+
+**Un schéma partagé peut décrire la bonne enveloppe et le mauvais PRODUCTEUR**
+(cycle 93). Une fois l'enveloppe fantôme de `messageResponseSchema` corrigée
+(cycle 88 bis, `data: messageSchema`), les deux routes d'édition servent enfin
+leur message — et leur `sender` sort TRONQUÉ. `messageSchema.sender` est
+`userMinimalSchema`, écrit pour un `User`, quand ces routes chargent un
+`Participant` :
+
+```
+in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
+out : { id, userId, displayName, avatar, type }     ← role, language, user PERDUS
+```
+
+Deux défauts empilés sur le même champ, réparés dans cet ordre : tant que le
+parent sortait `{}`, le second était invisible. **Réparer une enveloppe rend
+lisibles les défauts de ce qu'elle contenait** — la deuxième passe n'est pas
+facultative.
+
+**Le grain juste est celui qui CHARGE.** Deux routes qui chargent plus qu'un
+schéma partagé MINIMAL ne déclare, déclarent plus LOCALEMENT — élargir
+`userMinimalSchema` aurait poussé `role`, `language` et un `user` imbriqué sur
+les dizaines de réponses qui l'emploient, dont beaucoup décrivent un vrai `User`.
+Le schéma partagé ne grossit pas pour deux appelants. (À trois, la réponse
+devient un `participantSenderSchema` partagé — pas un élargissement du minimal.)
 
 **Entre deux producteurs, déclarer le SUPERSET.** L'asymétrie du sérialiseur le
 permet et le commande : une clé déclarée qu'un objet ne porte pas n'est pas

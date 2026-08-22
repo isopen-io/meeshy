@@ -85,32 +85,6 @@ const conversationStatsMetaSchema = {
 } as const;
 
 /**
- * L'enveloppe de `messageResponseSchema` (`{ success, data: messageSchema }`),
- * plus les stats que le seul transport `PUT` calcule.
- *
- * Composé depuis `messageSchema` et non en descendant dans
- * `messageResponseSchema.properties.data` : plusieurs suites mockent
- * `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports, et une
- * chaîne d'accès y lève à l'IMPORT — un `...spread` d'`undefined`, lui, est
- * légal et inerte. Un schéma de module ne doit pas pouvoir casser le chargement
- * d'un fichier de routes.
- */
-const editedMessageResponseSchema = {
-  type: 'object',
-  properties: {
-    success: { type: 'boolean', example: true },
-    data: {
-      ...messageSchema,
-      description: 'The message as it stands after the edit — served flat, not wrapped',
-      properties: {
-        ...messageSchema.properties,
-        meta: conversationStatsMetaSchema,
-      },
-    },
-  },
-} as const;
-
-/**
  * Plafond de `GET /conversations/:id/status` : les N messages les plus récents.
  *
  * Cet endpoint charge, PAR message, ses entrées de statut et le participant
@@ -119,6 +93,127 @@ const editedMessageResponseSchema = {
  * qui est paginé ; ce plafond n'y retire donc aucune information.
  */
 const CONVERSATION_STATUS_PAGE_SIZE = 50;
+
+/**
+ * L'expéditeur tel que les DEUX routes d'édition le CHARGENT — un `Participant`,
+ * pas un `User`.
+ *
+ * Deux défauts se sont empilés sur ce champ, et l'ordre compte : tant que le
+ * cycle 88 bis n'avait pas corrigé l'enveloppe fantôme (`data.message` sur une
+ * charge qui n'a jamais porté cette clé), `data` sortait `{}` et rien de ceci
+ * n'était observable. **Réparer une enveloppe rend lisibles les défauts de ce
+ * qu'elle contenait.**
+ *
+ * `messageSchema.sender` est `userMinimalSchema`, qui couvre bien le cas
+ * participant — il déclare `userId` et `type` pour lui. Mais il est
+ * délibérément MINIMAL, et ces deux routes chargent trois champs de plus.
+ * Mesuré au compilateur sur la charge utile réelle, une fois l'enveloppe
+ * réparée :
+ *
+ * ```
+ * in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
+ * out : { id, userId, displayName, avatar, type }     ← role, language, user PERDUS
+ * ```
+ *
+ * Élargir `userMinimalSchema` pousserait `role`, `language` et un objet `user`
+ * imbriqué sur les dizaines de réponses qui l'emploient, dont beaucoup décrivent
+ * un vrai `User`. Le grain juste est celui qui CHARGE : ce sont ces deux routes
+ * qui chargent plus, ce sont elles qui déclarent plus.
+ *
+ * **`isOnline` est délibérément ABSENT, et c'est la décision du lot.**
+ * `userMinimalSchema` le déclare, et la réparation de l'enveloppe a rendu cette
+ * déclaration VIVANTE : vérifié au compilateur, un `isOnline: true` posé sur
+ * l'objet est désormais SERVI. Rien ne fuit aujourd'hui — aucun des deux
+ * `select` ne le charge — mais le piège du cycle 84 est armé pour de bon, et le
+ * prochain `select` qui l'ajoute le mettrait sur le fil sans gate et sans qu'un
+ * témoin tombe. L'omettre est fail-closed : si le champ apparaît, le sérialiseur
+ * le retire. Cela vaut mieux qu'un gate sur une donnée que personne ne charge,
+ * lequel est du code mort qui se périme.
+ */
+const editedMessageSenderSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string', description: 'Participant ID' },
+    userId: { type: 'string', nullable: true, description: 'Real User ID (null for anonymous participants)' },
+    displayName: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    type: { type: 'string', enum: ['user', 'anonymous', 'bot'] },
+    role: { type: 'string', nullable: true },
+    language: { type: 'string', nullable: true },
+    user: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        displayName: { type: 'string', nullable: true },
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        role: { type: 'string', nullable: true }
+      }
+    }
+  }
+} as const;
+
+/**
+ * Le message édité tel que les DEUX transports le composent : l'enveloppe de
+ * `messageResponseSchema` (`{ success, data: messageSchema }`), avec le seul
+ * `sender` remplacé — ces routes chargent un `Participant`, pas un `User`.
+ *
+ * Composé depuis `messageSchema` et non en descendant dans
+ * `messageResponseSchema.properties.data` : plusieurs suites mockent
+ * `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports, et une
+ * chaîne d'accès y lève à l'IMPORT — un `...spread` d'`undefined`, lui, est
+ * légal et inerte. Un schéma de module ne doit pas pouvoir casser le chargement
+ * d'un fichier de routes.
+ *
+ * Gardé par `__tests__/unit/routes/edited-message-serialization.test.ts`, qui
+ * importe la constante exportée ci-dessous.
+ */
+const editedMessageDataSchema = {
+  ...messageSchema,
+  description: 'The message as it stands after the edit — served flat, not wrapped',
+  properties: {
+    ...messageSchema.properties,
+    sender: editedMessageSenderSchema,
+  },
+} as const;
+
+/**
+ * La forme du transport `PATCH` — celui qu'Android emprunte. Il ne calcule
+ * AUCUNE statistique, d'où l'absence de `meta` ici.
+ */
+export const editedMessageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: editedMessageDataSchema,
+  },
+} as const;
+
+/**
+ * La forme du transport `PUT` : la même, plus `meta: { conversationStats }`,
+ * que ce seul transport calcule juste avant la réponse et que `messageSchema`
+ * ne déclare pas.
+ *
+ * Gardé par
+ * `__tests__/unit/routes/conversations/message-mutation-serialization.test.ts`.
+ */
+const editedMessageWithStatsResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      ...editedMessageDataSchema,
+      properties: {
+        ...editedMessageDataSchema.properties,
+        meta: conversationStatsMetaSchema,
+      },
+    },
+  },
+} as const;
 
 
 /**
@@ -166,7 +261,7 @@ export function registerMessagesAdvancedRoutes(
         // `messageResponseSchema` mort : la clé déclarée étant absente de la
         // charge, `fast-json-stringify` — `additionalProperties: false` par
         // défaut — ne servait pas un message dégradé, il servait `data: {}`.
-        200: editedMessageResponseSchema,
+        200: editedMessageWithStatsResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -764,8 +859,10 @@ export function registerMessagesAdvancedRoutes(
         // panne réseau : l'édition, pourtant appliquée, était rejouée sans fin.
         //
         // Ce transport ne calcule PAS de statistiques (le sibling PUT si), d'où
-        // `messageResponseSchema` nu ici et sa variante `+ meta` là-bas.
-        200: messageResponseSchema,
+        // la variante sans `meta` ici et `editedMessageWithStatsResponseSchema`
+        // là-bas. Le `sender` élargi, lui, vaut pour les DEUX : les deux
+        // `include` chargent le même `Participant`.
+        200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
