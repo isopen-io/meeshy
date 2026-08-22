@@ -11,7 +11,8 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { viewerFromAuthContext } from './presence-gate';
+import { viewerFromRequest } from './presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 
@@ -651,23 +652,11 @@ export async function searchUsers(fastify: FastifyInstance) {
 
       // Gate de présence : un résultat de recherche n'expose lastActiveAt/isOnline
       // que pour les contacts (ami/affilié) ou modérateur+ (critère strict).
-      const viewer = viewerFromAuthContext(
-        (request as FastifyRequest & {
-          authContext?: { type?: string; userId?: string; registeredUser?: { role?: string } | null };
-        }).authContext,
-      );
       const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
-        viewer,
+        viewerFromRequest(request),
         users.map(u => u.id),
       );
-      const gatedUsers = users.map(u => {
-        const vis = visibilityMap.get(u.id);
-        return {
-          ...u,
-          isOnline: vis?.showOnline ? u.isOnline : false,
-          lastActiveAt: vis?.showLastSeenTimestamp ? u.lastActiveAt : null,
-        };
-      });
+      const gatedUsers = users.map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)));
 
       return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length));
     } catch (error) {

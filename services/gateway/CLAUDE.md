@@ -373,7 +373,27 @@ jamais depuis `AuthenticatedRequest`, dont le champ `registeredUser` est typé
 
 **Un paramètre `viewer` est REQUIS, jamais optionnel** : un appelant sans viewer
 passe `null`, ce qui MASQUE. Une porte de confidentialité échoue en montrant
-moins, jamais en montrant plus.
+moins, jamais en montrant plus. Même règle sur la carte rendue par
+`resolveForTargets` : **un id ABSENT vaut masqué**, jamais brut.
+
+Le collapse « visibilité résolue → champs servis » ne se réécrit pas à la main.
+Deux applicateurs partagés, et le schéma de la route choisit :
+`applyPresenceVisibility` (`isOnline: null`, pour un schéma nullable) et
+`applyPresenceVisibilityAsOffline` (`isOnline: false`, pour `userMinimalSchema`
+et `contacts-schemas`, qui le déclarent `type: 'boolean'`).
+
+**Une amitié acceptée n'est PAS un laissez-passer.** `areConnected` ouvre la
+porte, il ne dispense pas de `showOnlineStatus` — la politique pure masque quand
+même. Toute déduction du type « ce lecteur-là aurait `FULL` de toute façon » se
+vérifie dans `resolvePresenceVisibility`, elle ne se raisonne pas :
+`GET /users/friend-requests` a servi la présence brute de TOUTE la liste d'amis
+(c'est `?status=accepted`) sur cette hypothèse-là (cycle 82).
+
+**Et le gate s'applique à la SOURCE, jamais au sérialiseur.** Sur cette même
+route, `lastActiveAt` ne sortait que parce que `userMinimalSchema` ne le déclare
+pas — une omission de schéma partagé, que la première route qui l'ajoute
+annulerait sans faire tomber un seul témoin. fast-json-stringify n'est pas une
+garde de confidentialité.
 
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 

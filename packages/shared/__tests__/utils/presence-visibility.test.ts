@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolvePresenceVisibility,
   applyPresenceVisibility,
+  applyPresenceVisibilityAsOffline,
   type PresenceVisibilityInput,
 } from '../../utils/presence-visibility.js';
 
@@ -121,6 +122,56 @@ describe('applyPresenceVisibility', () => {
   it('does not mutate the input object', () => {
     const input = { id: 'u2', isOnline: true as boolean | null, lastActiveAt: new Date(2000) as Date | null };
     applyPresenceVisibility(input, { showOnline: false, showLastSeenTimestamp: false });
+    expect(input.isOnline).toBe(true);
+    expect(input.lastActiveAt).toEqual(new Date(2000));
+  });
+});
+
+// Variante non nullable : les schémas de sérialisation REST de la passerelle
+// déclarent `isOnline` en `type: 'boolean'` (userMinimalSchema,
+// contacts-schemas) et les clients le typent `boolean`. Masqué s'y présente
+// donc comme HORS LIGNE, pas comme `null`.
+describe('applyPresenceVisibilityAsOffline', () => {
+  const profile = { id: 'u1', isOnline: true, lastActiveAt: new Date(1000) as Date | null };
+
+  it('keeps both fields when both flags are on', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: true });
+    expect(out.isOnline).toBe(true);
+    expect(out.lastActiveAt).toEqual(new Date(1000));
+  });
+
+  it('collapses a hidden presence to offline rather than null', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: false, showLastSeenTimestamp: false });
+    expect(out.isOnline).toBe(false);
+    expect(out.lastActiveAt).toBeNull();
+    expect(out.id).toBe('u1');
+  });
+
+  it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: false });
+    expect(out.isOnline).toBe(true);
+    expect(out.lastActiveAt).toBeNull();
+  });
+
+  // Une visibilité ABSENTE de la carte résolue n'est pas une autorisation :
+  // un id que le résolveur n'a pas rendu doit sortir masqué, jamais brut.
+  it('treats an undefined visibility as hidden', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, undefined);
+    expect(out.isOnline).toBe(false);
+    expect(out.lastActiveAt).toBeNull();
+  });
+
+  it('normalises a null isOnline to false when visible', () => {
+    const out = applyPresenceVisibilityAsOffline(
+      { id: 'u3', isOnline: null, lastActiveAt: null },
+      { showOnline: true, showLastSeenTimestamp: true },
+    );
+    expect(out.isOnline).toBe(false);
+  });
+
+  it('does not mutate the input object', () => {
+    const input = { id: 'u2', isOnline: true, lastActiveAt: new Date(2000) as Date | null };
+    applyPresenceVisibilityAsOffline(input, undefined);
     expect(input.isOnline).toBe(true);
     expect(input.lastActiveAt).toEqual(new Date(2000));
   });
