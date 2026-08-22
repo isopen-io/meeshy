@@ -160,11 +160,17 @@
 
   /* river.lane */
   --lentille-river-lane-width-reference: 300px;
+  /* Bornes du PINCE (retour produit 2026-08-22) : le plancher 210 garde une
+     bulle lisible — §7ter, jamais tronquer le texte pour gagner une colonne —
+     et le plafond 540 laisse une voix seule respirer. */
+  --lentille-river-lane-width-min: 210px;
+  --lentille-river-lane-width-max: 540px;
   --lentille-river-lane-gutter: 28px;
 
   /* river.bubble */
   --lentille-river-bubble-detour-radius: 14px;
   --lentille-river-bubble-base-gap: 8px;
+  --lentille-river-bubble-content-padding: 14px;
   /* §7ter A.5 (2026-08-17) — borne du nom en tête de groupe, % de la largeur
      de bulle (garantit que la branche, à l'aplomb du centre du couloir,
      croise du vide dans la rangée d'identité). */
@@ -172,6 +178,18 @@
   /* §7ter A.6 — contour NEUTRE de la vue sérialisée (bord gauche/bas restent
      --lentille-river-line-width, couleur d'auteur). */
   --lentille-river-bubble-flat-border-width: 1px;
+
+  /* river.row — retour produit 2026-08-21 : « les messages s'empilent bord à
+     bord sans espace ». `gap` est la respiration verticale entre DEUX RANGS ;
+     `continuation-seam` la couture entre deux bulles CONSÉCUTIVES du même
+     auteur, qui se TOUCHENT et que sépare un pointillé horizontal ;
+     `continuation-dash-*` la longueur et l'écart de ces tirets. Le GROUPEMENT
+     reste une décision de la LOI (`RiverBubble.isFirstInGroup`) — ces cotes ne
+     font que le dessiner. */
+  --lentille-river-row-gap: 14px;
+  --lentille-river-row-continuation-seam: 3px;
+  --lentille-river-row-continuation-dash-length: 3px;
+  --lentille-river-row-continuation-dash-gap: 4px;
 
   /* river.connector */
   --lentille-river-connector-stroke-width: 1.4px;

@@ -179,41 +179,69 @@ déclarée existe-t-elle dans ce que le gestionnaire passe à `sendSuccess` ?*
 
 ## 5. Ce que ce lot laisse ouvert, priorisé
 
-Les 27 sites restants, **triés par ce qui les rend urgents** plutôt qu'en liste
-plate. Les `400` (12 sites) restent la queue : ce sont des `details` / `errors`
-de schémas d'ERREUR, ils dégradent un diagnostic et ne cassent aucun décodage.
+### D'abord : un cycle 88 concurrent a réfuté une de mes conclusions
 
-| site | gravité | victime vivante ? |
+Ce lot a été mené en parallèle du **cycle 88** (`claude/keen-hamilton-inwn81`,
+PR #3311, fusionné le premier), sans que l'un connaisse l'autre. Nous avons
+traité des familles disjointes — la présence pour lui, l'enveloppe fantôme pour
+moi — et nous nous croisons sur un seul site : `messages.ts|sender|200`, que
+j'avais **délibérément laissé** en écrivant que sa réparation « publierait une
+présence que la panne retenait ».
+
+**Il n'y avait pas de panne, et la fuite était déjà ouverte.** Sa version est la
+bonne, et voici ce qu'elle a vu que je n'avais pas vu : le schéma de cette route
+déclare `id`, `content`, `sender`… **au premier niveau**, alors que `sendSuccess`
+répond `{ success, data }`. Aucune de ces propriétés ne matche quoi que ce soit,
+`success` et `data` ne sont pas déclarés, et l'objet entier traverse par
+l'`additionalProperties: true` du bloc. **Toutes les déclarations y sont
+inertes** — `sender` n'était donc pas vidé, il était servi BRUT, présence
+comprise, sur ses deux porteurs.
+
+Mon erreur est instructive et tient en une phrase : **j'ai compilé le
+sous-schéma, pas la réponse.** Ma sonde a nourri `{ id, sender, … }` à un schéma
+qui décrit `{ id, sender, … }` — et a mesuré exactement ce que je lui avais
+demandé de mesurer. Il fallait lui donner `{ success, data: { … } }`, la charge
+que `sendSuccess` construit réellement. **Une sonde qui n'emprunte pas
+l'enveloppe de production ne prouve rien sur la production**, et elle échoue en
+CONFIRMANT ce qu'on croyait déjà — le pire des modes de panne pour une
+vérification.
+
+Le tableau ci-dessous est donc corrigé : cette famille n'a pas deux formes mais
+**trois**, et la troisième est la plus dangereuse parce que le balayage y rend un
+FAUX POSITIF — un champ signalé « vidé » qui est en réalité en fuite active.
+
+| forme | ce que le schéma fait | ce que ça coûte |
 |---|---|---|
-| `messages.ts\|sender\|200` | 1 | **non** — aucun client n'appelle `GET /messages/:messageId` |
-| `communities/core.ts\|user\|200` | 1 | à établir — **touche la présence** |
-| `magic-link.ts\|session\|200` ×2, `\|user\|200` ×2 | à établir | **touche la présence ET l'authentification** |
+| **1** — la clé déclarée existe | ce champ sort `{}` | un champ perdu |
+| **2** — la clé déclarée n'existe pas | le parent sort `{}` ENTIER | la réponse perdue |
+| **3** — le schéma décrit la mauvaise enveloppe | rien : tout traverse | **une fuite, sous un signal de vidage** |
+
+### L'inventaire restant
+
+23 sites, **triés par ce qui les rend urgents** plutôt qu'en liste plate. Les
+`400` (11 sites) restent la queue : ce sont des `details` / `errors` de schémas
+d'ERREUR, sans producteur — à RETIRER plutôt qu'à déclarer.
+
+| site | forme probable | victime vivante ? |
+|---|---|---|
 | `links/admin.ts\|creator\|200` | à établir | à établir |
 | `users/profile.ts\|permissions\|200` | 1 | à établir |
 | `voice-analysis.ts\|analysis\|200` ×4 | 1 | à établir |
 | `voice/translation.ts\|attachment\|200`, `\|202`, `\|transcription\|200` | 1 | à établir |
 
-**`messages.ts|sender|200` est délibérément laissé**, et la raison mérite d'être
-écrite parce qu'elle n'est pas de la paresse. Trois faits se composent :
-
-1. Aucun client n'appelle cette porte (vérifié sur les trois).
-2. Son `select` Prisma charge `isOnline` sur l'expéditeur **et** sur son
-   `user` — la réparer PUBLIE une présence que la panne retenait. C'est
-   exactement l'avertissement que le cycle 87 bis a inscrit dans l'inventaire :
-   *déclarer le schéma ET poser le gate dans le MÊME lot*.
-3. Le gate (`resolveForTargets` + `applyPresenceVisibilityAsOffline`) coûte un
-   aller-retour supplémentaire — sur une route que personne n'appelle.
-
-Le bon ordre est donc l'inverse de l'apparent : **trancher d'abord si cette
-porte doit rester servie**. Si oui, elle mérite le gate ; si non, la retirer
-règle le site sans en écrire une ligne. Réparer un schéma sur une route dont on
-n'a pas décidé le sort, c'est se donner du travail dans les deux branches.
+`messages.ts|sender|200` **reste dans l'inventaire**, mais pour une raison qui
+n'est plus la mienne : sa fuite est fermée (gate à la source, cycle 88), et ce
+qui subsiste est une dette de FORME. Aligner son schéma sur l'enveloppe réelle
+est un lot en soi — déclarer partiellement ce qui passait entier TRONQUERAIT ce
+qui marche aujourd'hui. À faire avec la liste complète des champs servis, ou pas
+du tout.
 
 Une remarque de méthode pour la suite : l'entrée `voice/translation.ts` porte
 DEUX sites nus voisins (`attachment` et `transcription`, mêmes `properties`
 absentes) tandis que le même fichier déclare correctement les mêmes champs trois
 cents lignes plus loin. C'est la signature exacte du cycle 87 — un fichier qui
-porte la forme juste et la forme nue en même temps. Les réparer ensemble.
+porte la forme juste et la forme nue en même temps. Les réparer ensemble — et,
+avant de conclure quoi que ce soit sur eux, **vérifier l'enveloppe**.
 
 ## 6. Les leçons
 
@@ -249,3 +277,21 @@ porte la forme juste et la forme nue en même temps. Les réparer ensemble.
 > réponse.** Les trois défauts de ce cycle vivaient sous des suites vertes. Un
 > contrat de sérialisation se teste en compilant le schéma réel — ce qui exige
 > qu'il soit exportable, donc qu'il ait un nom.
+
+> **Une sonde qui n'emprunte pas l'enveloppe de production ne prouve rien, et
+> elle échoue en CONFIRMANT.** J'ai compilé le sous-schéma de `messages.ts` et
+> je lui ai donné la charge que ce sous-schéma décrit ; il m'a rendu ce que je
+> croyais déjà — `sender: {}` — et j'ai classé le site « sans victime, fuite
+> retenue par la panne ». Le cycle 88 concurrent, lui, a nourri la vraie
+> enveloppe `{ success, data }` et a trouvé l'inverse : déclarations inertes,
+> charge traversant entière, **présence en fuite active**. Une vérification qui
+> ne peut que confirmer l'hypothèse n'est pas une vérification. Nourrir la
+> charge que le GESTIONNAIRE construit, jamais celle que le schéma décrit.
+
+> **Un signal d'outil est une hypothèse, pas un constat.** Le balayage ne voit
+> que des schémas ; il ne peut pas distinguer « ce champ sort vide » de « toute
+> la réponse sort vide » de « rien ne sort vide, et ce champ fuit ». Les trois
+> ont la même signature. **Le cas le plus dangereux est celui où l'outil se
+> trompe dans le sens rassurant** — un faux positif de vidage a servi de
+> couverture à une fuite de présence, et m'a fait écrire noir sur blanc qu'il n'y
+> avait rien à craindre.

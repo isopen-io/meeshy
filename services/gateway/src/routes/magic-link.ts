@@ -7,6 +7,7 @@ import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
+import { userSchema, sessionSchema } from '@meeshy/shared/types/api-schemas';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
@@ -148,10 +149,21 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                user: { type: 'object' },
+                // `{ type: 'object' }` sans `properties` sérialise en `{}` :
+                // la connexion rendait son jeton et AUCUN utilisateur. Les
+                // schémas partagés décrivent déjà ces deux formes —
+                // `userSchema` couvre le `socketIOUser` que le service
+                // construit, `sessionSchema` la `SessionData` de
+                // `createSession`.
+                //
+                // Pas de gate de présence ici, et pour une raison précise :
+                // `isOnline`/`lastActiveAt` y sont SYNTHÉTISÉS pour le
+                // compte qui vient de se connecter — c'est le lecteur
+                // lui-même, et la politique rend `FULL` sur `isSelf`.
+                user: userSchema,
                 token: { type: 'string', description: 'JWT access token' },
                 sessionToken: { type: 'string', description: 'Session token for device management' },
-                session: { type: 'object' },
+                session: sessionSchema,
                 expiresIn: { type: 'number', example: 86400 }
               }
             }
@@ -238,10 +250,11 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                user: { type: 'object' },
+                // Même défaut, même correctif (voir la route ci-dessus).
+                user: userSchema,
                 token: { type: 'string' },
                 sessionToken: { type: 'string' },
-                session: { type: 'object' },
+                session: sessionSchema,
                 expiresIn: { type: 'number', example: 86400 }
               }
             }
