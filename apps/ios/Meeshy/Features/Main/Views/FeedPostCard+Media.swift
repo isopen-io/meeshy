@@ -424,7 +424,17 @@ private struct FeedVideoMediaCell: View {
             MeeshyVideoPlayer(
                 attachment: attachment,
                 style: .inline,
-                controls: .inlineDefault,
+                // `.mute` ajouté (S2, exigence produit 2026-08-22 : « reels ET
+                // vidéos de post »). Cette surface ne démarre déjà pas seule
+                // (`autoplayOnAppear` par défaut à `false`, RF2 n'y touche
+                // pas) — elle n'a donc pas besoin du bouton de son SPÉCIFIQUE
+                // au fil (`ReelFeedSoundButton`, pensé pour un autoplay muet).
+                // Réutilise à la place le contrôle `.mute` EXISTANT de
+                // `VideoTransportControls` (déjà câblé sur
+                // `SharedAVPlayerManager.isMuted`, déjà localisé, déjà utilisé
+                // par `.fullscreenDefault`/la galerie de conversation) —
+                // aucune chrome seconde, coût quasi nul.
+                controls: .inlineDefault.union(.mute),
                 accentColor: accentColor,
                 frame: .card,
                 availability: availability,
