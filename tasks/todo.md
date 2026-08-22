@@ -399,7 +399,7 @@ autorisé si c'est compliqué : deux bulles distinctes.
 
 # Cycle 94 — Le sous-arbre DMA / Signal Protocol remis sous le compilateur (2026-08-22)
 
-- [x] Constat : `src/dma-interoperability/` (4 835 lignes, 6 modules de prod + 3 suites) exclu de
+- [x] Constat : `src/dma-interoperability/` (3 231 lignes de prod + 1 642 de suites), 6 modules + 3 suites, exclu de
       `tsconfig.json` (build ET type-check), ignoré par `jest.config.json`, absent de
       `collectCoverageFrom`, et importé par AUCUN module du dépôt. Les deux lignes d'exclusion sont
       les seules occurrences de `dma-interoperability` hors du sous-arbre.

@@ -32,8 +32,9 @@ répondent :
 lui-même.** Vérifié par balayage sur `.ts`, `.js` et `.json` du dépôt entier :
 personne ne l'importe, personne ne l'enregistre, personne ne l'instancie.
 
-Le sous-arbre — **4 835 lignes**, 6 modules de production (X3DH, Double Ratchet,
-gestion de clés, moteur, adaptateurs) et 3 suites de tests — est donc :
+Le sous-arbre — **3 231 lignes de production** en 6 modules (X3DH, Double Ratchet,
+gestion de clés, moteur, adaptateurs), plus 1 642 lignes réparties en 3 suites de
+tests — est donc :
 
 | ce dont il est exclu | par quoi |
 |---|---|
@@ -59,7 +60,7 @@ dépôt, ni dans l'image Docker** (le `Dockerfile` génère le client Prisma dan
 ## 2. Ce que le compilateur a dit dès qu'on l'a laissé regarder
 
 Périmètre inclus dans `tsconfig.json`, sans rien toucher d'autre : **8 erreurs sur
-4 835 lignes**. Quatre sont du bruit de typage `Buffer` (@types/node ≥ 22 :
+3 231 lignes de production**. Quatre sont du bruit de typage `Buffer` (@types/node ≥ 22 :
 `Buffer<ArrayBufferLike>` vs `Buffer<ArrayBuffer>`), et **quatre sont des défauts
 d'exécution** :
 
@@ -199,13 +200,13 @@ en regardant chaque échec — pas en desserrant des assertions pour obtenir du 
 Le chiffre est ici pour que le prochain cycle parte d'une mesure, pas d'une
 estimation.
 
-**Le sous-arbre n'entre PAS dans `collectCoverageFrom`.** Y verser 4 835 lignes
+**Le sous-arbre n'entre PAS dans `collectCoverageFrom`.** Y verser 3 231 lignes de production
 quasi non couvertes ferait passer la couverture globale sous le seuil
 (`lines: 87`) et rougir la CI, ce qui n'a rien à voir avec le défaut corrigé. Il y
 entrera quand ses suites tourneront.
 
 **Le sous-arbre n'est PAS supprimé.** C'était l'autre option honnête devant
-4 835 lignes que rien n'appelle. L'interopérabilité DMA est une obligation
+3 231 lignes de production que rien n'appelle. L'interopérabilité DMA est une obligation
 réglementaire européenne, donc une décision de FEUILLE DE ROUTE : supprimer un
 sous-système qu'un texte de loi impose n'est pas un arbitrage d'hygiène de code.
 Le remettre sous le compilateur est le geste qui coûte le moins et qui rend la
