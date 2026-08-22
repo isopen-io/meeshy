@@ -21,6 +21,34 @@ import MeeshySDK
 /// peau le rend alors GRAVÉ, pleine largeur, heure en tête
 /// (`RiverSystemNotice`, `RiverBubbleView`, `RiverStreamHost`) : exactement ce
 /// que le Fil et Focal en font, avec les mêmes vues et les mêmes clés i18n.
+/// Où une bulle se tient dans son GROUPE (messages consécutifs d'une même
+/// voix, tels que la loi les découpe par `isFirstInGroup`). La loi ne dit que
+/// la tête ; la queue se lit sur le rang SUIVANT — ici, purement, jamais dans
+/// la vue.
+///
+/// Directive produit 2026-08-22 : « deux messages envoyés à la suite et
+/// faisant partie du même groupe ont LEUR BORDURE JOINTE en pointillé et
+/// partagée — non pas des bordures fermées puis des pointillés en plus ». La
+/// position dit donc quels bords sont fermés et lequel est partagé : une
+/// bulle qui CONTINUE un groupe porte la jointure pointillée en haut
+/// (`joinsAbove`) ; une bulle que la suivante continue laisse son bas OUVERT
+/// (`joinsBelow`) pour que la suivante vienne s'y coller.
+nonisolated enum RiverGroupPosition: Equatable {
+    /// Seule dans son groupe : contour fermé des quatre côtés.
+    case solo
+    /// Première d'un groupe qui continue : haut fermé, bas ouvert.
+    case head
+    /// Entre deux bulles du même groupe : haut partagé, bas ouvert.
+    case middle
+    /// Dernière d'un groupe : haut partagé, bas fermé.
+    case tail
+
+    /// Le bord haut est la JOINTURE pointillée avec la bulle précédente.
+    var joinsAbove: Bool { self == .middle || self == .tail }
+    /// Le bord bas reste ouvert : la bulle suivante vient s'y coller.
+    var joinsBelow: Bool { self == .head || self == .middle }
+}
+
 nonisolated enum RiverConversationMapping {
 
     /// Le libellé du lecteur — EXACTEMENT celui de l'en-tête de couloir
@@ -144,6 +172,25 @@ nonisolated enum RiverConversationMapping {
         message.senderName ?? message.senderUsername ?? message.senderId
     }
 
+    /// Position de groupe de CHAQUE bulle, déduite de la loi seule : la tête
+    /// est `isFirstInGroup` ; la bulle est suivie dans son groupe si le rang
+    /// SUIVANT n'ouvre pas de groupe. Un avis système ouvre toujours un groupe
+    /// (la loi ne le rattache à personne), donc il coupe celui qui le précède.
+    static func groupPositions(bubbles: [RiverLaneResolver.RiverBubble]) -> [String: RiverGroupPosition] {
+        Dictionary(uniqueKeysWithValues: bubbles.enumerated().map { index, bubble in
+            let next = bubbles.indices.contains(index + 1) ? bubbles[index + 1] : nil
+            let isFollowed = next.map { !$0.isFirstInGroup && !$0.isSystem } ?? false
+            let position: RiverGroupPosition
+            switch (bubble.isFirstInGroup || bubble.isSystem, isFollowed) {
+            case (true, false): position = .solo
+            case (true, true): position = .head
+            case (false, true): position = .middle
+            case (false, false): position = .tail
+            }
+            return (bubble.messageId, position)
+        })
+    }
+
     /// Ce que le lecteur voit dans chaque bulle — texte PRISME (résolu par
     /// l'appelant), heure, nom, graine de couleur, aperçu de la réponse.
     /// `@MainActor` : `RiverBubbleContent` est un modèle de VUE (isolé) ;
@@ -157,6 +204,7 @@ nonisolated enum RiverConversationMapping {
         time: (Date) -> String
     ) -> [RiverBubbleContent] {
         let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let positions = groupPositions(bubbles: geometry.bubbles)
         return geometry.bubbles.compactMap { bubble in
             guard let message = byId[bubble.messageId] else { return nil }
             let resolvedTime = time(message.createdAt)
@@ -173,7 +221,8 @@ nonisolated enum RiverConversationMapping {
                 text: text(message),
                 layout: geometry.layout,
                 replyPreview: message.replyTo.map { RiverReplyPreview(authorDisplayName: $0.authorName, text: $0.previewText) },
-                systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text)
+                systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
+                groupPosition: positions[bubble.messageId] ?? .solo
             )
         }
     }

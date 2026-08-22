@@ -120,9 +120,13 @@ nonisolated public enum RiverMetrics {
     nonisolated public enum Row {
         public static let gap: CGFloat = 14
         /// Hauteur de la couture entre deux bulles CONSÉCUTIVES du même
-        /// auteur : elles se TOUCHENT (arbitrage produit 2026-08-21 — « ce
-        /// n'est pas la LIGNE qui doit être en pointillé mais la SÉPARATION
-        /// entre les deux bulles, qui devraient être collées »).
+        /// auteur (arbitrage produit 2026-08-21). **Depuis le lot G
+        /// (2026-08-22), iOS ne la consomme plus** : la jointure n'est plus
+        /// une couture posée ENTRE deux contours fermés, c'est le bord haut
+        /// PARTAGÉ de la bulle qui continue (`RiverBubbleOutline`,
+        /// `RiverBubbleView.sharedEdge`), dessiné avec `continuationDash*`.
+        /// La cote reste ici pour la parité avec le JSON partagé, que la peau
+        /// web lit encore.
         public static let continuationSeam: CGFloat = 3
         public static let continuationDashLength: CGFloat = 3
         public static let continuationDashGap: CGFloat = 4

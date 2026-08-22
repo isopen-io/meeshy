@@ -334,31 +334,47 @@ place) ; détails du message en focus (toujours à la pose, rendus à l'aplatiss
 - [x] Lot 10 (22/08) : scène désarmée à 4,5 s ; chips d'étiquettes 8 pt, respiration 30 (vérifiée) ; garde
       aperçu vide. NON revérifié : chip d'étiquette sur une carte (élection de Meeshy Global impossible à la
       main), carte vide observée 2× sur « charlie amah » (hypothèse `Text` vide + fixedSize, garde posée).
-- [ ] Rivière lots 2–5 inchangés (ci-dessous).
+- [x] Rivière : plan réconcilié ci-dessous (22/08, reprise en autonomie sur `main`).
 
-## Chantier Rivière iOS — lancé le 21/08 (soir), branche `feat/ios-list-scroll-fluidity`
+## Chantier Rivière iOS — reprise 22/08 (sur `main`, directive « poursuis en autonomie le reste des lots »)
 
-État trouvé : loi miroir `RiverLaneResolver` + vecteurs (R-132 ✅), peau `RiverStreamHost`/canvas/
-en-têtes/navigation (R-133 partiel), porte `RiverModeGate`, menu de liste dégrisé par capacités (R-135
-liste ✅) — mais AUCUN point d'entrée (garde `RiverScreenNotMountedTests`, « position B ») et le
-drapeau `riviere_mode` non câblé dans le fil.
+État trouvé : lots 1 et 2 LIVRÉS par la session Rivière (`4322bae1e`, `47b2612d7`, `aa25741e9`…) —
+montage au fil, avis système gravés pleine largeur (`LazyVStack` de rangs), heure en base, fenêtre
+de silence cherchée, pince, en-tête transparent, badges hors-champ. Reste : `tasks/riviere-r137-montage.md`
+§« Reste à faire » (R-3..R-8) + lots 3–5 ci-dessous, réconciliés. Branche distante
+`claude/riviere-conversation-navigation-x51rqq` = PR #3170/#3174 déjà mergées (0 commit d'avance).
 
-- [x] Lot 1 — branchement : `RiverConversationMapping` (fil → loi, messages système EXCLUS des voix —
-      exigence produit 2026-08-20), `RiverConversationHost` (navigation possédée, géométrie recalculée
-      sur empreinte, texte Prisme injecté), `ConversationView` câble `isRiverFlagEnabled` et monte
-      l'hôte derrière `mode == .river` ; garde « non monté » basculée en garde « monté ensemble » ;
-      `RiverConversationMappingTests`.
-- [ ] Lot 2 — messages système « gravés » DANS la Rivière : rangée centrée pleine largeur, heure en
-      tête (`BubbleSystemNoticeView`/`BubbleJoinNoticeView`), entre les rangs — la grille `LazyVGrid`
-      ne sait pas étendre une cellule sur toutes les colonnes : passer `RiverStreamHost` à des rangs
-      (`VStack` de `HStack`), le canvas lit déjà les cadres mesurés.
-- [ ] Lot 3 — gestes et retours : tap sur une bulle = ouvrir le message (retour Script + atterrissage,
-      comme Résumé) ; rebond au bord (`edgeBounceToken`) ; heure en base ; vérification simulateur sur
-      une conversation ≥ 5 voix (Meeshy Global) en clair/sombre.
-- [ ] Lot 4 — éligibilité réelle : `activeParticipantCount` = voix ACTIVES (fenêtre de silence) plutôt
-      que `memberCount` ; direct jamais ; a11y (ordre VoiceOver = chronologique), reduce motion.
-- [ ] Lot 5 — recette R-136 : snapshot OFF identique, connecteur pointe le bon message, parité web
-      (`components/conversations/riviere/`), REV-5.
+Directive produit 22/08 (prioritaire) : **deux messages consécutifs d'un même groupe partagent une
+bordure JOINTE en pointillé** — jamais deux contours fermés + une couture pointillée en plus. Repli
+autorisé si c'est compliqué : deux bulles distinctes.
+
+- [ ] Lot G — bulles groupées JOINTES : position de groupe (`solo/head/middle/tail`) dérivée PUREMENT
+      dans `RiverConversationMapping.contents` (la loi ne dit que `isFirstInGroup`, le suivant dit le reste) ;
+      `RiverBubbleView` dessine UN contour ouvert par position (coins arrondis aux seules extrémités du
+      groupe, `UnevenRoundedRectangle`), bord partagé en POINTILLÉ (tirets `Row.continuationDash*`), fond
+      continu, zéro espace entre les bulles d'un groupe ; vue sérialisée : barre gauche continue, barre
+      basse sur la queue seule. Témoins : position de groupe (mapping), forme du contour (Shape pur).
+- [ ] R-6 — la citation mène à sa cible : tap sur la citation ⇒ `moveTo` + `scrollTo(rang cible)`.
+      Pur : `RiverConversationMapping.cursor(forMessageId:)`.
+- [ ] R-5 — identité vivante : `MeeshyAvatar` (présence + cercle de story) en tête de groupe, nom et avatar
+      activables ⇒ profil (`ProfileSheetUser`) / fiche visiteur (`ParticipantProfileTarget`) via le routeur,
+      même chemin que le Fil (`openProfileHandler`). Présence/story INJECTÉES (pures côté mapping).
+- [ ] R-7 — marges du canvas : réserve basse = hauteur du composeur (`bottomInset`, `safeAreaInset`),
+      aucune bulle sous une zone non atteignable ; atterrissage au présent au-dessus du composeur.
+- [ ] Lot 3 / R-4 (partiel) — appui long sur une bulle : « Ouvrir dans le fil » (retour Script +
+      atterrissage, comme Résumé), « Répondre », « Copier » ; rebond de bord (`edgeBounceToken` ⇒ haptique) ;
+      vérification simulateur clair/sombre sur Meeshy Global.
+- [ ] R-8 — affinages mesurés : la bande de couloirs garde le DERNIER nommage connu entre deux rangs ;
+      marge gauche au premier cadrage mesurée et corrigée.
+- [ ] R-3 — plan à axe du temps avec poignée graduée (jour/semaine/mois/année selon l'amplitude réelle),
+      apparaît au défilement, glisser = sauter au rang de la période. Pur : `RiverTimeScale`.
+- [ ] Lot 4 — arbitré : l'ouverture reste gardée par `memberCount` (la LOI sérialise déjà quand les voix
+      actives manquent — `.belowMinimum`) ; un seuil sur les messages en cache rendrait le mode
+      indisponible à froid. a11y chronologique et reduce-motion tenus par construction (aucune animation).
+- [ ] Lot 5 / R-4 reste — pièces jointes, réactions, traductions dans la bulle ; parité web
+      (`components/conversations/riviere/`) — à ouvrir après recette.
+- [ ] Recette simulateur (Meeshy-iOS26, Meeshy Global ≥ 5 voix) à chaque lot ; suites `Riviere/*` +
+      gardes ; commit par lot sur `main`, push, CI.
 
 ## Lot E — clôture
 - [x] MERGÉ dans `main` (f935f91bf + correctifs CI 4c605ce0d / 5a3c81b9b / 1def3504d) — CI, Docker, iOS, Xcode Cloud verts le 2026-08-22.

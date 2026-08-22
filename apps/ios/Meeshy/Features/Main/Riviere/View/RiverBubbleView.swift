@@ -32,6 +32,11 @@ struct RiverBubbleContent: Equatable {
     /// `bubble.isSystem`. Défaut `nil` : les sites de montage antérieurs à
     /// le lot 2 (et leurs témoins) restent inchangés.
     let systemNotice: RiverSystemNotice?
+    /// Lot G (2026-08-22) — où la bulle se tient dans son groupe, déduit par
+    /// `RiverConversationMapping.groupPositions` (pur). Gouverne le CONTOUR :
+    /// une bulle jointe partage son bord haut en pointillé et laisse son bas
+    /// ouvert si la suivante la continue. Défaut `.solo` : contour fermé.
+    let groupPosition: RiverGroupPosition
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -41,7 +46,8 @@ struct RiverBubbleContent: Equatable {
         text: String,
         layout: RiverLaneResolver.RiverLayout,
         replyPreview: RiverReplyPreview? = nil,
-        systemNotice: RiverSystemNotice? = nil
+        systemNotice: RiverSystemNotice? = nil,
+        groupPosition: RiverGroupPosition = .solo
     ) {
         self.bubble = bubble
         self.senderDisplayName = senderDisplayName
@@ -51,6 +57,73 @@ struct RiverBubbleContent: Equatable {
         self.layout = layout
         self.replyPreview = replyPreview
         self.systemNotice = systemNotice
+        self.groupPosition = groupPosition
+    }
+}
+
+// MARK: - Contour de groupe — une forme PURE, éprouvée sans monter la vue
+
+/// Le contour PLEIN d'une bulle selon sa position de groupe : fermé des
+/// quatre côtés quand elle est seule, OUVERT du côté qu'elle partage avec sa
+/// voisine. Le bord partagé n'est pas dessiné ici — c'est la jointure
+/// pointillée (`RiverBubbleView.sharedEdge`), posée à part. Les coins ne
+/// s'arrondissent qu'aux extrémités du groupe : un fond continu
+/// (`UnevenRoundedRectangle`, mêmes rayons) relie les bulles sans encoche.
+///
+/// Directive produit 2026-08-22 : « bordure jointe en pointillé et partagée,
+/// non pas des bordures fermées puis des pointillés en plus ».
+struct RiverBubbleOutline: Shape {
+    let position: RiverGroupPosition
+    let cornerRadius: CGFloat
+    let lineWidth: CGFloat
+
+    /// Rayons par coin — `r` aux coins EXTÉRIEURS du groupe, `0` là où la
+    /// bulle rencontre sa voisine (même valeur pour le fond et le contour).
+    static func cornerRadii(position: RiverGroupPosition, radius: CGFloat) -> RectangleCornerRadii {
+        let top: CGFloat = position.joinsAbove ? 0 : radius
+        let bottom: CGFloat = position.joinsBelow ? 0 : radius
+        return RectangleCornerRadii(topLeading: top, bottomLeading: bottom, bottomTrailing: bottom, topTrailing: top)
+    }
+
+    func path(in rect: CGRect) -> Path {
+        // Inset d'un demi-trait : le trait reste DANS la bulle, comme
+        // `strokeBorder` — le canvas derrière ne le voit jamais déborder.
+        let r = rect.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
+        let radius = min(cornerRadius, min(r.width, r.height) / 2)
+        var path = Path()
+        switch position {
+        case .solo:
+            path.addRoundedRect(in: r, cornerSize: CGSize(width: radius, height: radius), style: .continuous)
+        case .head:
+            // Remonte le flanc gauche, ferme le haut par ses deux coins,
+            // redescend le flanc droit — le bas reste ouvert.
+            path.move(to: CGPoint(x: r.minX, y: r.maxY))
+            path.addLine(to: CGPoint(x: r.minX, y: r.minY + radius))
+            path.addArc(center: CGPoint(x: r.minX + radius, y: r.minY + radius), radius: radius,
+                        startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false)
+            path.addLine(to: CGPoint(x: r.maxX - radius, y: r.minY))
+            path.addArc(center: CGPoint(x: r.maxX - radius, y: r.minY + radius), radius: radius,
+                        startAngle: .degrees(270), endAngle: .degrees(360), clockwise: false)
+            path.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        case .middle:
+            // Les deux flancs seulement — haut partagé, bas ouvert.
+            path.move(to: CGPoint(x: r.minX, y: r.minY))
+            path.addLine(to: CGPoint(x: r.minX, y: r.maxY))
+            path.move(to: CGPoint(x: r.maxX, y: r.minY))
+            path.addLine(to: CGPoint(x: r.maxX, y: r.maxY))
+        case .tail:
+            // Descend le flanc gauche, ferme le bas par ses deux coins,
+            // remonte le flanc droit — le haut est partagé.
+            path.move(to: CGPoint(x: r.minX, y: r.minY))
+            path.addLine(to: CGPoint(x: r.minX, y: r.maxY - radius))
+            path.addArc(center: CGPoint(x: r.minX + radius, y: r.maxY - radius), radius: radius,
+                        startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+            path.addLine(to: CGPoint(x: r.maxX - radius, y: r.maxY))
+            path.addArc(center: CGPoint(x: r.maxX - radius, y: r.maxY - radius), radius: radius,
+                        startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
+            path.addLine(to: CGPoint(x: r.maxX, y: r.minY))
+        }
+        return path
     }
 }
 
@@ -128,6 +201,15 @@ nonisolated enum RiverBubbleLayout {
 /// d'auteur, même épaisseur que le trait), le reste neutre
 /// (`RiverMetrics.Bubble.flatBorderWidth`, 1pt).
 ///
+/// **Lot G (2026-08-22) — deux bulles d'un même groupe partagent UNE
+/// bordure.** Le contour suit la position de groupe (`RiverGroupPosition`,
+/// déduite purement par `RiverConversationMapping.groupPositions`) : fermé
+/// quand la bulle est seule, OUVERT du côté où la voisine se colle, et le
+/// bord partagé est un POINTILLÉ unique (`sharedEdge`) porté par la bulle qui
+/// continue. Le fond (`UnevenRoundedRectangle`) n'arrondit que les coins
+/// extérieurs du groupe — une seule surface, sans encoche. La forme du 21/08
+/// (contours fermés + couture pointillée intercalée) est retirée.
+///
 /// **« Le message en ENTIER »** (§7ter A1) : AUCUN `.lineLimit` sur le texte
 /// principal — c'est ce qui rend la hauteur du rang MESURÉE plutôt que
 /// supposée. La citation d'une réponse, elle, reste UNE ligne tronquée
@@ -177,31 +259,18 @@ struct RiverBubbleView: View, Equatable {
 
     /// Le haut du rang. Une nouvelle voix qui prend la parole gagne du VIDE
     /// (`Row.gap`) ; la MÊME voix qui continue ne gagne RIEN — sa bulle vient
-    /// se COLLER à la précédente, et un trait POINTILLÉ HORIZONTAL marque la
-    /// jointure (arbitrage produit 2026-08-21 : « ce n'est pas la ligne qui
-    /// doit être en pointillé mais la séparation entre les deux bulles, qui
-    /// devraient être collées »). Le groupement lui-même reste une décision de
-    /// la LOI (`isFirstInGroup`) — cette vue ne fait que le dessiner.
+    /// se COLLER à la précédente, bord à bord, et c'est SON contour qui porte
+    /// la jointure : un bord haut en pointillé, PARTAGÉ (`sharedEdge`), à la
+    /// place d'une couture posée entre deux contours fermés (directive produit
+    /// 2026-08-22 — la forme du 21/08, « bulles fermées + trait pointillé en
+    /// plus », est retirée). Le groupement lui-même reste une décision de la
+    /// LOI (`isFirstInGroup`) — cette vue ne fait que le dessiner.
     @ViewBuilder
     private var topSeam: some View {
-        if content.bubble.isFirstInGroup || content.bubble.isSystem {
+        if !content.groupPosition.joinsAbove {
             Color.clear
                 .frame(width: contentWidth, height: RiverMetrics.Row.gap)
                 .accessibilityHidden(true)
-        } else {
-            Path { path in
-                path.move(to: CGPoint(x: 0, y: RiverMetrics.Row.continuationSeam / 2))
-                path.addLine(to: CGPoint(x: contentWidth, y: RiverMetrics.Row.continuationSeam / 2))
-            }
-            .stroke(
-                laneColor.opacity(0.55),
-                style: StrokeStyle(
-                    lineWidth: 1,
-                    dash: [RiverMetrics.Row.continuationDashLength, RiverMetrics.Row.continuationDashGap]
-                )
-            )
-            .frame(width: contentWidth, height: RiverMetrics.Row.continuationSeam)
-            .accessibilityHidden(true)
         }
     }
 
@@ -286,32 +355,77 @@ struct RiverBubbleView: View, Equatable {
         .padding(.horizontal, RiverMetrics.Bubble.contentPadding)
         .padding(.vertical, RiverMetrics.Bubble.contentPadding)
         .frame(width: contentWidth, alignment: .leading)
+        // Le fond n'arrondit que les coins EXTÉRIEURS du groupe : deux bulles
+        // jointes forment UNE surface continue, sans encoche à la jointure.
         .background(
-            RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
+            UnevenRoundedRectangle(cornerRadii: cornerRadii, style: .continuous)
                 .fill(MeeshyColors.backgroundSecondary(isDark: isDark))
         )
         .overlay(bubbleOutline)
+        .overlay(alignment: .top) { sharedEdge }
+    }
+
+    private var cornerRadii: RectangleCornerRadii {
+        RiverBubbleOutline.cornerRadii(position: content.groupPosition, radius: RiverMetrics.Bubble.detourRadius)
+    }
+
+    private var solidOutline: RiverBubbleOutline {
+        RiverBubbleOutline(
+            position: content.groupPosition,
+            cornerRadius: RiverMetrics.Bubble.detourRadius,
+            lineWidth: content.layout == .lanes ? RiverMetrics.Line.width : RiverMetrics.Bubble.flatBorderWidth
+        )
+    }
+
+    /// La JOINTURE — le bord haut d'une bulle qui continue son groupe, en
+    /// pointillé (`Row.continuationDash*`), couleur d'auteur. C'est le SEUL
+    /// dessin à cet endroit : le contour plein y est ouvert (`RiverBubbleOutline`),
+    /// la bulle précédente y est ouverte aussi (`joinsBelow`). Une bordure,
+    /// partagée — jamais deux contours fermés plus un trait.
+    @ViewBuilder
+    private var sharedEdge: some View {
+        if content.groupPosition.joinsAbove {
+            Path { path in
+                path.move(to: CGPoint(x: 0, y: 0.5))
+                path.addLine(to: CGPoint(x: contentWidth, y: 0.5))
+            }
+            .stroke(
+                laneColor.opacity(0.55),
+                style: StrokeStyle(
+                    lineWidth: 1,
+                    dash: [RiverMetrics.Row.continuationDashLength, RiverMetrics.Row.continuationDashGap]
+                )
+            )
+            .frame(width: contentWidth, height: 1)
+            .accessibilityHidden(true)
+        }
     }
 
     /// §7ter A.6 — l'habillage suit le VERDICT DE FORME, jamais une
     /// préférence de peau (voir la docstring de tête du fichier).
     @ViewBuilder
     private var bubbleOutline: some View {
-        let shape = RoundedRectangle(cornerRadius: RiverMetrics.Bubble.detourRadius, style: .continuous)
         if content.layout == .lanes {
-            shape.strokeBorder(laneColor, lineWidth: RiverMetrics.Line.width)
+            // Contour plein, OUVERT du côté partagé (lot G) — même trait,
+            // même couleur que la ligne : « le bord de la bulle EST un segment
+            // de sa ligne ».
+            solidOutline.stroke(laneColor, lineWidth: RiverMetrics.Line.width)
         } else {
-            // Vue sérialisée : contour neutre PARTOUT, puis deux barres
-            // droites (gauche/bas) posées PAR-DESSUS en couleur d'auteur —
-            // approximation décorative assumée (deux rectangles, pas une
-            // découpe de coin), jamais éprouvée pixel-à-pixel hors device.
+            // Vue sérialisée : contour neutre (ouvert du côté partagé, lui
+            // aussi), puis deux barres droites en couleur d'auteur — le flanc
+            // gauche sur TOUTE la hauteur (il court le long du groupe), le
+            // bas sur la QUEUE ou la bulle seule seulement (sinon la suivante
+            // s'y colle) — approximation décorative assumée (deux
+            // rectangles, pas une découpe de coin).
             ZStack {
-                shape.strokeBorder(neutralOutlineColor, lineWidth: RiverMetrics.Bubble.flatBorderWidth)
-                VStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    Rectangle()
-                        .fill(laneColor)
-                        .frame(height: RiverMetrics.Line.width)
+                solidOutline.stroke(neutralOutlineColor, lineWidth: RiverMetrics.Bubble.flatBorderWidth)
+                if !content.groupPosition.joinsBelow {
+                    VStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        Rectangle()
+                            .fill(laneColor)
+                            .frame(height: RiverMetrics.Line.width)
+                    }
                 }
                 HStack(spacing: 0) {
                     Rectangle()
