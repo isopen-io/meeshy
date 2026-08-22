@@ -929,6 +929,110 @@ describe('useMessageTranslations', () => {
     });
   });
 
+  describe('Prisme — region-tagged / mixed-case language matching', () => {
+    // Le Prisme compare des codes de langue qui peuvent être région-tagués
+    // (`en-US`), sous-tagués script (`zh-Hant`) ou en casse mixte (`EN`). Une
+    // comparaison brute `===` traite `en-US` et `en` comme deux langues
+    // distinctes : le message est réputé « pas dans la langue préférée » alors
+    // qu'il l'est, et une traduction keyée `fr-FR` ne matche jamais la
+    // préférence `fr`. SSOT : normalizeLanguageForDedup (language-normalize.ts).
+
+    it('processMessageWithTranslations: region-tagged original equals preferred → not translated', () => {
+      const user = createTestUser({ systemLanguage: 'en' });
+      const message = createTestMessage({
+        content: 'Hello world',
+        originalLanguage: 'en-US',
+        translations: [],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.content).toBe('Hello world');
+      expect(processed.isTranslated).toBe(false);
+      expect(processed.translatedFrom).toBeUndefined();
+    });
+
+    it('processMessageWithTranslations: region-tagged translation matches preferred', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const message = createTestMessage({
+        content: 'Hello world',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr-FR',
+            translatedContent: 'Bonjour le monde',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.content).toBe('Bonjour le monde');
+      expect(processed.isTranslated).toBe(true);
+      expect(processed.translatedFrom).toBe('en');
+    });
+
+    it('getPreferredLanguageContent: region-tagged original equals preferred → original, no translatedFrom', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+
+      const message = {
+        id: 'msg-1',
+        content: 'Bonjour',
+        originalLanguage: 'fr-FR',
+        translations: [],
+        isTranslated: false,
+        originalContent: 'Bonjour',
+      };
+
+      const content = result.current.getPreferredLanguageContent(message as any);
+
+      expect(content.content).toBe('Bonjour');
+      expect(content.isTranslated).toBe(false);
+      expect(content.translatedFrom).toBeUndefined();
+    });
+
+    it('shouldRequestTranslation: false when a region-tagged translation already covers the target', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+
+      const message = {
+        id: 'msg-1',
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          { language: 'fr-FR', content: 'Bonjour', status: 'completed' },
+        ],
+        isTranslated: false,
+        originalContent: 'Hello',
+      };
+
+      expect(result.current.shouldRequestTranslation(message as any)).toBe(false);
+    });
+
+    it('getRequiredTranslations: no redundant request for a region-tagged original in preferred language', () => {
+      const user = createTestUser({ systemLanguage: 'en', translateToRegionalLanguage: false });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+
+      const message = {
+        id: 'msg-1',
+        content: 'Hello',
+        originalLanguage: 'en-US',
+        translations: [],
+        isTranslated: false,
+        originalContent: 'Hello',
+      };
+
+      expect(result.current.getRequiredTranslations(message as any)).toEqual([]);
+    });
+  });
+
   describe('Edge Cases', () => {
     it('should handle undefined translations gracefully', () => {
       const user = createTestUser({ systemLanguage: 'fr' });
