@@ -5,9 +5,9 @@ import XCTest
 /// story — le swap E4, exécuté au socle du lot C.
 ///
 /// La garde de couture d'E4 (`StoryViewerScenePlayerGuardTests`) tient déjà deux
-/// choses : que chaque montage garde les fils du viewer, et que le fichier dérive
-/// un document v3 par `storyEffects?.canvasV3 ?? CanvasV3(migrating:`. Elle ne
-/// peut rien dire de deux autres, qu'un swap peut trahir en SILENCE :
+/// choses : que chaque montage garde les fils du viewer, et que le fichier ouvre
+/// sa porte v3 sur `storyEffects?.canvasV3` sans jamais migrer l'archive. Elle ne
+/// peut rien dire de trois autres, qu'un swap peut trahir en SILENCE :
 ///
 /// 1. **Quel document va à quel montage.** Le canvas SORTANT du cross-fade peint
 ///    la story qu'on QUITTE ; le courant, celle qu'on rejoint. Servir le document
@@ -26,8 +26,15 @@ import XCTest
 ///    repli distant par `postMediaId`. Un montage sans porteur compile, se monte,
 ///    et rend faux.
 ///
+/// 3. **Le lecteur ne peint que ce qu'on lui a servi NATIF.** La porte v3 est le
+///    correctif du rejet DoD C0c : `canvasV3` valant `nil` pour 100 % des stories
+///    tant que `X-Canvas-Caps: 3` n'est pas posé (tâche C4, ouverte), un montage
+///    inconditionnel ferait passer TOUTE l'archive par un aller-retour v1→v3→v1
+///    qui letterboxe les ancres libres sans jamais les rendre au cadre réel.
+///
 /// Comme la garde de couture, ces assertions visent la fenêtre ÉQUILIBRÉE de
-/// l'appel : ce qui est chaîné après la parenthèse fermante n'en fait pas partie.
+/// l'appel — ou, depuis la porte, le corps ÉQUILIBRÉ de la fonction hôte : ce qui
+/// est chaîné après la parenthèse fermante n'en fait pas partie.
 final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
 
     private static let canvasFile = "Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift"
@@ -86,6 +93,90 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    // MARK: - La porte : le lecteur ne prend la main que sur un v3 NATIF
+
+    /// **Le fait qui commande cette garde (rejet DoD C0c, constat 1).** iOS ne
+    /// pose AUCUN en-tête `X-Canvas-Caps` — le relevé exhaustif du funnel n'en
+    /// compte que treize, aucun `caps`, et le plan lot C:159 le liste encore
+    /// comme À FAIRE. Côté gateway, `resolveWireForm` (`storyEffectsV3.ts`) rend
+    /// donc `'as-is'` pour un blob v1 et `'sentinel'` (v1 !) pour un v3-natif :
+    /// **iOS ne reçoit jamais de v3 aujourd'hui**, et `StoryEffects.canvasV3`
+    /// — posé au décodage sous la seule condition `v >= 3` — vaut `nil` pour
+    /// CENT POUR CENT des stories affichées.
+    ///
+    /// Un montage inconditionnel du lecteur ferait donc passer TOUTE l'archive
+    /// par `CanvasV3(migrating:)` → `StoryEffects(rendering:)`. Cet aller-retour
+    /// est LOSSY et le dépôt le sait déjà : la migration remappe les ancres
+    /// libres dans l'espace de scène FIXE 9:16 (`remapFreeAnchor`, piloté par
+    /// `effects.canvasAspectRatio`), et le retour ne réassigne JAMAIS
+    /// `canvasAspectRatio` ni n'applique le remap inverse — `StoryDraftStore`
+    /// contourne la même perte hors-bande pour les brouillons. Pendant ce temps
+    /// `readerCanvasRatio` encadre toujours au ratio RÉEL de la story. Sur un
+    /// fond 16:9 — le cas COURANT, le composer stampant un ratio CONTINU dès
+    /// qu'un fond est importé — un texte écrit à y = 0,90 se peindrait à
+    /// y ≈ 0,63.
+    ///
+    /// La porte rend les deux branches SELF-COHÉRENTES : l'archive v1 se peint
+    /// dans son propre cadre comme avant le swap, et une story v3-native se
+    /// peint dans un cadre 9:16 — car son `StoryEffects` décodé est LUI AUSSI
+    /// produit par `StoryEffects(rendering:)`, donc sans ratio, donc portrait.
+    /// Le lecteur prendra la main tout seul le jour où C4 posera
+    /// `X-Canvas-Caps: 3`.
+    func test_theArchiveIsNeverPaintedThroughAMigration() throws {
+        let text = try source()
+        let migrations = text.components(separatedBy: "CanvasV3(migrating:").count - 1
+        XCTAssertEqual(
+            migrations, 0,
+            "Le viewer story dérive un document par migration \(migrations) fois. Il ne doit " +
+            "JAMAIS le faire : canvasV3 étant nil pour 100 % des stories servies, cette " +
+            "dérivation est le chemin de TOUTE l'archive, et l'aller-retour v1→v3→v1 letterboxe " +
+            "les ancres libres sans jamais les rendre au cadre réel. Voir la perte gravée par " +
+            "CanvasV3MigrationTests." +
+            "v1RoundTripThroughV3_letterboxesFreeAnchors_andDropsTheCarrierAspect."
+        )
+    }
+
+    /// Le corollaire de la porte, au SITE : le document servi au lecteur est la
+    /// valeur que la porte a DÉJÀ liée — jamais une expression calculée au
+    /// montage.
+    ///
+    /// L'assertion vise l'absence de parenthèses dans l'argument, et c'est
+    /// délibéré : `document: canvasDocument(for: story)` cache une migration
+    /// derrière un nom sobre, et une garde qui chercherait le mot « migrating »
+    /// dans la fenêtre du montage passerait au vert sans rien voir (elle l'a
+    /// fait — constat au premier RED de cette suite). Un montage qui ne peut
+    /// servir qu'un identifiant lié n'a nulle part où cacher un calcul.
+    func test_everyPlayerMountIsServedTheDocumentTheGateAlreadyBound() throws {
+        let windows = playerMounts(in: try source())
+        XCTAssertFalse(
+            windows.isEmpty,
+            "Aucun montage du lecteur — le swap E4 a disparu du viewer story."
+        )
+        for window in windows {
+            let document = try XCTUnwrap(
+                argument("document:", in: window),
+                "Un montage du lecteur sans document servi."
+            )
+            XCTAssertFalse(
+                document.contains("(") || document.contains("migrating"),
+                "Le document servi au lecteur est CALCULÉ au montage — reçu « \(document) ». " +
+                "Il doit être la valeur liée par la porte v3 (`if let document = …`), sans quoi " +
+                "un appel au nom sobre peut y glisser une migration : le lecteur ne prend la " +
+                "main que sur un document v3 NATIF, l'archive v1 garde son hôte direct."
+            )
+        }
+    }
+
+    func test_theV1ArchiveKeepsItsDirectHost() throws {
+        let text = try source()
+        XCTAssertTrue(
+            text.contains("StoryReaderRepresentable("),
+            "L'hôte canvas direct doit RESTER construit ici : c'est la branche que prend " +
+            "l'archive v1, soit 100 % des stories tant que X-Canvas-Caps: 3 n'est pas posé " +
+            "(tâche C4, ouverte). Sans elle, toute l'archive repasse par la migration."
+        )
+    }
+
     private func mounts() throws -> (current: String, outgoing: String) {
         let windows = playerMounts(in: try source())
         XCTAssertEqual(
@@ -103,35 +194,68 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
         return (currentMount, outgoingMount)
     }
 
-    // MARK: - Chaque montage sert le document de la story QU'IL peint
+    // MARK: - Chaque canvas sert la story QU'IL peint, des deux côtés de la porte
 
-    func test_eachMountServesTheDocumentOfTheStoryItPaints() throws {
-        let mounts = try mounts()
+    /// Corps ÉQUILIBRÉ de la fonction `name` — de son accolade ouvrante à la
+    /// fermante correspondante. C'est l'unité qui a un sens depuis que la porte
+    /// v3 loge DEUX hôtes par canvas : la story qu'un canvas peint se lit à sa
+    /// porte, pas à l'argument `document:` du lecteur, qui ne voit plus qu'une
+    /// valeur déjà liée.
+    private func hostBody(_ name: String, in text: String) throws -> String {
+        guard let signature = text.range(of: "private func \(name)(") else {
+            throw XCTSkip("Fonction hôte \(name) introuvable — le viewer a changé de découpe.")
+        }
+        guard let opening = text.range(of: "{", range: signature.upperBound..<text.endIndex) else {
+            throw XCTSkip("Corps de \(name) introuvable.")
+        }
+        var depth = 1
+        var cursor = opening.upperBound
+        while cursor < text.endIndex, depth > 0 {
+            if text[cursor] == "{" { depth += 1 }
+            if text[cursor] == "}" { depth -= 1 }
+            cursor = text.index(after: cursor)
+        }
+        return String(text[opening.upperBound..<cursor])
+    }
 
-        let outgoingDocument = try XCTUnwrap(
-            argument("document:", in: mounts.outgoing),
-            "Le montage sortant doit servir un document au player."
-        )
-        XCTAssertTrue(
-            outgoingDocument.contains("outgoing"),
-            "Le canvas SORTANT doit servir le document de la story QU'ON QUITTE — " +
-            "reçu « \(outgoingDocument) ». Servi avec celui de la story courante, le fondu " +
-            "montre deux fois la story d'arrivée : elle clignote au lieu de se substituer."
-        )
+    /// Un canvas ne peint qu'UNE story, et il la nomme partout : à la porte, au
+    /// porteur du lecteur, et à l'hôte direct de l'archive.
+    ///
+    /// **Pourquoi la garde a déménagé de l'argument vers la fonction hôte.** Le
+    /// lecteur reçoit désormais `document:` — la valeur que la porte a liée —,
+    /// qui ne nomme plus aucune story. Interroger cet argument ne prouverait donc
+    /// plus rien. Ce qui prouve, c'est que le corps du canvas SORTANT ne mentionne
+    /// jamais la story courante et réciproquement : servir le document de l'une à
+    /// l'autre fait clignoter la story d'arrivée pendant les 350 ms du fondu, au
+    /// lieu de fondre celle qu'on quitte.
+    func test_eachCanvasGatesCarriesAndHostsTheStoryItPaints() throws {
+        let text = try source()
 
-        let currentDocument = try XCTUnwrap(
-            argument("document:", in: mounts.current),
-            "Le montage courant doit servir un document au player."
-        )
+        for (host, painted) in [("outgoingContentHost", "outgoing"),
+                                ("currentContentHost", "story")] {
+            let body = try hostBody(host, in: text)
+            for label in ["nativeSceneDocument(of:", "carrier:", "story:"] {
+                let raw = try XCTUnwrap(
+                    argument(label, in: body),
+                    "\(host) ne passe rien sous \(label)."
+                )
+                let value = raw.hasSuffix(")") ? String(raw.dropLast()) : raw
+                XCTAssertEqual(
+                    value, painted,
+                    "\(host) doit passer sous \(label) la story QU'IL peint — reçu « \(raw) ». " +
+                    "Servir à un canvas la story de l'autre fait clignoter la story d'arrivée " +
+                    "pendant les 350 ms du fondu, au lieu de fondre celle qu'on quitte."
+                )
+            }
+        }
+
         XCTAssertFalse(
-            currentDocument.contains("outgoing"),
-            "Le canvas COURANT doit servir le document de la story qu'on rejoint, jamais " +
-            "celui qu'on quitte — reçu « \(currentDocument) »."
-        )
-        XCTAssertTrue(
-            currentDocument.contains("story"),
-            "Le document du montage courant se dérive de la story courante — " +
-            "reçu « \(currentDocument) »."
+            try hostBody("currentContentHost", in: text).contains("outgoing"),
+            "Le canvas de la story COURANTE mentionne la story sortante : les deux canvas se " +
+            "servent l'un l'autre, et le fondu montre deux fois la story d'arrivée. (Le contrôle " +
+            "ne vaut que dans ce sens : « story » est une sous-chaîne de StoryItem et de " +
+            "StoryReaderRepresentable, elle ne discrimine rien. Les trois égalités ci-dessus " +
+            "épinglent l'autre sens.)"
         )
     }
 
