@@ -42,6 +42,9 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.LockReset
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NoEncryption
 import androidx.compose.material.icons.filled.ManageSearch
 import androidx.compose.material.icons.filled.MarkChatRead
 import androidx.compose.material.icons.filled.MarkChatUnread
@@ -185,6 +188,17 @@ fun ConversationListScreen(
                             )
                         }
                     }
+                    // Master-PIN management (parity iOS Settings → change / remove master
+                    // PIN). Surfaces only once a master PIN exists; "Remove" additionally
+                    // hides while any conversation is locked (see canRemoveMasterPin).
+                    if (state.hasMasterPin) {
+                        LockSecurityMenu(
+                            canChange = state.canChangeMasterPin,
+                            canRemove = state.canRemoveMasterPin,
+                            onChange = viewModel::onChangeMasterPin,
+                            onRemove = viewModel::onRemoveMasterPin,
+                        )
+                    }
                     // iOS parity: search moves to the bottom bar; sign-out lives in
                     // Settings (Danger section), so the top keeps only Contacts.
                     IconButton(onClick = onContacts) {
@@ -314,6 +328,50 @@ fun ConversationListScreen(
             onDismiss = viewModel::dismissLockPrompt,
         )
     }
+    }
+}
+
+/**
+ * Master-PIN management overflow (parity iOS Settings → change / remove master PIN).
+ * A dumb renderer: the enablement decisions live on [ConversationListUiState]
+ * ([ConversationListUiState.canChangeMasterPin] / [canRemoveMasterPin]); this only draws
+ * the menu and forwards the intent. Menu-open is local UI state, closed after each pick.
+ */
+@Composable
+private fun LockSecurityMenu(
+    canChange: Boolean,
+    canRemove: Boolean,
+    onChange: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    IconButton(onClick = { expanded = true }) {
+        Icon(
+            Icons.Filled.MoreVert,
+            contentDescription = stringResource(R.string.conversations_lock_security_menu),
+        )
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        if (canChange) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_change_master_pin)) },
+                leadingIcon = { Icon(Icons.Filled.LockReset, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onChange()
+                },
+            )
+        }
+        if (canRemove) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.conversations_remove_master_pin)) },
+                leadingIcon = { Icon(Icons.Filled.NoEncryption, contentDescription = null) },
+                onClick = {
+                    expanded = false
+                    onRemove()
+                },
+            )
+        }
     }
 }
 

@@ -2,6 +2,63 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **conversation-lock master-PIN change + remove shipped** (slice
+> `conversation-lock-master-pin`, feature-parity §Chat — "Conversation lock: master PIN
+> setup/change/remove + per-conversation 4-digit lock + unlock-all", flipped `[ ]` → `[x]`). This closes
+> the last named arm of the conversation-lock feature; setup / per-conversation lock / open-gate /
+> unlock-all were already live from prior slices.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 20 open PRs at branch
+> time (#3311/#3310/#3299/#3289/#3281/#3280/#3275/#3270/#3266/#3262/#3259/#3255/#3253/#3250/#3249/#3247/
+> #3245/#3243/#3242 …) are all web/shared/gateway/ios/sdk, none android-routine. Branched off
+> freshly-fetched `origin/main` (`59aac98c`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `android-37.0` recipe worked
+> (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran the full
+> `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally, **BUILD SUCCESSFUL**
+> (973 tasks).
+>
+> **The gap (read-only recon over iOS + Android)**: iOS `ConversationLockSheet.Mode` has SEVEN modes;
+> Android's `LockPinReducer` shipped only five — `changeMasterPin` and `removeMasterPin` (both Settings-level)
+> were missing, leaving the box's "master PIN … change/remove" arm unmet. The store already exposed
+> `removeMasterPin` (guarded) / `forceRemoveMasterPin` / `setMasterPin`, so no `:sdk-core` change was needed.
+>
+> **`:feature:chat`… `LockPinReducer`** (pure, extended): `CHANGE_MASTER_PIN` runs verify-current (step 0)
+> → new (step 1) → confirm (step 2) → `CommitMasterPin(new)`; a new-pin mismatch rewinds to step 1 (NOT the
+> already-passed verify step 0). `REMOVE_MASTER_PIN` verifies once then emits the new `RemoveMasterPin`
+> effect. New copy keys map to the sheet's title/subtitle strings (change reuses "Verify master PIN" title
+> with a distinct "enter current" subtitle, faithful to iOS). **`ConversationListViewModel`** gains
+> `onChangeMasterPin`/`onRemoveMasterPin`, a mirrored `hasMasterPin` (refreshed from the lock store on every
+> lock mutation AND after each master-PIN commit/removal), and the `canChangeMasterPin` /
+> `canRemoveMasterPin` gates; `applyLockResult` applies `RemoveMasterPin` via the store's **guarded**
+> `removeMasterPin`. **`ConversationListScreen`** adds a `LockSecurityMenu` overflow (top bar, visible once a
+> PIN exists) offering Change (always) and Remove (only while nothing is locked). Strings en/fr/es/pt.
+>
+> **SOTA over iOS**: iOS `removeMasterPin` force-clears the PIN even while conversation locks survive —
+> orphaning them (a lock can no longer be authorised, and unlock-all silently always fails against a null
+> master). Android offers Remove ONLY while nothing is locked and applies it through the guarded store call,
+> so an orphan is structurally impossible.
+>
+> **Tests: +17** — `LockPinReducerTest` +9 (change: length-all-steps / copy-per-step / happy verify→new→
+> confirm→commit / wrong-current-keeps-verify / new-mismatch-rewinds-to-step-1-not-0; remove: length / copy /
+> correct→RemoveMasterPin+Completed / wrong-flags-and-removes-nothing), `ConversationLockFlowViewModelTest`
+> +8 (change: affordance-gated-on-pin / replaces-pin-leaving-locks / wrong-current-keeps-sheet / inert-no-pin;
+> remove: affordance-requires-pin-and-no-locks / clears-it / wrong-keeps-it / inert-no-pin / inert-while-locked).
+> **Mutation (RED proof) ×2**: (a) change new-pin mismatch `entryStep = 1` → `0` → **exactly**
+> `a_mismatched_new_master_pin_resets_to_the_new_entry_step_not_the_verify_step` fails (1 of 38); (b)
+> `canRemoveMasterPin` drop the `&& lockedConversationIds.isEmpty()` guard → **exactly**
+> `the_remove_affordance_requires_a_pin_and_no_locks` fails (1 of 26). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (reducer + ViewModel + Screen + Sheet in `:feature:conversations`, strings×4, tracking
+> docs). Verdict: **PASS** — pure state-machine additions, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: the conversation-lock feature is now at full parity. Pick the next highest-value unchecked §Chat
+> box — the "Conversation info sheet" (hero/direct headers + options tab; members/media/pinned already live)
+> or "Anonymous-session conversation mode; guest join-via-share-link flow" (pure session/permission gating,
+> TDD-friendly). Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **conversation-stats sentiment three-way bar shipped** (slice
 > `conversation-stats-sentiment-bar`, feature-parity §Chat — "Conversation stats rings + activity +
 > content-type / **sentiment** breakdown", box flipped `[~]` → `[x]`). This closes the last open arm of
