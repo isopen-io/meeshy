@@ -10457,3 +10457,45 @@ suspecté.
   (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; fuite
   `createPeerConnection()` au-delà du site déjà patché (Vague 148, web) ; kick modérateur sans
   vérification du rôle CONVERSATION de la cible.
+
+## Vague 155 — kick modérateur : le plancher vérifiait le RANG du CALLEUR, jamais celui de la CIBLE (gateway) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Ferme l'item
+reconduit ci-dessus depuis la Vague 151.
+
+- **Root cause** : `DELETE /calls/:callId/participants/:participantId` (`routes/calls.ts`, kick
+  REST — le seul vecteur de retrait forcé, `call:leave` socket est self-only) autorisait le retrait
+  d'un AUTRE participant dès que `callerMembership.role === 'admin' || 'moderator'`, sans jamais lire
+  le rôle de la CIBLE. Un modérateur de conversation (rang 20) pouvait donc retirer un admin (30) —
+  ou même le créateur (40) — d'un appel actif : l'inverse de toute autre mutation gatée par rôle du
+  dépôt (`conversations/participants.ts` protège déjà `targetParticipant.role === 'creator'` sur la
+  mise à jour de rôle ; `PermissionsService.canManage` compare des rangs, jamais une égalité de
+  chaîne). Même famille que la Vague 154 (iOS, appelant anonyme) : un garde-fou présent à une couche,
+  absent sur son jumeau — ici le jumeau est le TARGET plutôt que le CALLER.
+  Bug adjacent trouvé en creusant : le plancher lui-même (`role === 'admin' || 'moderator'`) omettait
+  `'creator'` — le rang le PLUS élevé — donc le créateur d'un appel de groupe recevait
+  `PERMISSION_DENIED` en retirant qui que ce soit. Les deux bugs partagent la même cause (comparaison
+  de chaînes ad hoc au lieu d'un rang), donc le même correctif les ferme tous les deux.
+- **Fix** : `conversationRoleRank()` (nouvelle fonction pure, `routes/calls.ts`) lit
+  `MEMBER_ROLE_HIERARCHY`/`MemberRole` — la SSOT `@meeshy/shared/types/role-types` que
+  `member-visibility.ts` compare déjà pour ce même rôle de conversation. Le plancher devient
+  `callerRank >= MODERATOR` (inclut `creator`) ; la résolution de cible ajoute `role: true` au
+  `select` Prisma existant et refuse (`PERMISSION_DENIED`) si `callerRank <= targetRank` — rang égal
+  n'outrank pas (deux modérateurs ne peuvent pas se retirer l'un l'autre par cette route). Portée
+  scoped à la conversation + `isActive: true`, comme la résolution de cible qu'il prolonge — aucune
+  requête Prisma supplémentaire, le `select` existant gagne un champ.
+  Le même écart existe sur `conversations/participants.ts`'s route « retirer un participant de la
+  CONVERSATION » (ligne ~1204 : plancher caller correct, aucune vérification du rang de la cible) —
+  hors périmètre de cette vague (calling, pas conversation), reconduit ci-dessous pour une prochaine
+  passe non-calling.
+- **Tests** (TDD, RED confirmé) : 5 tests neufs dans `calls-routes.test.ts` — modérateur→admin refusé,
+  admin→créateur refusé, modérateur→modérateur pair refusé (égalité), modérateur→membre autorisé
+  (déjà vrai avant), créateur→admin autorisé (faux avant, le bug adjacent). RED confirmé sur les 4
+  premiers avant le fix (4/5 rouges, exactement ceux qui exercent le nouveau comportement) ; GREEN
+  après. Sweep complet `--testPathPatterns="[Cc]all"` : 58 suites / 1264 tests verts, 0 régression.
+  `tsc --noEmit` propre.
+- **Non fait volontairement** (reconduits, inchangés) : dead code / god-object `CallManager.swift`
+  (~5880 lignes) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer côté groupe ; fuite
+  `createPeerConnection()` au-delà du site déjà patché (Vague 148, web) ; même gap de hiérarchie de
+  rôle sur `conversations/participants.ts` (retrait d'un membre de la conversation elle-même, pas
+  d'un appel — hors périmètre calling).

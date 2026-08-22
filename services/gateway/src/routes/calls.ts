@@ -34,6 +34,18 @@ import {
   startCallRequestSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
+import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
+
+/**
+ * Numeric conversation-role rank (creator=40 > admin=30 > moderator=20 >
+ * member=10), 0 for anything unrecognized. SSOT: `MEMBER_ROLE_HIERARCHY`
+ * (`@meeshy/shared/types/role-types`) — the same table
+ * `conversations/participants.ts`' role-update route and
+ * `packages/shared/utils/member-visibility.ts` compare against, so a
+ * conversation's role hierarchy is decided in exactly one place.
+ */
+const conversationRoleRank = (role: string | null | undefined): number =>
+  MEMBER_ROLE_HIERARCHY[(role ?? '') as MemberRole] ?? 0;
 
 interface CallParams {
   callId: string;
@@ -911,12 +923,14 @@ export default async function callRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'NOT_A_PARTICIPANT');
       }
 
-      // Verify user is leaving their own participation or has moderator rights
+      // Verify user is leaving their own participation or has moderator rights.
+      // Rank-based (not a string-equality allowlist) so `creator` — the
+      // conversation's highest rank — clears this floor too; the old
+      // `role === 'admin' || role === 'moderator'` check omitted it, so a
+      // group call's own creator got PERMISSION_DENIED removing anyone.
+      const callerRank = conversationRoleRank(callerMembership.role);
       if (participantId !== userId) {
-        const isModerator =
-          callerMembership.role === 'admin' || callerMembership.role === 'moderator';
-
-        if (!isModerator) {
+        if (callerRank < MEMBER_ROLE_HIERARCHY[MemberRole.MODERATOR]) {
           return sendForbidden(reply, 'PERMISSION_DENIED');
         }
       }
@@ -950,11 +964,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         const targetParticipant =
           (await prisma.participant.findFirst({
             where: { conversationId: call.conversationId, userId: participantId, isActive: true },
-            select: { id: true }
+            select: { id: true, role: true }
           })) ??
           (await prisma.participant.findFirst({
             where: { conversationId: call.conversationId, id: participantId, isActive: true },
-            select: { id: true }
+            select: { id: true, role: true }
           }));
         // Do NOT fall back to the raw, unresolved `participantId` string here
         // — that fallback is what previously let a caller with no real
@@ -964,6 +978,18 @@ export default async function callRoutes(fastify: FastifyInstance) {
         // participant of.
         if (!targetParticipant) {
           return sendForbidden(reply, 'NOT_A_PARTICIPANT');
+        }
+        // Vague 155 — the floor check above only asks "is the caller at
+        // least a moderator?"; it never asked "does the caller outrank
+        // THIS target?" A moderator (rank 20) could therefore remove an
+        // admin (30) or the creator (40) from an active call — the one
+        // role-gated mutation in this file that skipped the hierarchy
+        // every sibling route (conversations/participants.ts role-update's
+        // `creator` guard, PermissionsService.canManage) already enforces.
+        // Equal rank does not outrank: two moderators cannot remove each
+        // other via this route.
+        if (callerRank <= conversationRoleRank(targetParticipant.role)) {
+          return sendForbidden(reply, 'PERMISSION_DENIED');
         }
         leaveParticipantId = targetParticipant.id;
       }
