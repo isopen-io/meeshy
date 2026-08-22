@@ -445,19 +445,18 @@ extension LentilleFocusCardTests {
         XCTAssertFalse(code.contains("Button(action: onShowParticipants)"), "l'effectif est une information, plus un contrôle")
     }
 
-    /// L'identité GAGNE la ligne : c'est la date qui cède. L'inverse faisait
-    /// tronquer le NOM sur une carte dont le seul métier est de le montrer en
-    /// plus gros — la magnification rétrécissait l'identité.
-    func test_focusCard_theNameOutranksTheDate_onTheHeaderLine() throws {
+    /// L'identité possède la ligne d'en-tête (2026-08-22 soir) : la date n'y
+    /// est plus — elle vit seule, à droite, sous l'aperçu (même place qu'au
+    /// repos, directive « la date gardera cette place même en magnificence »).
+    /// Le nom garde sa priorité : seul le badge de non-lus la dépasse.
+    func test_focusCard_theNameOwnsTheHeaderLine_theDateLivesBelow() throws {
         let code = try modeSource("LentilleFocusCard.swift")
         let name = try XCTUnwrap(code.range(of: "Text(conversation.displayName)"))
-        let date = try XCTUnwrap(code.range(of: "Text(Self.fullTimestamp("))
-        let namePriority = try XCTUnwrap(code.range(of: ".layoutPriority(2)", range: name.upperBound..<code.endIndex))
-        XCTAssertLessThan(namePriority.lowerBound, date.lowerBound, "la priorité 2 appartient au NOM, avant la date")
-        XCTAssertTrue(
-            code[date.upperBound...].contains(".layoutPriority(0)"),
-            "la date cède la première"
-        )
+        XCTAssertTrue(code[name.upperBound...].prefix(800).contains(".layoutPriority(2)"), "la priorité 2 appartient au NOM")
+        let header = try XCTUnwrap(code.range(of: "private var headerLine: some View {"))
+        let headerEnd = try XCTUnwrap(code.range(of: "private var unreadBadge: some View {"))
+        XCTAssertFalse(code[header.lowerBound..<headerEnd.lowerBound].contains("fullTimestamp("), "la date a quitté la ligne du nom")
+        XCTAssertTrue(code.contains("Text(Self.fullTimestamp("), "… mais elle reste, complète, sur la carte")
     }
 
     /// Un seul contour d'ACCENT sur la carte : son anneau, et l'encoche de

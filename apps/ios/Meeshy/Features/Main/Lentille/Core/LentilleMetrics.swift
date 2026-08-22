@@ -25,8 +25,20 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        public static let height: CGFloat = 64
-        public static let paddingVertical: CGFloat = 10
+        /// 64 → 92 le 2026-08-22 : la rangée porte désormais TROIS lignes —
+        /// nom, « auteur : message », puis la date seule à droite (retour
+        /// produit : « en bas sur une nouvelle ligne à droite mettre la date »)
+        /// — et, sur son bord bas, l'effectif. Le premier essai à 78 a été
+        /// CONSTATÉ trop court sur simulateur : le contenu mesure ~78,6 pt à la
+        /// taille de texte par défaut, si bien que la pile d'effectif sortait
+        /// sous la rangée suivante et que la date passait dessous.
+        public static let height: CGFloat = 92
+        /// Distance du badge de bord (effectif) au bord bas de la rangée : il
+        /// se pose SUR la trace que la bordure de la carte y dessinera, sans
+        /// jamais sortir du cadre — dehors, il mordait la rangée voisine et s'y
+        /// faisait tronquer (constaté au premier essai, débord de 6 pt).
+        public static let edgeBadgeOverhang: CGFloat = 2
+        public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
         public static let radius: CGFloat = 16
@@ -102,7 +114,9 @@ nonisolated public enum LentilleMetrics {
         /// importante et un padding suffisant en haut et en bas ») : déborde
         /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
         /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
-        public static let height: CGFloat = 104
+        /// 104 → 124 le 2026-08-22 : la carte loge les mêmes trois lignes que
+        /// la rangée, avec un aperçu qui coule sur deux lignes.
+        public static let height: CGFloat = 124
         public static let paddingVertical: CGFloat = 14
         /// Avatar de la carte = le contexte « liste » historique (52), un cran
         /// au-dessus de la rangée plate (44) : c'est la magnification.
