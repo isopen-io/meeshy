@@ -857,6 +857,7 @@ fun ChatScreen(
         ConversationStatsSheet(
             conversationId = state.conversationId,
             accentColor = accentColor,
+            messageContents = state.messages.filterNot { it.isDeleted }.map { it.text },
             onDismiss = { showStats = false },
         )
     }
