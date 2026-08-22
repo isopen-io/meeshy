@@ -20,7 +20,16 @@ interface VoiceQualityConfigProps {
 
 interface QualityMetricProps {
   label: string;
-  value: number;
+  /**
+   * `undefined` = NON MESURÉ, et la ligne ne s'affiche pas.
+   *
+   * Toutes les métriques ne viennent pas de l'analyseur : `energy.peak`,
+   * `pitch.contour` et `mfcc.coefficients` sont déclarés par le contrat mais
+   * `VoiceCharacteristics.to_dict()` ne les produit pas. Rendre `undefined`
+   * sous un libellé de mesure raconterait une lecture nulle là où il n'y a
+   * aucune lecture.
+   */
+  value: number | undefined;
   unit?: string;
   description?: string;
   goodRange?: [number, number];
@@ -62,6 +71,8 @@ function isInGoodRange(value: number, range?: [number, number]): boolean {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function QualityMetric({ label, value, unit = '', description, goodRange, recommendedRangeText }: QualityMetricProps & { recommendedRangeText?: string }) {
+  if (value === undefined) return null;
+
   const inRange = isInGoodRange(value, goodRange);
 
   return (
