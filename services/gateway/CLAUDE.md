@@ -561,6 +561,19 @@ Les deux moitiés tiennent en une phrase : **`statusCode` n'est pas une
 observation de la charge utile**, et seul un témoin qui traverse le sérialiseur
 (`app.inject()`, jamais un double du handler) peut voir ce qui en sort.
 
+**Rendre une déclaration VIVANTE repose la question de la visibilité, même
+quand rien ne fuit.** Sur les deux routes d'édition (cycle 92), `isOnline` était
+déclaré par `userMinimalSchema` et chargé par aucune des deux — tant que la
+charge utile sortait `{}`, la question ne se posait pas. Le reprendre en
+déclarant la charge utile n'aurait rien fait fuir (le sérialiseur ne fabrique pas
+un champ absent) et aurait ARMÉ le piège : le jour où quelqu'un l'ajoute au
+`select`, il atteint le fil sans gate et sans qu'un témoin tombe. **L'OMETTRE est
+fail-closed**, et vaut mieux qu'un gate sur une donnée que personne ne charge —
+lequel est du code mort qui se périme. La règle du cycle 84 ne dit pas seulement
+« poser le gate dans le même lot » : elle dit que rendre une donnée visible
+oblige à DÉCIDER, dans le même lot, si elle a le droit de l'être. Ici la décision
+est une omission, gardée par un témoin.
+
 **Une PANNE peut tenir la porte, et la réparer l'ouvre.**
 `GET /communities/search` chargeait `isOnline` sur ses membres sans le gater ;
 rien ne fuyait, parce que son schéma déclarait `creator: { type: 'object' }` et
@@ -615,7 +628,7 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 8
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 6
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -656,8 +669,8 @@ main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
 `voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient ; les trois
 de `voice/translation.ts` au cycle 91, avec la TRONCATURE que portait la forme
 « juste » du même fichier.
-**L'inventaire trié des 8 restants — tous sur des charges utiles `200` — est
-dans `tasks/realtime-sync-audit-2026-08-22-cycle91.md` §8.**
+**L'inventaire trié des 6 restants est dans
+`tasks/realtime-sync-audit-2026-08-22-cycle92.md` §8.**
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
@@ -748,6 +761,27 @@ déclaré, donc supprimé sur les trois.
 > producteur de CETTE route.** Trois fois de suite (cycles 84, 89, 91) la bonne
 > forme se trouvait à portée de regard du défaut ; la troisième fois, elle était
 > fausse aussi.
+
+**Un schéma partagé peut décrire la bonne ENVELOPPE et le mauvais
+PRODUCTEUR** (cycle 92). `messageResponseSchema` décrit exactement
+`{ success, data: { message } }` — l'enveloppe des deux routes d'édition de
+`messages-advanced.ts` — et son `sender` est `userMinimalSchema`, écrit pour un
+`User` là où ces routes chargent un `Participant` élargi :
+
+```
+in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
+out : { id, userId, displayName, avatar, type }     ← role, language, user PERDUS
+```
+
+**La bonne enveloppe est le piège** : elle rend la substitution évidente, et
+c'est quand elle est évidente qu'il faut mesurer.
+
+**Le grain juste est celui qui CHARGE.** Deux routes qui chargent plus qu'un
+schéma partagé MINIMAL ne déclare, déclarent plus LOCALEMENT — élargir
+`userMinimalSchema` aurait poussé `role`, `language` et un `user` imbriqué sur
+les dizaines de réponses qui l'emploient, dont beaucoup décrivent un vrai `User`.
+Le schéma partagé ne grossit pas pour deux appelants. (À trois, la réponse
+devient un `participantSenderSchema` partagé — pas un élargissement du minimal.)
 
 **Entre deux producteurs, déclarer le SUPERSET.** L'asymétrie du sérialiseur le
 permet et le commande : une clé déclarée qu'un objet ne porte pas n'est pas

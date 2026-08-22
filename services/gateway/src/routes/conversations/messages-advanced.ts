@@ -69,6 +69,90 @@ const logger = enhancedLogger.child({ module: 'messages-advanced' });
  */
 const CONVERSATION_STATUS_PAGE_SIZE = 50;
 
+/**
+ * L'expéditeur tel que les DEUX routes d'édition le chargent — un
+ * `Participant`, pas un `User`.
+ *
+ * `messageSchema.sender` est `userMinimalSchema`, qui couvre bien le cas
+ * participant (il déclare `userId` et `type` pour lui). Mais il est
+ * délibérément MINIMAL, et ces deux routes chargent trois champs qu'il ne
+ * déclare pas. Mesuré au compilateur sur la charge utile réelle :
+ *
+ * ```
+ * in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
+ * out : { id, userId, displayName, avatar, type }        ← role, language, user PERDUS
+ * ```
+ *
+ * Élargir `userMinimalSchema` pousserait `role`, `language` et un objet `user`
+ * imbriqué sur les dizaines de réponses qui l'emploient — dont beaucoup
+ * décrivent un vrai `User`, pour qui `type` est déjà noté « absent ». La
+ * déclaration locale est le bon grain : ce sont ces deux routes qui chargent
+ * plus, ce sont elles qui déclarent plus.
+ *
+ * **`isOnline` est délibérément ABSENT.** `userMinimalSchema` le déclare ;
+ * aucune des deux routes ne le charge (vérifié dans les deux `select`), et
+ * jusqu'ici la question ne se posait pas — la charge utile entière sortait
+ * `{}`. En rendant la déclaration vivante, la reprendre telle quelle armerait
+ * le piège que le cycle 84 a nommé : le jour où quelqu'un ajoute `isOnline` au
+ * `select`, il atteindrait le fil sans gate et sans qu'un témoin tombe.
+ * L'omettre est fail-closed — le sérialiseur le retirerait — et vaut mieux que
+ * gater un champ que personne ne charge.
+ */
+export const editedMessageSenderSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string', description: 'Participant ID' },
+    userId: { type: 'string', nullable: true, description: 'Real User ID (null for anonymous participants)' },
+    displayName: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    type: { type: 'string', enum: ['user', 'anonymous', 'bot'] },
+    role: { type: 'string', nullable: true },
+    language: { type: 'string', nullable: true },
+    user: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        displayName: { type: 'string', nullable: true },
+        firstName: { type: 'string', nullable: true },
+        lastName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        role: { type: 'string', nullable: true }
+      }
+    }
+  }
+} as const;
+
+/**
+ * L'enveloppe des deux réponses d'édition.
+ *
+ * `messageResponseSchema` (`@meeshy/shared`) décrit exactement cette forme —
+ * `{ success, data: { message } }` — et c'est bien lui qu'il fallait reprendre :
+ * seul son `sender` demandait à être remplacé, pour la raison ci-dessus.
+ * `messageSchema` était d'ailleurs DÉJÀ importé dans ce fichier, et n'y servait
+ * à rien.
+ */
+export const editedMessageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        message: {
+          ...messageSchema,
+          properties: {
+            ...messageSchema.properties,
+            sender: editedMessageSenderSchema
+          }
+        }
+      }
+    }
+  }
+} as const;
+
 
 /**
  * Enregistre les routes avancées de gestion des messages (edit, delete, reactions, status)
@@ -109,18 +193,7 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -705,18 +778,7 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,

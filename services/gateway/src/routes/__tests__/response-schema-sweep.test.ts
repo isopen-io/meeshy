@@ -50,6 +50,14 @@ const ROUTES_DIR = join(__dirname, '..');
  * `magic-link.ts|session` ×2 — schéma déclaré ET gate posé dans le même lot,
  * selon la règle du cycle 84 bis.
  *
+ * **Les deux `message` de `conversations/messages-advanced.ts` sont partis au
+ * cycle 92.** `messageResponseSchema` (`@meeshy/shared`) décrivait exactement
+ * leur enveloppe et faisait une substitution séduisante — mais son `sender` est
+ * `userMinimalSchema`, délibérément MINIMAL, quand ces deux routes chargent un
+ * `Participant` avec `role`, `language` et un `user` imbriqué. Le grain juste
+ * est la déclaration LOCALE : ce sont ces routes qui chargent plus, ce sont
+ * elles qui déclarent plus. `isOnline` y est délibérément OMIS (fail-closed).
+ *
  * **Les trois sites de `voice/translation.ts` sont partis au cycle 91**, et le
  * fichier portait déjà la forme juste trois cents lignes plus bas — sauf qu'elle
  * TRONQUAIT elle aussi : `POST /voice/transcribe` déclarait 6 champs
@@ -78,8 +86,6 @@ const ROUTES_DIR = join(__dirname, '..');
  */
 const FROZEN_INVENTORY: readonly string[] = [
   'calls.ts|details|400',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/messages-advanced.ts|message|200',
   'conversations/sharing.ts|link|200',
   'links/admin.ts|creator|200',
   'messages.ts|sender|200',
