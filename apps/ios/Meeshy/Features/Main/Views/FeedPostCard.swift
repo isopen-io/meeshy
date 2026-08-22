@@ -282,6 +282,95 @@ struct FeedPostCard: View {
     private var mentionTint: Color { MeeshyColors.mentionColor(isDark: theme.mode.isDark) }
     private var hashtagTint: Color { MeeshyColors.hashtagColor(isDark: theme.mode.isDark) }
 
+    /// Accent du badge son de fond (E1) : sur carte SOMBRE, l'accent
+    /// déterministe du post (revue totale C8, non-régression `accentColor`
+    /// — même valeur que `surfaceGradient`/la bordure de carte) ; sur carte
+    /// CLAIRE, le même repli AA que les mentions/hashtags du corps
+    /// (`mentionTint`, indigo vérifié AA) plutôt que l'accent brut du post,
+    /// qui peut échouer AA sur fond blanc (revue totale U16).
+    private var backgroundSoundAccentHex: String {
+        theme.mode.isDark ? accentColor : MeeshyColors.indigo600Hex
+    }
+
+    /// Annonce du fond (E1) — MÊME expression que le badge de la rangée
+    /// auteur, exposée comme UNE valeur réutilisable : le bouton muet
+    /// (B3.6, Task E2) partage cette valeur avec le badge, jamais une
+    /// seconde condition d'existence qui pourrait diverger.
+    private var backgroundSoundAnnouncement: BackgroundAudioAnnouncement {
+        BackgroundSoundBadge.announcement(for: post.storyEffects)
+    }
+
+    /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un
+    /// REPOST de story (`isStoryRepost`), qui reste rendu par
+    /// `StoryRepostEmbedCell` (hors périmètre E3). `nil` tant que le fil ne
+    /// sert que du legacy v1 : arrivée INERTE, `CANVAS_V3_WRITE_STRICT` est
+    /// OFF en prod à ce jour (spec rév. 8) — aucun écrivain n'émet encore v3.
+    private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
+
+    /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
+    /// iPad en colonne large n'étire pas la scène en mur vertical géant).
+    /// La hauteur n'est PAS dupliquée en constante : `.aspectRatio(9:16)`
+    /// la dérive de la largeur RÉELLEMENT proposée par le parent (voir
+    /// `cardScenePlayer(document:)`) — un plafond en points calculé sur la
+    /// largeur MAXIMALE (420 × 16/9 = 747pt) déforme la scène dès que la
+    /// carte est plus étroite que ce plafond (≈329pt sur iPhone 16 Pro,
+    /// après le double padding horizontal de 16pt de la carte).
+    private static let cardSceneMaxWidth: CGFloat = 420
+
+    /// Scène du post en carte (Task E3) — `MeeshyScenePlayer(.card)`. Née en
+    /// PAUSE et le RESTE : `sceneIndex`/`isPlaying` sont des `.constant`
+    /// figés, jamais un `@State` qu'un futur commit pourrait faire basculer.
+    /// « La carte de POST naît en pause, le mouvement est au tap » (revue
+    /// Fable n°25) — la lecture vit dans LA DESTINATION du tap (`onTapPost`,
+    /// le plein écran EXISTANT, `PostDetailView`), jamais dans la carte :
+    /// zéro AVPlayer/décodage actif ici. `ScenePlayerConfig(mode: .card)`
+    /// verrouille déjà `isMuted`/`loops`/`startsPaused` côté SDK (B4 gelé) ;
+    /// `isPlaying: .constant(false)` garantit qu'aucune commande locale ne
+    /// lève jamais la pause.
+    ///
+    /// `.preferredContentLanguages(...)` câble le Prisme Linguistique — même
+    /// source que le voisin `StoryRepostEmbedCell` (branche `isStoryRepost`
+    /// juste en dessous) : sans cet appel `MeeshyScenePlayer` garde
+    /// `languages: []` et `StoryTextObject.resolvedText` rend
+    /// inconditionnellement le texte ORIGINAL de l'auteur (correctif rejet
+    /// DoD, constat 1 — « le prisme s'applique à TOUT le contenu »).
+    ///
+    /// `.aspectRatio(9.0/16.0, contentMode: .fit)` — même patron que
+    /// `StoryRepostEmbedCell`, qui rend le MÊME hôte (`StoryReaderRepresentable`
+    /// via `MeeshyScenePlayer`) dans le MÊME fil sans jamais avoir récursé.
+    /// C'est un modificateur TOP-DOWN : le parent propose une taille à
+    /// l'enfant, l'enfant ne mesure jamais sa propre taille pour la
+    /// reboucler sur le layout — distinct du piège self-sizing BOTTOM-UP
+    /// (un hôte hosted qui DÉRIVE sa propre hauteur et la reboucle,
+    /// famille du crash SIGTRAP `_updateVisibleCellsNow` ×7 documenté par
+    /// l'incident `MessageListLayout.swift` 2026-08-18 — SwiftUI DANS une
+    /// cellule UIKit, l'inverse du cas présent, UIKit DANS SwiftUI) : un
+    /// `GeometryReader` local resterait interdit, `.aspectRatio` ne l'est
+    /// pas (correctif rejet DoD, constat 2).
+    @ViewBuilder
+    private func cardScenePlayer(document: CanvasV3) -> some View {
+        MeeshyScenePlayer(
+            document: document,
+            mode: .card,
+            sceneIndex: .constant(0),
+            isPlaying: .constant(false),
+            accentColorHex: accentColor
+        )
+        .preferredContentLanguages(AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+        .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        .frame(maxWidth: Self.cardSceneMaxWidth)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .contentShape(Rectangle())
+        .onTapGesture { onTapPost?(post) }
+    }
+
+    /// VoiceOver label pour la scène de carte — même convention que
+    /// `mediaAccessibilityLabel` (attribution à l'auteur).
+    private var cardSceneAccessibilityLabel: String {
+        String(format: String(localized: "a11y.feed.post.scene", defaultValue: "Scène partagée par %@", bundle: .main), post.author)
+    }
+
     /// Destination trackée `/l/<token>` pour la façade vidéo, dérivée de la
     /// première URL du contenu via `post.trackedLinkMap`. `nil` → watchURL.
     private var embedTrackedURL: URL? {
@@ -423,12 +512,24 @@ struct FeedPostCard: View {
                         .padding(.top, 8)
                 }
 
-                // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
-                // For this branch the gateway has snapshotted the original story media
-                // into the outer POST, but the canonical source is `post.repost` —
-                // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
-                // the in-viewer experience pixel-for-pixel.
-                if isStoryRepost {
+                // Scène du POST (Task E3) : le post porte son PROPRE canvas v3
+                // (composé, pas reposté) — la scène le remplace entièrement, elle
+                // compose déjà média + audio + texte. Priorité sur les branches
+                // repost ci-dessous : un post scène n'est ni un repost de story
+                // ni un repost de réel.
+                if let cardSceneDocument {
+                    cardScenePlayer(document: cardSceneDocument)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(cardSceneAccessibilityLabel)
+                        .accessibilityHint(String(localized: "a11y.feed.post.open.hint", defaultValue: "Touche deux fois pour ouvrir la publication", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
+                        .accessibilityAction { onTapPost?(post) }
+                } else if isStoryRepost {
+                    // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
+                    // For this branch the gateway has snapshotted the original story media
+                    // into the outer POST, but the canonical source is `post.repost` —
+                    // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
+                    // the in-viewer experience pixel-for-pixel.
                     StoryRepostEmbedCell(
                         post: post,
                         preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages
@@ -668,6 +769,15 @@ struct FeedPostCard: View {
                                         defaultValue: "a republié", bundle: .main)
                         )
                     }
+
+                    // Annonce du fond (B3.3-5), résolveur unique partagé
+                    // avec le viewer story et le plein écran réel (E1) —
+                    // BackgroundSoundBadge rend EmptyView sans piste (B3.5).
+                    BackgroundSoundBadge(
+                        announcement: backgroundSoundAnnouncement,
+                        accentHex: backgroundSoundAccentHex
+                    )
+                    .equatable()
                 }
 
                 HStack(spacing: 4) {
@@ -1129,6 +1239,15 @@ struct FeedPostCard: View {
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
             .accessibilityValue(String(format: String(localized: "a11y.feed.post.share.value", defaultValue: "%d partages", bundle: .main), displayShareCount ?? post.shareCount))
             .accessibilityHint(String(localized: "a11y.feed.post.share.hint", defaultValue: "Partage cette publication via un lien", bundle: .main))
+
+            // Pas de bouton muet ici en E2 (correctif revue DoD, constat
+            // majeur #2) : la carte n'embarque encore AUCUN lecteur local
+            // capable de jouer le fond (l'embed story-repost fige
+            // `mute: true` dans `StoryRepostEmbedCell`, hors périmètre E2 ;
+            // la scène jouée dans la carte arrive avec E3,
+            // `MeeshyScenePlayer(.card)`). Le badge d'ANNONCE ci-dessus
+            // (`backgroundSoundAnnouncement`, rangée auteur, E1) reste seul
+            // — un bouton sans lecteur à piloter serait décoratif.
         }
         .padding(.top, 4)
     }

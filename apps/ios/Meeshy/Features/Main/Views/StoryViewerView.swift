@@ -1445,8 +1445,7 @@ struct StoryViewerView: View {
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
-            storyHasBackgroundAudio: storyHasBackgroundAudio,
-            headerBackgroundAudioDisplay: headerBackgroundAudioDisplay,
+            backgroundSoundAnnouncement: backgroundSoundAnnouncement,
             storyHasAudioTranscript: storyHasAudioTranscript,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
@@ -1754,53 +1753,19 @@ struct StoryViewerView: View {
         )
     }
 
-    /// `true` quand la slide courante POSSÈDE un audio de fond — pilote la
-    /// note musicale affichée après la date dans le header. La note signale
-    /// la PRÉSENCE de l'audio de fond, indépendamment du mute global ou du
-    /// moment de la timeline où il joue (directive user 2026-07-13, précision
-    /// itération 2). Délègue à `StoryAudioAvailability.hasBackgroundAudioTrack`
-    /// (SDK, single source of truth) plutôt que de réinliner le prédicat.
-    var storyHasBackgroundAudio: Bool { // internal for cross-file extension access
-        guard let story = currentStory else { return false }
-        return StoryAudioAvailability.hasBackgroundAudioTrack(
-            effects: story.storyEffects,
-            backgroundAudio: story.backgroundAudio
-        )
-    }
-
-    /// Contenu à droite de la note du header (directive user 2026-08-02) :
-    /// un son de BIBLIOTHÈQUE s'annonce par le crédit défilant
-    /// « titre · @pseudo · M:SS » à la place de la sinusoïde ; une piste
-    /// PROPRE (première publication, même si la capture l'a versée ensuite à
-    /// la bibliothèque) garde la sinusoïde. Même résolveur que la chip du
-    /// canvas ; la fenêtre du FOND (fin = fin de slide) arme le compteur de
-    /// temps restant — primitives Equatable descendues en `let`, jamais le
-    /// `BackgroundEntry` privé du mixer.
-    var headerBackgroundAudioDisplay: AudioChipHeaderModel { // internal for cross-file access
-        guard let story = currentStory else { return AudioChipHeaderModel(display: .waveform) }
-        let bg = (story.storyEffects?.audioPlayerObjects ?? [])
-            .first(where: { $0.isBackground == true })
-        if let bg, bg.soundId != nil {
-            return AudioChipHeaderModel(
-                display: AudioChipDisplay.resolve(
-                    soundId: bg.soundId, title: bg.name,
-                    authorUsername: bg.soundAuthorUsername),
-                window: AudioChipPlaybackWindow(
-                    startTime: bg.startTime.map(TimeInterval.init),
-                    duration: bg.duration.map(TimeInterval.init),
-                    isBackground: true,
-                    slideDuration: currentSlideDuration))
-        }
-        if let entry = story.backgroundAudio {
-            return AudioChipHeaderModel(
-                display: AudioChipDisplay.resolve(
-                    soundId: entry.id, title: entry.title,
-                    authorUsername: entry.uploaderName),
-                window: AudioChipPlaybackWindow(
-                    isBackground: true,
-                    slideDuration: currentSlideDuration))
-        }
-        return AudioChipHeaderModel(display: .waveform)
+    /// Annonce du fond (B3.3-5) — résolveur unique partagé avec la carte de
+    /// post et le plein écran réel (E1, `BackgroundSoundBadge`). `.none`
+    /// sans piste (B3.5 : c'est l'EXISTENCE d'une piste qui gouverne
+    /// l'annonce, pas son audibilité — l'ancien gate `hasBackgroundAudio`
+    /// exigeait `volume > 0`, une notion que les deux autres surfaces
+    /// n'avaient pas ; alignement E1). `.original`/`.credit` selon la
+    /// provenance (B3.4). `story.backgroundAudio`
+    /// (`StoryBackgroundAudioEntry`) n'est retenu nulle part ici : il n'est
+    /// JAMAIS peuplé par le pipeline de production actuel (voir la doc de
+    /// `StoryAudioAvailability.hasBackgroundAudioTrack`) — retiré avec la
+    /// même justification que sa dépréciation là-bas.
+    var backgroundSoundAnnouncement: BackgroundAudioAnnouncement { // internal for cross-file extension access
+        BackgroundSoundBadge.announcement(for: currentStory?.storyEffects)
     }
 
     /// Probes each foreground video of the current slide for a real audio track.
