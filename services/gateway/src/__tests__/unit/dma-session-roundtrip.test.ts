@@ -224,12 +224,16 @@ describe('DMA Signal Protocol — aller-retour entre deux productions', () => {
     const aliceSession = alice.session(BOB_DMA_ID)!;
     const bobSession = bob.session(ALICE_DMA_ID)!;
 
-    // Les chaînes ont AVANCÉ (un message émis, un message reçu), donc on ne
-    // compare pas les clés courantes mais l'invariant qui les lie : les deux
-    // bouts ont tiré la MÊME clé de message pour ce message-là. C'est ce que
-    // l'aller-retour prouve, et ce que les deux compteurs attestent ici.
-    expect(aliceSession.messageNumberSend).toBe(1);
-    expect(bobSession.messageNumberReceive).toBe(1);
+    // Les deux chaînes ont avancé du MÊME pas (un message émis d'un côté, le
+    // même reçu de l'autre), donc l'égalité qui les lie survit à l'avance : la
+    // chaîne d'émission d'Alice est toujours la chaîne de réception de Bob.
+    expect(bobSession.chainKeyReceive.equals(aliceSession.chainKeySend)).toBe(true);
+    // Et le sens inverse, qu'aucun message n'a encore fait avancer.
+    expect(bobSession.chainKeySend.equals(aliceSession.chainKeyReceive)).toBe(true);
+
+    // La forme EXACTE du défaut : le double croisement rendait les deux sessions
+    // SEMBLABLES au lieu de complémentaires — même moitié, même rôle.
+    expect(bobSession.chainKeySend.equals(aliceSession.chainKeySend)).toBe(false);
   });
 
   it('déchiffre à l\'autre bout le texte clair chiffré par le premier', async () => {
