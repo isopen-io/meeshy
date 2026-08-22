@@ -23,33 +23,44 @@ Et côté iOS, le socle du lot C a mis le lecteur de scènes **derrière une por
 l'hôte canvas direct. Aujourd'hui cette porte est fermée pour **100 %** des
 stories, précisément parce qu'iOS ne pose pas encore l'en-tête.
 
-**Donc : le jour où C4 pose `X-Canvas-Caps: 3`, le lecteur prend la main en
-production, d'un coup, sur tout le parc.** Ce n'est pas un effet de bord à
-surveiller — c'est le déclencheur du swap, et il est écrit dans une tâche dont le
-titre parle d'autre chose.
+**RECTIFICATION (2026-08-22, même jour, vérifiée dans le code).** La première
+rédaction de cette note disait : « le jour où C4 pose `X-Canvas-Caps: 3`, le
+lecteur prend la main en production, d'un coup, sur tout le parc. » **C'est
+faux**, et la table de négociation le dit noir sur blanc.
 
-## Le risque à lever AVANT de poser l'en-tête
+`resolveWireForm()` (`storyEffectsV3.ts:410`) a **DEUX** verrous, pas un :
 
-Le socle a établi que l'aller-retour v1→v3 **perd le cadre** : la migration
-exprime les ancres libres dans un espace de scène **figé 9:16**, alors que
-`readerCanvasRatio` encadre au ratio **réel** de la story. Sur un fond 16:9 — le
-cas courant, le composer stampant un ratio continu dès qu'un fond est importé —
-un texte écrit à 0,90 se peint à **0,6266**.
+| blob | caps ≥ 3 | `CANVAS_V3_READ` | forme servie |
+|---|---|---|---|
+| v1 | non | — | tel quel (v1) |
+| v1 | **oui** | **non** | **tel quel (v1)** ← le cas réel |
+| v1 | oui | oui | converti (v3) |
+| v3-natif | oui | — | v3 |
+| v3-natif | non | — | sentinelle |
 
-La perte n'est pas une particularité du pont Swift : elle est **dans le format**,
-et le golden partagé avec le convertisseur gateway la porte déjà (texte du
-fixture v1 à 0,2, jumeau v3 à 0,40507).
+Deux faits mesurés qui ferment les deux dernières lignes :
 
-Le socle s'en tire parce que ses deux branches sont **self-cohérentes** : une
-story v3-native se peint en 9:16 parce que son `StoryEffects` décodé sort lui
-aussi du pont. La dérive n'apparaît que si l'on **mélange** — ancres en espace
-9:16 peintes dans un cadre au ratio réel.
+1. **`CANVAS_V3_READ` n'apparaît dans AUCUN fichier de configuration** — ni
+   `infrastructure/`, ni un `docker-compose*.yml`, ni un `.env` du dépôt. Il
+   n'existe que dans la source, avec son défaut : « lu à chaque appel, **défaut
+   OFF** » (l. 484). En production il est donc éteint.
+2. **Rien ne PERSISTE de v3 natif.** Le seul `v: 3` construit côté gateway est
+   dans `convertStoryEffectsForWire` (l. 231) — une forme de **fil**, jamais
+   écrite en base. Côté Swift, le seul est `CanvasV3Migration.swift:361` — la
+   **migration**, pas le composer. (Un `CANVAS_V3_WRITE_STRICT` existe aussi :
+   le chemin d'écriture est lui aussi sous drapeau.)
 
-**La question ouverte, et elle est produit autant que technique :** quand le
-gateway servira du v3 natif pour une story composée sur un fond 16:9, le lecteur
-la peindra-t-il en 9:16 ? Si oui, le cadrage de ces stories **change** par
-rapport à ce que voit l'utilisateur aujourd'hui — sur du contenu déjà publié,
-que personne ne recomposera.
+**Conséquence pour C4 : poser `X-Canvas-Caps: 3` aujourd'hui ne change RIEN.**
+Les stories v1 restent servies en v1 parce que le drapeau serveur est éteint, et
+la branche « v3-natif » n'a aucun contenu à servir. Le vrai déclencheur du swap
+n'est pas l'en-tête client — c'est **l'armement de `CANVAS_V3_READ=1` sur le
+serveur**, un geste d'exploitation qui n'appartient pas à ce lot.
+
+Ce que cela déplace : la question du cadrage reste entière, mais elle cesse
+d'être **bloquante pour C4** et devient bloquante pour **l'armement du drapeau**.
+C'est là qu'il faut la poser — et c'est une bien meilleure nouvelle, parce qu'un
+drapeau serveur se lève et se rabaisse, alors qu'un binaire iOS parti en
+production ne se rappelle pas.
 
 ## Définition de fini pour ce point (en plus de la DoD de C4)
 
@@ -57,9 +68,9 @@ que personne ne recomposera.
       gateway **avec** `x-canvas-caps: 3`, et compare le cadrage rendu à celui
       obtenu **sans** l'en-tête. Les deux doivent coïncider — ou l'écart doit
       être nommé, chiffré et assumé.
-- [ ] Tant que ce test n'est pas vert, `X-Canvas-Caps: 3` ne part pas. Les deux
-      autres en-têtes (`X-App-Version`, `X-App-Platform`) ne dépendent pas de
-      lui et peuvent partir seuls : la porte 426 n'a pas à attendre le cadrage.
+- [ ] `X-Canvas-Caps: 3` **peut partir avec C4** — il est inerte tant que
+      `CANVAS_V3_READ` est éteint. C'est l'**armement du drapeau serveur** qui
+      doit attendre le test de cadrage ci-dessus, pas le binaire iOS.
 - [ ] Si l'écart existe et qu'il est assumé, il se dit dans la planche P0 et dans
       `packages/MeeshySDK/decisions.md` — pas seulement dans un message de
       commit.
