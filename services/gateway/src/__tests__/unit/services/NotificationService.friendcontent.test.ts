@@ -1222,4 +1222,80 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
       expect(prisma.notification.create).toHaveBeenCalled();
     });
   });
+  // =====================================================
+  // Bannière push — la même phrase ne s'écrit jamais deux fois
+  // =====================================================
+
+  describe('push banner — pas de ligne dupliquée', () => {
+    let sendToUser: jest.Mock;
+
+    // Même extraction que `NotificationService.pushMessage.test.ts` :
+    // `sendToUser({ userId, types, payload })`.
+    const lastPushPayload = () => {
+      const calls = sendToUser.mock.calls as Array<
+        [{ payload: { title: string; subtitle?: string; body: string } }]
+      >;
+      expect(calls.length).toBeGreaterThan(0);
+      return calls[calls.length - 1][0].payload;
+    };
+
+    beforeEach(() => {
+      sendToUser = jest.fn().mockResolvedValue(undefined);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      service.setPushNotificationService({ sendToUser } as any);
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+    });
+
+    it('test_pushBanner_storyWithoutExcerpt_doesNotRepeatTheActionInBothLines', async () => {
+      // Le défaut signalé le 2026-08-22 : « brayan njiki / a publié une nouvelle
+      // story / a publié une nouvelle story ». Sans excerpt, le corps retombe
+      // sur la phrase d'action — que le subtitle porte déjà.
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+      });
+
+      const payload = lastPushPayload();
+      expect(payload.body).toBe('a publié une nouvelle story');
+      expect(payload.subtitle).toBeUndefined();
+    });
+
+    it('test_pushBanner_neverEmptiesTheBodyToDeduplicate', async () => {
+      // Le sens du correctif : c'est le subtitle qui tombe. Le corps part aussi
+      // vers FCM et WebPush, qui ne rendent aucun subtitle — le vider laisserait
+      // trois plateformes avec une alerte sans texte.
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      const payload = lastPushPayload();
+      expect(payload.body).toBe('a publié un nouveau post');
+      expect(payload.body.length).toBeGreaterThan(0);
+      // Le porteur produit a signalé le MÊME défaut sur la création de post :
+      // le correctif est générique (il compare les deux lignes, il ne connaît
+      // pas les types), la couverture le dit explicitement plutôt que de le
+      // laisser déduire du cas STORY.
+      expect(payload.subtitle).toBeUndefined();
+    });
+
+    it('test_pushBanner_withExcerpt_keepsBothLinesBecauseTheyDiffer', async () => {
+      // Non-régression du cas nominal : quand le contenu a un aperçu, les deux
+      // lignes disent des choses DIFFÉRENTES et doivent toutes deux survivre.
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+        excerpt: 'Mon voyage à Douala',
+      });
+
+      const payload = lastPushPayload();
+      expect(payload.body).toBe('Mon voyage à Douala');
+      expect(payload.subtitle).toBe('a publié une nouvelle story');
+    });
+  });
 });
