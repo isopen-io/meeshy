@@ -282,14 +282,14 @@ private struct VibrantCommunityCard: View, Equatable {
                     HStack(spacing: 3) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 9))
-                        Text(formatCount(community.memberCount))
+                        Text(CompactCountLabel.text(community.memberCount))
                             .font(.system(size: 10, weight: .semibold))
                     }
 
                     HStack(spacing: 3) {
                         Image(systemName: "bubble.left.fill")
                             .font(.system(size: 9))
-                        Text(formatCount(community.conversationCount))
+                        Text(CompactCountLabel.text(community.conversationCount))
                             .font(.system(size: 10, weight: .semibold))
                     }
                 }
@@ -309,15 +309,6 @@ private struct VibrantCommunityCard: View, Equatable {
             }
             onTap()
         }
-    }
-
-    private func formatCount(_ count: Int) -> String {
-        if count >= 1_000_000 {
-            return String(format: "%.1fM", Double(count) / 1_000_000.0)
-        } else if count >= 1_000 {
-            return String(format: "%.1fk", Double(count) / 1_000.0)
-        }
-        return "\(count)"
     }
 }
 
