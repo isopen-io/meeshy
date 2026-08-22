@@ -2,6 +2,65 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **authenticated share-link join shipped** (slice `sharelink-join-authenticated`,
+> feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
+> umbrella box stays `[~]` — the `ShareLinkEntryResolver` + `MeeshyApp.kt` rewire are the last named
+> follow-ups). This lands the JWT counterpart of the anonymous guest join, continuing the same feature
+> begun by `sharelink-entry-policy`.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 21 open PRs at branch
+> time (#3325/#3324/#3317/#3310/#3299/#3289/#3281/#3280/#3275/#3270/#3266/#3262/#3259/#3255/#3253/#3250/
+> #3249/#3247/#3245/#3243/#3242) are all web/shared/gateway/ios/sdk, none android-routine. Prior android
+> iteration (`sharelink-entry-policy`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`940ad0c1`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `platforms;android-37.0` recipe
+> worked (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran
+> the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally, **BUILD
+> SUCCESSFUL** (973 tasks).
+>
+> **The gap (read-only recon over iOS + Android)**: iOS `ShareLinkService.joinAuthenticated(linkId)`
+> hits `POST /conversations/join/{linkId}` (empty body — the gateway derives the joiner from the JWT;
+> `routes/conversations/sharing.ts` `resolveConversationEntry`, idempotent: an existing member gets the
+> same canonical conversationId as a fresh join). Android had the `JoinAuthenticatedResponse` model but
+> shipped it **orphaned** (grep: zero consumers outside `ShareLink.kt`) — no API endpoint, no repository.
+> `ShareLinkEntryPolicy` (last slice) can now DECIDE `JoinWithAccount`, but nothing could EXECUTE it.
+>
+> **`:core:network` `ConversationApi.joinViaShareLink(linkId)`** (`@POST conversations/join/{linkId}`,
+> no `@Body` — the markRead precedent; JWT rides the interceptor). Chose `ConversationApi` over
+> `ShareLinkApi` deliberately: the path is `conversations/…` and every `ConversationApi` endpoint is
+> JWT, whereas `ShareLinkApi` is documented as the **no-JWT** anonymous surface. The three hand-written
+> `ConversationApi` test stubs (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+> `ConversationAnalysisRepositoryTest`) each gained the one-line override + import.
+>
+> **`:sdk-core` `ShareLinkJoinRepository`** (new, stateless — JWT sibling of
+> `AnonymousSessionRepository.join`, but installs no token and touches no Room):
+> `joinAuthenticated(linkId): NetworkResult<String>` returns the canonical conversationId. SOTA over
+> iOS: a blank linkId is **inert** (folds to Failure with no network call — never the doomed
+> `conversations/join/` request iOS would fire); a success envelope carrying a **blank** conversationId
+> folds to Failure (malformed), so a caller can never navigate to an empty id; both the linkId sent and
+> the conversationId returned are trimmed.
+>
+> **Tests: +6** — `ShareLinkJoinRepositoryTest`: canonical-id-returned+linkId-forwarded / trims-both-
+> sides / blank-conversationId→Failure / blank-linkId-inert-no-network / unsuccessful-envelope→Failure /
+> transport-error→Failure. **Mutation (RED proof) ×2**: (a) neuter the blank-linkId guard (`if(false)`)
+> → **exactly** `is inert on a blank linkId and never calls the network` fails (1 of 6); (b) neuter the
+> blank-conversationId guard → **exactly** `folds a success envelope with a blank conversationId into a
+> failure` fails (1 of 6). Both restored via the Edit tool (uncommitted file — never `git checkout`);
+> production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (1 API method in `:core:network` + 1 new repository in `:sdk-core` + 1 new test +
+> 3 stub one-liners + tracking docs). Verdict: **PASS** — stateless repository addition, behavioural
+> tests through the public API, no production logic outside apps/android.
+>
+> **Next**: the `:sdk-core` `ShareLinkEntryResolver` — assembles the five `ShareLinkEntryFacts` (preview
+> via `AnonymousSessionRepository.preview` + `AnonymousSessionStore.load(linkId)` + the in-memory
+> conversation list) and dispatches the resolved `ShareLinkEntryIntent` to either
+> `AnonymousSessionRepository.join` or `ShareLinkJoinRepository.joinAuthenticated`; then rewire
+> `MeeshyApp.kt`'s deep-link route to branch on the intent (the final `[x]` for the umbrella box).
+> Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **share-link entry-decision policy shipped** (slice `sharelink-entry-policy`,
 > feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow",
 > box flipped `[ ]` → `[~]`). This lands the missing "who enters, and how" brain for share-link

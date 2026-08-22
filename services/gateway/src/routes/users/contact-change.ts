@@ -96,10 +96,10 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Email already in use or invalid' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Email already in use or invalid' },
           }
         },
         401: errorResponseSchema,
@@ -226,10 +226,10 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Invalid or expired token' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Invalid or expired token' },
           }
         },
         401: errorResponseSchema,
@@ -347,18 +347,18 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'No pending email change' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'No pending email change' },
           }
         },
         401: errorResponseSchema,
         429: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Rate limit exceeded' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Rate limit exceeded' },
           }
         },
         500: errorResponseSchema
@@ -484,10 +484,10 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Phone number already in use or invalid' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Phone number already in use or invalid' },
           }
         },
         401: errorResponseSchema,
@@ -605,10 +605,10 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Invalid or expired code' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Invalid or expired code' },
           }
         },
         401: errorResponseSchema,

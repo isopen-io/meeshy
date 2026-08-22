@@ -43,6 +43,7 @@ import {
   AttachmentStatusBodySchema,
 } from '../validation/messages-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import {
   sendSuccess,
   sendPaginatedSuccess,
@@ -139,10 +140,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Message not found',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       }
     },

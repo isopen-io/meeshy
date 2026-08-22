@@ -3050,10 +3050,17 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the gap where Android's deep-link handler (`MeeshyApp.kt`) routed EVERY share-link straight to
       the anonymous guest form, wrongly forcing an authenticated user / an existing member / a
       returning guest into it. +11 behavioural tests, 2 mutation RED proofs (both precedence orders).
+      **`joinAuthenticated` endpoint shipped** (slice `sharelink-join-authenticated`, 2026-08-22):
+      `ConversationApi.joinViaShareLink(linkId)` (`@POST conversations/join/{linkId}`, empty body — the
+      gateway derives the joiner from the JWT, idempotent server-side) + a stateless `:sdk-core`
+      `ShareLinkJoinRepository.joinAuthenticated(linkId): NetworkResult<String>` returning the canonical
+      conversationId. SOTA over iOS: a blank linkId is inert (no doomed network call) and a success
+      envelope carrying a blank conversationId folds to Failure, so a caller never navigates to an empty
+      id. +6 behavioural tests, 2 mutation RED proofs (blank-linkId guard, blank-conversationId guard).
       **Remaining before `[x]`:** a `:sdk-core` `ShareLinkEntryResolver` that assembles the facts
-      (preview + `AnonymousSessionStore.load(linkId)` + in-memory conversation list), a
-      `joinAuthenticated` endpoint (`POST conversations/join/{linkId}`, idempotent) on `ShareLinkApi`
-      + repository method, and rewiring `MeeshyApp.kt`'s deep-link route to branch on the intent.
+      (preview + `AnonymousSessionStore.load(linkId)` + in-memory conversation list) and dispatches the
+      intent to either `AnonymousSessionRepository.join` or `ShareLinkJoinRepository.joinAuthenticated`,
+      and rewiring `MeeshyApp.kt`'s deep-link route to branch on the intent.
 - [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
       **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
       `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns
