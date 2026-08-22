@@ -103,6 +103,15 @@ data class ConversationListUiState(
      */
     val lockedConversationIds: Set<String> = emptySet(),
     /**
+     * Whether a master PIN is currently configured — mirror of
+     * [me.meeshy.sdk.lock.ConversationLockStore.hasMasterPin], refreshed whenever a lock
+     * mutation or a master-PIN commit/removal flows through [ConversationListViewModel].
+     * Gates the Settings-level change/remove affordances ([canChangeMasterPin] /
+     * [canRemoveMasterPin]); a master PIN can exist with zero locks (set up, then every
+     * lock dropped), so this can be `true` while [lockedConversationIds] is empty.
+     */
+    val hasMasterPin: Boolean = false,
+    /**
      * The active conversation-lock PIN sheet, or `null` when none is shown. Driven by the
      * pure [LockPinReducer] (parity iOS `ConversationLockSheet`, whose logic Android lifts
      * out of the view into a covered reducer). The sheet renders [LockPinState] and forwards
@@ -148,6 +157,20 @@ data class ConversationListUiState(
      * master PIN is present; the sheet re-verifies it regardless.
      */
     val canUnlockAll: Boolean get() = lockedConversationIds.isNotEmpty()
+
+    /**
+     * True when the master PIN can be changed — i.e. one exists (parity iOS Settings,
+     * which shows "Change master PIN" only once a PIN is configured).
+     */
+    val canChangeMasterPin: Boolean get() = hasMasterPin
+
+    /**
+     * True when the master PIN can be removed — it exists AND nothing is locked. SOTA
+     * over iOS, which offers removal unconditionally and force-clears the PIN even while
+     * conversation locks survive (orphaning them). Gating on "no locks" keeps every lock
+     * authorisable and unlock-all reachable for as long as any lock exists.
+     */
+    val canRemoveMasterPin: Boolean get() = hasMasterPin && lockedConversationIds.isEmpty()
 
     /**
      * The single surfaced typer's display name for [conversationId] (deterministic), or `null`
@@ -339,8 +362,13 @@ class ConversationListViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            // The StateFlow replays its current snapshot on subscription, so this both
+            // seeds [ConversationListUiState.lockedConversationIds] at start-up and keeps
+            // it live. `hasMasterPin` is refreshed alongside every lock mutation (a master
+            // PIN is only ever set as part of a lock, so the two move together on that path);
+            // the change/remove flows refresh it directly in [applyLockResult].
             lockStore.lockedConversationIdsFlow.collect { ids ->
-                _state.update { it.copy(lockedConversationIds = ids) }
+                _state.update { it.copy(lockedConversationIds = ids, hasMasterPin = lockStore.hasMasterPin()) }
             }
         }
 
@@ -660,6 +688,33 @@ class ConversationListViewModel @Inject constructor(
         _state.update { it.copy(lockPrompt = LockPinState(LockPinMode.UNLOCK_ALL, conversationId = null)) }
     }
 
+    /**
+     * Opens the master-PIN sheet to change the master PIN (parity iOS Settings →
+     * `ConversationLockSheet.Mode.changeMasterPin`): verify the current PIN, enter a new
+     * one, confirm it. Inert when no master PIN exists (the entry affordance is hidden
+     * then — [ConversationListUiState.canChangeMasterPin]), but the guard reads the
+     * authoritative store so a stale tap can never open the sheet with nothing to verify.
+     * Any pending chained lock is dropped (this is not a lock flow).
+     */
+    fun onChangeMasterPin() {
+        if (!lockStore.hasMasterPin()) return
+        pendingLockConversationId = null
+        _state.update { it.copy(lockPrompt = LockPinState(LockPinMode.CHANGE_MASTER_PIN, conversationId = null)) }
+    }
+
+    /**
+     * Opens the master-PIN sheet to remove the master PIN (parity iOS Settings →
+     * `ConversationLockSheet.Mode.removeMasterPin`). Offered only while a PIN exists AND
+     * nothing is locked ([ConversationListUiState.canRemoveMasterPin]); the guard re-reads
+     * the authoritative store so a stale tap can never open the sheet once a lock has
+     * appeared. Any pending chained lock is dropped (this is not a lock flow).
+     */
+    fun onRemoveMasterPin() {
+        if (!lockStore.hasMasterPin() || lockStore.lockedConversationIds.isNotEmpty()) return
+        pendingLockConversationId = null
+        _state.update { it.copy(lockPrompt = LockPinState(LockPinMode.REMOVE_MASTER_PIN, conversationId = null)) }
+    }
+
     /** Feeds a digit tap into the open lock sheet; no-op when none is shown. */
     fun onLockDigit(digit: Int) {
         val current = _state.value.lockPrompt ?: return
@@ -685,6 +740,7 @@ class ConversationListViewModel @Inject constructor(
                 is LockPinEffect.CommitMasterPin -> lockStore.setMasterPin(effect.pin)
                 is LockPinEffect.CommitLock -> lockStore.setLock(effect.conversationId, effect.pin)
                 is LockPinEffect.RemoveLock -> lockStore.removeLock(effect.conversationId)
+                LockPinEffect.RemoveMasterPin -> lockStore.removeMasterPin()
                 LockPinEffect.RemoveAllLocks -> lockStore.removeAllLocks()
                 is LockPinEffect.OpenConversation -> openConversationRequests.trySend(effect.conversationId)
                 LockPinEffect.Completed -> {
@@ -698,7 +754,9 @@ class ConversationListViewModel @Inject constructor(
                 }
             }
         }
-        _state.update { it.copy(lockPrompt = nextPrompt) }
+        // A CommitMasterPin (change) or RemoveMasterPin effect changes master-PIN presence
+        // without touching the locked set, so the flow collector won't fire — refresh it here.
+        _state.update { it.copy(lockPrompt = nextPrompt, hasMasterPin = lockStore.hasMasterPin()) }
     }
 
     /**

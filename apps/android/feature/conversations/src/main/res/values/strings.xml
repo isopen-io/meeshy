@@ -72,6 +72,16 @@
     <string name="conversations_lock_subtitle_unlock">Enter the code for %1$s to unlock it</string>
     <string name="conversations_lock_subtitle_open">Enter the code for %1$s to open it</string>
     <string name="conversations_lock_subtitle_unlock_all">Enter your master PIN to unlock every conversation</string>
+    <string name="conversations_lock_title_new_master">New master PIN</string>
+    <string name="conversations_lock_title_confirm_new">Confirm new PIN</string>
+    <string name="conversations_lock_title_remove_master">Remove master PIN</string>
+    <string name="conversations_lock_subtitle_change_verify">Enter your current master PIN</string>
+    <string name="conversations_lock_subtitle_new_master">Choose a new 6-digit master PIN</string>
+    <string name="conversations_lock_subtitle_confirm_new">Confirm your new master PIN</string>
+    <string name="conversations_lock_subtitle_remove_master">Enter your master PIN to confirm removal</string>
+    <string name="conversations_change_master_pin">Change master PIN</string>
+    <string name="conversations_remove_master_pin">Remove master PIN</string>
+    <string name="conversations_lock_security_menu">Lock settings</string>
     <string name="conversations_unlock_all">Unlock all conversations</string>
     <string name="conversations_lock_error_master_incorrect">Incorrect master PIN</string>
     <string name="conversations_lock_error_pin_mismatch">The PINs don\'t match</string>

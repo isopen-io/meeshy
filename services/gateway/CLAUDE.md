@@ -599,6 +599,8 @@ tableaux — cycle 86.)
 
 ### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 31
 
+### Le balayage a été fait : 38 sites, et il reste 26
+
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
 la main.** Le cycle 86 l'avait construit et laissé dans son JOURNAL ; deux
@@ -626,14 +628,44 @@ un parent permissif ne rattrape pas un enfant déclaré vide, puisque la clé es
 LISTÉE. Le champ sort à `{}` là où l'omettre l'aurait laissé passer entier.
 
 Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
-**l'inventaire trié des 31 restants est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle87.md` §6** (le tri du cycle 86 bis
-était FAUX — voir juste en dessous). Les plus graves restants sont les 4 `user:`
-et 1 `sender:`, qui touchent la famille de la présence : **les traiter comme le
-cycle 84 bis a traité le sien** — déclarer le schéma ET poser le gate dans le
-même lot, sans quoi la réparation publie la fuite (§ Une PANNE peut tenir la
-porte). Et `communities/core.ts:524` vit dans le module OMBRÉ : vérifier
-d'abord qui enregistre la route.
+**l'inventaire trié des 26 restants est dans
+`tasks/realtime-sync-audit-2026-08-22-cycle88.md` §8** (le tri du cycle 86 bis
+était FAUX — voir plus bas). **Les cinq sites de PRÉSENCE sont traités**
+(cycle 88) ; le seul restant, `communities/core.ts:524`, vit dans le module
+OMBRÉ et n'a aucun effet tant que rien ne l'enregistre. Restent 11 champs
+`details`/`errors` de réponses 400 **sans producteur** — à RETIRER plutôt qu'à
+déclarer — et une quinzaine de charges utiles à instruire une par une.
+
+### Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE
+
+`{ type: 'object' }` nu ne vide que si le schéma qui le porte décrit vraiment la
+charge utile. `GET /messages/:messageId` déclare `id`, `content`, `sender`… au
+premier niveau, alors que `sendSuccess` répond `{ success, data }` : aucune de
+ces propriétés ne matche, `success`/`data` sont non déclarés, et l'objet entier
+traverse par l'`additionalProperties: true` du bloc. **Toutes les déclarations
+y sont inertes** (cycle 88, vérifié en isolant le compilateur).
+
+Conséquences, dans les deux sens :
+
+- **Le balayage rend un faux positif** sur ces sites — un champ signalé « vidé »
+  qui ne l'est pas. Vérifier l'enveloppe avant de conclure.
+- **Et un vrai défaut peut s'y cacher** : ce site-là servait la présence brute de
+  l'expéditeur sur ses DEUX porteurs, en fuite ACTIVE — l'inverse du piège armé
+  du cycle 84 bis, et plus urgent. Le signal était faux, la conclusion juste.
+- **Aligner un tel schéma est un lot en soi** : déclarer partiellement une
+  enveloppe qui passait entière TRONQUE ce qui marchait. Le faire avec la liste
+  complète des champs servis, ou pas du tout.
+
+### Le régime se lit dans le `where`, pas dans le contrôle d'accès
+
+Le contrôle d'accès borne qui ENTRE ; la requête borne ce qui SORT — et c'est la
+seconde qui décide du régime de présence. Sur
+`GET /communities/:id/conversations`, l'accès ne referme que les communautés
+PRIVÉES (ce qui appellerait le strict), mais le `where` porte
+`participants: { some: { userId } }` : la route ne rend que les conversations
+dont l'appelant est lui-même participant, donc tout profil servi est un
+CO-PARTICIPANT ⇒ `resolvePrefsOnly`, sans condition. Choisir sur le contrôle
+d'accès aurait retiré des pastilles légitimes (cycle 88).
 
 ### Un tri est une AFFIRMATION, et se vérifie comme telle
 

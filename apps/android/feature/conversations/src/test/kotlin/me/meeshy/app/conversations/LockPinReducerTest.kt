@@ -306,4 +306,99 @@ class LockPinReducerTest {
         assertThat(wrong.state.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
         assertThat(wrong.effects).isEmpty()
     }
+
+    // MARK: - Change master PIN (Settings: verify current → enter new → confirm new) flow
+
+    @Test
+    fun change_master_pin_length_is_six_at_every_step() {
+        val s = LockPinState(LockPinMode.CHANGE_MASTER_PIN, conversationId = null)
+        assertThat(s.pinLength).isEqualTo(6)
+        assertThat(s.copy(step = 1).pinLength).isEqualTo(6)
+        assertThat(s.copy(step = 2).pinLength).isEqualTo(6)
+    }
+
+    @Test
+    fun change_master_pin_copy_maps_each_step() {
+        assertThat(LockPinState(LockPinMode.CHANGE_MASTER_PIN, null, step = 0).copy)
+            .isEqualTo(LockPinCopy.CHANGE_VERIFY_MASTER_PIN)
+        assertThat(LockPinState(LockPinMode.CHANGE_MASTER_PIN, null, step = 1).copy)
+            .isEqualTo(LockPinCopy.NEW_MASTER_PIN)
+        assertThat(LockPinState(LockPinMode.CHANGE_MASTER_PIN, null, step = 2).copy)
+            .isEqualTo(LockPinCopy.CONFIRM_NEW_MASTER_PIN)
+    }
+
+    @Test
+    fun changing_verifies_the_current_pin_then_takes_a_new_one_confirmed_twice() {
+        val r = reducer(masterPin = "123456")
+        val verified = r.type(LockPinState(LockPinMode.CHANGE_MASTER_PIN, null), "123456")
+        assertThat(verified.state.step).isEqualTo(1)
+        assertThat(verified.state.pin).isEmpty()
+        assertThat(verified.effects).isEmpty()
+
+        val entered = r.type(verified.state, "654321")
+        assertThat(entered.state.step).isEqualTo(2)
+        assertThat(entered.state.pin).isEqualTo("654321")
+
+        val done = r.type(entered.state, "654321")
+        assertThat(done.effects).containsExactly(
+            LockPinEffect.CommitMasterPin("654321"),
+            LockPinEffect.Completed,
+        ).inOrder()
+    }
+
+    @Test
+    fun a_wrong_current_master_pin_keeps_the_verify_step_and_flags_it() {
+        val wrong = reducer(masterPin = "123456")
+            .type(LockPinState(LockPinMode.CHANGE_MASTER_PIN, null), "999999")
+        assertThat(wrong.state.step).isEqualTo(0)
+        assertThat(wrong.state.pin).isEmpty()
+        assertThat(wrong.state.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
+        assertThat(wrong.effects).isEmpty()
+    }
+
+    @Test
+    fun a_mismatched_new_master_pin_resets_to_the_new_entry_step_not_the_verify_step() {
+        val r = reducer(masterPin = "123456")
+        val verified = r.type(LockPinState(LockPinMode.CHANGE_MASTER_PIN, null), "123456")
+        val entered = r.type(verified.state, "654321")
+        val mismatch = r.type(entered.state, "111111")
+        // Rewinds to step 1 (choose new) — NOT step 0 (verify current, already passed).
+        assertThat(mismatch.state.step).isEqualTo(1)
+        assertThat(mismatch.state.pin).isEmpty()
+        assertThat(mismatch.state.confirmPin).isEmpty()
+        assertThat(mismatch.state.error).isEqualTo(LockPinError.PIN_MISMATCH)
+        assertThat(mismatch.effects).isEmpty()
+    }
+
+    // MARK: - Remove master PIN (Settings: verify master → clear) flow
+
+    @Test
+    fun remove_master_pin_length_is_six() {
+        assertThat(LockPinState(LockPinMode.REMOVE_MASTER_PIN, null).pinLength).isEqualTo(6)
+    }
+
+    @Test
+    fun remove_master_pin_copy_is_remove_master() {
+        assertThat(LockPinState(LockPinMode.REMOVE_MASTER_PIN, null).copy)
+            .isEqualTo(LockPinCopy.REMOVE_MASTER_PIN)
+    }
+
+    @Test
+    fun the_correct_master_pin_removes_the_master_pin_and_completes() {
+        val done = reducer(masterPin = "123456")
+            .type(LockPinState(LockPinMode.REMOVE_MASTER_PIN, null), "123456")
+        assertThat(done.effects).containsExactly(
+            LockPinEffect.RemoveMasterPin,
+            LockPinEffect.Completed,
+        ).inOrder()
+    }
+
+    @Test
+    fun a_wrong_remove_master_pin_flags_it_and_removes_nothing() {
+        val wrong = reducer(masterPin = "123456")
+            .type(LockPinState(LockPinMode.REMOVE_MASTER_PIN, null), "000000")
+        assertThat(wrong.state.pin).isEmpty()
+        assertThat(wrong.state.error).isEqualTo(LockPinError.MASTER_PIN_INCORRECT)
+        assertThat(wrong.effects).isEmpty()
+    }
 }
