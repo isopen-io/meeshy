@@ -1,8 +1,15 @@
-# Cycle 94 — La dernière enveloppe inerte, et les deux défauts qu'elle couvrait
+# Cycle 94 bis — La dernière enveloppe inerte, et les deux défauts qu'elle couvrait
 
 **Date** : 2026-08-22
 **Branche** : `claude/keen-hamilton-hjakmo`
 **Périmètre** : passerelle — `routes/messages.ts` ; schéma partagé — `types/api-schemas.ts`
+
+> **Homonyme.** Un cycle concurrent porte déjà le numéro 94 sur `main`
+> (`…-cycle94.md`, sous-arbre DMA/Signal remis sous le compilateur) — sujet sans
+> aucun recouvrement avec celui-ci, ni en fichiers ni en matière. Ce journal
+> prend donc le suffixe `-bis`, comme les cycles 86, 91 et 93 avant lui. Les
+> deux numérotations se sont croisées parce qu'elles avancent en parallèle sur
+> la même journée, pas parce que l'une reprend l'autre.
 
 **Clients touchés** : aucun changement de code client. Aucun nom d'événement
 ajouté ni retiré, aucune charge utile temps réel modifiée, aucune ligne de

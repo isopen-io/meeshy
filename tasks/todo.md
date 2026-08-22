@@ -405,9 +405,9 @@ autorisé si c'est compliqué : deux bulles distinctes.
 - Incident : un script de résolution en échec + chaîne `&&` filtrée par `grep` a committé des marqueurs (`bce89832a`, worktree privé) → repris par `reset --hard` sur le merge précédent, rejoué proprement ; règle consignée (Leçon 243). Deuxième occurrence du motif (`grep -c` à 0 rend 1) sans dégât.
 - Suivis ouverts (hors périmètre, signalés par les revues) : `SignalProtocolEngine` émet des IV de 16 octets alors que `SignalSchemas.encryptedMessage.iv` (mort) en attend 12 ; `offset` non borné dans `admin-schemas.ts` ; trois idiomes de clamp `limit` (helper Zod SSOT à créer) ; #3324 laisse le corps des messages web (`use-message-translations.ts`) comparer des codes bruts ; règle de rang du kick d'appel plus stricte que `participants.ts` ; 2 `#expect` Swift à greffer dans `ComposerMentionQueryTests` (bob@alice, marie-claire).
 
-## Cycle 94 (2026-08-22) — la dernière enveloppe inerte, et les deux défauts qu'elle couvrait
+## Cycle 94 bis (2026-08-22) — la dernière enveloppe inerte, et les deux défauts qu'elle couvrait
 
-Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle94.md`.
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle94-bis.md`.
 
 - [x] `GET /messages/:messageId` aligné sur son enveloppe réelle (`{success, data}`) — dernière
       ligne de `FROZEN_INVENTORY`, seule de la **forme 3** (schéma décrivant le MESSAGE quand
