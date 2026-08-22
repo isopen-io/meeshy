@@ -44,6 +44,18 @@ data class PostDetailUiState(
     val notFound: Boolean = false,
     val errorMessage: String? = null,
     val translatingLanguages: Set<String> = emptySet(),
+    /**
+     * The quote-repost composer currently open (the reader chose "Quote"), or `null` when
+     * dismissed. Shares the [QuoteComposerState] value model with the feed so the sheet renders
+     * identically. Mirror of iOS `PostDetailView`'s quote path — one better than iOS, which
+     * offers only a content-less quote here (see [submitQuote]).
+     */
+    val quoteComposer: QuoteComposerState? = null,
+    /**
+     * Optimistic "this post is reposted" flag — set the instant the reader taps repost/quote so
+     * the action reflects instantly, reverted on failure. Mirror of iOS `isPostReposted`.
+     */
+    val isReposted: Boolean = false,
 )
 
 @HiltViewModel
@@ -227,6 +239,80 @@ class PostDetailViewModel @Inject constructor(
     }
 
     /**
+     * Simple repost (no commentary) of the open post. Routed through the tested [RepostCommand]
+     * SSOT, which resolves the ROOT target when the open post is itself a repost — iOS's
+     * `PostDetailView.toggleDetailRepost` reposts by the raw `postId` and so embeds an empty
+     * share card when re-sharing a share; Android fixes that here. Inert until the post has
+     * loaded (nothing to repost).
+     */
+    fun repost() {
+        val post = rawPost.value ?: return
+        sendRepost(RepostCommand.of(post.id, post.repostOf, quote = false, commentary = null))
+    }
+
+    /**
+     * Open the quote-repost composer for the open post — inert until it has loaded. Seeds a
+     * [QuoteComposerState] with the source author and a trimmed content preview so the sheet
+     * renders the embed. Mirror of the feed's `beginQuote`, scoped to the single open post.
+     */
+    fun beginQuote() {
+        val post = rawPost.value ?: return
+        status.update {
+            it.copy(
+                quoteComposer = QuoteComposerState(
+                    postId = post.id,
+                    sourceAuthorName = (post.author?.displayName ?: post.author?.username)
+                        ?.takeIf { name -> name.isNotBlank() },
+                    sourceContentPreview = post.content.orEmpty().trim(),
+                ),
+            )
+        }
+    }
+
+    fun onQuoteTextChange(text: String) {
+        status.update { st -> st.quoteComposer?.let { st.copy(quoteComposer = it.copy(text = text)) } ?: st }
+    }
+
+    fun cancelQuote() {
+        status.update { it.copy(quoteComposer = null) }
+    }
+
+    /**
+     * Publish the quote: repost the ROOT of the open post carrying the trimmed commentary. A
+     * blank/whitespace-only commentary degrades to a simple repost (surpasses iOS, which would
+     * send `content = ""`). The sheet closes immediately (iOS dismisses immediately too); a
+     * failure surfaces via [PostDetailUiState.errorMessage] and reverts the optimistic flag.
+     */
+    fun submitQuote() {
+        val composer = status.value.quoteComposer ?: return
+        val post = rawPost.value ?: return
+        val command = RepostCommand.of(composer.postId, post.repostOf, quote = true, commentary = composer.text)
+        status.update { it.copy(quoteComposer = null) }
+        sendRepost(command)
+    }
+
+    private fun sendRepost(command: RepostCommand) {
+        if (status.value.isRepostInFlight) return
+        status.update { it.copy(isRepostInFlight = true, isReposted = true, error = null) }
+        viewModelScope.launch {
+            try {
+                when (val result = postRepository.repost(command.targetId, content = command.content, isQuote = command.isQuote)) {
+                    is NetworkResult.Success ->
+                        status.update { it.copy(isRepostInFlight = false) }
+                    is NetworkResult.Failure ->
+                        status.update {
+                            it.copy(isRepostInFlight = false, isReposted = false, error = result.error.message)
+                        }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                status.update { it.copy(isRepostInFlight = false, isReposted = false, error = e.message) }
+            }
+        }
+    }
+
+    /**
      * The viewer tapped a configured language the post has no content for yet: translate it on
      * demand, swap the freshly-merged post into [rawPost] (so the strip's translatable chip becomes
      * a live content chip), and point [activeCode] at it so the reader lands on the translation. A
@@ -281,6 +367,8 @@ class PostDetailViewModel @Inject constructor(
             notFound = st.notFound,
             errorMessage = st.error,
             translatingLanguages = st.translating,
+            quoteComposer = st.quoteComposer,
+            isReposted = st.isReposted,
         )
     }
 
@@ -296,4 +384,7 @@ private data class PostDetailStatus(
     val notFound: Boolean = false,
     val error: String? = null,
     val translating: Set<String> = emptySet(),
+    val quoteComposer: QuoteComposerState? = null,
+    val isReposted: Boolean = false,
+    val isRepostInFlight: Boolean = false,
 )
