@@ -3,8 +3,21 @@ import Foundation
 /// L'abrégé d'un grand nombre — « 1,5 k » / « 1.5K » / « ١٫٥ ألف » — rendu par
 /// **Foundation**, dans la locale du lecteur.
 ///
-/// Il remplace un `formatCount` privé de `ConversationListHelpers` qui composait
-/// l'abrégé à la main :
+/// Il remplace **deux** `formatCount` privés, copies l'un de l'autre, qui
+/// composaient l'abrégé à la main : celui de `ConversationListHelpers`
+/// (`ThemedCommunityCard`, app) et celui de `CommunityListView`
+/// (`VibrantCommunityCard`, SDK). Les deux rendent une carte « communauté » ;
+/// les corriger séparément aurait rendu les deux cartes incohérentes —
+/// « 1,5 k » d'un côté, « 1.5k » de l'autre.
+///
+/// Il vit dans le SDK parce que c'est un **moteur de règle sans état à
+/// paramètres opaques** — la case « rule engines stateless (pures functions)
+/// → SDK » du tableau de placement de `packages/MeeshySDK/CLAUDE.md`. Il
+/// n'orchestre rien, ne lit aucun singleton Meeshy, ne décide d'aucune règle
+/// produit : il formate un entier. L'app le consomme via `import MeeshyUI`,
+/// qu'elle importait déjà.
+///
+/// Le code remplacé, à l'identique des deux côtés :
 ///
 /// ```swift
 /// if count >= 1000000 { return String(format: "%.1fM", Double(count) / 1000000.0) }
@@ -33,7 +46,7 @@ import Foundation
 /// rouge en CI (en), ou l'inverse. Même raison que la paire `bundle`/`locale` de
 /// `MembersCountLabel` ; il n'y a pas de `bundle` ici parce qu'aucune chaîne du
 /// catalogue n'entre dans le rendu — tout vient de CLDR.
-enum CompactCountLabel {
+public enum CompactCountLabel {
 
     /// Sous 1000, Foundation rend le nombre tel quel (« 999 »), comme le faisait
     /// la branche de repli du code remplacé.
@@ -49,7 +62,7 @@ enum CompactCountLabel {
     /// La notation s'appelle `.compactName` — `.compact` n'existe pas dans
     /// `NumberFormatStyleConfiguration.Notation`, qui n'offre que `.automatic`,
     /// `.scientific` et `.compactName`.
-    static func text(_ count: Int, locale: Locale = .current) -> String {
+    public nonisolated static func text(_ count: Int, locale: Locale = .current) -> String {
         IntegerFormatStyle<Int>(locale: locale)
             .notation(.compactName)
             .format(count)

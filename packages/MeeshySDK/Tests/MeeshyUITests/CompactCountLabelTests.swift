@@ -1,5 +1,5 @@
 import XCTest
-@testable import Meeshy
+@testable import MeeshyUI
 
 /// L'abrégé des grands nombres des cartes « communauté » (effectif et nombre de
 /// conversations) était composé à la main :
@@ -32,8 +32,10 @@ import XCTest
 /// La première ligne est LA régression : l'invariance à la locale ÉTAIT le bug,
 /// donc la variance est la preuve du correctif.
 ///
-/// `@MainActor` : `CompactCountLabel` vit dans le target app, isolé
-/// main-actor-par-défaut (Swift 6.2).
+/// Suite **phase 0** (`MeeshySDK-Package`) : `CompactCountLabel` vit dans
+/// `MeeshyUI` depuis qu'il sert AUSSI `VibrantCommunityCard` côté SDK. La
+/// fonction est `nonisolated` — un formateur pur n'a aucune raison d'être
+/// isolé — mais la classe reste `@MainActor`, idiome des suites `MeeshyUITests`.
 @MainActor
 final class CompactCountLabelTests: XCTestCase {
 

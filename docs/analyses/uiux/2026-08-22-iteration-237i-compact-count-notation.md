@@ -120,9 +120,10 @@ bug, donc la variance en est la preuve. `text(1500, fr) != text(1500, en)` aurai
 Contrôles déterministes complémentaires :
 
 - **Équilibre syntaxique** des 3 fichiers Swift au tokenizer : 0 / 0 / 0.
-- **`formatCount` n'a plus qu'une occurrence** dans tout `apps/ios` : la ligne
-  de doc-comment qui explique ce qu'il a remplacé (`grep` sur le dépôt entier,
-  méthode imposée par la leçon 236i).
+- **`formatCount` n'a plus aucune occurrence vivante** — vérifié par
+  `grep -rn --include=*.swift .` sur le **dépôt entier** cette fois (voir la
+  section « Revue de merge » : la première vérification ne portait que sur
+  `apps/ios`, ce qui a laissé passer le jumeau SDK).
 - **8 entrées `pbxproj`** (4 pour le helper, 4 pour la suite) — sans elles, la
   suite serait *verte par omission* en local.
 - Le retrait du `private func` ne laisse ni accolade orpheline ni ligne vide
@@ -160,11 +161,64 @@ CLDR ni forme d'appel — seulement que le rendu français diffère du rendu
 anglais. Un test écrit sur le contrat survit à la correction de
 l'implémentation.
 
+## Revue de merge — trois constats, et ce qu'ils ont corrigé
+
+La revue de merge (jcnm) a bloqué la PR sur trois points. Les trois étaient
+justes ; deux étaient miens.
+
+**1. Ne compilait pas.** Déjà corrigé au moment de la revue (voir la section
+précédente) — la revue portait sur la tête antérieure.
+
+**2. Correctif incomplet — et c'est le constat qui compte.** Le même
+`formatCount`, copie mot pour mot, vivait aussi dans
+`packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListView.swift:314`
+(`VibrantCommunityCard`, atteinte via `RootView` et `iPadRootView+Panels`).
+Merger l'app seule aurait rendu **les deux cartes communauté incohérentes** :
+« 1,5 k » d'un côté, « 1.5k » de l'autre.
+
+J'avais écrit « `grep` sur le dépôt entier ». Le grep n'avait porté que sur
+`apps/ios`. C'est **exactement la leçon 236i** — « un grep de fermeture part de
+la CLÉ, jamais de la SURFACE » — que cette analyse citait, dans la même
+itération où elle la violait.
+
+**Correction retenue, et pourquoi elle diffère de celle proposée.** La revue
+suggérait de *porter l'appel* dans le fichier SDK. Cela aurait résolu
+l'incohérence en **dupliquant la règle** dans deux modules — précisément ce que
+234i et 236i ont passé deux itérations à défaire. Le helper est donc **déplacé**
+dans `MeeshyUI/Theme/`, `public` et `nonisolated` : c'est un moteur de règle
+sans état à paramètres opaques, la case « rule engines stateless → SDK » du
+tableau de placement de `packages/MeeshySDK/CLAUDE.md`. Il n'orchestre rien, ne
+lit aucun singleton, ne décide d'aucune règle produit — il formate un entier.
+L'app le consomme via `import MeeshyUI`, qu'elle importait déjà : **aucun site
+d'appel n'a changé**. Effet de bord heureux : le `pbxproj` redevient
+**identique à `main`** (les deux fichiers vivent désormais dans le package SPM),
+et la suite passe en **phase 0**, qui fait partie du gate depuis 2026-07-30.
+
+**3. Pointeur faux.** Le bloc 237i affirmait « seule occurrence résiduelle = un
+doc-comment ». Faux, et la consigne « ne plus re-flagger » aurait **enterré le
+jumeau** pour 238i+. Corrigé, et la leçon consignée.
+
+### Ce que le grep refait a réellement trouvé
+
+Six sites de plus portent le même `%.1fk` / `%.1fM` : `FeedPostCard:105-106`,
+`PostDetailReachAndVisibility:15-16`, `ReelFeedCard:444-445`,
+`ReelsPlayerView:1323-1324`, `ConversationDashboardView:1149-1150 / 1175-1177`.
+
+Je ne les traite **pas** ici, et pas par prudence de façade : ils ne sont pas
+byte-identiques. Le tableau de bord bascule à `>= 10_000` là où le feed bascule
+à `>= 1_000` — consolider demande donc de trancher si ce seuil est
+**intentionnel**, ce qui est une décision produit, pas une substitution
+mécanique. Élargir la PR de cinq fichiers et d'autant de nombres visibles pour
+la trancher en passant serait le mauvais arbitrage. `CompactCountLabel` est en
+place pour les recevoir en 238i.
+
 ## Bilan
 
-**1 fichier prod modifié** (−8 lignes : le helper maison disparaît),
-**1 fichier prod neuf** (`CompactCountLabel`), **1 suite neuve** (7 tests),
-**8 entrées pbxproj**.
+**2 fichiers prod modifiés** (app + SDK : les deux helpers maison
+disparaissent, −16 lignes), **1 fichier prod neuf** (`CompactCountLabel`, dans
+`MeeshyUI/Theme/`), **1 suite neuve** (7 tests, phase 0 `MeeshyUITests`),
+**`pbxproj` identique à `main`** — les deux fichiers neufs vivent dans le
+package SPM, donc aucune entrée à ajouter.
 0 clé i18n neuve · 0 logique · 0 réseau · 0 SDK · **changement visuel assumé et
 tabulé ci-dessus**.
 

@@ -22,7 +22,13 @@ décimal ET abréviation — au lieu de le composer à la main en format POSIX.
 - [x] Ajouter les 8 entrées `pbxproj` (4 helper + 4 suite).
 - [x] `grep` sur tout `apps/ios` : plus aucune référence vivante à `formatCount` (méthode imposée par la leçon 236i).
 - [x] Documenter analyse + plan + pointeur, **en tabulant le changement visuel** plutôt qu'en le passant sous silence.
-- [ ] Gate réel : CI iOS Tests.
+- [x] **Revue de merge (jcnm) — 3 constats, tous justes, 2 miens.** (1) ne compilait pas → déjà corrigé avant la revue ; (2) **correctif incomplet** : jumeau `formatCount` dans `packages/MeeshySDK/.../CommunityListView.swift:314` (`VibrantCommunityCard`) — mon grep « dépôt entier » n'avait porté que sur `apps/ios`, violation de la leçon 236i que l'analyse citait ; (3) pointeur faux (« seule occurrence résiduelle = doc-comment »), qui aurait enterré le jumeau.
+- [x] **Déplacer** `CompactCountLabel` dans `MeeshyUI/Theme/` (`public`, `nonisolated`) plutôt que **porter l'appel** comme proposé : porter l'appel aurait dupliqué la règle dans deux modules, ce que 234i et 236i ont mis deux itérations à défaire. Case « rule engines stateless → SDK » du tableau de placement.
+- [x] Recâbler `VibrantCommunityCard` (SDK) sur le helper ; **aucun site d'appel app modifié** (l'app importait déjà `MeeshyUI`).
+- [x] Déplacer la suite en **phase 0** (`MeeshyUITests`) ; **`pbxproj` remis à l'identique de `main`** (les deux fichiers vivent désormais dans le package SPM).
+- [x] Refaire le grep **pour de bon** (`grep -rn --include=*.swift .`) → **six sites de plus** de la même famille, documentés en piste 238i+ (non absorbés : seuils divergents `>= 10_000` vs `>= 1_000`, décision produit).
+- [x] Corriger le pointeur ; consigner les deux leçons dans `tasks/lessons.md`.
+- [ ] Gate réel : CI iOS Tests + phase 0 SDK.
 
 ## Non-fait, et pourquoi
 
@@ -33,10 +39,10 @@ décimal ET abréviation — au lieu de le composer à la main en format POSIX.
 
 | | |
 |---|---|
-| Fichier production modifié | 1 (`ConversationListHelpers.swift`, −8 lignes) |
-| Fichier production neuf | 1 (`CompactCountLabel.swift`) |
-| Fichier test | 1 neuf (7 tests de propriétés) |
+| Fichiers production modifiés | 2 (`ConversationListHelpers.swift` app + `CommunityListView.swift` SDK, −16 lignes) |
+| Fichier production neuf | 1 (`MeeshyUI/Theme/CompactCountLabel.swift`) |
+| Fichier test | 1 neuf, **phase 0 `MeeshyUITests`** (7 tests de propriétés) |
 | Clés i18n neuves | **0** (tout vient de CLDR) |
-| Fichiers pbxproj | 1 (8 entrées ajoutées) |
+| Fichiers pbxproj | **0 — identique à `main`** (fichiers neufs dans le package SPM) |
 | Changement visuel | **oui, assumé** — « 1.0k » → « 1 k » (fr) / « 1K » (en) ; sous 1000, rien ne bouge |
 | Logique / réseau / SDK | 0 |
