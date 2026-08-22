@@ -597,7 +597,54 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 11
+### Un schéma BIEN FORMÉ peut être entièrement faux — la seconde moitié du défaut
+
+La règle ci-dessus (« sans `properties`, ça efface ») décrit la moitié
+RECONNAISSABLE du défaut. L'autre moitié n'a aucune forme suspecte :
+
+```ts
+// Schéma irréprochable. Il décrit simplement une AUTRE charge utile.
+data: { type: 'object', properties: { message: { type: 'object' } } }
+// …quand le handler fait : sendSuccess(reply, { ...updatedMessage, meta })
+```
+
+Un bloc `data` qui déclare au moins une propriété **supprime toutes celles
+qu'il ne nomme pas**. Si aucune clé déclarée n'est celle que le handler envoie,
+la réponse sort à `{}` — et le balayage des objets nus ne voit RIEN, puisqu'il
+cherche l'absence de `properties`.
+
+Trois exemplaires vivaient en production, trouvés au cycle 91 en réparant les
+objets nus :
+
+| route | déclaré | envoyé | effet |
+|---|---|---|---|
+| `POST /auth/login` (2FA) | `user, token, sessionToken, session, expiresIn` | `requires2FA, twoFactorToken, …` | **aucun compte 2FA ne pouvait se connecter** |
+| `POST /auth/register` (conflit) | `user, token, expiresIn` | `phoneOwnershipConflict, phoneOwnerInfo, pendingRegistration` | modale de transfert de numéro morte |
+| `DELETE /…/messages/:id` | `message` (string) | `messageId, deleted, meta` | acquittement vide |
+
+**Le second balayage est outillé et en cliquet** :
+`routes/__tests__/response-payload-mismatch.ts`, gardé par
+`response-payload-mismatch.test.ts`. Il apparie chaque bloc `response:` avec
+les `sendSuccess(reply, { … })` qui le suivent et compare les jeux de clés —
+`total` (réponse vidée) vs `partial` (clés supprimées, nommées). Il ne conclut
+jamais au vide quand la charge utile porte un `...spread`, qui peut apporter
+les clés déclarées.
+
+Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
+jusqu'à la variable demanderait un typeur.
+
+**Les deux balayages sont nécessaires** : le premier trouve les objets nus, le
+second les schémas bien formés qui décrivent la mauvaise charge utile. Aucun ne
+subsume l'autre.
+
+Corollaire de méthode, et c'est ce qui a laissé ces trois-là vivre : **un
+témoin qui n'assert que `statusCode` couvre une route morte sans jamais
+rougir.** Pire, quand quelqu'un REMARQUE le retrait et l'écrit en commentaire
+au lieu de le traiter comme un défaut, il scelle la panne — le commentaire
+`// 2FA case returns 200 (response schema strips requires2FA from serialized
+output)` a tenu la connexion à deux facteurs fermée en le disant à voix haute.
+
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il n'en reste qu'UN
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -636,8 +683,16 @@ au cliquet comme dette de FORME, plus comme fuite.
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
 main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
 `voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient.
-**L'inventaire trié des 11 restants — tous sur des charges utiles `200`/`202` —
-est dans `tasks/realtime-sync-audit-2026-08-22-cycle90.md` §9.**
+
+**Les neuf derniers sites nus sont partis au cycle 91** (édition et suppression
+de message, les deux routes de traduction vocale, la création de lien de
+partage, le `creator` d'administration, le 400 de `calls.ts`, et
+`users/profile.ts|permissions` RETIRÉ faute de producteur). Détail et preuves de
+sérialisation : `tasks/realtime-sync-audit-2026-08-22-cycle91.md`.
+
+**Il ne reste qu'UNE ligne au cliquet, et ce n'est pas une fuite** :
+`messages.ts|sender|200`, dette de FORME décrite au § suivant — la déclaration y
+est INERTE, le champ traverse entier. `FROZEN_INVENTORY` doit rester à une ligne.
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent.

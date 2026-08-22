@@ -68,17 +68,32 @@ const ROUTES_DIR = join(__dirname, '..');
  * ce qui passait entier TRONQUERAIT. Tant que ce n'est pas fait, la ligne reste
  * ici — elle nomme une dette de FORME, plus une fuite.
  */
+/**
+ * **Les neuf derniers sites nus sont partis au cycle 91.** L'inventaire ne
+ * contient plus que la dette de FORME décrite ci-dessus, et le balayage doit
+ * désormais rester à UNE ligne :
+ *
+ * - `calls.ts|details|400` — schéma d'erreur écrit à la main, qui se trompait
+ *   sur l'enveloppe dans les trois sens (cf. cycle 89) : `error` déclaré OBJET
+ *   quand `sendError` le rend en STRING, `message` et `code` non déclarés donc
+ *   supprimés. Remplacé par `errorResponseSchema`.
+ * - `conversations/messages-advanced.ts|message|200` ×2 et le `message` STRING
+ *   de la suppression — les trois transports de mutation déclaraient une
+ *   ENVELOPPE `message` que leur handler n'a jamais posée, et répondaient donc
+ *   `data: {}`. Édition et suppression ne rendaient RIEN.
+ * - `conversations/sharing.ts|link|200` — `link` déclaré objet là où le handler
+ *   met une URL (string), `code` et `shareLink` supprimés avec.
+ * - `links/admin.ts|creator|200`, `voice/translation.ts|attachment|200|202`,
+ *   `…|transcription|200` — déclarés depuis leurs ÉMETTEURS respectifs.
+ * - `users/profile.ts|permissions|200` — RETIRÉ plutôt que déclaré : le handler
+ *   posait `permissions: undefined` délibérément, le champ n'avait aucun
+ *   producteur.
+ *
+ * Détail, preuves de sérialisation et inventaire raisonné :
+ * `tasks/realtime-sync-audit-2026-08-22-cycle91.md`.
+ */
 const FROZEN_INVENTORY: readonly string[] = [
-  'calls.ts|details|400',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/sharing.ts|link|200',
-  'links/admin.ts|creator|200',
   'messages.ts|sender|200',
-  'users/profile.ts|permissions|200',
-  'voice/translation.ts|attachment|200',
-  'voice/translation.ts|attachment|202',
-  'voice/translation.ts|transcription|200',
 ];
 
 describe('balayage — un schéma de réponse ne déclare jamais un objet NU', () => {

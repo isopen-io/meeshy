@@ -95,8 +95,32 @@ export function registerSharingRoutes(
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              // `link` était déclaré OBJET alors que le handler y met l'URL
+              // complète — une STRING. fast-json-stringify rendait donc `{}`,
+              // et supprimait en prime `code` et `shareLink`, non déclarés :
+              // la création d'un lien de partage ne rendait ni l'URL, ni le
+              // code, ni les autorisations du lien tout juste créé.
               properties: {
-                link: { type: 'object', description: 'Created share link object' }
+                link: { type: 'string', description: 'Canonical invite URL (/chat/:linkId)' },
+                code: { type: 'string', description: 'Link identifier, as used in the URL' },
+                shareLink: {
+                  type: 'object',
+                  description: 'The share link as persisted, with its guest permissions',
+                  properties: {
+                    id: { type: 'string' },
+                    linkId: { type: 'string' },
+                    name: { type: 'string', nullable: true },
+                    description: { type: 'string', nullable: true },
+                    maxUses: { type: 'number', nullable: true },
+                    expiresAt: { type: 'string', format: 'date-time', nullable: true },
+                    allowAnonymousMessages: { type: 'boolean' },
+                    allowAnonymousFiles: { type: 'boolean' },
+                    allowAnonymousImages: { type: 'boolean' },
+                    allowViewHistory: { type: 'boolean' },
+                    requireNickname: { type: 'boolean' },
+                    requireEmail: { type: 'boolean' }
+                  }
+                }
               }
             }
           }

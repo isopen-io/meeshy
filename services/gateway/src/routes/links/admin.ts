@@ -70,9 +70,21 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
                           conversationUrl: { type: 'string', description: 'URL to conversation', example: '/conversations/:id' }
                         }
                       },
+                      // Les deux émetteurs de cette route (`admin.ts:156` et le
+                      // `select` Prisma de la bascule d'activation) rendent ces
+                      // six champs exactement, et AUCUN champ de présence — la
+                      // déclaration n'ouvre donc aucune porte à gater.
                       creator: {
                         type: 'object',
-                        description: 'Link creator information'
+                        description: 'Link creator information',
+                        properties: {
+                          id: { type: 'string' },
+                          username: { type: 'string' },
+                          firstName: { type: 'string', nullable: true },
+                          lastName: { type: 'string', nullable: true },
+                          displayName: { type: 'string', nullable: true },
+                          avatar: { type: 'string', nullable: true }
+                        }
                       },
                       stats: {
                         type: 'object',

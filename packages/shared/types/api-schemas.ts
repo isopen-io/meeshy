@@ -1133,6 +1133,33 @@ export const conversationStatsSchema = {
         }
       },
       description: 'Most used languages'
+    },
+    // `createdAt` et `translationStats` appartiennent à `ConversationStats`
+    // (`types/conversation.ts`) depuis toujours ; ce schéma ne les déclarait
+    // pas. Tant qu'aucune route ne l'employait, l'écart ne coûtait rien — mais
+    // son PREMIER consommateur les aurait perdus en silence, puisqu'un objet
+    // déclaré supprime tout champ non listé. Complété avec le type, pas
+    // au-delà.
+    createdAt: { type: 'string', format: 'date-time', description: 'Conversation creation timestamp' },
+    translationStats: {
+      type: 'object',
+      description: 'Translation activity for this conversation',
+      properties: {
+        totalTranslations: { type: 'number' },
+        cacheHitRate: { type: 'number' },
+        averageTranslationTime: { type: 'number' },
+        topLanguagePairs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              from: { type: 'string' },
+              to: { type: 'string' },
+              count: { type: 'number' }
+            }
+          }
+        }
+      }
     }
   }
 } as const;

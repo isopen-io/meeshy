@@ -12,6 +12,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
   messageSchema,
+  conversationStatsSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -58,6 +59,40 @@ const EditMessageBodySchema = z.object({
 });
 // Logger dédié pour messages-advanced
 const logger = enhancedLogger.child({ module: 'messages-advanced' });
+
+/**
+ * Les trois transports de mutation d'un message déclaraient un `data` portant
+ * une clé `message` que leur handler n'a JAMAIS posée : `sendSuccess` rend le
+ * message à plat sous `data`, pas sous `data.message`. Un bloc `data` qui
+ * déclare au moins une propriété supprime toutes celles qu'il ne nomme pas :
+ * les trois routes répondaient donc `{"success":true,"data":{}}` — édition
+ * comme suppression.
+ *
+ * Seule la diffusion Socket.IO (`broadcastMessageMutation`) portait la vérité ;
+ * un client qui réconcilie son optimistic update sur la réponse REST restait
+ * donc sur l'ancien texte. Gardé par
+ * `__tests__/unit/routes/conversations/message-mutation-serialization.test.ts`.
+ */
+const conversationStatsMetaSchema = {
+  type: 'object',
+  properties: { conversationStats: conversationStatsSchema },
+} as const;
+
+/** Le message servi à plat, plus les stats que le transport PUT calcule déjà. */
+const editedMessageResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      ...messageSchema,
+      description: 'The message as it stands after the edit — served flat, not wrapped',
+      properties: {
+        ...messageSchema.properties,
+        meta: conversationStatsMetaSchema,
+      },
+    },
+  },
+} as const;
 
 /**
  * Plafond de `GET /conversations/:id/status` : les N messages les plus récents.
@@ -109,18 +144,7 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -504,8 +528,14 @@ export function registerMessagesAdvancedRoutes(
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              // Le `message` déclaré ici — une STRING — n'a jamais été servi :
+              // le handler acquitte `{messageId, deleted, meta}`. Aucune clé ne
+              // matchait, donc `data` sortait VIDE, et le client n'apprenait
+              // même pas que la suppression avait eu lieu.
               properties: {
-                message: { type: 'string', example: 'Message supprimé avec succès' }
+                messageId: { type: 'string', description: 'ID of the deleted message' },
+                deleted: { type: 'boolean', description: 'Always true on success', example: true },
+                meta: conversationStatsMetaSchema
               }
             }
           }
@@ -705,18 +735,7 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'object', description: 'Updated message object' }
-              }
-            }
-          }
-        },
+        200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -996,7 +1015,9 @@ export function registerMessagesAdvancedRoutes(
                 reactions: {
                   type: 'array',
                   description: 'All reactions grouped by message'
-                }
+                },
+                // Le handler sert aussi `total` ; non déclaré, il était retiré.
+                total: { type: 'number', description: 'Total reaction rows across the conversation' }
               }
             }
           }
@@ -1457,7 +1478,9 @@ export function registerMessagesAdvancedRoutes(
                 statuses: {
                   type: 'array',
                   description: 'Status information for all messages'
-                }
+                },
+                // Idem : `total` était servi et supprimé.
+                total: { type: 'number', description: 'Number of messages covered by this status page' }
               }
             }
           }
