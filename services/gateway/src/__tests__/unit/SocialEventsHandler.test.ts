@@ -914,6 +914,7 @@ describe('SocialEventsHandler', () => {
       expect(SERVER_EVENTS.COMMENT_ADDED).toBe('comment:added');
       expect(SERVER_EVENTS.COMMENT_DELETED).toBe('comment:deleted');
       expect(SERVER_EVENTS.COMMENT_LIKED).toBe('comment:liked');
+      expect(SERVER_EVENTS.COMMENT_UNLIKED).toBe('comment:unliked');
     });
 
     it('should emit each broadcast method with the correct event constant', async () => {

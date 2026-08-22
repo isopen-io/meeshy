@@ -78,13 +78,17 @@ nonisolated struct LentilleModeMenuModel: Equatable {
         capabilities: ReadingModeOrchestrator.ReadingModeCapabilities,
         currentPreference: ReadingModeOrchestrator.ReadingModePreference
     ) -> LentilleModeMenuModel {
-        // RETRAIT FOCAL iOS (2026-08-18) : « Focal » sort du menu — Script
-        // est le mode nominal du fil (clamp `ReadingModeController`).
-        let order: [ReadingModeOrchestrator.ReadingModePreference] = [.auto, .script, .resume, .riviere]
+        // 2026-08-21 : Focal est de retour (passe minimale) et Bulles devient
+        // un choix — les trois vues du fil, puis Résumé et Rivière.
+        let order: [ReadingModeOrchestrator.ReadingModePreference] = [.auto, .focal, .script, .bulles, .resume, .riviere]
         let entries = order.map { preference -> Entry in
             let isRiviere = preference == .riviere
             let isDisabled: Bool
-            if let mode = renderedMode(for: preference) {
+            if preference == .bulles {
+                // Choix de RENDU hors loi (`ReadingModeController.renderDecision`) :
+                // toujours sélectionnable drapeau ON — ce menu n'existe que là.
+                isDisabled = false
+            } else if let mode = renderedMode(for: preference) {
                 // R-135 — Rivière suit désormais EXACTEMENT le même chemin que
                 // Focal/Script/Résumé : la borne réelle est
                 // `capabilities.availableModes`, publiée par
@@ -210,8 +214,10 @@ struct LentilleModeMenu: View {
 /// (`ConversationListView+Overlays.swift`), APRÈS « Marquer lu » (contrat
 /// LWS-8). N'existe QUE sur le chemin natif iOS 26+ (`nativeContextMenuView`)
 /// — le fallback < iOS 26 (`ConversationContextMenuView`, overlay custom)
-/// n'est pas un fichier possédé par LWS-8 (§1.4) ; le troisième point
-/// d'entrée y est l'aperçu, `LentillePeekView`, pas ce sous-menu.
+/// n'est pas un fichier possédé par LWS-8 (§1.4). L'aperçu d'appui long
+/// (`LentillePeekView`, ancien troisième point d'entrée) a été SUPPRIMÉ le
+/// 2026-08-21 : l'aperçu montre les derniers messages, le choix de mode a
+/// deux portes — l'encoche et ce sous-menu.
 ///
 /// Charge la préférence mémorisée (M-048) à l'ouverture — `UserDefaults`
 /// est synchrone en pratique (aucune latence perceptible) ; `.auto` reste

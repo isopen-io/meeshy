@@ -43,6 +43,7 @@ class SocialSocketManager @Inject constructor(
     private val _postDeleted = buf<SocketPostDeletedData>()
     private val _commentAdded = buf<SocketCommentAddedData>()
     private val _commentLiked = buf<SocketCommentLikedData>()
+    private val _commentUnliked = buf<SocketCommentLikedData>()
     private val _commentDeleted = buf<SocketCommentDeletedData>()
     private val _commentReactionAdded = buf<SocketCommentReactionUpdateData>()
     private val _commentReactionRemoved = buf<SocketCommentReactionUpdateData>()
@@ -63,6 +64,15 @@ class SocialSocketManager @Inject constructor(
     val postDeleted: SharedFlow<SocketPostDeletedData> = _postDeleted.asSharedFlow()
     val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
     val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
+
+    /**
+     * Jumelle DESCENDANTE de [commentLiked]. Même forme de charge : `likeCount`
+     * y est le total ABSOLU après retrait, jamais un delta — le contrat déclare
+     * deux interfaces identiques et le SENS vit dans le flux, pas dans les
+     * champs (comme [commentReactionAdded] / [commentReactionRemoved], qui
+     * partagent déjà un seul type).
+     */
+    val commentUnliked: SharedFlow<SocketCommentLikedData> = _commentUnliked.asSharedFlow()
     val commentDeleted: SharedFlow<SocketCommentDeletedData> = _commentDeleted.asSharedFlow()
     val commentReactionAdded: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionAdded.asSharedFlow()
     val commentReactionRemoved: SharedFlow<SocketCommentReactionUpdateData> = _commentReactionRemoved.asSharedFlow()
@@ -84,6 +94,7 @@ class SocialSocketManager @Inject constructor(
         listen("post:deleted", _postDeleted)
         listen("comment:added", _commentAdded)
         listen("comment:liked", _commentLiked)
+        listen("comment:unliked", _commentUnliked)
         listen("comment:deleted", _commentDeleted)
         listen("comment:reaction-added", _commentReactionAdded)
         listen("comment:reaction-removed", _commentReactionRemoved)

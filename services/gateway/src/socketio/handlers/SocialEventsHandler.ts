@@ -25,6 +25,7 @@ import type {
   CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  CommentUnlikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
@@ -477,6 +478,22 @@ export class SocialEventsHandler {
     // author is in both their feed room and the post room. Mirrors
     // `broadcastPostLiked`.
     this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_LIKED, data);
+  }
+
+  /**
+   * Jumelle DESCENDANTE de `broadcastCommentLiked` — mêmes deux adresses, même
+   * charge absolue (`likeCount` APRÈS retrait), donc même idempotence sous
+   * double livraison.
+   *
+   * Sans elle, le compteur d'un commentaire ne savait que MONTER en direct : la
+   * pose diffusait, le retrait ne diffusait rien, et l'écart tenait jusqu'au
+   * prochain REST. Côté iOS il tenait plus longtemps encore — `FeedSocketHandler`
+   * PERSISTE la valeur reçue, si bien que le compte gonflé survivait au
+   * redémarrage. Calque de `post:liked` / `post:unliked`.
+   */
+  broadcastCommentUnliked(data: CommentUnlikedEventData, commentAuthorId: string): void {
+    this.emitToUser(commentAuthorId, SERVER_EVENTS.COMMENT_UNLIKED, data);
+    this.io.to(ROOMS.post(data.postId)).emit(SERVER_EVENTS.COMMENT_UNLIKED, data);
   }
 
   // ==============================================

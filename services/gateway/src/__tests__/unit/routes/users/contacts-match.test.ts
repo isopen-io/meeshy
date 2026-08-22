@@ -5,7 +5,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -22,9 +22,25 @@ jest.mock('../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
 
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { matchContacts } from '../../../../routes/users/contacts-match';
+
+const FULL = { showOnline: true, showLastSeenTimestamp: true };
+const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+beforeEach(() => {
+  mockResolveForTargets.mockReset().mockImplementation(async (_viewer: unknown, ids: string[]) =>
+    new Map(ids.map((id) => [id, FULL])),
+  );
+});
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -63,7 +79,7 @@ async function buildApp(opts: {
   app.decorate('prisma', prisma);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = auth === 'authenticated'
-      ? { isAuthenticated: true, userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID } }
+      ? { isAuthenticated: true, type: 'user', userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID, role: 'USER' } }
       : { isAuthenticated: false, registeredUser: null };
   });
 
@@ -332,6 +348,70 @@ describe('POST /users/me/contacts/match — vCard pseudo', () => {
     const body = res.json();
     expect(body.data.matches).toHaveLength(1);
     expect(body.data.matches[0].matchedBy).toBe('username');
+    await app.close();
+  });
+});
+
+/**
+ * Le rapprochement est une porte de sortie de profils : `isOnline` / `lastActiveAt`
+ * y passent par le même gate STRICT que `/users/search`, jamais bruts.
+ */
+describe('POST /users/me/contacts/match — gate de présence', () => {
+  it('masks the presence of a matched profile the viewer may not see', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[MATCHED_USER.id, HIDDEN]]));
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: { contacts: [{ displayName: 'Awa', phoneNumbers: ['+221771234567'] }] },
+    });
+    expect(res.statusCode).toBe(200);
+    const matched = res.json().data.matches[0].user;
+    expect(matched.isOnline).toBe(false);
+    expect(matched.lastActiveAt).toBeNull();
+    expect(matched.username).toBe('awa');
+    await app.close();
+  });
+
+  it('serves the presence the resolver allows', async () => {
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: { contacts: [{ displayName: 'Awa', phoneNumbers: ['+221771234567'] }] },
+    });
+    const matched = res.json().data.matches[0].user;
+    expect(matched.isOnline).toBe(true);
+    expect(matched.lastActiveAt).toBe(MATCHED_USER.lastActiveAt.toISOString());
+    await app.close();
+  });
+
+  it('resolves the presence for the authenticated viewer', async () => {
+    const prisma = makePrisma([MATCHED_USER]);
+    const { app } = await buildApp({ prisma });
+    await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: { contacts: [{ displayName: 'Awa', phoneNumbers: ['+221771234567'] }] },
+    });
+    expect(mockResolveForTargets).toHaveBeenCalledWith(
+      { userId: CURRENT_USER_ID, role: 'USER' },
+      [MATCHED_USER.id],
+    );
+    await app.close();
+  });
+
+  it('does not resolve anything when nothing matched', async () => {
+    const prisma = makePrisma([]);
+    const { app } = await buildApp({ prisma });
+    await app.inject({
+      method: 'POST',
+      url: '/users/me/contacts/match',
+      payload: { contacts: [{ displayName: 'Ghost', phoneNumbers: ['+221771234567'] }] },
+    });
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
     await app.close();
   });
 });

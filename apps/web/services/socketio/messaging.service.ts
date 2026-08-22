@@ -223,10 +223,6 @@ export class MessagingService {
       this.consumedListeners.forEach(listener => listener(data));
     });
 
-    socket.on(SERVER_EVENTS.SYSTEM_MESSAGE, (data) => {
-      this.messageListeners.forEach(listener => listener(convertMessageFn(data as unknown as SocketIOMessage)));
-    });
-
     (socket as unknown as { on: (event: string, handler: (data: AttachmentStatusUpdatedEventData) => void) => void }).on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
     });

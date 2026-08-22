@@ -59,6 +59,33 @@ public struct MessageHiddenForMeEvent: Decodable, Sendable {
     }
 }
 
+/// `message:restored-for-me` — l'INVERSE de `message:hidden-for-me` : un
+/// message que CE lecteur avait retiré de sa vue redevient visible, depuis un
+/// autre de ses appareils (`POST /api/messages/:id/restore-for-me`).
+///
+/// La charge utile ne porte VOLONTAIREMENT aucun contenu, et c'est la propriété
+/// qui décide de l'écriture locale. Une APPARITION ne peut pas s'écrire comme
+/// une tombstone inversée : le masquage a PURGÉ la ligne (cf.
+/// `MessageHiddenForMeEvent`), l'appareil ne détient donc plus rien à
+/// ressusciter. La seule instruction honnête que porte cet événement est une
+/// ADRESSE — « va rechercher ce message » — et le consommateur doit refaire un
+/// aller-retour serveur. Contrat serveur :
+/// `services/gateway/src/services/personalMessageVisibilitySync.ts`.
+public struct MessageRestoredForMeEvent: Decodable, Sendable {
+    public let userId: String
+    public let messages: [PersonalMessageVisibilityRef]
+    /// Instant ISO-8601 du retour en vue. Optionnel pour la même raison que
+    /// `hiddenAt` : il n'arbitre rien, et un serveur plus ancien pourrait ne
+    /// pas le porter — son absence ne doit pas faire perdre le retour.
+    public let restoredAt: String?
+
+    public init(userId: String, messages: [PersonalMessageVisibilityRef], restoredAt: String? = nil) {
+        self.userId = userId
+        self.messages = messages
+        self.restoredAt = restoredAt
+    }
+}
+
 public struct MessagePinnedEvent: Decodable, Sendable {
     public let messageId: String
     public let conversationId: String
@@ -1365,30 +1392,6 @@ public struct ReactionSyncEvent: Decodable, Sendable {
     public let userReactions: [String]?
 }
 
-// MARK: - System Message Event Data
-
-public struct SystemMessageEvent: Decodable, Sendable {
-    public let type: String
-    public let content: String
-
-    private enum CodingKeys: String, CodingKey {
-        case type, messageType, content
-    }
-
-    public init(from decoder: Decoder) throws {
-        // Le gateway broadcaste `system:message` avec un objet message complet
-        // (MeeshySocketIOHandler.broadcastMessage) : la clé porte le nom
-        // `messageType`, pas `type`, et tous les champs message sont présents.
-        // On accepte les deux clés et on retombe sur des valeurs sûres pour ne
-        // jamais échouer le décodage d'un event temps réel.
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        type = (try? container.decode(String.self, forKey: .type))
-            ?? (try? container.decode(String.self, forKey: .messageType))
-            ?? "system"
-        content = (try? container.decode(String.self, forKey: .content)) ?? ""
-    }
-}
-
 // MARK: - Attachment Status Event Data
 
 public struct AttachmentStatusEvent: Decodable, Sendable {
@@ -1557,19 +1560,6 @@ public struct NotificationCountsEvent: Decodable, Sendable {
     public let byType: [String: Int]?
 }
 
-public struct ConversationOnlineStatsEvent: Decodable, Sendable {
-    public let conversationId: String
-    public let onlineUsers: [OnlineUserInfo]
-    public let updatedAt: Date?
-
-    public struct OnlineUserInfo: Decodable, Sendable {
-        public let id: String
-        public let username: String
-        public let firstName: String?
-        public let lastName: String?
-    }
-}
-
 // MARK: - Connection State
 
 public enum ConnectionState: Equatable, Sendable {
@@ -1599,6 +1589,10 @@ public protocol MessageSocketProviding: Sendable {
     /// protocole parce que le consommateur (`ConversationSocketHandler`) ne
     /// détient qu'un `MessageSocketProviding`.
     var messageHiddenForMe: PassthroughSubject<MessageHiddenForMeEvent, Never> { get }
+    /// `message:restored-for-me` — le canal jumeau, en sens inverse. Dans le
+    /// protocole pour la même raison que son jumeau : le consommateur
+    /// (`ConversationSocketHandler`) ne détient qu'un `MessageSocketProviding`.
+    var messageRestoredForMe: PassthroughSubject<MessageRestoredForMeEvent, Never> { get }
     var messagePinned: PassthroughSubject<MessagePinnedEvent, Never> { get }
     var messageUnpinned: PassthroughSubject<MessageUnpinnedEvent, Never> { get }
     var reactionAdded: PassthroughSubject<ReactionUpdateEvent, Never> { get }
@@ -1675,7 +1669,6 @@ public protocol MessageSocketProviding: Sendable {
     var notificationRead: PassthroughSubject<NotificationReadEvent, Never> { get }
     var notificationDeleted: PassthroughSubject<NotificationDeletedEvent, Never> { get }
     var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
-    var conversationOnlineStats: PassthroughSubject<ConversationOnlineStatsEvent, Never> { get }
     var callOfferReceived: PassthroughSubject<CallOfferData, Never> { get }
     var callSignalOfferReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
@@ -1694,7 +1687,6 @@ public protocol MessageSocketProviding: Sendable {
     var callIceServersRefreshed: PassthroughSubject<CallIceServersRefreshedData, Never> { get }
     var callQualityAlert: PassthroughSubject<CallQualityAlertData, Never> { get }
     var reactionSynced: PassthroughSubject<ReactionSyncEvent, Never> { get }
-    var systemMessageReceived: PassthroughSubject<SystemMessageEvent, Never> { get }
     var mentionCreated: PassthroughSubject<MentionCreatedEvent, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
@@ -1845,6 +1837,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let messageEdited = PassthroughSubject<APIMessage, Never>()
     public let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     public let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
+    public let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     public let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
     public let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
 
@@ -1941,9 +1934,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
 
-    // Combine publishers — conversation online stats
-    public let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
-
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
     public let callSignalOfferReceived = PassthroughSubject<CallAnswerData, Never>()
@@ -1968,9 +1958,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callTranslatedSegmentReceived = PassthroughSubject<CallTranslatedSegmentData, Never>()
     public let callTranscriptionActiveReceived = PassthroughSubject<CallTranscriptionActiveData, Never>()
 
-    // Combine publishers — reactions sync, system, attachments, mentions
+    // Combine publishers — reactions sync, attachments, mentions
     public let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
-    public let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     public let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
 
     @Published public var isConnected = false
@@ -3283,6 +3272,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // Le retour en vue. Même room (celle de l'UTILISATEUR), donc l'appareil
+        // qui a émis la requête le reçoit aussi — et c'est sans conséquence : la
+        // relecture qu'il déclenche est idempotente.
+        socket.on("message:restored-for-me") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(MessageRestoredForMeEvent.self, from: data) { [weak self] event in
+                self?.messageRestoredForMe.send(event)
+            }
+        }
+
         socket.on("message:pinned") { [weak self] data, _ in
             guard let self else { return }
             self.decode(MessagePinnedEvent.self, from: data) { [weak self] event in
@@ -3391,13 +3390,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         // --- Translation events ---
 
         socket.on("message:translation") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TranslationEvent.self, from: data) { [weak self] event in
-                self?.translationReceived.send(event)
-            }
-        }
-
-        socket.on("message:translated") { [weak self] data, _ in
             guard let self else { return }
             self.decode(TranslationEvent.self, from: data) { [weak self] event in
                 self?.translationReceived.send(event)
@@ -3727,15 +3719,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        // --- Conversation online stats events ---
-
-        socket.on("conversation:online-stats") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ConversationOnlineStatsEvent.self, from: data) { [weak self] event in
-                self?.conversationOnlineStats.send(event)
-            }
-        }
-
         // --- Mention events ---
 
         socket.on("mention:created") { [weak self] data, _ in
@@ -3888,15 +3871,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallTranscriptionActiveData.self, from: data) { [weak self] event in
                 self?.callTranscriptionActiveReceived.send(event)
-            }
-        }
-
-        // --- System message events ---
-
-        socket.on("system:message") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SystemMessageEvent.self, from: data) { [weak self] event in
-                self?.systemMessageReceived.send(event)
             }
         }
 

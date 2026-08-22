@@ -50,7 +50,6 @@ const mockOnTranslation = jest.fn(() => jest.fn());
 const mockOnTyping = jest.fn(() => jest.fn());
 const mockOnUserStatus = jest.fn(() => jest.fn());
 const mockOnConversationStats = jest.fn(() => jest.fn());
-const mockOnConversationOnlineStats = jest.fn(() => jest.fn());
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   meeshySocketIOService: {
@@ -72,7 +71,6 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onTyping: (...args: any[]) => (mockOnTyping as any)(...args),
     onUserStatus: (...args: any[]) => (mockOnUserStatus as any)(...args),
     onConversationStats: (...args: any[]) => (mockOnConversationStats as any)(...args),
-    onConversationOnlineStats: (...args: any[]) => (mockOnConversationOnlineStats as any)(...args),
     onStatusChange: jest.fn(() => () => {}),
   },
 }));

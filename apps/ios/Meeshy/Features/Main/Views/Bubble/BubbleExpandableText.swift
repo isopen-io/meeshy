@@ -55,6 +55,9 @@ struct BubbleExpandableText: View, Equatable {
     /// Libellé du bouton d'expansion — `nil` = « Voir plus » historique
     /// (aucun site d'appel existant ne change). Focal passe « Lire plus ».
     var expandLabel: String? = nil
+    /// Plafond de caractères de CETTE instance (défaut : la constante
+    /// historique). Le message en focus de Focal en pose un plus bas.
+    var truncateLimit: Int = BubbleExpandableText.truncateLimit
     /// Détournement d'expansion : quand posé, le tap N'ÉTEND PAS inline —
     /// il route vers l'appelant (Focal ouvre sa sheet scrollable, spec
     /// Magnificence §3 : un message de 3 écrans casserait la loupe).
@@ -78,11 +81,11 @@ struct BubbleExpandableText: View, Equatable {
     }
 
     var body: some View {
-        let needsTruncation = !isExpanded && Self.exceeds(content, Self.truncateLimit)
+        let needsTruncation = !isExpanded && Self.exceeds(content, truncateLimit)
         let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
 
         if needsTruncation {
-            let truncated = Self.truncateAtWord(content, limit: Self.truncateLimit)
+            let truncated = Self.truncateAtWord(content, limit: truncateLimit)
             VStack(alignment: .leading, spacing: 4) {
                 MessageTextRenderer.render(truncated + "...", fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
                     .fixedSize(horizontal: false, vertical: true)

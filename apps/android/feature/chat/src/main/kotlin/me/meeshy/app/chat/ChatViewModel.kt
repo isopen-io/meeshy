@@ -599,7 +599,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.messageUpdated.collect { event ->
+                messageSocketManager.messageEdited.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.refresh(conversationId)
                     }
@@ -620,18 +620,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.translationCompleted.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.applyTranslation(
-                            event.messageId,
-                            event.targetLanguage,
-                            event.translatedContent,
-                        )
-                    }
-                }
-            }
-            launch {
-                messageSocketManager.translationInProgress.collect { event ->
+                messageSocketManager.translationReceived.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.applyTranslation(
                             event.messageId,
@@ -647,10 +636,10 @@ class ChatViewModel @Inject constructor(
                         messageRepository.applyTranscription(
                             event.messageId,
                             event.attachmentId,
-                            event.text,
-                            event.language,
-                            event.confidence,
-                            event.durationMs,
+                            event.transcription.text,
+                            event.transcription.language,
+                            event.transcription.confidence,
+                            event.transcription.durationMs,
                         )
                     }
                 }

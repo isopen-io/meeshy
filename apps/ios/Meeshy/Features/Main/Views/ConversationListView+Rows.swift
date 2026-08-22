@@ -84,7 +84,14 @@ struct ConversationRowItem: View {
     ///    contrairement aux rows : un contenu de menu n'a pas d'identité
     ///    structurelle à préserver (reconstruit à l'ouverture du menu).
     /// `EmptyView` boxé sur le chemin fallback < iOS 26 (jamais rendu).
-    let nativeContextMenu: AnyView
+    /// 2026-08-21 (audit fluidité H3) : une CLOSURE, plus une valeur. La
+    /// valeur était matérialisée par `ConversationListView.conversationRow`
+    /// à CHAQUE passe de body de la LISTE (N menus complets par passe, dont
+    /// les passes déclenchées par la présence ou la frappe d'autrui). La
+    /// closure n'est invoquée que dans le body de CETTE row — derrière le
+    /// portillon `.equatable()` — et son type reste `AnyView` (aucun
+    /// paramètre générique : les deux raisons ci-dessus tiennent toujours).
+    let nativeContextMenu: () -> AnyView
 
     var body: some View {
         SwipeableRow(
@@ -121,60 +128,40 @@ struct ConversationRowItem: View {
                         NSItemProvider(object: conversation.id as NSString)
                     }
                     .contextMenu {
-                        nativeContextMenu
+                        nativeContextMenu()
                     } preview: {
-                        // Preview — troisième point d'entrée du menu de mode
-                        // (contrat LWS-8, « trois points d'entrée, une
-                        // préférence »), câblée sur CE chemin par I-067ter :
-                        // jusque-là seul le chemin < iOS 26
-                        // (`conversationContextMenuOverlay`, +Overlays.swift,
-                        // I-072) montait `LentillePeekView` — écart documenté
-                        // par l'en-tête de `LentillePeekView.swift` et
-                        // verrouillé par `PeekViewModelTests
-                        // .test_nativeContextMenuPreviewPath_…`, comblé ici.
-                        // Mêmes entrées que le montage du chemin fallback,
-                        // relues sur les propriétés DÉJÀ stockées de cette
-                        // row (mêmes valeurs, sans re-lire les singletons
-                        // qu'elles encapsulent) — seule `isAnonymous` n'a pas
-                        // d'équivalent stocké et se lit sur `AuthManager
-                        // .shared`, comme +Overlays.swift : ce closure est
-                        // long-press-only (voir le commentaire du portillon
-                        // `.equatable()` plus bas — « minor staleness there
-                        // is acceptable »), jamais évalué à chaque passe de
-                        // body. `Group` fait du if/else UNE expression pour
-                        // que `.frame(width: 340)` s'applique aux deux
-                        // branches, comme l'overlay custom.
-                        Group {
-                            if LentilleFeatureFlag.isLentilleListEnabled {
-                                LentillePeekView(
-                                    conversation: conversation,
-                                    isDark: isDark,
-                                    isAnonymous: AuthManager.shared.currentUser?.isAnonymous ?? true,
-                                    preferredContentLanguages: preferredContentLanguages,
-                                    presenceState: conversation.type == .direct ? presenceState : nil,
-                                    storyState: storyRingState,
-                                    moodEmoji: moodStatus?.moodEmoji
-                                )
-                            } else {
-                                // Preview statique (non interactive dans un
-                                // contextMenu natif) — mêmes inputs que
-                                // l'overlay custom, sans callbacks. Largeur
-                                // pilotée par le call site, comme l'overlay
-                                // (source de vérité unique).
-                                ConversationPreviewView(
-                                    conversation: conversation,
-                                    cachedMessages: cachedPreviewMessages,
-                                    bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
-                                        .flatMap { MeeshyConfig.resolveMediaURL($0) },
-                                    avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
-                                    storyState: storyRingState,
-                                    moodEmoji: moodStatus?.moodEmoji,
-                                    presenceState: conversation.type == .direct ? presenceState : nil,
-                                    isDirect: conversation.type == .direct
-                                )
-                            }
-                        }
+                        // Aperçu d'appui long = la carte des DERNIERS MESSAGES
+                        // (bannière, avatar/logo, titre, icônes d'en-tête, fil
+                        // récent) — drapeau Lentille ON comme OFF (décision
+                        // user 2026-08-21 : le menu des modes n'a rien à faire
+                        // dans l'aperçu ; le choix de mode garde ses deux
+                        // portes, l'encoche de la carte de focus et le
+                        // sous-menu « Mode de lecture » du menu). Preview
+                        // STATIQUE (non interactive dans un contextMenu natif)
+                        // — mêmes inputs que l'overlay custom, sans callbacks.
+                        // Largeur pilotée par le call site, comme l'overlay
+                        // (source de vérité unique). Ce closure est
+                        // long-press-only (voir le portillon `.equatable()`
+                        // plus bas), jamais évalué à chaque passe de body.
+                        ConversationPreviewView(
+                            conversation: conversation,
+                            cachedMessages: cachedPreviewMessages,
+                            bannerURL: (conversation.type == .direct ? conversation.participantBanner : conversation.banner)
+                                .flatMap { MeeshyConfig.resolveMediaURL($0) },
+                            avatarURL: conversation.type == .direct ? conversation.participantAvatarURL : conversation.avatar,
+                            storyState: storyRingState,
+                            moodEmoji: moodStatus?.moodEmoji,
+                            presenceState: conversation.type == .direct ? presenceState : nil,
+                            isDirect: conversation.type == .direct
+                        )
                         .frame(width: 340)
+                        // Les derniers messages se chargent À L'OUVERTURE de
+                        // l'aperçu (au-delà des `autoPreviewLoadRowLimit`
+                        // premières rangées, rien ne les a préchargés) : le
+                        // chargement est idempotent côté VM, et la rangée se
+                        // re-rend sur le compte de messages (`==`), ce qui
+                        // rafraîchit l'aperçu encore présenté.
+                        .task { await onLoadPreview() }
                     }
                     .task {
                         guard enableAutoPreviewLoad else { return }
@@ -302,6 +289,24 @@ struct ConversationRowItem: View {
             )
             .equatable()
         }
+    }
+}
+
+// MARK: - Contexte de passe (résolu UNE fois par passe de body de la liste)
+
+/// Ce que chaque rangée lirait sinon par elle-même à chaque passe (audit
+/// fluidité 2026-08-21, H4/H18) : les langues du lecteur (copie de tableau par
+/// rang) et l'éligibilité à l'auto-chargement d'aperçu (`firstIndex` O(n) par
+/// rang ⇒ O(n²) par passe). `autoPreviewIds` applique la MÊME règle que
+/// `ConversationListView.shouldAutoLoadPreview` (préfixe `limit` de l'ordre
+/// rendu), en O(1) par rang.
+struct ConversationRowPassContext {
+    let preferredContentLanguages: [String]
+    let autoPreviewIds: Set<String>
+
+    init(orderedConversationIds: [String], preferredContentLanguages: [String], autoPreviewLimit: Int) {
+        self.preferredContentLanguages = preferredContentLanguages
+        self.autoPreviewIds = Set(orderedConversationIds.prefix(max(0, autoPreviewLimit)))
     }
 }
 

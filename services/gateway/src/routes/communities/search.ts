@@ -2,10 +2,12 @@
  * Search routes for communities
  */
 import { FastifyInstance } from 'fastify';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { communityMemberSchema, errorResponseSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
+import { resolveCommunityMemberPresence } from '../community-member-presence';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
@@ -59,8 +61,18 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
                   memberCount: { type: 'number' },
                   conversationCount: { type: 'number' },
                   createdAt: { type: 'string', format: 'date-time' },
-                  creator: { type: 'object' },
-                  members: { type: 'array', items: { type: 'object' } }
+                  // `{ type: 'object' }` sans `properties` n'est PAS un objet
+                  // libre : fast-json-stringify applique
+                  // `additionalProperties: false` par défaut et sérialisait
+                  // `creator` et chaque `members[i]` en `{}`. iOS type
+                  // `APICommunityUser.id`/`.username` non-optionnels — le `{}`
+                  // faisait échouer le décodage de TOUTE la réponse.
+                  creator: { ...userMinimalSchema, nullable: true, description: 'Community creator' },
+                  members: {
+                    type: 'array',
+                    items: communityMemberSchema,
+                    description: 'First members of the community (max 5)'
+                  }
                 }
               }
             },
@@ -134,6 +146,11 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
               }
             },
             members: {
+              // Sans ce filtre, l'aperçu pouvait présenter comme membre
+              // quelqu'un qui a quitté la communauté. Invisible tant que le
+              // schéma vidait `members[]` en `{}` ; servi dès que la réponse
+              // porte vraiment ses champs.
+              where: { isActive: true },
               take: 5,
               include: {
                 user: {
@@ -161,6 +178,8 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
+      const memberVisibility = await resolveCommunityMemberPresence(fastify, request, communities);
+
       // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({
         id: community.id,
@@ -173,7 +192,11 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         conversationCount: community._count.Conversation,
         createdAt: community.createdAt,
         creator: community.creator,
-        members: community.members
+        members: community.members.map(member =>
+          member.user
+            ? { ...member, user: applyPresenceVisibilityAsOffline(member.user, memberVisibility.get(member.user.id)) }
+            : member
+        )
       }));
 
       return sendPaginatedSuccess(reply, communitiesWithCount, createPaginationMeta(totalCount, offsetNum, limitNum, communities.length));

@@ -161,7 +161,7 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
     /// gratuité-là que la décision produit supprime. Le `setEnabled(true)`
     /// ci-dessous est donc l'amendement : le chemin bout-en-bout reste
     /// intégralement valide POUR QUI L'A DEMANDÉ.
-    func test_betaExplicitlyOn_noStickyPreference_fewUnread_readerPresent_autoResolvesToScript() {
+    func test_betaExplicitlyOn_noStickyPreference_fewUnread_readerPresent_autoResolvesToFocal() {
         let defaults = makeIsolatedDefaults()
         BetaFeaturesPreference.setEnabled(true, defaults: defaults)
 
@@ -188,7 +188,10 @@ final class BetaFeaturesReadingModesIntegrationTests: XCTestCase {
             now: { now }
         )
 
-        XCTAssertEqual(controller.mode, .script, "AUTO, branche par défaut de la loi gelée (.focal) CLAMPÉE sur .script — RETRAIT FOCAL iOS 2026-08-18.")
+        // RETOUR FOCAL iOS 2026-08-21 (feat/ios-list-scroll-fluidity) : le clamp
+        // .focal → .script du retrait du 18/08 est levé, Focal est de nouveau la
+        // branche par défaut de la loi gelée.
+        XCTAssertEqual(controller.mode, .focal, "AUTO, branche par défaut de la loi gelée (.focal) — le clamp sur .script du 2026-08-18 est retiré depuis le retour de Focal (2026-08-21).")
         XCTAssertEqual(controller.decision.reason, .default)
     }
 

@@ -308,15 +308,47 @@ describe('useUserStatusRealtime', () => {
     });
   });
 
-  describe('Heartbeat', () => {
-    it('should send heartbeat every 90s', () => {
+  describe('Heartbeat applicatif', () => {
+    /**
+     * Ce hook a emis un `heartbeat` toutes les 90s, pour « maintenir la
+     * presence dans Redis (TTL 120s) ». Cette charge est tenue par le serveur
+     * depuis `handleEnginePong` : le gateway rafraichit la presence sur le pong
+     * ENGINE, echange toutes les 25s (`pingInterval: 25000`) avec CHAQUE client.
+     *
+     * Les deux chemins appellent la meme methode etranglee a 60s
+     * (`StatusService.noteHeartbeat`) : le battement de 90s ne pouvait rien
+     * produire que le pong n'ait deja produit, et il partait NU (sans
+     * `clientTime`), donc sans meme obtenir le RTT qui est la seule chose que le
+     * canal applicatif offre en plus.
+     *
+     * Le test est ecrit sur une fenetre LARGE — 5 minutes, soit plus de trois
+     * battements de l'ancien intervalle. Verifier 90s a la seconde pres
+     * laisserait passer un battement reintroduit a une autre periode, qui est
+     * precisement la forme sous laquelle la regression reviendrait.
+     */
+    it('n\'emet aucun heartbeat applicatif, quelle que soit sa periode', () => {
       const mockEmit = jest.fn();
       mockGetSocket.mockReturnValue({ connected: true, emit: mockEmit });
 
       renderHook(() => useUserStatusRealtime());
 
-      jest.advanceTimersByTime(90_000);
-      expect(mockEmit).toHaveBeenCalledWith('heartbeat');
+      jest.advanceTimersByTime(300_000);
+
+      expect(mockEmit).not.toHaveBeenCalledWith('heartbeat');
+      expect(mockEmit).not.toHaveBeenCalledWith('heartbeat', expect.anything());
+    });
+
+    /**
+     * Le temoin qui empeche le test precedent d'etre vert pour la mauvaise
+     * raison. Sans lui, un hook qui n'appellerait plus DU TOUT `getSocket` — ou
+     * un mock casse — passerait l'assertion de non-emission sans rien prouver.
+     */
+    it('tique toujours le recalcul de presence local sur la meme fenetre', () => {
+      renderHook(() => useUserStatusRealtime());
+
+      jest.advanceTimersByTime(300_000);
+
+      expect(mockTriggerStatusTick).toHaveBeenCalled();
     });
   });
 

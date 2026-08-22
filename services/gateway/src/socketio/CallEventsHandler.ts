@@ -17,7 +17,7 @@ import { NotificationService } from '../services/notifications/NotificationServi
 import { PushNotificationService } from '../services/PushNotificationService';
 import { logger } from '../utils/logger';
 import { CALL_EVENTS, CALL_ERROR_CODES, CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
-import { ROOMS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { ROOMS, CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-parsing';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
@@ -861,32 +861,187 @@ export class CallEventsHandler {
     io: SocketIOServer;
     participation: DisconnectParticipation;
     userId: string;
+    /**
+     * La raison à graver quand ce départ termine l'appel. Le défaut sert le
+     * seul appelant historique — l'expiration d'une fenêtre de grâce, un
+     * arrachement de socket. Une fin d'APPARTENANCE, elle, n'a rien perdu :
+     * elle passe `completed`, ce que produit déjà un raccroché ordinaire, et
+     * n'oblige donc aucun client à connaître une raison de plus.
+     */
+    endReasonHint?: CallEndReason;
   }): Promise<void> {
-    const { io, participation, userId } = opts;
+    const { io, participation, userId, endReasonHint = CallEndReason.connectionLost } = opts;
     try {
       const leftSession = await this.callService.leaveCall({
         callId: participation.callSessionId,
         userId,
         participantId: participation.participantId,
-        // This method is reached exclusively from a disconnect-grace expiry
-        // (see onDisconnectGraceExpired, its only caller) — an involuntary
-        // socket drop that never reconnected, never an explicit call:leave/
-        // call:end. Mirrors the connectionLost reason this same scenario's
-        // error-fallback branch below already stamps via
-        // forceEndOrphanedCallSession.
-        endReasonHint: CallEndReason.connectionLost
+        // Le défaut (`connectionLost`) sert le chemin d'origine : une
+        // expiration de fenêtre de grâce (voir onDisconnectGraceExpired) —
+        // un arrachement de socket qui n'a jamais reconnecté, jamais un
+        // call:leave/call:end explicite. Il reflète la même raison que la
+        // branche de repli ci-dessous grave via forceEndOrphanedCallSession.
+        endReasonHint
       });
       // Cache eviction now lives inside broadcastParticipantLeftResult, so
       // both this caller and AuthHandler's anonymous path get it.
       await this.broadcastParticipantLeftResult({ io, leftSession, participation, userId });
 
-      logger.info('✅ Socket: Auto-left call on disconnect', {
+      logger.info('✅ Socket: participation left call', {
         callId: participation.callSessionId,
-        userId
+        userId,
+        endReasonHint
       });
     } catch (leaveError) {
       await this.forceCleanupParticipationAfterLeaveFailure({ io, participation, userId, leaveError });
     }
+  }
+
+  /**
+   * Sort un membre des appels EN COURS du fil dont il vient de perdre
+   * l'appartenance — quitté, banni, retiré par un modérateur, fil supprimé
+   * pour soi.
+   *
+   * ─── Pourquoi ce verbe existe ───────────────────────────────────────────
+   *
+   * La room d'un appel (`ROOMS.call(callId)`) n'est PAS celle de la
+   * conversation (`ROOMS.conversation(id)`) : sortir quelqu'un de la seconde
+   * le laisse entièrement dans la première. Et rien en aval ne le rattrape —
+   * l'autorisation du relais `call:signal` se lit sur la ligne
+   * `CallParticipant` (`!p.leftAt`), jamais sur l'appartenance à la
+   * conversation. Un membre banni pendant l'appel restait donc DEDANS :
+   * signalisation relayée, média P2P établi, transcriptions et traductions
+   * de tous les autres servies, dans un fil dont il vient d'être exclu.
+   *
+   * ─── Et il ne pouvait pas en sortir seul ────────────────────────────────
+   *
+   * `call:force-leave` — le seul verbe qui retire quelqu'un des appels d'une
+   * conversation — commence par exiger `Participant.isActive: true`. La perte
+   * du droit fait donc taire la commande de RETRAIT elle-même : c'est
+   * exactement le défaut que le cycle 74 a payé sur
+   * `handleLiveLocationStop`, ici d'un cran plus cher parce que ce qui
+   * survit n'est pas une épingle figée mais un micro ouvert.
+   *
+   * ─── Ce que la CLÔTURE, elle, ne fait toujours pas ──────────────────────
+   *
+   * `announceConversationClosed` laisse délibérément vivre les appels d'un
+   * fil clos : « raccrocher au nez de gens qui se parlent serait une
+   * régression » (cycle 72, § 6). L'argument tient parce que la clôture ne
+   * retire le droit de personne — tous les interlocuteurs restent membres.
+   * Il s'INVERSE pour la fin d'appartenance : c'est précisément parce que le
+   * partant n'a plus le droit d'être là qu'il faut le sortir.
+   *
+   * ─── L'ordre, et l'identité de la ligne ─────────────────────────────────
+   *
+   * `leaveParticipationAndBroadcast` diffuse `call:participant-left` (et
+   * `call:ended` s'il ne restait que lui) dans la room de l'appel AVANT que
+   * l'éviction ne s'y produise : c'est par cette room que l'appareil du
+   * partant apprend qu'il doit démonter sa `RTCPeerConnection`, et par elle
+   * que les restants démontent la leur — ce qui coupe le média P2P que
+   * l'éviction seule, purement serveur, ne toucherait jamais.
+   *
+   * S'y ajoute `call:force-leave` vers la room PERSONNELLE du sorti : c'est
+   * la seule phrase qui dise « c'est TOI qu'on sort » plutôt que « un pair
+   * s'en va », et la seule room que l'éviction ne touche pas.
+   *
+   * La recherche s'appuie sur `participant: { userId, conversationId }` et
+   * n'exige AUCUN `isActive` : la ligne vient d'être passée à `false` par la
+   * route appelante, et la lire ainsi reproduirait le silence même qu'on
+   * corrige.
+   *
+   * Ne rejette JAMAIS : l'appelant est une route qui a déjà commis son
+   * écriture (bannissement, départ, retrait) et dont le succès ne doit pas
+   * dépendre de cette hygiène.
+   */
+  async endCallParticipationForDepartedMember(opts: {
+    io: SocketIOServer;
+    conversationId: string;
+    userId: string;
+  }): Promise<void> {
+    const { io, conversationId, userId } = opts;
+
+    try {
+      // Audit C5 — `{leftAt: null}` seul manque les documents Mongo dont le
+      // champ n'a jamais été écrit ; même paire que le chemin disconnect.
+      const participations = await this.prisma.callParticipant.findMany({
+        where: {
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
+          participant: { userId, conversationId }
+        },
+        include: { callSession: true }
+      });
+
+      for (const participation of participations) {
+        // Une ligne `leftAt: null` sur un appel déjà terminal est de la
+        // comptabilité résiduelle, pas un appel vivant — même garde que le
+        // chemin disconnect.
+        if ((CALL_TERMINAL_STATUSES as readonly string[]).includes(participation.callSession.status)) continue;
+
+        const callId = participation.callSessionId;
+
+        // Une fenêtre de grâce encore armée pour ce membre n'a plus d'objet :
+        // il ne peut plus revenir dans ce fil, donc plus dans cet appel.
+        this.cancelDisconnectGrace(callId, userId);
+
+        await this.leaveParticipationAndBroadcast({
+          io,
+          participation: participation as unknown as DisconnectParticipation,
+          userId,
+          endReasonHint: CallEndReason.completed
+        });
+
+        // Même hygiène par-partant que `call:leave`/`call:force-leave` : la
+        // minuterie de sonnerie et l'offre bufferisée du partant n'ont plus
+        // de destinataire (voir clearBufferedOfferFor).
+        this.callService.clearRingingTimeout(callId);
+        this.clearBufferedOfferFor(callId, userId, participation.participantId);
+
+        // Et l'écran du sorti, que rien d'autre ne referme. `call:participant
+        // -left` dit aux RESTANTS qu'un pair s'en va ; il ne dit à personne
+        // « c'est TOI qu'on sort ». `call:force-leave` porte exactement cette
+        // phrase, et iOS l'implémente déjà entièrement (démontage WebRTC +
+        // clôture de la session CallKit) — le gateway ne l'avait simplement
+        // jamais émis. Vers la room PERSONNELLE : c'est la seule que
+        // l'éviction ci-dessous ne touche pas, donc la seule qui reste
+        // atteignable quel que soit l'ordre.
+        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CALL_FORCE_LEAVE, {
+          callId,
+          reason: 'membership_ended'
+        });
+
+        // L'éviction ne vise QUE les appareils du partant : un appel de
+        // groupe continue pour ceux qui restent. Elle passe par la room
+        // personnelle — la même clé que `endConversationMembership` — parce
+        // que ce verbe n'a pas de socket appelant à interroger.
+        await this.evictDepartedMemberFromCallRoom(io, callId, userId);
+
+        logger.info('📞 Membre sorti de l\'appel avec son appartenance', {
+          callId,
+          conversationId,
+          userId
+        });
+      }
+    } catch (error) {
+      logger.error('❌ Échec de la sortie d\'appel d\'un membre sortant', {
+        conversationId,
+        userId,
+        error
+      });
+    }
+  }
+
+  /**
+   * Sort les seuls appareils du partant de la room d'un appel. Sœur
+   * user-scopée de `evictCallRoomSockets`, qui vide la room entière quand
+   * l'appel LUI-MÊME est terminé.
+   */
+  private async evictDepartedMemberFromCallRoom(
+    io: SocketIOServer,
+    callId: string,
+    userId: string
+  ): Promise<void> {
+    const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
+    await Promise.all(userSockets.map((s) => s.leave(ROOMS.call(callId))));
   }
 
   /**

@@ -29,7 +29,10 @@ import me.meeshy.sdk.net.api.PostImpressionsRequest
 import me.meeshy.sdk.net.api.PostTranslationRequest
 import me.meeshy.sdk.net.api.PostViewRequest
 import me.meeshy.sdk.net.api.RepostPostRequest
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
+import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.rawApiCall
 import javax.inject.Inject
@@ -49,6 +52,7 @@ typealias BookmarkPage = PostPage
 @Singleton
 class PostRepository @Inject constructor(
     private val postApi: PostApi,
+    private val translationApi: TranslationApi,
     private val clock: CacheClock = SystemCacheClock,
 ) {
     // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
@@ -394,6 +398,89 @@ class PostRepository @Inject constructor(
 
     suspend fun requestTranslation(postId: String, targetLanguage: String): NetworkResult<Unit> =
         apiCall { postApi.requestTranslation(postId, PostTranslationRequest(targetLanguage)) }
+
+    /**
+     * On-demand translation (Prisme, pull side): the viewer tapped a configured
+     * language the post has no content for yet. Blocking-translates the post's
+     * original text into [targetLanguage] and upserts the result into the in-memory
+     * feed cache via [PostTranslationMerge] so the open card can switch to it — the
+     * map-keyed sibling of [me.meeshy.sdk.conversation.MessageRepository.requestTranslation].
+     *
+     * Returns `true` only when a non-blank translation was actually stored. Inert
+     * (`false`, nothing stored) when the post is not in the cache, has no source
+     * text, the target is blank, the network call fails, the translator returns a
+     * blank string, or the translation already matches what is cached (idempotent).
+     */
+    suspend fun requestOnDemandTranslation(postId: String, targetLanguage: String): Boolean {
+        val post = _feedCache.value?.firstOrNull { it.id == postId } ?: return false
+        val merged = translatePost(post, targetLanguage) ?: return false
+        _feedCache.value = _feedCache.value?.map { if (it.id == postId) merged else it }
+        return true
+    }
+
+    /**
+     * On-demand translation for a post the caller already holds (the post-detail
+     * surface owns its post outside the feed cache): blocking-translates [post]'s
+     * original text into [targetLanguage] and returns the merged post the caller
+     * can swap in. Returns `null` — inert, no state to change — for the same reasons
+     * [requestOnDemandTranslation] returns `false` (blank target, no source text,
+     * network failure, blank translation, or an idempotent no-op). The cache-mutating
+     * [requestOnDemandTranslation] and this pull-and-return variant share the single
+     * translate-then-[PostTranslationMerge] law in [translateAndMerge].
+     */
+    suspend fun translatePost(post: ApiPost, targetLanguage: String): ApiPost? {
+        val target = targetLanguage.trim()
+        val translated = translateSource(post.content, post.originalLanguage, target) ?: return null
+        return PostTranslationMerge.mergeTranslation(post, target, translated)
+    }
+
+    /**
+     * On-demand translation for a comment the caller already holds (the comment thread
+     * owns its rows outside the feed cache): blocking-translates [comment]'s original
+     * text into [targetLanguage] and returns the merged comment the caller can swap in.
+     * Returns `null` — inert, no state to change — for the same reasons [translatePost]
+     * does (blank target, no source text, network failure, blank translation, or an
+     * idempotent no-op). The comment-keyed sibling of [translatePost]; both share the
+     * single translate law in [translateSource] and the [PostTranslationMerge] upsert.
+     */
+    suspend fun translateComment(comment: ApiPostComment, targetLanguage: String): ApiPostComment? {
+        val target = targetLanguage.trim()
+        val translated = translateSource(comment.content, comment.originalLanguage, target) ?: return null
+        return PostTranslationMerge.mergeTranslation(comment, target, translated)
+    }
+
+    /**
+     * The shared translate law over any Prisme content: reject a blank [target] or blank
+     * [source] before touching the network, then blocking-translate [source] from
+     * [sourceLanguage] into [target]. Returns the non-blank translated text, or `null`
+     * when nothing should be stored (blank target/source, network failure, or a blank
+     * translation). Callers pass an already-trimmed [target] and fold the result into
+     * their own content type via [PostTranslationMerge].
+     */
+    private suspend fun translateSource(
+        source: String?,
+        sourceLanguage: String?,
+        target: String,
+    ): String? {
+        if (target.isEmpty()) return null
+        if (source.isNullOrBlank()) return null
+
+        val translated = when (
+            val result = apiCall {
+                translationApi.translate(
+                    TranslateRequest(
+                        text = source,
+                        sourceLanguage = sourceLanguage?.trim().orEmpty(),
+                        targetLanguage = target,
+                    ),
+                )
+            }
+        ) {
+            is NetworkResult.Success -> result.data.translatedText
+            is NetworkResult.Failure -> return null
+        }
+        return translated.takeUnless { it.isBlank() }
+    }
 
     suspend fun viewPost(postId: String, duration: Int? = null): NetworkResult<Unit> =
         apiCall { postApi.viewPost(postId, PostViewRequest(duration)) }

@@ -10,12 +10,17 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
+import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
 import me.meeshy.sdk.model.SharedPlace
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreatePostRequest
 import me.meeshy.sdk.net.api.PostApi
+import me.meeshy.sdk.net.api.TranslateRequest
+import me.meeshy.sdk.net.api.TranslateResponse
+import me.meeshy.sdk.net.api.TranslationApi
 import org.junit.Test
 import java.io.IOException
 
@@ -23,6 +28,7 @@ import java.io.IOException
 class PostRepositoryTest {
 
     private val api: PostApi = mockk(relaxed = true)
+    private val translationApi: TranslationApi = mockk(relaxed = true)
 
     private fun ok(post: ApiPost) = ApiResponse(success = true, data = listOf(post))
     private fun okUnit() = ApiResponse(success = true, data = Unit)
@@ -41,7 +47,7 @@ class PostRepositoryTest {
 
     private suspend fun seed(post: ApiPost): PostRepository {
         coEvery { api.getFeed(any(), any()) } returns ok(post)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
         repo.refresh()
         return repo
     }
@@ -167,7 +173,7 @@ class PostRepositoryTest {
     fun feedHasMore_reflectsFirstPagePagination() = runTest {
         coEvery { api.getFeed(null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = "c1", hasMore = true)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         repo.refresh()
 
@@ -184,7 +190,7 @@ class PostRepositoryTest {
                 nextCursor = null,
                 hasMore = false,
             )
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
         repo.refresh()
 
         val moreRemains = repo.loadMore()
@@ -201,7 +207,7 @@ class PostRepositoryTest {
     fun loadMore_isNoOp_whenNoCursorRemains() = runTest {
         coEvery { api.getFeed(null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a")), nextCursor = null, hasMore = false)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
         repo.refresh()
 
         assertThat(repo.loadMore()).isFalse()
@@ -213,7 +219,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_returnsPostsWithPaginationWatermark() = runTest {
         coEvery { api.getBookmarks(null, any()) } returns
             page(listOf(ApiPost(id = "b1", content = "a"), ApiPost(id = "b2", content = "b")), "cur2", true)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val result = repo.getBookmarksPage(cursor = null)
 
@@ -227,7 +233,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_forwardsTheCursorToTheApi() = runTest {
         coEvery { api.getBookmarks("cur2", any()) } returns
             page(listOf(ApiPost(id = "b3", content = "c")), nextCursor = null, hasMore = false)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val result = repo.getBookmarksPage(cursor = "cur2")
 
@@ -240,7 +246,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
         coEvery { api.getBookmarks(any(), any()) } returns
             ApiResponse(success = false, data = null, error = "nope")
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val result = repo.getBookmarksPage()
 
@@ -250,7 +256,7 @@ class PostRepositoryTest {
     @Test
     fun getBookmarksPage_foldsTransportFailureIntoFailure() = runTest {
         coEvery { api.getBookmarks(any(), any()) } throws IOException("offline")
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         assertThat(repo.getBookmarksPage()).isInstanceOf(NetworkResult.Failure::class.java)
     }
@@ -259,7 +265,7 @@ class PostRepositoryTest {
     fun getBookmarksPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
         coEvery { api.getBookmarks(any(), any()) } returns
             ApiResponse(success = true, data = listOf(ApiPost(id = "b1", content = "a")))
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val data = (repo.getBookmarksPage() as NetworkResult.Success).data
         assertThat(data.hasMore).isFalse()
@@ -270,7 +276,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_returnsPostsWithPaginationWatermark() = runTest {
         coEvery { api.getUserPosts("u1", null, any()) } returns
             page(listOf(ApiPost(id = "p1", content = "a"), ApiPost(id = "p2", content = "b")), "cur2", true)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val data = (repo.getUserPostsPage("u1", cursor = null) as NetworkResult.Success).data
 
@@ -283,7 +289,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_forwardsUserIdAndCursorToTheApi() = runTest {
         coEvery { api.getUserPosts("u9", "cur2", any()) } returns
             page(listOf(ApiPost(id = "p3", content = "c")), nextCursor = null, hasMore = false)
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val result = repo.getUserPostsPage("u9", cursor = "cur2")
 
@@ -296,7 +302,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_foldsUnsuccessfulEnvelopeIntoFailure() = runTest {
         coEvery { api.getUserPosts(any(), any(), any()) } returns
             ApiResponse(success = false, data = null, error = "forbidden")
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val result = repo.getUserPostsPage("u1")
 
@@ -306,7 +312,7 @@ class PostRepositoryTest {
     @Test
     fun getUserPostsPage_foldsTransportFailureIntoFailure() = runTest {
         coEvery { api.getUserPosts(any(), any(), any()) } throws IOException("offline")
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         assertThat(repo.getUserPostsPage("u1")).isInstanceOf(NetworkResult.Failure::class.java)
     }
@@ -315,7 +321,7 @@ class PostRepositoryTest {
     fun getUserPostsPage_defaultsHasMoreFalseWhenPaginationAbsent() = runTest {
         coEvery { api.getUserPosts(any(), any(), any()) } returns
             ApiResponse(success = true, data = listOf(ApiPost(id = "p1", content = "a")))
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         val data = (repo.getUserPostsPage("u1") as NetworkResult.Success).data
         assertThat(data.hasMore).isFalse()
@@ -330,7 +336,7 @@ class PostRepositoryTest {
     fun create_withNoLocation_forwardsANullLocationField() = runTest {
         val slot = slot<CreatePostRequest>()
         coEvery { api.create(capture(slot)) } returns okPost(ApiPost(id = "new", content = "hi"))
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         repo.create(content = "hi")
 
@@ -348,10 +354,285 @@ class PostRepositoryTest {
         )
         val slot = slot<CreatePostRequest>()
         coEvery { api.create(capture(slot)) } returns okPost(ApiPost(id = "new", content = "hi"))
-        val repo = PostRepository(api)
+        val repo = PostRepository(api, translationApi)
 
         repo.create(content = "hi", location = place)
 
         assertThat(slot.captured.location).isEqualTo(place)
+    }
+
+    // --- On-demand post translation (requestOnDemandTranslation) ---
+
+    private fun translated(text: String) =
+        ApiResponse(success = true, data = TranslateResponse(translatedText = text))
+
+    private fun CacheResult<List<ApiPost>>.cachedPost(id: String): ApiPost =
+        ((this as? CacheResult.Fresh)?.value ?: (this as CacheResult.Stale).value).post(id)
+
+    @Test
+    fun requestOnDemandTranslation_storesTheTranslationAndReportsSuccess() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val stored = repo.requestOnDemandTranslation("p1", "es")
+
+        assertThat(stored).isTrue()
+        repo.feedStream().test {
+            assertThat(awaitItem().cachedPost("p1").translations!!["es"]!!.text).isEqualTo("Hola")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun requestOnDemandTranslation_forwardsTheSourceTextAndLanguages() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+        val slot = slot<TranslateRequest>()
+        coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
+
+        repo.requestOnDemandTranslation("p1", "  es  ")
+
+        assertThat(slot.captured.text).isEqualTo("Bonjour")
+        assertThat(slot.captured.sourceLanguage).isEqualTo("fr")
+        assertThat(slot.captured.targetLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun requestOnDemandTranslation_isInertForAnUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+
+        val stored = repo.requestOnDemandTranslation("missing", "es")
+
+        assertThat(stored).isFalse()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun requestOnDemandTranslation_isInertForABlankTarget() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+
+        val stored = repo.requestOnDemandTranslation("p1", "   ")
+
+        assertThat(stored).isFalse()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun requestOnDemandTranslation_isInertWhenThePostHasNoSourceText() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "   ", originalLanguage = "fr"))
+
+        val stored = repo.requestOnDemandTranslation("p1", "es")
+
+        assertThat(stored).isFalse()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun requestOnDemandTranslation_returnsFalseWhenTheTranslatorFails() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+        coEvery { translationApi.translate(any()) } throws IOException("offline")
+
+        val stored = repo.requestOnDemandTranslation("p1", "es")
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun requestOnDemandTranslation_returnsFalseForABlankTranslation() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+        coEvery { translationApi.translate(any()) } returns translated("   ")
+
+        val stored = repo.requestOnDemandTranslation("p1", "es")
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun requestOnDemandTranslation_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
+        val repo = seed(
+            ApiPost(
+                id = "p1",
+                content = "Bonjour",
+                originalLanguage = "fr",
+                translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")),
+            ),
+        )
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val stored = repo.requestOnDemandTranslation("p1", "es")
+
+        assertThat(stored).isFalse()
+    }
+
+    // --- On-demand post translation for a caller-held post (translatePost) ---
+
+    @Test
+    fun translatePost_translatesTheSourceAndReturnsTheMergedPost() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translatePost(
+            ApiPost(id = "p9", content = "Bonjour", originalLanguage = "fr"),
+            "es",
+        )
+
+        assertThat(merged?.translations?.get("es")?.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun translatePost_forwardsTheSourceTextAndLanguages_andTrimsTheTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+        val slot = slot<TranslateRequest>()
+        coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
+
+        repo.translatePost(ApiPost(id = "p9", content = "Bonjour", originalLanguage = "fr"), "  es  ")
+
+        assertThat(slot.captured.text).isEqualTo("Bonjour")
+        assertThat(slot.captured.sourceLanguage).isEqualTo("fr")
+        assertThat(slot.captured.targetLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun translatePost_isInertForABlankTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "   ")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translatePost_isInertWhenThePostHasNoSourceText() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "   "), "es")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translatePost_returnsNullWhenTheTranslatorFails() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } throws IOException("offline")
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translatePost_returnsNullForABlankTranslation() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("   ")
+
+        val merged = repo.translatePost(ApiPost(id = "p9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translatePost_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translatePost(
+            ApiPost(
+                id = "p9",
+                content = "Bonjour",
+                originalLanguage = "fr",
+                translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")),
+            ),
+            "es",
+        )
+
+        assertThat(merged).isNull()
+    }
+
+    // --- On-demand comment translation for a caller-held comment (translateComment) ---
+
+    @Test
+    fun translateComment_translatesTheSourceAndReturnsTheMergedComment() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translateComment(
+            ApiPostComment(id = "c9", content = "Bonjour", originalLanguage = "fr"),
+            "es",
+        )
+
+        assertThat(merged?.id).isEqualTo("c9")
+        assertThat(merged?.translations?.get("es")?.text).isEqualTo("Hola")
+    }
+
+    @Test
+    fun translateComment_forwardsTheSourceTextAndLanguages_andTrimsTheTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+        val slot = slot<TranslateRequest>()
+        coEvery { translationApi.translate(capture(slot)) } returns translated("Hola")
+
+        repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour", originalLanguage = "fr"), "  es  ")
+
+        assertThat(slot.captured.text).isEqualTo("Bonjour")
+        assertThat(slot.captured.sourceLanguage).isEqualTo("fr")
+        assertThat(slot.captured.targetLanguage).isEqualTo("es")
+    }
+
+    @Test
+    fun translateComment_isInertForABlankTarget() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "   ")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translateComment_isInertWhenTheCommentHasNoSourceText() = runTest {
+        val repo = PostRepository(api, translationApi)
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "   "), "es")
+
+        assertThat(merged).isNull()
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun translateComment_returnsNullWhenTheTranslatorFails() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } throws IOException("offline")
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translateComment_returnsNullForABlankTranslation() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("   ")
+
+        val merged = repo.translateComment(ApiPostComment(id = "c9", content = "Bonjour"), "es")
+
+        assertThat(merged).isNull()
+    }
+
+    @Test
+    fun translateComment_isIdempotentWhenTheTranslationAlreadyMatches() = runTest {
+        val repo = PostRepository(api, translationApi)
+        coEvery { translationApi.translate(any()) } returns translated("Hola")
+
+        val merged = repo.translateComment(
+            ApiPostComment(
+                id = "c9",
+                content = "Bonjour",
+                originalLanguage = "fr",
+                translations = mapOf("es" to ApiPostTranslationEntry(text = "Hola")),
+            ),
+            "es",
+        )
+
+        assertThat(merged).isNull()
     }
 }

@@ -12,12 +12,30 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 import { ContactDirectoryService } from '../../../services/ContactDirectoryService';
 import { normalizeContacts } from '../../../utils/contact-identifiers';
 
 const OWNER_ID = '507f1f77bcf86cd799439011';
 const AWA_ID = '507f1f77bcf86cd799439022';
 const BOB_ID = '507f1f77bcf86cd799439033';
+
+const OWNER_VIEWER = { userId: OWNER_ID, role: 'USER' as const };
+const FULL = { showOnline: true, showLastSeenTimestamp: true };
+const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+/** Par défaut la présence est visible : les témoins qui portent sur autre chose ne s'en occupent pas. */
+beforeEach(() => {
+  mockResolveForTargets.mockReset().mockImplementation(async (_viewer: unknown, ids: string[]) =>
+    new Map(ids.map((id) => [id, FULL])),
+  );
+});
 
 function makeUser(overrides: Record<string, unknown> = {}) {
   return {
@@ -238,7 +256,7 @@ describe('ContactDirectoryService.list', () => {
     const prisma = makePrisma({ existing: [storedEntry], count: 1 });
     const service = new ContactDirectoryService(prisma);
 
-    const result = await service.list({ ownerId: OWNER_ID, offset: 0, limit: 50 });
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
 
     expect(result.contacts[0].isOnMeeshy).toBe(true);
     expect(result.contacts[0].matchedUser?.username).toBe('awa');
@@ -249,7 +267,7 @@ describe('ContactDirectoryService.list', () => {
     const prisma = makePrisma({ existing: [{ ...storedEntry, matchedUser: null, matchedBy: null }], count: 1 });
     const service = new ContactDirectoryService(prisma);
 
-    const result = await service.list({ ownerId: OWNER_ID, offset: 0, limit: 50 });
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
 
     expect(result.contacts[0].isOnMeeshy).toBe(false);
     expect(result.contacts[0].matchedUser).toBeNull();
@@ -259,7 +277,7 @@ describe('ContactDirectoryService.list', () => {
     const prisma = makePrisma({ existing: [storedEntry], count: 1 });
     const service = new ContactDirectoryService(prisma);
 
-    await service.list({ ownerId: OWNER_ID, offset: 0, limit: 50, filter: 'meeshy' });
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50, filter: 'meeshy' });
 
     expect(prisma.userContact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ matchedUserId: { not: null } }) })
@@ -270,7 +288,7 @@ describe('ContactDirectoryService.list', () => {
     const prisma = makePrisma({ existing: [], count: 0 });
     const service = new ContactDirectoryService(prisma);
 
-    await service.list({ ownerId: OWNER_ID, offset: 0, limit: 50, filter: 'invitable' });
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50, filter: 'invitable' });
 
     expect(prisma.userContact.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: expect.objectContaining({ matchedUserId: null }) })
@@ -281,7 +299,7 @@ describe('ContactDirectoryService.list', () => {
     const prisma = makePrisma({ existing: [], count: 0 });
     const service = new ContactDirectoryService(prisma);
 
-    await service.list({ ownerId: OWNER_ID, offset: 0, limit: 50, query: 'awa' });
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50, query: 'awa' });
 
     const where = prisma.userContact.findMany.mock.calls[0][0].where;
     expect(where.OR).toEqual(
@@ -293,9 +311,119 @@ describe('ContactDirectoryService.list', () => {
     const prisma = makePrisma({ existing: [], count: 0 });
     const service = new ContactDirectoryService(prisma);
 
-    await service.list({ ownerId: OWNER_ID, offset: 0, limit: 10_000 });
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 10_000 });
 
     expect(prisma.userContact.findMany.mock.calls[0][0].take).toBe(200);
+  });
+});
+
+/**
+ * Le répertoire est une porte de SORTIE comme une autre : `match()` applique déjà
+ * le blocage bidirectionnel et douze autres surfaces passent leur présence par
+ * `PresenceVisibilityService`. La lecture du carnet ne faisait ni l'un ni l'autre —
+ * elle servait `isOnline` / `lastActiveAt` bruts, et gardait le lien Meeshy d'un
+ * compte bloqué DEPUIS la dernière synchronisation.
+ */
+describe('ContactDirectoryService.list — blocage et présence', () => {
+  const storedEntry = {
+    id: 'contact-1',
+    contactKey: 'key-1',
+    displayName: 'Awa Diallo',
+    phoneNumbers: ['+221771234567'],
+    emails: ['awa@test.com'],
+    usernames: [],
+    matchedBy: 'phone',
+    matchedAt: new Date('2026-07-01T00:00:00.000Z'),
+    lastSyncedAt: new Date('2026-07-01T00:00:00.000Z'),
+    matchedUser: makeUser(),
+  };
+
+  it('masks the presence of a matched profile the viewer may not see', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[AWA_ID, HIDDEN]]));
+    const prisma = makePrisma({ existing: [storedEntry], count: 1 });
+    const service = new ContactDirectoryService(prisma);
+
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(result.contacts[0].matchedUser?.isOnline).toBe(false);
+    expect(result.contacts[0].matchedUser?.lastActiveAt).toBeNull();
+    expect(result.contacts[0].matchedUser?.username).toBe('awa');
+  });
+
+  it('serves the presence the resolver allows', async () => {
+    const prisma = makePrisma({ existing: [storedEntry], count: 1 });
+    const service = new ContactDirectoryService(prisma);
+
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(result.contacts[0].matchedUser?.isOnline).toBe(true);
+    expect(result.contacts[0].matchedUser?.lastActiveAt).toEqual(storedEntry.matchedUser.lastActiveAt);
+  });
+
+  it('resolves the presence for the viewer, not for the owner of the profile', async () => {
+    const prisma = makePrisma({ existing: [storedEntry], count: 1 });
+    const service = new ContactDirectoryService(prisma);
+
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(mockResolveForTargets).toHaveBeenCalledWith(OWNER_VIEWER, [AWA_ID]);
+  });
+
+  it('severs the Meeshy link of a contact the owner has blocked', async () => {
+    const prisma = makePrisma({ existing: [storedEntry], count: 1, owner: { blockedUserIds: [AWA_ID] } });
+    const service = new ContactDirectoryService(prisma);
+
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(result.contacts[0].matchedUser).toBeNull();
+    expect(result.contacts[0].isOnMeeshy).toBe(false);
+    expect(result.contacts[0].matchedBy).toBeNull();
+    expect(result.contacts[0].matchedAt).toBeNull();
+  });
+
+  it('severs the Meeshy link of a contact who blocked the owner', async () => {
+    const prisma = makePrisma({ existing: [storedEntry], count: 1, users: [{ id: AWA_ID }] });
+    const service = new ContactDirectoryService(prisma);
+
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(result.contacts[0].matchedUser).toBeNull();
+    expect(result.contacts[0].isOnMeeshy).toBe(false);
+  });
+
+  it('keeps the address book identity of a severed contact — it is the owner own entry', async () => {
+    const prisma = makePrisma({ existing: [storedEntry], count: 1, owner: { blockedUserIds: [AWA_ID] } });
+    const service = new ContactDirectoryService(prisma);
+
+    const result = await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(result.contacts[0].displayName).toBe('Awa Diallo');
+    expect(result.contacts[0].phoneNumbers).toEqual(['+221771234567']);
+    expect(result.total).toBe(1);
+  });
+
+  it('never resolves the presence of a severed match', async () => {
+    const prisma = makePrisma({ existing: [storedEntry], count: 1, owner: { blockedUserIds: [AWA_ID] } });
+    const service = new ContactDirectoryService(prisma);
+
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    for (const call of mockResolveForTargets.mock.calls) {
+      expect(call[1]).not.toContain(AWA_ID);
+    }
+  });
+
+  it('does not query the block relation when the page carries no matched profile', async () => {
+    const prisma = makePrisma({
+      existing: [{ ...storedEntry, matchedUser: null, matchedBy: null }],
+      count: 1,
+    });
+    const service = new ContactDirectoryService(prisma);
+
+    await service.list({ ownerId: OWNER_ID, viewer: OWNER_VIEWER, offset: 0, limit: 50 });
+
+    expect(prisma.user.findMany).not.toHaveBeenCalled();
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 });
 

@@ -53,6 +53,10 @@ struct ThemedMessageBubble: View {
     var translatedAudios: [MessageTranslatedAudio] = []
     var textTranslations: [MessageTranslation] = []
     var preferredTranslation: MessageTranslation? = nil
+    /// Langue audio préférée, résolue par l'hôte (`MessageListViewController`)
+    /// une fois par configuration de cellule. `nil` ⇒ résolution locale
+    /// (anciens sites d'appel) — mais JAMAIS à chaque body : voir `body`.
+    var preferredAudioLangCode: String? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState? = nil
     var senderMoodEmoji: String? = nil
@@ -199,7 +203,7 @@ struct ThemedMessageBubble: View {
             // (`AudioTrackLanguageResolver`, lecture directe d'AuthManager
             // comme `resolvedPreferredTranscriptionLanguage`). Sans lui, le
             // drapeau-toggle d'un vocal sans traduction texte reste inerte.
-            preferredAudioLangCode: AudioTrackLanguageResolver.resolve(
+            preferredAudioLangCode: preferredAudioLangCode ?? AudioTrackLanguageResolver.resolve(
                 manualOverride: nil,
                 originalLanguage: message.originalLanguage,
                 preferredLanguages: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved,

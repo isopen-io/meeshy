@@ -158,7 +158,6 @@ describe('messaging-utils', () => {
       expect(typeof callbacks.onUserStatus).toBe('function');
       expect(typeof callbacks.onTranslation).toBe('function');
       expect(typeof callbacks.onConversationStats).toBe('function');
-      expect(typeof callbacks.onConversationOnlineStats).toBe('function');
     });
 
     it('should call provided onNewMessage callback', () => {
@@ -215,7 +214,6 @@ describe('messaging-utils', () => {
       expect(() => callbacks.onUserStatus('', '', true)).not.toThrow();
       expect(() => callbacks.onTranslation('', [])).not.toThrow();
       expect(() => callbacks.onConversationStats({})).not.toThrow();
-      expect(() => callbacks.onConversationOnlineStats({})).not.toThrow();
     });
   });
 

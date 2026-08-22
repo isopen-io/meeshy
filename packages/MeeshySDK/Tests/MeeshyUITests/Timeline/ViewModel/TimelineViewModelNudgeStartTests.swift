@@ -56,7 +56,8 @@ final class TimelineViewModelNudgeStartTests: XCTestCase {
     func test_theGesturePath_stillSnaps_soTheTwoPathsRemainDistinct() async {
         let sut = await makeSUT(mediaObjects: [media("m1", start: 0, duration: 5)])
 
-        sut.dragClip(id: "m1", deltaTimeSeconds: 0.1, isCommitted: true)
+        sut.dragClip(id: "m1", deltaTimeSeconds: 0.1, isCommitted: true,
+                     geometry: TimelineGeometry(zoomScale: 1.0))
 
         XCTAssertEqual(start(of: "m1", in: sut) ?? -1, 0, accuracy: 0.0001,
                        "Un déplacement au doigt sous la tolérance reste aimanté — comportement voulu.")

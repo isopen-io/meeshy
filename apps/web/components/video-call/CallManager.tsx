@@ -1061,6 +1061,7 @@ export function CallManager() {
         socket.off(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
         socket.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
         socket.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+        socket.off(SERVER_EVENTS.CALL_FORCE_LEAVE, attachedListeners[SERVER_EVENTS.CALL_FORCE_LEAVE]);
       }
       if (debugListenerRef) socket.offAny(debugListenerRef);
 
@@ -1082,6 +1083,30 @@ export function CallManager() {
         [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: unknown) => handleAnsweredElsewhereRef.current(data as { callId: string }),
         [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: unknown) => handleMediaToggleRef.current(data),
         [SERVER_EVENTS.CALL_ERROR]: (data: unknown) => handleCallErrorRef.current(data),
+        // `call:force-leave` — le serveur sort CE destinataire de l'appel,
+        // qui continue pour les autres (fin d'appartenance : quitté, banni,
+        // retiré, fil supprimé pour soi). Distinct de `call:participant-left`,
+        // qui parle d'un PAIR : celui-ci dit « c'est toi qu'on sort », et
+        // c'est le seul chemin par lequel cet onglet l'apprend — ses sockets
+        // viennent d'être évincées de la room de l'appel.
+        //
+        // Délégué à `handleCallEnded`, qui porte déjà toute la descente
+        // (garde sur le callId suivi, extinction de la sonnerie, `reset()`,
+        // promotion d'un appel en attente) — même délégation que l'ACK
+        // `CALL_ENDED` du re-join après reconnexion plus haut. Raison
+        // `completed` : rien n'a échoué, et aucune offre « Réessayer » ne doit
+        // être posée pour un appel qu'on n'a plus le droit de rejoindre.
+        [SERVER_EVENTS.CALL_FORCE_LEAVE]: (data: unknown) => {
+          const event = data as { callId?: string; reason?: string };
+          if (!event?.callId) return;
+          logger.warn('[CallManager]', 'Forced out of call by server - callId: ' + event.callId + ', reason: ' + (event.reason ?? 'unspecified'));
+          handleCallEndedRef.current({
+            callId: event.callId,
+            duration: 0,
+            endedBy: '',
+            reason: 'completed',
+          } as CallEndedEvent);
+        },
       };
       socket.on(SERVER_EVENTS.CALL_INITIATED, attachedListeners[SERVER_EVENTS.CALL_INITIATED]);
       socket.on(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, attachedListeners[SERVER_EVENTS.CALL_PARTICIPANT_JOINED]);
@@ -1090,11 +1115,12 @@ export function CallManager() {
       socket.on(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
       socket.on(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
       socket.on(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+      socket.on(SERVER_EVENTS.CALL_FORCE_LEAVE, attachedListeners[SERVER_EVENTS.CALL_FORCE_LEAVE]);
 
       console.log('✅ [CallManager] All call listeners registered', {
         socketId: socket.id,
         userId: user?.id,
-        listenersCount: 7
+        listenersCount: 8
       });
     };
 

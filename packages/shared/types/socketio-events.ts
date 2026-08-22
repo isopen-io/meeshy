@@ -79,6 +79,7 @@ import type {
   CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  CommentUnlikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
@@ -115,7 +116,14 @@ export const SERVER_EVENTS = {
   MESSAGE_EDITED: 'message:edited',
   MESSAGE_DELETED: 'message:deleted',
   MESSAGE_TRANSLATION: 'message:translation',
-  MESSAGE_TRANSLATED: 'message:translated',
+  // Pas de `MESSAGE_TRANSLATED` : la traduction d'un message voyage sous
+  // `message:translation`, et sous ce nom seul. `message:translated` a été
+  // déclaré comme un alias que la passerelle n'a jamais émis — et les TROIS
+  // clients s'y étaient abonnés, chacun en dupliquant le traitement du vrai
+  // canal (iOS vers le même sujet, Android via un flow `translationCompleted`
+  // jumeau, web via le même chemin de déduplication). Rien ne manquait à
+  // l'arrivée, mais rien non plus n'aurait signalé que la moitié de ce câblage
+  // ne servait à rien. Retiré au cycle 77.
   /**
    * PER-USER "delete for me" on a MESSAGE (`DELETE /api/messages/:id/delete-for-me`
    * and its bulk sibling): a `UserMessageDeletion` row now hides the message from
@@ -172,9 +180,22 @@ export const SERVER_EVENTS = {
    *  lignes qui partent sont déjà lues. @see NotificationDeletedBulkScope */
   NOTIFICATION_DELETED_BULK: 'notification:deleted-bulk',
   NOTIFICATION_COUNTS: 'notification:counts',
-  SYSTEM_MESSAGE: 'system:message',
+  // Pas de `SYSTEM_MESSAGE` : un message système est un MESSAGE, et il arrive
+  // sous `message:new` comme tous les autres (`messageType: 'system'`). Le canal
+  // séparé venait d'un ancien comportement où `broadcastMessage` diffusait
+  // `system:message` à TOUS les sockets connectés faute de savoir router ; il a
+  // été supprimé, et une régression le garde fermé
+  // (`MeeshySocketIOHandler.broadcastMessage.test.ts`, « ne retombe PAS sur un
+  // broadcast global system:message »). Le nom, lui, était resté déclaré ici, et
+  // iOS comme web s'y étaient abonnés. Retiré au cycle 77.
   CONVERSATION_STATS: 'conversation:stats',
-  CONVERSATION_ONLINE_STATS: 'conversation:online-stats',
+  // Pas de `CONVERSATION_ONLINE_STATS` : jamais émis, par aucune version de la
+  // passerelle, et sans consommateur d'interface nulle part — le décompte des
+  // présents se lit sur `presence:snapshot` et `user:status`. Le nom portait
+  // pourtant un décodeur iOS, un publisher, et côté web une chaîne complète de
+  // six niveaux (`presence.service` → `orchestrator` → `meeshy-socketio.
+  // service` → `use-socketio-messaging` → `use-stream-safe` → `use-stream-
+  // socket`) qui n'a jamais rien transporté. Retiré au cycle 77.
   CONVERSATION_UNREAD_UPDATED: 'conversation:unread-updated',
   REACTION_ADDED: 'reaction:added',
   REACTION_REMOVED: 'reaction:removed',
@@ -195,14 +216,18 @@ export const SERVER_EVENTS = {
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
   /**
-   * --- Call events RESERVED (no emitter yet) ---
-   * Declared for upcoming voice/video phases:
-   * - quality monitoring (CALL_QUALITY_ALERT, CALL_SCREEN_CAPTURE_ALERT)
-   * - in-call translation pipeline (CALL_TRANSLATED_SEGMENT,
-   *   CALL_TRANSLATION_REQUESTED/ENABLED, CALL_TRANSCRIPTION_RESULT)
-   * - state edge cases (CALL_MISSED, CALL_ALREADY_ANSWERED — iOS already
-   *   subscribes via MessageSocketManager but the gateway never emits)
-   * Keep names + types in sync until the emitters land.
+   * --- Événements d'appel autrefois « RESERVED (no emitter yet) ---
+   *
+   * Cette prose énumérait six noms de ce bloc comme dépourvus d'émetteur. Elle
+   * avait pourri : `call:missed`, `call:quality-alert`,
+   * `call:translated-segment`, `call:transcription-active`,
+   * `call:already-answered` et `call:screen-capture-alert` ont tous reçu le
+   * leur depuis, sans que personne ne vienne la corriger — c'est ce que fait
+   * une exemption écrite en commentaire, que rien n'exécute.
+   *
+   * La liste vit désormais dans `RESERVED_SERVER_EVENTS` (bas de fichier), et
+   * une garde la vérifie DANS LES DEUX SENS à chaque PR. Il n'en reste que le
+   * pipeline de traduction en appel.
    */
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
@@ -216,7 +241,27 @@ export const SERVER_EVENTS = {
   CALL_TRANSCRIPTION_RESULT: 'call:transcription-result',
   CALL_ALREADY_ANSWERED: 'call:already-answered',
   CALL_SCREEN_CAPTURE_ALERT: 'call:screen-capture-alert',
-  /** Server-side GC/admin forced the call to end — clients should dismiss call UI. */
+  /**
+   * Le serveur sort UN destinataire de l'appel — il ne dit rien de l'appel
+   * lui-même, qui continue pour les autres. Émis vers la room PERSONNELLE du
+   * sorti (`ROOMS.user`), jamais vers la room de l'appel.
+   *
+   * Unique émetteur : la fin d'appartenance
+   * (`CallEventsHandler.endCallParticipationForDepartedMember`, cycle 75) —
+   * quitter, être banni, être retiré, supprimer le fil pour soi. Le sorti a
+   * déjà perdu le droit d'être là ; ses appareils démontent la
+   * `RTCPeerConnection` et referment l'écran d'appel sur cet événement, seul
+   * chemin par lequel ils l'apprennent (le verbe `call:force-leave` CLIENT,
+   * qui porte le même nom en sens inverse, exige une appartenance active et
+   * est donc muet précisément dans ce cas).
+   *
+   * Récepteurs : iOS (`MessageSocketManager` → `CallManager.callForcedLeave`,
+   * qui clôt aussi la session CallKit) et web (`components/video-call/
+   * CallManager`). Android ne l'écoute pas encore (`CallSignalManager
+   * .INBOUND_EVENTS`) : le média y est tout de même coupé par le
+   * `call:participant-left` que les pairs restants reçoivent, seul l'écran
+   * d'appel du sorti survit.
+   */
   CALL_FORCE_LEAVE: 'call:force-leave',
   /** Gateway pushes fresh TURN credentials to the client after a `call:request-ice-servers` event. */
   CALL_ICE_SERVERS_REFRESHED: 'call:ice-servers-refreshed',
@@ -443,14 +488,24 @@ export const SERVER_EVENTS = {
   COMMENT_UPDATED: 'comment:updated',
   COMMENT_DELETED: 'comment:deleted',
   COMMENT_LIKED: 'comment:liked',
+  // Jumelle descendante de `COMMENT_LIKED`, calque de `POST_UNLIKED`. Les deux
+  // portent le total ABSOLU (`likeCount`) : le client écrit la valeur reçue,
+  // jamais un ±1. Sans la descendante, un compteur de commentaire ne savait que
+  // monter en direct — et côté iOS la valeur gonflée était PERSISTÉE.
+  COMMENT_UNLIKED: 'comment:unliked',
   COMMENT_REACTION_ADDED: 'comment:reaction-added',
   COMMENT_REACTION_REMOVED: 'comment:reaction-removed',
-  COMMENT_REACTION_SYNC: 'comment:reaction-sync',
+  // Pas de `COMMENT_REACTION_SYNC` — même raison que `REACTION_SYNC` ci-dessus,
+  // dont il est le frère resté en place quand celui-là a été retiré :
+  // l'instantané voyage dans l'ACK de `CLIENT_EVENTS.COMMENT_REACTION_REQUEST_
+  // SYNC` (`CommentReactionHandler` répond par `callback?.({ success, data })`),
+  // jamais en diffusion. `CommentReactionSyncEventData` reste — c'est le type de
+  // cet ACK.
 
   // --- Post reactions (Phase 3B) ---
   POST_REACTION_ADDED: 'post:reaction-added',
   POST_REACTION_REMOVED: 'post:reaction-removed',
-  POST_REACTION_SYNC: 'post:reaction-sync',
+  // Pas de `POST_REACTION_SYNC` — idem, `PostReactionHandler` répond par ACK.
 
   // --- Post/Comment Translations ---
   POST_TRANSLATION_UPDATED: 'post:translation-updated',
@@ -484,6 +539,41 @@ export const SERVER_EVENTS = {
    */
   HEARTBEAT_ACK: 'heartbeat:ack',
 } as const;
+
+/**
+ * Les canaux serveur→client déclarés AVANT que leur émetteur n'atterrisse.
+ *
+ * Un nom qui figure ici est une promesse non tenue, et c'est assumé : le
+ * contrat le fige pour que les types et les décodeurs clients s'écrivent une
+ * seule fois. Un nom qui N'Y figure PAS et que la passerelle ne prononce nulle
+ * part est un défaut — un client peut s'y abonner et attendre pour toujours,
+ * sans qu'aucune erreur ne soit levée. `packages/shared/__tests__/ci/
+ * socket-event-emitter-gate.test.ts` fait respecter exactement cette
+ * distinction.
+ *
+ * La liste vit ICI, et non dans la garde, pour deux raisons. Réserver un canal
+ * doit être un acte VISIBLE en revue, dans le fichier que l'on ouvre de toute
+ * façon pour déclarer l'événement — une table d'exceptions cachée au fond d'un
+ * test est un endroit où l'on dépose ce qu'on ne veut pas traiter. Et parce
+ * qu'une exemption qui survit à sa raison d'être finit par couvrir un vrai
+ * défaut : la garde vérifie donc AUSSI le sens inverse, et rougit si l'un de
+ * ces noms reçoit enfin un émetteur sans sortir d'ici.
+ *
+ * Précédent : la prose « Call events RESERVED (no emitter yet) » qui tenait ce
+ * rôle plus haut avait pourri sans que rien ne le signale — elle énumérait
+ * encore six événements (`call:missed`, `call:quality-alert`,
+ * `call:translated-segment`, `call:transcription-active`,
+ * `call:already-answered`, `call:screen-capture-alert`) dont la passerelle
+ * avait entre-temps implémenté l'émission.
+ *
+ * Ce qui reste : le pipeline de traduction EN APPEL. Les trois noms sont
+ * décodés côté clients et attendent le service qui les produira.
+ */
+export const RESERVED_SERVER_EVENTS: ReadonlySet<string> = new Set<string>([
+  SERVER_EVENTS.CALL_TRANSLATION_REQUESTED,
+  SERVER_EVENTS.CALL_TRANSLATION_ENABLED,
+  SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT,
+]);
 
 // Événements du client vers le serveur
 export const CLIENT_EVENTS = {
@@ -912,29 +1002,11 @@ export interface AttachmentUpdatedEventData {
 }
 
 /**
- * Données de message système
- */
-export interface SystemMessageEventData {
-  readonly type: string;
-  readonly content: string;
-  readonly timestamp: Date;
-}
-
-/**
  * Données pour l'événement de statistiques de conversation
  */
 export interface ConversationStatsEventData {
   readonly conversationId: string;
   readonly stats: ConversationStatsDTO;
-}
-
-/**
- * Données pour l'événement de statistiques en ligne
- */
-export interface ConversationOnlineStatsEventData {
-  readonly conversationId: string;
-  readonly onlineUsers: readonly ConversationOnlineUser[];
-  readonly updatedAt: Date;
 }
 
 /**
@@ -1824,7 +1896,6 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME]: (data: MessageHiddenForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME]: (data: MessageRestoredForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
-  [SERVER_EVENTS.MESSAGE_TRANSLATED]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;
   [SERVER_EVENTS.TYPING_STOP]: (data: TypingEvent) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
@@ -1835,9 +1906,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
   [SERVER_EVENTS.ERROR]: (data: ErrorEventData) => void;
-  [SERVER_EVENTS.SYSTEM_MESSAGE]: (data: SystemMessageEventData) => void;
   [SERVER_EVENTS.CONVERSATION_STATS]: (data: ConversationStatsEventData) => void;
-  [SERVER_EVENTS.CONVERSATION_ONLINE_STATS]: (data: ConversationOnlineStatsEventData) => void;
   [SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED]: (data: ConversationUnreadUpdatedEventData) => void;
   [SERVER_EVENTS.REACTION_ADDED]: (data: ReactionUpdateEventData) => void;
   [SERVER_EVENTS.REACTION_REMOVED]: (data: ReactionUpdateEventData) => void;
@@ -1920,14 +1989,13 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMENT_UPDATED]: (data: CommentUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_DELETED]: (data: CommentDeletedEventData) => void;
   [SERVER_EVENTS.COMMENT_LIKED]: (data: CommentLikedEventData) => void;
+  [SERVER_EVENTS.COMMENT_UNLIKED]: (data: CommentUnlikedEventData) => void;
   [SERVER_EVENTS.COMMENT_REACTION_ADDED]: (data: CommentReactionUpdateEventData) => void;
   [SERVER_EVENTS.COMMENT_REACTION_REMOVED]: (data: CommentReactionUpdateEventData) => void;
-  [SERVER_EVENTS.COMMENT_REACTION_SYNC]: (data: CommentReactionSyncEventData) => void;
 
   // Post reactions (Phase 3B)
   [SERVER_EVENTS.POST_REACTION_ADDED]: (data: PostReactionUpdateEventData) => void;
   [SERVER_EVENTS.POST_REACTION_REMOVED]: (data: PostReactionUpdateEventData) => void;
-  [SERVER_EVENTS.POST_REACTION_SYNC]: (data: PostReactionSyncEventData) => void;
 
   // Post/Comment Translations
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;

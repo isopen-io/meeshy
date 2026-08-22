@@ -44,13 +44,16 @@ struct LensRowModel: Equatable, Identifiable {
 /// Catalogue + libellés — SEUL domicile des titres/sous-titres (le chip ET
 /// la feuille lisent d'ici, jamais une seconde résolution).
 enum ReadingModeLensCatalog {
-    /// Ordre d'affichage. `.bubbles` n'apparaît JAMAIS : c'est le mode de
-    /// repli drapeau OFF (`resolveCapabilities` ne le rend que si le
-    /// drapeau est OFF — cas où cette feuille n'est de toute façon jamais
-    /// présentée, le chip qui l'ouvre étant lui-même sous drapeau).
-    /// RETRAIT FOCAL iOS (2026-08-18) : `.focal` sort du catalogue — Script
-    /// est le mode nominal (clamp `ReadingModeController.clampRetiredModes`).
-    static let displayOrder: [ConversationReadingMode] = [.script, .summary, .river]
+    /// Ordre d'affichage (2026-08-21) : les TROIS vues du fil — Focal, Script,
+    /// Bulles — puis Résumé et Rivière. Parité avec le `LensSwitcher` web
+    /// (« Focal, Script, Bulles — et rien d'autre »). `.bubbles` est un CHOIX
+    /// de rendu (règle de consommation `ReadingModeController.renderDecision`),
+    /// pas un mode de la loi : il est toujours sélectionnable drapeau ON.
+    static let displayOrder: [ConversationReadingMode] = [.focal, .script, .bubbles, .summary, .river]
+
+    /// Les vues que le chip fait tourner en tapant : les trois rendus du fil,
+    /// dans l'ordre du catalogue.
+    static let cycleOrder: [ConversationReadingMode] = [.focal, .script, .bubbles]
 
     /// Rivière TOUJOURS présente (amendement R du workshop) — grisée avec sa
     /// raison et son seuil RÉELS quand `resolveCapabilities` ne l'a pas
@@ -97,7 +100,9 @@ enum ReadingModeLensCatalog {
                     currentValue: reason.current
                 )
             }
-            let available = capabilities.availableModes.contains(mode)
+            // `.bubbles` : choix de rendu hors loi — disponible dès que le
+            // drapeau est ON (le catalogue n'est présenté que dans ce cas).
+            let available = mode == .bubbles || capabilities.availableModes.contains(mode)
             return LensRowModel(
                 mode: mode,
                 isCurrent: currentMode == mode,
@@ -125,7 +130,7 @@ enum ReadingModeLensCatalog {
         case .script: return String(localized: "reading_mode.script.subtitle", defaultValue: "Rangée plate, densité uniforme", bundle: .main)
         case .summary: return String(localized: "reading_mode.summary.subtitle", defaultValue: "L'essentiel d'abord, la preuve à un tap", bundle: .main)
         case .river: return String(localized: "reading_mode.river.subtitle", defaultValue: "Les couloirs de la conversation", bundle: .main)
-        case .bubbles: return ""
+        case .bubbles: return String(localized: "reading_mode.bubbles.subtitle", defaultValue: "Les bulles classiques", bundle: .main)
         }
     }
 

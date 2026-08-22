@@ -97,8 +97,8 @@ final class StickySectionStructureTests: XCTestCase {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertTrue(
-            code.contains("private var stickyHeaderInset: CGFloat { LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.collapsedHeight : 0 }"),
-            "L'inset de tête doit valoir la hauteur de la barre REPLIÉE sous drapeau ON et " +
+            code.contains("private var stickyHeaderInset: CGFloat { LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.accessoryCollapsedHeight : 0 }"),
+            "L'inset de tête doit valoir la hauteur de la barre REPLIÉE AVEC SON ACCESSOIRE (la trail compacte de stories — `accessoryCollapsedHeight`, 2026-08-21 : à `collapsedHeight` le sticker épinglé passait sous la trail) sous drapeau ON et " +
             "ZÉRO sous OFF, lue depuis `CollapsibleHeaderMetrics` — la métrique que le " +
             "header consomme lui-même, jamais un nombre recopié. Un inset inconditionnel " +
             "décalerait la liste de tout le monde, drapeau éteint compris."
@@ -185,7 +185,7 @@ final class StickySectionStructureTests: XCTestCase {
 
         XCTAssertTrue(
             code.contains(
-                "Section { sectionContent(for: group, orderedConversationIds: orderedConversationIds, " +
+                "Section { sectionContent(for: group, passContext: passContext, " +
                 "trackedSectionId: trackedSectionId) } header: { sectionHeader(for: group) }"
             ),
             "Chaque groupe doit être une `Section` dont les RANGS sont le contenu et le " +
@@ -200,7 +200,7 @@ final class StickySectionStructureTests: XCTestCase {
 
         // Le pliage garde le CONTENU (`sectionContent`), jamais le header.
         XCTAssertTrue(
-            code.contains("private func sectionContent( for group: (section: ConversationSection, conversations: [Conversation]), orderedConversationIds: [String], trackedSectionId: String? ) -> some View { if isSectionContentVisible(group.section.id) {"),
+            code.contains("private func sectionContent( for group: (section: ConversationSection, conversations: [Conversation]), passContext: ConversationRowPassContext, trackedSectionId: String? ) -> some View { if isSectionContentVisible(group.section.id) {"),
             "La condition de pliage doit garder le CONTENU de la section et lui seul : " +
             "`sectionContent` commence par `if isSectionContentVisible(...)`. Critère LWS-6 : " +
             "« replier une catégorie masque ses rangs et CONSERVE son sticker »."

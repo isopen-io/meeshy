@@ -121,7 +121,7 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
         XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01)
 
         sut.beginClipDrag(clipId: "m1")
-        sut.dragClipMoved(rawTime: 0, snapCandidates: [])
+        sut.dragClipMoved(rawTime: 0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         sut.endClipDrag()
 
         XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01,
@@ -138,7 +138,7 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
         XCTAssertEqual(sut.project.slideDuration, 10, accuracy: 0.01)
 
         sut.beginClipDrag(clipId: "m1")
-        sut.dragClipMoved(rawTime: 0, snapCandidates: [])
+        sut.dragClipMoved(rawTime: 0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
 
         XCTAssertEqual(sut.project.slideDuration, 6, accuracy: 0.01,
                        "project.slideDuration updates live mid-drag...")
@@ -154,7 +154,7 @@ final class TimelineViewModelSlideDurationTests: XCTestCase {
         let sut = await makeSUT(mediaObjects: [media]) // window = 4+6 = 10
 
         sut.beginClipDrag(clipId: "m1")
-        sut.dragClipMoved(rawTime: 0, snapCandidates: [])
+        sut.dragClipMoved(rawTime: 0, snapCandidates: [], geometry: TimelineGeometry(zoomScale: 1.0))
         XCTAssertNil(sut.durationDidAutoAdjust, "Still suppressed mid-drag.")
 
         sut.endClipDrag()

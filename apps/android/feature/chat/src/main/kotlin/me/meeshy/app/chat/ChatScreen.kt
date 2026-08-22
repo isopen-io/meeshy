@@ -62,6 +62,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Gradient
 import androidx.compose.material.icons.filled.Grain
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
@@ -351,6 +352,8 @@ fun ChatScreen(
     var scrollAffordance by remember { mutableStateOf(ScrollAffordanceState()) }
     var showConversationSettings by remember { mutableStateOf(false) }
     var showMembers by remember { mutableStateOf(false) }
+    var showStats by remember { mutableStateOf(false) }
+    var showAnalysis by remember { mutableStateOf(false) }
     // Window-space frame of each rendered message row, captured during layout for
     // the long-press preview hero (see MessageOverlayPreviewHero). A plain map, not
     // snapshot state: written from onGloballyPositioned without forcing recomposition,
@@ -464,6 +467,18 @@ fun ChatScreen(
                         val peerName = state.conversationTitle.orEmpty()
                         IconButton(onClick = viewModel::openSearch) {
                             Icon(Icons.Filled.Search, contentDescription = stringResource(R.string.chat_search))
+                        }
+                        IconButton(onClick = { showStats = true }) {
+                            Icon(
+                                Icons.Filled.Insights,
+                                contentDescription = stringResource(R.string.conversation_stats_title),
+                            )
+                        }
+                        IconButton(onClick = { showAnalysis = true }) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = stringResource(R.string.conversation_analysis_title),
+                            )
                         }
                         if (state.isGroup) {
                             IconButton(onClick = { showMembers = true }) {
@@ -835,6 +850,22 @@ fun ChatScreen(
             conversationId = state.conversationId,
             accentColor = accentColor,
             onDismiss = { showMembers = false },
+        )
+    }
+
+    if (showStats) {
+        ConversationStatsSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { showStats = false },
+        )
+    }
+
+    if (showAnalysis) {
+        ConversationAnalysisSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { showAnalysis = false },
         )
     }
 

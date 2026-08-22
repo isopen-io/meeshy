@@ -2,6 +2,7 @@ package me.meeshy.app.feed
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiPostTranslationEntry
 
 /**
  * Immutable accumulation SSOT for a post's comment thread.
@@ -79,6 +80,26 @@ data class CommentThreadState(
     fun removed(id: String): CommentThreadState {
         if (comments.none { it.id == id }) return this
         return copy(comments = comments.filterNot { it.id == id }, pendingIds = pendingIds - id)
+    }
+
+    /**
+     * Apply a freshly-merged on-demand translation to a top-level comment [commentId]:
+     * replace only its [ApiPostComment.translations] — every other field (notably
+     * `replyCount`, which a live reply may bump while the translation is in flight) is
+     * left untouched — so the projection can re-render it in the newly-available language.
+     * Inert (same instance) when no top-level comment matches [commentId] (it may be a
+     * reply, handled by [CommentRepliesState.retranslated], or on an unloaded page).
+     */
+    fun retranslated(
+        commentId: String,
+        translations: Map<String, ApiPostTranslationEntry>?,
+    ): CommentThreadState {
+        if (comments.none { it.id == commentId }) return this
+        return copy(
+            comments = comments.map {
+                if (it.id == commentId) it.copy(translations = translations) else it
+            },
+        )
     }
 
     /**

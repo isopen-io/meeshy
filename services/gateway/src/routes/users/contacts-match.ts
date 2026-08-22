@@ -4,7 +4,10 @@ import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError } from
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
 import { ContactDirectoryService } from '../../services/ContactDirectoryService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { matchedUserSchema } from './contacts-schemas';
+import { viewerFromRequest } from './presence-gate';
 import type { AuthenticatedRequest } from './types';
 
 /**
@@ -102,11 +105,24 @@ export async function matchContacts(fastify: FastifyInstance) {
       const service = new ContactDirectoryService(fastify.prisma);
       const matchesByKey = await service.match({ contacts, excludeUserId: authContext.userId });
 
+      // Gate de présence : un profil rapproché n'expose isOnline/lastActiveAt
+      // qu'au titre du critère STRICT (soi, modérateur+, ami), exactement comme
+      // `/users/search`. Avoir quelqu'un dans son carnet d'adresses n'est pas un
+      // droit d'accès à sa présence — c'est une affirmation unilatérale et non
+      // vérifiée. `match()` a déjà écarté les comptes en relation de blocage.
+      const matchedIds = [...new Set([...matchesByKey.values()].map((match) => match.user.id))];
+      const visibility = matchedIds.length > 0
+        ? await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
+            viewerFromRequest(request),
+            matchedIds,
+          )
+        : new Map();
+
       const matches = contacts.flatMap((contact) => {
         const match = matchesByKey.get(contact.contactKey);
         if (!match) return [];
         return [{
-          user: match.user,
+          user: applyPresenceVisibilityAsOffline(match.user, visibility.get(match.user.id)),
           matchedBy: match.matchedBy,
           contactDisplayName: contact.displayName
         }];

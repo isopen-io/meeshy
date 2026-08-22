@@ -173,3 +173,65 @@ extension FocalRowInputEquatableTests {
         XCTAssertFalse(makeInput().senderIsAnonymous)
     }
 }
+
+// MARK: - Message en focus (Focal, 2026-08-21)
+
+extension FocalRowInputEquatableTests {
+
+    private func makeFocusInput(isFocused: Bool, sentAt: Date? = nil) -> FocalRowInput {
+        FocalRowInput(
+            localId: "m1", serverId: "s1", content: makeContent(), density: .focal,
+            isFirstInGroup: false, senderId: "u1", senderDisplayName: "Ali", senderUsername: "ali",
+            senderAvatarURL: nil, senderThumbHash: nil, senderColorHex: "#31B6BA",
+            senderPresence: .online, senderStoryRing: .none, senderMoodEmoji: nil,
+            accentHex: "#31B6BA", isDark: false, isDirect: true, isRightToLeft: false,
+            isOptimistic: false, isAgentAuthored: false, showsAgentGrammar: false,
+            highlightSearchTerm: nil, mentionDisplayNames: [:], userLanguages: (nil, nil),
+            activeDisplayLangCode: "en", secondaryLangCode: nil, voiceConsentMissing: false,
+            transcription: nil, translatedAudios: [], allAudioItems: [],
+            conversationName: "Conv", isFocused: isFocused, sentAt: sentAt
+        )
+    }
+
+    func test_isFocused_defaultsToFalse_andParticipatesInEquality() {
+        XCTAssertFalse(makeInput().isFocused)
+        XCTAssertNotEqual(makeFocusInput(isFocused: true), makeFocusInput(isFocused: false),
+                          "passer en focus DOIT traverser le portillon .equatable() : la rangée gagne son identité et son plafond de texte")
+        XCTAssertEqual(makeFocusInput(isFocused: true), makeFocusInput(isFocused: true))
+    }
+
+    func test_sentAt_participatesInEquality() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        XCTAssertNotEqual(makeFocusInput(isFocused: true, sentAt: now), makeFocusInput(isFocused: true, sentAt: nil))
+    }
+}
+
+// MARK: - (+) d'ajout rapide de réaction — dernier message reçu (2026-08-21)
+
+extension FocalRowInputEquatableTests {
+
+    private func makePositionInput(isLastReceivedMessage: Bool) -> FocalRowInput {
+        FocalRowInput(
+            localId: "m1", serverId: "s1", content: makeContent(), density: .script,
+            isFirstInGroup: true, senderId: "u1", senderDisplayName: "Ali", senderUsername: "ali",
+            senderAvatarURL: nil, senderThumbHash: nil, senderColorHex: "#31B6BA",
+            senderPresence: .online, senderStoryRing: .none, senderMoodEmoji: nil,
+            accentHex: "#31B6BA", isDark: false, isDirect: true, isRightToLeft: false,
+            isOptimistic: false, isAgentAuthored: false, showsAgentGrammar: false,
+            highlightSearchTerm: nil, mentionDisplayNames: [:], userLanguages: (nil, nil),
+            activeDisplayLangCode: "en", secondaryLangCode: nil, voiceConsentMissing: false,
+            transcription: nil, translatedAudios: [], allAudioItems: [],
+            conversationName: "Conv", isLastReceivedMessage: isLastReceivedMessage
+        )
+    }
+
+    func test_isLastReceivedMessage_defaultsToFalse_andParticipatesInEquality() {
+        XCTAssertFalse(makeInput().isLastReceivedMessage, "Sans signal de l'hôte, pas de (+) : le défaut est prudent.")
+        XCTAssertNotEqual(
+            makePositionInput(isLastReceivedMessage: true), makePositionInput(isLastReceivedMessage: false),
+            "Devenir (ou cesser d'être) le dernier message reçu DOIT traverser le portillon .equatable() : " +
+            "c'est ce qui monte ou démonte le bouton (+) d'ajout rapide."
+        )
+        XCTAssertEqual(makePositionInput(isLastReceivedMessage: true), makePositionInput(isLastReceivedMessage: true))
+    }
+}

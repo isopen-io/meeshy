@@ -17,6 +17,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let messageEdited = PassthroughSubject<APIMessage, Never>()
     let messageDeleted = PassthroughSubject<MessageDeletedEvent, Never>()
     let messageHiddenForMe = PassthroughSubject<MessageHiddenForMeEvent, Never>()
+    let messageRestoredForMe = PassthroughSubject<MessageRestoredForMeEvent, Never>()
     let messagePinned = PassthroughSubject<MessagePinnedEvent, Never>()
     let messageUnpinned = PassthroughSubject<MessageUnpinnedEvent, Never>()
     let reactionAdded = PassthroughSubject<ReactionUpdateEvent, Never>()
@@ -53,7 +54,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
-    let conversationOnlineStats = PassthroughSubject<ConversationOnlineStatsEvent, Never>()
     let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
     let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
@@ -65,7 +65,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
     let callError = PassthroughSubject<CallErrorData, Never>()
     let reactionSynced = PassthroughSubject<ReactionSyncEvent, Never>()
-    let systemMessageReceived = PassthroughSubject<SystemMessageEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
     let mentionCreated = PassthroughSubject<MentionCreatedEvent, Never>()
@@ -301,6 +300,10 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
 
     func simulateMessageHiddenForMe(_ event: MessageHiddenForMeEvent) {
         messageHiddenForMe.send(event)
+    }
+
+    func simulateMessageRestoredForMe(_ event: MessageRestoredForMeEvent) {
+        messageRestoredForMe.send(event)
     }
 
     func simulateReconnect() {

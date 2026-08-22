@@ -58,6 +58,7 @@ data class PostCommentsUiState(
     val canLoadMore: Boolean = false,
     val isEmpty: Boolean = false,
     val errorMessage: String? = null,
+    val translatingLanguages: Set<String> = emptySet(),
 )
 
 /**
@@ -104,6 +105,14 @@ class PostCommentsViewModel @Inject constructor(
     /** Per-comment Prisme language override (comment id → chosen language code), set by a flag tap. */
     private val activeLanguages = MutableStateFlow<Map<String, String>>(emptyMap())
 
+    /**
+     * In-flight on-demand comment translations, keyed `commentId|targetLanguage` — the flag-strip
+     * counterpart of [FeedUiState.translatingLanguages]. Guards against a duplicate request while
+     * one is already running and surfaces a per-chip spinner. Folded into the projection so a
+     * background re-emit never drops it.
+     */
+    private val translatingLanguages = MutableStateFlow<Set<String>>(emptySet())
+
     /** The composer's live text + @-mention autocomplete panel, folded into the projection so a
      *  background re-emit (a socket comment landing) never tears the half-typed draft down. */
     private val composerDraft = MutableStateFlow(ComposerDraft())
@@ -133,7 +142,9 @@ class PostCommentsViewModel @Inject constructor(
             }.combine(activeLanguages) { (inputs, replyTarget), langs ->
                 Triple(inputs, replyTarget, langs)
             }.combine(composerDraft) { (inputs, replyTarget, langs), draft ->
-                project(inputs, replyTarget, langs, draft)
+                ProjectionBundle(inputs, replyTarget, langs, draft)
+            }.combine(translatingLanguages) { bundle, translating ->
+                project(bundle.inputs, bundle.replyTarget, bundle.activeLanguages, bundle.draft, translating)
             }.collect { projected -> _state.value = projected }
         }
         observeRealtime()
@@ -418,8 +429,41 @@ class PostCommentsViewModel @Inject constructor(
                 activeLanguages.update { it + (commentId to result.code) }
             LanguageFlagTapResolver.Result.Revert ->
                 activeLanguages.update { it - commentId }
-            is LanguageFlagTapResolver.Result.RequestTranslation -> Unit
+            is LanguageFlagTapResolver.Result.RequestTranslation ->
+                requestCommentTranslation(commentId, result.targetLanguage)
             LanguageFlagTapResolver.Result.None -> Unit
+        }
+    }
+
+    /**
+     * The reader tapped a configured language a comment has no content for yet: translate it on
+     * demand, fold the merged translation into whichever collection holds the comment (top-level
+     * [thread] or a loaded [replies] thread — each transition is inert for the other), and point
+     * that comment's [activeLanguages] override at it so the row lands on the translation. A failed
+     * or inert translation leaves the strip's translatable chip in place to retry; a second tap
+     * while the request is in flight is ignored via [translatingLanguages]. The comment-thread
+     * counterpart of [PostDetailViewModel.requestOnDemandTranslation], keyed per comment.
+     */
+    private fun requestCommentTranslation(commentId: String, target: String) {
+        val comment = findComment(commentId) ?: return
+        val key = "$commentId|$target"
+        if (key in translatingLanguages.value) return
+        translatingLanguages.update { it + key }
+        viewModelScope.launch {
+            try {
+                val merged = postRepository.translateComment(comment, target)
+                if (merged != null) {
+                    thread.update { it.retranslated(commentId, merged.translations) }
+                    replies.update { it.retranslated(commentId, merged.translations) }
+                    activeLanguages.update { it + (commentId to target) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                status.update { it.copy(error = e.message) }
+            } finally {
+                translatingLanguages.update { it - key }
+            }
         }
     }
 
@@ -594,6 +638,7 @@ class PostCommentsViewModel @Inject constructor(
         replyTarget: ReplyTarget?,
         activeLanguages: Map<String, String>,
         draft: ComposerDraft,
+        translatingLanguages: Set<String>,
     ): PostCommentsUiState {
         val thread = inputs.thread
         val st = inputs.status
@@ -655,6 +700,7 @@ class PostCommentsViewModel @Inject constructor(
             canLoadMore = thread.canLoadMore,
             isEmpty = thread.hasLoaded && thread.comments.isEmpty(),
             errorMessage = st.error,
+            translatingLanguages = translatingLanguages,
         )
     }
 
@@ -685,6 +731,15 @@ private data class Status(
 private data class ComposerDraft(
     val text: String = "",
     val mention: MentionAutocompleteState = MentionAutocompleteState(),
+)
+
+/** The projection inputs accumulated before the final [translatingLanguages] fold, threaded
+ *  through as one value so the chained `combine` stays within its 5-arg cap. */
+private data class ProjectionBundle(
+    val inputs: ProjectionInputs,
+    val replyTarget: ReplyTarget?,
+    val activeLanguages: Map<String, String>,
+    val draft: ComposerDraft,
 )
 
 /** The five reactive inputs folded into the projection, threaded past the 5-arg `combine` cap. */

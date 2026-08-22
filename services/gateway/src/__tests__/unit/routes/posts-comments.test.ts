@@ -138,6 +138,7 @@ async function buildApp({ authenticated = true, withCmidDecoration = false } = {
     broadcastCommentUpdated: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentDeleted: jest.fn<any>().mockResolvedValue(undefined),
     broadcastCommentLiked: jest.fn<any>().mockReturnValue(undefined),
+    broadcastCommentUnliked: jest.fn<any>().mockReturnValue(undefined),
   } as any);
 
   // prisma decorated on app (used for broadcast lookups in POST/DELETE handlers)

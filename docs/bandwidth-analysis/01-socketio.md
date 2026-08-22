@@ -21,7 +21,6 @@ L'analyse identifie **18 problèmes** de consommation de bande passante dans le 
 | `message:edited` | Édition | `ROOMS.conversation(id)` | 2–15 KB |
 | `message:deleted` | Suppression | `ROOMS.conversation(id)` | ~100 B |
 | `message:translation` | Traduction texte prête | `ROOMS.conversation(id)` | 0.5–2 KB |
-| `message:translated` | Alias traduction | `ROOMS.conversation(id)` | 0.5–2 KB |
 | `message:pinned` | Épinglage | `ROOMS.conversation(id)` | ~150 B |
 | `message:unpinned` | Dés-épinglage | `ROOMS.conversation(id)` | ~100 B |
 | `message:consumed` | View-once consommé | `ROOMS.conversation(id)` | ~150 B |
@@ -37,7 +36,6 @@ L'analyse identifie **18 problèmes** de consommation de bande passante dans le 
 | `conversation:updated` | Nouveau message (bump) | `ROOMS.user(id)` × N participants | ~300 B × N |
 | `conversation:unread-updated` | Compteur non lus | `ROOMS.user(id)` | ~100 B |
 | `conversation:stats` | Stats | `ROOMS.conversation(id)` | ~500 B |
-| `conversation:online-stats` | Stats en ligne | `ROOMS.conversation(id)` | ~500 B |
 | `conversation:participant-left` | Quitte | `ROOMS.user(id)` | ~200 B |
 | `conversation:participant-banned` | Bannissement | `ROOMS.user(id)` | ~200 B |
 | `conversation:closed` | Fermeture | `ROOMS.conversation(id)` | ~150 B |
@@ -65,6 +63,7 @@ L'analyse identifie **18 problèmes** de consommation de bande passante dans le 
 | `post:updated` | Post modifié | `ROOMS.feed(id)` × amis | 2–20 KB |
 | `post:deleted` | Post supprimé | `ROOMS.feed(id)` × amis | ~100 B |
 | `post:liked` / `post:unliked` | Like/unlike | `ROOMS.feed(id)` × amis | ~300 B |
+| `comment:liked` / `comment:unliked` | Like/unlike d'un commentaire | `ROOMS.feed(auteur)` + `ROOMS.post(id)` | ~200 B |
 | `story:created` / `story:updated` | Story | `ROOMS.feed(id)` × amis filtrés | 2–30 KB |
 | `user:preferences-updated` | Préfs mises à jour | `ROOMS.user(id)` | ~100 B |
 
@@ -234,7 +233,7 @@ Ce champ `path` est le chemin du fichier sur le système de fichiers du serveur 
 
 **Fichier :** `packages/shared/types/socketio-events.ts` lignes 1213–1224
 
-**Description :** Le type `TranslationData` (envoyé dans `message:translation` et `message:translated`) inclut :
+**Description :** Le type `TranslationData` (envoyé dans `message:translation`) inclut :
 - `cacheKey: string` — clé de cache interne (ex: `messageId_fr_en`)
 - `cached: boolean` — information de debug interne
 - `translationModel: string` — information de modèle interne
@@ -274,7 +273,7 @@ const messagePayload = this._buildMessagePayload(
 
 **Sévérité :** HAUTE
 
-**Correction :** Ne PAS inclure les traductions dans `message:new`. Elles arrivent ensuite via `message:translation` / `message:translated`. Le client doit merger les traductions à la réception de l'événement dédié (ce qu'il fait déjà via `handleTranslation` dans `use-socket-cache-sync.ts`).
+**Correction :** Ne PAS inclure les traductions dans `message:new`. Elles arrivent ensuite via `message:translation`. Le client doit merger les traductions à la réception de l'événement dédié (ce qu'il fait déjà via `handleTranslation` dans `use-socket-cache-sync.ts`).
 
 ---
 
@@ -532,6 +531,28 @@ console.log(`[RT-DIAG] message:new emitted conv=${normalizedId} msg=${message.id
 **Sévérité :** BASSE
 
 **Correction :** Throttler `handleHeartbeat` côté serveur (une mise à jour DB max toutes les 30s par userId). Envisager de supprimer le heartbeat applicatif puisque les pings Socket.IO natifs (25s) suffisent pour détecter les déconnexions.
+
+**État — les deux moitiés sont faites, la seconde à moitié :**
+
+1. *Throttling* : **fait.** `StatusService.noteHeartbeat` étrangle à 60 s
+   (`HEARTBEAT_THROTTLE_MS`), donc au plus une écriture DB par minute et par
+   utilisateur, quelle que soit la cadence du client. Un client bavard ne peut
+   plus multiplier les `prisma.user.update`.
+
+2. *Suppression du battement applicatif* : **faite côté web (cycle 78).** Ce
+   rapport avait vu juste, et le serveur avait entre-temps rendu la chose
+   démontrable : `handleEnginePong` rafraîchit la présence sur le pong ENGINE
+   (25 s, tous clients), en appelant **la même** `noteHeartbeat`. Le battement
+   web de 90 s ne pouvait donc rien produire de neuf, et il partait NU (sans
+   `clientTime`) — donc sans même récolter le RTT de `heartbeat:ack`, seule
+   chose que le canal applicatif offre en plus du pong. Retiré de
+   `use-user-status-realtime`.
+
+   **iOS le garde** (30 s, AVEC `clientTime`) et c'est lui qui justifie que
+   `CLIENT_EVENTS.HEARTBEAT` reste au contrat. Voir `04-ios.md` §P13, qui porte
+   la même remarque pour iOS : elle reste ouverte, et son arbitrage dépend de
+   `connectionRTT` — un `PassthroughSubject` alimenté par cet ack et **abonné
+   nulle part** (cf. `tasks/realtime-sync-audit-2026-08-21-cycle78.md` §6).
 
 ---
 

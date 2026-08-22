@@ -3,6 +3,8 @@ package me.meeshy.sdk.net.api
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.ConversationAnalysis
+import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
@@ -53,6 +55,14 @@ interface ConversationApi {
 
     @GET("conversations/{id}")
     suspend fun getById(@Path("id") id: String): ApiResponse<ApiConversation>
+
+    /** Aggregated message statistics for the conversation dashboard — gateway `conversations/stats.ts`. */
+    @GET("conversations/{id}/stats")
+    suspend fun stats(@Path("id") id: String): ApiResponse<ConversationMessageStatsResponse>
+
+    /** AI conversation analysis (summary / health / participant personas) — gateway `conversations/analysis`. */
+    @GET("conversations/{id}/analysis")
+    suspend fun analysis(@Path("id") id: String): ApiResponse<ConversationAnalysis>
 
     /** Recherche par titre OU par nom de participant — gateway `conversations/search.ts`. */
     @GET("conversations/search")

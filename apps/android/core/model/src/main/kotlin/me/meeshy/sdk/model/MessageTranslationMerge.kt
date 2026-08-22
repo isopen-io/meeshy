@@ -4,7 +4,7 @@ package me.meeshy.sdk.model
  * Prisme Linguistique — progressive translation merge (read side).
  *
  * A message reaches the client in its original language; the translator finishes
- * later and the gateway pushes `message:translated` / `message:translation`. This
+ * later and the gateway pushes `message:translation`. This
  * upserts that translation into a cached [ApiMessage.translations] so the open
  * bubble re-renders in the viewer's preferred language the instant it lands — no
  * refetch, no reload. Faithful to the shared socket contract and to Rule 1 of the

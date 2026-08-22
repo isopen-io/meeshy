@@ -36,6 +36,7 @@ import { CallTranscriptPanel } from './CallTranscriptPanel';
 import { CallInfoOverlay } from './CallInfoOverlay';
 import { LocalVideoTile } from './LocalVideoTile';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
+import { computeParticipantOverlayPosition } from '@/lib/calls/overlay-grid-layout';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '@/utils/logger';
@@ -952,7 +953,15 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
               isVideoEnabled={participant?.isVideoEnabled ?? true}
               isDisconnected={disconnectedParticipants.has(participantId)}
               muted={!speakerEnabled}
-              initialPosition={{ x: 20 + index * 160, y: 20 }}
+              initialPosition={
+                typeof window !== 'undefined'
+                  ? computeParticipantOverlayPosition({
+                      index,
+                      viewportWidth: window.innerWidth,
+                      viewportHeight: window.innerHeight,
+                    })
+                  : { x: 20, y: 20 }
+              }
               onDoubleClick={() => handleToggleFullscreen(participantId)}
               onRemove={() => {
                 const { removeRemoteStream, removePeerConnection } = useCallStore.getState();

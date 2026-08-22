@@ -5,7 +5,138 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
-## 2026-08-21 (latest) — Feed realtime = a family of `FeedRealtimeHead` overlays; add the next event as one more overlay, don't invent a mechanism
+## 2026-08-22 — Two test files in one package can't both declare the same `private class` name
+- When adding a new sibling repository test (`ConversationAnalysisRepositoryTest`) modelled on an
+  existing one (`ConversationStatsRepositoryTest`) in the SAME package
+  (`me.meeshy.sdk.conversation`), a `private class EnvelopeFailureApi` in each file collided:
+  Kotlin reported `Redeclaration` + a cascading `Cannot access '…': it is private in file` on the
+  OTHER file. File-private top-level classes still share the package's file-facade namespace for
+  this name check. Fix: give reused test-double names a per-slice prefix
+  (`EnvelopeFailureAnalysisApi`, `StubAnalysisApi`, …) rather than copying the stats test's names
+  verbatim. The unique names (`Stub…Api`, `Success…Api`, `Throwing…Api`) were already fine; only the
+  generic `EnvelopeFailureApi` clashed.
+- Also: when `ConversationApi` gains a method, EVERY hand-written stub of it must implement it — there
+  are three in `:sdk-core` tests (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+  and the new one). Grep `override suspend fun stats(` to find them all.
+
+## 2026-08-21 — SDK platform: `compileSdk = 37` wants `android-37.0`, install ordering matters
+- The repo is on `compileSdk = 37` = **Android 17**, whose platform package is `platforms;android-37.0`
+  (`AndroidVersion.ApiLevel=37.0`), NOT `android-37`. The ROUTINE §Environment recipe still installs
+  `platforms;android-35`; that is not enough — add `android-37.0`. `sdkmanager "platforms;android-37"`
+  fails (`Failed to find package`); the cmdline-tools bundle only speaks SDK XML v3 and can't see the
+  v4-only stable name.
+- **Let AGP auto-download it, but wait for it.** With `local.properties` pointing at the SDK, the first
+  Gradle invocation auto-installs `android-37.0` — but if dependency resolution runs while that install is
+  still in flight it dies with `Failed to find target with hash string 'android-37'`. Re-run once the
+  install line prints complete (or pre-run `./gradlew :core:model:compileDebugKotlin` to force the download),
+  then the real build/test resolves cleanly. AGP 8.13.0 maps `compileSdk 37` → the `android-37.0` platform.
+- **Orphaned models are the frontier.** `AgentAnalysis.kt` (`ConversationMessageStatsResponse`,
+  `ConversationAnalysis`, `ParticipantProfile`…) shipped with ZERO consumers (grep outside the model file =
+  nothing). When a parity area looks "already started", grep for consumers before assuming — a defined-but-
+  unconsumed DTO is unbuilt, and wiring it (repository + pure projection + VM + sheet) is a clean vertical slice.
+- **Inject `today` for any windowed/time-bucketed projection.** iOS computes `activityData` off `Date()`
+  inside a view getter (untestable). The Android SSOT takes `today: LocalDate` as a parameter and the
+  Composable passes `LocalDate.now()` in — the same "pass time in" doctrine the chat header uses for presence
+  (`System.currentTimeMillis()`). Makes the cutoff-window mutation catchable in a plain JVM test.
+
+## 2026-08-21 — story on-demand translation: gotchas
+- **Mutation-proving an "override" line needs a scenario Prisme can't auto-resolve.** The story
+  request arm sets `languageOverride = storyId to target` after merging the pulled translation. If
+  the test requests the viewer's PRIMARY language, `emit()`'s auto-resolution
+  (`StoryContentResolver` → `preferredTranslation`) lands on that same freshly-merged translation on
+  its own, so **dropping the override still passes** — the mutation is not caught. Use a scenario
+  where a HIGHER-priority language is already present (prefs `en>de`, story present `en`, request
+  `de`): without the override, auto-resolution keeps showing `en`, so the test only goes green with
+  the override. Rule: to prove a display-switch line, pick inputs where the default resolution would
+  choose *something else*.
+- **Stories carry no `originalLanguage`.** `StoryItem` has `content` + `translations` but no source-
+  language field (unlike `ApiPost`). `translateStory` passes an empty `sourceLanguage` to the
+  translator (auto-detect), which is the same thing `translateSource` does for a post with a null
+  original. Don't invent a source-language field on the story model for this.
+- **`StoryItem.translations` is a `List<StoryTranslation>`, not a map.** The post/comment merges upsert
+  a `Map<code, entry>`; the story merge upserts a list (match by `indexOfFirst`, replace by
+  `mapIndexed`, else `+`). Same laws (blank/idempotent/in-place-or-append), different container — hence
+  a separate `StoryTranslationMerge` rather than reusing `PostTranslationMerge`.
+
+## 2026-08-21 — comment on-demand translation: gotchas
+- **MockK `coAnswers` is a member infix, NOT a top-level import.** `import io.mockk.coAnswers`
+  → *Unresolved reference*. Write `coEvery { … } coAnswers { gate.await() }` and import nothing
+  extra (only `coEvery`). Same for `answers`. (The build failed only at test-compile, so it was
+  cheap to catch — but it costs a full `compileDebugUnitTestKotlin` cycle.)
+- **Flipping a dead arm live breaks the test that asserted the dead behaviour.** The comment
+  request arm was gated behind `CommentProjection.build` NOT passing `includeTranslatable`; a
+  pre-existing test (`content-less language is inert`) asserted the old `RequestTranslation -> Unit`
+  no-op. Enabling the arm made a content-less tap fire a request (relaxed mock → non-null →
+  display changed). This is not a regression — it is the slice's intended behaviour change, so the
+  obsolete test was **rewritten to the new contract** (a content-less tap now requests + leaves the
+  display until a translation lands), a strictly stronger assertion. Not a floor-lowering.
+- **Fold on-demand translation onto the LIVE row, translations-only** (`retranslated(id, translations)`),
+  never replace the whole comment from the tap-time snapshot: `replyCount` lives on `ApiPostComment`
+  and a realtime reply can bump it while the translate is in flight — a wholesale swap would revert it.
+  (PostDetail could `rawPost.value = merged` wholesale because its count overlay is a *separate* flow;
+  comments carry the mutable count on the row itself, so the rule differs.)
+
+## 2026-08-21 (latest) — `--offline` full-assemble trap; `dl.google.com` reachability varies by container; on-demand translation for a caller-held post = a stateless repo method returning the merged post, NOT the cache-mutating one.
+
+Slice `feed-post-detail-translation-request`. Three lessons.
+
+**(1) `dl.google.com` reachability is not fixed per environment.** Prior runs recorded it 403-blocked (forcing
+CI-as-compiler). THIS container reached it (`curl -o /dev/null -w '%{http_code}'` → **200**), so the full local
+SDK bootstrap + `meeshy.sh check` ran locally. Always probe it at run start; don't assume the last run's verdict.
+
+**(2) `--offline` breaks a *full* `assembleDebug` after a *targeted* run.** If your first gradle invocation only
+built `:sdk-core` + `:feature:feed` (targeted `--tests`), only those modules' deps are cached. A subsequent
+`./gradlew assembleDebug testDebugUnitTest --offline` then dies resolving `:app`'s deps (androidx.browser:1.8.0,
+com.google.zxing:core, androidx.activity:1.7.0 …) — "No cached version … available for offline mode". Run the
+full check **online** the first time; `--offline` is only safe once every module's deps are warm.
+
+**(3) On-demand translation for a post the VM owns outside the feed cache.** `PostRepository
+.requestOnDemandTranslation(postId, target)` mutates `_feedCache` and returns `Boolean` — perfect for the feed
+list VM that observes that cache. But `PostDetailViewModel` holds its post in a private `rawPost` from an
+independent `getPost` fetch and never observes `_feedCache`, so that method's mutation would be invisible to it.
+The right shape is a **stateless** `translatePost(post, target): ApiPost?` that returns the merged post; the VM
+swaps it into `rawPost` and points `activeCode` at the new language. Factor the shared trim→translate→
+`PostTranslationMerge` law into one private `translateAndMerge` and have BOTH methods delegate (behaviour of the
+cache one is identical under single-thread — its existing tests stay green). Same lesson will recur for comments
+(`ApiPostComment`, different type/path — needs its own comment-translation method, no `translatePost` reuse).
+
+## 2026-08-21 — SDK bootstrap: on THIS container the pristine `android-37.0` recipe is the one that works; the `cp→android-37` patch recipe FAILS. And on-demand translation = mirror the chat repository, not the iOS socket path.
+
+Slice `feed-post-translation-request`. Two lessons.
+
+**(1) SDK bootstrap — stop patching to `android-37`.** The malformed metadata (`android-37.0/source.properties`
+→ `AndroidVersion.ApiLevel=37.0`, `Pkg.Desc=…Platform 17`) is back, so the older notes' reflex was to
+`cp -r android-37.0 android-37` + sed the metadata to a clean `android-37`. **That recipe FAILED here.** AGP
+8.13.0's own diagnostic reads "compile SDK version **37.0**" and it resolves `compileSdk 37` to the
+minor-versioned **dir** `android-37.0` directly — a hand-made `android-37`, even with byte-perfect
+`source.properties`+`package.xml`, is never matched (`sdkmanager --list_installed` shows it, AGP still says
+`Failed to find target with hash string 'android-37'`). The recipe that works, every time, on this container:
+```bash
+sdkmanager --channel=3 "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"   # pristine, DON'T patch
+# build with auto-download OFF so the first ./gradlew can't re-fetch the malformed dir over any edits:
+./gradlew assembleDebug testDebugUnitTest -Pandroid.builder.sdkDownload=false
+```
+Two traps that cost a cycle: (a) the very first `./gradlew` of a fresh container needs to run **online** — AGP
+8.13.0's plugin artifact isn't cached yet, so `--offline` dies with "Plugin com.android.application 8.13.0 not
+found"; run once online, then `--offline` is fine. (b) AGP auto-downloads the platform if it's missing — with
+auto-download ON it silently re-fetches the pristine (malformed-metadata) `android-37.0`, which is actually
+what we want, so DON'T fight it; the only reason to pass `sdkDownload=false` is to stop it clobbering a manual
+edit. Net: **install pristine `android-37.0`, patch NOTHING, let AGP map `compileSdk 37 → android-37.0`.**
+
+**(2) On-demand post translation = the map-keyed sibling of the chat message path.** Feed posts store
+translations as `Map<code, ApiPostTranslationEntry>` (vs. the message list form), so the merge is a NEW pure
+`PostTranslationMerge` (map upsert, case-insensitive key match, idempotent) — not a reuse of
+`MessageTranslationMerge`. But the REST/cache flow is identical: `PostRepository.requestOnDemandTranslation`
+blocking-translates via `TranslationApi` + merges into `_feedCache`, exactly like
+`MessageRepository.requestTranslation`. Do NOT mirror iOS's literal `POST /posts/:id/translate` fire-and-forget
++ socket-completion path — Android has no post-translation socket consumer, so that variant is blocked/
+cross-cutting. Adding `translationApi` to `PostRepository`'s constructor means updating its ~16 test
+`PostRepository(api)` call sites (`sed 's/PostRepository(api)/PostRepository(api, translationApi)/g'` + a
+class-level relaxed mock). And `includeTranslatable = true` only surfaces a translatable chip when the post
+ALREADY has a preferred translation — `MessageLanguageStrip.build` early-returns empty for an untranslated
+post regardless of the flag (Prisme rule 1), so a fully-monolingual card still shows no strip.
+
+## 2026-08-21 — Feed realtime = a family of `FeedRealtimeHead` overlays; add the next event as one more overlay, don't invent a mechanism
 
 Slice `feed-realtime-comment-count`. The feed's live-sync surface is now a coherent **overlay family** on
 `FeedRealtimeHead`: `posts`+`newPostsCount` (created), `removedIds` (deleted), `likes: LikeOverlay` (like),
@@ -1218,3 +1349,19 @@ hand-made `android-37` / malformed `android-37.0` and `rm -rf` it, reinstall pri
 daemon (`./gradlew --stop`), and run WITHOUT `sdkDownload=false`. Also: the Bash tool cwd persists
 across calls — a `cd /home/user/meeshy` earlier will make `./gradlew` (which lives in `apps/android`)
 "No such file or directory"; always `cd /home/user/meeshy/apps/android &&` in the gradle command.
+
+## 2026-08-22 — Port iOS `Mirror`-based trait extraction as explicit field access, and grow an existing sheet rather than add a header button
+- iOS `ConversationDashboardView.extractTraitScores<T>(from:)` uses `Mirror(reflecting:)` to pull the
+  non-nil `TraitScore` fields out of each trait struct. Kotlin/JVM reflection over data-class members is
+  fragile (needs `kotlin-reflect`, order not guaranteed) and slow — the faithful port is **explicit
+  `listOfNotNull(traits.verbosity, traits.formality, …)`** per axis. Same behaviour, deterministic order,
+  zero reflection dependency, and it doubles as the SOTA note (stable tie-break, unlike Swift's unstable
+  `sorted`). Pattern to reuse for any iOS `Mirror` extraction.
+- When a second render section belongs to the SAME endpoint/response as an already-shipped sheet
+  (persona profiles live in the same `GET /analysis` payload as the summary), **grow the existing
+  ViewModel + sheet** instead of minting a parallel ViewModel + a third header button. Add the new
+  projection field to the UiState (default `emptyList()` keeps old tests green), recompute the Empty
+  gate as "both halves empty", and render the new block under the old one. This matches iOS's single
+  dashboard, avoids a double-fetch of the same endpoint, and keeps the chat header uncluttered. The
+  existing Empty tests stayed green precisely because they carried no profiles — verify that before
+  relying on it.

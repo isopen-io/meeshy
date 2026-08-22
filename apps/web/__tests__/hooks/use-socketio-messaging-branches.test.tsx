@@ -7,7 +7,6 @@
  * - Line 134: event.displayName || event.username fallback
  * - Line 141: onUserStatus invocation
  * - Lines 147-148: onConversationStats if-block
- * - Lines 152-153: onConversationOnlineStats if-block
  * - Line 167: "return prev" branch in status-change handler
  */
 
@@ -33,7 +32,6 @@ let capturedTranslationCb: ((data: any) => void) | null = null;
 let capturedTypingCb: ((event: any) => void) | null = null;
 let capturedUserStatusCb: ((event: any) => void) | null = null;
 let capturedConversationStatsCb: ((data: any) => void) | null = null;
-let capturedConversationOnlineStatsCb: ((data: any) => void) | null = null;
 let capturedStatusChangeCb: ((diag: { isConnected: boolean; hasSocket: boolean }) => void) | null = null;
 
 const mockReconnect = jest.fn();
@@ -62,10 +60,6 @@ const mockOnConversationStats = jest.fn((cb: (data: any) => void) => {
   capturedConversationStatsCb = cb;
   return jest.fn();
 });
-const mockOnConversationOnlineStats = jest.fn((cb: (data: any) => void) => {
-  capturedConversationOnlineStatsCb = cb;
-  return jest.fn();
-});
 const mockOnStatusChange = jest.fn((cb: (diag: { isConnected: boolean; hasSocket: boolean }) => void) => {
   capturedStatusChangeCb = cb;
   return jest.fn();
@@ -91,7 +85,6 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     onTyping: (...args: any[]) => mockOnTyping(...args),
     onUserStatus: (...args: any[]) => mockOnUserStatus(...args),
     onConversationStats: (...args: any[]) => mockOnConversationStats(...args),
-    onConversationOnlineStats: (...args: any[]) => mockOnConversationOnlineStats(...args),
     onStatusChange: (...args: any[]) => mockOnStatusChange(...args),
   },
 }));
@@ -106,7 +99,6 @@ beforeEach(() => {
   capturedTypingCb = null;
   capturedUserStatusCb = null;
   capturedConversationStatsCb = null;
-  capturedConversationOnlineStatsCb = null;
   capturedStatusChangeCb = null;
 
   // Re-wire captures after clearAllMocks
@@ -114,7 +106,6 @@ beforeEach(() => {
   mockOnTyping.mockImplementation((cb) => { capturedTypingCb = cb; return jest.fn(); });
   mockOnUserStatus.mockImplementation((cb) => { capturedUserStatusCb = cb; return jest.fn(); });
   mockOnConversationStats.mockImplementation((cb) => { capturedConversationStatsCb = cb; return jest.fn(); });
-  mockOnConversationOnlineStats.mockImplementation((cb) => { capturedConversationOnlineStatsCb = cb; return jest.fn(); });
   mockOnStatusChange.mockImplementation((cb) => { capturedStatusChangeCb = cb; return jest.fn(); });
 
   mockGetConnectionDiagnostics.mockReturnValue({ isConnected: true, hasSocket: true, isConnecting: false });
@@ -483,31 +474,6 @@ describe('useSocketIOMessaging – branch gap coverage', () => {
     });
   });
 
-  // ── Lines 152-153: onConversationOnlineStats if-block ─────────────────────
-
-  describe('onConversationOnlineStats (lines 152-153)', () => {
-    it('registers onConversationOnlineStats listener and delivers data', () => {
-      const onConversationOnlineStats = jest.fn();
-
-      renderHook(() => useSocketIOMessaging({ onConversationOnlineStats }));
-
-      expect(mockOnConversationOnlineStats).toHaveBeenCalledTimes(1);
-
-      const onlineStats = { onlineCount: 3, userIds: ['u1', 'u2', 'u3'] };
-      act(() => {
-        capturedConversationOnlineStatsCb!(onlineStats);
-      });
-
-      expect(onConversationOnlineStats).toHaveBeenCalledWith(onlineStats);
-    });
-
-    it('does not register onConversationOnlineStats listener when callback not provided', () => {
-      renderHook(() => useSocketIOMessaging({}));
-
-      expect(mockOnConversationOnlineStats).not.toHaveBeenCalled();
-    });
-  });
-
   // ── Line 167: "return prev" branch in status-change handler ──────────────
   //
   // In the hook, ÉTAPE 4 uses:
@@ -577,14 +543,12 @@ describe('useSocketIOMessaging – branch gap coverage', () => {
       const onUserTyping = jest.fn();
       const onUserStatus = jest.fn();
       const onConversationStats = jest.fn();
-      const onConversationOnlineStats = jest.fn();
 
       renderHook(() => useSocketIOMessaging({
         onTranslation,
         onUserTyping,
         onUserStatus,
         onConversationStats,
-        onConversationOnlineStats,
       }));
 
       act(() => {
@@ -592,14 +556,12 @@ describe('useSocketIOMessaging – branch gap coverage', () => {
         capturedTypingCb!({ userId: 'u1', username: 'alice', displayName: 'Alice', isTyping: true, conversationId: 'c1' });
         capturedUserStatusCb!({ userId: 'u2', username: 'bob', isOnline: false });
         capturedConversationStatsCb!({ count: 10 });
-        capturedConversationOnlineStatsCb!({ onlineCount: 2 });
       });
 
       expect(onTranslation).toHaveBeenCalledWith('m1', [{ language: 'fr', text: 'ok' }]);
       expect(onUserTyping).toHaveBeenCalledWith('u1', 'Alice', true, 'c1');
       expect(onUserStatus).toHaveBeenCalledWith('u2', 'bob', false, undefined);
       expect(onConversationStats).toHaveBeenCalledWith({ count: 10 });
-      expect(onConversationOnlineStats).toHaveBeenCalledWith({ onlineCount: 2 });
     });
   });
 

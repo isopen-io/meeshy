@@ -265,6 +265,7 @@ class PostDetailViewModelTest {
     @Test
     fun `onFlagTap with a content-less language keeps the default resolution`() = runTest {
         coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+        coEvery { repository.translatePost(any(), "de") } returns null
 
         val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en")))
         vm.onFlagTap("de")
@@ -272,6 +273,63 @@ class PostDetailViewModelTest {
         vm.state.test {
             assertThat(awaitItem().post?.content).isEqualTo("Hello")
         }
+    }
+
+    @Test
+    fun `onFlagTap on a translatable language requests it and switches to the merged translation`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+        val merged = post(
+            content = "Bonjour",
+            translations = mapOf(
+                "en" to ApiPostTranslationEntry(text = "Hello"),
+                "es" to ApiPostTranslationEntry(text = "Hola"),
+                "de" to ApiPostTranslationEntry(text = "Hallo"),
+            ),
+        )
+        coEvery { repository.translatePost(any(), "de") } returns merged
+
+        // System=en, regional=de → German is a configured-but-absent (translatable) strip chip.
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "de")))
+        vm.onFlagTap("de")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Hallo")
+            assertThat(s.post?.languageStrip?.first { it.code == "de" }?.isActive).isTrue()
+            assertThat(s.translatingLanguages).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 1) { repository.translatePost(any(), "de") }
+    }
+
+    @Test
+    fun `onFlagTap on a translatable language that fails leaves the display unchanged`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+        coEvery { repository.translatePost(any(), "de") } returns null
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "de")))
+        vm.onFlagTap("de")
+
+        vm.state.test {
+            val s = awaitItem()
+            assertThat(s.post?.content).isEqualTo("Hello")
+            assertThat(s.translatingLanguages).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a second tap while a translation is in flight does not fire a duplicate request`() = runTest {
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(bilingual)
+        val gate = CompletableDeferred<ApiPost?>()
+        coEvery { repository.translatePost(any(), "de") } coAnswers { gate.await() }
+
+        val vm = viewModel(currentUser = user(Prefs(systemLanguage = "en", regionalLanguage = "de")))
+        vm.onFlagTap("de")
+        vm.onFlagTap("de")
+        gate.complete(null)
+
+        coVerify(exactly = 1) { repository.translatePost(any(), "de") }
     }
 
     @Test

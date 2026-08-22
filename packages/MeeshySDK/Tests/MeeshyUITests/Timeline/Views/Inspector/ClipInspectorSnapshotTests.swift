@@ -86,6 +86,32 @@ final class ClipInspectorSnapshotTests: XCTestCase {
         )
     }
 
+    // MARK: - Variant 3b : « Suivre la slide » (D3) — HIDDEN when following
+
+    /// `ClipSnapshot.isFollowingSlide` defaults to `false` (a real, explicit
+    /// window — the common case for these fixtures, all carrying explicit
+    /// `startTime`/`duration`). This variant locks in the OPPOSITE state —
+    /// `isFollowingSlide: true` (O4 : `timing == nil` at the model) — where
+    /// "Suivre la slide" has nothing to release and MUST stay hidden. Without
+    /// this baseline, the button's visibility toggle had zero rendering
+    /// coverage: both `test_init_notFollowingSlide_doesNotCrash` and
+    /// `test_init_followingSlide_hidesTheButton_doesNotCrash`
+    /// (`ClipInspectorTests`) only call `_ = view.body`, asserting nothing
+    /// about what actually renders.
+    func test_snapshot_inspector_followingSlide_hidesFollowSlideButton() {
+        let text = ClipInspector.ClipSnapshot(
+            id: "t2", displayName: "Bienvenue", kind: .text,
+            startTime: 0, duration: 10, volume: 1.0,
+            fadeInDuration: 0, fadeOutDuration: 0,
+            isLooping: false, isBackground: false,
+            isFollowingSlide: true
+        )
+        SnapshotHelpers.assertLightDarkSnapshot(
+            of: snapshot(text),
+            named: "inspector-followingSlide-hidesButton"
+        )
+    }
+
     // MARK: - Variant 4 : no selection (popover empty state)
 
     func test_snapshot_inspector_noSelection() {
