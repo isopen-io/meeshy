@@ -151,16 +151,43 @@ partagé. Aucune requête, aucun chemin de code, aucun handler touché.
 
 ## 8. Ce que ce cycle laisse ouvert
 
-**Inventaire : 6 sites restants** :
+**Inventaire : 5 sites restants** — comptés dans `FROZEN_INVENTORY`, pas
+déduits du journal précédent (voir la correction ci-dessous) :
 
 | champ | site |
 |---|---|
-| `sender` | `messages.ts` — dette de FORME seulement (cycle 88) |
-| `creator` | `links/admin.ts` |
 | `details` | `calls.ts` (400) |
 | `link` | `conversations/sharing.ts` |
+| `creator` | `links/admin.ts` |
+| `sender` | `messages.ts` — dette de FORME seulement (cycle 88) |
 | `permissions` | `users/profile.ts` |
-| `user` | — |
+
+### Correction : les quatre comptes publiés étaient tous faux d'une unité
+
+Les cycles 89, 90, 91 et 92 ont annoncé **15, 11, 8 puis 6** sites restants.
+`FROZEN_INVENTORY` en portait **14, 10, 7 puis 5**. Vérifié en comptant les
+lignes du fichier à chaque commit :
+
+```
+999016b1 (cycle 89) -> 14      f9a6673c (cycle 90) -> 10
+32e35da0 (cycle 91) ->  7      HEAD     (cycle 92) ->  5
+```
+
+Et les quatre tableaux « ce qui reste » nommaient un champ **`user`** qui n'a
+jamais figuré dans le cliquet. Il vient du tableau en prose du cycle 88, recopié
+de journal en journal sans être confronté au fichier ; le compte, lui, s'est
+propagé par simple soustraction à partir d'un premier chiffre déjà faux.
+
+Aucun correctif n'est en cause : le cliquet est vert à chaque cycle, donc le
+FICHIER a toujours été juste. C'est la prose qui a dérivé — y compris dans des
+corps de PR fusionnés et des entrées de CHANGELOG, qui restent au dossier tels
+qu'ils ont été publiés.
+
+C'est la même faute que le cycle 86 bis, dans une autre matière : *« un tri est
+une AFFIRMATION, et se vérifie comme telle »*. Un COMPTE aussi.
+
+> **Le cliquet est la source. Un journal qui le cite se vérifie contre lui,
+> jamais contre le journal précédent.**
 
 Et, propre à ce cycle :
 

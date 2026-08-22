@@ -628,7 +628,7 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 6
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 5
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -669,8 +669,16 @@ main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
 `voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient ; les trois
 de `voice/translation.ts` au cycle 91, avec la TRONCATURE que portait la forme
 « juste » du même fichier.
-**L'inventaire trié des 6 restants est dans
+**L'inventaire trié des 5 restants est dans
 `tasks/realtime-sync-audit-2026-08-22-cycle92.md` §8.**
+
+**Le compte se lit dans le FICHIER, jamais dans le journal précédent.** Les
+cycles 89 à 92 ont publié 15, 11, 8 puis 6 restants, quand `FROZEN_INVENTORY`
+en portait 14, 10, 7 puis 5 — et leurs tableaux nommaient un champ `user` qui
+n'y a jamais figuré. L'erreur est entrée en recopiant la prose du cycle
+précédent au lieu de compter les lignes, puis s'est propagée par soustraction.
+Corrigé au cycle 92. **Le cliquet est la source ; un journal qui le cite se
+vérifie contre lui.**
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
