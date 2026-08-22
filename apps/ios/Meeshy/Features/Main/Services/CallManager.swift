@@ -2596,6 +2596,28 @@ final class CallManager: ObservableObject {
             await previousAnswer?.value
             await previousCameraSwitch?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 158): re-enabling video while CallKit holds the
+            // call (cellular pre-emption) or the OS has suspended capture must NOT
+            // actually acquire the camera / announce "camera active" to the peer —
+            // mirrors the guard `applySurvivalVideoSend` already applies for the
+            // automatic survival-recovery path. Without this, a hold→toggle-off→
+            // toggle-on sequence (a normal double-tap while the CallKit hold banner
+            // is up) called `upgradeToVideo()` unconditionally, starting capture and
+            // renegotiating with the peer while the call is still on hold — exactly
+            // the false "camera active" signal `applyCameraSuspension`'s doc-comment
+            // and `applySurvivalVideoSend`'s guard both exist to prevent.
+            // `isVideoEnabled` (already set to the new intent above) stays the
+            // source of truth: `handleHold`'s unhold branch resumes video
+            // automatically once the suspension lifts, so intent is never lost —
+            // only the actuation is deferred.
+            if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.hold.blocked",
+                           defaultValue: "Vidéo indisponible pendant la mise en attente de l'appel",
+                           bundle: .main)
+                )
+                return
+            }
             // Caméra jamais demandée : sans ce pré-flight, le prompt système
             // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
             // voyait la vidéo « s'activer » puis retomber. On tranche avant.

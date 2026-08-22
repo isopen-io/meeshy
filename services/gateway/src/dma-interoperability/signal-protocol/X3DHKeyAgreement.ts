@@ -41,6 +41,30 @@ export class X3DHSignedPreKeyRejected extends Error {
 }
 
 /**
+ * L'identifiant d'enregistrement entre dans l'`info` du HKDF, donc dans les clés.
+ * Les deux bouts doivent y mettre le MÊME entier — celui de l'INITIATEUR.
+ *
+ * Dériver contre un `0` de repli, comme le faisait le répondeur, ne dégrade pas
+ * la session : elle fabrique des clés que le pair ne retrouvera JAMAIS. La panne
+ * ne se déclare alors qu'au premier déchiffrement, sous les traits d'une
+ * authentification GCM rompue — c'est-à-dire sous les traits d'une ATTAQUE.
+ * Refuser ici nomme la vraie cause, à l'endroit où elle est encore lisible.
+ *
+ * La garde est runtime parce que la valeur traverse une frontière que le typage
+ * ne couvre pas : elle vient d'une colonne (`DMAEnrollment.registrationId`).
+ */
+const assertInitiatorRegistrationId = (registrationId: number | undefined): number => {
+  if (typeof registrationId !== 'number' || !Number.isInteger(registrationId)) {
+    throw new Error(
+      "X3DH: impossible de dériver — l'identifiant d'enregistrement de l'initiateur est absent " +
+        'ou non entier, or les deux bouts doivent lier le même'
+    );
+  }
+
+  return registrationId;
+};
+
+/**
  * Pre-key bundle published by a user for others to initiate sessions
  */
 export interface PreKeyBundle {
@@ -229,10 +253,23 @@ export class X3DHKeyAgreement {
       logger.debug('Performed DH operations and concatenated results', { dhOperations: recipientBundle.preKey ? 4 : 3 });
 
       // Step 4: HKDF key derivation
+      //
+      // L'identifiant lié au HKDF est celui de l'INITIATEUR — le nôtre, ici. Les
+      // deux bouts doivent y mettre le MÊME entier, sans quoi un secret partagé
+      // pourtant identique produit deux jeux de clés étrangers l'un à l'autre ;
+      // et c'est le seul des deux que les deux bouts peuvent connaître sans le
+      // tenir d'un canal hostile (le répondeur le lit dans l'inscription de
+      // l'expéditeur, cf. `responderKeyAgreement`).
+      //
+      // `recipientBundle.registrationId`, lui, ne voyage QUE dans le paquet de
+      // pré-clés — un champ que la signature de la pré-clé signée ne couvre PAS.
+      // Le lier donnerait à l'annuaire un levier pour désaccorder deux pairs sans
+      // jamais toucher à une signature. Il reste dans le paquet comme étiquette
+      // de session ; il n'entre pas dans une dérivation.
       const derived = this.deriveKeys(
         concatenated,
         'WhatsApp DMA Interoperability',
-        recipientBundle.registrationId
+        this.initiatorRegistrationId()
       );
 
       logger.debug('Derived keys using HKDF');
@@ -279,8 +316,11 @@ export class X3DHKeyAgreement {
     ephemeralPublicKey: Buffer,
     initiatorIdentityKey: Buffer,
     signedPreKeyId: number,
-    preKeyId?: number,
-    initiatorRegistrationId?: number
+    preKeyId: number | undefined,
+    // REQUIS : sans lui aucune clé du pair n'est atteignable (cf.
+    // `assertInitiatorRegistrationId`). Un appelant qui ne l'a pas n'a pas de
+    // session à ouvrir — il n'a pas un argument par défaut à recevoir.
+    initiatorRegistrationId: number
   ): Promise<X3DHResponderResult> {
     try {
       logger.debug('Starting X3DH responder key agreement', { signedPreKeyId, preKeyId, initiatorRegistrationId });
@@ -351,7 +391,7 @@ export class X3DHKeyAgreement {
       const derived = this.deriveKeys(
         concatenated,
         'WhatsApp DMA Interoperability',
-        initiatorRegistrationId ?? 0
+        assertInitiatorRegistrationId(initiatorRegistrationId)
       );
 
       logger.debug('Derived keys using HKDF');
@@ -376,6 +416,17 @@ export class X3DHKeyAgreement {
       this.stats.agreementErrors++;
       throw error;
     }
+  }
+
+  /**
+   * Notre propre identifiant d'enregistrement, côté initiateur.
+   *
+   * C'est celui que nous PUBLIONS (`SignalKeyManager.getPublicKeysForPublishing`)
+   * et donc celui que le répondeur retrouvera dans notre inscription — la même
+   * valeur des deux côtés, ce qu'exige la dérivation.
+   */
+  private initiatorRegistrationId(): number {
+    return assertInitiatorRegistrationId(this.keyManager.getRegistrationId());
   }
 
   /**

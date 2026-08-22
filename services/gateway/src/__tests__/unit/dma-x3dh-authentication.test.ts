@@ -78,12 +78,20 @@ const producedSignedPreKey = async (
 };
 
 /**
- * Sur le chemin initiateur, `initiatorKeyAgreement` ne lit qu'UNE méthode du
- * gestionnaire de clés — et seulement APRÈS avoir statué sur l'authenticité du
- * paquet. Un paquet rejeté ne doit donc jamais l'atteindre.
+ * Sur le chemin initiateur, `initiatorKeyAgreement` ne lit du gestionnaire de
+ * clés que ce que l'initiateur publie de LUI-MÊME — sa clé d'identité publique
+ * et son identifiant d'enregistrement — et seulement APRÈS avoir statué sur
+ * l'authenticité du paquet. Un paquet rejeté ne doit donc jamais l'atteindre.
+ *
+ * L'identifiant est lu ici depuis le gestionnaire, et non depuis le paquet,
+ * parce que les deux bouts doivent lier le MÊME entier dans leur HKDF ; le
+ * témoin de cette symétrie vit dans `dma-x3dh-derivation-symmetry.test.ts`.
  */
 const initiatorKeyManager = (identityPublicKey: Buffer): SignalKeyManager =>
-  ({ getIdentityPublicKey: () => identityPublicKey }) as unknown as SignalKeyManager;
+  ({
+    getIdentityPublicKey: () => identityPublicKey,
+    getRegistrationId: () => 12345,
+  }) as unknown as SignalKeyManager;
 
 const makeX3DH = (identityPublicKey: Buffer): X3DHKeyAgreement =>
   new X3DHKeyAgreement(initiatorKeyManager(identityPublicKey), {} as unknown as PrismaClient);

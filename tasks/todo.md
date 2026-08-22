@@ -592,3 +592,61 @@ jour jusqu'au modèle unique (canvas v3).
       passe 67/67 isolé ; `tsc` : 0 erreur sur mes fichiers, total 1290 → 1241 (page de diffusion typée).
 - [x] SDK : `MeeshySDK-Package` complet sur iOS 18.2 — **7896/7896, 0 échec, 35 ignorés** (ciblé : 19/19).
 - [ ] Merge `--no-ff` via `main` local (ff sur `origin/main` fait : 36937badb), push, CI, build + install sur `Meeshy-iOS26`.
+
+
+## Cycle 97 (2026-08-22) — les deux bouts de X3DH dérivent les mêmes clés
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle97.md`.
+
+- [x] Constat : l'`info` du HKDF de X3DH porte un identifiant d'enregistrement, et
+      les deux bouts n'y mettaient PAS le même — l'initiateur celui du
+      DESTINATAIRE (`recipientBundle.registrationId`), le répondeur celui de
+      l'INITIATEUR. Deux entiers tirés au hasard par identité (`randomInt(1, 16383)`).
+- [x] Conséquence exacte : les quatre DH étant correctement disposés, **le secret
+      partagé COÏNCIDE et toutes les clés qui en sortent DIVERGENT** (racine,
+      chaîne d'émission, chaîne de réception). Toute session DMA nouvelle
+      s'établissait sans erreur, et aucun message n'y était déchiffrable.
+- [x] Ce qui rend le défaut lisible : **le répondeur ÉNONÇAIT l'invariant que
+      l'initiateur violait**, trois lignes au-dessus de son propre appel — « both
+      parties must use the same registration ID (initiator's) ». Le côté qui
+      portait la règle était le côté conforme.
+- [x] Pourquoi rien ne le voyait : `X3DHKeyAgreement.test.ts` exerce chaque côté
+      SEUL, et un côté seul est toujours cohérent avec lui-même. C'est la
+      « quatrième famille » que le cycle 94 déclarait non outillée.
+- [x] Autoritatif = l'identifiant de l'INITIATEUR, et pas par convention : celui
+      du destinataire ne voyage QUE dans le paquet de pré-clés, un champ que la
+      signature NE COUVRE PAS — le lier donnait à l'annuaire un levier pour
+      désaccorder deux pairs sans franchir la vérification du cycle 96.
+- [x] Second défaut, même famille : `initiatorRegistrationId ?? 0` fabriquait
+      silencieusement une session que le pair ne retrouverait jamais, en déplaçant
+      le diagnostic vers la couche GCM — sous les traits d'une ATTAQUE. Fail-closed
+      (`assertInitiatorRegistrationId`), paramètre REQUIS au typage, garde runtime
+      conservée pour la frontière que le typage ne couvre pas (colonne Prisma).
+- [x] Troisième : `ISignalProtocolAdapter.performX3DH` taisait `ourRegistrationId`,
+      sans lequel le pair ne peut rien dériver — exactement ce que le cycle 96
+      avait corrigé pour la clé éphémère publique. Ajouté.
+- [x] **Le suivi `registrationId: 0` du cycle 96 est refermé, et pas comme il
+      l'annonçait** : ce `0` n'était pas à « porter », il était à retirer de la
+      dérivation. Il reste comme étiquette de session, avec l'interdiction écrite
+      d'y injecter l'identifiant du pair.
+- [x] Témoins : `dma-x3dh-derivation-symmetry.test.ts` (5), confrontant deux
+      PRODUCTIONS réelles. Le premier sépare volontairement « le secret partagé
+      coïncide » de « les clés dérivées coïncident » — la séparation EST le
+      diagnostic. **ROUGE prouvé deux fois séparément** : état initial ⇒ 4/5
+      tombent (seul le secret partagé passe) ; retour de la seule ligne initiateur
+      ⇒ 3/5 tombent.
+- [x] Gates : `tsc --noEmit` gateway 0 · suites ciblées 16/16 · suite complète gateway.
+- [ ] Suivi — préfixe `F` et sel du HKDF (hérité c96). Note ajoutée : l'`info` de
+      libsignal ne porte AUCUN identifiant d'enregistrement, donc le lot de
+      conformité retirera ce que ce cycle rend cohérent. Bon ordre : cohérent
+      d'abord, conforme ensuite.
+- [ ] Suivi — les 3 suites du sous-arbre restent ignorées par jest (hérité c96).
+- [ ] Suivi — `SignalKeyManager.registrationId` est tiré au hasard dans le
+      CONSTRUCTEUR, remplacé par la valeur persistée seulement au chargement : même
+      forme que le `?? 0` fermé ici, une valeur par défaut plausible là où
+      l'absence devrait se déclarer.
+- [ ] Suivi — la quatrième famille reste non outillée. Formulation la plus nette à
+      ce jour : rien ne garde contre deux moitiés d'un même protocole chacune
+      cohérente avec elle-même et fausses l'une contre l'autre. Paires à instruire :
+      chiffrement/déchiffrement du Double Ratchet, sérialiseur/décodeur Socket.IO,
+      producteur gateway / décodeurs iOS-Android.
