@@ -2,6 +2,61 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **share-link entry-decision policy shipped** (slice `sharelink-entry-policy`,
+> feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow",
+> box flipped `[ ]` → `[~]`). This lands the missing "who enters, and how" brain for share-link
+> deep links; the umbrella box stays `[~]` because the resolver + `joinAuthenticated` endpoint +
+> `MeeshyApp.kt` rewiring are named follow-ups.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 20 open PRs at
+> branch time are all web/shared/gateway/ios/sdk, none android-routine). Branched off latest
+> `origin/main` (`685ac5e2`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `platforms;android-37.0`
+> recipe worked (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0"
+> "platform-tools"`); the local gate is available this run.
+>
+> **The gap (read-only recon over iOS + Android)**: iOS `ShareLinkEntryPolicy.swift` is a pure
+> six-way decision engine that decides HOW a person enters a conversation from a share link.
+> Android had ported nearly the whole anonymous-session feature (permission core, session store,
+> guest-join form/VM/screen, composer gate, dual-auth) but NOT this entry-decision policy — so
+> `MeeshyApp.kt`'s deep-link handler routed EVERY share-link straight to the anonymous guest form,
+> wrongly forcing an already-authenticated user, an existing member, or a returning guest into it.
+> iOS branches six ways here; Android branched zero.
+>
+> **`:core:model` `ShareLinkEntryPolicy`** (new, pure SSOT): `intent(ShareLinkEntryFacts) →
+> ShareLinkEntryIntent`. `ShareLinkEntryFacts` = five values (conversationId, isAuthenticated,
+> isAlreadyMember, linkRequiresAccount, hasStoredGuestSession) — deliberately values, not services:
+> the rule looks nothing up itself. `ShareLinkEntryIntent` = sealed interface of six:
+> `OpenConversation(id)` / `JoinWithAccount(id)` / `JoinAnonymously` / `ResumeGuestSession` /
+> `ChooseIdentity(id)` / `RequiresAccount`. Branch order is a faithful port of iOS `intent(for:)`:
+> unauthenticated → (stored guest session ⇒ resume) else (requireAccount ⇒ requiresAccount) else
+> joinAnonymously; authenticated → (member ⇒ open) else (requireAccount ⇒ joinWithAccount) else
+> chooseIdentity. Two load-bearing precedence rules asserted: stored-guest beats requireAccount
+> (unauth), member beats requireAccount (auth). Pure — no I/O, no clock, no state; presentation
+> (choice sheets, routing) stays app-side.
+>
+> **Tests: +11** — `ShareLinkEntryPolicyTest`: joinAnonymously / requiresAccount /
+> resumeGuestSession / stored-guest-beats-requireAccount / openConversation / member-beats-
+> requireAccount / joinWithAccount / chooseIdentity / stored-guest-does-not-skip-choice-when-auth /
+> conversationId-threaded-into-every-conversation-scoped-intent / member-flag-ignored-when-unauth.
+> **Mutation (RED proof) ×2**: (a) unauthenticated precedence reordered (requireAccount checked
+> before the stored-guest guard) → **exactly** `unauthenticated_storedGuestSession_beatsAccountRequirement`
+> fails (1 of 11); (b) authenticated precedence reordered (requireAccount checked before
+> isAlreadyMember) → **exactly** `authenticated_alreadyMember_beatsAccountRequirement` fails (1 of
+> 11). Both restored; production diff is clean.
+>
+> **Verified**: `assembleDebug testDebugUnitTest` locally (see run log for result). Reviewer PASS.
+> Diff is `apps/android` only (1 new code file in `:core:model` + 1 test + tracking docs). Verdict:
+> **PASS** — pure decision-engine addition, behavioural tests through the public API, no production
+> logic outside apps/android.
+>
+> **Next**: continue the same feature toward `[x]` — port `joinAuthenticated` (`POST
+> conversations/join/{linkId}`, idempotent) on `ShareLinkApi` + `AnonymousSessionRepository` (or a
+> new `ShareLinkJoinRepository`) as the next thin, TDD-friendly slice; then the `:sdk-core`
+> `ShareLinkEntryResolver` that assembles the facts; then rewire `MeeshyApp.kt`. Re-scout read-only
+> before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **conversation-lock master-PIN change + remove shipped** (slice
 > `conversation-lock-master-pin`, feature-parity §Chat — "Conversation lock: master PIN
 > setup/change/remove + per-conversation 4-digit lock + unlock-all", flipped `[ ]` → `[x]`). This closes
