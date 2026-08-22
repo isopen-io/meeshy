@@ -36,6 +36,15 @@ export interface EncryptedMessage {
   signature: Buffer;
   messageNumber: number;
   previousChainLength: number;
+  /**
+   * Identifiant de la pré-clé à usage unique que l'initiateur a consommée pour
+   * DH4. Absent quand l'accord s'est fait à trois DH. C'est la seule information
+   * qui permet au répondeur de retrouver la MÊME quatrième moitié : sans elle il
+   * concatène 32 octets nuls là où l'initiateur a mis un vrai Diffie-Hellman, et
+   * le désaccord ne se manifeste qu'à la couche GCM, sous les traits d'une
+   * altération du message.
+   */
+  preKeyId?: number;
 }
 
 /**
@@ -55,6 +64,13 @@ interface SignalSession {
   messageNumberSend: number;
   messageNumberReceive: number;
   previousChainLength: number;
+  /**
+   * Pré-clé à usage unique consommée par l'INITIATEUR pour DH4, ou `null` quand
+   * l'accord s'est fait à trois DH. Le répondeur n'a aucun moyen de la deviner :
+   * elle doit voyager avec le message qui établit la session, faute de quoi les
+   * deux bouts concatènent des quatrièmes DH différents.
+   */
+  preKeyUsed: number | null;
 }
 
 /**
@@ -78,6 +94,7 @@ interface StoredSessionData {
 
 export class SignalProtocolEngine {
   private prisma: PrismaClient;
+  private userId?: string;
   private keyManager?: SignalKeyManager;
   private x3dh?: X3DHKeyAgreement;
   private doubleRatchet?: DoubleRatchet;
@@ -96,6 +113,22 @@ export class SignalProtocolEngine {
   }
 
   /**
+   * Set the user ID this engine speaks for.
+   *
+   * `SignalKeyManager` REFUSE d'écrire quoi que ce soit sans identité
+   * (`storeIdentityKey` lève « User ID not set »), si bien qu'un moteur sans
+   * cette information ne franchit même pas `initialize()`. Le seuil était
+   * infranchissable : le moteur construisait son gestionnaire de clés sans
+   * jamais lui transmettre d'identité, et n'en possédait aucune à transmettre.
+   * `SignalProtocolAdapter` — la jumelle de ce moteur — portait ce point d'entrée
+   * depuis toujours ; c'est le même, à la même place.
+   */
+  setUserId(userId: string): void {
+    this.userId = userId;
+    this.keyManager?.setUserId(userId);
+  }
+
+  /**
    * Initialize Signal Protocol engine
    *
    * Week 1-2 (COMPLETED): Initialize key manager
@@ -107,7 +140,7 @@ export class SignalProtocolEngine {
 
     try {
       // Initialize key manager (Week 1-2)
-      this.keyManager = new SignalKeyManager(this.prisma);
+      this.keyManager = new SignalKeyManager(this.prisma, undefined, this.userId);
       await this.keyManager.initialize();
 
       // Initialize X3DH key agreement (Week 3-4)
@@ -159,7 +192,10 @@ export class SignalProtocolEngine {
             // Message counters from separate DB fields
             messageNumberSend: session.messageNumberSend || 0,
             messageNumberReceive: session.messageNumberReceive || 0,
-            previousChainLength: session.previousChainLength || 0
+            previousChainLength: session.previousChainLength || 0,
+            // Une session RESTAURÉE est déjà établie : la pré-clé unique n'a plus
+            // de rôle, elle n'a servi qu'à l'accord initial.
+            preKeyUsed: null
           };
 
           // Initialize Double Ratchet session with restored DH key pair
@@ -302,10 +338,20 @@ export class SignalProtocolEngine {
         logger.debug('Initiating X3DH session', { recipientId });
         // Perform X3DH key agreement and initialize Double Ratchet
         const session = await this.initiateNewSession(recipientId);
+        // La paire éphémère de X3DH doit ENTRER dans la session : c'est elle que
+        // l'étape 5 publie en `ephemeralPublicKey`, et sans laquelle le répondeur
+        // ne peut calculer NI DH2, NI DH3, NI DH4. Omise, `initializeSession`
+        // laissait `dhRatchetKeyPair` à `undefined` et le message partait avec un
+        // `Buffer.alloc(0)` en guise de clé publique — un accord que le pair ne
+        // pouvait par construction jamais retrouver. Même défaut que celui corrigé
+        // au cycle 96 sur `SignalProtocolAdapter`, la JUMELLE de ce moteur.
         ratchetSession = this.doubleRatchet.initializeSession(
           session.rootKey,
           session.chainKeySend,
-          session.chainKeyReceive
+          session.chainKeyReceive,
+          session.dhRatchetPublicKey && session.dhRatchetPrivateKey
+            ? { publicKey: session.dhRatchetPublicKey, privateKey: session.dhRatchetPrivateKey }
+            : undefined
         );
         this.ratchetSessions.set(recipientId, ratchetSession);
         logger.debug('X3DH key agreement completed', { recipientId });
@@ -344,7 +390,12 @@ export class SignalProtocolEngine {
         authenticationTag,
         signature,
         messageNumber: messageKey.messageNumber,
-        previousChainLength: ratchetSession.previousChainLength
+        previousChainLength: ratchetSession.previousChainLength,
+        // Portée par CHAQUE message, pas seulement par le premier : un répondeur
+        // qui a perdu son état doit pouvoir rétablir la session depuis n'importe
+        // lequel, et l'établir sans DH4 quand l'initiateur en avait un revient à
+        // ne jamais déchiffrer.
+        preKeyId: this.sessions.get(recipientId)?.preKeyUsed ?? undefined
       };
 
       // Persist session state
@@ -395,12 +446,29 @@ export class SignalProtocolEngine {
         logger.debug('Initiating X3DH session (responder)', { senderId });
         // Perform X3DH key agreement and initialize Double Ratchet
         // In this context, we're the responder, so we use the ephemeralPublicKey from sender
-        const session = await this.responderKeyAgreement(senderId, encryptedMessage.ephemeralPublicKey);
+        const session = await this.responderKeyAgreement(
+          senderId,
+          encryptedMessage.ephemeralPublicKey,
+          encryptedMessage.preKeyId
+        );
+        // Les chaînes entrent TELLES QUELLES. `performResponderKeyAgreement` les a
+        // déjà croisées — « responder's send is initiator's receive and vice
+        // versa » — et `responderKeyAgreement` le REDIT à son tour (« X3DH already
+        // swaps chain keys for responder, so use them directly »). Les croiser une
+        // seconde fois ici ANNULAIT le croisement : le répondeur déchiffrait avec
+        // la chaîne d'émission de l'initiateur, donc jamais. L'invariant était
+        // écrit deux fois, chez le producteur, et violé chez l'unique consommateur.
         ratchetSession = this.doubleRatchet.initializeSession(
           session.rootKey,
+          session.chainKeySend,
           session.chainKeyReceive,
-          session.chainKeySend
+          session.dhRatchetPublicKey && session.dhRatchetPrivateKey
+            ? { publicKey: session.dhRatchetPublicKey, privateKey: session.dhRatchetPrivateKey }
+            : undefined
         );
+        if (session.dhRatchetRemoteKey) {
+          ratchetSession.dhRatchetKeyRemote = session.dhRatchetRemoteKey;
+        }
         this.ratchetSessions.set(senderId, ratchetSession);
         logger.debug('X3DH key agreement completed (responder)', { senderId });
       }
@@ -650,8 +718,14 @@ export class SignalProtocolEngine {
         // Message counters (aligned with DB schema)
         messageNumberSend: 0,
         messageNumberReceive: 0,
-        previousChainLength: 0
+        previousChainLength: 0,
+        // Le paquet n'apporte une pré-clé unique que si le destinataire en avait
+        // une de libre ; c'est cette même condition qui décide de DH4 côté
+        // initiateur, donc la seule qui doive voyager.
+        preKeyUsed: preKey.keyData ? preKey.preKeyId : null
       };
+
+      this.sessions.set(recipientId, session);
 
       // Step 5 & 6: Store session and mark pre-key as used ATOMICALLY
       // Using Prisma transaction ensures both operations succeed or both fail
@@ -743,7 +817,11 @@ export class SignalProtocolEngine {
    *
    * Note: Responder side uses the ephemeral public key sent by initiator
    */
-  private async responderKeyAgreement(senderId: string, ephemeralPublicKey: Buffer): Promise<SignalSession> {
+  private async responderKeyAgreement(
+    senderId: string,
+    ephemeralPublicKey: Buffer,
+    preKeyId?: number
+  ): Promise<SignalSession> {
     logger.debug('Performing X3DH key agreement (RESPONDER)', { senderId });
 
     if (!this.x3dh || !this.keyManager) {
@@ -773,7 +851,12 @@ export class SignalProtocolEngine {
         ephemeralPublicKey,
         senderIdentityKey,
         enrollment.signedPreKeyId,
-        undefined, // preKeyId - optional
+        // La pré-clé unique que l'initiateur DIT avoir consommée. Le littéral
+        // `undefined` d'avant faisait replier le répondeur sur 32 octets nuls en
+        // guise de DH4 pendant que l'initiateur en calculait un vrai : deux
+        // secrets partagés étrangers, et un échec qui ne se lisait qu'en aval,
+        // à l'authentification GCM.
+        preKeyId,
         enrollment.registrationId // Initiator's registration ID for HKDF
       );
 
@@ -793,7 +876,8 @@ export class SignalProtocolEngine {
         // Message counters (aligned with DB schema)
         messageNumberSend: 0,
         messageNumberReceive: 0,
-        previousChainLength: 0
+        previousChainLength: 0,
+        preKeyUsed: preKeyId ?? null
       };
 
       this.stats.sessionsActive++;

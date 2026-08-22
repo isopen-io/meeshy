@@ -2,6 +2,64 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **quote-repost composer shipped** (slice `feed-quote-repost`, feature-parity §F —
+> "Post / comment pin-unpin; repost / quote-repost / share; report"). The post options menu offered only a
+> SIMPLE repost; iOS also lets you **quote** — repost with your own commentary. This lands the quote flow
+> and, along the way, fixes a latent Android bug.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the two
+> open PRs repo-wide are #3342 web + #3337 shared/iOS, neither android-routine). Prior android iteration
+> (`guest-join-entry-navigation`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`cb7c8297`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `--channel=3 platforms;android-37.0`
+> recipe worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally,
+> **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Pure SSOT `RepostCommand`** (`:feature:feed`, app-side — ports what iOS keeps in `FeedViewModel`):
+> `of(postId, repostOf, quote, commentary) → RepostCommand(targetId, content, isQuote)` folds two decisions.
+> **(1) Target id** (port of iOS `resolveRepostTargetId`): reposting a repost targets its recorded ROOT
+> (`originalRepostOfId?.trim() ?: repostOf.id`), never the intermediate share — the gateway hydrates
+> `repostOf` one level deep, so reposting a share by its own id embeds an EMPTY share card. The pre-existing
+> simple `repost()` passed `postId` straight through — a **latent bug now fixed** since both the simple and
+> quote paths route through `RepostCommand`. **(2) content/isQuote** (port of iOS `repostPost`
+> `content: isQuote ? content : nil`, `isQuote: isQuote ? (content != nil) : false`): a simple repost carries
+> no content; a quote carries the trimmed commentary. **Surpasses iOS**: a blank/whitespace-only quote
+> degrades to a simple repost (blank→null then `isQuote = content != null`), where iOS's raw `content != nil`
+> would send `content = ""`, `isQuote = true` (an empty quote card).
+>
+> **`:feature:feed` `FeedViewModel`**: `repost(postId)` now routes through `RepostCommand` (target fix);
+> new `beginQuote(postId)` (inert if the post isn't loaded — nothing to quote; seeds a `QuoteComposerState`
+> with the source author + trimmed content preview), `onQuoteTextChange`, `cancelQuote`, `submitQuote`
+> (computes the command, closes the sheet — iOS dismisses immediately — reposts, `refresh()` on success /
+> `errorMessage` on failure). `PostAction.Quote` added to the pure `PostActionMenu` right after `Repost`
+> (every post). `FeedScreen` wires `onQuote → beginQuote` and renders a `QuoteComposerSheet` (Compose glue,
+> exempt: an `AlertDialog` coherent with `ReportPostDialog` — commentary field above a bordered source
+> preview). New strings in all 4 locales (en/fr/es/pt).
+>
+> **Tests: +23** — `RepostCommandTest` ×11 (pure: own-id / repost→root / no-root fallback / blank-root
+> fallback / padded-root trim / simple carries no content / quote trims content + flags / blank + null
+> commentary degrade / inner-whitespace preserved / quote-of-repost composes both); `FeedViewModelTest` ×11
+> (repost own-id + refresh / repost-of-repost→root / error surfaces + no refresh / beginQuote preview /
+> beginQuote inert on unknown / draft change / submitQuote commentary + close + refresh / submitQuote-of-
+> repost→root / submitQuote blank degrades / cancel closes no repost / submit inert with no composer);
+> `PostActionMenuTest` ×1 (quote follows repost). **Mutation RED-proof ×1**: `isQuote = content != null` →
+> `= quote` fails EXACTLY the 3 blank-degradation tests (2 pure + 1 VM), 730 others green. Restored via `cp`
+> backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure SSOT + 1 new test in `:feature:feed`, VM + menu + screen wiring,
+> strings in 4 locales, tracking docs). Verdict: **PASS** — app-side orchestration + Compose glue,
+> behavioural tests through the public API, the pure "what to send" decision isolated in a tested SSOT, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). The sibling gap `comment pin-unpin` remains, but neither iOS nor Android has a
+> comment-pin backend, so it is net-new invention without a port reference — skip until a gateway endpoint
+> exists. Better candidates: quote-repost from the **post-detail** menu (iOS `PostDetailView.toggleDetailRepost`
+> offers both repost and quote there too — `PostDetailViewModel` has its own `repost`; wiring the same
+> `RepostCommand` + composer there is a clean follow-up), or advance to another §F `[~]` (e.g. the reposted/
+> quoted embed cell, line ~4544). Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **guest-join deep-link route rewired — the umbrella box is now `[x]`** (slice
 > `guest-join-entry-navigation`, feature-parity §Chat — "Anonymous-session conversation mode; guest
 > join-via-share-link flow"). This lands the last named follow-up: the `MeeshyApp.kt` deep-link route no

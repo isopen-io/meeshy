@@ -213,9 +213,18 @@ export class DoubleRatchet {
     const kdf = this.kdfRatchet(session.rootKey, dhOutput);
 
     // Update session
+    //
+    // Les deux bouts tirent le MÊME bloc de 96 octets du même Diffie-Hellman :
+    // la symétrie ne peut donc venir que du CROISEMENT. Celui qui reçoit prend
+    // en réception ce que celui qui émet a pris en émission — sans quoi les deux
+    // côtés se retrouvent avec la même moitié dans le même rôle, et la chaîne
+    // d'émission de l'un n'est jamais la chaîne de réception de l'autre.
+    // C'est la disposition que `X3DHKeyAgreement.performResponderKeyAgreement`
+    // applique déjà à l'accord initial (« responder's send is initiator's receive
+    // and vice versa ») ; le ratchet asymétrique doit la reconduire à chaque pas.
     session.rootKey = kdf.rootKey;
-    session.chainKeySend = kdf.chainKeySend;
-    session.chainKeyReceive = kdf.chainKeyReceive;
+    session.chainKeySend = remotePublicKey ? kdf.chainKeyReceive : kdf.chainKeySend;
+    session.chainKeyReceive = remotePublicKey ? kdf.chainKeySend : kdf.chainKeyReceive;
     session.dhRatchetKeyPair = newDHKeyPair;
     session.previousChainLength = session.messageNumberSend;
     session.messageNumberSend = 0;
