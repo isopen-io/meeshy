@@ -7442,3 +7442,99 @@ final class FailCallActiveGuardTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Vague 158: toggleVideo must not re-acquire the camera while CallKit
+// is holding the call or the OS has suspended capture.
+
+/// Audit finding: `applyCameraSuspension`, `handleHold`, and
+/// `applySurvivalVideoSend` all treat `isVideoSuspendedByHold` /
+/// `isVideoSuspendedByCaptureInterruption` as "no camera access right now" —
+/// `applySurvivalVideoSend` explicitly refuses to resume video while either
+/// flag is set. `toggleVideo()`, the user-facing manual video button, had no
+/// such guard: a hold→toggle-off→toggle-on sequence (an ordinary double-tap
+/// while the CallKit hold banner is up) called `upgradeToVideo()`
+/// unconditionally — acquiring the camera, notifying CallKit `hasVideo: true`,
+/// and telling the peer "camera active" while the call was still on hold.
+final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func toggleVideoBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo() not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "func switchCamera()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
+            "automatic survival-recovery path."
+        )
+    }
+
+    func test_toggleVideo_holdGuardOnlyBlocksTurningVideoOn() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("expected `if target, ...` guard — turning video OFF while on hold must " +
+                     "remain a normal downgrade, only re-enabling is unsafe mid-hold")
+            return
+        }
+        XCTAssertFalse(guardRange.isEmpty)
+    }
+
+    func test_toggleVideo_holdGuardPrecedesUpgradeToVideo() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
+        }
+        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()") else {
+            XCTFail("upgradeToVideo() call not found in toggleVideo"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, upgradeRange.lowerBound,
+            "the hold/capture-interruption guard must run before upgradeToVideo() acquires the " +
+            "camera — otherwise a re-enable tap during a CallKit hold starts capture and " +
+            "renegotiates with the peer while the call is still on hold."
+        )
+    }
+
+    func test_toggleVideo_holdGuardReturnsWithoutFallingThroughToPermissionCheck() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
+        }
+        let searchStart = guardRange.upperBound
+        guard let closeRange = body.range(of: "\n            }", range: searchStart..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "MediaPermissionCoordinator.ensureCamera / upgradeToVideo."
+        )
+    }
+}
