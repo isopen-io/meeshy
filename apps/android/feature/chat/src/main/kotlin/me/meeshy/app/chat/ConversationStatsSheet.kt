@@ -41,6 +41,8 @@ import me.meeshy.sdk.model.ContentTypeKind
 import me.meeshy.sdk.model.ContentTypeShare
 import me.meeshy.sdk.model.LanguageShare
 import me.meeshy.sdk.model.ParticipantShare
+import me.meeshy.sdk.model.SentimentBreakdown
+import me.meeshy.sdk.model.SentimentTone
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
@@ -61,12 +63,13 @@ import kotlin.math.roundToInt
 fun ConversationStatsSheet(
     conversationId: String,
     accentColor: Color,
+    messageContents: List<String>,
     onDismiss: () -> Unit,
     viewModel: ConversationStatsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(conversationId) { viewModel.load(conversationId) }
+    LaunchedEffect(conversationId) { viewModel.load(conversationId, messageContents) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -141,6 +144,95 @@ private fun LoadedContent(
         SectionLabel(stringResource(R.string.conversation_stats_languages))
         state.languages.take(LANGUAGE_ROW_LIMIT).forEach { LanguageRow(it, accentColor) }
     }
+
+    state.sentiment?.let { sentiment ->
+        SectionLabel(stringResource(R.string.conversation_stats_sentiment))
+        SentimentSummary(sentiment)
+        SentimentBar(sentiment)
+    }
+}
+
+@Composable
+private fun SentimentSummary(sentiment: SentimentBreakdown) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = MeeshySpacing.sm),
+    ) {
+        SentimentColumn(
+            SentimentTone.POSITIVE,
+            "😄",
+            stringResource(R.string.conversation_stats_sentiment_positive),
+            sentiment,
+            Modifier.weight(1f),
+        )
+        SentimentColumn(
+            SentimentTone.NEUTRAL,
+            "😐",
+            stringResource(R.string.conversation_stats_sentiment_neutral),
+            sentiment,
+            Modifier.weight(1f),
+        )
+        SentimentColumn(
+            SentimentTone.NEGATIVE,
+            "😔",
+            stringResource(R.string.conversation_stats_sentiment_negative),
+            sentiment,
+            Modifier.weight(1f),
+        )
+    }
+}
+
+@Composable
+private fun SentimentColumn(
+    tone: SentimentTone,
+    emoji: String,
+    label: String,
+    sentiment: SentimentBreakdown,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(emoji, style = MaterialTheme.typography.titleMedium)
+        Text(
+            "${sentiment.percent(tone)}%",
+            style = MaterialTheme.typography.bodyMedium,
+            color = toneColor(tone),
+            fontWeight = FontWeight.Bold,
+        )
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MeeshyTheme.tokens.textMuted)
+    }
+}
+
+@Composable
+private fun SentimentBar(sentiment: SentimentBreakdown) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = MeeshySpacing.sm)
+            .height(12.dp)
+            .clip(CircleShape),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        sentiment.segments().forEach { segment ->
+            Box(
+                modifier = Modifier
+                    .weight(segment.fraction.toFloat().coerceAtLeast(0.01f))
+                    .fillMaxHeight()
+                    .clip(CircleShape)
+                    .background(toneColor(segment.tone)),
+            )
+        }
+    }
+}
+
+private fun toneColor(tone: SentimentTone): Color = when (tone) {
+    SentimentTone.POSITIVE -> MeeshyPalette.Success
+    SentimentTone.NEUTRAL -> MeeshyPalette.Warning
+    SentimentTone.NEGATIVE -> MeeshyPalette.Error
 }
 
 @Composable

@@ -151,6 +151,61 @@ class ConversationStatsViewModelTest {
     }
 
     @Test
+    fun `load scores the message contents into a sentiment split`() = runTest {
+        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+
+        vm.load("c1", listOf("love this", "hate that", "the table"))
+        advanceUntilIdle()
+
+        val sentiment = vm.state.value.sentiment
+        assertThat(sentiment).isNotNull()
+        assertThat(sentiment!!.total).isEqualTo(3)
+        assertThat(sentiment.positive).isEqualTo(1)
+        assertThat(sentiment.negative).isEqualTo(1)
+        assertThat(sentiment.neutral).isEqualTo(1)
+    }
+
+    @Test
+    fun `load leaves sentiment null when no message can be scored`() = runTest {
+        val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
+
+        vm.load("c1", listOf("", "   "))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.sentiment).isNull()
+    }
+
+    @Test
+    fun `sentiment survives a stats fetch failure`() = runTest {
+        val vm = ConversationStatsViewModel(repo(NetworkResult.Failure(ApiError("offline"))))
+
+        vm.load("c1", listOf("love it"))
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.phase).isEqualTo(StatsPhase.Error)
+        assertThat(vm.state.value.sentiment?.positive).isEqualTo(1)
+    }
+
+    @Test
+    fun `retry keeps the already-scored sentiment without re-passing contents`() = runTest {
+        val repository = mockk<ConversationStatsRepository>()
+        coEvery { repository.fetchStats("c1") } returnsMany listOf(
+            NetworkResult.Failure(ApiError("offline")),
+            NetworkResult.Success(stats()),
+        )
+        val vm = ConversationStatsViewModel(repository)
+
+        vm.load("c1", listOf("love it"))
+        advanceUntilIdle()
+
+        vm.retry()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.phase).isEqualTo(StatsPhase.Loaded)
+        assertThat(vm.state.value.sentiment?.positive).isEqualTo(1)
+    }
+
+    @Test
     fun `selecting the current period is inert`() = runTest {
         val vm = ConversationStatsViewModel(repo(NetworkResult.Success(stats())))
         vm.load("c1")
