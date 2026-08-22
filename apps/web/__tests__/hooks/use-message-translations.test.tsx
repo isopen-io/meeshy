@@ -470,6 +470,64 @@ describe('useMessageTranslations', () => {
 
       expect(processed.content).toBe('Bonjour (medium)');
     });
+
+    it('should collapse region-tagged codes of the same language into one entry (fr + fr-FR)', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const message = createTestMessage({
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr',
+            translatedContent: 'Bonjour (basic)',
+            translationModel: 'basic',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            targetLanguage: 'fr-FR',
+            translatedContent: 'Bonjour (premium)',
+            translationModel: 'premium',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      // fr et fr-FR désignent la même langue : une seule entrée doit survivre,
+      // et la qualité (premium > basic) doit gagner malgré les codes distincts.
+      expect(processed.translations.length).toBe(1);
+      expect(processed.content).toBe('Bonjour (premium)');
+    });
+
+    it('should let a premium region-tagged translation win over a basic bare code regardless of order', () => {
+      const user = createTestUser({ systemLanguage: 'fr' });
+      const message = createTestMessage({
+        content: 'Hello',
+        originalLanguage: 'en',
+        translations: [
+          {
+            targetLanguage: 'fr-FR',
+            translatedContent: 'Bonjour (premium)',
+            translationModel: 'premium',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            targetLanguage: 'FR',
+            translatedContent: 'Bonjour (basic, mixed case)',
+            translationModel: 'basic',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+      });
+
+      const { result } = renderHook(() => useMessageTranslations({ currentUser: user as unknown as User }));
+      const processed = result.current.processMessageWithTranslations(message);
+
+      expect(processed.translations.length).toBe(1);
+      expect(processed.content).toBe('Bonjour (premium)');
+    });
   });
 
   describe('processMessageWithTranslations — cache keyed by preferred language', () => {
