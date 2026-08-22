@@ -61,6 +61,10 @@
         <item quantity="one">%1$d nouvelle publication</item>
         <item quantity="other">%1$d nouvelles publications</item>
     </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d j\'aime</item>
+        <item quantity="other">%1$d j\'aime</item>
+    </plurals>
     <!-- Mood status bar (Prisme: FR) -->
     <string name="status_bar_me">Moi</string>
     <string name="status_bar_add">Statut</string>

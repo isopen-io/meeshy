@@ -3,14 +3,13 @@
  * Gère les réactions aux messages (ajout, suppression, synchronisation)
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { notifyReactionAdded, notifyReactionRemoved } from '../../services/notifications/reactionNotify';
 import { ReactionService } from '../../services/ReactionService.js';
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { SocketIOResponse, ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
 import type { ReactionUpdateEvent } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS, RATE_LIMIT_REFUSAL_MESSAGE } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
@@ -440,7 +439,11 @@ export class ReactionHandler {
    */
   private async _broadcastReactionEventWithConversationId(
     conversationId: string,
-    updateEvent: unknown,
+    // Cycle 101 — `unknown` ici ANNULAIT le contrat pour l'émission ci-dessous :
+    // la garde d'un `MeeshySocket` ne vaut que jusqu'au premier paramètre non
+    // typé (leçon du cycle 100, `SocialEventsHandler`). `createUpdateEvent`
+    // rend déjà exactement cette forme.
+    updateEvent: ReactionUpdateEventData,
     eventType: typeof SERVER_EVENTS.REACTION_ADDED | typeof SERVER_EVENTS.REACTION_REMOVED
   ): Promise<void> {
     const normalizedConversationId = await normalizeConversationId(

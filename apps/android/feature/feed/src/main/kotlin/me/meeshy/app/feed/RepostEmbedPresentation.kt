@@ -25,6 +25,7 @@ data class RepostEmbedPresentation(
     val isTranslated: Boolean,
     val previewImageUrl: String?,
     val extraMediaCount: Int,
+    val likeCount: Int,
     val isQuote: Boolean,
     val isStory: Boolean,
     val isReel: Boolean,
@@ -60,6 +61,7 @@ object RepostEmbedBuilder {
                 ?.takeIf { it.isNotBlank() }
                 ?.let { resolveFeedMediaUrl(it, mediaBaseUrl) },
             extraMediaCount = (mediaCount - 1).coerceAtLeast(0),
+            likeCount = (repost.likeCount ?: 0).coerceAtLeast(0),
             isQuote = repost.isQuote == true,
             isStory = repost.type.equals("story", ignoreCase = true),
             isReel = repost.type.equals("reel", ignoreCase = true),

@@ -61,6 +61,10 @@
         <item quantity="one">%1$d nova publicação</item>
         <item quantity="other">%1$d novas publicações</item>
     </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d curtida</item>
+        <item quantity="other">%1$d curtidas</item>
+    </plurals>
     <!-- Mood status bar (Prisme: PT) -->
     <string name="status_bar_me">Eu</string>
     <string name="status_bar_add">Status</string>
