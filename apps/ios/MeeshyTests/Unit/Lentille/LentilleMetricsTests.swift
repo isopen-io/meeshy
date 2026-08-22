@@ -292,6 +292,7 @@ final class LentilleMetricsTests: XCTestCase {
     func test_rail() throws {
         XCTAssertEqual(Double(LentilleMetrics.Rail.size), try tokenNumber("rail", "size"))
         XCTAssertEqual(Double(LentilleMetrics.Rail.ringWidth), try tokenNumber("rail", "ring"))
+        XCTAssertEqual(Double(LentilleMetrics.Rail.paddingVertical), try tokenNumber("rail", "paddingVertical"))
         XCTAssertEqual(LentilleMetrics.Rail.maxEntries, Int(try tokenNumber("rail", "maxEntries")))
     }
 

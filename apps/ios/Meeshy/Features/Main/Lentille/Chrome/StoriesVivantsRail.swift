@@ -224,6 +224,7 @@ public struct StoriesVivantsRail: View {
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, LentilleMetrics.Rail.paddingVertical)
             }
         }
     }

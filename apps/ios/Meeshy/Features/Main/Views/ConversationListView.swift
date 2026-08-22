@@ -584,16 +584,39 @@ struct ConversationListView: View {
         for group: (section: ConversationSection, conversations: [Conversation])
     ) -> some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            // Pleine largeur, sans marge latérale : épinglé, ce sticker passe
-            // AU-DESSUS des rangs qui défilent dessous — son fond doit couvrir
-            // toute la largeur, sinon les rangs réapparaissent dans les
-            // gouttières. Les cotes (10.5/800/.1em, padding 4/13) vivent dans
+            // Pleine largeur, sans marge latérale — et la RAISON n'est pas
+            // celle qui était écrite ici. L'ancien motif (« sinon les rangs
+            // réapparaissent dans les gouttières ») ne peut pas se produire :
+            // la perspective ne fait que RÉTRÉCIR (`listScaleDecay = 0.04`,
+            // `scale = 1 − 0.04f ≤ 1`, ancrée), et la carte de focus est bornée
+            // à la même laisse (`geo.size.width - 2 * Row.marginHorizontal`) ;
+            // rien n'occupe jamais ces 8 pt. Le vrai motif est la PARITÉ avec la
+            // peau web, qui fait le même choix indépendamment —
+            // `LentilleSticker.tsx` est `sticky top-0` pleine largeur du
+            // conteneur pendant que `LentilleRow.tsx` porte
+            // `marginLeft/Right: var(--lentille-list-row-margin-horizontal)`.
+            // Deux implémentations concordantes = délibération, pas oubli.
+            // Les cotes (10.5/800/.1em, padding 4/13) vivent dans
             // `LentilleMetrics.Sticker`, jamais ici (garde R15).
             LentilleSticker(
                 title: group.section.name,
                 isExpanded: isSectionContentVisible(group.section.id),
                 onToggle: sectionToggle(for: group.section.id)
             )
+            // D7 — la respiration s'appliquait aux RANGS SEULS (`sectionConversations`)
+            // et jamais aux headers : les rangées sous la ligne de focus étaient
+            // poussées de +18 pt pendant la scène tandis que le sticker restait
+            // immobile, si bien que la marge de 8 pt était mangée et que le
+            // header mordait la rangée précédente. Chevauchement mesuré à
+            // géométrie stabilisée, deux frontières, deux relevés indépendants :
+            // 9,6 / 8,9 puis 9,2 / 9,1 pt. L'arithmétique boucle exactement —
+            // 18 (respiration) − 8 (marge) − (88 − h)/2 = 9,6 pour h = 87,3.
+            // Ce n'était PAS l'échelle : elle rétrécit autour du midY, donc elle
+            // éloigne les bords de leurs voisins et ne peut mécaniquement pas
+            // mordre un header. Poser la MÊME loi ici fait suivre le sticker et
+            // conserve la marge, plutôt que d'écrêter la respiration — l'effet
+            // reste entier.
+            .lentilleFocusBreathing(isEnabled: true)
             // Position vivante du sticker → registre inerte de la pilule (la
             // section épinglée = le sticker le plus haut). `onGeometryChange`
             // ne monte aucune vue de plus, contrairement à un `GeometryReader`.

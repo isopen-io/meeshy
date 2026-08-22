@@ -92,6 +92,7 @@
   /* list.rail */
   --lentille-list-rail-size: 48px;
   --lentille-list-rail-ring: 3.5px;
+  --lentille-list-rail-padding-vertical: 8px;
   --lentille-list-rail-max-entries: 6;
 
   /* list.tags */

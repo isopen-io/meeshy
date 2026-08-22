@@ -101,8 +101,10 @@
     "rail": {
       "size": 48,
       "ring": 3.5,
+      "paddingVertical": 8,
       "maxEntries": 6,
-      "ringPulsedWhenLive": true
+      "ringPulsedWhenLive": true,
+      "$noteRail": "paddingVertical = respiration VERTICALE du rail de stories. Le rail iOS n'en avait AUCUNE (`.padding(.horizontal)` seul) alors que son jumeau web porte `py-2` depuis toujours : la trail finissait donc a 199.3 et le premier sticker commencait a 199.3, 0 pt de jonction, quand toutes les autres jonctions de la liste valent 8. Mesure reproduite deux fois au repos, iPhone 16 Pro."
     },
     "tags": {
       "size": 6,

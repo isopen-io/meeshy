@@ -244,6 +244,14 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum Rail {
         public static let size: CGFloat = 48
         public static let ringWidth: CGFloat = 3.5
+        /// Respiration VERTICALE du rail. Le rail iOS n'en avait AUCUNE —
+        /// `.padding(.horizontal)` seul — alors que son jumeau web porte
+        /// `py-2` depuis toujours (`LivesRail.tsx:55`). Mesure reproduite deux
+        /// fois au repos : la trail finissait a 199.3 et le premier sticker
+        /// commencait a 199.3, soit 0 pt de jonction, quand TOUTES les autres
+        /// jonctions de la liste valent 8 (header→rang 220.6→228.7,
+        /// 440.0→448.0, 659.3→667.3).
+        public static let paddingVertical: CGFloat = 8
         public static let maxEntries: Int = 6
     }
 
