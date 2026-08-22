@@ -64,6 +64,7 @@ type PrismaOpts = {
   upsertResult?: typeof STORED_PREF;
   deleteError?: Error | null;
   findManyError?: Error | null;
+  memberships?: string[];
 };
 
 function makePrisma({
@@ -73,6 +74,7 @@ function makePrisma({
   upsertResult = STORED_PREF,
   deleteError = null,
   findManyError = null,
+  memberships = [COMMUNITY_ID],
 }: PrismaOpts = {}) {
   return {
     userCommunityPreferences: {
@@ -86,6 +88,11 @@ function makePrisma({
         ? jest.fn().mockRejectedValue(deleteError)
         : jest.fn().mockResolvedValue(undefined),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+    },
+    communityMember: {
+      findMany: jest.fn().mockResolvedValue(
+        memberships.map((communityId) => ({ communityId })),
+      ),
     },
   };
 }
@@ -325,9 +332,13 @@ describe('POST /user-preferences/communities/reorder', () => {
     await appAnon.close();
   });
 
+  // Le rejet porte sur `upsert` — la méthode que la route appelle depuis que
+  // le réordonnancement persiste vraiment. Stubber `updateMany`, qu'elle
+  // n'appelle plus, laissait ce témoin passer sur le chemin NOMINAL en croyant
+  // tenir le chemin d'erreur.
   it('returns 500 on db error', async () => {
     const prisma = makePrisma();
-    (prisma.userCommunityPreferences.updateMany as ReturnType<typeof jest.fn>).mockRejectedValue(new Error('db crash'));
+    (prisma.userCommunityPreferences.upsert as ReturnType<typeof jest.fn>).mockRejectedValue(new Error('db crash'));
     const appErr = Fastify({ logger: false });
     appErr.decorate('prisma', prisma as unknown);
     appErr.decorate('authenticate', async (req: FastifyRequest) => {
@@ -343,5 +354,100 @@ describe('POST /user-preferences/communities/reorder', () => {
     });
     expect(res.statusCode).toBe(500);
     await appErr.close();
+  });
+});
+
+// ─── Le réordonnancement de communautés persistait-il seulement ? ────────────
+//
+// `POST /user-preferences/communities/reorder` écrivait par `updateMany`, qui
+// ne touche QUE les lignes existantes. Or la ligne `UserCommunityPreferences`
+// n'est créée que par le PUT : une communauté jamais épinglée / mise en
+// sourdine / renommée n'en a pas. Glisser-déposer une liste fraîche rendait
+// donc 200 sans rien persister, et l'ordre revenait au prochain chargement.
+//
+// Le jumeau conversation (`reorderConversationPreferences`) a été corrigé et
+// porte la raison dans son commentaire : passer à l'`upsert` EXIGE de borner
+// aux appartenances, « an unscoped batch would let any authenticated caller
+// mint preference rows against arbitrary conversation ids. `updateMany` used
+// to absorb that for the wrong reason: it matched nothing, for anybody. »
+// Cette phrase décrivait aussi, mot pour mot, la route communauté.
+
+describe('POST /user-preferences/communities/reorder — persistance réelle', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function prismaOf(app: FastifyInstance) {
+    return (app as unknown as { prisma: any }).prisma;
+  }
+
+  async function reorder(app: FastifyInstance, updates: Array<{ communityId: string; orderInCategory: number }>) {
+    return app.inject({
+      method: 'POST',
+      url: '/user-preferences/communities/reorder',
+      headers: AUTH,
+      payload: { updates },
+    });
+  }
+
+  it('crée la ligne de préférences quand elle n existe pas encore', async () => {
+    const app = await buildApp();
+    const res = await reorder(app, [{ communityId: COMMUNITY_ID, orderInCategory: 3 }]);
+
+    expect(res.statusCode).toBe(200);
+    expect(prismaOf(app).userCommunityPreferences.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId_communityId: { userId: USER_ID, communityId: COMMUNITY_ID } },
+        create: expect.objectContaining({ userId: USER_ID, communityId: COMMUNITY_ID, orderInCategory: 3 }),
+        update: { orderInCategory: 3 },
+      }),
+    );
+    await app.close();
+  });
+
+  // Corollaire OBLIGATOIRE de l'upsert : sans ce filtre, n'importe quel appelant
+  // authentifié fabriquerait des lignes contre des ids arbitraires.
+  it('ignore une communauté dont l appelant n est pas membre', async () => {
+    const app = await buildApp({ memberships: [COMMUNITY_ID] });
+    const res = await reorder(app, [
+      { communityId: COMMUNITY_ID, orderInCategory: 0 },
+      { communityId: 'bbbbbbbbbbbbbbbbbbbbbbbb', orderInCategory: 1 },
+    ]);
+
+    expect(res.statusCode).toBe(200);
+    const calls = prismaOf(app).userCommunityPreferences.upsert.mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0].where.userId_communityId.communityId).toBe(COMMUNITY_ID);
+    await app.close();
+  });
+
+  it('n écrit rien quand aucune communauté du lot n est la sienne', async () => {
+    const app = await buildApp({ memberships: [] });
+    const res = await reorder(app, [{ communityId: COMMUNITY_ID, orderInCategory: 0 }]);
+
+    expect(res.statusCode).toBe(200);
+    expect(prismaOf(app).userCommunityPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('déduplique un même id, dernier gagnant', async () => {
+    const app = await buildApp();
+    await reorder(app, [
+      { communityId: COMMUNITY_ID, orderInCategory: 1 },
+      { communityId: COMMUNITY_ID, orderInCategory: 7 },
+    ]);
+
+    const calls = prismaOf(app).userCommunityPreferences.upsert.mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0].update).toEqual({ orderInCategory: 7 });
+    await app.close();
+  });
+
+  it('n ouvre aucune requête sur un lot vide', async () => {
+    const app = await buildApp();
+    const res = await reorder(app, []);
+
+    expect(res.statusCode).toBe(200);
+    expect(prismaOf(app).communityMember.findMany).not.toHaveBeenCalled();
+    expect(prismaOf(app).userCommunityPreferences.upsert).not.toHaveBeenCalled();
+    await app.close();
   });
 });

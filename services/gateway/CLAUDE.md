@@ -440,6 +440,31 @@ les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
 tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
 PORTE, pas un bug.
 
+## Cette entité a-t-elle une JUMELLE ?
+
+À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein
+de paires portant la même opération sur deux tables : conversation / communauté,
+message / post, participant / membre. `reorderConversationPreferences` a été
+corrigé et a laissé sa raison en commentaire — « `updateMany` used to absorb
+that for the wrong reason: it matched nothing, for anybody » — une phrase qui
+décrivait MOT POUR MOT la route communauté, restée cassée un fichier plus loin
+(cycle 85). **Un commentaire ne documente que l'exemplaire qu'il touche.**
+
+Corollaire quand on reprend le correctif d'une jumelle : **on le prend en
+entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
+`updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
+des ids arbitraires, l'upsert seul retire cette protection.
+
+## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
+
+`expect(res.statusCode).toBe(200)` atteste que la route RÉPOND, pas qu'elle
+FAIT. C'est resté vert pendant toute la vie du défaut ci-dessus, sur une route
+qui ne persistait rien. Une écriture se garde sur la ligne écrite et
+l'événement émis. Et quand on change la méthode Prisma qu'un handler appelle,
+**repointer les témoins d'erreur** : un `mockRejectedValue` sur une méthode que
+la route n'appelle plus passe au vert par le chemin nominal en croyant tenir le
+chemin d'erreur.
+
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
 `ContactDirectoryService.match()` filtrait le blocage bidirectionnel, avec le
