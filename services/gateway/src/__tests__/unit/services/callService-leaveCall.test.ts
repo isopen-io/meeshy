@@ -251,6 +251,52 @@ describe('CallService.leaveCall() — clearHeartbeats memory leak regression', (
     expect(clearSpy).not.toHaveBeenCalled();
   });
 
+  it('idempotent leave — group continues: still deletes the departed participant\'s heartbeat entry', async () => {
+    // Vague 157 — twin of the two branches above (last-participant-leaves,
+    // terminal-guard leave): this is the THIRD branch that resolves a
+    // departed participant without ending the call — the idempotent leave
+    // whose CallParticipant row is already gone (racing auto-leave, a
+    // duplicate call:leave, or CallEventsHandler's
+    // forceCleanupParticipationAfterLeaveFailure fallback stamping leftAt
+    // directly) — for a GROUP call where others are still active. Unlike
+    // its two siblings, it returned early without calling
+    // clearParticipantBackgrounded()/deleting the heartbeat entry, leaking
+    // the departed participant's heartbeat for the rest of the call. Left
+    // long enough, the leaked entry inflates CallCleanupService's stale-vs-
+    // live ratio and can force-end a call that is still legitimately active
+    // for its remaining participants.
+    const callId = 'call-group-idem-1';
+    const participantId = 'part-gone';
+
+    const existingCall = {
+      id: callId,
+      conversationId: 'conv-group',
+      status: CallStatus.active,
+      startedAt: new Date(Date.now() - 120_000),
+      answeredAt: new Date(Date.now() - 60_000),
+      endedAt: null,
+      version: 3,
+      metadata: null,
+      participants: [
+        { id: 'cp-gone', callSessionId: callId, participantId, leftAt: new Date() },
+        { id: 'cp-2', callSessionId: callId, participantId: 'part-2', leftAt: null },
+        { id: 'cp-3', callSessionId: callId, participantId: 'part-3', leftAt: null },
+      ],
+    };
+
+    // findFirst returns null: the leaver's row is already gone → idempotent branch.
+    prisma.callParticipant.findFirst.mockResolvedValue(null);
+    prisma.callSession.findUnique.mockResolvedValue(existingCall);
+    prisma.conversation.findUnique.mockResolvedValue({ type: 'group' });
+
+    service.recordHeartbeat(callId, participantId);
+    expect(service['heartbeats'].get(callId)?.has(participantId)).toBe(true);
+
+    await service.leaveCall({ callId, userId: 'user-x', participantId });
+
+    expect(service['heartbeats'].get(callId)?.has(participantId)).toBe(false);
+  });
+
   it('calls clearHeartbeats on the idempotent-leave direct-call force-end path', async () => {
     const callId = 'call-idem-1';
     const participantId = 'part-missing';
