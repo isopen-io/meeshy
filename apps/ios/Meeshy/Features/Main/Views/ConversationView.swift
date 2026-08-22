@@ -1389,6 +1389,9 @@ struct ConversationView: View {
                     // commencer SOUS l'en-tête — contrairement au fil, dont les
                     // bulles ont le droit de défiler dessous.
                     topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
+                    // R-7 : la même réserve basse que le fil — le composeur
+                    // n'est jamais une zone où une bulle reste prise.
+                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                     text: { message in
                         viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
                     }
@@ -1834,7 +1837,11 @@ struct ConversationView: View {
                     }
                 )
             }
-            .zIndex(50)
+            // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
+            // pane (80) — le pane lui réserve sa hauteur (`bottomInset`) et
+            // c'est lui qui est recouvert sinon (mesuré au simulateur :
+            // champ « Message… » présent à y = 797, invisible).
+            .zIndex(readingModeController.mode == .river ? 85 : 50)
             // Chrome escamoté pendant le défilement Focal : glissement vers le
             // bord BAS + fondu (`EdgeHiddenChrome`) — le composeur garde sa
             // hauteur mesurée (aucun inset ne bouge, donc aucun re-scaling du

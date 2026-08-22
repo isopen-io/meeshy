@@ -18,6 +18,9 @@ struct RiverConversationHost: View {
     /// dynamique et derrière le bouton « Retour » — l'appelant est le seul à
     /// connaître la hauteur de son propre en-tête, c'est donc lui qui la dit.
     var topInset: CGFloat = 0
+    /// Bande basse réservée au composeur (R-7) — l'appelant la mesure déjà
+    /// pour le fil (`MessageListView.bottomInset`), il la dit ici aussi.
+    var bottomInset: CGFloat = 0
 
     @StateObject private var navigation: RiverNavigationController
     /// Échelle du plan, POSÉE par le pince (retour produit 2026-08-22).
@@ -34,16 +37,23 @@ struct RiverConversationHost: View {
     @GestureState private var isPinching = false
     @State private var geometry: RiverLaneResolver.RiverGeometry
     @State private var fingerprint: String
+    /// Incrémenté quand le pane doit RE-CADRER le curseur : première
+    /// géométrie peuplée, ou rangs préfixés (le curseur a changé de rang pour
+    /// le MÊME message). Jamais pour un message qui s'ajoute en bout — un
+    /// lecteur remonté dans l'histoire n'est pas ramené au présent.
+    @State private var landingToken = 0
 
     init(
         messages: [MeeshyMessage],
         viewerId: String,
         topInset: CGFloat = 0,
+        bottomInset: CGFloat = 0,
         text: @escaping (MeeshyMessage) -> String
     ) {
         self.messages = messages
         self.viewerId = viewerId
         self.topInset = topInset
+        self.bottomInset = bottomInset
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
         _geometry = State(initialValue: geometry)
@@ -97,6 +107,8 @@ struct RiverConversationHost: View {
                 paneHeight: proxy.size.height,
                 paneWidth: proxy.size.width,
                 headerInset: topInset,
+                bottomInset: bottomInset,
+                landingToken: landingToken,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -114,8 +126,33 @@ struct RiverConversationHost: View {
                 guard next != fingerprint else { return }
                 fingerprint = next
                 let resolved = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
+                // Le fil s'ouvre souvent AVANT ses messages (cache puis
+                // réseau) : la Rivière naît alors sur une géométrie VIDE, et
+                // son curseur d'init vaut (0, 0). La PREMIÈRE géométrie
+                // peuplée est le vrai moment d'ouverture — le curseur se pose
+                // au présent, comme si le fil avait été là dès le départ
+                // (mesuré au simulateur le 2026-08-22 : sans cela, la Rivière
+                // restait en haut de l'histoire, rang 0). Ensuite, le curseur
+                // survit aux arrivées de messages, jamais recalé.
+                //
+                // Et quand le réseau PRÉFIXE l'histoire (le cache donnait 20
+                // messages, le réseau en rend 200 plus anciens), chaque rang
+                // glisse : le curseur reste sur son MESSAGE, pas sur son
+                // ancien numéro, et le pane le recadre.
+                let wasEmpty = geometry.rankCount == 0
+                let previousCursor = navigation.cursor
+                let cursorMessageId = geometry.bubbles.first { $0.rank == previousCursor.rank }?.messageId
                 geometry = resolved
                 navigation.updateGeometry(resolved)
+                if wasEmpty {
+                    navigation.moveTo(RiverConversationMapping.initialCursor(geometry: resolved))
+                    landingToken += 1
+                } else if let cursorMessageId,
+                          let remapped = RiverConversationMapping.cursor(forMessageId: cursorMessageId, geometry: resolved),
+                          remapped != previousCursor {
+                    navigation.moveTo(remapped)
+                    landingToken += 1
+                }
             }
     }
 

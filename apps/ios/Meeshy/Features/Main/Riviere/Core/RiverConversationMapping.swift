@@ -253,6 +253,15 @@ nonisolated enum RiverConversationMapping {
         return .plain(text(message))
     }
 
+    /// R-6 — la citation mène à sa cible : le curseur du message cité,
+    /// couloir et rang tels que la loi les a servis. `nil` si le message
+    /// n'est pas dans la fenêtre, ou s'il est un avis système (la loi ne lui
+    /// donne aucun couloir — il n'est la cible de personne).
+    static func cursor(forMessageId messageId: String, geometry: RiverLaneResolver.RiverGeometry) -> RiverLaneResolver.RiverCursor? {
+        guard let bubble = geometry.bubbles.first(where: { $0.messageId == messageId }), !bubble.isSystem else { return nil }
+        return RiverLaneResolver.RiverCursor(laneIndex: bubble.laneIndex, rank: bubble.rank)
+    }
+
     /// Curseur d'ouverture : la bulle la plus RÉCENTE — là où le lecteur
     /// arrive dans le fil — sinon la rive du lecteur au premier rang.
     static func initialCursor(geometry: RiverLaneResolver.RiverGeometry) -> RiverLaneResolver.RiverCursor {

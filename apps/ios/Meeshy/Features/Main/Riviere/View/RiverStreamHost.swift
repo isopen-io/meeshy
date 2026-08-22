@@ -70,8 +70,17 @@ struct RiverStreamHost: View {
     /// `ScrollView`, il pousse le contenu AU REPOS sous l'en-tête tout en le
     /// laissant DÉFILER DERRIÈRE — ce que fait déjà le fil en Bulles/Script.
     var headerInset: CGFloat = 0
+    /// R-7 — bande basse occupée par le COMPOSEUR, DITE par l'appelant.
+    /// Même patron que `headerInset` : un inset de contenu (`safeAreaInset`),
+    /// pas une marge du pane — la dernière bulle peut remonter AU-DESSUS du
+    /// composeur, et aucune ne reste sous une zone qu'aucun doigt n'atteint.
+    var bottomInset: CGFloat = 0
+    /// Demande de RE-CADRAGE venue de l'appelant (première géométrie
+    /// peuplée, rangs préfixés) — chaque incrément recadre le curseur.
+    var landingToken: Int = 0
 
     @ObservedObject var navigation: RiverNavigationController
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var frames: [String: CGRect] = [:]
     @State private var horizontalOffset: CGFloat = 0
@@ -80,6 +89,22 @@ struct RiverStreamHost: View {
     /// message (même règle que le fil : la position de la barre ne dit pas ce
     /// qui a été vu).
     @State private var hasLandedOnCursor = false
+    /// **Un cadrage est une DEMANDE, pas un acte** — il tient jusqu'à ce que
+    /// la cellule visée soit RÉELLEMENT apparue. Mesuré au simulateur
+    /// (2026-08-22) : un `scrollTo` lancé au premier `onAppear` ne bougeait
+    /// pas d'un point — le pane n'avait pas encore de hauteur
+    /// (`GeometryReader` à 0), et la pile paresseuse ne connaissait pas
+    /// encore la cellule. La demande est donc rejouée à chaque occasion
+    /// (hauteur du pane connue, nouvelle demande) et CONCLUE par la cellule
+    /// elle-même, dans son `onAppear` (`completeLanding`). R-6 réutilise le
+    /// même canal pour la citation.
+    @State private var landingTarget: RiverLaneResolver.RiverCursor?
+    @State private var landingAnchor: UnitPoint = UnitPoint(x: 0.5, y: 1)
+    @State private var landingIsAnimated = false
+    @State private var scrollProxy: ScrollViewProxy?
+    /// L'axe des VOIX se pose par un offset explicite (voir
+    /// `RiverHorizontalOffsetWriter`) — `scrollTo` ne bouge que l'axe du temps.
+    @State private var horizontalRequest: RiverHorizontalOffsetWriter.Request?
 
 
     private var laneCount: Int { max(1, geometry.laneCount) }
@@ -145,7 +170,21 @@ struct RiverStreamHost: View {
     var body: some View {
         ScrollViewReader { proxy in
             scrollPane
-                .onAppear { landOnCursor(proxy) }
+                .onAppear {
+                    scrollProxy = proxy
+                    landOnCursor()
+                }
+                // Chaque occasion rejoue la demande en cours : le pane reçoit
+                // sa hauteur, ou une nouvelle cible est posée.
+                .adaptiveOnChange(of: paneHeight) { _, _ in attemptLanding() }
+                .adaptiveOnChange(of: landingTarget) { _, _ in attemptLanding() }
+                // La géométrie arrive souvent APRÈS le premier `onAppear`
+                // (messages chargés ensuite), et l'histoire peut se PRÉFIXER :
+                // l'appelant le dit par un jeton, le pane recadre le curseur.
+                .adaptiveOnChange(of: landingToken) { _, _ in
+                    hasLandedOnCursor = false
+                    landOnCursor()
+                }
         }
     }
 
@@ -153,25 +192,87 @@ struct RiverStreamHost: View {
     /// récente (`RiverConversationMapping.initialCursor`) — sans ce cadrage,
     /// la Rivière s'ouvrait sur le message le PLUS ANCIEN de la fenêtre
     /// chargée, et il fallait dérouler toute l'histoire pour rejoindre la
-    /// conversation. Le rang EST l'identité de la rangée dans la grille
-    /// (`ForEach(0..<rankCount, id: \.self)`), donc la cible du `scrollTo`.
-    ///
-    /// Différé d'un tour de boucle : la pile paresseuse (`LazyVStack`) n'a
-    /// pas encore posé ses rangées au premier `onAppear`. Si le cadrage
-    /// échoue, la Rivière s'ouvre simplement en haut — jamais une erreur.
-    private func landOnCursor(_ proxy: ScrollViewProxy) {
+    /// conversation. Demandé UNE fois : un lecteur remonté dans l'histoire
+    /// ne doit jamais être ramené en bas par l'arrivée d'un message.
+    private func landOnCursor() {
         guard !hasLandedOnCursor, geometry.rankCount > 0 else { return }
         hasLandedOnCursor = true
-        let target = min(max(0, navigation.cursor.rank), geometry.rankCount - 1)
+        let rank = min(max(0, navigation.cursor.rank), geometry.rankCount - 1)
+        requestLanding(
+            on: RiverLaneResolver.RiverCursor(laneIndex: navigation.cursor.laneIndex, rank: rank),
+            // La base de la cellule sur le haut du composeur (R-7), la voix
+            // du curseur au milieu de l'écran, ses voisines de part et d'autre.
+            anchor: UnitPoint(x: 0.5, y: 1),
+            animated: false
+        )
+    }
+
+    /// R-6 — la citation mène à sa cible : le curseur se pose sur le message
+    /// cité (choix explicite du lecteur, pas un pas de la loi) et le pane le
+    /// cadre sous la ligne de lecture — la MÊME hauteur relative que
+    /// `focusRank` lit (`readingLineRatio`), pour que la bande de couloirs
+    /// nomme aussitôt la voix rejointe. Le couloir et le rang viennent du
+    /// mapping, jamais recalculés ici.
+    private func openReply(_ messageId: String) {
+        guard let cursor = RiverConversationMapping.cursor(forMessageId: messageId, geometry: geometry) else { return }
+        navigation.moveTo(cursor)
+        requestLanding(on: cursor, anchor: UnitPoint(x: 0.5, y: Self.readingLineRatio), animated: !reduceMotion)
+    }
+
+    private func requestLanding(on target: RiverLaneResolver.RiverCursor, anchor: UnitPoint, animated: Bool) {
+        landingAnchor = anchor
+        landingIsAnimated = animated
+        landingTarget = target
+    }
+
+    /// Le cadrage vise le RANG (identité directe de la pile paresseuse,
+    /// toujours connue) avec l'ancre qui centre le couloir ; la cellule visée
+    /// CONCLUT le cadrage dans son propre `onAppear` (`completeLanding`), une
+    /// fois posée avec ses cotes réelles. Si elle est déjà à l'écran, aucun
+    /// `onAppear` ne viendra : la demande s'éteint d'elle-même peu après.
+    private func attemptLanding() {
+        guard let target = landingTarget, scrollProxy != nil, paneHeight > 0 else { return }
+        frame(target)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            if landingTarget == target { landingTarget = nil }
+        }
+    }
+
+    /// Conclusion du cadrage par la cellule visée, au moment où elle existe
+    /// (la pile paresseuse vient de la poser : ses cotes sont enfin réelles).
+    private func completeLanding(rank: Int, laneIndex: Int) {
+        guard let target = landingTarget,
+              target.rank == rank, target.laneIndex == laneIndex else { return }
         DispatchQueue.main.async {
-            // Ancre au bord GAUCHE du rang, pas `.bottom` : le pane défile sur
-            // DEUX axes, et une ancre centrée en X emmenait aussi la vue vers
-            // la droite du rang — c'est-à-dire dans les colonnes VIDES des
-            // couloirs qui ne parlent pas à cet instant (mesuré au
-            // simulateur : écran blanc, seule la pastille du dernier couloir
-            // visible au bord droit). L'axe du temps se cadre, l'axe des voix
-            // reste à la rive.
-            proxy.scrollTo(target, anchor: UnitPoint(x: 0, y: 1))
+            frame(target)
+            landingTarget = nil
+        }
+    }
+
+    /// **Deux axes, deux gestes.** L'axe du TEMPS se cadre par `scrollTo` sur
+    /// le rang (identité directe de la pile paresseuse, connue même non
+    /// matérialisée) ; l'axe des VOIX par un offset explicite
+    /// (`RiverColumnLayout.horizontalOffset`, rail du couloir au centre du
+    /// pane), écrit au `UIScrollView` par `RiverHorizontalOffsetWriter` —
+    /// `scrollTo` ne bouge pas X sur un pane à deux axes (mesuré). Animée, la
+    /// glissade horizontale suit la verticale plutôt que de la couper.
+    private func frame(_ target: RiverLaneResolver.RiverCursor) {
+        guard let proxy = scrollProxy else { return }
+        let animated = landingIsAnimated
+        scroll(animated: animated) { proxy.scrollTo(target.rank, anchor: UnitPoint(x: 0, y: landingAnchor.y)) }
+        let x = columns.horizontalOffset(centeringLane: target.laneIndex, paneWidth: paneWidth)
+        DispatchQueue.main.asyncAfter(deadline: .now() + (animated ? 0.4 : 0)) {
+            horizontalRequest = RiverHorizontalOffsetWriter.Request(
+                token: (horizontalRequest?.token ?? 0) + 1, x: x, animated: animated
+            )
+        }
+    }
+
+    private func scroll(animated: Bool, _ body: () -> Void) {
+        if animated {
+            withAnimation(.easeInOut(duration: 0.35)) { body() }
+        } else {
+            body()
         }
     }
 
@@ -179,6 +280,9 @@ struct RiverStreamHost: View {
         ScrollView([.horizontal, .vertical]) {
             grid
                 .background(RiverLaneCanvas(geometry: geometry, frames: frames, columns: columns))
+                // Écrivain d'offset horizontal — DANS le contenu, pour
+                // retrouver son `UIScrollView` par ses parents.
+                .background(RiverHorizontalOffsetWriter(request: horizontalRequest))
                 // La sonde d'offset horizontal DOIT vivre DANS le contenu
                 // défilant : son cadre, exprimé dans le repère nommé porté
                 // par le `ScrollView` (fixe), bouge avec le défilement.
@@ -208,20 +312,39 @@ struct RiverStreamHost: View {
         // simulateur : bouton « Retour » à x = −683). Le cadre extensible +
         // rognage la borne à la largeur proposée sans rien changer à son
         // contenu ni à son offset.
+        // R-7 : la place du composeur, vide et transparente — le contenu au
+        // repos s'arrête au-dessus, et défile derrière au besoin.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomInset)
+        }
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
                 // La place de l'en-tête du fil — vide et TRANSPARENTE : les
                 // bulles la traversent au défilement, l'en-tête de verre les
                 // laisse voir.
                 Color.clear.frame(height: headerInset)
-                RiverLaneHeaderStrip(
-                    headers: laneHeaders,
-                    columns: columns,
-                    horizontalOffset: horizontalOffset,
-                    visibleWidth: paneWidth
-                )
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .clipped()
+                // **La bande est un OVERLAY, jamais un enfant de l'inset.**
+                // Son cadre est FIXE à la largeur de tous les couloirs
+                // (jusqu'à 7 × 300 pt) et `frame(maxWidth: .infinity)` ne
+                // réduit jamais un enfant sous son minimum : posée en enfant,
+                // elle gonflait l'inset, donc le `ScrollView` entier, à cette
+                // largeur — mesuré au simulateur le 2026-08-22 (chaîne UIKit :
+                // `PlatformContainer[1800×874 @−699]` dans `HostingView[402]`) :
+                // un pane centré par son parent, que rien ne faisait défiler
+                // horizontalement, et dont `contentOffset.x` ne pouvait pas
+                // bouger (débordement nul). Un overlay reçoit la taille de son
+                // hôte et ne la fait JAMAIS grandir.
+                Color.clear
+                    .frame(height: RiverMetrics.LaneHeader.height)
+                    .overlay(alignment: .leading) {
+                        RiverLaneHeaderStrip(
+                            headers: laneHeaders,
+                            columns: columns,
+                            horizontalOffset: horizontalOffset,
+                            visibleWidth: paneWidth
+                        )
+                    }
+                    .clipped()
             }
         }
         .simultaneousGesture(swipeGesture)
@@ -255,6 +378,10 @@ struct RiverStreamHost: View {
                             cell(rank: rank, laneIndex: laneIndex)
                         }
                     }
+                    // Identité de RANG, explicite : `ForEach(…, id: \.self)`
+                    // la donne déjà à la pile, et c'est elle que le premier
+                    // pas du cadrage vise (`frame(_:anchor:proxy:)`).
+                    .id(rank)
                 }
             }
         }
@@ -268,11 +395,12 @@ struct RiverStreamHost: View {
             bubble.laneIndex == laneIndex,
             let content = contentByMessageId[bubble.messageId]
         {
-            RiverBubbleView(content: content, contentWidth: columns.bubbleContentWidth)
+            RiverBubbleView(content: content, contentWidth: columns.bubbleContentWidth, onOpenReply: openReply)
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
                     navigation.moveTo(RiverLaneResolver.RiverCursor(laneIndex: laneIndex, rank: rank))
                 }
+                .onAppear { completeLanding(rank: rank, laneIndex: laneIndex) }
         } else {
             // Cellule VIDE — préserve l'alignement de colonne pour que
             // `LazyVGrid` garde la grille synchronisée avec `RiverColumnLayout`.
@@ -301,4 +429,54 @@ struct RiverStreamHost: View {
     }
 }
 
+// MARK: - Offset horizontal — le seul geste que `scrollTo` ne sait pas faire ici
 
+/// Pose `contentOffset.x` sur le `UIScrollView` qui porte le pane. Une vue
+/// UIKit VIDE, posée dans le contenu défilant, remonte ses parents jusqu'au
+/// scroll view et y écrit l'offset demandé, borné au débordement réel.
+/// Chaque `Request` s'applique UNE fois (`token`) ; ni mesure, ni
+/// `PreferenceKey` (`RiverSourceGuardTests`) — un écrivain, pas un lecteur.
+private struct RiverHorizontalOffsetWriter: UIViewRepresentable {
+    struct Request: Equatable {
+        let token: Int
+        let x: CGFloat
+        let animated: Bool
+    }
+
+    let request: Request?
+
+    final class Coordinator {
+        var appliedToken = 0
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView(frame: .zero)
+        view.isHidden = true
+        view.isUserInteractionEnabled = false
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        guard let request, context.coordinator.appliedToken != request.token else { return }
+        context.coordinator.appliedToken = request.token
+        DispatchQueue.main.async {
+            guard let scrollView = Self.enclosingScrollView(of: view) else { return }
+            let overflow = scrollView.contentSize.width - scrollView.bounds.width
+                + scrollView.adjustedContentInset.left + scrollView.adjustedContentInset.right
+            let x = min(max(0, request.x), max(0, overflow))
+            scrollView.setContentOffset(CGPoint(x: x, y: scrollView.contentOffset.y), animated: request.animated)
+        }
+    }
+
+    private static func enclosingScrollView(of view: UIView) -> UIScrollView? {
+        var candidate = view.superview
+        while let current = candidate {
+            if let scrollView = current as? UIScrollView { return scrollView }
+            candidate = current.superview
+        }
+        return nil
+    }
+}

@@ -229,6 +229,10 @@ nonisolated enum RiverBubbleLayout {
 struct RiverBubbleView: View, Equatable {
     let content: RiverBubbleContent
     let contentWidth: CGFloat
+    /// R-6 — « la citation mène à sa cible » : tap sur la citation ⇒ l'hôte
+    /// pose le curseur sur le message cité et le cadre. Reçu, jamais résolu
+    /// ici : cette vue ne connaît ni la géométrie ni le défilement.
+    var onOpenReply: ((String) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -501,7 +505,21 @@ struct RiverBubbleView: View, Equatable {
 
     // MARK: - Citation de réponse — une ligne, jamais plus (§7ter A4)
 
+    @ViewBuilder
     private func quotedReply(_ reply: RiverReplyPreview) -> some View {
+        if let targetId = content.bubble.replyToMessageId, let onOpenReply {
+            // R-6 : la citation est une RÉFÉRENCE — et une référence se suit.
+            Button { onOpenReply(targetId) } label: { quotedReplyLabel(reply) }
+                .buttonStyle(.plain)
+                .accessibilityHint(
+                    String(localized: "riviere.bubble.replyHint", defaultValue: "Ouvre le message cité", bundle: .main)
+                )
+        } else {
+            quotedReplyLabel(reply)
+        }
+    }
+
+    private func quotedReplyLabel(_ reply: RiverReplyPreview) -> some View {
         HStack(spacing: 0) {
             Rectangle()
                 .fill(laneColor.opacity(0.6))
@@ -512,6 +530,7 @@ struct RiverBubbleView: View, Equatable {
                 .lineLimit(1)
                 .padding(.leading, 8)
         }
+        .contentShape(Rectangle())
     }
 
     // MARK: - Accessibilité

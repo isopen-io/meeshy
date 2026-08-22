@@ -261,4 +261,30 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(positions["a2"], .head)
         XCTAssertEqual(positions["a3"], .tail)
     }
+
+    // MARK: - R-6 : la citation mène à sa cible
+
+    /// Un tap sur la citation d'une réponse doit poser le curseur SUR le
+    /// message cité — couloir ET rang — tels que la loi les a servis. Un
+    /// identifiant inconnu (message hors fenêtre) ne fabrique aucun curseur,
+    /// et un avis système n'est la cible de personne (la loi ne lui donne pas
+    /// de couloir).
+    func test_cursorForMessageId_isTheCitedBubblesLaneAndRank_orNilWhenUnknownOrSystem() {
+        let messages = [
+            message("a1", sender: "alice", name: "Alice", minutes: 0),
+            message("b1", sender: "bob", name: "Bob", minutes: 1),
+            message("sys", sender: "newcomer", name: "Nouveau", minutes: 2, source: .system),
+            message("c1", sender: "carol", name: "Carol", minutes: 3, replyTo: "a1"),
+        ]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let target = try? XCTUnwrap(geometry.bubbles.first { $0.messageId == "a1" })
+        let cursor = RiverConversationMapping.cursor(forMessageId: "a1", geometry: geometry)
+
+        XCTAssertEqual(cursor?.laneIndex, target?.laneIndex)
+        XCTAssertEqual(cursor?.rank, target?.rank)
+        XCTAssertNil(RiverConversationMapping.cursor(forMessageId: "hors-fenêtre", geometry: geometry))
+        XCTAssertNil(RiverConversationMapping.cursor(forMessageId: "sys", geometry: geometry), "un avis n'est la cible de personne")
+    }
 }
