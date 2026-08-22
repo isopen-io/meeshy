@@ -3037,7 +3037,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       path — `conversation:participant-left`/`conversation:deleted`). delete-for-all still
       unwired — the gateway's admin/creator-only "delete for everyone" semantics differ
       meaningfully (not assumed to be a quick follow-up). Box stays unchecked until it lands.
-- [ ] Anonymous-session conversation mode; guest join-via-share-link flow
+- [~] Anonymous-session conversation mode; guest join-via-share-link flow — the
+      **entry-decision brain landed** (slice `sharelink-entry-policy`, 2026-08-22): pure
+      `ShareLinkEntryPolicy.intent(ShareLinkEntryFacts) → ShareLinkEntryIntent` (`:core:model`,
+      faithful port of iOS `ShareLinkEntryPolicy.swift`) — five facts in (conversationId,
+      isAuthenticated, isAlreadyMember, linkRequiresAccount, hasStoredGuestSession), one of six
+      intents out (`OpenConversation` / `JoinWithAccount` / `JoinAnonymously` / `ResumeGuestSession`
+      / `ChooseIdentity` / `RequiresAccount`). Encodes the two load-bearing precedence rules:
+      unauthenticated → a stored guest session on THIS link beats the link's account requirement
+      (re-asking would erase the only identity the visitor has here); authenticated → already-a-member
+      beats the account requirement (nothing to decide when already named in the room). This closes
+      the gap where Android's deep-link handler (`MeeshyApp.kt`) routed EVERY share-link straight to
+      the anonymous guest form, wrongly forcing an authenticated user / an existing member / a
+      returning guest into it. +11 behavioural tests, 2 mutation RED proofs (both precedence orders).
+      **Remaining before `[x]`:** a `:sdk-core` `ShareLinkEntryResolver` that assembles the facts
+      (preview + `AnonymousSessionStore.load(linkId)` + in-memory conversation list), a
+      `joinAuthenticated` endpoint (`POST conversations/join/{linkId}`, idempotent) on `ShareLinkApi`
+      + repository method, and rewiring `MeeshyApp.kt`'s deep-link route to branch on the intent.
 - [x] AI conversation analysis (health score, summary, topics, tone, emotions) —
       **AI-summary card shipped 2026-08-22** (slice `conversation-analysis-summary`). The
       `ConversationAnalysis` model shipped orphaned (no repository, no consumer); this slice turns
