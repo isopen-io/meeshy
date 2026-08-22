@@ -1394,6 +1394,52 @@ de l'autre.
 > « laquelle est la plus naturelle ? » mais « laquelle un attaquant peut-il
 > fournir ? ».**
 
+### Un invariant de paire se viole chez le CONSOMMATEUR, pas chez le producteur
+
+Le cycle 97 a formulé la règle pour deux fichiers. Le cycle 98 l'a retrouvée
+**dans la même classe** : `X3DHKeyAgreement` croise les chaînes du répondeur
+(« responder's send is initiator's receive and vice versa »),
+`SignalProtocolEngine.responderKeyAgreement` le REDIT (« X3DH already swaps chain
+keys for responder, so use them directly ») — et `decryptMessage`, son UNIQUE
+consommateur cent lignes plus bas, les recroisait. Deux croisements s'annulent :
+le répondeur déchiffrait avec la chaîne d'ÉMISSION de son pair.
+
+> **La distance n'est ni ce qui protège ni ce qui expose.** Deux commentaires
+> justes, chez le producteur, dans le même fichier que la violation, n'ont rien
+> gardé. Seul un témoin qui TRAVERSE les deux moitiés peut voir un désaccord
+> d'orientation.
+
+Corollaire, et il est cher : **un correctif de symétrie prouvé à une couche peut
+être défait par la couche qui le consomme.** Le cycle 97 a fait converger les deux
+HKDF de X3DH et l'a prouvé ; le moteur redivergeait à la ligne suivante. Le
+correctif était juste, testé, et sans effet. Quand on corrige une symétrie,
+**remonter jusqu'au dernier site qui compose le résultat**.
+
+### La quatrième famille s'outille en faisant se rencontrer deux PRODUCTIONS
+
+Le patron est acquis (cycles 97 et 98) et se reprend tel quel :
+
+1. **Deux instances réelles**, jamais un côté et une reconstitution de l'autre —
+   un côté seul est toujours cohérent avec lui-même.
+2. **Ne fabriquer que la BASE** : ce que chaque partie publie de soi et que l'autre
+   lit. Tout le reste sort des productions.
+3. **SÉPARER les affirmations, la séparation EST le diagnostic** : secret partagé,
+   puis orientation, puis texte clair. La première qui tombe nomme la couche. Un
+   unique `expect` sur le texte clair laisse chercher partout.
+4. **Écrire en négatif ce qui se présentait en vert** : « la chaîne d'émission de
+   l'un n'est PAS celle de l'autre » garde la forme exacte du défaut.
+
+Références : `__tests__/unit/dma-session-roundtrip.test.ts` (aller-retour complet,
+4 défauts découverts d'un coup), `__tests__/unit/dma-double-ratchet-symmetry.test.ts`,
+`__tests__/unit/dma-x3dh-derivation-symmetry.test.ts`.
+
+**Et quand aucun témoin de bout en bout n'existe, demander pourquoi.** Ici la
+réponse était matérielle : `SignalProtocolEngine.initialize()` ne pouvait pas
+aboutir (aucune identité transmise à son gestionnaire de clés), donc aucun témoin
+de bout en bout n'était possible. **Un protocole sans témoin de bout en bout est
+souvent un protocole qu'on ne PEUT pas instancier** — le chercher avant de
+conclure à un oubli de couverture.
+
 ### Un défaut par défaut ment sur sa cause
 
 Le répondeur repliait sur `0` un identifiant absent (`initiatorRegistrationId ?? 0`).
