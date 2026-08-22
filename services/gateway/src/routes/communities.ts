@@ -10,7 +10,7 @@
  * - Les conversations d'une communaute sont exposees via `GET /communities/:id/conversations`.
  * - Le schema Prisma definit une relation Community -> Conversation.
  */
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   communitySchema,
@@ -18,14 +18,108 @@ import {
   communityMemberSchema,
   createCommunityRequestSchema,
   updateCommunityRequestSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  userMinimalSchema
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../utils/response';
 import { validatePagination } from '../utils/pagination';
+import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
+import { viewerFromRequest } from './users/presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
+
+type PresencePrisma = Parameters<typeof getPresenceVisibilityService>[0];
+
+type MemberUser = { id: string; isOnline: boolean | null; lastActiveAt?: Date | null };
+
+/**
+ * Présence d'un CO-MEMBRE servie à un membre de la même communauté.
+ *
+ * L'appartenance commune est un contexte d'accès garanti des deux côtés : la
+ * présence est montrable, et seules les préférences `showOnlineStatus` /
+ * `showLastSeen` de la cible s'appliquent. C'est le même régime que celui que
+ * `routes/conversations/participants.ts` porte pour les co-participants.
+ *
+ * `onMissingEntry: 'reveal'` parce que le régime prefs-only tient une entrée
+ * absente pour normale et non pour suspecte — le défaut inverse de celui du
+ * critère strict.
+ */
+async function gateCoMemberPresence<T extends { user?: MemberUser | null }>(
+  prisma: PresencePrisma,
+  member: T,
+): Promise<T> {
+  const user = member.user;
+  if (!user?.id) return member;
+
+  const visibility = await getPresenceVisibilityService(prisma).resolvePrefsOnly([user.id]);
+  return {
+    ...member,
+    user: applyPresenceVisibilityAsOffline(user, visibility.get(user.id), {
+      onMissingEntry: 'reveal',
+    }),
+  };
+}
+
+type SearchMemberRow = { user?: MemberUser | null };
+type SearchCommunityRow = { id: string; members: SearchMemberRow[] };
+
+/**
+ * Présence des membres rendus par la recherche PUBLIQUE de communautés.
+ *
+ * Le régime se tranche par LIGNE, pas par route : une communauté dont le
+ * lecteur EST membre actif prouve un lien posé des DEUX côtés (appartenance
+ * commune) et relève du contexte acquis ; une communauté publique qu'il ne fait
+ * que découvrir n'en prouve aucun. Cette route sert `isPrivate: false` sans
+ * aucune condition d'appartenance — la recherche est une surface de DÉCOUVERTE,
+ * et son régime par défaut est donc strict, avec le `onMissingEntry: 'hide'`
+ * qui va avec (le défaut de `applyPresenceVisibilityAsOffline`).
+ *
+ * Et un membre qui prouve le lien par UNE communauté de la page le prouve pour
+ * toutes : masquer sa pastille sur une ligne pendant qu'elle s'affiche sur la
+ * suivante, dans la même page, ne décrirait rien.
+ */
+async function resolveSearchMemberPresence(
+  prisma: PresencePrisma,
+  request: FastifyRequest,
+  communities: SearchCommunityRow[],
+): Promise<Map<string, PresenceVisibility>> {
+  const memberIdsOf = (community: SearchCommunityRow) =>
+    community.members.map(m => m.user?.id).filter((id): id is string => typeof id === 'string');
+
+  const allIds = new Set(communities.flatMap(memberIdsOf));
+  if (allIds.size === 0) return new Map();
+
+  const viewer = viewerFromRequest(request);
+  const viewerCommunityIds = viewer
+    ? new Set(
+        (
+          await prisma.communityMember.findMany({
+            where: {
+              communityId: { in: communities.map(c => c.id) },
+              userId: viewer.userId,
+              isActive: true
+            },
+            select: { communityId: true }
+          })
+        ).map((row: { communityId: string }) => row.communityId)
+      )
+    : new Set<string>();
+
+  const contextIds = new Set(communities.filter(c => viewerCommunityIds.has(c.id)).flatMap(memberIdsOf));
+  const strictIds = [...allIds].filter(id => !contextIds.has(id));
+
+  const presence = getPresenceVisibilityService(prisma);
+  const [contextVisibility, strictVisibility] = await Promise.all([
+    contextIds.size > 0 ? presence.resolvePrefsOnly([...contextIds]) : new Map<string, PresenceVisibility>(),
+    strictIds.length > 0 ? presence.resolveForTargets(viewer, strictIds) : new Map<string, PresenceVisibility>()
+  ]);
+
+  return new Map([...contextVisibility, ...strictVisibility]);
+}
 
 // Enum des roles de communaute (aligne avec shared/types/community.ts)
 enum CommunityRole {
@@ -367,8 +461,24 @@ export async function communityRoutes(fastify: FastifyInstance) {
                   memberCount: { type: 'number' },
                   conversationCount: { type: 'number' },
                   createdAt: { type: 'string', format: 'date-time' },
-                  creator: { type: 'object' },
-                  members: { type: 'array', items: { type: 'object' } }
+                  // `{ type: 'object' }` sans `properties` n'est PAS un objet
+                  // libre : fast-json-stringify applique
+                  // `additionalProperties: false` par défaut et sérialisait
+                  // `creator` et chaque `members[i]` en `{}`. iOS type
+                  // `APICommunityUser.id`/`.username` non-optionnels — le `{}`
+                  // faisait échouer le décodage de TOUTE la réponse.
+                  //
+                  // Le cycle 84 bis avait posé ce correctif dans
+                  // `routes/communities/search.ts` — le module OMBRÉ, que Node
+                  // ne charge jamais (§ « Un fichier X.ts à côté d'un
+                  // répertoire X/ »). Il n'a donc jamais atteint la production.
+                  // Le voici sur la route RÉELLEMENT enregistrée.
+                  creator: { ...userMinimalSchema, nullable: true, description: 'Community creator' },
+                  members: {
+                    type: 'array',
+                    items: communityMemberSchema,
+                    description: 'First members of the community (max 5)'
+                  }
                 }
               }
             },
@@ -441,6 +551,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
               }
             },
             members: {
+              // Sans ce filtre, l'aperçu pouvait présenter comme membre
+              // quelqu'un qui a quitté la communauté. Invisible tant que le
+              // schéma vidait `members[]` en `{}` ; servi dès que la réponse
+              // porte vraiment ses champs.
+              where: { isActive: true },
               take: 5,
               include: {
                 user: {
@@ -468,6 +583,8 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
+      const memberVisibility = await resolveSearchMemberPresence(fastify.prisma, request, communities);
+
       // Transformer les donnees pour le frontend
       const communitiesWithCount = communities.map(community => ({
         id: community.id,
@@ -480,7 +597,14 @@ export async function communityRoutes(fastify: FastifyInstance) {
         conversationCount: community._count.Conversation,
         createdAt: community.createdAt,
         creator: community.creator,
-        members: community.members
+        members: community.members.map(member =>
+          member.user
+            ? {
+                ...member,
+                user: applyPresenceVisibilityAsOffline(member.user, memberVisibility.get(member.user.id))
+              }
+            : member
+        )
       }));
 
       sendPaginatedSuccess(reply, communitiesWithCount, {
@@ -965,7 +1089,35 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      sendPaginatedSuccess(reply, members, {
+      // Porte MIXTE. Le contrôle d'accès ci-dessus ne referme que les
+      // communautés PRIVÉES : sur une communauté publique, `hasAccess` est faux
+      // et le lecteur est un NON-MEMBRE qui parcourt une liste de tiers.
+      //
+      //  - lecteur co-membre  ⇒ contexte d'accès garanti ⇒ préférences seules,
+      //    et une entrée absente reste visible ;
+      //  - lecteur non-membre ⇒ c'est une porte de DÉCOUVERTE ⇒ critère STRICT
+      //    (blocage, amitié, co-participation), et une entrée absente masque.
+      //
+      // `userMinimalSchema` ne déclare pas `lastActiveAt` : ce champ ne sort
+      // d'aucune de ces réponses, mais le gate le couvre pour le jour où il y
+      // serait déclaré.
+      const memberUserIds = members
+        .map((m: { user?: MemberUser | null }) => m.user?.id)
+        .filter((uid: string | undefined): uid is string => !!uid);
+
+      const presenceService = getPresenceVisibilityService(fastify.prisma);
+      const presenceVis = hasAccess
+        ? await presenceService.resolvePrefsOnly(memberUserIds)
+        : await presenceService.resolveForTargets(viewerFromRequest(request), memberUserIds);
+      const onMissingEntry = hasAccess ? 'reveal' as const : 'hide' as const;
+
+      const gatedMembers = members.map((m: { user?: MemberUser | null }) =>
+        m.user
+          ? { ...m, user: applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id), { onMissingEntry }) }
+          : m
+      );
+
+      sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -1117,7 +1269,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      sendSuccess(reply, member);
+      // L'acteur est admin de la communauté et la cible vient d'en devenir
+      // membre : ils sont co-membres, donc préférences seules. La branche
+      // `existingMember` ne charge aucun `user` — le gate la laisse passer.
+      sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error adding community member', error as Error);
       sendInternalError(reply, 'Failed to add community member');
@@ -2038,7 +2193,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      sendSuccess(reply, member);
+      // Le profil de l'invité repart vers l'inviteur, qui est membre de la même
+      // communauté que l'invité vient de rejoindre : préférences seules.
+      sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error inviting to community', error as Error);
       sendInternalError(reply, 'Failed to invite user to community');
