@@ -61,10 +61,84 @@ inatteignable, parce qu'il n'y a pas d'endroit unique où la poser.
 
 ## 5. Le lot
 
-- [ ] `serializeConversationParticipant` — pur, dans `packages/shared/utils/participant-helpers.ts`,
+- [x] `serializeConversationParticipant` — pur, dans `packages/shared/utils/participant-helpers.ts`,
       à côté du schéma qu'il honore ; prend la visibilité de présence en paramètre.
-- [ ] `GET …/participants` : sa projection en ligne DEVIENT l'appel (référence, comportement conservé).
-- [ ] `PATCH …/role` : sérialise + garde la présence (REST **et** diffusion Socket.IO).
-- [ ] `POST …/invite` : sérialise + garde ; clé alignée sur celle de ses deux voisins.
-- [ ] `POST …/participants` : `participant` déclaré SANS producteur — retiré (précédent 91 bis §5).
-- [ ] Témoins : vrai Fastify, assertions de VALEUR, rouges prouvés avant correctif.
+- [x] `GET …/participants` : sa projection en ligne DEVIENT l'appel (référence, comportement conservé).
+- [x] `PATCH …/role` : sérialise + garde la présence (REST **et** diffusion Socket.IO).
+- [x] `POST …/invite` : sérialise + garde ; clé alignée sur celle de ses deux voisins.
+- [x] `POST …/participants` : `participant` déclaré SANS producteur — retiré (précédent 91 bis §5).
+- [x] Témoins : vrai Fastify, assertions de VALEUR, rouges prouvés avant correctif.
+
+
+## 6. Ce que la vérification des clients a trouvé — un second défaut, vivant
+
+Avant de changer la forme d'un événement diffusé, il faut savoir qui le lit. Le
+relevé des consommateurs de `participant:role-updated` a rendu trois réponses,
+dont deux n'étaient pas la question posée.
+
+**Web — sûr.** Ses trois sites ne lisent que `conversationId`, `userId`,
+`newRole`. Aucun ne descend dans `participant`.
+
+**Swift — sûr sur la taxonomie, cassable sur le vide.** `participant.role` est
+déclaré et jamais lu (iOS applique `newRole`, au premier niveau) : la bascule
+`role` → `conversationRole` ne coûte rien. Mais le bloc `participant` était
+**NON-optionnel**, quand la passerelle envoie `null` si la relecture du rang ne
+rend rien — et que le type PARTAGÉ le déclare `participant?`. Le décodeur du
+manager journalise et JETTE l'événement entier sur la moindre erreur : un `null`
+supprimait donc le rafraîchissement du trombinoscope, sans trace. Rendu optionnel,
+avec ses deux témoins (`null` et clé absente).
+
+**Android — MORT depuis toujours.** `ParticipantRoleUpdatedEvent` exigeait un
+`role` de premier niveau **que la passerelle n'a jamais émis** : elle envoie
+`newRole`. Le champ étant non-optionnel et sans défaut, `decodeFromString` levait
+`MissingFieldException` à CHAQUE événement (`coerceInputValues` ne secourt un
+non-nullable que s'il a un défaut ; `ignoreUnknownKeys` ne fabrique pas une clé
+absente). L'exception est avalée par le `runCatching` du listener :
+
+> **Aucun changement de rang n'a jamais atteint le trombinoscope Android.**
+
+Corrigé par `@SerialName("newRole")`.
+
+### Pourquoi personne ne l'avait vu, et c'est la leçon
+
+Le seul témoin du chemin, `ConversationMembersViewModelTest`, CONSTRUIT
+l'événement en Kotlin et l'ÉMET directement dans le flow. Il saute le décodeur —
+la seule couche où vivait le défaut.
+
+> **Un témoin qui n'exerce pas la sérialisation atteste un contrat que personne
+> ne respecte.** C'est mot pour mot la leçon du cycle 91 bis (« mocker les schémas
+> partagés DÉSARME fast-json-stringify »), dans un autre langage et dans l'autre
+> sens : là le serveur ne servait rien, ici le client ne décode rien. La forme du
+> témoin est la même — il n'a jamais traversé la couche qui casse.
+
+Et le commentaire du site d'émission le disait sans le savoir : « les seuls
+consommateurs sont les écrans de participants (web, iOS) ». Android en a un. Il
+n'était pas compté parce qu'il n'a jamais marché.
+
+## 7. Ce que ce cycle n'a PAS pu vérifier
+
+Dettes d'ENVIRONNEMENT, pas d'implémentation — dites ici plutôt que tues :
+
+- **Android non exécuté.** Le conteneur ne résout pas l'Android Gradle Plugin
+  (cache Gradle vide, Google Maven injoignable) : `ParticipantRoleUpdatedDecodeTest`
+  est écrit et sera exercé par la CI, pas ici. Le correctif ne repose pas sur une
+  intuition — il repose sur le contrat de `kotlinx.serialization`, où un champ
+  requis sans défaut et absent lève, et où `coerceInputValues` ne secourt que ce
+  qui a un défaut.
+- **Swift non compilé.** Aucune chaîne Swift sous Linux. Les deux sites d'appel
+  du constructeur mémberwise ont été repris à la main (`CacheCoordinatorTests`),
+  et les accès `event.participant.x` passés en `event.participant?.x`.
+- Inchangées : `npx eslint` échoue dans ce conteneur (cycle 79), `librosa` absent.
+
+## 8. La leçon
+
+> **Un schéma qui « marche » peut cacher une fuite au lieu de l'empêcher.** Deux
+> routes jumelles passaient le même rang Prisma brut au même schéma ; l'une
+> fuyait, l'autre non, et le seul discriminant était la coïncidence d'un nom de
+> clé. Celle qui ne fuyait pas ne protégeait rien — elle était cassée.
+>
+> La garde ne manquait pas par oubli : elle n'avait **aucun endroit unique où
+> être posée**. Trois surfaces réécrivaient la forme de fil à la main, et une
+> règle qui doit être retapée à chaque site est une règle qu'un site finira par
+> ne pas avoir. Outiller la famille — ici une fabrique, au cycle 91 bis un
+> balayage — est ce qui transforme une discipline en propriété.

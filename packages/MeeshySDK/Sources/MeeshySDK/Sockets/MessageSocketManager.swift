@@ -763,10 +763,20 @@ public struct AttachmentUpdatedEvent: Decodable, Sendable {
 
 // MARK: - Participant Role Updated Event Data
 
+/// Le participant imbriqué de `participant:role-updated`.
+///
+/// `role` porte le rôle **GLOBAL** (`USER|ADMIN|…`) depuis le cycle 92 ; le rang
+/// DANS LA CONVERSATION est `conversationRole`, et il voyage aussi au premier
+/// niveau de l'événement sous `newRole` — c'est celui-là qu'on applique.
+///
+/// Tout est optionnel sauf `id` : un champ manquant ne doit jamais faire tomber
+/// l'événement ENTIER. Le décodeur du manager journalise et JETTE l'événement sur
+/// la moindre erreur, donc un nom absent coûterait la mise à jour du rang.
 public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
     public let id: String
-    public let role: String
-    public let displayName: String
+    public let role: String?
+    public let conversationRole: String?
+    public let displayName: String?
     public let userId: String?
 }
 
@@ -791,7 +801,14 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let userId: String
     public let newRole: String
     public let updatedBy: String
-    public let participant: ParticipantRoleUpdatedParticipantInfo
+    /// OPTIONNEL, comme le déclare le type partagé (`participant?`) : la
+    /// passerelle envoie `null` quand la relecture du rang ne rend rien. Il était
+    /// non-optionnel ici, et un `null` faisait échouer le décodage de l'événement
+    /// ENTIER — donc aucun rafraîchissement, sans trace côté produit.
+    ///
+    /// Ce qui compte pour appliquer le changement (`userId`, `newRole`) est au
+    /// premier niveau : l'événement reste utile sans ce bloc.
+    public let participant: ParticipantRoleUpdatedParticipantInfo?
 }
 
 public struct SocketEventUser: Decodable, Sendable {

@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** Mirrors iOS MessageSocketManager event payloads (Sockets/MessageSocketManager.swift). */
@@ -177,11 +178,25 @@ data class ParticipantBannedEvent(
     val bannedAt: String? = null,
 )
 
+/**
+ * `participant:role-updated`.
+ *
+ * Le rang voyage sous **`newRole`** au premier niveau — c'est ce que la
+ * passerelle émet depuis toujours. Ce champ s'appelait ici `role` sans
+ * `@SerialName`, donc absent de la charge utile : NON-optionnel et sans défaut,
+ * il faisait lever `MissingFieldException` à chaque événement, avalée par le
+ * `runCatching` du listener. Aucun changement de rang n'atteignait le
+ * trombinoscope, en silence.
+ *
+ * Ne PAS lire le `participant.role` imbriqué à sa place : il porte le rôle
+ * GLOBAL (`USER|ADMIN|…`) depuis le cycle 92, le rang de conversation étant
+ * passé sous `participant.conversationRole`.
+ */
 @Serializable
 data class ParticipantRoleUpdatedEvent(
     val conversationId: String,
     val userId: String,
-    val role: String,
+    @SerialName("newRole") val role: String,
 )
 
 /**

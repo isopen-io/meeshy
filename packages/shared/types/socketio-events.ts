@@ -1384,13 +1384,26 @@ export interface ParticipantRoleUpdatedEventData {
   readonly userId: string;
   readonly newRole: string;
   readonly updatedBy: string;
-  /** Minimum guaranteed shape from gateway; actual payload may include additional fields */
+  /**
+   * Le participant SÉRIALISÉ (`serializeConversationParticipant`), ou `null`
+   * quand la relecture du rang ne rend rien — d'où l'optionnalité, qui est
+   * portée par le contrat et doit l'être par chaque décodeur client.
+   *
+   * **`role` porte le rôle GLOBAL** (`USER|ADMIN|…`) ; le rang DANS LA
+   * CONVERSATION est `conversationRole`. Le rang à APPLIQUER reste `newRole`,
+   * au premier niveau : ce bloc est un complément d'affichage, pas la décision.
+   * Confondre les deux rétrograderait tout le monde en « membre ».
+   *
+   * Forme minimale garantie ; la charge utile porte le participant entier.
+   */
   readonly participant?: {
     readonly id: string;
-    readonly role: string;
-    readonly displayName: string;
+    readonly participantId?: string;
+    readonly role?: string;
+    readonly conversationRole?: string | null;
+    readonly displayName?: string | null;
     readonly userId: string | null;
-  };
+  } | null;
 }
 
 /**
