@@ -61,6 +61,10 @@
         <item quantity="one">%1$d new post</item>
         <item quantity="other">%1$d new posts</item>
     </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d like</item>
+        <item quantity="other">%1$d likes</item>
+    </plurals>
     <string name="status_bar_me">Me</string>
     <string name="status_bar_add">Status</string>
     <string name="status_bar_add_label">Add a status</string>

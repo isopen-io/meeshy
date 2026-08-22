@@ -25,6 +25,7 @@ class RepostEmbedBuilderTest {
         media: List<ApiPostMedia>? = null,
         isQuote: Boolean? = false,
         createdAt: String? = "2026-07-01T10:00:00Z",
+        likeCount: Int? = null,
     ) = ApiRepostOf(
         id = id,
         type = type,
@@ -35,6 +36,7 @@ class RepostEmbedBuilderTest {
         media = media,
         isQuote = isQuote,
         createdAt = createdAt,
+        likeCount = likeCount,
     )
 
     // --- absence / presence ---
@@ -154,5 +156,25 @@ class RepostEmbedBuilderTest {
     fun build_carriesCreatedAtIso() {
         val embed = RepostEmbedBuilder.build(repost(createdAt = "2026-07-01T10:00:00Z"), Prefs(), null)
         assertThat(embed?.createdAtIso).isEqualTo("2026-07-01T10:00:00Z")
+    }
+
+    // --- reposted post's like count (parity iOS FeedPostCard.repostView / PostDetailView.repostEmbed) ---
+
+    @Test
+    fun build_projectsRepostedPostLikeCount() {
+        val embed = RepostEmbedBuilder.build(repost(likeCount = 7), Prefs(), null)
+        assertThat(embed?.likeCount).isEqualTo(7)
+    }
+
+    @Test
+    fun build_absentLikeCountBecomesZero() {
+        val embed = RepostEmbedBuilder.build(repost(likeCount = null), Prefs(), null)
+        assertThat(embed?.likeCount).isEqualTo(0)
+    }
+
+    @Test
+    fun build_clampsNegativeLikeCountToZero() {
+        val embed = RepostEmbedBuilder.build(repost(likeCount = -3), Prefs(), null)
+        assertThat(embed?.likeCount).isEqualTo(0)
     }
 }

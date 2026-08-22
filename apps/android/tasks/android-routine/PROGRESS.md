@@ -2,6 +2,57 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **repost embed shows the reposted post's like count** (slice `feed-repost-embed-like-count`,
+> feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders the reposted post's like count
+> inside the embedded quote block (`FeedPostCard.repostView` heart + `repost.likes`; `PostDetailView`
+> `repostEmbed` gated `> 0`); Android's shared `RepostEmbedCell` omitted it. This lands it — the single
+> cleanest remaining Feed embed gap, since the data is **already deserialized** into `ApiRepostOf.likeCount`
+> (no new gateway endpoint, no new SDK model field, no new socket stream — which is exactly what disqualified
+> the mood-emoji / location-sticker embed variants that each need a net-new `ApiRepostOf` field).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-postdetail-quote-repost`) already merged into main as PR #3350. Branched off freshly-fetched
+> `origin/main` (`ad904485`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe wrinkle DEEPENED: the symlink
+> `android-37 → android-37.0` is **no longer sufficient** — AGP reads `AndroidVersion.ApiLevel=37.0` from the
+> platform's `source.properties` and computes the hash `android-37.0`, so `compileSdk = 37` still fails with
+> *"Failed to find target with hash string 'android-37'"* even with the symlink present (confirmed this run:
+> baseline `assembleDebug` failed on exactly that). Fix that actually works: **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. After that the full
+> `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) ran locally, **BUILD SUCCESSFUL**
+> (973 tasks). Local gate available this run. (Recorded in NOTES.md.)
+>
+> **`:feature:feed` `RepostEmbedBuilder`** (pure, app-side): `RepostEmbedPresentation` gained `likeCount: Int`,
+> projected as `(repost.likeCount ?: 0).coerceAtLeast(0)` — null (absent payload) → 0, and a malformed
+> negative clamps to 0 (same precedent as `feed-realtime-comment-count`'s `coerceAtLeast(0)`). **Improvement
+> over iOS**: gated `> 0` in the shared cell, so a reposted post with no likes shows no "0 j'aime" clutter —
+> iOS's `FeedPostCard.repostView` renders the count unconditionally; its own `PostDetailView.repostEmbed`
+> already gates `> 0`, and the shared Android cell adopts that restraint for both surfaces.
+>
+> **`:feature:feed` `RepostEmbedCell`** (Compose glue, exempt): a heart (`Icons.Filled.Favorite`) + count row
+> after the media block, accent-coherent (`Indigo500` at 0.7 alpha, mirroring iOS `accentText(...).opacity(0.7)`),
+> merged into one accessibility element via the new `feed_repost_likes_count` plurals (EN/FR/ES/PT). No dead
+> ends: the row is read-only, part of the same tap target that opens the original post.
+>
+> **Tests: +3** — all in `RepostEmbedBuilderTest`, through the public `RepostEmbedBuilder.build`:
+> projects the reposted post's count (7) / absent (null) → 0 / negative (-3) clamps to 0. **Mutation RED-proof
+> ×1**: dropping `.coerceAtLeast(0)` fails EXACTLY `build_clampsNegativeLikeCountToZero` (1 of 17), the other 16
+> green. Restored via `cp` backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 field + projection, cell wiring, plurals ×4 locales, +3 tests, tracking docs).
+> Verdict: **PASS** — pure app-side projection through a tested SSOT + exempt Compose glue, behavioural tests
+> through the public API, no production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) the composer's **per-post language selector** (iOS lets you pick the post's original language; confirm
+> `POST /posts` accepts an explicit `originalLanguage` before committing — unverified-backend risk); (2) the
+> reposted post's **mood emoji** in the embed (needs a new `ApiRepostOf.moodEmoji` field + gateway payload
+> confirmation — model plumbing slice); (3) the composer's **location** attachment. Comment-repost is
+> DISQUALIFIED — iOS exposes no repost/quote on comment cells (net-new invention, skip).
+
 > On 2026-08-22 **post-detail gains repost + quote** (slice `feed-postdetail-quote-repost`, feature-parity
 > §F — "Post / comment pin-unpin; repost / quote-repost / share; report"). The feed card already offered
 > repost + quote (slice `feed-quote-repost`); the full-screen post-detail did not. iOS offers both there via
