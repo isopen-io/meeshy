@@ -13,7 +13,8 @@
  * - Message signing with identity key
  */
 
-import { PrismaClient } from '../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SignalProtocolLimits } from '@meeshy/shared/utils/validation';
 import { SignalKeyManager } from './SignalKeyManager';
 import { X3DHKeyAgreement } from './X3DHKeyAgreement';
 import { DoubleRatchet, DoubleRatchetSession } from './DoubleRatchet';
@@ -315,7 +316,12 @@ export class SignalProtocolEngine {
       logger.trace('Generated message key', { messageNumber: messageKey.messageNumber });
 
       // Step 3: Encrypt plaintext with AES-256-GCM
-      const iv = crypto.randomBytes(16);
+      // Nonce de 96 bits — voir `SignalProtocolAdapter.encryptMessage` : c'est la
+      // largeur que `SignalValidation.validateEncryptedPayload` et
+      // `SignalSchemas.encryptedMessage` DÉCLARENT, et la seule qui interopère.
+      // L'IV voyage avec le message : un chiffré émis sous l'ancienne largeur se
+      // déchiffre encore, `decryptMessage` lisant `encryptedMessage.iv` tel quel.
+      const iv = crypto.randomBytes(SignalProtocolLimits.AES_GCM_IV_SIZE);
       const cipher = crypto.createCipheriv('aes-256-gcm', messageKey.key, iv);
 
       const plaintextBuffer = Buffer.from(plaintext, 'utf-8');
@@ -592,12 +598,27 @@ export class SignalProtocolEngine {
       logger.trace('Retrieved pre-key', { preKeyId: preKey.id });
 
       // Step 3: Perform X3DH key agreement (INITIATOR SIDE)
+      //
+      // Le paquet doit avoir la FORME que `PreKeyBundle` déclare, pas celle des
+      // colonnes de `DMAEnrollment`. La forme plate d'avant — `signedPreKey` en
+      // Buffer, `onetimePreKey` au lieu de `preKey`, aucun `registrationId` —
+      // rendait cette branche inexécutable de bout en bout : `initiatorKeyAgreement`
+      // lit `signedPreKey.publicKey` (undefined sur un Buffer), n'a jamais vu la
+      // clé unique donc n'a jamais calculé DH4, et `deriveKeys` appelle
+      // `registrationId.toString()` sur `undefined`.
+      const enrollment = preKey.signalEnrollment;
       const x3dhResult = await this.x3dh.initiatorKeyAgreement(
         {
-          identityKey: Buffer.from(preKey.signalEnrollment.identityKey, 'base64'),
-          signedPreKey: Buffer.from(preKey.signalEnrollment.signedPreKey, 'base64'),
-          signedPreKeySignature: Buffer.from(preKey.signalEnrollment.signedPreKeySignature, 'base64'),
-          onetimePreKey: preKey.keyData ? Buffer.from(preKey.keyData, 'base64') : undefined
+          identityKey: Buffer.from(enrollment.identityKey, 'base64'),
+          signedPreKey: {
+            id: enrollment.signedPreKeyId,
+            publicKey: Buffer.from(enrollment.signedPreKey, 'base64'),
+            signature: Buffer.from(enrollment.signedPreKeySignature, 'base64')
+          },
+          preKey: preKey.keyData
+            ? { id: preKey.preKeyId, publicKey: Buffer.from(preKey.keyData, 'base64') }
+            : undefined,
+          registrationId: enrollment.registrationId
         },
         identityKeyPair.privateKey
       );
