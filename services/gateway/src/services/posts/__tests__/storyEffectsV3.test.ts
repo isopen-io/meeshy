@@ -61,9 +61,15 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect(() => convertV1ToV3(v1())).not.toThrow();
   });
 
-  it('canvasAspectRatio disappears — the carrier keeps its own ratio (S8)', () => {
-    const out = convertV1ToV3(v1()) as unknown as Record<string, unknown>;
+  // S8 RÉVISÉE. La règle d'origine — « `canvasAspectRatio` disparaît, le porteur
+  // garde son propre ratio » — tenait pour la LECTURE et échouait pour
+  // l'ÉDITION (cf. le bloc carrierAspect plus bas). Ce test dit désormais les
+  // DEUX moitiés, faute de quoi il passerait par simple non-collision de noms :
+  // la clé v1 s'en va, l'information reste.
+  it('the v1 key canvasAspectRatio disappears, but its VALUE survives as carrierAspect (S8 révisée)', () => {
+    const out = convertV1ToV3(v1());
     expect(JSON.stringify(out)).not.toContain('canvasAspectRatio');
+    expect(out.scenes?.[0].carrierAspect).toBeCloseTo(1.7777, 6);
   });
 
   it('place object travels whole into the payload', () => {
@@ -158,6 +164,51 @@ describe('storyEffectsV3 — convertisseur v1→v3 (table §C2)', () => {
     expect((carrier?.anchor as { y: number }).y).toBe(0.5);
     expect(carrier?.payload.muted).toBe(false);
     expect((text?.anchor as { y: number }).y).toBeCloseTo(0.3418 + 0.2 * 0.3164, 2);
+  });
+
+  // ─── carrierAspect (révision S8) ─────────────────────────────────────────
+  // S8 gravait la DISPARITION de `canvasAspectRatio` : « le porteur garde son
+  // propre ratio ». L'argument vaut pour la LECTURE — un lecteur peint une
+  // scène 9:16 et le porteur se débrouille. Il n'a pas survécu à l'ÉDITION :
+  // `remapFreeAnchor` est affine (`y' = top + y·h`, h et top déduits du seul
+  // `carrierAspect`), donc INVERSIBLE — mais seulement si l'on sait encore ce
+  // que valait le porteur. Jeté, il rendait la conversion à sens unique, et
+  // rouvrir un ancien post recadrait ses objets sans retour possible.
+  // `StoryDraftStore` avait déjà dû le repersister hors document, par
+  // diapositive, pour les brouillons ; on cesse d'industrialiser ce pansement.
+  //
+  // La LETTRE de S8 tient : la clé v1 `canvasAspectRatio` disparaît bien. Son
+  // ESPRIT est révisé : l'information, elle, survit sous un nom v3.
+
+  it('carrierAspect is LOGGED on the scene — the U20 remap stops being one-way', () => {
+    const out = convertV1ToV3({
+      canvasAspectRatio: 16 / 9,
+      textObjects: [{ id: 'txt1', text: 'x', x: 0.5, y: 0.9 }],
+    });
+    expect(out.scenes?.[0].carrierAspect).toBeCloseTo(16 / 9, 6);
+  });
+
+  it('knowing carrierAspect, the letterbox remap inverts EXACTLY', () => {
+    const y0 = 0.9;
+    const scene = convertV1ToV3({
+      canvasAspectRatio: 16 / 9,
+      textObjects: [{ id: 'txt1', text: 'x', x: 0.5, y: y0 }],
+    }).scenes?.[0];
+    const aspect = scene?.carrierAspect as number;
+    const h = (9 / 16) / aspect;
+    const top = (1 - h) / 2;
+    const y1 = (scene?.objects.find(o => o.kind === 'text')?.anchor as { y: number }).y;
+    expect((y1 - top) / h).toBeCloseTo(y0, 10);
+  });
+
+  it('no carrierAspect is logged when the v1 blob never carried one', () => {
+    const scene = convertV1ToV3({ textObjects: [{ id: 'txt1', text: 'x', x: 0.5, y: 0.9 }] }).scenes?.[0];
+    expect(scene?.carrierAspect).toBeUndefined();
+  });
+
+  it('CanvasV3Schema PRESERVES carrierAspect through a parse (never stripped as unknown)', () => {
+    const parsed = CanvasV3Schema.parse({ v: 3, scenes: [{ id: 's1', objects: [], carrierAspect: 1.7777 }] });
+    expect(parsed.scenes?.[0].carrierAspect).toBeCloseTo(1.7777, 6);
   });
 
   it('wire helper: v3 passes through UNTOUCHED, v1 converts, nullish passes', () => {

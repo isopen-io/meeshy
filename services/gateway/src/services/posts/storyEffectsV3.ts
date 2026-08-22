@@ -215,6 +215,17 @@ export function convertV1ToV3(
     : objects;
 
   const scene: SceneV3 = { id: 's1', objects: remapped };
+  // Le ratio du porteur SURVIT à la conversion (révision de S8). `remapFreeAnchor`
+  // ci-dessus est affine, donc inversible — à condition de savoir ce que valait
+  // le porteur. Le jeter rendait le recadrage définitif et faisait de l'édition
+  // d'un ancien contenu une perte sèche. La clé v1 `canvasAspectRatio`, elle,
+  // disparaît toujours : c'est la LETTRE de S8, tenue.
+  //
+  // Il ne compte PAS dans `sceneCarriesSomething` : un ratio sans objet ne fait
+  // pas un contenu, et O3 interdit le cadre vide.
+  if (typeof carrierAspect === 'number' && Number.isFinite(carrierAspect) && carrierAspect > 0) {
+    scene.carrierAspect = carrierAspect;
+  }
   if (typeof blob.timelineDuration === 'number') scene.timelineDuration = blob.timelineDuration;
   if (blob.opening && typeof blob.opening === 'object') scene.opening = blob.opening as Record<string, unknown>;
   if (blob.closing && typeof blob.closing === 'object') scene.closing = blob.closing as Record<string, unknown>;
