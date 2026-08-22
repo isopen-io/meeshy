@@ -19,9 +19,14 @@ import XCTest
 /// suffit pas — le tap doit RÉELLEMENT atteindre un lecteur. Deux des trois
 /// surfaces livraient un état muet en ÉCRITURE SEULE (déclaré, basculé, lu
 /// pour l'icône — aucun consommateur). Fermé ici :
-/// - carte de post (`FeedPostCard`) : bouton RETIRÉ pour E2 — aucun lecteur
-///   local n'existe encore dans ce fichier (arrive avec E3,
-///   `MeeshyScenePlayer(.card)`). Le badge E1 (annonce) reste inchangé ;
+/// - carte de post (`FeedPostCard`) : bouton ABSENT — décision DÉFINITIVE
+///   depuis E3, plus un report. `ScenePlayerConfig(mode: .card).isMuted` est
+///   gelé à `true` côté SDK (B4) et `isPlaying` y est un `.constant(false)`
+///   figé (E3, née en pause et le RESTE) : la scène de carte ne jouera JAMAIS
+///   de son, donc aucun bouton muet n'aura jamais de lecteur local à piloter
+///   sur cette surface. B3.6-carte est CLOSE par une décision d'architecture
+///   (silence permanent par construction), pas par un bouton temporairement
+///   retiré. Le badge E1 (annonce) reste inchangé ;
 /// - détail de post (`PostDetailView`) : bouton CONSERVÉ, mais sa porte est
 ///   maintenant conjuguée au prédicat de rendu réel du canvas
 ///   (`BackgroundSoundBadge.detailCanvasIsRendered`) — un post NON-story
@@ -102,20 +107,25 @@ final class MuteButtonExistenceGuardTests: XCTestCase {
         }
     }
 
-    // MARK: - Carte (FeedPostCard) — bouton RETIRÉ pour E2 (correctif majeur #2)
+    // MARK: - Carte (FeedPostCard) — bouton ABSENT PAR DÉCISION (E3 a clos le report)
     //
-    // Aucun lecteur local n'existe encore dans ce fichier pour piloter un
-    // muet (l'embed story-repost, `StoryRepostEmbedCell`, fige `mute: true`
-    // et est hors périmètre E2 ; la scène jouée dans la carte arrive avec
-    // E3, `MeeshyScenePlayer(.card)`). Monter le bouton sans lecteur en
-    // aurait fait une commande décorative — retiré ici, reporté à E3.
+    // E2 avait retiré le bouton faute de lecteur local à piloter, en le
+    // reportant à E3. E3 a livré la scène de carte et démontré que le report
+    // était en réalité IMPOSSIBLE à honorer : `ScenePlayerConfig(mode: .card)`
+    // fige `isMuted = true` côté SDK (B4, contrat gelé) et E3 monte la scène
+    // avec un `isPlaying` en `.constant(false)`. La carte est donc silencieuse
+    // PAR CONSTRUCTION — aucun bouton muet n'y aura jamais de lecteur à
+    // piloter. B3.6-carte est close par une décision d'architecture, pas par
+    // un bouton en attente : ce qui suit garde la DÉCISION, pas un report.
 
-    func test_feedPostCard_muteButton_isNotMounted_deferredToE3() throws {
+    func test_feedPostCard_muteButton_isNeverMounted_cardIsSilentByConstruction() throws {
         let text = try source("Meeshy/Features/Main/Views/FeedPostCard.swift")
         XCTAssertFalse(
             text.contains("BackgroundSoundBadge.showsMuteButton(for: backgroundSoundAnnouncement)"),
-            "La carte ne doit PAS monter de bouton muet en E2 — aucun lecteur local n'existe " +
-            "encore pour le piloter (arrive avec E3, MeeshyScenePlayer(.card))."
+            "La carte ne doit JAMAIS monter de bouton muet : sa scène est muette par " +
+            "construction (ScenePlayerConfig(mode: .card).isMuted figé à true, B4) et née en " +
+            "pause pour de bon (isPlaying en .constant(false), E3). Aucun lecteur local n'y " +
+            "existera pour le piloter."
         )
         XCTAssertFalse(
             text.contains("isBackgroundSoundMuted"),
