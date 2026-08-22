@@ -26,8 +26,21 @@ function baseObject(
   fallbackZ: number
 ): ObjectV3 {
   const timing: NonNullable<ObjectV3['timing']> = {};
-  if (typeof o.startTime === 'number') timing.start = o.startTime;
-  if (typeof o.endTime === 'number') timing.end = o.endTime;
+  // La fenêtre temporelle d'un objet ne s'émet QUE comme un intervalle valide.
+  // Un blob v1 (qui n'a jamais porté l'invariant `end >= start`) avec
+  // `startTime > endTime` sortait auparavant `timing: { start, end }` inversé —
+  // que le contrat CanvasV3 (`TimingSchema`, itération 234/236) refuse à juste
+  // titre. Comme pour l'audio `bounds`, le convertisseur reste tolérant : une
+  // fenêtre inversée dégrade en « pas de fenêtre » (l'objet reste visible tout
+  // du long), jamais en donnée corrompue servie aux clients v3. Une borne
+  // partielle (une seule des deux) reste valide et passe telle quelle.
+  const start = o.startTime;
+  const end = o.endTime;
+  const hasStart = typeof start === 'number' && Number.isFinite(start);
+  const hasEnd = typeof end === 'number' && Number.isFinite(end);
+  const invertedWindow = hasStart && hasEnd && (end as number) < (start as number);
+  if (hasStart && !invertedWindow) timing.start = start as number;
+  if (hasEnd && !invertedWindow) timing.end = end as number;
   if (Array.isArray(o.keyframes)) {
     timing.keyframes = o.keyframes as NonNullable<ObjectV3['timing']>['keyframes'];
   }
