@@ -724,3 +724,47 @@ traces de la bordure et jamais dans le contenu, même au repos ».
 **Leçon** : une garde de forme vise le BLOC, jamais le FICHIER. Mes deux premières assertions
 interdisaient `strokeBorder` et `Capsule(` dans tout `LentilleConversationRow.swift` et condamnaient
 l'anneau d'avatar et le bouton « Rejoindre » d'un appel en cours (2 rouges sur 112).
+
+## Reprise du chantier MeeshyComposer + reader (2026-08-22 soir)
+
+Directive : « REPRENDRE tout le travail et plan d'implémentation de MeeshyComposer et du reader
+en suivant le plan établi ». État établi par AUDIT CROISÉ (plans × `git log origin/main` × code),
+pas par lecture des fiches — la fiche projet prévenait elle-même qu'elle est une hypothèse.
+
+### Ce qui est RÉELLEMENT sur main
+Lots A, B, D, E, F entiers. Du lot C : le socle C0a/b/c (`4c937e078`), C1 `ComposerIntent`
+(`ff41657b9`), et la MOITIÉ de C4 (l'en-tête `X-Canvas-Caps: 3`, `cf05538d9`). E4 est livré
+(le viewer story monte `MeeshyScenePlayer(.reader)`), et le défaut de cadre v1→v3 est corrigé
+par `carrierAspect` (`b82ebbc17`) — le texte à 0,90 n'atterrit plus à 0,6266.
+
+### (a) Documentation qui MENT sur l'état du code — d'abord, coût nul
+- [ ] a1 · 6 affirmations « C4 ouverte / iOS ne pose aucun caps / cadre 9:16 sans ratio » :
+      `StoryViewerView+Canvas.swift:1224-1230`, `StoryViewerScenePlayerGuardTests.swift:123`,
+      `StoryViewerScenePlayerDocumentGuardTests.swift:31,99,133,185` (dont un MESSAGE D'ASSERTION).
+- [ ] a2 · `FeedPostCard.swift:305-307` « aucun écrivain n'émet encore v3 » — faux des deux côtés
+      (`StoryModels.swift:1889`, `StoryComposer.tsx:288`).
+- [ ] a3 · P0 remis à l'état réel (D/E/C0a-c « sur main », ligne C1 créée, C4 scindée, ligne
+      carrierAspect, camembert recalculé). Un P0 périmé est un défaut BLOQUANT au sens de sa §E.
+- [ ] a4 · fermer les 4 sites que `todo-carrier-aspect-s8-revisee` prétend fermés, et le
+      « Reste bloquant » périmé de `todo-c4-canvas-caps-…`.
+
+### (b) Dettes techniques réelles
+- [ ] b1 · **Android ne pose aucun `X-Canvas-Caps`** ⇒ tout le parc voit la sentinelle indigo à la
+      place de chaque canevas v3. RÉGRESSION VIVANTE, priorité après (a).
+- [ ] b2 · la porte v3 du viewer repose sur deux prémisses mortes → la faire tomber et mesurer.
+- [ ] b3 · retirer le contournement `canvasAspectRatio:<slideId>` de `StoryDraftStore` (sans objet).
+- [ ] b4 · web : kinds `drawing` et `place` émis mais rendus par aucune branche de `CanvasV3Scene`.
+- [ ] b5 · Plan2D : 4 familles sur 7 sans producteur.
+- [ ] b6 · mesure device A11 de D4 (STOP levé par dérogation, jamais par mesure).
+- [ ] b7 · code mort SDK laissé par E1. b8 · compte à rebours du fond audio. b9 · reliquats du
+      plan reader (WS2.4 et WS3.5 CADUQUES — les symboles n'existent plus).
+
+### (c) Lot C — le vrai reste, dans l'ordre de merge de la spec
+- [ ] C2 · le meuble (`MeeshyComposerHost`, absent) · [ ] C3 · les portes (intention par entrée)
+- [ ] C4 reste · `X-App-Version`/`X-App-Platform`, 426 → `meeshyUpgradeRequired`, `UpgradeGateView`,
+      porte RootView ET iPadRootView, bootstrap `GET /app/min-version`
+- [ ] C5 · collage O12 + « Mes stickers » LRU 64 Mo · [ ] C6 · appui long = capture
+- [ ] C6b · auto-brouillon (fermeture + 426) · [ ] C7/C7b · Étagère 4 onglets, alt text +
+      `allowSoundExtraction` · [ ] C8 · gate complet, C merge EN DERNIER (pbxproj)
+- [ ] G · plan jamais écrit (partage entrant) · [ ] H · plan jamais écrit (Android v3) —
+      H conditionne l'armement de `CANVAS_V3_READ` / `CANVAS_V3_WRITE_STRICT`.
