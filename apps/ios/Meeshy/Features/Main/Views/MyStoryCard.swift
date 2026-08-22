@@ -198,32 +198,22 @@ struct MyStoryCard: View {
             // décodage plein format tournait sur le main thread À CHAQUE
             // render de cellule. `CachedAsyncImage` décode off-main, borné à
             // la taille de cellule, et son NSCache rend les re-renders
-            // synchrones. Le fond `backgroundHex` (couche du dessous) couvre
-            // la frame de chargement initiale.
+            // synchrones. Pendant le chargement — et si le fichier local est
+            // illisible (tué mi-écriture) — le placeholder EST la chaîne de
+            // repli historique (thumbHash → miniature serveur), donc aucun
+            // état ne rend moins que l'ancien code.
             if let path = model.localCoverPath, FileManager.default.fileExists(atPath: path) {
+                // showsStatusOverlays: false — surface décorative : ni spinner
+                // pendant le décodage, ni bouton Retry sans issue sur un
+                // fichier local illisible.
                 CachedAsyncImage(
                     url: URL(fileURLWithPath: path).absoluteString,
-                    targetSize: Self.thumbnailTargetSize
-                ) { Color.clear }
+                    targetSize: Self.thumbnailTargetSize,
+                    showsStatusOverlays: false
+                ) { resolvedThumbnailFallback }
                 .scaledToFill()
             } else {
-                switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
-                                                        remoteURL: model.thumbnailURL) {
-                case .composite(let hash):
-                    if let image = UIImage.fromThumbHash(hash) {
-                        Image(uiImage: image).resizable().scaledToFill()
-                    } else if let url = model.thumbnailURL, !url.isEmpty {
-                        // targetSize ≈ cellule de grille 9:16 (adaptive 150pt) —
-                        // décode downsamplé au lieu du plafond 1200 px plein format.
-                        CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
-                    } else {
-                        emptyOrPlaceholder
-                    }
-                case .remoteURL(let url):
-                    CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
-                case .placeholder:
-                    emptyOrPlaceholder
-                }
+                resolvedThumbnailFallback
             }
 
             if isVeiled {
@@ -242,6 +232,31 @@ struct MyStoryCard: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                     .shadow(color: .black.opacity(0.5), radius: 2)
             }
+        }
+    }
+
+    /// Chaîne de repli historique de la vignette (thumbHash composite →
+    /// miniature serveur → placeholder), déléguée à `MyStoryThumbnailResolver`.
+    /// Sert de branche sans cover local ET de placeholder du cover local
+    /// (pendant son décodage, ou s'il est illisible).
+    @ViewBuilder
+    private var resolvedThumbnailFallback: some View {
+        switch MyStoryThumbnailResolver.resolve(thumbHash: model.thumbHash,
+                                                remoteURL: model.thumbnailURL) {
+        case .composite(let hash):
+            if let image = UIImage.fromThumbHash(hash) {
+                Image(uiImage: image).resizable().scaledToFill()
+            } else if let url = model.thumbnailURL, !url.isEmpty {
+                // targetSize ≈ cellule de grille 9:16 (adaptive 150pt) —
+                // décode downsamplé au lieu du plafond 1200 px plein format.
+                CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
+            } else {
+                emptyOrPlaceholder
+            }
+        case .remoteURL(let url):
+            CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
+        case .placeholder:
+            emptyOrPlaceholder
         }
     }
 

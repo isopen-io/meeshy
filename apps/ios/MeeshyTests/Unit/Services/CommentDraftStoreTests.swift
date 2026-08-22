@@ -64,4 +64,19 @@ final class CommentDraftStoreTests: XCTestCase {
         let (sut, _) = makeSUT()
         XCTAssertNil(sut.load(postId: "inconnu"))
     }
+
+    /// Filet kill-safety : le flush (passage en arrière-plan) fait atterrir
+    /// immédiatement toute écriture en vol, sans attendre le debounce.
+    func test_flushPendingSaves_writesInFlightDraftImmediately() {
+        let (sut, defaults) = makeSUT(debounceMilliseconds: 60_000)
+        sut.save(postId: "p1", text: "brouillon long")
+        XCTAssertNil(defaults.string(forKey: "meeshy.commentDraft.v1.p1"),
+            "précondition : rien n'a encore atterri pendant le debounce")
+
+        sut.flushPendingSaves()
+
+        XCTAssertEqual(defaults.string(forKey: "meeshy.commentDraft.v1.p1"), "brouillon long")
+        XCTAssertTrue(sut.pendingSaves.isEmpty)
+        XCTAssertEqual(sut.load(postId: "p1"), "brouillon long")
+    }
 }

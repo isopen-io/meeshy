@@ -1,4 +1,6 @@
+import Combine
 import Foundation
+import UIKit
 
 // MARK: - CommentDraftStore
 
@@ -28,9 +30,29 @@ final class CommentDraftStore {
     /// Texte pas encore écrit dans `defaults` — lu en priorité par `load`.
     private var pendingTexts: [String: String] = [:]
 
+    private var cancellables = Set<AnyCancellable>()
+
     init(defaults: UserDefaults = .standard, debounceMilliseconds: UInt64 = 400) {
         self.defaults = defaults
         self.debounceNanos = debounceMilliseconds * 1_000_000
+        // Filet kill-safety : au passage en arrière-plan, les écritures en vol
+        // atterrissent immédiatement — même garantie que le composer
+        // conversation (flush au scenePhase). Combine plutôt qu'un token
+        // NotificationCenter : pas de deinit isolé à gérer sous Swift 6.
+        NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)
+            .sink { [weak self] _ in self?.flushPendingSaves() }
+            .store(in: &cancellables)
+    }
+
+    /// Écrit immédiatement tout brouillon en vol et annule les tâches
+    /// débouncées. Idempotent.
+    func flushPendingSaves() {
+        for task in pendingSaves.values { task.cancel() }
+        pendingSaves.removeAll()
+        for (postId, text) in pendingTexts {
+            defaults.set(text, forKey: key(for: postId))
+        }
+        pendingTexts.removeAll()
     }
 
     private func key(for postId: String) -> String { prefix + postId }

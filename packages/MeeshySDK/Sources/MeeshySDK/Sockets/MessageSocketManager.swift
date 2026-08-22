@@ -2166,19 +2166,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // CALL-FIX 2026-06-06 — WebSocket transport. The previous
-            // `.forcePolling(true)` (HTTP long-poll ONLY) dropped mid-call: every
-            // re-poll under WebRTC CPU load surfaced as "transport close" on the
-            // gateway, killing call:initiate / SDP / ICE signaling. The old "~35s
-            // the WS dropped" was a ping timeout (gateway pingTimeout was 10s) —
-            // bumped to 20s server-side, so the persistent WebSocket holds.
+            // CALL-FIX 2026-06-06 — WebSocket transport (polling handshake → auto
+            // upgrade to WebSocket). The previous `.forcePolling(true)` (HTTP
+            // long-poll ONLY) dropped mid-call: every re-poll under WebRTC CPU load
+            // surfaced as "transport close" on the gateway, killing call:initiate /
+            // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
+            // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
+            // 20s server-side, so the persistent WebSocket now holds.
             //
-            // P4-1 2026-08-22 — WebSocket DIRECT (plus de handshake polling +
-            // upgrade) : supprime 1-2 RTT + une requête HTTP à CHAQUE connect —
-            // cold start, foreground, rotation de token, reconnexion. Parité
-            // avec le web (`transports: ['websocket', 'polling']`, WS d'abord) ;
-            // la gateway n'impose aucune restriction de transport.
-            .forceWebsockets(true),
+            // P4-1 évalué 2026-08-22 puis ÉCARTÉ : `.forceWebsockets(true)`
+            // économiserait 1-2 RTT par connect mais supprime le REPLI polling
+            // — contrairement au web (`transports: ['websocket','polling']`,
+            // WS d'abord AVEC repli), un réseau qui casse l'upgrade WebSocket
+            // (proxy TLS-inspectant, portail captif) perdrait tout temps réel.
+            // À reconsidérer seulement avec un repli après N échecs.
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),
@@ -2205,8 +2206,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // CALL-FIX 2026-06-06 + P4-1 — WebSocket direct (voir connect()).
-            .forceWebsockets(true),
+            // CALL-FIX 2026-06-06 — WebSocket transport (voir connect()).
             .extraHeaders(["X-Session-Token": sessionToken]),
             .reconnects(true),
             .reconnectWait(1),

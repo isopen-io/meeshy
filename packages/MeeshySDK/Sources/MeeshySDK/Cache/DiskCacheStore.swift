@@ -757,11 +757,25 @@ public actor DiskCacheStore: ReadableCacheStore {
         return _imageCache.object(forKey: key)
     }
 
+    /// « Une variante décodée, n'importe laquelle, est-elle résidente ? » —
+    /// probe de résidence (badge de téléchargement, gates) qui ne doit pas
+    /// dépendre du bucket sous lequel la surface d'affichage a décodé.
+    nonisolated public static func hasAnyCachedImageVariant(for urlString: String) -> Bool {
+        let fileKey = fileKey(for: urlString)
+        if _imageCache.object(forKey: fileKey as NSString) != nil { return true }
+        return pixelSizeBuckets.contains { bucket in
+            _imageCache.object(forKey: imageCacheKey(fileKey: fileKey, bucket: bucket)) != nil
+        }
+    }
+
     public func image(for urlString: String, maxPixelSize: CGFloat) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
         let bucket = Self.pixelBucket(for: maxPixelSize)
         let cacheKey = Self.imageCacheKey(fileKey: fileKey, bucket: bucket)
-        let decodePixelSize = bucket ?? Self.fullFormatPixelCap
+        // Hors bucket (> 1024) : décoder à la taille DEMANDÉE, comme avant —
+        // une bannière iPad full-bleed peut requérir 2048 px ; la rabattre au
+        // cap 1200 la rendrait visiblement plus douce qu'avant ce changement.
+        let decodePixelSize = bucket ?? maxPixelSize
 
         if let cached = Self._imageCache.object(forKey: cacheKey) {
             return cached

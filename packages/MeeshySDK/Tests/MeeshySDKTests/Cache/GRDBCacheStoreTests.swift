@@ -257,6 +257,26 @@ final class GRDBCacheStoreTests: XCTestCase {
             "les rangées portent leur empreinte plaintext")
     }
 
+    /// L'écriture-diff conserve les rowids des rangées inchangées : l'ordre de
+    /// la liste doit donc être porté par la colonne `position` (v8), sinon une
+    /// conversation remontée en tête relirait dans l'ordre PÉRIMÉ au cold
+    /// start. Ce test échoue sans la persistance d'ordre.
+    func test_save_reorderedItems_persistsNewOrder() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+        try await store.save([CacheTestItem(id: "1", name: "A"),
+                              CacheTestItem(id: "2", name: "B")], for: "orderkey")
+        try await store.save([CacheTestItem(id: "2", name: "B"),
+                              CacheTestItem(id: "1", name: "A")], for: "orderkey")
+
+        // Purge L1 pour forcer la relecture disque — c'est l'ordre PERSISTÉ
+        // qu'on verrouille, pas la copie mémoire.
+        await store.evictL1()
+        let result = await store.load(for: "orderkey")
+        XCTAssertEqual(result.value?.map(\.id), ["2", "1"],
+            "le nouvel ordre doit survivre au round-trip L2 même à payloads identiques")
+    }
+
     /// La contrepartie : un payload réellement modifié est bien réécrit.
     func test_flushDirtyKeys_changedItem_isRewritten() async throws {
         let db = try makeDB()

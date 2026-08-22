@@ -9,6 +9,18 @@ import os
 public protocol DatabaseEncryptionProviding: Sendable {
     func encrypt(_ plaintext: Data) -> Data?
     func decrypt(_ ciphertext: Data) -> Data?
+    /// Empreinte STABLE de l'identité de la clé courante (jamais la clé
+    /// elle-même). Mélangée aux `contentHash` du cache GRDB pour qu'un
+    /// changement de clé (perte Keychain, destroyKey) invalide toutes les
+    /// empreintes : sans cela, le skip « payload identique » laisserait des
+    /// rangées chiffrées sous l'ancienne clé, indéchiffrables pour toujours.
+    var keyFingerprint: String { get }
+}
+
+public extension DatabaseEncryptionProviding {
+    /// Défaut vide — les stubs de test et les stores non chiffrés n'ont pas
+    /// d'identité de clé à faire concourir.
+    var keyFingerprint: String { "" }
 }
 
 public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
@@ -18,9 +30,16 @@ public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked S
     fileprivate static let logger = Logger(subsystem: "com.meeshy.sdk", category: "db-encryption")
     private var logger: Logger { Self.logger }
     private let key: SymmetricKey
+    /// SHA-256 des octets de la clé, tronqué — identité de clé, pas un secret
+    /// exploitable. Calculé une fois : la clé est stable pour tout le process.
+    public let keyFingerprint: String
 
     private init() {
-        key = Self.loadOrCreateKey()
+        let key = Self.loadOrCreateKey()
+        self.key = key
+        let keyData = key.withUnsafeBytes { Data($0) }
+        self.keyFingerprint = SHA256.hash(data: keyData).prefix(8)
+            .map { String(format: "%02x", $0) }.joined()
     }
 
     // MARK: - Key Management

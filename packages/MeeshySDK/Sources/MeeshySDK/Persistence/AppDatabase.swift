@@ -277,6 +277,18 @@ public final class AppDatabase: @unchecked Sendable {
             }
         }
 
+        // Migration SÉPARÉE de la v8 (GRDB identifie par NOM : étendre une
+        // migration déjà exécutée quelque part la rendrait silencieusement
+        // incomplète sur ces stores). L'ordre de la liste persistée : l'ancien
+        // delete-all + réécriture le garantissait par rowid ; l'écriture-diff
+        // conserve les rowids des rangées inchangées, l'ordre doit donc être
+        // explicite. NULL (pré-v9) ⇒ repli rowid en lecture.
+        migrator.registerMigration("v9_cache_entries_position") { db in
+            try db.alter(table: "cache_entries") { t in
+                t.add(column: "position", .integer)
+            }
+        }
+
         try migrator.migrate(writer)
     }
 }

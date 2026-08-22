@@ -535,24 +535,38 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
         let encrypt = encrypted
         let existingRows = try Row.fetchAll(
             db,
-            sql: "SELECT itemId, contentHash FROM cache_entries WHERE key = ?",
+            sql: "SELECT itemId, contentHash, position FROM cache_entries WHERE key = ?",
             arguments: [keyStr]
         )
         var existingHashes: [String: String] = [:]
+        var existingPositions: [String: Int] = [:]
         var existingIds: [String] = []
         for row in existingRows {
             let id: String = row["itemId"]
             existingIds.append(id)
             if let hash: String = row["contentHash"] { existingHashes[id] = hash }
+            if let position: Int = row["position"] { existingPositions[id] = position }
         }
         let currentIds = Set(items.map(\.id))
         for removedId in existingIds where !currentIds.contains(removedId) {
             try CacheEntry.filter(Column("key") == keyStr && Column("itemId") == removedId).deleteAll(db)
         }
-        for item in items {
+        for (index, item) in items.enumerated() {
             let json = try encoder.encode(item)
-            let hash = Self.contentHash(of: json)
-            if existingHashes[item.id] == hash { continue }
+            let hash = contentHash(of: json)
+            if existingHashes[item.id] == hash {
+                // Payload identique — pas de re-chiffrement ni de réécriture.
+                // Seul le RANG est réaligné s'il a bougé (un déplacement dans
+                // la liste, ex. conversation remontée en tête, n'est pas un
+                // changement de contenu).
+                if existingPositions[item.id] != index {
+                    try db.execute(
+                        sql: "UPDATE cache_entries SET position = ? WHERE key = ? AND itemId = ?",
+                        arguments: [index, keyStr, item.id]
+                    )
+                }
+                continue
+            }
             let data: Data
             if encrypt {
                 guard let encryptedData = encryption.encrypt(json) else {
@@ -563,7 +577,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             } else {
                 data = json
             }
-            let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now, contentHash: hash)
+            let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now, contentHash: hash, position: index)
             try entry.save(db)
         }
     }
@@ -642,7 +656,13 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
                     return nil
                 }
 
-                let entries = try CacheEntry.filter(Column("key") == keyStr).fetchAll(db)
+                // Ordre explicite (v8) — repli rowid pour les rangées pré-v8,
+                // qui reproduisent l'ancien ordre d'insertion du delete-all.
+                let entries = try CacheEntry.fetchAll(
+                    db,
+                    sql: "SELECT * FROM cache_entries WHERE key = ? ORDER BY COALESCE(position, rowid)",
+                    arguments: [keyStr]
+                )
                 guard !entries.isEmpty else { return nil }
 
                 let items: [Value] = entries.compactMap { entry in
@@ -795,11 +815,20 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
         }
     }
 
-    /// Empreinte de changement d'un item (SHA-256 hex du JSON plaintext).
-    /// Le blob chiffré est non déterministe (nonce frais à chaque encrypt) —
-    /// seul un hash du plaintext permet de détecter « payload identique ».
-    private nonisolated static func contentHash(of json: Data) -> String {
-        SHA256.hash(data: json).map { String(format: "%02x", $0) }.joined()
+    /// Empreinte de changement d'un item (SHA-256 hex du JSON plaintext,
+    /// préfixé de l'identité de la clé sur les stores chiffrés). Le blob
+    /// chiffré est non déterministe (nonce frais à chaque encrypt) — seul un
+    /// hash du plaintext permet de détecter « payload identique ». Mélanger
+    /// l'identité de clé garantit qu'un changement de clé (perte Keychain,
+    /// destroyKey) invalide TOUTES les empreintes : chaque rangée est alors
+    /// réécrite sous la clé courante au lieu de rester indéchiffrable.
+    private nonisolated func contentHash(of json: Data) -> String {
+        var hasher = SHA256()
+        if encrypted {
+            hasher.update(data: Data(encryption.keyFingerprint.utf8))
+        }
+        hasher.update(data: json)
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private nonisolated func flushKeyToL2(keyStr: String, items: [Value]) -> Bool {

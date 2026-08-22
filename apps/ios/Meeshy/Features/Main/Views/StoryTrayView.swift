@@ -401,26 +401,16 @@ fileprivate func storyCountDots(count: Int, unviewed: Bool) -> some View {
 /// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
 /// pour les stories text-only (pas de media). Helper fileprivate
 /// pour pouvoir s'appeler depuis `MyStoryButton` aussi.
-/// Mémo des covers locaux RÉSOLUS (hits uniquement) : le `stat()` de
-/// `thumbnailLocalFileURL` tournait par ring à chaque render. Un cover écrit
-/// au publish ne disparaît pas en cours de session, donc un hit est stable ;
-/// un miss reste re-vérifié (le cover peut apparaître après un publish).
-@MainActor private var storyCoverURLMemo: [String: URL] = [:]
-
 fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
     guard let lastStory = group.stories.last else { return group.avatarURL }
     // Local-first: a composite cover rendered at publish (text + drawing + all
     // layers) wins over the server thumbnail (raw bg, no overlays). Synchronous
-    // existence check — no actor hop, safe in the View body.
-    let localCover: URL?
-    if let memoized = storyCoverURLMemo[lastStory.id] {
-        localCover = memoized
-    } else {
-        localCover = CacheCoordinator.thumbnailLocalFileURL(
-            for: StoryCoverThumbnail.cacheKey(storyId: lastStory.id)
-        )
-        if let localCover { storyCoverURLMemo[lastStory.id] = localCover }
-    }
+    // existence check — no actor hop, safe in the View body. Pas de memo : la
+    // purge de logout peut détruire le fichier, et servir une URL morte au
+    // relogin coûterait plus cher qu'un stat() par render événementiel.
+    let localCover = CacheCoordinator.thumbnailLocalFileURL(
+        for: StoryCoverThumbnail.cacheKey(storyId: lastStory.id)
+    )
     return StoryCoverThumbnail.preferredCoverURLString(
         localCover: localCover,
         serverThumbnailUrl: lastStory.media.first?.thumbnailUrl,

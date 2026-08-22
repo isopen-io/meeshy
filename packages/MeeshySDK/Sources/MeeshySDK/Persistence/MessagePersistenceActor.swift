@@ -2237,7 +2237,7 @@ public actor MessagePersistenceActor {
             }
         }
         if !affectedConvIds.isEmpty {
-            postMessageStoreRefresh(conversationIds: Array(affectedConvIds))
+            postMessageStoreRefresh(conversationIds: affectedConvIds)
         }
     }
 
