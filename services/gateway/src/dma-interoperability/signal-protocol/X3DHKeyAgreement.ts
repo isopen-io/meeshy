@@ -18,7 +18,7 @@
 
 import * as crypto from 'crypto';
 import { createHmac, createHash } from 'crypto';
-import { PrismaClient } from '../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SignalKeyManager } from './SignalKeyManager';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -179,7 +179,7 @@ export class X3DHKeyAgreement {
         'DH3: ephemeral × signed-prekey'
       );
 
-      let dh4 = Buffer.alloc(32);
+      let dh4: Buffer = Buffer.alloc(32);
       let preKeyUsed: number | undefined;
 
       if (recipientBundle.preKey) {
@@ -298,7 +298,7 @@ export class X3DHKeyAgreement {
         'DH3: signed-prekey × ephemeral'
       );
 
-      let dh4 = Buffer.alloc(32);
+      let dh4: Buffer = Buffer.alloc(32);
 
       if (preKey) {
         // DH4: responder pre-key private × initiator ephemeral public

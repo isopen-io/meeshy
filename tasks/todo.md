@@ -396,3 +396,37 @@ autorisé si c'est compliqué : deux bulles distinctes.
 ## Review
 - Incident : un script de résolution en échec + chaîne `&&` filtrée par `grep` a committé des marqueurs (`bce89832a`, worktree privé) → repris par `reset --hard` sur le merge précédent, rejoué proprement ; règle consignée (Leçon 243). Deuxième occurrence du motif (`grep -c` à 0 rend 1) sans dégât.
 - Suivis ouverts (hors périmètre, signalés par les revues) : `SignalProtocolEngine` émet des IV de 16 octets alors que `SignalSchemas.encryptedMessage.iv` (mort) en attend 12 ; `offset` non borné dans `admin-schemas.ts` ; trois idiomes de clamp `limit` (helper Zod SSOT à créer) ; #3324 laisse le corps des messages web (`use-message-translations.ts`) comparer des codes bruts ; règle de rang du kick d'appel plus stricte que `participants.ts` ; 2 `#expect` Swift à greffer dans `ComposerMentionQueryTests` (bob@alice, marie-claire).
+
+# Cycle 94 — Le sous-arbre DMA / Signal Protocol remis sous le compilateur (2026-08-22)
+
+- [x] Constat : `src/dma-interoperability/` (4 835 lignes, 6 modules de prod + 3 suites) exclu de
+      `tsconfig.json` (build ET type-check), ignoré par `jest.config.json`, absent de
+      `collectCoverageFrom`, et importé par AUCUN module du dépôt. Les deux lignes d'exclusion sont
+      les seules occurrences de `dma-interoperability` hors du sous-arbre.
+- [x] Preuve que rien ne l'avait compilé : 4 modules importaient `'../../../shared/prisma/client'`,
+      chemin inexistant dans le dépôt comme dans l'image Docker → repointés sur `@meeshy/shared/prisma/client`.
+- [x] Sous-arbre ajouté à l'`include` de `tsconfig.json` → 8 erreurs, dont 4 défauts d'exécution :
+      X3DH construit sans dépendances (`new X3DHKeyAgreement()`), deux appels à des méthodes privées
+      dont un générateur brut sans id masqué par un `(pk: any)`, et le paquet X3DH du moteur à la
+      forme des colonnes `DMAEnrollment` au lieu de `PreKeyBundle` (DH1/DH3 lèvent, DH4 jamais
+      calculé, `registrationId.toString()` sur `undefined`). Tous corrigés — `tsc --noEmit` à 0.
+- [x] Largeur du nonce AES-GCM : les deux producteurs du FIL (`SignalProtocolEngine`,
+      `SignalProtocolAdapter`) passent par `SignalProtocolLimits.AES_GCM_IV_SIZE` (12 octets) au lieu
+      du littéral `16`. Aucune migration : l'IV voyage avec le chiffré.
+- [x] 6 témoins neufs exécutés par jest (`src/__tests__/unit/dma-signal-wire-crypto.test.ts`).
+      ROUGE prouvé deux fois : échec de chargement de suite avant correctif (TS2554/TS2341), et
+      3 échecs / 6 en remettant le littéral `16`.
+- [x] Gates : `tsc --noEmit` 0 · `tsc` (émission) 0 · suite ciblée 6/6.
+- [ ] Suivi — `SignalKeyManager.encryptKey` : cadre auto-porté à offsets FIXES (`iv(16)|authTag(16)`),
+      lecteur codé en dur ; migrer exige un préfixe de version ou un repli discriminé par
+      l'authentification GCM, sous peine de rendre illisible le matériel de clé persisté. Non fait :
+      bénéfice cosmétique (nonce privé, hors fil), risque sur des clés privées.
+- [ ] Suivi — X3DH ne VÉRIFIE jamais `signedPreKey.signature` : c'est le lien qui rattache la pré-clé
+      signée à la clé d'identité, donc l'accord de clés n'est pas authentifié. La signature est
+      désormais posée à sa place dans le paquet, prête à l'être. **Le plus important des trois.**
+- [ ] Suivi — les 3 suites du sous-arbre restent ignorées par jest : mesuré 56 échecs / 114 témoins
+      (compteurs `DoubleRatchet` à 0, `new PrismaClient()` réel supposant une base). À instruire un
+      par un, jamais en desserrant des assertions. Le sous-arbre entrera dans `collectCoverageFrom`
+      quand ses suites tourneront.
+- [ ] Suivi — `SignalProtocolAdapter.performX3DH` garde un `as any` : `ISignalProtocolAdapter` ne
+      transporte pas la signature de la pré-clé signée que `PreKeyBundle` déclare obligatoire.

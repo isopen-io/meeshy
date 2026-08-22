@@ -9,7 +9,8 @@ import { ISignalProtocolAdapter } from '../../adapters/LibraryAdapters';
 import { SignalKeyManager } from '../SignalKeyManager';
 import { X3DHKeyAgreement } from '../X3DHKeyAgreement';
 import { DoubleRatchet } from '../DoubleRatchet';
-import { PrismaClient } from '../../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SignalProtocolLimits } from '@meeshy/shared/utils/validation';
 import * as crypto from 'crypto';
 
 export class SignalProtocolAdapter implements ISignalProtocolAdapter {
@@ -26,7 +27,10 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
   constructor(prisma: PrismaClient, masterKey?: Buffer) {
     this.prisma = prisma;
     this.keyManager = new SignalKeyManager(prisma, masterKey);
-    this.x3dh = new X3DHKeyAgreement();
+    // X3DHKeyAgreement REQUIERT son gestionnaire de clés et son client Prisma :
+    // sans eux, `initiatorKeyAgreement` lit `this.keyManager.getIdentityPublicKey()`
+    // sur `undefined` et tout accord de clés passant par cet adaptateur lève.
+    this.x3dh = new X3DHKeyAgreement(this.keyManager, prisma);
     this.doubleRatchet = new DoubleRatchet();
   }
 
@@ -38,17 +42,15 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
   }
 
   async generateIdentityKeyPair(): Promise<{ publicKey: Buffer; privateKey: Buffer }> {
-    // Use custom implementation
-    const keyPair = this.keyManager['generateIdentityKeyPair']();
-    return keyPair;
+    return this.keyManager.generateIdentityKeyPair();
   }
 
   async generatePreKeyBatch(count: number): Promise<Array<{ id: number; publicKey: Buffer }>> {
-    const preKeys = await this.keyManager.generatePreKeyBatch(count);
-    return preKeys.map((pk: any) => ({
-      id: pk.id,
-      publicKey: pk.publicKey
-    }));
+    // `generateAndStorePreKeys` est le seul chemin qui ATTRIBUE un id de pré-clé
+    // (`getNextPreKeyId`) et le persiste. L'ancien appel visait le générateur brut,
+    // qui rend des `KeyPair` sans id : le contrat `{ id, publicKey }` de cet
+    // adaptateur sortait avec `id: undefined` sur chaque entrée.
+    return this.keyManager.generateAndStorePreKeys(count);
   }
 
   async generateSignedPreKey(id: number): Promise<{ id: number; publicKey: Buffer; signature: Buffer }> {
@@ -91,7 +93,12 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     iv: Buffer;
     authTag: Buffer;
   }> {
-    const iv = crypto.randomBytes(16);
+    // Nonce de 96 bits : la largeur STANDARD de GCM, celle que déclarent
+    // `SignalValidation.validateEncryptedPayload` et `SignalSchemas.encryptedMessage`,
+    // et celle qu'emploie tout le reste du dépôt (pièces jointes web et passerelle,
+    // `encryption-utils`, `node-crypto-adapter`). Le littéral `16` d'avant produisait
+    // un IV que les DEUX gardes partagées rejetaient.
+    const iv = crypto.randomBytes(SignalProtocolLimits.AES_GCM_IV_SIZE);
     const cipher = crypto.createCipheriv('aes-256-gcm', sessionKey, iv);
     let ciphertext = cipher.update(plaintext);
     ciphertext = Buffer.concat([ciphertext, cipher.final()]);
