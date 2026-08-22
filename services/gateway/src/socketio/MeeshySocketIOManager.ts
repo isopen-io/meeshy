@@ -79,8 +79,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socket
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from './messageNewPayload';
-import { buildMessageEditedCore } from './messageEditedPayload';
-import { resolveWireSenderId } from './wireSenderId';
+import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
@@ -2968,17 +2967,21 @@ export class MeeshySocketIOManager {
       const senderParticipant = message.sender;
       const resolvedSenderId = resolveWireSenderId(message);
       const updatedAt = message.updatedAt || new Date();
+      // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
+      // partagée avec le transport socket (`MessageHandler.handleMessageEdit`),
+      // qui en omettait trois champs requis — cf.
+      // `socketio/messageEditedPayload.ts`. Ce producteur-ci les servait déjà
+      // tous : le passage à l'unité ne change RIEN de ce qu'il émet, il
+      // supprime la possibilité qu'un quatrième transport diverge.
       const editedPayload = {
-        // Noyau requis par `SocketIOMessage` — même unité que les deux autres
-        // producteurs de `message:edited` (cf. `messageEditedPayload.ts`).
-        ...buildMessageEditedCore(message, { conversationId: normalizedId }),
-        content: message.content,
-        originalLanguage: message.originalLanguage || 'fr',
+        ...buildMessageEditedCore(message, {
+          conversationId: normalizedId,
+          content: message.content,
+          isEdited: Boolean(message.isEdited),
+          editedAt: updatedAt,
+        }),
         messageSource: message.messageSource || undefined,
         metadata: message.metadata ?? {},
-        isEdited: Boolean(message.isEdited),
-        editedAt: updatedAt,
-        updatedAt,
         translations: messageTranslations,
         sender: senderParticipant ? {
           id: senderParticipant.id,

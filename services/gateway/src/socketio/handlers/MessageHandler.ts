@@ -7,6 +7,29 @@
  */
 
 import * as path from 'path';
+// Cycle 101 (bis) — ce handler est le ONZIÈME et DERNIER basculé sur
+// `MeeshySocket` : ses émissions sont désormais vérifiées à la compilation
+// contre `ServerToClientEvents`, comme celles des dix autres (cycles 99, 100).
+//
+// Le flip butait sur deux dettes, l'une derrière l'autre :
+//
+//  1. `message:edited` — le producteur omettait trois des sept champs requis
+//     par `SocketIOMessage`. C'est le défaut de production que ce flip a nommé,
+//     réparé par `socketio/messageEditedPayload.ts` et retenu par son cliquet.
+//
+//  2. `message:new` — `_buildMessagePayload` rendait `unknown`, que six
+//     enrichissements MUTAIENT ensuite via `as Record<string, unknown>`. Un tel
+//     sac de clés ne satisfait AUCUN champ requis : c'est lui qui rendait le
+//     fichier entier intypable, `message:edited` compris. Les enrichissements
+//     sont maintenant composés par étalement IMMUABLE, et le type inféré de
+//     `buildMessageNewPayload` survit jusqu'à l'émission.
+//
+// Une dette annoncée s'est révélée inexistante, et c'est mesuré : `messageType`
+// était donné pour bloquant, servi en `string` là où le contrat déclare l'union
+// `MessageType`. Il ne l'est pas — `Message.messageType` EST déjà cette union
+// (`@meeshy/shared/types/index`), donc `message.messageType || 'text'` la rend.
+// Une fois le sac de clés retiré, il ne restait AUCUN blocage : ni cast, ni
+// validateur au producteur.
 import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
@@ -719,9 +742,10 @@ export class MessageHandler {
           senderId: true,
           content: true,
           originalLanguage: true,
-          // Exigé par `SocketIOMessage`, donc par le décodeur de `message:edited`
-          // sur les trois clients. Une colonne de plus sur un `select` déjà là :
-          // aucun aller-retour supplémentaire.
+          // `messageType` et `createdAt` ne sont pas lus par la décision
+          // d'admission : ils sont REQUIS par le contrat de fil
+          // (`SocketIOMessage`) que la diffusion doit servir. Deux colonnes de
+          // plus sur un `select` déjà là — aucun aller-retour supplémentaire.
           messageType: true,
           createdAt: true,
           // Lu pour la réconciliation des mentions : une mention ajoutée en
@@ -875,16 +899,25 @@ export class MessageHandler {
         onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
       });
 
-      // Le NOYAU que `SocketIOMessage` EXIGE vient de l'unité partagée : ce
-      // littéral en avait perdu `senderId`, `messageType` et `createdAt`, et
-      // le décodeur iOS de `message:edited` rejette la charge utile ENTIÈRE
-      // quand l'un d'eux manque (cf. `messageEditedPayload.ts`).
+      // Le NOYAU du contrat `message:edited` vient de `buildMessageEditedCore`
+      // — la source unique partagée avec les autres producteurs de l'événement.
+      // Ce littéral était manuscrit, et il omettait TROIS des sept champs que
+      // `SocketIOMessage` déclare requis (`senderId`, `messageType`,
+      // `createdAt`), ce qui faisait échouer le décodage iOS du message ENTIER
+      // et rendait invisible en direct, sur iOS, toute édition faite depuis le
+      // web. Détail et tableau de parité : `socketio/messageEditedPayload.ts`.
+      //
+      // `sender` reste ici, en passthrough BRUT : la forme est propre à ce
+      // transport (le `select` ci-dessus porte `role`, pas `user`), et
+      // l'aligner sur celle du manager serait un CHANGEMENT de forme, pas un
+      // ajout.
       const updatedMessage = {
-        ...buildMessageEditedCore(message, { conversationId: message.conversationId }),
-        content: editedContent,
-        isEdited: true,
-        editedAt,
-        originalLanguage: message.originalLanguage,
+        ...buildMessageEditedCore(message as unknown as Message, {
+          conversationId: message.conversationId,
+          content: editedContent,
+          isEdited: true,
+          editedAt,
+        }),
         sender: message.sender,
       };
 

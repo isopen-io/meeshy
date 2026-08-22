@@ -1,198 +1,209 @@
-# Cycle 101 — une édition faite en WebSocket n'atteignait aucun client iOS ; le contrat de `message:new`/`message:edited` cesse de mentir
+# Cycle 101 — `message:edited` : le transport d'édition PRIMAIRE servait une charge que le décodeur iOS REJETTE
 
 ## D'où part ce cycle
 
-Le cycle 100 a basculé sept handlers Socket.IO sur `MeeshySocket` et laissé
-quatre handlers RENDUS au `Socket` nu de socket.io, avec pour chacun la raison du
-blanchiment. Le premier de sa liste :
+Le cycle 100 a basculé six handlers de plus sur `MeeshySocket` (le `Socket` typé
+contre `ServerToClientEvents`) et laissé en suivi nommé **quatre handlers rendus
+au `Socket` nu** : `MessageHandler`, `AuthHandler`, `ReactionHandler`,
+`PostReactionHandler`. Il écrivait, du premier :
 
 > `MessageHandler._buildMessagePayload` rend `unknown` : c'est LA source du fait
 > que le contrat ne contraignait pas le producteur WebSocket de `message:new`.
 > Lui donner un type de retour honnête est le geste qui aurait fait tomber le
 > défaut de 99/99 bis à la compilation.
 
-Ce cycle instruit ce suivi-là. Le basculement a effectivement nommé un défaut de
-production — mais pas sur `message:new`, sur son jumeau `message:edited`.
+Ce cycle-ci instruit ce suivi. Le flip des quatre a été **tenté et mesuré** :
+`tsc` a nommé **douze** émissions. Onze relevaient de dettes connues ; **la
+douzième était une panne en production que personne n'avait vue.**
 
-## Le défaut : une édition faite depuis le web n'atteignait AUCUN client iOS
+## Le défaut
 
-`message:edited` est déclaré `(message: SocketIOMessage) => void` — **le même
-contrat que `message:new`** — et `SocketIOMessage` rend sept champs
-OBLIGATOIRES. L'événement a TROIS producteurs :
+`message:edited` a **TROIS producteurs** :
 
-| producteur | transport | noyau servi |
+| producteur | transport | employé par |
 |---|---|---|
-| `MeeshySocketIOManager._broadcastCallMessageEdited` | transition live→terminal d'un appel | complet |
-| `broadcastMessageMutation` | les cinq routes REST de mutation | complet (les appelants passent le message transformé) |
-| `MessageHandler.handleMessageEdit` | socket `message:edit` | **`senderId`, `messageType`, `createdAt` absents** |
+| `MessageHandler.handleMessageEdit` | socket | **le web** (`messaging.service.ts` émet `message:edit`) |
+| `MeeshySocketIOManager.broadcastMessageEdited` | interne | résumés d'appel |
+| `broadcastMessageMutation` | REST | **iOS** (`PUT /messages/:messageId`) |
 
-Le troisième construisait sa charge utile à la main, à partir d'un littéral de
-sept clés (`updatedMessage`).
-
-Ce n'est pas une omission cosmétique. `APIMessage`, le décodeur iOS de
-`message:edited` (`MessageSocketManager.swift:3299`), lit ces champs sans repli :
-
-```swift
-senderId  = try c.decode(String.self, forKey: .senderId)   // MessageModels.swift:506
-createdAt = try c.decode(Date.self,   forKey: .createdAt)  // MessageModels.swift:530
-```
-
-Une clé absente fait échouer le décodage du message ENTIER ; `decode(_:from:)`
-journalise `decode DROP` et rend la main. **Toute édition passée par le transport
-WebSocket était donc silencieusement jetée par chaque client iOS de la
-conversation** — la bulle y gardait le texte d'avant jusqu'à une relecture
-complète, que rien ne déclenche spontanément.
-
-### Les trois clients relevés — un seul casse, et c'est structurel
-
-Le défaut ne se voyait nulle part ailleurs, et la raison n'est pas la chance :
-**seul iOS consomme cette charge utile comme une DONNÉE.**
-
-| client | ce qu'il fait de `message:edited` | effet |
-|---|---|---|
-| **iOS** | décode en `APIMessage` et applique le résultat | `try c.decode` sans repli sur `senderId`/`createdAt` ⇒ **décodage rejeté, édition perdue** |
-| Android | décode en `ApiMessage`, puis **ignore la charge** et appelle `messageRepository.refresh(conversationId)` | `senderId`/`createdAt`/`messageType` ont des défauts Kotlin ; seul `conversationId` est lu ⇒ intact |
-| web | fusionne `{ ...cached, ...editedPayload }` | les trois clés manquantes viennent de la ligne en cache ⇒ intact |
-
-Deux enseignements :
-
-1. **Le côté d'où vient l'édition ne voit jamais rien.** Le web, qui émet sur ce
-   transport, est aussi celui que la fusion protège. iOS édite par REST
-   (`PUT /messages/:messageId`, cf. l'en-tête de `broadcastMessageMutation.ts`) :
-   il n'est jamais l'ÉMETTEUR de ce transport-ci, seulement son destinataire —
-   la moitié qui échoue.
-2. **Un client qui traite l'événement comme un simple SIGNAL est insensible aux
-   défauts de forme de sa charge utile** — et donc incapable de les révéler.
-   Android est vert ici pour la même raison qui l'a rendu aveugle ailleurs.
-
-C'est le patron « deux moitiés cohérentes séparément » du cycle 97, appliqué à
-un producteur et un décodeur : chacun est irréprochable seul.
-
-## Comment le compilateur l'a nommé
-
-Le défaut vivait dans un fichier que rien ne vérifiait. `broadcastNewMessage`
-construisait son payload en `unknown`, puis l'enrichissait par SIX mutations à
-travers un cast :
+Le contrat partagé déclare l'événement comme un `SocketIOMessage`
+(`socketio-events.ts:1940`), dont **sept champs sont requis**. Le producteur
+socket — celui que son propre commentaire nomme « le transport d'édition
+PRIMAIRE » — n'en servait que **quatre**. Son littéral, manuscrit, portait
+exactement sept clés :
 
 ```ts
-const messagePayload: unknown = this._buildMessagePayload(…);
-if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = …;
+const updatedMessage = {
+  id, conversationId, content, isEdited, editedAt, originalLanguage, sender,
+};
 ```
 
-Un `Record<string, unknown>` ne satisfait aucun des sept champs requis de
-`SocketIOMessage` : typer `this.io` aurait fait échouer les cinq émissions
-`message:new` de la méthode. **C'est pour cela que ce handler était resté rendu
-à socket.io** — et, l'étant, il ne vérifiait pas non plus son émission
-`message:edited`, deux cents lignes plus haut.
+Manquaient **`senderId`, `messageType`, `createdAt`**.
 
-Les enrichissements sont donc recomposés par étalement IMMUABLE (chaque bloc rend
-un fragment au lieu de muter le payload), le type inféré de
-`buildMessageNewPayload` survit jusqu'à l'émission, et le handler bascule sur
-`MeeshySocket` / `MeeshyIOServer`. Des huit erreurs que `tsc` a alors levées,
-sept étaient de la plomberie ; **la huitième était le défaut**, en toutes lettres :
+### Ce n'était pas un piège armé, c'était une panne
 
-```
-error TS2345: … is missing the following properties from type 'SocketIOMessage':
-senderId, messageType, createdAt
+Le décodeur iOS lit ces deux-là **sans tolérance** :
+
+```swift
+// APIMessage.init(from:) — MessageModels.swift
+conversationId = try c.decode(String.self, forKey: .conversationId)
+senderId       = try c.decode(String.self, forKey: .senderId)   // ← absent du fil
+createdAt      = try c.decode(Date.self,   forKey: .createdAt)  // ← absent du fil
 ```
 
-## Le correctif, et le piège qu'il évite
+`try c.decode`, pas `decodeIfPresent` — contrairement à ses voisins immédiats.
+Une clé absente y fait échouer le décodage du message **ENTIER** ;
+`MessageSocketManager.decode` journalise un « decode DROP » et abandonne, si
+bien que le sujet `messageEdited` ne publie **jamais rien**.
 
-Le noyau requis passe par une unité partagée par les trois producteurs
-(`messageEditedPayload.ts`), et le `select` de l'édition socket gagne
-`messageType` (une colonne de plus sur un `select` déjà là, aucun aller-retour).
+```
+un utilisateur web édite un message
+  → la passerelle diffuse la charge partielle à TOUT le salon
+  → chaque client iOS présent la rejette au décodage
+  → l'édition n'apparaît JAMAIS en direct sur iOS
+```
 
-Le point non évident est `senderId`. `Message.senderId` est un `Participant.id`,
-alors que les clients comparent ce champ à leur propre `User.id` pour reconnaître
-leurs messages. Servir la colonne brute aurait réparé le DÉCODAGE en installant
-une divergence de SENS, celle-là muette. La règle — déjà encodée dans
-`buildMessageNewPayload` — est extraite en `wireSenderId.ts` et partagée par les
-producteurs des deux événements ; son paramètre est STRUCTUREL, parce que les
-trois producteurs partent de `select` différents et qu'exiger le type complet
-aurait forcé un cast à chaque site, c'est-à-dire réintroduit pour appeler l'unité
-le blanchiment qu'elle existe pour retirer.
+**Et personne ne pouvait le voir depuis les autres clients.** Web → web
+marchait : son écouteur est typé `any` et reconstruit un `Message`. Android
+marchait : `ApiMessage.senderId` et `.createdAt` y sont `String? = null`. Seul
+iOS, le client le PLUS strict, tombait — et en silence, dans un log d'un
+processus que personne ne regarde.
 
-## Second lot : `SocketIOMessage` cesse de sous-déclarer
+> C'est la signature exacte du cycle 99 bis, un événement plus loin : **web →
+> web marchait, iOS non.** Deux producteurs cohérents CHACUN avec eux-mêmes, et
+> faux ENSEMBLE — la « quatrième famille » (`services/gateway/CLAUDE.md`) : une
+> déclaration PRÉSENTE, bien formée, et fausse contre son producteur.
 
-Suivi nommé par le cycle 100 (« lot à part, large surface de consommation »).
-Le contrat déclarait **quatorze** champs quand les producteurs en servent une
-trentaine : ni l'enveloppe E2EE, ni les pièces jointes, ni les traductions, ni
-`location`, ni `postReplyTo`, ni `clientMessageId`, ni la vue-unique n'y
-figuraient.
+### Le web y perdait aussi quelque chose
 
-Ce n'est pas une imprécision sans suite : les décodeurs iOS, Android et web sont
-écrits CONTRE ce contrat, et un champ qui n'y figure pas doit être transcrit
-indépendamment par chacun des trois — le mécanisme exact qui a produit les deux
-transcriptions divergentes de `conversation:join-error` au cycle 99.
+Avant ce lot, la charge socket ne portait **aucun** `senderId`. Le web
+reconstruit son `Message` depuis la charge reçue (`convertMessageFn`) : après
+une édition passée par le socket, il n'en avait donc pas non plus. Servir le bon
+identifiant est une réparation pour les deux clients, pas seulement pour iOS.
 
-Ce qui reste `unknown` l'est PAR DÉCISION : `replyTo`, `attachments`,
-`translations` et `metadata` ont une forme délibérément différente d'un transport
-à l'autre (l'en-tête de `messageNewPayload.ts` énumère les écarts et leur
-raison). Entre deux producteurs qui se contredisent, ne rien affirmer est plus
-honnête que d'en couronner un — règle du cycle 91.
+## Ce qui est livré
 
-Deux corrections sont tombées de ce lot :
+### 1. `socketio/messageEditedPayload.ts` — la source unique du noyau
 
-- **`senderId` était documenté faux.** La ligne portait
-  `// Participant.id (unified)` depuis toujours, alors que les deux producteurs
-  servent délibérément le `User.id`. Un commentaire qui énonce une contrainte est
-  une AFFIRMATION (cycle 94) ; celle-ci était fausse et à contre-sens du code.
-- **`clientMessageId` et `effectFlags` partaient sur le fil en `unknown`.**
-  `Message` ne les déclare pas ; `buildMessageNewPayload` les lit à travers un
-  `Record<string, unknown>` et les émettait crus. Aucun producteur ne promettait
-  donc le type que les décodeurs attendent. Les deux lectures sont désormais
-  GARDÉES (`typeof … === 'string' | 'number'`).
+Sur le patron de `messageNewPayload.ts` (cycle 99 bis) : `buildMessageEditedCore`
+porte **les champs que le contrat déclare requis**, résolus une seule fois pour
+tous les producteurs. Les deux producteurs en-process y passent désormais.
 
-## Portée de la garde — à ne pas surestimer
+Restent **hors** de l'unité, avec leur raison écrite — même règle que son
+jumeau, ces formes sont DÉLIBÉRÉMENT propres à chaque transport et les fusionner
+serait un CHANGEMENT, pas un ajout :
 
-La passerelle compile en `strict: false` / `strictNullChecks: false`. Déclarer un
-champ dans `SocketIOMessage` fait donc tomber une émission dont la clé **manque**
-ou dont le **type** est incompatible — jamais une qui sert `undefined` là où le
-contrat promet une valeur. C'est ce qui a suffi ici (les trois clés manquaient),
-et c'est écrit dans l'en-tête du contrat pour qu'on ne lise pas la déclaration
-comme une garantie de nullité.
+- `sender` — passthrough BRUT côté socket (son `select` porte `role`, pas
+  `user`), reconstruit et aplati côté manager ;
+- `translations` — chaque chemin les obtient par sa propre voie ;
+- `attachments`, `metadata`, `messageSource` — servis par les seuls chemins qui
+  les chargent.
 
-De même, les champs ajoutés étant OPTIONNELS, ce lot ne transforme PAS le témoin
-de parité runtime du cycle 99 bis en garde de compilation — le cycle 100
-l'espérait ; c'est faux, et un champ optionnel omis par un seul producteur compile
-toujours. `message-new-producer-parity.test.ts` reste la seule garde de parité.
+**Le lot est ADDITIF.** Aucun champ ne disparaît d'aucun transport : le
+producteur socket GAGNE trois champs, le manager passe à l'unité **sans que sa
+charge change d'une clé** (vérifié champ par champ avant bascule). Un témoin
+dédié — « ne perd RIEN de ce que le producteur servait déjà » — passe AVANT et
+APRÈS le correctif ; c'est lui qui rend la mesure vérifiable.
+
+### 2. `resolveWireSenderId` — une seule résolution pour les deux événements
+
+`senderId` du fil est un **`User.id`**, jamais le `Participant.id` de la colonne :
+les clients le comparent à leur propre `User.id` pour reconnaître leurs messages.
+`buildMessageNewPayload` portait cette règle en ligne ; elle est maintenant
+écrite **une fois**, et `message:new` comme `message:edited` en dépendent. Sans
+quoi la MÊME bulle serait « la mienne » puis « celle d'un autre » selon
+l'événement qui l'a touchée en dernier.
+
+### 3. Deux seams `unknown` de plus fermés
+
+Suite directe de la leçon du cycle 100 (« un seam qui prend `unknown` annule le
+contrat de tout ce qui passe par lui ») :
+
+| handler | seam | fermé en |
+|---|---|---|
+| `ReactionHandler` | `_broadcastReactionEventWithConversationId(_, updateEvent: unknown, _)` | `ReactionUpdateEventData` |
+| `PostReactionHandler` | `broadcastReactionChange(…, updateEvent: unknown)` | `PostReactionUpdateEventData` |
+
+Les deux `createUpdateEvent` rendaient déjà exactement ces formes : flip propre,
+0 erreur. Les deux handlers sont désormais sur `MeeshySocket`.
+
+### 4. `AuthenticatedEventData` cesse de mentir
+
+Le contrat déclarait `user?: SocketIOUser` — onze champs requis (`username`,
+`email`, `role`, `isOnline`, `lastActiveAt`…). Les **deux seuls** émetteurs de
+`AUTHENTICATED` servent `{ id, language, isAnonymous }` + `version`. `language`
+n'existe même pas sur `SocketIOUser`, et un participant ANONYME n'a pas de ligne
+`User` d'où tirer le reste.
+
+Relevé avant de trancher : le type n'a **aucun consommateur** hors sa propre
+déclaration ; iOS et Android n'écoutent pas l'événement ; le web lit `success`,
+`error`, et range `data.user` dans un champ **qu'il ne relit jamais**. La
+réparation honnête est donc de **déclarer ce que l'émetteur émet**
+(`AuthenticatedEventUser`), pas de fabriquer un `SocketIOUser` que personne ne
+demande. `AuthHandler` est basculé sur `MeeshySocket`.
+
+### 5. Un CLIQUET à la compilation, et il n'est pas décoratif
+
+Le flip complet du `MessageHandler` ne se livre pas dans ce cycle (§ Suivis).
+Sans garde, le correctif ne serait retenu par rien côté typage. Le cliquet vit
+donc dans `messageEditedPayload.ts` : il dérive la liste des champs REQUIS
+**depuis le contrat partagé lui-même** et vérifie que le noyau les couvre tous.
+
+> **La première formulation était VACANTE, et c'est mesuré.** Écrite
+> `undefined extends SocketIOMessage[K] ? never : K` — la forme qui vient
+> d'abord à l'esprit — elle rendait `never` pour TOUTE clé : la passerelle
+> compile sous `strictNullChecks: false`, où `undefined extends T` est vrai
+> partout. Retirer `createdAt` du noyau ne la faisait pas tomber. Reformulée sur
+> le MODIFICATEUR `?` (`Record<string, never> extends Pick<T, K>`), que le
+> drapeau n'efface pas.
+>
+> **ROUGE prouvé séparément pour les trois champs du défaut** : retirer
+> `createdAt`, `senderId` ou `messageType` du noyau fait échouer la compilation,
+> chacun pour son propre compte. Un cliquet qui ne peut pas tomber n'est pas un
+> cliquet — et celui-ci ne pouvait pas, avant d'être mesuré.
 
 ## Gates
 
-- **`tsc` passerelle : 0 erreur.**
-- **`src/socketio` : 48 suites / 1602 tests verts** (1600 avant ce cycle, +2
-  témoins).
-- **Web `type-check` : 863 erreurs avant, 863 après**, jeu d'erreurs IDENTIQUE
-  (les seuls écarts textuels sont l'ordre non déterministe des membres d'union
-  dans des messages sans rapport). Le contrat honnête n'ajoute aucune erreur au
-  client qui le consomme.
-- **RED prouvé** : les deux témoins tombent sur la production d'avant, et sur
-  elle seule (2 échecs / 64 succès).
-
-## Témoins
-
-Deux, SÉPARÉS parce que la séparation est le diagnostic — « le noyau requis
-manque » et « le noyau est là mais `senderId` porte la mauvaise identité » sont
-deux pannes différentes, et la seconde est le résultat exact d'un correctif naïf.
-Le second témoin assert en prime `PARTICIPANT_ID !== USER_ID`, pour qu'il ne
-puisse pas passer par coïncidence de fixture.
+- **`tsc --noEmit` passerelle : 0 erreur** (baseline avant lot : 0 également).
+- **`src/socketio` : 49 suites / 1605 tests verts.**
+- **Témoin du lot** : `MessageHandlerEditedContract.test.ts`, 5 témoins.
+  **ROUGE prouvé** contre la production d'avant — 4 tombent (`senderId`,
+  `createdAt`, `messageType`, `senderId` comme `User.id`), et le 5e (« ne perd
+  RIEN ») passe AVANT comme APRÈS, ce qui est exactement ce qu'un témoin
+  d'additivité doit faire.
+- Le premier jet du témoin tombait sur un **refus d'admission** (`createdAt`
+  figé hors de la fenêtre d'édition de 24 h) — donc pour la mauvaise raison,
+  sans jamais atteindre le producteur gardé. Corrigé, et le harnais nomme
+  désormais le refus quand il y en a un, plutôt que de laisser chercher sur un
+  « payload undefined ».
 
 ## Suivis
 
-- **3 handlers restent rendus à socket.io** : `AuthHandler`, `ReactionHandler`,
-  `PostReactionHandler` (le cycle 100 en comptait 4 ; `MessageHandler` est
-  basculé ici). Les deux handlers de réaction blanchissent `updateEvent: unknown`
-  dans leur helper — même recette que `SocialEventsHandler` au cycle 100.
-  `AuthHandler` émet `AUTHENTICATED` avec un `user` réduit là où
-  `AuthenticatedEventData.user` déclare un `SocketIOUser` complet : mensonge de
-  contrat LATENT, à trancher (type dédié, ou servir un `SocketIOUser`).
-- **La parité des trois producteurs de `message:edited` n'a pas de témoin
-  runtime**, là où `message:new` en a un depuis le cycle 99 bis. Le noyau requis
-  est désormais partagé, donc la famille qui a cassé ici ne peut plus diverger ;
-  le reste de la charge utile (traductions, pièces jointes, `metadata`) est
-  toujours écrit à la main par chaque producteur.
-- **Android traite `message:edited` en SIGNAL, pas en donnée** : il décode puis
-  jette la charge utile et relit la conversation entière
-  (`ChatViewModel:602` → `messageRepository.refresh`). C'est robuste, et c'est
-  aussi une relecture complète par édition reçue — à confronter au budget réseau
-  du cycle « payload weight » si le volume d'éditions monte. Aucune action ici.
+- [ ] **Le flip du `MessageHandler` reste ouvert, et son blocage est MESURÉ.**
+      Sept émissions de `message:new` restent hors contrat parce que
+      `_buildMessagePayload` rend `unknown` et que les enrichissements
+      (`forwardedFrom`, `postReplyTo`, `mentionedUsers`, `trackingLinks`,
+      `location`) le MUTENT via `as Record<string, unknown>`. Rendre ce type
+      honnête est nécessaire mais **pas suffisant** : le seul blocage restant est
+      alors `messageType`, que `buildMessageNewPayload` sert en `string`
+      (`message.messageType || 'text'`) quand le contrat déclare l'union
+      `MessageType`. **Le caster blanchirait exactement ce que la garde existe
+      pour voir** — l'honnête est de valider la colonne contre l'union AU
+      PRODUCTEUR. Lot à part, à mesurer contre les trois clients.
+- [ ] **Le troisième producteur de `message:edited` n'est pas passé à l'unité.**
+      `broadcastMessageMutation` prend `payload: Record<string, unknown>` — un
+      seam de charge utile, exactement la famille du cycle 100 mais sur la
+      donnée au lieu du nom d'événement. Ses cinq appelants REST étalent la
+      ligne Prisma brute, donc servent le contrat par ACCIDENT (l'`include` est
+      large), pas par construction : un `select` restrictif posé un jour sur
+      l'une de ces routes rouvrirait le défaut sans qu'un témoin tombe.
+- [ ] **`senderId` : le chemin REST sert le `Participant.id` brut** là où le
+      socket et le manager servent le `User.id`. Vérifié non destructeur côté
+      iOS (`markEdited` n'écrit que `content`/`isEdited`/`editedAt`/`updatedAt`,
+      jamais `senderId`) ; à instruire côté web, qui reconstruit le message
+      entier depuis la charge. Aligner est un CHANGEMENT de sens, donc un lot
+      avec relevé des consommateurs.
+- [ ] **`SocketIOMessage` sous-déclare toujours `message:new`** d'une vingtaine
+      de champs (suivi hérité du cycle 99 bis, inchangé).
+- [ ] **Android n'a pas été confronté** sur `message:edited` autrement que par
+      lecture de son modèle (`senderId`/`createdAt` optionnels ⇒ tolérant).

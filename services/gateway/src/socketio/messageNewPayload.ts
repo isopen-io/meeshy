@@ -1,5 +1,5 @@
 import type { Message } from '@meeshy/shared/types/index';
-import { resolveWireSenderId } from './wireSenderId';
+import { resolveWireSenderId } from './messageEditedPayload';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -125,14 +125,18 @@ export function buildMessageNewPayload(
   // `Message` ne déclare ni `clientMessageId` ni `effectFlags` ; ils sont lus à
   // travers ce sac de clés. La lecture est GARDÉE plutôt que crue : sans garde,
   // les deux champs partaient sur le fil en `unknown`, c'est-à-dire qu'aucun
-  // producteur ne promettait le type que les décodeurs clients attendent.
+  // producteur ne promettait le type que les décodeurs clients attendent — ce
+  // que le contrat honnête de `SocketIOMessage` (cycle 101) fait constater au
+  // compilateur.
   const raw = message as unknown as Record<string, unknown>;
 
   return {
     id: message.id,
     conversationId: inputs.conversationId,
-    // `Participant.id` vs `User.id` — la règle, et sa raison, vivent dans
-    // `wireSenderId.ts`, partagées avec les producteurs de `message:edited`.
+    // Résolution PARTAGÉE avec `message:edited` — la même bulle doit être
+    // « la mienne » quel que soit l'événement qui l'a touchée en dernier. La
+    // règle (et le repli sur le `Participant.id` d'un expéditeur anonyme) est
+    // écrite une seule fois, sur `resolveWireSenderId`.
     senderId: resolveWireSenderId(message),
     content: message.content,
     originalLanguage: message.originalLanguage || 'fr',
