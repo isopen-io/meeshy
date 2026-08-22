@@ -1415,6 +1415,21 @@ struct ConversationView: View {
                         overlayState.storyViewerStartAtFirstUnviewed = true
                         overlayState.showStoryViewer = true
                     },
+                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
+                    // puis atterrissage sur le message (et le composeur en
+                    // mode réponse pour « Répondre »).
+                    onOpenInThread: { messageId in
+                        readingModeController.select(.script)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onReply: { messageId in
+                        readingModeController.select(.script)
+                        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                        triggerReply(for: msg)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
                     text: { message in
                         viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
                     }

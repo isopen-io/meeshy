@@ -257,6 +257,11 @@ struct RiverBubbleView: View, Equatable {
     /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
+    /// Lot 3 — l'appui long : « Ouvrir dans le fil » (retour Script +
+    /// atterrissage, comme Résumé), « Répondre » (Script + composeur),
+    /// « Copier ». Les deux premiers sont des actes de l'hôte.
+    var onOpenInThread: ((String) -> Void)? = nil
+    var onReply: ((String) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -350,6 +355,37 @@ struct RiverBubbleView: View, Equatable {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
+        .contextMenu { bubbleMenu }
+    }
+
+    // MARK: - Appui long — les actes que le Fil offre déjà, avec ses mots
+
+    /// Les libellés sont CEUX du Fil (`action.reply`, `action.copy`,
+    /// `MessageMoreSheet`) — un seul vocabulaire pour un même acte.
+    @ViewBuilder
+    private var bubbleMenu: some View {
+        if let onOpenInThread {
+            Button {
+                onOpenInThread(content.bubble.messageId)
+            } label: {
+                Label(
+                    String(localized: "riviere.bubble.openInThread", defaultValue: "Ouvrir dans le fil", bundle: .main),
+                    systemImage: "text.bubble"
+                )
+            }
+        }
+        if let onReply {
+            Button {
+                onReply(content.bubble.messageId)
+            } label: {
+                Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
+            }
+        }
+        Button {
+            UIPasteboard.general.string = content.text
+        } label: {
+            Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
+        }
     }
 
     // MARK: - Corps du message — la bulle proprement dite

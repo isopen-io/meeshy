@@ -361,7 +361,7 @@ autorisé si c'est compliqué : deux bulles distinctes.
       même chemin que le Fil (`openProfileHandler`). Présence/story INJECTÉES (pures côté mapping).
 - [x] R-7 (e96179a5f) — marges du canvas : réserve basse = hauteur du composeur (`bottomInset`, `safeAreaInset`),
       aucune bulle sous une zone non atteignable ; atterrissage au présent au-dessus du composeur.
-- [ ] Lot 3 / R-4 (partiel) — appui long sur une bulle : « Ouvrir dans le fil » (retour Script +
+- [x] Lot 3 / R-4 (partiel) — appui long sur une bulle : « Ouvrir dans le fil » (retour Script +
       atterrissage, comme Résumé), « Répondre », « Copier » ; rebond de bord (`edgeBounceToken` ⇒ haptique) ;
       vérification simulateur clair/sombre sur Meeshy Global.
 - [x] R-8 (partiel) — cadrage au présent mesuré et corrigé (scroll view de 1800 pt → bande en overlay ; curseur

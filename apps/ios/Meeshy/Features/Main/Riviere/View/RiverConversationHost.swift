@@ -27,6 +27,10 @@ struct RiverConversationHost: View {
     var storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
+    /// Lot 3 — retours au Fil depuis une bulle (appui long), DITS par
+    /// l'appelant qui possède le contrôleur de mode et le composeur.
+    var onOpenInThread: ((String) -> Void)? = nil
+    var onReply: ((String) -> Void)? = nil
 
     @StateObject private var navigation: RiverNavigationController
     /// Échelle du plan, POSÉE par le pince (retour produit 2026-08-22).
@@ -58,6 +62,8 @@ struct RiverConversationHost: View {
         storyRing: @escaping (MeeshyMessage) -> StoryRingState = { _ in .none },
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
+        onOpenInThread: ((String) -> Void)? = nil,
+        onReply: ((String) -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
         self.messages = messages
@@ -68,6 +74,8 @@ struct RiverConversationHost: View {
         self.storyRing = storyRing
         self.onOpenProfile = onOpenProfile
         self.onViewStory = onViewStory
+        self.onOpenInThread = onOpenInThread
+        self.onReply = onReply
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
         _geometry = State(initialValue: geometry)
@@ -127,6 +135,8 @@ struct RiverConversationHost: View {
                 landingToken: landingToken,
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
+                onOpenInThread: onOpenInThread,
+                onReply: onReply,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

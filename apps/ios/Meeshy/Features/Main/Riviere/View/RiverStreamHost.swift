@@ -81,6 +81,9 @@ struct RiverStreamHost: View {
     /// R-5 — la fiche d'une voix, la story d'une voix : l'hôte les ouvre.
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
+    /// Lot 3 — retours au Fil depuis une bulle (appui long).
+    var onOpenInThread: ((String) -> Void)? = nil
+    var onReply: ((String) -> Void)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -400,6 +403,9 @@ struct RiverStreamHost: View {
         // Les cadres publiés bougent à chaque défilement : c'est le signal
         // qui montre la poignée, sans second lecteur d'offset.
         .adaptiveOnChange(of: frames) { _, _ in noteScrollActivity() }
+        // Lot 3 — le bord atteint se SENT : la loi a dit `.edge`, le
+        // contrôleur a incrémenté son jeton, la peau frappe une fois.
+        .adaptiveOnChange(of: navigation.edgeBounceToken) { _, _ in HapticFeedback.light() }
         .accessibilityElement(children: .contain)
     }
 
@@ -476,7 +482,9 @@ struct RiverStreamHost: View {
                 contentWidth: columns.bubbleContentWidth,
                 onOpenReply: openReply,
                 onOpenProfile: onOpenProfile,
-                onViewStory: onViewStory
+                onViewStory: onViewStory,
+                onOpenInThread: onOpenInThread,
+                onReply: onReply
             )
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
