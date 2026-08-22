@@ -10637,3 +10637,57 @@ inchangés).
 single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
 (hors périmètre calling). L'audit n'a pas trouvé de défaut supplémentaire dans
 `use-webrtc-p2p.ts` (1285 lignes, lu en entier) au-delà de ce qui est déjà documenté.
+
+## Vague 158 — `toggleVideo()` pouvait ré-acquérir la caméra pendant qu'un hold CallKit la suspendait (iOS) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Audit dédié
+(agent en tâche de fond) sur `CallManager.swift` (lu en entier, ~6270 lignes), `PiPCallController.swift`,
+`CallPiPPolicy.swift`, `CallEventsHandler.ts`, `CallService.ts`, `CallCleanupService.ts`,
+`use-webrtc-p2p.ts` — après vérification que les Vagues 155-157 sont bien closes.
+
+**Root cause** : trois sites distincts (`applyCameraSuspension`, `handleHold`, `applySurvivalVideoSend`)
+traitent `isVideoSuspendedByHold`/`isVideoSuspendedByCaptureInterruption` comme « accès caméra
+indisponible maintenant » — `applySurvivalVideoSend` refuse explicitement de reprendre l'envoi
+vidéo tant que l'un des deux drapeaux est actif. `toggleVideo()`, le bouton vidéo manuel côté
+utilisateur, ne vérifiait ni l'un ni l'autre. Scénario : appel vidéo actif, `CXSetHeldCallAction`
+met l'appel en attente (préemption cellulaire) → `isVideoSuspendedByHold = true`, vidéo sortante
+suspendue, mais `isVideoEnabled` reste `true` (intention préservée, comportement voulu). Toujours
+en attente, l'utilisateur tape le bouton vidéo (toggle off, légitime) puis retape (toggle on) —
+un double-tap ordinaire pendant que la bannière de mise en attente CallKit est affichée.
+`toggleVideo()` appelait alors `upgradeToVideo()` sans condition : acquisition caméra réelle,
+notification CallKit `hasVideo: true`, émission `call:toggle-video(enabled:true)` au pair,
+renégociation — alors que l'appel est toujours en attente. Exactement le faux signal « caméra
+active » que le commentaire de `applyCameraSuspension` et la garde de `applySurvivalVideoSend`
+existent pour empêcher.
+
+**Fix** — garde ajoutée dans `toggleVideo()`, juste après le guard d'annulation de tâche et avant
+le pré-flight permission caméra, copiant le pattern de `applySurvivalVideoSend` :
+```swift
+if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+    FeedbackToastManager.shared.showError(...)  // "call.video.hold.blocked", 7 locales
+    return
+}
+```
+`isVideoEnabled` (déjà mis à jour de manière optimiste avant le `Task`) reste la source de
+vérité : la branche unhold de `handleHold` reprend automatiquement la vidéo une fois la
+suspension levée — l'intention utilisateur n'est jamais perdue, seule l'actuation est différée.
+Toast ajouté (au lieu d'un no-op silencieux) pour que l'utilisateur comprenne pourquoi le tap n'a
+rien fait — nouvelle clé `call.video.hold.blocked` dans `Localizable.xcstrings` (ar/de/en/es/fr/it/pt-BR).
+
+**Tests** : 4 nouveaux tests structurels dans `CallManagerToggleVideoHoldSuspensionGuardTests`
+(`CallManagerTests.swift`, même convention source-based que le reste du fichier — pas de host
+XCTest disponible dans ce container pour un run comportemental) : présence de la garde, portée
+limitée à `target == true` (turn OFF pendant un hold reste un downgrade normal), ordre garde
+< `upgradeToVideo()`, et `return` effectif sans fallthrough vers le check permission caméra.
+CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — nouvelle garde additive dans une branche déjà conditionnée sur
+`target` (ré-activation uniquement), aucun changement pour le flux nominal (hors hold/interruption).
+Diff `Localizable.xcstrings` purement additif (clé neuve insérée entre deux entrées existantes,
+sans toucher au reste du fichier).
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
+(hors périmètre calling). L'audit n'a pas trouvé de second défaut de confiance équivalente dans
+les autres surfaces lues (gateway, web) au-delà de ce qui est déjà documenté.

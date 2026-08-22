@@ -37923,6 +37923,53 @@
         }
       }
     },
+    "call.video.hold.blocked": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الفيديو غير متاح أثناء انتظار المكالمة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video während des Anrufhaltens nicht verfügbar"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video unavailable while the call is on hold"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video no disponible mientras la llamada está en espera"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vidéo indisponible pendant la mise en attente de l'appel"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Video non disponibile durante la messa in attesa della chiamata"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vídeo indisponível enquanto a chamada está em espera"
+          }
+        }
+      }
+    },
     "call.video.hideControls": {
       "extractionState": "manual",
       "localizations": {
