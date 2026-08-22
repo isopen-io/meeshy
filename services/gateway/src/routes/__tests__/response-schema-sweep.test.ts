@@ -87,20 +87,6 @@ const ROUTES_DIR = join(__dirname, '..');
  * feuille. Un normaliseur les réconcilie à la frontière
  * (`services/voice-analysis-normalize.ts`).
  *
- * **`calls.ts|details|400` est parti au cycle 92**, et il n'a jamais été ce que
- * cette ligne disait. Ce `details` nu était imbriqué dans un
- * `error: { type: 'object', properties: { code, message, details } }` — une
- * déclaration de l'enveloppe d'erreur écrite contre un producteur IMAGINAIRE,
- * quand `sendError` pose `error` en CHAÎNE. Les dix-neuf schémas du fichier la
- * portaient, et le sérialiseur coerçait la chaîne en objet vide :
- *
- *   { "success": false, "error": {} }
- *
- * Toute la surface de signalisation d'appel servait ses erreurs sans code, sans
- * message et sans `success` exploitable. Le balayage voyait le `details` — la
- * feuille — et jamais la racine, parce qu'une clé du MAUVAIS TYPE n'est pas nue.
- * C'est `error-schema-sweep` qui garde cette forme-là désormais.
- *
  * `messages.ts|sender|200` RESTE, et ce n'est pas un oubli. Le balayage le
  * signale comme nu, mais la déclaration y est INERTE : le schéma de cette route
  * décrit le message quand `sendSuccess` répond `{ success, data }`, si bien que
@@ -110,10 +96,45 @@ const ROUTES_DIR = join(__dirname, '..');
  * ce qui passait entier TRONQUERAIT. Tant que ce n'est pas fait, la ligne reste
  * ici — elle nomme une dette de FORME, plus une fuite.
  */
+/**
+ * **Les trois derniers sites nus sont partis au cycle 91 bis**, et l'inventaire
+ * tombe à UNE ligne — celle, inerte, décrite juste au-dessus :
+ *
+ * - `calls.ts|details|400` — schéma d'erreur écrit à la main, faux sur
+ *   l'enveloppe dans les trois sens (cf. cycle 89) : `error` déclaré OBJET
+ *   quand `sendError` le rend en STRING à la racine, `message` et `code` non
+ *   déclarés donc supprimés, et `details` déclaré comme clé alors que
+ *   l'enveloppe l'ÉTALE. Remplacé par `errorResponseSchema`.
+ * - `links/admin.ts|creator|200` — déclaré depuis ses deux émetteurs ; aucun
+ *   champ de présence, donc aucune porte ouverte.
+ * - `users/profile.ts|permissions|200` — **RETIRÉ** plutôt que déclaré : le
+ *   handler posait `permissions: undefined` DÉLIBÉRÉMENT (un profil public ne
+ *   porte pas les autorisations de son sujet), le champ n'avait donc aucun
+ *   producteur et ne partait jamais. Aucun changement de contrat.
+ *
+ * **Ce cliquet ne suffit pas, et le cycle 91 bis l'a montré en le vidant.** Il
+ * cherche l'ABSENCE de `properties` ; un schéma BIEN FORMÉ décrivant une AUTRE
+ * charge utile vide tout aussi complètement et lui reste invisible. Le
+ * `DELETE /…/messages/:messageId` en était un — `message: { type: 'string' }`,
+ * irréprochable, contre `{messageId, deleted, meta}` — et il a survécu au
+ * cycle 88 bis, qui réparait ses deux siblings dans le même fichier. D'où le
+ * balayage frère : `response-payload-mismatch.test.ts`. **Les deux sont
+ * nécessaires ; aucun ne subsume l'autre.**
+ *
+ * **Un troisième les complète depuis le cycle 92** : `error-schema-sweep.test.ts`.
+ * Le `calls.ts|details|400` retiré ci-dessus était la FEUILLE d'un défaut dont
+ * ce cliquet ne pouvait pas voir la racine — `error` déclaré OBJET porte des
+ * `properties`, donc n'est pas « nu ». Et cette racine-là vivait sur les
+ * DIX-NEUF schémas du fichier, pas sur le seul 400 que l'inventaire nommait.
+ * Une clé du mauvais TYPE n'est pas supprimée, elle est COERCÉE ; c'est le
+ * balayage d'erreur qui garde cette forme, et il le peut parce que les erreurs
+ * n'ont qu'un producteur.
+ *
+ * Détail, preuves de sérialisation et inventaire raisonné :
+ * `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
+ */
 const FROZEN_INVENTORY: readonly string[] = [
-  'links/admin.ts|creator|200',
   'messages.ts|sender|200',
-  'users/profile.ts|permissions|200',
 ];
 
 describe('balayage — un schéma de réponse ne déclare jamais un objet NU', () => {

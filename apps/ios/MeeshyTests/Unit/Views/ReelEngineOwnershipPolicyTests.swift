@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import Meeshy
 
 /// Covers the P2 audit fix: `ReelFeedVideoSurface.onDisappear` gated its
@@ -37,5 +38,35 @@ final class ReelEngineOwnershipPolicyTests: XCTestCase {
 
     func test_shouldRelease_neitherOwnsNorShowing_false() {
         XCTAssertFalse(ReelEngineOwnershipPolicy.shouldRelease(ownsEngine: false, isShowingThis: false))
+    }
+
+    // MARK: - ReelEngineOwnershipPolicy.isEngineOwned — pure
+    //
+    // Correctif DoD S2 rejet (S2, exigence produit 2026-08-22), constat
+    // majeur #3 : la condition de montage du bouton de son lisait des
+    // miroirs @State potentiellement PÉRIMÉS (`isShowingThis`, bâti sur
+    // `player`/`activeURL` locaux, tenus à jour par une souscription
+    // `.onReceive` DISTINCTE) au lieu des sources autoritaires
+    // (`manager.player`/`manager.activeURL`). Ce prédicat pur formalise la
+    // DÉCISION correcte et est appelé directement sur les valeurs du
+    // manager — aucun miroir entre les deux.
+
+    func test_isEngineOwned_ownsFalse_isFalse() {
+        let player = AVPlayer()
+        XCTAssertFalse(ReelEngineOwnershipPolicy.isEngineOwned(owns: false, player: player, activeURL: "a", expectedURL: "a"))
+    }
+
+    func test_isEngineOwned_playerNil_isFalse() {
+        XCTAssertFalse(ReelEngineOwnershipPolicy.isEngineOwned(owns: true, player: nil, activeURL: "a", expectedURL: "a"))
+    }
+
+    func test_isEngineOwned_urlMismatch_isFalse() {
+        let player = AVPlayer()
+        XCTAssertFalse(ReelEngineOwnershipPolicy.isEngineOwned(owns: true, player: player, activeURL: "a", expectedURL: "b"))
+    }
+
+    func test_isEngineOwned_ownsPlayerPresentAndUrlMatches_isTrue() {
+        let player = AVPlayer()
+        XCTAssertTrue(ReelEngineOwnershipPolicy.isEngineOwned(owns: true, player: player, activeURL: "a", expectedURL: "a"))
     }
 }

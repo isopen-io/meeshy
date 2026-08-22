@@ -199,16 +199,43 @@ Les schémas de réponse sont compilés une fois au démarrage. Le diff des rout
 est net de **-318 lignes** (472 supprimées, 154 ajoutées) — vingt fichiers
 cessent de recopier une enveloppe.
 
+## 8 bis. Collision avec le cycle 91 bis — et ce qu'elle prouve
+
+Pendant que ce cycle travaillait, une session concurrente (`main`, PR #3322,
+« la connexion 2FA était morte, et le balayage ne pouvait pas la voir ») a
+touché `calls.ts`. Elle a atteint **le même diagnostic et écrit le même
+correctif** sur le seul 400 que l'inventaire gelé nommait :
+
+```ts
+// … `sendError` rend `error` en STRING à la RACINE … `error` sortait en `{}`
+400: { description: '…', ...errorResponseSchema },
+```
+
+Deux sessions sans contact ont donc trouvé la même coercition en partant de deux
+bouts opposés — elle du cliquet des objets nus, ce cycle du producteur. C'est une
+confirmation indépendante, et le conflit de fusion s'est réduit à une
+`description` (la sienne, plus riche, est retenue).
+
+**Mais elle voyait la FEUILLE.** Le cliquet nommait `calls.ts|details|400` : un
+site, sur le `details` imbriqué. La racine — `error` déclaré objet — vivait sur
+les **dix-neuf** schémas du fichier, et sur vingt fichiers de plus. Le
+correctif concurrent en a réparé **un**.
+
+> Deux outils qui cherchent l'ABSENCE et deux sessions qui les suivent
+> convergent sur le site que l'outil DÉSIGNE, pas sur la famille dont il fait
+> partie. C'est l'argument le plus net pour outiller la question du PRODUCTEUR :
+> elle seule rend l'étendue visible.
+
+Fusion manuelle, trois conflits (`calls.ts`, l'inventaire gelé,
+`services/gateway/CLAUDE.md`), résolus en gardant l'état le plus avancé des deux
+côtés : l'inventaire tombe à UNE ligne (`messages.ts|sender|200`) — leur cycle a
+aussi réparé `links/admin.ts|creator|200` et retiré
+`users/profile.ts|permissions|200`.
+
 ## 9. Ce que ce cycle laisse ouvert
 
-**Balayage frère : 3 sites restants** (`calls.ts|details|400` est parti avec la
-racine qui le portait) :
-
-| champ | fichier |
-|---|---|
-| `creator` | `links/admin.ts` |
-| `sender` | `messages.ts` — dette de FORME seulement (cycle 88) |
-| `permissions` | `users/profile.ts` |
+**Balayage frère : UNE ligne restante** après fusion avec le cycle 91 bis (§8 bis)
+— `messages.ts|sender|200`, dette de FORME seulement (cycle 88).
 
 **Reconnaissance faite pour le cycle suivant** (`messages.ts|sender|200`), pour
 qu'il parte informé — c'est le lot que le cycle 91 désignait, et qui reste le
