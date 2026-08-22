@@ -1406,7 +1406,15 @@
     "newSaveError": "Error saving draft",
     "newBroadcastIdMissing": "Error: broadcast ID not received",
     "newTranslationStarted": "Translation started",
-    "newPreviewError": "Error starting preview"
+    "newPreviewError": "Error starting preview",
+    "detailStatInApp": "Notified in-app",
+    "detailSendInAppButton": "Notify {count} accounts in-app",
+    "detailSendingInApp": "Sending in-app…",
+    "detailSendInAppConfirm": "Send this broadcast as an in-app notification to {count} accounts? Each targeted account gets a system notification (toast, notification center, push).",
+    "detailSendInAppStarted": "In-app delivery started",
+    "detailSendInAppError": "Error starting in-app delivery",
+    "detailSendInAppInProgress": "Delivery in progress…",
+    "detailSendInAppFailed": "{failed} failure(s)"
   },
   "languages": {
     "loadError": "Error loading language statistics",

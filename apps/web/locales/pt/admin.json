@@ -1406,7 +1406,15 @@
     "newSaveError": "Erro ao guardar",
     "newBroadcastIdMissing": "Erro: ID do broadcast não recebido",
     "newTranslationStarted": "Tradução iniciada",
-    "newPreviewError": "Erro ao iniciar a pré-visualização"
+    "newPreviewError": "Erro ao iniciar a pré-visualização",
+    "detailStatInApp": "Notificados in-app",
+    "detailSendInAppButton": "Notificar {count} contas na app",
+    "detailSendingInApp": "A enviar in-app…",
+    "detailSendInAppConfirm": "Enviar este broadcast como notificação in-app para {count} contas? Cada conta visada recebe uma notificação de sistema (toast, centro de notificações, push).",
+    "detailSendInAppStarted": "Envio in-app iniciado",
+    "detailSendInAppError": "Erro ao iniciar o envio in-app",
+    "detailSendInAppInProgress": "Envio em curso…",
+    "detailSendInAppFailed": "{failed} falha(s)"
   },
   "languages": {
     "loadError": "Erro ao carregar estatísticas de idiomas",

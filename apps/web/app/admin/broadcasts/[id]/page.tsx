@@ -6,11 +6,32 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Send, Trash2, Eye, RefreshCw, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Send, Trash2, Eye, RefreshCw, AlertTriangle, BellRing } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatCardSkeleton } from '@/components/admin/TableSkeleton';
+
+type BroadcastDetail = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  sourceLanguage: string;
+  status: string;
+  targeting?: { languages?: string[]; countries?: string[]; activityStatus?: string; inactiveSinceDays?: number; inactiveDays?: number } | null;
+  translatedSubjects?: Record<string, string> | null;
+  translatedBodies?: Record<string, string> | null;
+  recipientsByLanguage?: Record<string, number> | null;
+  totalRecipients?: number;
+  sentCount?: number;
+  failedCount?: number;
+  error?: string | null;
+  inAppSentAt?: string | null;
+  inAppCompletedAt?: string | null;
+  inAppSentCount?: number;
+  inAppFailedCount?: number;
+};
 
 export default function BroadcastDetailPage() {
   const router = useRouter();
@@ -30,9 +51,10 @@ export default function BroadcastDetailPage() {
     }
   };
 
-  const [broadcast, setBroadcast] = useState<unknown>(null);
+  const [broadcast, setBroadcast] = useState<BroadcastDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [sendingInApp, setSendingInApp] = useState(false);
   const [selectedLang, setSelectedLang] = useState<string>('');
 
   const loadBroadcast = useCallback(async () => {
@@ -98,6 +120,22 @@ export default function BroadcastDetailPage() {
     }
   };
 
+  const handleSendInApp = async () => {
+    const total = broadcast?.totalRecipients || 0;
+    if (!window.confirm(t('broadcasts.detailSendInAppConfirm', { count: total }))) return;
+    setSendingInApp(true);
+    try {
+      await adminService.sendBroadcastInApp(id);
+      toast.success(t('broadcasts.detailSendInAppStarted'));
+      loadBroadcast();
+    } catch (error) {
+      console.error('Erreur diffusion in-app broadcast:', error);
+      toast.error(t('broadcasts.detailSendInAppError'));
+    } finally {
+      setSendingInApp(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!window.confirm(t('broadcasts.detailDeleteConfirm'))) return;
     try {
@@ -160,8 +198,8 @@ export default function BroadcastDetailPage() {
   const translatedBodies = broadcast.translatedBodies || {};
   const translationLangs = Object.keys(translatedSubjects).filter(l => l !== broadcast.sourceLanguage);
   const recipientsByLanguage = broadcast.recipientsByLanguage || {};
-  const progressPercent = broadcast.totalRecipients > 0
-    ? Math.round(((broadcast.sentCount || 0) / broadcast.totalRecipients) * 100)
+  const progressPercent = (broadcast.totalRecipients ?? 0) > 0
+    ? Math.round(((broadcast.sentCount || 0) / (broadcast.totalRecipients ?? 0)) * 100)
     : 0;
 
   return (
@@ -190,7 +228,7 @@ export default function BroadcastDetailPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
           <Card className="dark:bg-gray-900 dark:border-gray-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">{t('broadcasts.detailStatRecipients')}</CardTitle>
@@ -224,6 +262,23 @@ export default function BroadcastDetailPage() {
             </CardHeader>
             <CardContent>
               <div className="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400">{translationLangs.length || '-'}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="dark:bg-gray-900 dark:border-gray-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400">{t('broadcasts.detailStatInApp')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400">
+                {broadcast.inAppSentAt ? (broadcast.inAppSentCount ?? 0) : '-'}
+              </div>
+              {broadcast.inAppSentAt && !broadcast.inAppCompletedAt && (
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('broadcasts.detailSendInAppInProgress')}</p>
+              )}
+              {broadcast.inAppCompletedAt && (broadcast.inAppFailedCount ?? 0) > 0 && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">{t('broadcasts.detailSendInAppFailed', { failed: broadcast.inAppFailedCount })}</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -476,6 +531,18 @@ export default function BroadcastDetailPage() {
                 <span>{t('broadcasts.detailDeleteButton')}</span>
               </Button>
             </>
+          )}
+
+          {(broadcast.status === 'READY' || broadcast.status === 'SENT') && (
+            <Button
+              variant="outline"
+              onClick={handleSendInApp}
+              disabled={sendingInApp}
+              className="flex items-center space-x-2 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-900"
+            >
+              <BellRing className="h-4 w-4" />
+              <span>{sendingInApp ? t('broadcasts.detailSendingInApp') : t('broadcasts.detailSendInAppButton', { count: broadcast.totalRecipients ?? 0 })}</span>
+            </Button>
           )}
 
           {broadcast.status === 'TRANSLATING' && (
