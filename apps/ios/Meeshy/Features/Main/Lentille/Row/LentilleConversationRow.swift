@@ -139,14 +139,15 @@ struct LentilleConversationRow: View {
         // dans le contenu, même au repos »). La rangée plate n'a pas de
         // bordure — c'est la carte de magnification qui la peint, au même
         // endroit : le badge occupe donc d'avance la place où elle passera,
-        // et ne bouge pas quand la carte se lève. Débord vers le bas par
-        // `edgeBadgeOverhang` : il mord la marge, jamais la rangée voisine.
+        // et ne bouge pas quand la carte se lève. Il reste DANS le cadre, à
+        // `edgeBadgeOverhang` du bord : un débord VERS L'EXTÉRIEUR le faisait
+        // tronquer par la rangée voisine (constaté au premier essai).
         // Label NU, sans capsule ni fond — aucune carte dans `Lentille/Row/`.
         .overlay(alignment: .bottomTrailing) {
             if conversation.type != .direct {
                 memberCountBadge
                     .padding(.trailing, LentilleMetrics.Row.paddingHorizontal)
-                    .offset(y: LentilleMetrics.Row.edgeBadgeOverhang)
+                    .padding(.bottom, LentilleMetrics.Row.edgeBadgeOverhang)
             }
         }
         .contentShape(Rectangle())

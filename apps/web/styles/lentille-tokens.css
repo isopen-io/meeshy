@@ -17,9 +17,9 @@
   /* ========== LIST SECTION ========== */
 
   /* list.row */
-  --lentille-list-row-height: 78px;
-  --lentille-list-row-edge-badge-overhang: 6px;
-  --lentille-list-row-padding-vertical: 10px;
+  --lentille-list-row-height: 92px;
+  --lentille-list-row-edge-badge-overhang: 2px;
+  --lentille-list-row-padding-vertical: 8px;
   --lentille-list-row-padding-horizontal: 16px;
   --lentille-list-row-margin-horizontal: 8px;
   --lentille-list-row-radius: 16px;

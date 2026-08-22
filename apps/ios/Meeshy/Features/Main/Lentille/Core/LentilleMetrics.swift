@@ -25,15 +25,20 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        /// 64 → 78 le 2026-08-22 : la rangée porte désormais TROIS lignes —
+        /// 64 → 92 le 2026-08-22 : la rangée porte désormais TROIS lignes —
         /// nom, « auteur : message », puis la date seule à droite (retour
-        /// produit : « en bas sur une nouvelle ligne à droite mettre la date »).
-        /// Deux lignes tenaient dans 64 ; trois n'y tiennent pas.
-        public static let height: CGFloat = 78
-        /// Débord d'un badge de bord (effectif) sur la trace de la bordure —
-        /// il mord la marge de la rangée, jamais la rangée voisine.
-        public static let edgeBadgeOverhang: CGFloat = 6
-        public static let paddingVertical: CGFloat = 10
+        /// produit : « en bas sur une nouvelle ligne à droite mettre la date »)
+        /// — et, sur son bord bas, l'effectif. Le premier essai à 78 a été
+        /// CONSTATÉ trop court sur simulateur : le contenu mesure ~78,6 pt à la
+        /// taille de texte par défaut, si bien que la pile d'effectif sortait
+        /// sous la rangée suivante et que la date passait dessous.
+        public static let height: CGFloat = 92
+        /// Distance du badge de bord (effectif) au bord bas de la rangée : il
+        /// se pose SUR la trace que la bordure de la carte y dessinera, sans
+        /// jamais sortir du cadre — dehors, il mordait la rangée voisine et s'y
+        /// faisait tronquer (constaté au premier essai, débord de 6 pt).
+        public static let edgeBadgeOverhang: CGFloat = 2
+        public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
         public static let radius: CGFloat = 16
