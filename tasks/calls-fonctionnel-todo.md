@@ -10901,3 +10901,105 @@ sonnant (web, confiance modérée — fréquence réelle en prod non confirmée)
 a (iOS, actuellement inerte derrière une garde extérieure) ; `handleAudioRouteChange`'s branche
 `.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` que `toggleSpeaker()`
 exploite (iOS, fenêtre étroite et auto-corrigée par `CXProviderDelegate.didActivate`).
+
+## Vague 161 — `rejoinActiveCallAfterReconnect` hardcodait `reason: 'completed'`, défaisant l'offre de retry sur une reconnexion réellement transitoire (gateway + web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Reprise du
+suivi explicitement laissé ouvert par la Vague 160 (« confiance haute mais fix nécessite un
+changement de contrat serveur, hors scope d'une vague à un seul commit ») — après vérification que
+la Vague 160 est bien mergée sur `main` (PR #3351) et qu'aucune branche `claude/upbeat-dirac-*`
+antérieure n'est en avance.
+
+**Root cause** : `rejoinActiveCallAfterReconnect` (`CallManager.tsx`) ré-émet `call:join` quand le
+socket de signalisation se reconnecte, pour que la passerelle sache que ce client est toujours dans
+l'appel avant que sa fenêtre de grâce de déconnexion (`CallEventsHandler` `DISCONNECT_GRACE_MS`)
+n'expire. Si l'appel a déjà été terminé côté serveur (perdu la course contre la fenêtre de grâce,
+ou terminé pour une autre raison pendant la coupure), l'ack porte `error.code === 'CALL_ENDED'` —
+et ce client construisait alors un `CallEndedEvent` synthétique avec **`reason: 'completed'` codé
+en dur**, quelle que soit la VRAIE cause. `isRetryableCallFailure` (`lib/calls/call-retry-policy.ts`)
+traite `completed` comme définitivement NON réessayable — l'offre « Réessayer » que ce chemin même
+existe pour couvrir (un raccroché pour cause de `connectionLost`/`heartbeatTimeout`, la reconnexion
+ayant perdu la course) ne s'affichait jamais, silencieusement remplacée par un hangup muet identique
+à un raccroché volontaire.
+
+Le serveur, lui, connaît la vraie raison : `CallSession.endReason` (Prisma) est déjà écrit par tous
+les writers terminaux (`endCall`, `leaveCall`, `forceEndOrphanedCallSession`, …) — mais
+`joinCallAttempt` (`CallService.ts`), quand il refuse un join parce que l'appel est dans un état
+terminal, jetait un `Error` générique portant seulement `CODE: message`
+(`CALL_ENDED: This call has already ended`) sans jamais lire `call.endReason`, déjà chargé en
+mémoire deux lignes plus haut. Le renseignement existait à CHAQUE couche (DB, service, ack) et
+n'était simplement jamais lu par celle du dessus — même famille que la Vague 96 (« un champ présent
+à chaque étape se lit comme un champ traité »), une couche plus bas dans la pile calling.
+
+**Fix, en deux parts additives** :
+
+1. **`CallService.ts`** — nouvelle classe `CallAlreadyEndedError extends Error`, exportée, portant
+   `.endReason: CallEndReason` en plus du même message `CODE: message` que l'ancien `Error` générique
+   (`parseCallHandlerError` continue de le parser identiquement — aucun gate `CALL_ENDED` existant
+   ne change de comportement). `joinCallAttempt` la jette avec `call.endReason ?? CallEndReason.completed`
+   au lieu de l'`Error` nue.
+2. **`CallEventsHandler.ts`** — le catch de `call:join` détecte `error instanceof CallAlreadyEndedError`
+   et étale conditionnellement `endReason` dans l'objet d'erreur de l'ack
+   (`{ code, message, ...(endReason ? { endReason } : {}) }`) — jamais de clé `endReason: undefined`
+   fabriquée pour un `CALL_ENDED` générique (parité avec la règle du tri-état `bridge` déjà en place
+   ailleurs dans ce fichier : la PRÉSENCE de la clé porte le sens, pas sa valeur).
+3. **`CallJoinAck.error`** (`packages/shared/types/video-call.ts`) — `endReason?: CallEndReason` ajouté,
+   purement additif.
+4. **`CallManager.tsx`** — `rejoinActiveCallAfterReconnect` lit `ack.error?.endReason ?? 'completed'`
+   au lieu du littéral. Le fallback préserve le comportement historique pour tout ack qui ne porte pas
+   le champ (gateway non redéployée, ou tout autre chemin `CALL_ENDED` qui ne passe pas par
+   `CallAlreadyEndedError`).
+
+**Décision de portée** : `call:force-leave` (même fichier, même littéral `reason: 'completed'`) n'est
+**volontairement pas touché** — son propre commentaire (Vague 159/160) explique que `completed` y est
+correct PAR CONSTRUCTION : rien n'a échoué, ce client est éjecté d'un appel qu'il n'a plus le droit de
+rejoindre, et aucune offre « Réessayer » ne doit s'y poser. Les deux littéraux se ressemblent, un seul
+porte le défaut.
+
+**Tests (TDD, RED confirmé)** :
+- `CallService.test.ts` — 2 nouveaux témoins : `joinCall` sur un appel terminal avec
+  `endReason: connectionLost` rejette une `CallAlreadyEndedError` portant `.endReason === 'connectionLost'`
+  (pas seulement le code générique) ; un `endReason` `null` (ligne DB antérieure à la colonne) retombe
+  sur `CallEndReason.completed`. `MockCallSession`/`createMockCallSession` étendus avec `endReason`.
+- `CallEventsHandler-join-ack.test.ts` — 1 nouveau témoin : l'ack de `call:join` sur un rejet
+  `CallAlreadyEndedError('connectionLost')` porte `error.endReason === 'connectionLost'` ; le témoin
+  existant (`Error` générique, sans `endReason`) reste inchangé et vert, prouvant que le champ ne
+  s'invente pas quand la source ne le fournit pas.
+- `CallManager.reconnect.test.tsx` (web) — 2 nouveaux témoins : un ack `CALL_ENDED` avec
+  `endReason: 'connectionLost'` peuple `pendingRetry['conv-1']` (offre de retry) ; un ack avec
+  `endReason: 'missed'` n'en peuple aucun.
+- **RED confirmé par `git stash` des 4 fichiers de production** (`video-call.ts`, `CallService.ts`,
+  `CallEventsHandler.ts`, `CallManager.tsx`) : les 2 suites gateway retouchées échouent à la
+  COMPILATION (`CallAlreadyEndedError` non exporté) ; restauré, GREEN.
+- **Collatéral découvert au premier balayage large** (`--testPathPatterns="[Cc]all"`, gateway) :
+  4 suites tierces qui mockent tout le module `CallService` (`CallEventsHandler.test.ts`,
+  `CallEventsHandler-join-buffered-offer.test.ts`, `CallEventsHandler-restart-resilience.test.ts`,
+  `CallEventsHandler-error-fallbacks.test.ts`) ne réexportaient pas `CallAlreadyEndedError` — leur
+  fabrique de mock laissait l'import `undefined`, et `error instanceof undefined` lève un
+  `TypeError` au runtime dès qu'un de leurs témoins fait échouer `joinCall`. Corrigé en ajoutant la
+  même classe-jouet minimale (miroir du vrai `CallAlreadyEndedError`) aux 4 fabriques.
+
+**Gates** : gateway `--testPathPatterns="[Cc]all"` **58/58 suites, 1268/1268 tests** ; `tsc --noEmit`
+gateway 0 erreur. Web `--testPathPatterns="CallManager|video-call"` **41/41 suites, 279/279 tests**
+(277 + 2 neufs) ; `tsc --noEmit` web **1834/1834 identique à la baseline** (mesuré par `git stash`).
+`packages/shared` reconstruit (`bun run build`) après l'ajout additif à `CallJoinAck`.
+
+**Risk assessment** : minimal — extension additive d'un type partagé (`endReason?` optionnel),
+nouvelle classe d'erreur qui préserve le message `CODE: message` exact que tout gate `CALL_ENDED`
+existant continue de lire, et un `??` de repli côté client qui reproduit le comportement historique
+quand le champ est absent. Aucun changement de signature publique, aucun champ retiré.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS
+single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors
+périmètre calling) ; `call:check-active` réarme le timer 45s du callee à chaque reconnexion même
+pour le même call déjà sonnant (web, confiance modérée) ; `handleHold`'s branche `catch` générique
+omet `videoSurvivalController.reset()` (iOS, actuellement inerte) ; `handleAudioRouteChange`'s
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` (iOS, fenêtre étroite
+auto-corrigée). **iOS vérifié, PAS le même défaut** : son pendant du rejoin-après-reconnexion
+(`socket.didReconnect` → `emitCallJoinWithAck`, `CallManager.swift` ~4798-4847) ne construit AUCUN
+`CallEndedEvent` synthétique sur un ack en échec — il logge un warning (« proceeding anyway ») et
+laisse le futur `call:ended` broadcast (qui porte déjà la vraie raison) faire la descente. Gap
+DIFFÉRENT, non instruit ici : si ce broadcast a été manqué pendant la coupure (le scénario même que
+ce rejoin existe pour couvrir), iOS ne semble offrir aucun retry du tout sur ce chemin — à vérifier
+lors d'une prochaine vague dédiée iOS plutôt que supposé par analogie avec le web.

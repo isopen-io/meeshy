@@ -22,13 +22,27 @@ import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 const mockJoinCall = jest.fn<any>();
 const mockGenerateIceServers = jest.fn<any>().mockReturnValue([]);
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn().mockImplementation(() => ({
-    joinCall: mockJoinCall,
-    generateIceServers: mockGenerateIceServers,
-    clearRingingTimeout: jest.fn(),
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  // Mirrors the real CallAlreadyEndedError (services/CallService.ts) — same
+  // message shape `parseCallHandlerError` splits on, plus the `endReason`
+  // the production class carries on top of it.
+  class CallAlreadyEndedError extends Error {
+    readonly endReason: string;
+    constructor(endReason: string) {
+      super('CALL_ENDED: This call has already ended');
+      this.name = 'CallAlreadyEndedError';
+      this.endReason = endReason;
+    }
+  }
+  return {
+    CallService: jest.fn().mockImplementation(() => ({
+      joinCall: mockJoinCall,
+      generateIceServers: mockGenerateIceServers,
+      clearRingingTimeout: jest.fn(),
+    })),
+    CallAlreadyEndedError,
+  };
+});
 
 jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn(),
@@ -74,6 +88,7 @@ jest.mock('../../../utils/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
@@ -297,6 +312,25 @@ describe('CallEventsHandler — call:join acks every failure branch', () => {
       expect(socket.emit).toHaveBeenCalledWith(
         CALL_EVENTS.ERROR,
         expect.objectContaining({ code: 'CALL_ENDED', message: 'The call has already ended' })
+      );
+    });
+
+    it('Vague 161 — forwards the real endReason from CallAlreadyEndedError on the ack, so a reconnect can distinguish a transient failure from a benign hangup', async () => {
+      // Without this, apps/web/components/video-call/CallManager.tsx's
+      // rejoinActiveCallAfterReconnect hardcoded reason: 'completed' on every
+      // CALL_ENDED ack — including one caused by connectionLost/
+      // heartbeatTimeout — silently defeating isRetryableCallFailure's retry
+      // offer for the one case a reconnect-rejoin exists to catch.
+      const prisma = makePrisma();
+      (prisma.participant.findFirst as any).mockResolvedValue({ id: 'participant-abc' });
+      mockJoinCall.mockRejectedValue(new CallAlreadyEndedError('connectionLost'));
+      const { ack } = await setupAndJoin({ prisma });
+
+      expect(ack).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: { code: 'CALL_ENDED', message: 'This call has already ended', endReason: 'connectionLost' }
+        })
       );
     });
   });
