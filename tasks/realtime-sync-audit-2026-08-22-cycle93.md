@@ -39,6 +39,29 @@ deux routes.
 Son correctif est intégralement retenu. Le mien est retiré. Ce qui suit est ce
 qu'il RESTE une fois le sien en place — et qui n'existait pas avant lui.
 
+### Et un TROISIÈME cycle est passé sur le même fichier
+
+À l'intégration suivante, le **cycle 91 bis** avait composé sa propre enveloppe
+sur ces deux routes — même nom de constante que la mienne — en séparant le
+transport `PUT` (qui calcule des statistiques, d'où `meta`) du `PATCH` (qui n'en
+calcule pas).
+
+**Et il avait mieux résolu que moi le problème de chargement du §6.2.** Sa
+constante est composée depuis `messageSchema`, jamais en descendant dans
+`messageResponseSchema.properties.data` : un `...spread` d'`undefined` est légal
+et inerte, quand une chaîne d'accès lève à l'IMPORT. Là où j'avais réparé le
+HARNAIS (`requireActual` sur une suite), il a rendu le CODE DE PRODUCTION
+insensible au harnais — ce qui protège aussi toutes les suites que personne n'a
+encore corrigées.
+
+Sa structure est reprise ; ma surcharge de `sender` s'y greffe, sur les deux
+enveloppes. Trois cycles concurrents ont traversé ce fichier en une session, et
+chacun a corrigé une couche que le précédent avait rendue visible.
+
+> **Quand deux corrections visent le même défaut, prendre la plus DÉFENSIVE.**
+> Réparer un harnais protège une suite ; rendre la production insensible au
+> harnais les protège toutes.
+
 > **Un témoin qui teste une charge utile INVENTÉE n'atteste rien.** Le dépôt
 > nomme cette faute depuis le cycle 62, pour des helpers qui recopiaient un
 > corps de production. Elle a ici une seconde forme, plus discrète : recopier la
@@ -131,14 +154,16 @@ Aucune réponse ne perd de champ.
 
 ## 6. Témoins
 
-`edited-message-serialization.test.ts` (11 témoins) monte une vraie instance
-Fastify sur le schéma exporté. **Sa charge utile est calquée sur
+`edited-message-serialization.test.ts` (13 témoins) monte une vraie instance
+Fastify sur les DEUX schémas exportés — `PUT` (avec `meta`) et `PATCH` (sans),
+séparés par le cycle 91 bis. **Sa charge utile est calquée sur
 `messageResponse` tel que les deux gestionnaires le composent** — le message
 étalé, pas enveloppé (§0). Un témoin y assert explicitement l'absence de toute
 clé `message`, pour que l'enveloppe fantôme ne puisse pas revenir en silence.
 
-**ROUGE prouvé : 5 des 11 tombent** quand on retire la surcharge de `sender` —
-les trois champs, l'expéditeur anonyme, et le témoin d'`isOnline`. Ce dernier
+**ROUGE prouvé : 7 des 13 tombent** quand on retire la surcharge de `sender` —
+les trois champs et l'expéditeur anonyme côté `PUT`, les deux témoins côté
+`PATCH`, et le témoin d'`isOnline`. Ce dernier
 **prouve** que le schéma partagé publierait la présence, au lieu de le supposer.
 
 Ce qui n'est pas prouvé par un revert et n'a pas à l'être : le module de routes
