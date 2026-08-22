@@ -3,7 +3,7 @@
  * déclarée par `conversationParticipantSchema`.
  *
  * Elle existe parce que trois surfaces la réécrivaient à la main en gardant la
- * présence, et deux passaient le rang Prisma BRUT sans la garder (cycle 92).
+ * présence, et deux passaient le rang Prisma BRUT sans la garder (cycle 92 bis).
  * Les témoins ci-dessous tiennent donc DEUX propriétés, pas une : la forme, et
  * le fait que la présence ne sort jamais sans qu'on l'ait autorisée.
  */

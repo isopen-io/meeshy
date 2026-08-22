@@ -152,7 +152,7 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.participant?.userId, "u1")
     }
 
-    /// La charge utile RÉELLE de la passerelle depuis le cycle 92 : le rang de
+    /// La charge utile RÉELLE de la passerelle depuis le cycle 92 bis : le rang de
     /// conversation est passé sous `conversationRole`, et `role` porte désormais
     /// le rôle GLOBAL. Le rang à APPLIQUER reste `newRole`, au premier niveau.
     func test_participantRoleUpdatedEvent_serializedWireShape() throws {

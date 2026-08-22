@@ -159,7 +159,7 @@ const ADMIN_ROLES = ['ADMIN', 'BIGBOSS'];
  * SOURCE UNIQUE de la forme de fil déclarée par `conversationParticipantSchema`.
  *
  * Elle existe parce que la forme était réécrite à la main à chaque surface, et
- * que cette dispersion avait une conséquence mesurée (cycle 92) : les trois
+ * que cette dispersion avait une conséquence mesurée (cycle 92 bis) : les trois
  * routes qui LISTENT des participants gardaient la présence, les deux qui en
  * MUTENT un passaient le rang Prisma brut et ne la gardaient pas. La garde
  * n'était pas oubliée — elle n'avait aucun endroit unique où être posée.

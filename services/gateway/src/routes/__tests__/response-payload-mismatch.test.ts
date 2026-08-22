@@ -42,7 +42,7 @@ const ROUTES_DIR = join(__dirname, '..');
  * répare ce qui rendait une donnée invisible, on pose dans le même lot la règle
  * qui décide si elle a le droit d'être vue »).
  *
- * Le lot est fait au cycle 92 : les deux routes de MUTATION de participant
+ * Le lot est fait au cycle 92 bis : les deux routes de MUTATION de participant
  * passent par `serializeConversationParticipant`, qui exige qu'on lui donne la
  * visibilité de présence.
  *

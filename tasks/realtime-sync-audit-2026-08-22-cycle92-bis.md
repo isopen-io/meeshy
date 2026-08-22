@@ -1,6 +1,8 @@
-# Cycle 92 — la présence est gardée sur ce qui LISTE un participant, sur rien qui en MUTE un
+# Cycle 92 bis — la présence est gardée sur ce qui LISTE un participant, sur rien qui en MUTE un
 
 **Branche** : `claude/keen-hamilton-jarxb5`
+**Nom** : le numéro 92 était déjà pris par une session concurrente (schéma partagé /
+expéditeur, `messages-advanced.ts`) — même convention qu'au cycle 91 bis.
 **Point de départ** : le lot laissé ouvert par le cycle 91 bis (§6) — `POST /conversations/:id/invite`,
 « déclarer `member` + poser le gate, ensemble ».
 

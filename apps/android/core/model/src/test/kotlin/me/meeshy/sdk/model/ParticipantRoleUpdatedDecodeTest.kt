@@ -72,7 +72,7 @@ class ParticipantRoleUpdatedDecodeTest {
     /**
      * Le rang de CONVERSATION voyage au premier niveau, sous `newRole`. Le
      * `participant.role` imbriqué porte le rôle GLOBAL (`USER`) depuis le
-     * cycle 92 : le confondre rétrograderait tout le monde en « membre ».
+     * cycle 92 bis : le confondre rétrograderait tout le monde en « membre ».
      */
     @Test
     fun `ignores the nested participant role, which is the GLOBAL rank`() {

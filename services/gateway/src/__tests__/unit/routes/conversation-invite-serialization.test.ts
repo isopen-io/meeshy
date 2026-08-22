@@ -11,7 +11,7 @@
  * explicitement qu'il tomberait le jour où quelqu'un aligne les deux noms, et
  * qu'il l'obligerait à poser le gate dans le même lot.
  *
- * Ce jour est le cycle 92, et le piège a fonctionné comme prévu : les deux
+ * Ce jour est le cycle 92 bis, et le piège a fonctionné comme prévu : les deux
  * arrivent ensemble. La route sert désormais un participant SÉRIALISÉ sous la
  * clé déclarée, dont la présence est passée par `resolvePrefsOnly`.
  *

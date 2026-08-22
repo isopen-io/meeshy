@@ -189,7 +189,7 @@ data class ParticipantBannedEvent(
  * trombinoscope, en silence.
  *
  * Ne PAS lire le `participant.role` imbriqué à sa place : il porte le rôle
- * GLOBAL (`USER|ADMIN|…`) depuis le cycle 92, le rang de conversation étant
+ * GLOBAL (`USER|ADMIN|…`) depuis le cycle 92 bis, le rang de conversation étant
  * passé sous `participant.conversationRole`.
  */
 @Serializable

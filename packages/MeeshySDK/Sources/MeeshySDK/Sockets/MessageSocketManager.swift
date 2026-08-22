@@ -765,7 +765,7 @@ public struct AttachmentUpdatedEvent: Decodable, Sendable {
 
 /// Le participant imbriqué de `participant:role-updated`.
 ///
-/// `role` porte le rôle **GLOBAL** (`USER|ADMIN|…`) depuis le cycle 92 ; le rang
+/// `role` porte le rôle **GLOBAL** (`USER|ADMIN|…`) depuis le cycle 92 bis ; le rang
 /// DANS LA CONVERSATION est `conversationRole`, et il voyage aussi au premier
 /// niveau de l'événement sous `newRole` — c'est celui-là qu'on applique.
 ///

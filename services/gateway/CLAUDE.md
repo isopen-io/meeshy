@@ -317,6 +317,27 @@ toute garde de comportement du manager y va. Le prétexte historique de la copie
 la mutation qu'elle nomme — c'est la seule mesure qui distingue un témoin d'une
 décoration.
 
+**Un témoin qui n'exerce pas la SÉRIALISATION atteste un contrat que personne ne
+respecte.** La règle vaut dans les deux sens, et les deux ont été mesurés :
+
+- côté SERVEUR, mocker les schémas partagés DÉSARME fast-json-stringify — 154
+  témoins verts couvraient des routes qui ne rendaient rien (cycle 91 bis) ;
+- côté CLIENT, construire l'événement dans le langage du client et l'ÉMETTRE
+  directement dans le flux saute le DÉCODEUR. `ConversationMembersViewModelTest`
+  (Android) le faisait : `ParticipantRoleUpdatedEvent` exigeait un `role` de
+  premier niveau que la passerelle n'a jamais émis (elle envoie `newRole`), donc
+  `MissingFieldException` à chaque événement, avalée par le `runCatching` du
+  listener. **Aucun changement de rang n'a jamais atteint le trombinoscope
+  Android**, et le témoin était vert (cycle 92 bis).
+
+Un témoin de contrat de fil part donc de la charge utile RÉELLE de l'émetteur,
+copiée clé par clé, et la fait traverser la vraie couche de (dé)sérialisation.
+
+Corollaire pour un événement DIFFUSÉ : **avant d'en changer la forme, relever ses
+consommateurs sur les trois clients.** Le commentaire du site d'émission de
+`participant:role-updated` affirmait « les seuls consommateurs sont web et iOS ».
+Android en avait un — il n'était pas compté parce qu'il n'avait jamais marché.
+
 **Un `.catch` sur promesse détachée se prouve par le runtime, pas par le retour de
 l'appelant** (§ Critical Gotchas, `void p`) : la promesse étant abandonnée,
 l'appelant résout `undefined` qu'elle soit gardée ou non. Écouter
@@ -428,12 +449,15 @@ négative masque, d'où l'idiome `vis.get(id)?.showOnline === false ? false : x`
 
 **Un audit qui liste des `select:` ne liste pas des fuites.** Entre la requête et
 le fil il y a un sérialiseur : au cycle 84, deux des trois portes examinées ne
-servaient RIEN — `POST /conversations/:id/invite` renvoie `member` quand son
-schéma déclare `membership` (la clé du handler supprimée, celle du schéma jamais
-posée), et `GET /communities/search` déclare `creator`/`members` en
+servaient RIEN — `POST /conversations/:id/invite` renvoyait `member` quand son
+schéma déclarait `membership` (la clé du handler supprimée, celle du schéma jamais
+posée), et `GET /communities/search` déclarait `creator`/`members` en
 `{ type: 'object' }` NU, que fast-json-stringify sérialise en `{}`. Avant de
 qualifier une fuite, **traverser la sérialisation** (patron :
 `friend-requests-pagination.test.ts`, `conversation-invite-serialization.test.ts`).
+
+Les deux sont réparés — l'invitation au cycle 92 bis, avec son gate. La règle, elle,
+ne l'est pas : c'est une règle de MÉTHODE, et elle vaut au prochain audit.
 
 **Et une non-fuite ACCIDENTELLE se garde par un témoin.** Trois fois déjà, la
 donnée s'est arrêtée sur une omission de schéma que rien ne nomme
@@ -441,6 +465,52 @@ donnée s'est arrêtée sur une omission de schéma que rien ne nomme
 les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
 tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
 PORTE, pas un bug.
+
+**Le piège a fonctionné, et c'est mesuré.** Le témoin posé sur l'invitation au
+cycle 84 disait explicitement qu'il tomberait le jour où quelqu'un aligne les
+deux noms, et qu'il l'obligerait à poser le gate dans le même lot. Il est tombé
+au cycle 92 bis, et les deux sont arrivés ensemble. Un cycle entier s'est écoulé
+entre le moment où le site a été identifié (91 bis, laissé ouvert PAR DÉCISION,
+gelé au cliquet avec sa raison écrite) et sa réparation : **c'est la forme
+normale d'un lot de confidentialité, pas un retard.**
+
+## La présence est gardée sur ce qui LISTE un participant, sur rien qui en MUTE un
+
+Formulé au cycle 92 bis, où c'était vrai des cinq surfaces qui servent un participant
+sous `conversationParticipantSchema` : les trois qui en LISTENT construisaient
+leur projection et gardaient la présence, les deux qui en MUTENT passaient le
+rang Prisma BRUT et ne la gardaient pas.
+
+Les deux mutations avaient le MÊME défaut et des issues OPPOSÉES, décidées par
+la seule coïncidence d'un nom de clé : `PATCH …/role` déclarait `participant` et
+envoyait `participant` ⇒ `Participant.isOnline`/`lastActiveAt`, que le schéma
+DÉCLARE, sortaient non gardés. `POST …/invite` déclarait `membership` et envoyait
+`member` ⇒ tout était supprimé, donc rien ne fuyait.
+
+> **Un schéma qui « marche » peut cacher une fuite au lieu de l'empêcher.** Celui
+> qui ne fuyait pas ne protégeait rien — il était cassé. Ne jamais lire « ce site
+> ne fuit pas » comme « ce site est gardé » sans avoir vu la garde.
+
+Le chemin le plus exposé n'était pas REST mais la diffusion Socket.IO
+(`participant:role-updated`), qui n'a **aucun sérialiseur** : le rang y partait
+entier — `bannedAt`, `leftAt`, `deletedForMe`, `nickname`, `shareLinkId`.
+
+**La cause était structurelle, pas un oubli.** Aucun sérialiseur de participant
+n'existait : la forme de fil était réécrite à la main à chaque surface, donc la
+garde n'avait aucun endroit unique où être posée.
+`serializeConversationParticipant` (`packages/shared/utils/participant-helpers.ts`)
+est cette source unique. Elle ferme deux pièges par construction :
+
+1. **La présence ne peut sortir qu'à travers son paramètre de visibilité** — pas
+   de champ à recopier, donc pas de champ à oublier.
+2. **`role` porte DEUX taxonomies.** `Participant.role` est le rang DANS LA
+   CONVERSATION (`creator|admin|moderator|member`) ; le schéma déclare le rôle
+   GLOBAL (`USER|ADMIN|…`). Le rang brut servait donc `member` là où le contrat
+   promet `USER`, en laissant `conversationRole` vide. La fabrique sépare les deux.
+
+**Toute nouvelle surface qui sert un participant l'appelle.** Écrire la projection
+à la main est exactement ce qui a produit l'écart — une règle qui doit être
+retapée à chaque site est une règle qu'un site finira par ne pas avoir.
 
 **Une même route peut relever des DEUX régimes, décidés par son contrôle
 d'accès.** `GET /communities/:id/members` ne referme que les communautés
@@ -722,6 +792,13 @@ les clés déclarées.
 
 Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
 jusqu'à la variable demanderait un typeur, pas un balayage.
+
+**`FROZEN_MISMATCHES` est VIDE depuis le cycle 92 bis**, et c'est un état à défendre,
+pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
+entier PAR DÉCISION, le temps que son gate de présence soit prêt. Quand le
+cliquet tombe : ouvrir l'ÉMETTEUR (le seul discriminant, cycle 91 bis) avant de
+geler quoi que ce soit, et ne geler que ce qu'une raison ÉCRITE justifie de
+laisser ouvert.
 
 **Pourquoi il fallait l'outiller, et pas seulement poser la question.** Le
 cycle 88 bis a réparé trois sites de forme 2 en les cherchant à la main. Le
