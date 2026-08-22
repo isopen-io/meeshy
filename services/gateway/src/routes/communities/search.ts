@@ -13,8 +13,12 @@ import { viewerFromRequest } from '../users/presence-gate';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
-/** Profil inline porté par un membre rendu par la recherche. */
-type MemberProfile = { id: string; isOnline: boolean | null; lastActiveAt: Date | null };
+/**
+ * Profil inline porté par un membre rendu par la recherche. Pas de
+ * `lastActiveAt` : l'aperçu ne le charge pas, et `applyPresenceVisibilityAsOffline`
+ * ne fabrique pas la clé — une réponse ne gagne pas un champ parce qu'on l'a filtrée.
+ */
+type MemberProfile = { id: string; isOnline: boolean | null };
 type MemberRow = { user?: MemberProfile | null };
 type CommunityRow = { id: string; members: MemberRow[] };
 
@@ -221,8 +225,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
                     username: true,
                     displayName: true,
                     avatar: true,
-                    isOnline: true,
-                    lastActiveAt: true
+                    isOnline: true
                   }
                 }
               }

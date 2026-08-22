@@ -24,9 +24,8 @@ import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -357,9 +356,6 @@ export function registerSharingRoutes(
             where: { isActive: true },
             select: {
               id: true,
-              // Déclaré par `conversationParticipantSchema` et jamais chargé :
-              // la réponse sortait sans `userId`, et sans lui aucune carte de
-              // visibilité ne peut être adressée.
               userId: true,
               displayName: true,
               avatar: true,
@@ -367,49 +363,40 @@ export function registerSharingRoutes(
               role: true,
               language: true,
               isOnline: true,
-              lastActiveAt: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  systemLanguage: true,
-                  isOnline: true,
-                  lastActiveAt: true,
-                  role: true
-                }
-              }
+              lastActiveAt: true
             }
           }
         }
       });
 
-      // Présence des co-participants : montrable (l'appartenance de l'appelant
-      // est vérifiée ci-dessus — contexte d'accès déjà garanti), mais soumise
-      // aux préférences showOnlineStatus/showLastSeen de chacun. Même règle que
-      // `GET /conversations` et la liste des participants. Anonymes inchangés
-      // (pas de `userId`, aucune préférence à consulter).
+      // Gate de présence des co-participants. `conversationParticipantSchema`
+      // déclare `isOnline`/`lastActiveAt` : ces deux champs atteignent le fil,
+      // et rien ne les filtrait — quand la liste de participants
+      // (`routes/conversations/participants.ts`) applique le gate depuis
+      // longtemps sur exactement les mêmes lignes.
+      //
+      // Régime `resolvePrefsOnly` : la co-participation est un contexte d'accès
+      // garanti des DEUX côtés, seules les préférences s'appliquent. Un id
+      // ABSENT de la carte vaut MONTRABLE — à l'inverse du critère strict :
+      // un participant anonyme n'a pas de `userId`, donc pas de préférences,
+      // et il reste visible.
       const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
         updatedConversation.participants
-          .map((participant) => participant.userId)
-          .filter((uid): uid is string => !!uid)
+          .map((p: { userId: string | null }) => p.userId)
+          .filter((uid: string | null): uid is string => !!uid),
       );
 
       return sendSuccess(reply, {
         ...updatedConversation,
-        participants: updatedConversation.participants.map((participant) => {
-          const visibility = participant.userId ? presenceVis.get(participant.userId) : undefined;
-          if (!visibility) return participant;
-          return {
-            ...applyPresenceVisibilityAsOffline(participant, visibility),
-            ...(participant.user
-              ? { user: applyPresenceVisibilityAsOffline(participant.user, visibility) }
-              : {})
-          };
-        })
+        participants: updatedConversation.participants.map((p: {
+          userId: string | null;
+          isOnline: boolean | null;
+          lastActiveAt: Date | null;
+        }) => ({
+          ...p,
+          isOnline: presenceVis.get(p.userId ?? '')?.showOnline === false ? false : p.isOnline,
+          lastActiveAt: presenceVis.get(p.userId ?? '')?.showLastSeenTimestamp === false ? null : p.lastActiveAt,
+        })),
       });
 
     } catch (error) {
