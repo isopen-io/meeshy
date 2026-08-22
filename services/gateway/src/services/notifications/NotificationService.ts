@@ -201,6 +201,43 @@ export function buildPushHeader(input: {
   return { title, subtitle };
 }
 
+/**
+ * La bannière ne dit jamais deux fois la même phrase.
+ *
+ * `buildPushHeader` promeut l'ACTION en subtitle ; le corps du push est le
+ * `content` PERSISTÉ. Les deux sont légitimes et, la plupart du temps,
+ * différents — l'action au-dessus, l'aperçu du contenu en dessous. Mais pour
+ * une story / un post / un réel SANS excerpt, `content` retombe justement sur
+ * la phrase d'action (« a publié une nouvelle story »), parce que la ligne de
+ * la LISTE in-app n'a pas de sous-titre pour la porter et ne doit jamais être
+ * vide — invariant explicite, tenu par
+ * `NotificationService.friendcontent.test.ts`. La bannière affichait alors la
+ * même phrase deux fois (signalé par le porteur produit le 2026-08-22).
+ *
+ * Le dédoublonnage se fait ICI, au seul point où les deux lignes se
+ * rencontrent : ni le contenu persisté (la liste en a besoin) ni
+ * `buildPushHeader` (le toast Socket.IO consomme son subtitle) ne bougent.
+ *
+ * **C'est le SUBTITLE qui tombe, jamais le corps** : le corps part aussi vers
+ * FCM (bloc `notification`) et WebPush, où le subtitle n'existe pas — le vider
+ * exposerait trois plateformes à une alerte sans texte pour ne corriger qu'iOS.
+ *
+ * Seul le doublon EXACT (aux espaces de bord près) est supprimé : le corps est
+ * tronqué à 200 et le subtitle à 120, donc un subtitle qui n'est qu'un préfixe
+ * du corps porte peut-être une information de plus — le faire disparaître
+ * cacherait du texte au lieu d'en dédoublonner.
+ *
+ * Exporté pour test unitaire — la fonction est pure.
+ */
+export function dedupePushSubtitle(input: {
+  subtitle?: string;
+  body: string;
+}): string | undefined {
+  const subtitle = input.subtitle?.trim();
+  if (!subtitle) return undefined;
+  return subtitle === input.body.trim() ? undefined : input.subtitle;
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Protected-message preview (view-once / blurred / ephemeral / encrypted)
 // ──────────────────────────────────────────────────────────────────────────
@@ -1044,7 +1081,16 @@ export class NotificationService {
               // — survives iOS Communication Notification rewriting that would
               // otherwise drop a "<sender> | <conv>" concatenated title.
               // Dropped with showPreview:false (rich subtitles carry previews).
-              ...(pushSubtitle && showPreview ? { subtitle: pushSubtitle } : {}),
+              // Dédoublonnage de bannière : sans excerpt, le corps porte la
+              // MÊME phrase d'action que le subtitle — on garde le corps (seul
+              // champ rendu par les trois plateformes) et on laisse tomber le
+              // subtitle. Cf. `dedupePushSubtitle`.
+              ...(showPreview
+                ? (() => {
+                    const deduped = dedupePushSubtitle({ subtitle: pushSubtitle, body: pushBody });
+                    return deduped ? { subtitle: deduped } : {};
+                  })()
+                : {}),
               body: pushBody,
               link,
               collapseId: params.collapseId,

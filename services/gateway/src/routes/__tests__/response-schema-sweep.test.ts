@@ -32,8 +32,28 @@ const ROUTES_DIR = join(__dirname, '..');
 
 /**
  * Les sites nus qui subsistent, gelés au cycle 87 bis, après la consolidation de
- * `routes/communities.ts` en coquille (cycle 86-ter) et la réparation des trois
- * listes d'administration (cycle 87).
+ * `routes/communities.ts` en coquille (cycle 86-ter), la réparation des trois
+ * listes d'administration (cycle 87), celle des cinq sites de PRÉSENCE
+ * (cycle 88) et celle des deux transports REST d'édition de message plus de la
+ * création de lien de partage (cycle 88 bis).
+ *
+ * Le cycle 88 a montré que cette famille a TROIS formes, pas une, et que le
+ * balayage ne peut en distinguer aucune — il ne voit que le schéma, jamais la
+ * charge d'en face. Avant de réparer un site, établir laquelle il a :
+ *
+ * 1. **La clé déclarée existe dans la charge** ⇒ ce champ sort `{}`, le reste
+ *    survit. C'est la forme que le cycle 86 a balayée.
+ * 2. **La clé déclarée n'existe pas dans la charge** ⇒ le parent n'a plus
+ *    aucune propriété qui matche, et sort `{}` ENTIER. Les deux entrées
+ *    `messages-advanced.ts|message|200` et `sharing.ts|link|200` étaient de
+ *    cette espèce — `data` était vide (cycle 88 bis).
+ * 3. **Le schéma décrit la mauvaise ENVELOPPE** ⇒ toutes ses déclarations sont
+ *    inertes et la charge traverse entière. Le balayage rend alors un FAUX
+ *    POSITIF — et c'est le cas le plus dangereux, parce qu'un champ qu'on croit
+ *    vidé peut être en fuite active (cycle 88, `messages.ts`).
+ *
+ * La question qui les départage : **que passe le gestionnaire à `sendSuccess`,
+ * et à quel niveau le schéma prétend-il le décrire ?**
  *
  * **Les onze `400` ont été retirés au cycle 89** : c'étaient des `details` /
  * `errors` déclarés en TABLEAU au premier niveau, alors que l'enveloppe
@@ -78,9 +98,6 @@ const ROUTES_DIR = join(__dirname, '..');
  */
 const FROZEN_INVENTORY: readonly string[] = [
   'calls.ts|details|400',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/messages-advanced.ts|message|200',
-  'conversations/sharing.ts|link|200',
   'links/admin.ts|creator|200',
   'messages.ts|sender|200',
   'users/profile.ts|permissions|200',
@@ -98,6 +115,16 @@ describe('balayage — un schéma de réponse ne déclare jamais un objet NU', (
   it('ne compte plus aucun site nu dans les trois listes réparées au cycle 87', () => {
     const repaired = sweepRoutes(ROUTES_DIR).filter(
       (s) => s.file === 'admin/content.ts' || s.file === 'admin/posts.ts'
+    );
+
+    expect(repaired).toEqual([]);
+  });
+
+  it("ne compte plus aucun site nu dans les transports d'édition ni le partage réparés au cycle 88 bis", () => {
+    const repaired = sweepRoutes(ROUTES_DIR).filter(
+      (s) =>
+        s.file === 'conversations/messages-advanced.ts' ||
+        s.file === 'conversations/sharing.ts'
     );
 
     expect(repaired).toEqual([]);
