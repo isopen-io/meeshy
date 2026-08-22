@@ -3041,8 +3041,9 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`:sdk-core`) fetches `GET /conversations/{id}/analysis`; `ConversationAnalysisViewModel` +
       `ConversationAnalysisSheet` (`:feature:chat`) render it behind a new header `AutoAwesome`
       action (any member): health badge, engagement/conflict chips, tone, topics + emotions chip
-      rows, summary narrative, dynamic. Strings en/fr/es/pt. **Still open — participant persona
-      profiles + trait bars** (same endpoint, `ParticipantProfile`/`ParticipantTraits`): the box below.
+      rows, summary narrative, dynamic. Strings en/fr/es/pt. **Persona profiles + trait bars landed
+      2026-08-22** (slice `conversation-analysis-personas`) — same endpoint/ViewModel, rendered under
+      the summary in the same sheet (no third header button): see the persona box below.
 - [~] Conversation stats rings + activity-over-time chart + content-type / sentiment breakdown —
       **stats dashboard shipped 2026-08-21** (slice `conversation-stats-core`). The
       `ConversationMessageStatsResponse` model shipped orphaned (no consumer); this slice turns it
@@ -3058,7 +3059,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       topics / emotions). **Still open here — the sentiment three-way bar** the stats dashboard's
       own `sentimentAnalysis` computes, and the `AI participant persona` box below (same endpoint,
       `ParticipantProfile`/`ParticipantTraits`). Box stays `[~]` until the sentiment bar lands.
-- [ ] AI participant persona profiles + per-participant activity breakdown + trait bars
+- [x] AI participant persona profiles + trait bars — **shipped 2026-08-22** (slice
+      `conversation-analysis-personas`). The `ParticipantProfile`/`ParticipantTraits` model tree shipped
+      orphaned (grep-confirmed zero consumers); this slice turns it real. Pure
+      `ParticipantProfileProjection` (`:core:model`, SSOT) mirrors iOS's `agentParticipantProfilesSection`
+      + `traitBarsView` + `traitScoreColor`: per-persona name (displayName › username › userId — a single
+      seed for label AND colour, SOTA over iOS's `"?"`-vs-userId fork), a clamped-0..1 confidence percent
+      (SOTA — iOS renders `Int(confidence*100)` raw), trimmed persona/tone/vocabulary, the four trait axes
+      (communication/personality/interpersonal/emotional) each extracted by **explicit field access, not
+      reflection** (SOTA over iOS's `Mirror`), clamped 0..100, **stably** sorted desc, top 4, with a
+      GOOD≥70 / MID≥40 / LOW tier; deduped topics (top 3) / catchphrases (top 3) / emojis (top 6). Rendered
+      **inside the existing `ConversationAnalysisSheet`** below the summary (the `ConversationAnalysisViewModel`
+      now projects both halves of `/analysis`; Empty only when summary AND personas are both empty) — no
+      extra header action, matching iOS's single dashboard. Strings en/fr/es/pt. +25 tests (projection ×22,
+      ViewModel ×3), 2 mutation RED proofs. (The per-participant *activity* breakdown — message-count bars —
+      is the stats sheet's busiest-participant list, shipped with `conversation-stats-core`.)
+      **Still open on this endpoint — the stats dashboard's sentiment three-way bar.**
 
 ## D. Translation — Prisme Linguistique
 - [~] Automatic per-user translation display (resolution: system → regional → custom → original) —
