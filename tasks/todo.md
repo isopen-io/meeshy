@@ -356,7 +356,7 @@ autorisé si c'est compliqué : deux bulles distinctes.
       basse sur la queue seule. Témoins : position de groupe (mapping), forme du contour (Shape pur).
 - [x] R-6 (e96179a5f) — la citation mène à sa cible : tap sur la citation ⇒ `moveTo` + `scrollTo(rang cible)`.
       Pur : `RiverConversationMapping.cursor(forMessageId:)`.
-- [ ] R-5 — identité vivante : `MeeshyAvatar` (présence + cercle de story) en tête de groupe, nom et avatar
+- [x] R-5 — identité vivante : `MeeshyAvatar` (présence + cercle de story) en tête de groupe, nom et avatar
       activables ⇒ profil (`ProfileSheetUser`) / fiche visiteur (`ParticipantProfileTarget`) via le routeur,
       même chemin que le Fil (`openProfileHandler`). Présence/story INJECTÉES (pures côté mapping).
 - [x] R-7 (e96179a5f) — marges du canvas : réserve basse = hauteur du composeur (`bottomInset`, `safeAreaInset`),

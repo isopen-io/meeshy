@@ -78,6 +78,9 @@ struct RiverStreamHost: View {
     /// Demande de RE-CADRAGE venue de l'appelant (première géométrie
     /// peuplée, rangs préfixés) — chaque incrément recadre le curseur.
     var landingToken: Int = 0
+    /// R-5 — la fiche d'une voix, la story d'une voix : l'hôte les ouvre.
+    var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    var onViewStory: ((String) -> Void)? = nil
 
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -409,7 +412,13 @@ struct RiverStreamHost: View {
             bubble.laneIndex == laneIndex,
             let content = contentByMessageId[bubble.messageId]
         {
-            RiverBubbleView(content: content, contentWidth: columns.bubbleContentWidth, onOpenReply: openReply)
+            RiverBubbleView(
+                content: content,
+                contentWidth: columns.bubbleContentWidth,
+                onOpenReply: openReply,
+                onOpenProfile: onOpenProfile,
+                onViewStory: onViewStory
+            )
                 .padding(.horizontal, RiverMetrics.Lane.gutter)
                 .onTapGesture {
                     navigation.moveTo(RiverLaneResolver.RiverCursor(laneIndex: laneIndex, rank: rank))

@@ -1392,6 +1392,29 @@ struct ConversationView: View {
                     // R-7 : la même réserve basse que le fil — le composeur
                     // n'est jamais une zone où une bulle reste prise.
                     bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    // R-5 : identité vivante — les MÊMES sources que le Fil
+                    // (`MessageListViewController` : présence par expéditeur,
+                    // anneau de story sauf pour soi, fiche par le routeur).
+                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
+                    storyRing: { message in
+                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
+                    },
+                    onOpenProfile: { user in
+                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
+                            router.participantProfileTarget = ParticipantProfileTarget(
+                                conversationId: conversationId,
+                                participantId: participantId
+                            )
+                        } else {
+                            router.deepLinkProfileUser = user
+                        }
+                    },
+                    onViewStory: { userId in
+                        overlayState.storyViewerUserId = userId
+                        overlayState.storyViewerSlideIndex = 0
+                        overlayState.storyViewerStartAtFirstUnviewed = true
+                        overlayState.showStoryViewer = true
+                    },
                     text: { message in
                         viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
                     }

@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Le pont PUR entre le fil d'une conversation (`MeeshyMessage`) et la loi de
 /// la Rivière (`RiverLaneResolver`) — chantier Rivière iOS, lot 1
@@ -203,13 +204,20 @@ nonisolated enum RiverConversationMapping {
     /// l'appelant), heure, nom, graine de couleur, aperçu de la réponse.
     /// `@MainActor` : `RiverBubbleContent` est un modèle de VUE (isolé) ;
     /// la règle reste pure — rien n'est lu hors de ses arguments.
+    ///
+    /// R-5 : la présence et le cercle de story de la voix sont RÉSOLUS par
+    /// l'appelant (`PresenceManager`, `StoryViewModel`) et injectés — par
+    /// défaut muets. La fiche (`ProfileSheetUser.from(message:)`) est celle
+    /// que le Fil ouvre, jamais une seconde composition d'identité.
     @MainActor
     static func contents(
         geometry: RiverLaneResolver.RiverGeometry,
         messages: [MeeshyMessage],
         viewerId: String,
         text: (MeeshyMessage) -> String,
-        time: (Date) -> String
+        time: (Date) -> String,
+        presence: (MeeshyMessage) -> PresenceState? = { _ in nil },
+        storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     ) -> [RiverBubbleContent] {
         let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let positions = groupPositions(bubbles: geometry.bubbles)
@@ -232,7 +240,14 @@ nonisolated enum RiverConversationMapping {
                     RiverReplyPreview(authorDisplayName: singleLine($0.authorName), text: singleLine($0.previewText))
                 },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
-                groupPosition: positions[bubble.messageId] ?? .solo
+                groupPosition: positions[bubble.messageId] ?? .solo,
+                identity: bubble.isSystem ? nil : RiverBubbleIdentity(
+                    avatarURL: message.senderAvatarURL,
+                    presence: presence(message),
+                    storyRing: storyRing(message),
+                    profileUser: ProfileSheetUser.from(message: message),
+                    userId: message.senderIsAnonymous ? nil : (message.senderUserId ?? message.senderId)
+                )
             )
         }
     }

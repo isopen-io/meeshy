@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Chantier Rivière iOS — le pont PUR fil → loi (`RiverConversationMapping`),
@@ -298,5 +299,50 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(RiverConversationMapping.singleLine("Bonjour\n\n  à   tous\n"), "Bonjour à tous")
         XCTAssertEqual(RiverConversationMapping.singleLine("   "), "")
         XCTAssertEqual(RiverConversationMapping.singleLine("déjà une ligne"), "déjà une ligne")
+    }
+
+    // MARK: - R-5 : identité vivante — présence, story et fiche, INJECTÉES
+
+    /// La bulle porte de quoi rendre une identité VIVANTE (présence, cercle
+    /// de story, fiche à ouvrir) — résolue par l'appelant et injectée, jamais
+    /// lue ici (aucun singleton dans le mapping). Un avis système n'a pas
+    /// d'identité : il n'est la voix de personne.
+    func test_contents_identity_isInjected_andAbsentForSystemNotices() {
+        var spoken = message("a1", sender: "alice", name: "Alice", minutes: 0)
+        spoken.senderUsername = "alice_w"
+        spoken.senderAvatarURL = "https://cdn/alice.png"
+        let messages = [spoken, message("sys", sender: "newcomer", name: "Nouveau", minutes: 1, source: .system)]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "10:00" },
+            presence: { $0.senderId == "alice" ? .online : nil },
+            storyRing: { $0.senderId == "alice" ? .unread : .none }
+        )
+        let alice = try? XCTUnwrap(contents.first { $0.bubble.messageId == "a1" }?.identity)
+        XCTAssertEqual(alice?.presence, .online)
+        XCTAssertEqual(alice?.storyRing, .unread)
+        XCTAssertEqual(alice?.avatarURL, "https://cdn/alice.png")
+        XCTAssertEqual(alice?.profileUser.participantId, "alice")
+        XCTAssertEqual(alice?.profileUser.username, "alice_w")
+        XCTAssertNil(contents.first { $0.bubble.messageId == "sys" }?.identity, "un avis n'est la voix de personne")
+    }
+
+    /// Sans résolveurs injectés, la bulle garde une identité MUETTE (fiche
+    /// ouvrable, ni présence ni story) — les sites antérieurs à R-5 ne
+    /// changent pas de comportement.
+    func test_contents_identity_defaultsToSilentPresenceAndNoStory() {
+        let messages = [message("a1", sender: "alice", name: "Alice", minutes: 0)]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me", text: { $0.content }, time: { _ in "10:00" }
+        )
+        XCTAssertNil(contents.first?.identity?.presence)
+        XCTAssertEqual(contents.first?.identity?.storyRing, StoryRingState.none)
+        XCTAssertEqual(contents.first?.identity?.profileUser.participantId, "alice")
     }
 }

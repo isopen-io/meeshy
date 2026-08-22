@@ -21,6 +21,12 @@ struct RiverConversationHost: View {
     /// Bande basse réservée au composeur (R-7) — l'appelant la mesure déjà
     /// pour le fil (`MessageListView.bottomInset`), il la dit ici aussi.
     var bottomInset: CGFloat = 0
+    /// R-5 — résolveurs d'identité vivante et ouvertures, DITS par l'appelant
+    /// (qui possède `PresenceManager`, `StoryViewModel`, le routeur).
+    var presence: (MeeshyMessage) -> PresenceState? = { _ in nil }
+    var storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
+    var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    var onViewStory: ((String) -> Void)? = nil
 
     @StateObject private var navigation: RiverNavigationController
     /// Échelle du plan, POSÉE par le pince (retour produit 2026-08-22).
@@ -48,12 +54,20 @@ struct RiverConversationHost: View {
         viewerId: String,
         topInset: CGFloat = 0,
         bottomInset: CGFloat = 0,
+        presence: @escaping (MeeshyMessage) -> PresenceState? = { _ in nil },
+        storyRing: @escaping (MeeshyMessage) -> StoryRingState = { _ in .none },
+        onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
+        onViewStory: ((String) -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
         self.messages = messages
         self.viewerId = viewerId
         self.topInset = topInset
         self.bottomInset = bottomInset
+        self.presence = presence
+        self.storyRing = storyRing
+        self.onOpenProfile = onOpenProfile
+        self.onViewStory = onViewStory
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
         _geometry = State(initialValue: geometry)
@@ -70,7 +84,9 @@ struct RiverConversationHost: View {
             messages: messages,
             viewerId: viewerId,
             text: text,
-            time: { TimeStringCache.shared.format($0) }
+            time: { TimeStringCache.shared.format($0) },
+            presence: presence,
+            storyRing: storyRing
         )
     }
 
@@ -109,6 +125,8 @@ struct RiverConversationHost: View {
                 headerInset: topInset,
                 bottomInset: bottomInset,
                 landingToken: landingToken,
+                onOpenProfile: onOpenProfile,
+                onViewStory: onViewStory,
                 navigation: navigation
             )
             .frame(width: proxy.size.width, height: proxy.size.height)

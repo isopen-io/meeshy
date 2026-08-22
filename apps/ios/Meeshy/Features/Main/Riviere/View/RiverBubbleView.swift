@@ -37,6 +37,11 @@ struct RiverBubbleContent: Equatable {
     /// une bulle jointe partage son bord haut en pointillé et laisse son bas
     /// ouvert si la suivante la continue. Défaut `.solo` : contour fermé.
     let groupPosition: RiverGroupPosition
+    /// R-5 (2026-08-22) — l'identité VIVANTE de la voix : présence, cercle de
+    /// story, avatar, fiche à ouvrir. Résolue par l'appelant (singletons de
+    /// l'app), injectée ici — la vue n'en lit aucun. `nil` pour un avis
+    /// système : il n'est la voix de personne.
+    let identity: RiverBubbleIdentity?
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -47,7 +52,8 @@ struct RiverBubbleContent: Equatable {
         layout: RiverLaneResolver.RiverLayout,
         replyPreview: RiverReplyPreview? = nil,
         systemNotice: RiverSystemNotice? = nil,
-        groupPosition: RiverGroupPosition = .solo
+        groupPosition: RiverGroupPosition = .solo,
+        identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
         self.senderDisplayName = senderDisplayName
@@ -58,7 +64,21 @@ struct RiverBubbleContent: Equatable {
         self.replyPreview = replyPreview
         self.systemNotice = systemNotice
         self.groupPosition = groupPosition
+        self.identity = identity
     }
+}
+
+/// Ce qu'une tête de groupe montre de sa voix, au-delà du nom (R-5) : la
+/// pastille devient un vrai avatar (présence, cercle de story), et le nom
+/// devient ACTIVABLE — profil pour un compte, fiche d'information pour un
+/// visiteur sans compte (`ProfileSheetUser`, le MÊME type que le Fil).
+struct RiverBubbleIdentity: Equatable {
+    let avatarURL: String?
+    let presence: PresenceState?
+    let storyRing: StoryRingState
+    let profileUser: ProfileSheetUser
+    /// Compte de l'auteur — la story s'ouvre par lui ; `nil` pour un visiteur.
+    let userId: String?
 }
 
 // MARK: - Contour de groupe — une forme PURE, éprouvée sans monter la vue
@@ -233,6 +253,10 @@ struct RiverBubbleView: View, Equatable {
     /// pose le curseur sur le message cité et le cadre. Reçu, jamais résolu
     /// ici : cette vue ne connaît ni la géométrie ni le défilement.
     var onOpenReply: ((String) -> Void)? = nil
+    /// R-5 — le nom (et l'avatar) ouvrent la fiche de la voix ; le cercle de
+    /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
+    var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
+    var onViewStory: ((String) -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -451,16 +475,32 @@ struct RiverBubbleView: View, Equatable {
 
     // MARK: - En-tête d'identité (tête de groupe seulement) — §7ter A.5, HORS de la bulle
 
+    /// R-5 — la pastille devient un avatar VIVANT (présence, cercle de
+    /// story) et l'identité entière s'active : un tap ouvre la fiche de la
+    /// voix, exactement comme l'en-tête d'identité du Fil
+    /// (`FocalIdentityHeader`). Le cercle de story non lue, lui, ouvre la
+    /// story — `MeeshyAvatar` arbitre déjà cette priorité.
+    @ViewBuilder
     private var identityHeader: some View {
+        if let identity = content.identity, let onOpenProfile {
+            Button {
+                onOpenProfile(identity.profileUser)
+            } label: {
+                identityRow(identity: identity)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(content.senderDisplayName)
+            .accessibilityHint(
+                String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main)
+            )
+        } else {
+            identityRow(identity: content.identity)
+        }
+    }
+
+    private func identityRow(identity: RiverBubbleIdentity?) -> some View {
         HStack(spacing: 7) {
-            Circle()
-                .fill(laneColor)
-                .frame(width: FocalMetrics.Avatar.size, height: FocalMetrics.Avatar.size)
-                .overlay(
-                    Text(RiverBubbleLayout.initials(for: content.senderDisplayName))
-                        .font(MeeshyFont.relative(FocalMetrics.Avatar.size / 2, weight: .bold))
-                        .foregroundColor(.white)
-                )
+            avatar(identity: identity)
 
             // §7ter A.5 — borné à la moitié de la largeur de la bulle : la
             // branche descend à l'aplomb du CENTRE du couloir, cette borne
@@ -486,6 +526,39 @@ struct RiverBubbleView: View, Equatable {
         // bulle, exactement comme `.idh`/`.bub`, deux enfants directs de
         // `.cell` dans la maquette normative.
         .frame(width: contentWidth, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// L'avatar de la voix — `MeeshyAvatar` (présence, cercle de story,
+    /// image ou initiales) dès qu'une identité est là ; la pastille colorée
+    /// d'initiales sinon. La COULEUR reste celle du couloir : c'est elle qui
+    /// dit à quelle branche la voix appartient.
+    @ViewBuilder
+    private func avatar(identity: RiverBubbleIdentity?) -> some View {
+        if let identity {
+            MeeshyAvatar(
+                name: content.senderDisplayName,
+                context: .custom(FocalMetrics.Avatar.size),
+                accentColor: colorHex,
+                avatarURL: identity.avatarURL,
+                storyState: identity.storyRing,
+                presenceState: identity.presence,
+                enablePulse: false,
+                isDark: isDark,
+                onViewStory: identity.userId.flatMap { userId in
+                    identity.storyRing == .none ? nil : { onViewStory?(userId) }
+                }
+            )
+        } else {
+            Circle()
+                .fill(laneColor)
+                .frame(width: FocalMetrics.Avatar.size, height: FocalMetrics.Avatar.size)
+                .overlay(
+                    Text(RiverBubbleLayout.initials(for: content.senderDisplayName))
+                        .font(MeeshyFont.relative(FocalMetrics.Avatar.size / 2, weight: .bold))
+                        .foregroundColor(.white)
+                )
+        }
     }
 
     // MARK: - Heure en base de bulle (rangée de suite)
