@@ -532,5 +532,9 @@ jour jusqu'au modèle unique (canvas v3).
       connu (pas d'hôte de toast global), consigné.
 
 ### Gates
-- [ ] SDK : `xcodebuild test -scheme MeeshySDK-Package` (suites ciblées puis complètes) · iOS :
-      `meeshy.sh test` complet · gateway : suites ciblées + tsc · web : suites ciblées + tsc.
+- [x] iOS : `MeeshyTests` complet sur iOS 18.2 — **7499/7499, 0 échec, 7 ignorés** (simulateur dédié, DerivedData privé).
+- [x] Gateway : 51 suites / 1578 tests (notifications, routes admin, jobs, devices, friends) + `tsc` 0.
+- [x] Web : `admin`/`services`/`use-i18n` 2079/2080 sous load 367 — le seul rouge (`admin/users/[id]`, timeout 5 s)
+      passe 67/67 isolé ; `tsc` : 0 erreur sur mes fichiers, total 1290 → 1241 (page de diffusion typée).
+- [ ] SDK : `MeeshySDK-Package` complet sur iOS 18.2 (ciblé : 19/19).
+- [ ] Merge `--no-ff` via `main` local (ff sur `origin/main` fait : 36937badb), push, CI, build + install sur `Meeshy-iOS26`.
