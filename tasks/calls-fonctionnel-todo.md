@@ -10350,3 +10350,72 @@ celle fixée ici, hors périmètre d'un fix à une seule préoccupation. »
   iOS single-peer côté groupe (`2026-08-13-group-calls-gap-analysis.md`) ; kick modérateur sans
   vérification du rôle CONVERSATION de la cible (décision produit, Vague 147/149) ; dette lint
   systémique `eslint-plugin-react-hooks@7.1.1` sur `hooks/` (Vague 143, décision d'équipe requise).
+
+
+
+## Vague 154 — la Vague 151 n'avait fermé que 2 des 9 sites : les six autres `toast.error(message)` DUPLIQUAIENT bien le toast du consommateur (web) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), reprise après
+qu'une exécution PARALLÈLE de cette même routine ait fermé (sous le même nom « Vague 151 »,
+numérotation coïncidente — motif déjà documenté aux cycles 49 bis/77/78) une PR (#3279) portant ce
+correctif complet, en la déclarant superseded par sa propre Vague 151 (commit `e5b2b81fd`). Vérifié
+sur `main` (`git show origin/main:apps/web/hooks/use-webrtc-p2p.ts`) : la Vague 151 réellement mergée
+n'a retiré QUE les deux `toast.error` des branches d'agrégation pair/ICE — les sept autres
+subsistaient, `toast.error` toujours présent aux lignes des catches `initializeLocalStream`,
+`createOffer`, `handleOffer`, `handleAnswer`, `onError` générique du service, et les deux catches de
+renégociation. La note « Non fait volontairement » de la Vague 151 le dit explicitement : « les six
+autres `toast.error(message)` … dette i18n plus large … **aucun doublon de toast identifié dessus** »
+— une conclusion FAUSSE, corrigée ici avec preuve directe (RED avant correctif : 7/75 tests rouges).
+
+## Current state (avant correctif) / pourquoi la Vague 151 a sous-estimé la portée
+
+Sur les sept sites restants, `onError?.()` est appelé IMMÉDIATEMENT après chaque `toast.error(...)`
+— exactement le même couplage que sur les deux sites déjà corrigés — et `VideoCallInterface.tsx`
+forwarde `onError` vers un unique `toast.error(handleWebRTCError(...))` inconditionnel. La Vague 151
+a dû lire ces sept sites comme « messages d'erreur réels, pas des doublons » parce que leur texte
+(`error.message` d'une exception navigateur/WebRTC, ou un repli anglais comme `'Failed to create
+offer'`) n'est pas visuellement identique à une clé `toasts.*` — contrairement aux deux codes internes
+(`PEER_CONNECTION_FAILED`/`ICE_CONNECTION_FAILED`) dont le texte anglais coïncidait BYTE-À-BYTE avec
+la traduction. Mais le mécanisme de duplication ne dépend pas du contenu du message : `onError` est
+TOUJOURS forwardé vers un toast unique côté consommateur, donc TOUT `toast.error` posé juste avant
+lui, quel que soit son texte, produit un second toast — brut, jamais traduit, empilé sur celui,
+correctement localisé (ou au générique préfixé `t('toasts.connectionError') + ': ' + error.message`),
+que `handleWebRTCError` affiche déjà.
+
+## Fix
+
+Retrait des sept `toast.error(...)` restants (`onError` générique du service, `initializeLocalStream`,
+`createOffer`, `handleOffer`, `handleAnswer`, renégociation offre, renégociation réponse) —
+`setError(...)` et `onError?.(...)` intacts sur chacun, même geste que la Vague 151.
+
+## Tests (TDD, RED confirmé)
+
+`use-webrtc-p2p.test.tsx` : 5 assertions `expect(toast.error).not.toHaveBeenCalled()` ajoutées aux
+tests d'erreur existants (initialisation, createOffer, handleOffer, handleAnswer), + 3 tests neufs
+(renégociation offre en échec, renégociation réponse en échec, erreur générique du service). RED
+confirmé par `git stash` du seul fichier de production sur la base Vague 151 (2 sites déjà fixés) :
+**7/75 tests rouges**, chacun échouant précisément sur `expect(toast.error).not.toHaveBeenCalled()`
+avec le texte brut anciennement toasté en preuve. GREEN après fix : **75/75**. Sweep web
+`--testPathPatterns="[Cc]all|webrtc"` : **60 suites / 796 tests** verts, 0 régression. `npx tsc
+--noEmit` (apps/web, diff `git stash`/`stash pop`) : **0 erreur ajoutée** — 1276 erreurs préexistantes,
+compte identique avant/après ; 0 erreur sur `use-webrtc-p2p.ts` avant comme après.
+
+## Risk assessment
+
+Faible — même raisonnement que la Vague 151 : le seul consommateur de production forwarde déjà
+`onError` vers un toast unique sur ces sept chemins ; retirer le toast du hook ne supprime AUCUNE
+notification utilisateur, seulement le doublon.
+
+## Non fait volontairement / reste ouvert
+
+`toast.success('Connected!')` reste un texte anglais codé en dur — pas un doublon (aucun toast de
+succès équivalent côté consommateur), dette i18n distincte, hors périmètre. Note de processus pour
+la routine elle-même : la collision de numérotation « Vague 151 » deux fois (deux exécutions
+parallèles, deux correctifs de portée différente sur le même fichier, méritant chacun le même nom)
+a produit une clôture de PR sur une affirmation non vérifiée exhaustivement (« no functional diff
+remains to merge ») — troisième occurrence documentée de ce motif après les cycles 49 bis/77/78 :
+**une clôture-pour-doublon doit diffuser le fichier ENTIER, pas seulement les lignes citées dans le
+message du commit qui a motivé la clôture.** Reconduits (inchangés) : dead code / god-object
+`CallManager.swift` ; ADR `actor CallEventQueue` ; iOS single-peer côté groupe ; `canCallBack`/
+`BubbleCallNoticeView` anonyme non audité iOS ; fuite `createPeerConnection()` au-delà du site déjà
+patché (Vague 148) ; kick modérateur sans vérification du rôle CONVERSATION de la cible.

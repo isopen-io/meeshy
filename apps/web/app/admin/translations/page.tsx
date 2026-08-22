@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Languages, ArrowLeft, Filter, Calendar, User, Globe, Brain, TrendingUp, Eye, RefreshCw, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react';
 
 import { adminService } from '@/services/admin.service';
+import { readPaginatedList } from '@/services/paginated-list';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
@@ -134,15 +135,11 @@ export default function AdminTranslationsPage() {
         period || undefined
       );
 
-      if (response.data) {
-        setTranslations(response.data.translations || []);
-        setTotalCount(response.data.pagination?.total || 0);
-        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / pageSize));
-      } else {
-        setTranslations([]);
-        setTotalCount(0);
-        setTotalPages(1);
-      }
+      const { items, pagination } = readPaginatedList<Translation>(response);
+      const total = pagination?.total ?? 0;
+      setTranslations(items);
+      setTotalCount(total);
+      setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
     } catch (error) {
       console.error('Erreur lors du chargement des traductions:', error);
       toast.error(t('translationsPage.loadError'));
