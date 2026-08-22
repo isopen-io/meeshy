@@ -4282,10 +4282,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       either platform to port. +5 tests (`PostActionMenuTest` ×3: own-post ordering now includes
       `Pin`, someone-else's post never offers it; `FeedViewModelTest` ×2: delegates + refreshes
       on success, surfaces error without refreshing on failure). EN/FR/ES/PT strings.
-      **Still open**: comment pin-unpin (separate surface, not investigated this slice);
-      quote-repost's own composer UI (the `isQuote`/`content` params already exist on
-      `PostRepository.repost`, but `FeedScreen`'s current `onRepost` always calls the SIMPLE
-      repost path — a quote-with-commentary UI, if one exists at all, wasn't confirmed).
+      **Quote-repost composer shipped 2026-08-22** (slice `feed-quote-repost`): the post menu now
+      offers **Quote** right after **Repost** (`PostAction.Quote`, every post, iOS parity with
+      `PostDetailView.toggleDetailRepost`). Tapping it opens a commentary composer (`QuoteComposerState`
+      + `QuoteComposerSheet`, a dialog coherent with `ReportPostDialog`: an `OutlinedTextField` above a
+      bordered source-post preview) → `FeedViewModel.beginQuote`/`onQuoteTextChange`/`cancelQuote`/
+      `submitQuote`. New pure `RepostCommand.of(postId, repostOf, quote, commentary)` SSOT ports the two
+      decisions iOS scatters across `FeedViewModel.repostPost`/`resolveRepostTargetId`: **(1) target id** —
+      reposting a repost targets its recorded ROOT (`originalRepostOfId ?? repostOf.id`), never the
+      intermediate share (the gateway hydrates `repostOf` one level deep, so reposting a share by its own
+      id embeds an EMPTY share card — a latent bug in the pre-existing simple `repost()`, now fixed since
+      **both** paths route through `RepostCommand`); **(2) content/isQuote gating** — a simple repost
+      carries no content, a quote carries the trimmed commentary and flags `isQuote`. **Surpasses iOS**:
+      a blank/whitespace-only quote degrades to a simple repost (`isQuote = content != null` after
+      blank→null), where iOS's raw `content != nil` would send `content = ""`, `isQuote = true` (an empty
+      quote card). +23 tests (`RepostCommandTest` ×11 pure incl. root fallback/blank-root-trim/inner-
+      whitespace-preserved; `FeedViewModelTest` ×11 — repost own-id, repost-of-repost→root, error path,
+      beginQuote preview + inert-on-unknown, draft change, submit-with/without-commentary, submit-of-repost
+      →root, cancel, no-composer inert; `PostActionMenuTest` ×1 quote-follows-repost). Mutation RED-proof:
+      `isQuote = content != null` → `= quote` fails EXACTLY the 3 degradation tests (2 pure + 1 VM), 730
+      others green. EN/FR/ES/PT strings.
+      **Still open**: comment pin-unpin (separate surface, not investigated this slice).
 - [~] Post view + dwell-time tracking; batched impression tracking — **batched impression
       tracking shipped 2026-08-17** (slice `feed-impression-batching`). Re-proved before coding:
       `PostApi.recordImpressions`/`PostRepository.recordImpressions(postIds, source)`

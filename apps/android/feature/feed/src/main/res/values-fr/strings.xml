@@ -120,6 +120,11 @@
     <string name="feed_action_share">Partager</string>
     <string name="feed_action_copy_link">Copier le lien</string>
     <string name="feed_action_repost">Reposter</string>
+    <string name="feed_action_quote">Citer</string>
+    <string name="feed_quote_title">Citer le post</string>
+    <string name="feed_quote_hint">Ajouter un commentaire</string>
+    <string name="feed_quote_submit">Reposter</string>
+    <string name="feed_quote_cancel">Annuler</string>
     <string name="feed_action_bookmark">Enregistrer</string>
     <string name="feed_action_unbookmark">Retirer des enregistrés</string>
     <string name="feed_action_pin">Épingler</string>

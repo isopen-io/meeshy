@@ -119,6 +119,11 @@
     <string name="feed_action_share">Share</string>
     <string name="feed_action_copy_link">Copy link</string>
     <string name="feed_action_repost">Repost</string>
+    <string name="feed_action_quote">Quote</string>
+    <string name="feed_quote_title">Quote post</string>
+    <string name="feed_quote_hint">Add a comment</string>
+    <string name="feed_quote_submit">Repost</string>
+    <string name="feed_quote_cancel">Cancel</string>
     <string name="feed_action_bookmark">Save</string>
     <string name="feed_action_unbookmark">Remove from saved</string>
     <string name="feed_action_pin">Pin</string>
