@@ -1349,3 +1349,19 @@ hand-made `android-37` / malformed `android-37.0` and `rm -rf` it, reinstall pri
 daemon (`./gradlew --stop`), and run WITHOUT `sdkDownload=false`. Also: the Bash tool cwd persists
 across calls — a `cd /home/user/meeshy` earlier will make `./gradlew` (which lives in `apps/android`)
 "No such file or directory"; always `cd /home/user/meeshy/apps/android &&` in the gradle command.
+
+## 2026-08-22 — Port iOS `Mirror`-based trait extraction as explicit field access, and grow an existing sheet rather than add a header button
+- iOS `ConversationDashboardView.extractTraitScores<T>(from:)` uses `Mirror(reflecting:)` to pull the
+  non-nil `TraitScore` fields out of each trait struct. Kotlin/JVM reflection over data-class members is
+  fragile (needs `kotlin-reflect`, order not guaranteed) and slow — the faithful port is **explicit
+  `listOfNotNull(traits.verbosity, traits.formality, …)`** per axis. Same behaviour, deterministic order,
+  zero reflection dependency, and it doubles as the SOTA note (stable tie-break, unlike Swift's unstable
+  `sorted`). Pattern to reuse for any iOS `Mirror` extraction.
+- When a second render section belongs to the SAME endpoint/response as an already-shipped sheet
+  (persona profiles live in the same `GET /analysis` payload as the summary), **grow the existing
+  ViewModel + sheet** instead of minting a parallel ViewModel + a third header button. Add the new
+  projection field to the UiState (default `emptyList()` keeps old tests green), recompute the Empty
+  gate as "both halves empty", and render the new block under the old one. This matches iOS's single
+  dashboard, avoids a double-fetch of the same endpoint, and keeps the chat header uncluttered. The
+  existing Empty tests stayed green precisely because they carried no profiles — verify that before
+  relying on it.
