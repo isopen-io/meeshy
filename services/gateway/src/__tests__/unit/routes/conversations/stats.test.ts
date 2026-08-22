@@ -149,3 +149,115 @@ describe('GET /conversations/:id/stats — service error', () => {
     await app.close();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La charge utile atteint-elle le fil ?
+//
+// Les cinq témoins ci-dessus attestent que la route RÉPOND — `statusCode`,
+// `success` — et pas un seul un champ de `data`. Ils sont restés verts pendant
+// toute la vie du défaut : le schéma déclarait `data: { type: 'object' }`, sans
+// `properties`, et fast-json-stringify applique `additionalProperties: false`
+// par défaut. La réponse ENTIÈRE sortait en `{}`.
+//
+// Les deux clients (`ConversationMessageStatsResponse`, iOS et Android) typent
+// `conversationId`, `totalMessages`, `contentTypes`… comme NON-optionnels : le
+// `{}` ne dégradait pas l'affichage, il faisait échouer le décodage. Ces
+// témoins traversent `app.inject()`, donc le VRAI sérialiseur — seul endroit où
+// la panne était observable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /conversations/:id/stats — la charge utile atteint le fil', () => {
+  const FULL_STATS = {
+    conversationId: 'conv-resolved-id',
+    totalMessages: 42,
+    totalWords: 300,
+    totalCharacters: 1500,
+    contentTypes: { text: 40, image: 1, audio: 1, video: 0, file: 0, location: 0 },
+    participantStats: {
+      [USER_ID]: {
+        messageCount: 5, wordCount: 30, characterCount: 150,
+        imageCount: 1, audioCount: 0, videoCount: 0,
+        firstMessageAt: '2024-01-01T10:00:00.000Z',
+        lastMessageAt: '2024-01-02T10:00:00.000Z',
+      },
+    },
+    dailyActivity: { '2024-01-01': 5, '2024-01-02': 8 },
+    hourlyDistribution: { '9': 3, '14': 7 },
+    languageDistribution: { fr: 30, en: 12 },
+    updatedAt: '2024-01-02T12:00:00.000Z',
+  };
+
+  async function fetchStats() {
+    mockGetStats.mockResolvedValueOnce(FULL_STATS);
+    const prisma = makePrisma({
+      user: {
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: USER_ID, username: 'alice', displayName: 'Alice Smith', avatar: null },
+        ]),
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/stats` });
+    await app.close();
+    return res.json().data;
+  }
+
+  it('sert les compteurs de tête', async () => {
+    const data = await fetchStats();
+
+    expect(data.conversationId).toBe('conv-resolved-id');
+    expect(data.totalMessages).toBe(42);
+    expect(data.totalWords).toBe(300);
+    expect(data.totalCharacters).toBe(1500);
+  });
+
+  it('sert `contentTypes`, un objet FERMÉ à six compteurs nommés', async () => {
+    const data = await fetchStats();
+
+    expect(data.contentTypes).toEqual({ text: 40, image: 1, audio: 1, video: 0, file: 0, location: 0 });
+  });
+
+  it('sert `participantStats` aplati et enrichi du profil', async () => {
+    const data = await fetchStats();
+
+    expect(data.participantStats).toHaveLength(1);
+    expect(data.participantStats[0]).toMatchObject({
+      userId: USER_ID,
+      username: 'alice',
+      displayName: 'Alice Smith',
+      messageCount: 5,
+      wordCount: 30,
+      firstMessageAt: '2024-01-01T10:00:00.000Z',
+    });
+  });
+
+  it('sert `dailyActivity` et `languageDistribution` en tableaux triés', async () => {
+    const data = await fetchStats();
+
+    expect(data.dailyActivity).toEqual([
+      { date: '2024-01-01', count: 5 },
+      { date: '2024-01-02', count: 8 },
+    ]);
+    expect(data.languageDistribution).toEqual([
+      { language: 'fr', count: 30 },
+      { language: 'en', count: 12 },
+    ]);
+  });
+
+  // La distinction que `{ type: 'object' }` effaçait : une CARTE dont les clés
+  // sont des données ne se déclare pas par `properties` (on ne les connaît
+  // pas), mais par `additionalProperties`. C'est la seule forme qui laisse
+  // passer un objet aux clés inconnues — et la raison pour laquelle « objet
+  // libre » n'est pas synonyme de « pas de déclaration ».
+  it('sert `hourlyDistribution` comme une CARTE aux clés inconnues', async () => {
+    const data = await fetchStats();
+
+    expect(data.hourlyDistribution).toEqual({ '9': 3, '14': 7 });
+  });
+
+  it('sert `updatedAt`', async () => {
+    const data = await fetchStats();
+
+    expect(data.updatedAt).toBe('2024-01-02T12:00:00.000Z');
+  });
+});

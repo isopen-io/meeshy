@@ -288,3 +288,88 @@ describe('POST /communities/:id/join — la cible est le lecteur', () => {
     expect(mockResolveForTargets).not.toHaveBeenCalled();
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /communities/search — le ROUTAGE des deux régimes
+//
+// `communities-search-live.test.ts` (cycle 86, PR #3302) garde déjà ce que la
+// route SERT : `creator` et `members[]` porteurs de leurs champs, masquage sous
+// le critère strict, bascule prefs-only pour un membre, aperçu limité aux
+// appartenances actives. Ces témoins-ci ne les redoublent pas — ils gardent ce
+// que cette suite-là n'observe pas : vers QUEL résolveur chaque ligne part, et
+// la règle de page qui en découle.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const searchCommunity = (id: string, members: ReadonlyArray<ReturnType<typeof memberRow>>) => ({
+  id,
+  name: 'Tech',
+  identifier: 'mshy_tech',
+  description: null,
+  avatar: null,
+  isPrivate: false,
+  createdAt: new Date('2026-01-01T00:00:00.000Z'),
+  creator: { id: VIEWER_ID, username: 'alice', displayName: 'Alice', avatar: null },
+  members,
+  _count: { members: members.length, Conversation: 0 },
+});
+
+async function search(opts: {
+  communities: ReadonlyArray<ReturnType<typeof searchCommunity>>;
+  viewerCommunityIds?: ReadonlyArray<string>;
+}) {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('authenticate', async (req: any) => { req.authContext = authContextFor(VIEWER_ID); });
+  app.decorate('prisma', {
+    community: {
+      findMany: jest.fn<any>().mockResolvedValue(opts.communities),
+      count: jest.fn<any>().mockResolvedValue(opts.communities.length),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
+    communityMember: {
+      findMany: jest.fn<any>().mockResolvedValue(
+        (opts.viewerCommunityIds ?? []).map(communityId => ({ communityId })),
+      ),
+    },
+  } as any);
+  await communityRoutes(app);
+  await app.ready();
+  const res = await app.inject({ method: 'GET', url: '/communities/search?q=tech' });
+  await app.close();
+  return res.json();
+}
+
+describe('GET /communities/search — routage des deux régimes', () => {
+  it('envoie une communauté NON partagée au critère strict, avec le viewer réel', async () => {
+    await search({ communities: [searchCommunity(COMM_ID, [memberRow(SHY_ID, true)])] });
+
+    expect(mockResolveForTargets).toHaveBeenCalledWith(
+      { userId: VIEWER_ID, role: 'USER' },
+      [SHY_ID],
+    );
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+  });
+
+  // Le corollaire de page, et la partie la plus subtile du régime par LIGNE :
+  // masquer la pastille de quelqu'un sur une ligne pendant qu'elle s'affiche
+  // sur la suivante, dans la même réponse, ne décrirait rien. Un membre qui
+  // prouve le lien par UNE communauté de la page le prouve pour TOUTES.
+  it('classe un membre rencontré dans une communauté partagée en prefs-only sur toute la page', async () => {
+    await search({
+      communities: [
+        searchCommunity(COMM_ID, [memberRow(SHY_ID, true)]),
+        searchCommunity('comm-2', [memberRow(SHY_ID, true), memberRow(OPEN_ID, true)]),
+      ],
+      viewerCommunityIds: [COMM_ID],
+    });
+
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([SHY_ID]);
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: VIEWER_ID, role: 'USER' }, [OPEN_ID]);
+  });
+
+  it('n’ouvre aucune résolution sur une page sans membre', async () => {
+    await search({ communities: [searchCommunity(COMM_ID, [])] });
+
+    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
+    expect(mockResolveForTargets).not.toHaveBeenCalled();
+  });
+});

@@ -191,7 +191,12 @@
     <string name="conversation_stats_type_audio">Audio</string>
     <string name="conversation_stats_type_video">Vidéos</string>
     <string name="conversation_stats_type_file">Fichiers</string>
-    <string name="conversation_stats_type_location">Localisation</string>    <string name="conversation_settings_saved">Paramètres enregistrés</string>
+    <string name="conversation_stats_type_location">Localisation</string>
+    <string name="conversation_stats_sentiment">Sentiment</string>
+    <string name="conversation_stats_sentiment_positive">Positif</string>
+    <string name="conversation_stats_sentiment_neutral">Neutre</string>
+    <string name="conversation_stats_sentiment_negative">Négatif</string>
+    <string name="conversation_settings_saved">Paramètres enregistrés</string>
     <string name="conversation_settings_write_role">Qui peut envoyer des messages</string>
     <string name="conversation_settings_announcement">Mode annonce</string>
     <string name="conversation_settings_slow_mode">Mode lent</string>
