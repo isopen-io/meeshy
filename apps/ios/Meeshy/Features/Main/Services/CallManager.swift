@@ -2731,6 +2731,18 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 159): mirrors the toggleVideo() guard (Vague
+            // 158). A hold or capture-interruption has released the camera —
+            // flipping front/back here would call capturer.startCapture and
+            // silently reacquire it (camera hardware + OS indicator turn back
+            // on) even though the transceiver stays recvOnly and the peer never
+            // sees the switch. Revert the optimistic mirror flag instead of
+            // actuating; `handleHold`'s unhold branch restores the real camera
+            // state once suspension lifts.
+            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                self.isUsingFrontCamera = previousFrontCamera
+                return
+            }
             let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 self.webRTCService.switchCamera { success in
                     continuation.resume(returning: success)
@@ -2785,6 +2797,13 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 159): same guard as switchCamera() above —
+            // both drive the same capturer through the same suspension state.
+            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                self.selectedCameraId = previousSelectedCameraId
+                self.isUsingFrontCamera = previousFrontCamera
+                return
+            }
             let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 self.webRTCService.switchToCamera(uniqueID: id) { success in
                     continuation.resume(returning: success)
