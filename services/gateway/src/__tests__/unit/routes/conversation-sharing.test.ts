@@ -72,6 +72,14 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
+const mockResolvePrefsOnly = jest.fn<any>().mockResolvedValue(new Map());
+
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+  }),
+}));
+
 jest.mock('@meeshy/shared/utils/errors', () => ({
   createError: jest.fn<any>(),
   sendErrorResponse: jest.fn<any>(),
@@ -1399,5 +1407,151 @@ describe('Avis d’arrivée — POST /conversations/join/:linkId', () => {
     await route.handler(makeRequest({ params: { linkId: LINK_ID } }), reply);
 
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ conversationId: CONV_ID }));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /conversations/:id — présence des co-participants
+//
+// L'appartenance de l'appelant est vérifiée par le handler : le contexte
+// d'accès est ACQUIS, seules les préférences de chacun s'appliquent. Ce que la
+// route servait, elle, était brut — sur les DEUX porteurs de la présence, la
+// ligne `Participant` et le `User` qu'elle référence.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const VISIBLE_PRESENCE = { showOnline: true, showLastSeenTimestamp: true };
+const HIDDEN_PRESENCE = { showOnline: false, showLastSeenTimestamp: false };
+const LAST_SEEN = new Date('2026-08-01T10:00:00.000Z');
+
+describe('PATCH /conversations/:id — presence of co-participants', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockResolvePrefsOnly.mockResolvedValue(new Map());
+  });
+
+  function patchWith(participants: any[]) {
+    const { fastify, prisma, reply } = setup();
+    const route = getRoute(fastify, 'PATCH', '/conversations/:id');
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
+    prisma.conversation.update.mockResolvedValue({ id: CONV_ID, title: 'Updated', participants });
+    return { prisma, reply, route };
+  }
+
+  function makeConvParticipant(overrides: Record<string, any> = {}) {
+    return {
+      id: PART_ID,
+      userId: INVITEE_ID,
+      displayName: 'Bob',
+      isOnline: true,
+      lastActiveAt: LAST_SEEN,
+      user: { id: INVITEE_ID, username: 'bob', isOnline: true, lastActiveAt: LAST_SEEN },
+      ...overrides,
+    };
+  }
+
+  function servedParticipants() {
+    const payload = mockSendSuccess.mock.calls[0]?.[1] as any;
+    return payload?.participants ?? [];
+  }
+
+  it('masks the participant row presence when the co-participant opted out', async () => {
+    const { reply, route } = patchWith([makeConvParticipant()]);
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[INVITEE_ID, HIDDEN_PRESENCE]]));
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    expect(servedParticipants()[0].isOnline).toBe(false);
+    expect(servedParticipants()[0].lastActiveAt).toBeNull();
+  });
+
+  it('masks the nested user presence too — both carriers, one decision', async () => {
+    const { reply, route } = patchWith([makeConvParticipant()]);
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[INVITEE_ID, HIDDEN_PRESENCE]]));
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    expect(servedParticipants()[0].user.isOnline).toBe(false);
+    expect(servedParticipants()[0].user.lastActiveAt).toBeNull();
+  });
+
+  it('keeps the presence a co-participant allows', async () => {
+    const { reply, route } = patchWith([makeConvParticipant()]);
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[INVITEE_ID, VISIBLE_PRESENCE]]));
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    expect(servedParticipants()[0].isOnline).toBe(true);
+    expect(servedParticipants()[0].user.isOnline).toBe(true);
+    expect(servedParticipants()[0].lastActiveAt).toEqual(LAST_SEEN);
+  });
+
+  it('hides only the timestamp when last-seen alone is opted out', async () => {
+    const { reply, route } = patchWith([makeConvParticipant()]);
+    mockResolvePrefsOnly.mockResolvedValue(
+      new Map([[INVITEE_ID, { showOnline: true, showLastSeenTimestamp: false }]])
+    );
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    expect(servedParticipants()[0].isOnline).toBe(true);
+    expect(servedParticipants()[0].lastActiveAt).toBeNull();
+  });
+
+  it('resolves the co-participants through the prefs-only regime', async () => {
+    const { reply, route } = patchWith([makeConvParticipant()]);
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([INVITEE_ID]);
+  });
+
+  it('leaves an anonymous participant untouched — no userId, no preference to read', async () => {
+    const { reply, route } = patchWith([makeConvParticipant({ userId: null, user: null })]);
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([]);
+    expect(servedParticipants()[0].isOnline).toBe(true);
+  });
+
+  it('loads the userId the response schema declares', async () => {
+    const { prisma, reply, route } = patchWith([]);
+
+    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
+
+    const select = prisma.conversation.update.mock.calls[0][0].include.participants.select;
+    expect(select.userId).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /conversations/:id/invite — ne charger que ce qui a un destinataire
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /conversations/:id/invite — invited member payload', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('does not load the invitee raw presence — nothing serves it', async () => {
+    const { fastify, reply } = setup();
+    const route = getRoute(fastify, 'POST', '/invite');
+    fastify.prisma.conversation.findUnique.mockResolvedValue({
+      id: CONV_ID,
+      title: 'Test',
+      type: 'group',
+      participants: [{ id: PART_ID, userId: USER_ID, role: 'admin', user: { id: USER_ID, username: 'alice', role: 'USER' } }],
+    });
+    fastify.prisma.user.findUnique.mockResolvedValue({
+      id: INVITEE_ID, username: 'bob', displayName: 'Bob', firstName: 'Bob', lastName: 'B',
+    });
+    fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', userId: INVITEE_ID, user: { id: INVITEE_ID } });
+
+    await route.handler(
+      makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } }),
+      reply
+    );
+
+    const include = fastify.prisma.participant.create.mock.calls[0][0].include;
+    expect(include.user.select.isOnline).toBeUndefined();
   });
 });

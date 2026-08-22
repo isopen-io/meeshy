@@ -24,6 +24,8 @@ import {
   resolveConversationEntry,
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
@@ -355,6 +357,10 @@ export function registerSharingRoutes(
             where: { isActive: true },
             select: {
               id: true,
+              // Déclaré par `conversationParticipantSchema` et jamais chargé :
+              // la réponse sortait sans `userId`, et sans lui aucune carte de
+              // visibilité ne peut être adressée.
+              userId: true,
               displayName: true,
               avatar: true,
               type: true,
@@ -381,7 +387,30 @@ export function registerSharingRoutes(
         }
       });
 
-      return sendSuccess(reply, updatedConversation);
+      // Présence des co-participants : montrable (l'appartenance de l'appelant
+      // est vérifiée ci-dessus — contexte d'accès déjà garanti), mais soumise
+      // aux préférences showOnlineStatus/showLastSeen de chacun. Même règle que
+      // `GET /conversations` et la liste des participants. Anonymes inchangés
+      // (pas de `userId`, aucune préférence à consulter).
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        updatedConversation.participants
+          .map((participant) => participant.userId)
+          .filter((uid): uid is string => !!uid)
+      );
+
+      return sendSuccess(reply, {
+        ...updatedConversation,
+        participants: updatedConversation.participants.map((participant) => {
+          const visibility = participant.userId ? presenceVis.get(participant.userId) : undefined;
+          if (!visibility) return participant;
+          return {
+            ...applyPresenceVisibilityAsOffline(participant, visibility),
+            ...(participant.user
+              ? { user: applyPresenceVisibilityAsOffline(participant.user, visibility) }
+              : {})
+          };
+        })
+      });
 
     } catch (error) {
       logger.error('Error updating conversation', error as Error);
@@ -919,6 +948,12 @@ export function registerSharingRoutes(
         }
       };
 
+      // `isOnline` était chargé ici et n'a jamais eu de destinataire : le
+      // schéma de réponse déclare `data.membership` quand le handler renvoie
+      // `data.member`, que fast-json-stringify supprime donc en entier. Ne rien
+      // charger qu'aucune surface ne sert — sinon le jour où la dérive
+      // `member`/`membership` est corrigée, la présence brute d'un invité part
+      // sur le fil sans qu'un seul témoin ne tombe.
       const invitedMemberInclude = {
         user: {
           select: {
@@ -927,8 +962,7 @@ export function registerSharingRoutes(
             displayName: true,
             firstName: true,
             lastName: true,
-            avatar: true,
-            isOnline: true
+            avatar: true
           }
         }
       };
