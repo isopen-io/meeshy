@@ -15,9 +15,12 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertEqual(AvatarContext.storyViewer.size, 44)
     }
 
-    func test_size_storyTrayCompact_returns44() {
-        // Mini-trail épinglée dans le header collapsé : moitié de storyTray (88).
-        XCTAssertEqual(AvatarContext.storyTrayCompact.size, 44)
+    func test_size_storyTrayCompact_returns36() {
+        // Mini-trail épinglée dans le header collapsé. 44 pt + anneau de 6
+        // débordaient la barre de 60 pt : le sticker de section opaque rognait
+        // le bas des cercles (directive 2026-08-22 : « réduire la taille des
+        // cercles pour que ce ne soit pas coupé »). 36 + 6 = 42 laisse 14 pt.
+        XCTAssertEqual(AvatarContext.storyTrayCompact.size, 36)
     }
 
     func test_size_feedComposer_returns36() {

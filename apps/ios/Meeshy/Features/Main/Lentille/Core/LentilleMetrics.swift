@@ -25,7 +25,14 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        public static let height: CGFloat = 64
+        /// 64 → 78 le 2026-08-22 : la rangée porte désormais TROIS lignes —
+        /// nom, « auteur : message », puis la date seule à droite (retour
+        /// produit : « en bas sur une nouvelle ligne à droite mettre la date »).
+        /// Deux lignes tenaient dans 64 ; trois n'y tiennent pas.
+        public static let height: CGFloat = 78
+        /// Débord d'un badge de bord (effectif) sur la trace de la bordure —
+        /// il mord la marge de la rangée, jamais la rangée voisine.
+        public static let edgeBadgeOverhang: CGFloat = 6
         public static let paddingVertical: CGFloat = 10
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
@@ -102,7 +109,9 @@ nonisolated public enum LentilleMetrics {
         /// importante et un padding suffisant en haut et en bas ») : déborde
         /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
         /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
-        public static let height: CGFloat = 104
+        /// 104 → 124 le 2026-08-22 : la carte loge les mêmes trois lignes que
+        /// la rangée, avec un aperçu qui coule sur deux lignes.
+        public static let height: CGFloat = 124
         public static let paddingVertical: CGFloat = 14
         /// Avatar de la carte = le contexte « liste » historique (52), un cran
         /// au-dessus de la rangée plate (44) : c'est la magnification.

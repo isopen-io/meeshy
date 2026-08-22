@@ -115,6 +115,7 @@ struct LentilleConversationRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 headerLine
                 line2
+                dateLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -130,6 +131,22 @@ struct LentilleConversationRow: View {
                     .fill(accent)
                     .frame(width: 3)
                     .padding(.vertical, 6)
+            }
+        }
+        // L'EFFECTIF vit sur la trace de la bordure, jamais dans le contenu
+        // (retour produit 2026-08-22 : « la pile avec le nombre de membre
+        // s'affiche en bas à droite sur les traces de la bordure et jamais
+        // dans le contenu, même au repos »). La rangée plate n'a pas de
+        // bordure — c'est la carte de magnification qui la peint, au même
+        // endroit : le badge occupe donc d'avance la place où elle passera,
+        // et ne bouge pas quand la carte se lève. Débord vers le bas par
+        // `edgeBadgeOverhang` : il mord la marge, jamais la rangée voisine.
+        // Label NU, sans capsule ni fond — aucune carte dans `Lentille/Row/`.
+        .overlay(alignment: .bottomTrailing) {
+            if conversation.type != .direct {
+                memberCountBadge
+                    .padding(.trailing, LentilleMetrics.Row.paddingHorizontal)
+                    .offset(y: LentilleMetrics.Row.edgeBadgeOverhang)
             }
         }
         .contentShape(Rectangle())
@@ -286,24 +303,70 @@ struct LentilleConversationRow: View {
                     joinLiveCallButton
                 }
             } else {
-                Text("·")
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(textMuted)
-
-                LentilleRowTimestamp(date: conversation.lastMessageAt)
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
-                    .layoutPriority(1)
-
+                // La date a QUITTÉ cette ligne le 2026-08-22 : elle vit seule,
+                // en bas à droite (`dateLine`). Le nom possède donc toute la
+                // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
-
-                if conversation.userState.hasPendingSync {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(accent.opacity(0.7))
-                        .accessibilityHidden(true)
-                }
             }
+        }
+    }
+
+    /// Troisième ligne — la date SEULE, poussée à droite (retour produit
+    /// 2026-08-22 : « en bas sur une nouvelle ligne à droite mettre la date ;
+    /// la date gardera cette place même en magnificence »). Le glyphe d'outbox
+    /// la précède : il parle du même envoi.
+    ///
+    /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
+    /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
+    /// aucune composante temporelle.
+    private var dateLine: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Spacer(minLength: 0)
+
+            if conversation.userState.hasPendingSync {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .foregroundColor(accent.opacity(0.7))
+                    .accessibilityHidden(true)
+            }
+
+            LentilleRowTimestamp(date: conversation.lastMessageAt)
+                .font(LentilleMetrics.Time.font)
+                .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
+                .lineLimit(1)
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// Effectif — MÊME grammaire que la carte de magnification
+    /// (`LentilleFocusCard.typeBadge`) : icône de type + compteur, en texte
+    /// nu, jamais une capsule. Il ne s'affiche que hors conversation directe,
+    /// où « le nombre de membres » ne veut rien dire.
+    private var memberCountBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: Self.typeBadgeIcon(for: conversation.type))
+                .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+                .imageScale(.small)
+            if conversation.memberCount > 1 {
+                Text(conversation.memberCountDisplay)
+                    .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
+            }
+        }
+        .foregroundColor(textMuted)
+        .accessibilityHidden(true)
+    }
+
+    /// Reproduit depuis `LentilleFocusCard.typeBadgeIcon` — même icône des
+    /// deux côtés de la loupe, sinon le badge changerait de forme en se
+    /// levant.
+    private static func typeBadgeIcon(for type: MeeshyConversation.ConversationType) -> String {
+        switch type {
+        case .group: return "person.2.fill"
+        case .community: return "person.3.fill"
+        case .channel: return "megaphone.fill"
+        case .bot: return "sparkles"
+        case .public, .global, .broadcast: return "globe"
+        case .direct: return "person.fill"
         }
     }
 
@@ -504,16 +567,20 @@ struct LentilleConversationRow: View {
         let totalCount = conversation.lastMessageAttachmentCount
 
         if hasText {
+            // « Auteur : message » en UN SEUL texte (retour produit
+            // 2026-08-22 : « juste mettre l'auteur : message »), même
+            // grammaire que la carte de magnification — deux `Text` côte à
+            // côte dans un `HStack` laissaient l'auteur occuper sa propre
+            // colonne et tronquaient le message avant le bord.
             HStack(spacing: 4) {
                 if showEphemeralIcon {
                     Image(systemName: "timer")
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                 }
-                senderLabel
-                Text(resolvedPreviewText)
+                (senderPrefix + Text(resolvedPreviewText)
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
+                    .foregroundColor(textSecondary))
                     .lineLimit(1)
             }
         } else if let first = attachments.first {
@@ -555,6 +622,26 @@ struct LentilleConversationRow: View {
         }
     }
 
+    /// « Auteur : » — la règle, pure et partagée avec la carte de
+    /// magnification (`LentilleFocusCard.senderPrefix`), pour que les deux
+    /// vues ne puissent pas dériver l'une de l'autre. `nil` quand il n'y a
+    /// personne à nommer : le message commence alors la ligne.
+    nonisolated static func authorPrefix(name: String?) -> String? {
+        guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return "\(trimmed) : "
+    }
+
+    /// Le préfixe, en `Text` concaténable — teinté accent, comme la carte.
+    private var senderPrefix: Text {
+        guard let prefix = Self.authorPrefix(name: conversation.lastMessageSenderName) else { return Text("") }
+        return Text(prefix)
+            .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
+            .foregroundColor(accent)
+    }
+
+    /// Conservé pour les branches qui INTERCALENT un glyphe entre l'auteur et
+    /// le libellé (pièce jointe, localisation, masqué, vue unique) : là, la
+    /// concaténation en un seul `Text` est impossible.
     private var senderLabel: some View {
         Group {
             if let name = conversation.lastMessageSenderName, !name.isEmpty {

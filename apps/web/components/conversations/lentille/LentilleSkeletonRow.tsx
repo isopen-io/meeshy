@@ -2,7 +2,7 @@
  * `LentilleSkeletonRow` — squelette (WL-103, LWS-10).
  *
  * Géométrie EXACTE du rang réel (mêmes tokens que `LentilleRow` : hauteur
- * `64`, padding `10/16`, avatar `44`) — pas une approximation Tailwind
+ * `78` — trois lignes depuis 2026-08-22 —, padding `10/16`, avatar `44`) — pas une approximation Tailwind
  * générique. Affiché UNIQUEMENT sur cache vide (décision du point de
  * montage, pas de ce composant) : ce fichier ne sait pas quand se montrer,
  * il ne fait que rendre un rang plausible quand on le lui demande.
@@ -34,8 +34,13 @@ export function LentilleSkeletonRow() {
       <div className="flex-1 min-w-0 space-y-2">
         <div className="h-3.5 bg-muted rounded w-3/4" />
         <div className="h-3 bg-muted/60 rounded w-1/2" />
+        {/* Troisième ligne — la date, à droite (2026-08-22) : la barre de fin
+            de rang a quitté le bord droit du rang pour rejoindre la place
+            qu'occupe la date dans le rang réel. */}
+        <div className="flex justify-end">
+          <div className="h-3 bg-muted/40 rounded w-8" />
+        </div>
       </div>
-      <div className="h-3 bg-muted/40 rounded w-8 shrink-0" />
     </div>
   );
 }
