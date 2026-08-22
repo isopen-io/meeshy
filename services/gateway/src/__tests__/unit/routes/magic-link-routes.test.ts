@@ -718,3 +718,88 @@ describe('MagicLink Routes', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// La connexion rend-elle un UTILISATEUR ?
+//
+// Les deux routes de validation déclaraient `user: { type: 'object' }` et
+// `session: { type: 'object' }`. Sans `properties`, fast-json-stringify
+// (`additionalProperties: false` par défaut) les vidait en `{}` : la connexion
+// par lien magique rendait son jeton, et AUCUN utilisateur.
+//
+// Les deux formes sont déjà décrites par les schémas partagés — `userSchema`
+// couvre le `socketIOUser` que le service construit, `sessionSchema` la
+// `SessionData` de `createSession`. Aucun gate de présence ici, et pour une
+// raison précise : `isOnline`/`lastActiveAt` y sont SYNTHÉTISÉS pour le compte
+// qui vient de se connecter — c'est le lecteur lui-même, et la politique rend
+// `FULL` sur `isSelf`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('POST /magic-link/validate — l’utilisateur et la session atteignent le fil', () => {
+  const FULL_USER = {
+    id: 'user-abc-123',
+    username: 'testuser',
+    email: 'test@example.com',
+    firstName: 'Alice',
+    lastName: 'Martin',
+    displayName: 'Alice Martin',
+    avatar: null,
+    role: 'USER',
+    isOnline: true,
+    lastActiveAt: new Date('2026-08-22T10:00:00.000Z'),
+    systemLanguage: 'fr',
+    isActive: true,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-08-22T10:00:00.000Z'),
+  };
+
+  async function validateAndRead() {
+    mockValidateMagicLink.mockResolvedValue(
+      makeValidateResult({ user: FULL_USER, session: makeSession() })
+    );
+    const app = await buildApp();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/magic-link/validate',
+      payload: { token: 'tok' },
+    });
+    await app.close();
+    return res.json().data;
+  }
+
+  it('sert l’utilisateur avec son identité, pas `{}`', async () => {
+    const data = await validateAndRead();
+
+    expect(data.user).toMatchObject({
+      id: 'user-abc-123',
+      username: 'testuser',
+      email: 'test@example.com',
+      displayName: 'Alice Martin',
+      role: 'USER',
+    });
+  });
+
+  it('sert la session avec son appareil, pas `{}`', async () => {
+    const data = await validateAndRead();
+
+    expect(data.session).toMatchObject({
+      id: 'session-xyz-789',
+      deviceType: 'desktop',
+      browserName: 'Chrome',
+    });
+  });
+
+  // La présence du compte qui vient de se connecter est la SIENNE : la
+  // politique rend FULL sur `isSelf`, aucun gate n'a lieu d'être.
+  it('sert la présence de SOI sans la masquer', async () => {
+    const data = await validateAndRead();
+
+    expect(data.user.isOnline).toBe(true);
+  });
+
+  it('sert toujours le jeton — il n’a jamais été en cause', async () => {
+    const data = await validateAndRead();
+
+    expect(data.token).toBe('jwt-token-abc');
+  });
+});

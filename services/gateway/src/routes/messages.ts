@@ -10,6 +10,8 @@ import { emitToConversationParticipants } from '../socketio/emitToConversationPa
 import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
+import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { ConversationBridgeService } from '../services/ConversationBridgeService.js';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
@@ -110,6 +112,25 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           properties: {
             id: { type: 'string' },
             content: { type: 'string' },
+            // ATTENTION — aucune de ces déclarations ne s'applique.
+            //
+            // Ce schéma décrit le MESSAGE (id, content, sender…) alors que
+            // `sendSuccess` répond `{ success, data }`. Les six propriétés
+            // listées ici ne correspondent donc à aucune clé de l'objet réel ;
+            // `success` et `data` sont non déclarés et traversent par
+            // l'`additionalProperties: true` ci-dessus, **entiers et non
+            // gouvernés**. Vérifié en isolant le compilateur.
+            //
+            // Conséquence à retenir avant de « corriger » ce bloc : le
+            // `sender: { type: 'object' }` nu qu'il portait ne vidait RIEN, et
+            // la présence brute de l'expéditeur atteignait bel et bien le fil —
+            // ce n'est pas une non-fuite accidentelle, c'était une fuite. Le
+            // gate posé dans le handler est ce qui la ferme.
+            //
+            // Aligner ce schéma sur l'enveloppe est un lot en soi : il faudrait
+            // décrire TOUT ce que la route sert (une trentaine de colonnes,
+            // pièces jointes et bloc de statut compris), sans quoi la
+            // déclaration tronquerait ce qui passe aujourd'hui.
             sender: { type: 'object' },
             attachments: { type: 'array' },
             translations: { type: 'array' },
@@ -246,11 +267,54 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         logger.warn('[MESSAGES] Failed to compute read status summary', err as Error);
       }
 
+      // Présence de l'expéditeur : montrable — l'appelant est un participant
+      // ACTIF de la conversation, vérifié vingt lignes plus haut (403 sinon),
+      // donc contexte d'accès garanti des deux côtés — mais soumise aux
+      // préférences `showOnlineStatus` / `showLastSeen` de l'auteur.
+      //
+      // Ce site N'EST PAS une non-fuite accidentelle, contrairement à ce que
+      // le balayage `{ type: 'object' }` laissait croire : le schéma de cette
+      // route décrit le message quand `sendSuccess` répond `{ success, data }`,
+      // si bien que ses déclarations ne s'appliquent à rien et que `data`
+      // traverse entier (voir la note sur `sender` dans le schéma). `isOnline`
+      // brut — sur la ligne `Participant` ET sur le `user` imbriqué —
+      // atteignait donc réellement le fil. C'était une fuite, pas un piège
+      // armé, et ce gate est ce qui la ferme.
+      //
+      // `onMissingEntry: 'reveal'` : sous `resolvePrefsOnly`, une entrée
+      // absente est NORMALE — un expéditeur anonyme n'a pas de `userId`, donc
+      // pas de préférences, et reste visible. C'est le défaut inverse du
+      // critère strict.
+      const senderUserId = (message as { sender?: { userId?: string | null } }).sender?.userId;
+      const senderVisibility = senderUserId
+        ? (await getPresenceVisibilityService(prisma).resolvePrefsOnly([senderUserId])).get(senderUserId)
+        : undefined;
+      const gatedSender = (message as { sender?: Record<string, unknown> | null }).sender
+        ? (() => {
+            const raw = (message as unknown as { sender: Record<string, unknown> }).sender;
+            const gated = applyPresenceVisibilityAsOffline(
+              raw as unknown as { isOnline: boolean | null },
+              senderVisibility,
+              { onMissingEntry: 'reveal' },
+            ) as Record<string, unknown>;
+            const nested = raw.user as { isOnline: boolean | null } | null | undefined;
+            return nested
+              ? {
+                  ...gated,
+                  user: applyPresenceVisibilityAsOffline(nested, senderVisibility, {
+                    onMissingEntry: 'reveal',
+                  }),
+                }
+              : gated;
+          })()
+        : (message as { sender?: unknown }).sender;
+
       // hoistLocationOnto hisse metadata.location en champ top-level `location`
       // — Lot 1 : ce message est affiché en entier, sans hoist la position
       // resterait invisible même si elle a bien été validée à l'écriture.
       return sendSuccess(reply, hoistLocationOnto({
         ...message,
+        sender: gatedSender,
         // Les mêmes valeurs écrasent aussi les champs de premier niveau issus
         // du `select` : les trois clients y décodent leurs coches de livraison.
         // Les laisser au contenu de la ligne aurait servi zéro ici pendant que
