@@ -25,6 +25,7 @@ import {
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -355,33 +356,48 @@ export function registerSharingRoutes(
             where: { isActive: true },
             select: {
               id: true,
+              userId: true,
               displayName: true,
               avatar: true,
               type: true,
               role: true,
               language: true,
               isOnline: true,
-              lastActiveAt: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  firstName: true,
-                  lastName: true,
-                  avatar: true,
-                  systemLanguage: true,
-                  isOnline: true,
-                  lastActiveAt: true,
-                  role: true
-                }
-              }
+              lastActiveAt: true
             }
           }
         }
       });
 
-      return sendSuccess(reply, updatedConversation);
+      // Gate de présence des co-participants. `conversationParticipantSchema`
+      // déclare `isOnline`/`lastActiveAt` : ces deux champs atteignent le fil,
+      // et rien ne les filtrait — quand la liste de participants
+      // (`routes/conversations/participants.ts`) applique le gate depuis
+      // longtemps sur exactement les mêmes lignes.
+      //
+      // Régime `resolvePrefsOnly` : la co-participation est un contexte d'accès
+      // garanti des DEUX côtés, seules les préférences s'appliquent. Un id
+      // ABSENT de la carte vaut MONTRABLE — à l'inverse du critère strict :
+      // un participant anonyme n'a pas de `userId`, donc pas de préférences,
+      // et il reste visible.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+        updatedConversation.participants
+          .map((p: { userId: string | null }) => p.userId)
+          .filter((uid: string | null): uid is string => !!uid),
+      );
+
+      return sendSuccess(reply, {
+        ...updatedConversation,
+        participants: updatedConversation.participants.map((p: {
+          userId: string | null;
+          isOnline: boolean | null;
+          lastActiveAt: Date | null;
+        }) => ({
+          ...p,
+          isOnline: presenceVis.get(p.userId ?? '')?.showOnline === false ? false : p.isOnline,
+          lastActiveAt: presenceVis.get(p.userId ?? '')?.showLastSeenTimestamp === false ? null : p.lastActiveAt,
+        })),
+      });
 
     } catch (error) {
       logger.error('Error updating conversation', error as Error);
