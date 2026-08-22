@@ -10,6 +10,8 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import {
   voiceTranslationResultSchema,
   translationJobSchema,
+  voiceAttachmentSchema,
+  voiceTranscriptionSchema,
   errorResponseSchema,
   getUserId
 } from './types';
@@ -96,8 +98,8 @@ export function registerTranslationRoutes(
               properties: {
                 taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if already completed)' },
                 status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
-                attachment: { type: 'object', nullable: true },
-                transcription: { type: 'object', nullable: true },
+                attachment: voiceAttachmentSchema,
+                transcription: voiceTranscriptionSchema,
                 translatedAudios: { type: 'array' },
                 result: voiceTranslationResultSchema
               }
@@ -282,7 +284,7 @@ export function registerTranslationRoutes(
                 jobId: { type: 'string', description: 'Unique job identifier for status tracking' },
                 taskId: { type: 'string', description: 'Task ID (alias for jobId)' },
                 status: { type: 'string', enum: ['pending', 'processing'], description: 'Initial job status' },
-                attachment: { type: 'object', nullable: true }
+                attachment: voiceAttachmentSchema
               }
             }
           }
@@ -576,30 +578,15 @@ export function registerTranslationRoutes(
               properties: {
                 taskId: { type: 'string', nullable: true, description: 'Task ID for tracking (null if completed)' },
                 status: { type: 'string', description: 'Processing status', enum: ['completed', 'processing'] },
-                attachment: {
-                  type: 'object',
-                  nullable: true,
-                  properties: {
-                    id: { type: 'string' },
-                    messageId: { type: 'string' },
-                    fileName: { type: 'string' },
-                    fileUrl: { type: 'string' },
-                    duration: { type: 'number' },
-                    mimeType: { type: 'string' }
-                  }
-                },
-                transcription: {
-                  type: 'object',
-                  nullable: true,
-                  properties: {
-                    text: { type: 'string' },
-                    language: { type: 'string' },
-                    confidence: { type: 'number' },
-                    source: { type: 'string' },
-                    segments: { type: 'array' },
-                    durationMs: { type: 'number' }
-                  }
-                }
+                attachment: voiceAttachmentSchema,
+                transcription: voiceTranscriptionSchema,
+                // Volontairement SANS `items` : les deux producteurs de cette
+                // clé n'ont pas la même forme (`translateSync` rend
+                // `audioBase64`, `getAttachmentWithTranscription` rend
+                // `audioPath`/`id`/`createdAt`), et un tableau sans `items`
+                // laisse passer ses éléments INTACTS — vérifié au compilateur.
+                // Déclarer l'une des deux formes en tronquerait l'autre.
+                translatedAudios: { type: 'array' }
               }
             }
           }

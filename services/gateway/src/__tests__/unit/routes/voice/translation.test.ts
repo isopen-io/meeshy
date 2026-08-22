@@ -489,3 +489,191 @@ describe('POST /api/v1/voice/transcribe — no translationService with attachmen
     await app.close();
   });
 });
+
+// ─── Le sérialiseur sert enfin l'attachement et la transcription (cycle 91) ───
+
+/**
+ * Trois charges utiles de ce fichier déclaraient `attachment` /
+ * `transcription` en `{ type: 'object', nullable: true }` — sans `properties`,
+ * donc `{}` (fast-json-stringify applique `additionalProperties: false`).
+ *
+ * Et la quatrième, celle de `POST /transcribe`, portait la forme « juste » que
+ * les trois autres auraient dû copier : elle TRONQUAIT quand même. Mesuré au
+ * compilateur sur le schéma tel qu'il était :
+ *
+ *   attachment    → perd originalName, fileSize, bitrate, sampleRate, codec,
+ *                   channels, createdAt
+ *   transcription → perd id, createdAt
+ *   translatedAudios → clé NON déclarée, donc supprimée entièrement
+ *
+ * Les deux producteurs sont dans le même service et se rangent en superset :
+ * `translateAttachment` rend 6 champs, `getAttachmentWithTranscription` en rend
+ * 13. Déclarer le superset ne tronque ni l'un ni l'autre — une clé déclarée
+ * qu'un objet ne porte pas n'est pas fabriquée.
+ */
+describe('les charges utiles `attachment` / `transcription` traversent le sérialiseur', () => {
+  const FULL_ATTACHMENT = {
+    id: 'att-1',
+    messageId: 'msg-1',
+    fileName: 'f.wav',
+    originalName: 'voix.wav',
+    fileUrl: '/uploads/f.wav',
+    mimeType: 'audio/wav',
+    fileSize: 12345,
+    duration: 8000,
+    bitrate: 128,
+    sampleRate: 22050,
+    codec: 'pcm',
+    channels: 1,
+    createdAt: '2026-08-22T09:00:00.000Z',
+  };
+
+  const FULL_TRANSCRIPTION = {
+    id: 'att-1',
+    text: 'bonjour',
+    language: 'fr',
+    confidence: 0.91,
+    source: 'server',
+    segments: [],
+    durationMs: 8000,
+    createdAt: '2026-08-22T09:00:00.000Z',
+  };
+
+  const EXISTING = {
+    attachment: FULL_ATTACHMENT,
+    transcription: FULL_TRANSCRIPTION,
+    translatedAudios: [{ id: 'att-1_en', targetLanguage: 'en', translatedText: 'hello' }],
+  };
+
+  it('POST /translate sert l’attachement ENTIER quand la traduction existe déjà', async () => {
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue(EXISTING),
+      }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['en'] },
+    });
+
+    expect(res.json().data.attachment).toEqual(FULL_ATTACHMENT);
+    await app.close();
+  });
+
+  it('POST /translate sert la transcription ENTIÈRE, `id` et `createdAt` compris', async () => {
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue(EXISTING),
+      }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['en'] },
+    });
+
+    expect(res.json().data.transcription).toEqual(FULL_TRANSCRIPTION);
+    await app.close();
+  });
+
+  it('POST /translate sert la transcription COURTE du chemin base64 sans la déformer', async () => {
+    const { app } = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/translate`,
+      payload: { audioBase64: 'AAA', targetLanguages: ['fr'] },
+    });
+
+    // Le chemin base64 construit quatre champs seulement : le superset les sert
+    // tels quels, et ne FABRIQUE pas les quatre autres.
+    expect(res.json().data.transcription).toEqual({
+      text: 'hello',
+      language: 'en',
+      confidence: 0.99,
+      durationMs: 1000,
+    });
+    await app.close();
+  });
+
+  it('POST /translate sert l’attachement du chemin « processing »', async () => {
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue({
+          attachment: FULL_ATTACHMENT,
+          transcription: null,
+          translatedAudios: [],
+        }),
+        translateAttachment: jest.fn<any>().mockResolvedValue({
+          taskId: JOB_ID,
+          attachment: {
+            id: 'att-1',
+            messageId: 'msg-1',
+            fileName: 'f.wav',
+            fileUrl: '/uploads/f.wav',
+            duration: 8000,
+            mimeType: 'audio/wav',
+          },
+        }),
+      }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/translate`,
+      payload: { attachmentId: 'att-1', targetLanguages: ['en'] },
+    });
+
+    const body = res.json().data;
+    expect(body.status).toBe('processing');
+    expect(body.attachment.fileName).toBe('f.wav');
+    expect(body.attachment.mimeType).toBe('audio/wav');
+    await app.close();
+  });
+
+  it('POST /transcribe ne TRONQUE plus l’attachement — les sept champs perdus reviennent', async () => {
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue(EXISTING),
+      }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/transcribe`,
+      payload: { attachmentId: 'att-1' },
+    });
+
+    const { attachment } = res.json().data;
+    expect(attachment.originalName).toBe('voix.wav');
+    expect(attachment.fileSize).toBe(12345);
+    expect(attachment.bitrate).toBe(128);
+    expect(attachment.sampleRate).toBe(22050);
+    expect(attachment.codec).toBe('pcm');
+    expect(attachment.channels).toBe(1);
+    expect(attachment.createdAt).toBe('2026-08-22T09:00:00.000Z');
+    await app.close();
+  });
+
+  it('POST /transcribe sert `translatedAudios`, que son schéma ne déclarait pas du tout', async () => {
+    const { app } = await buildApp({
+      translationService: makeTranslationService({
+        getAttachmentWithTranscription: jest.fn<any>().mockResolvedValue(EXISTING),
+      }),
+    });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `${PREFIX}/transcribe`,
+      payload: { attachmentId: 'att-1' },
+    });
+
+    expect(res.json().data.translatedAudios).toEqual([
+      { id: 'att-1_en', targetLanguage: 'en', translatedText: 'hello' },
+    ]);
+    await app.close();
+  });
+});
