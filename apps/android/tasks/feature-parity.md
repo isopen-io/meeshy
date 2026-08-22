@@ -4577,8 +4577,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       accent-coherent quote block (author, Prisme content, first-media preview + "+N", quote/repost
       + story/reel kind badge) inside the feed card, post detail, saved and user-posts surfaces; tap
       opens the ORIGINAL post's detail. Pure `RepostEmbedBuilder` + shared `ApiRepostOf` Prisme law
-      (slice `feed-repost-embed-cell`, 2026-07-17). **Still open:** the full story-/reel-canvas embed
-      (needs an Android story-canvas renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`).
+      (slice `feed-repost-embed-cell`, 2026-07-17). **Reposted post's like count now shown** (slice
+      `feed-repost-embed-like-count`, 2026-08-22): `RepostEmbedBuilder` projects `ApiRepostOf.likeCount`
+      → `RepostEmbedPresentation.likeCount` (null → 0, negative payload clamped to 0, matching the
+      established feed-realtime clamp precedent); the shared cell renders an accent-coherent heart +
+      count row (parity iOS `FeedPostCard.repostView` / `PostDetailView.repostEmbed`), gated `> 0` to
+      mirror the detail embed's restraint and avoid a "0 likes" clutter the feed card does not. +3
+      `RepostEmbedBuilderTest` (projects / null→0 / clamps negative; mutation-proven: dropping the
+      `coerceAtLeast(0)` fails exactly the negative-clamp test). New `feed_repost_likes_count` plurals
+      EN/FR/ES/PT. **Still open:** the full story-/reel-canvas embed (needs an Android story-canvas
+      renderer — iOS `StoryRepostEmbedCell`/`ReelRepostEmbedCell`); the reposted post's author mood
+      emoji + location sticker (each needs a new `ApiRepostOf` field — model plumbing + gateway
+      payload confirmation first).
 
 ## G. Statuses / Moods
 > **TTL correction (slice `status-mood-core`, 2026-07-19):** a mood **status expires 1h** after creation
