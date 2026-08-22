@@ -348,24 +348,26 @@ Directive produit 22/08 (prioritaire) : **deux messages consécutifs d'un même 
 bordure JOINTE en pointillé** — jamais deux contours fermés + une couture pointillée en plus. Repli
 autorisé si c'est compliqué : deux bulles distinctes.
 
-- [ ] Lot G — bulles groupées JOINTES : position de groupe (`solo/head/middle/tail`) dérivée PUREMENT
+- [x] Lot G (1a22127f2) — bulles groupées JOINTES : position de groupe (`solo/head/middle/tail`) dérivée PUREMENT
       dans `RiverConversationMapping.contents` (la loi ne dit que `isFirstInGroup`, le suivant dit le reste) ;
       `RiverBubbleView` dessine UN contour ouvert par position (coins arrondis aux seules extrémités du
       groupe, `UnevenRoundedRectangle`), bord partagé en POINTILLÉ (tirets `Row.continuationDash*`), fond
       continu, zéro espace entre les bulles d'un groupe ; vue sérialisée : barre gauche continue, barre
       basse sur la queue seule. Témoins : position de groupe (mapping), forme du contour (Shape pur).
-- [ ] R-6 — la citation mène à sa cible : tap sur la citation ⇒ `moveTo` + `scrollTo(rang cible)`.
+- [x] R-6 (e96179a5f) — la citation mène à sa cible : tap sur la citation ⇒ `moveTo` + `scrollTo(rang cible)`.
       Pur : `RiverConversationMapping.cursor(forMessageId:)`.
 - [ ] R-5 — identité vivante : `MeeshyAvatar` (présence + cercle de story) en tête de groupe, nom et avatar
       activables ⇒ profil (`ProfileSheetUser`) / fiche visiteur (`ParticipantProfileTarget`) via le routeur,
       même chemin que le Fil (`openProfileHandler`). Présence/story INJECTÉES (pures côté mapping).
-- [ ] R-7 — marges du canvas : réserve basse = hauteur du composeur (`bottomInset`, `safeAreaInset`),
+- [x] R-7 (e96179a5f) — marges du canvas : réserve basse = hauteur du composeur (`bottomInset`, `safeAreaInset`),
       aucune bulle sous une zone non atteignable ; atterrissage au présent au-dessus du composeur.
 - [ ] Lot 3 / R-4 (partiel) — appui long sur une bulle : « Ouvrir dans le fil » (retour Script +
       atterrissage, comme Résumé), « Répondre », « Copier » ; rebond de bord (`edgeBounceToken` ⇒ haptique) ;
       vérification simulateur clair/sombre sur Meeshy Global.
-- [ ] R-8 — affinages mesurés : la bande de couloirs garde le DERNIER nommage connu entre deux rangs ;
-      marge gauche au premier cadrage mesurée et corrigée.
+- [x] R-8 (partiel) — cadrage au présent mesuré et corrigé (scroll view de 1800 pt → bande en overlay ; curseur
+      posé à la première géométrie peuplée ; offset X explicite) ; canvas dans le repère FIXE du pane + rangs non
+      matérialisés (rails/connecteurs visibles cadré au présent) ; citation sur une ligne. Reste : anneau « adressé »
+      de tête de segment parfois absent ; bande de couloirs entre deux rangs (non observé vide après mesure).
 - [ ] R-3 — plan à axe du temps avec poignée graduée (jour/semaine/mois/année selon l'amplitude réelle),
       apparaît au défilement, glisser = sauter au rang de la période. Pur : `RiverTimeScale`.
 - [ ] Lot 4 — arbitré : l'ouverture reste gardée par `memberCount` (la LOI sérialise déjà quand les voix

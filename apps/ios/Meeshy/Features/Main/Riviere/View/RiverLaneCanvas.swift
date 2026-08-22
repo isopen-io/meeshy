@@ -23,27 +23,73 @@ import MeeshyUI
 /// Décorative — `accessibilityHidden`. L'ordre chronologique du contenu
 /// (`geometry.bubbles`, celui du DOM/VoiceOver côté peau) est ce qui prime ;
 /// les traits ne portent aucune information que le contenu ne porte déjà.
+/// Où un rang se tient par rapport au champ VISIBLE — la seule question que
+/// le canvas pose à un rang sans cadre. Pure, éprouvée sans Canvas
+/// (`RiverBubbleLayoutTests`).
+///
+/// Une pile paresseuse ne pose que les rangs visibles : leurs cadres sont
+/// connus, les autres n'existent pas. Un segment de branche qui commence
+/// plus haut ou finit plus bas doit quand même se tracer sur sa part
+/// visible — sans cela, AUCUN rail ni connecteur dès qu'on quitte le haut
+/// de l'histoire (mesuré au simulateur le 2026-08-22). Un rang sans cadre
+/// est AU-DESSUS s'il précède le premier rang connu, AU-DESSOUS s'il suit le
+/// dernier ; entre deux rangs connus (ou sans aucun rang connu), rien n'est
+/// supposé.
+nonisolated enum RiverCanvasRankPlacement: Equatable {
+    case known(CGRect)
+    case above
+    case below
+    case unknown
+
+    static func resolve(rank: Int, known: [Int: CGRect]) -> RiverCanvasRankPlacement {
+        if let frame = known[rank] { return .known(frame) }
+        guard let first = known.keys.min(), let last = known.keys.max() else { return .unknown }
+        if rank < first { return .above }
+        if rank > last { return .below }
+        return .unknown
+    }
+}
+
 struct RiverLaneCanvas: View {
     let geometry: RiverLaneResolver.RiverGeometry
-    /// `messageId → cadre mesuré`, dans le MÊME repère
-    /// (`RiverCoordinateSpace.name`) que ce Canvas.
+    /// `messageId → cadre mesuré`, dans le repère FIXE du pane
+    /// (`RiverCoordinateSpace.name`) — le MÊME que celui de ce Canvas, posé
+    /// en fond du `ScrollView` et non de la grille : le fond de la grille
+    /// vivait dans le repère du CONTENU (26 000 pt), et les cadres dans celui
+    /// du pane — ils ne coïncidaient qu'à l'offset zéro (mesuré au
+    /// simulateur le 2026-08-22 : tracé invisible une fois cadré au présent).
     let frames: [String: CGRect]
     let columns: RiverColumnLayout
+    /// Décalage horizontal du pane — les cadres sont dans le repère du pane,
+    /// les rails (`columns.railX`) dans celui du contenu : la différence est
+    /// cet offset.
+    var horizontalOffset: CGFloat = 0
+    /// Bande haute (en-tête du fil + bande de couloirs) sous laquelle rien ne
+    /// se trace : le canvas couvre tout le pane, inset compris.
+    var topExclusion: CGFloat = 0
 
     var body: some View {
-        Canvas { context, _ in
+        Canvas { context, size in
             // Sérialisée : AUCUN trait — le verdict de la loi a retiré l'axe
             // horizontal. En tracer quand même, même empilés dans l'unique
             // colonne, affirmerait un axe que la loi vient de nier (§7ter C).
             // Le contour de chaque bulle suffit à dire qui parle.
             guard geometry.layout == .lanes else { return }
 
+            context.clip(to: Path(CGRect(x: 0, y: topExclusion, width: size.width, height: max(0, size.height - topExclusion))))
+
             let bubbleByRank: [Int: RiverLaneResolver.RiverBubble] = Dictionary(
                 uniqueKeysWithValues: geometry.bubbles.map { ($0.rank, $0) }
             )
+            let known: [Int: CGRect] = Dictionary(
+                uniqueKeysWithValues: geometry.bubbles.compactMap { bubble in
+                    frames[bubble.messageId].map { (bubble.rank, $0) }
+                }
+            )
+            let extent = RankExtent(known: known, viewportHeight: size.height)
 
-            drawConnectors(bubbleByRank: bubbleByRank, in: &context)
-            drawLanes(bubbleByRank: bubbleByRank, in: &context)
+            drawConnectors(bubbleByRank: bubbleByRank, extent: extent, in: &context)
+            drawLanes(bubbleByRank: bubbleByRank, extent: extent, in: &context)
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
@@ -51,23 +97,49 @@ struct RiverLaneCanvas: View {
 
     // MARK: - Cadres par rang (jamais par couloir — un rang, une bulle)
 
-    private func frame(forRank rank: Int, bubbleByRank: [Int: RiverLaneResolver.RiverBubble]) -> CGRect? {
-        guard let messageId = bubbleByRank[rank]?.messageId else { return nil }
-        return frames[messageId]
+    /// Les cotes verticales d'un rang, connu ou hors champ : un rang au-dessus
+    /// du champ est placé juste au-dessus du pane, un rang au-dessous juste
+    /// en dessous — assez loin pour qu'un trait qui y mène sorte du champ
+    /// franchement, jamais à l'intérieur.
+    private struct RankExtent {
+        let known: [Int: CGRect]
+        let viewportHeight: CGFloat
+        private var margin: CGFloat { 48 }
+
+        func rect(_ rank: Int) -> CGRect? {
+            switch RiverCanvasRankPlacement.resolve(rank: rank, known: known) {
+            case .known(let frame): return frame
+            case .above: return CGRect(x: 0, y: -margin, width: 0, height: 0)
+            case .below: return CGRect(x: 0, y: viewportHeight + margin, width: 0, height: 0)
+            case .unknown: return nil
+            }
+        }
+
+        func isOnScreen(_ rank: Int) -> Bool {
+            if case .known = RiverCanvasRankPlacement.resolve(rank: rank, known: known) { return true }
+            return false
+        }
+    }
+
+    private func railX(_ laneIndex: Int) -> CGFloat {
+        columns.railX(laneIndex) - horizontalOffset
     }
 
     // MARK: - Connecteurs de réponse — DERRIÈRE les bulles, en pointillé
 
-    private func drawConnectors(bubbleByRank: [Int: RiverLaneResolver.RiverBubble], in context: inout GraphicsContext) {
+    private func drawConnectors(bubbleByRank: [Int: RiverLaneResolver.RiverBubble], extent: RankExtent, in context: inout GraphicsContext) {
         for connector in geometry.connectors {
+            // Au moins un des deux bouts doit être à l'écran — un connecteur
+            // entre deux rangs hors champ n'a rien à montrer.
             guard
-                let fromFrame = frame(forRank: connector.fromRank, bubbleByRank: bubbleByRank),
-                let toFrame = frame(forRank: connector.toRank, bubbleByRank: bubbleByRank),
+                extent.isOnScreen(connector.fromRank) || extent.isOnScreen(connector.toRank),
+                let fromFrame = extent.rect(connector.fromRank),
+                let toFrame = extent.rect(connector.toRank),
                 let toBubble = bubbleByRank[connector.toRank]
             else { continue }
 
-            let fx = columns.railX(connector.fromLaneIndex)
-            let tx = columns.railX(connector.toLaneIndex)
+            let fx = railX(connector.fromLaneIndex)
+            let tx = railX(connector.toLaneIndex)
             let fy = fromFrame.midY
             let ty = toFrame.midY
             let side: CGFloat = tx >= fx ? 1 : -1
@@ -95,12 +167,12 @@ struct RiverLaneCanvas: View {
 
     // MARK: - Branches
 
-    private func drawLanes(bubbleByRank: [Int: RiverLaneResolver.RiverBubble], in context: inout GraphicsContext) {
+    private func drawLanes(bubbleByRank: [Int: RiverLaneResolver.RiverBubble], extent: RankExtent, in context: inout GraphicsContext) {
         for lane in geometry.lanes {
-            let cx = columns.railX(lane.laneIndex)
+            let cx = railX(lane.laneIndex)
             let color = laneColor(seed: lane.colorSeed)
             for span in lane.spans {
-                drawSpan(span, color: color, cx: cx, bubbleByRank: bubbleByRank, in: &context)
+                drawSpan(span, color: color, cx: cx, extent: extent, in: &context)
             }
         }
     }
@@ -113,20 +185,23 @@ struct RiverLaneCanvas: View {
         _ span: RiverLaneResolver.RiverLaneSpan,
         color: Color,
         cx: CGFloat,
-        bubbleByRank: [Int: RiverLaneResolver.RiverBubble],
+        extent: RankExtent,
         in context: inout GraphicsContext
     ) {
-        guard let topFrame = frame(forRank: span.startRank, bubbleByRank: bubbleByRank) else { return }
-        guard let endFrame = frame(forRank: span.endRank, bubbleByRank: bubbleByRank) else { return }
+        // Un segment entièrement hors champ n'a rien à tracer ; un segment qui
+        // commence plus haut ou finit plus bas se trace sur sa part visible.
+        guard span.nodes.contains(where: { extent.isOnScreen($0.rank) }) || spanCrossesViewport(span, extent: extent) else { return }
+        guard let topFrame = extent.rect(span.startRank) else { return }
+        guard let endFrame = extent.rect(span.endRank) else { return }
 
-        let top = topFrame.minY + 2
-        let end = endFrame.maxY - 4
+        let top = extent.isOnScreen(span.startRank) ? topFrame.minY + 2 : topFrame.minY
+        let end = extent.isOnScreen(span.endRank) ? endFrame.maxY - 4 : endFrame.maxY
 
         let bubbleRanksInSpan = span.nodes.filter { $0.kind == .bubble }.map(\.rank)
         let liveTo: CGFloat
-        if let lastBubbleRank = bubbleRanksInSpan.max(), let lastFrame = frame(forRank: lastBubbleRank, bubbleByRank: bubbleByRank) {
+        if let lastBubbleRank = bubbleRanksInSpan.max(), let lastFrame = extent.rect(lastBubbleRank) {
             liveTo = lastFrame.maxY
-        } else if let lastNode = span.nodes.last, let anchorFrame = frame(forRank: lastNode.rank, bubbleByRank: bubbleByRank) {
+        } else if let lastNode = span.nodes.last, let anchorFrame = extent.rect(lastNode.rank) {
             // Segment SANS bulle propre (branche reparue pour recevoir une
             // réponse, `.addressed` seul) — amorce courte sous son nœud.
             liveTo = anchorFrame.midY + 9
@@ -157,17 +232,20 @@ struct RiverLaneCanvas: View {
             context.stroke(tailPath, with: shading, style: StrokeStyle(lineWidth: RiverMetrics.Line.width))
         }
 
-        // Naissance — une amorce pleine, pour qu'on voie la branche APPARAÎTRE.
-        let birthRadius: CGFloat = 2.6
-        context.fill(
-            Path(ellipseIn: CGRect(x: cx - birthRadius, y: top - birthRadius, width: birthRadius * 2, height: birthRadius * 2)),
-            with: .color(color)
-        )
+        // Naissance — une amorce pleine, pour qu'on voie la branche APPARAÎTRE
+        // (seulement si sa naissance est dans le champ).
+        if extent.isOnScreen(span.startRank) {
+            let birthRadius: CGFloat = 2.6
+            context.fill(
+                Path(ellipseIn: CGRect(x: cx - birthRadius, y: top - birthRadius, width: birthRadius * 2, height: birthRadius * 2)),
+                with: .color(color)
+            )
+        }
 
         // Nœuds `.addressed` — reparue pour recevoir une réponse : anneau
         // creux en pointillé, AUCUNE bulle.
         for node in span.nodes where node.kind == .addressed {
-            guard let nodeFrame = frame(forRank: node.rank, bubbleByRank: bubbleByRank) else { continue }
+            guard extent.isOnScreen(node.rank), let nodeFrame = extent.rect(node.rank) else { continue }
             let ringRadius: CGFloat = 6.5
             let ringRect = CGRect(
                 x: cx - ringRadius, y: nodeFrame.midY - ringRadius,
@@ -179,6 +257,14 @@ struct RiverLaneCanvas: View {
                 style: StrokeStyle(lineWidth: 2, dash: [3, 2.5])
             )
         }
+    }
+
+    /// Un segment sans aucun nœud à l'écran TRAVERSE pourtant le champ s'il
+    /// commence au-dessus et finit au-dessous : sa ligne passe devant le
+    /// lecteur, elle se trace.
+    private func spanCrossesViewport(_ span: RiverLaneResolver.RiverLaneSpan, extent: RankExtent) -> Bool {
+        RiverCanvasRankPlacement.resolve(rank: span.startRank, known: extent.known) == .above
+            && RiverCanvasRankPlacement.resolve(rank: span.endRank, known: extent.known) == .below
     }
 
     private func laneColor(seed: String) -> Color {

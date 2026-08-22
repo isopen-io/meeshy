@@ -530,6 +530,8 @@ struct RiverBubbleView: View, Equatable {
                 .lineLimit(1)
                 .padding(.leading, 8)
         }
+        // Le rail prend la hauteur de la LIGNE, jamais celle qu'on lui propose.
+        .fixedSize(horizontal: false, vertical: true)
         .contentShape(Rectangle())
     }
 

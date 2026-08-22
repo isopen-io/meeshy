@@ -80,4 +80,24 @@ final class RiverBubbleLayoutTests: XCTestCase {
         XCTAssertFalse(middle.isEmpty, "un milieu garde ses deux flancs")
         XCTAssertEqual(middle.boundingRect.width, 198, accuracy: 0.01, "les flancs seulement, à un demi-trait du bord")
     }
+
+    // MARK: - R-8 : le canvas tolère les rangs que la pile paresseuse n'a pas posés
+
+    /// Dans une pile paresseuse, seuls les rangs VISIBLES publient un cadre.
+    /// Un segment de branche qui commence plus haut, ou finit plus bas, doit
+    /// quand même se tracer sur la part visible : un rang sans cadre est
+    /// AU-DESSUS s'il précède le premier rang connu, AU-DESSOUS s'il suit le
+    /// dernier — jamais « absent » (mesuré au simulateur : aucun rail, aucun
+    /// connecteur dès que l'on quitte le haut de l'histoire).
+    func test_rankPlacement_knownAboveBelow_followsTheKnownRanks() {
+        let known: [Int: CGRect] = [
+            10: CGRect(x: 0, y: 100, width: 10, height: 10),
+            12: CGRect(x: 0, y: 300, width: 10, height: 10),
+        ]
+        XCTAssertEqual(RiverCanvasRankPlacement.resolve(rank: 10, known: known), .known(known[10]!))
+        XCTAssertEqual(RiverCanvasRankPlacement.resolve(rank: 3, known: known), .above)
+        XCTAssertEqual(RiverCanvasRankPlacement.resolve(rank: 40, known: known), .below)
+        XCTAssertEqual(RiverCanvasRankPlacement.resolve(rank: 11, known: known), .unknown, "entre deux rangs connus sans cadre : rien à supposer")
+        XCTAssertEqual(RiverCanvasRankPlacement.resolve(rank: 5, known: [:]), .unknown, "aucun cadre connu : rien à tracer")
+    }
 }

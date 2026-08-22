@@ -287,4 +287,16 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertNil(RiverConversationMapping.cursor(forMessageId: "hors-fenêtre", geometry: geometry))
         XCTAssertNil(RiverConversationMapping.cursor(forMessageId: "sys", geometry: geometry), "un avis n'est la cible de personne")
     }
+
+    // MARK: - La citation tient sur UNE ligne, quoi qu'en dise le message cité
+
+    /// `previewText` est une chaîne brute : des retours à la ligne y font
+    /// gonfler le bloc de citation (mesuré au simulateur : un rail de 245 pt
+    /// pour une ligne de texte). La citation est une RÉFÉRENCE (§7ter A4) —
+    /// une seule ligne, espaces repliés.
+    func test_singleLine_collapsesNewlinesAndRepeatedWhitespace() {
+        XCTAssertEqual(RiverConversationMapping.singleLine("Bonjour\n\n  à   tous\n"), "Bonjour à tous")
+        XCTAssertEqual(RiverConversationMapping.singleLine("   "), "")
+        XCTAssertEqual(RiverConversationMapping.singleLine("déjà une ligne"), "déjà une ligne")
+    }
 }

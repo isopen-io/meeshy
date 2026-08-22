@@ -279,7 +279,6 @@ struct RiverStreamHost: View {
     private var scrollPane: some View {
         ScrollView([.horizontal, .vertical]) {
             grid
-                .background(RiverLaneCanvas(geometry: geometry, frames: frames, columns: columns))
                 // Écrivain d'offset horizontal — DANS le contenu, pour
                 // retrouver son `UIScrollView` par ses parents.
                 .background(RiverHorizontalOffsetWriter(request: horizontalRequest))
@@ -300,6 +299,21 @@ struct RiverStreamHost: View {
                 )
         }
         .coordinateSpace(name: RiverCoordinateSpace.name)
+        // Le tracé vit dans le repère FIXE du pane — le même que les cadres
+        // publiés par les bulles (`RiverCoordinateSpace.name`, posé sur le
+        // `ScrollView`). En fond de la GRILLE, il vivait dans le repère du
+        // contenu et ne coïncidait avec les cadres qu'à l'offset zéro
+        // (mesuré au simulateur le 2026-08-22 : plus aucun rail ni connecteur
+        // une fois cadré au présent). Sous la bande des couloirs, rien.
+        .background(
+            RiverLaneCanvas(
+                geometry: geometry,
+                frames: frames,
+                columns: columns,
+                horizontalOffset: horizontalOffset,
+                topExclusion: headerInset + RiverMetrics.LaneHeader.height
+            )
+        )
         .onPreferenceChange(MessageFramePreferenceKey.self) { frames = $0 }
         .onPreferenceChange(HorizontalScrollOffsetKey.self) { horizontalOffset = $0 } // iOS 16–17
         .trackScrollContentOffsetX { horizontalOffset = $0 } // iOS 18+

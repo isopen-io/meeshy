@@ -172,6 +172,14 @@ nonisolated enum RiverConversationMapping {
         message.senderName ?? message.senderUsername ?? message.senderId
     }
 
+    /// Une citation tient sur UNE ligne (§7ter A4) : retours à la ligne et
+    /// blancs répétés repliés en un espace. `previewText` arrive brut du
+    /// message cité — laissé tel quel, il faisait gonfler le bloc de citation
+    /// à la hauteur de toutes ses lignes (mesuré au simulateur 2026-08-22).
+    static func singleLine(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
     /// Position de groupe de CHAQUE bulle, déduite de la loi seule : la tête
     /// est `isFirstInGroup` ; la bulle est suivie dans son groupe si le rang
     /// SUIVANT n'ouvre pas de groupe. Un avis système ouvre toujours un groupe
@@ -220,7 +228,9 @@ nonisolated enum RiverConversationMapping {
                 timeString: resolvedTime,
                 text: text(message),
                 layout: geometry.layout,
-                replyPreview: message.replyTo.map { RiverReplyPreview(authorDisplayName: $0.authorName, text: $0.previewText) },
+                replyPreview: message.replyTo.map {
+                    RiverReplyPreview(authorDisplayName: singleLine($0.authorName), text: singleLine($0.previewText))
+                },
                 systemNotice: systemNotice(for: message, viewerId: viewerId, timeString: resolvedTime, text: text),
                 groupPosition: positions[bubble.messageId] ?? .solo
             )
