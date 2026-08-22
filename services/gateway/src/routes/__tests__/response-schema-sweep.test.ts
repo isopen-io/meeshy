@@ -50,6 +50,23 @@ const ROUTES_DIR = join(__dirname, '..');
  * `magic-link.ts|session` ×2 — schéma déclaré ET gate posé dans le même lot,
  * selon la règle du cycle 84 bis.
  *
+ * **Les trois sites de `voice/translation.ts` sont partis au cycle 91**, et le
+ * fichier portait déjà la forme juste trois cents lignes plus bas — sauf qu'elle
+ * TRONQUAIT elle aussi : `POST /voice/transcribe` déclarait 6 champs
+ * d'attachement quand `getAttachmentWithTranscription` en rend 13, 6 champs de
+ * transcription sur 8, et ne déclarait pas `translatedAudios` du tout. Une
+ * déclaration n'est juste que CONTRE SON PRODUCTEUR ; le balayage ne voit pas
+ * cette forme-là de défaut, puisqu'elle porte des `properties`.
+ *
+ * **Les quatre `analysis` de `voice-analysis.ts` sont partis au cycle 90**, avec
+ * la panne qu'ils recouvraient : le traducteur appelait deux méthodes
+ * inexistantes (`analyze(analysis_types=…)`, `compare_voices`), si bien que ces
+ * routes ne rendaient jamais 200. Réparer le schéma seul aurait publié une
+ * charge utile dont chaque feuille était mal nommée, et des métriques de qualité
+ * figées à 0,45 — l'émetteur et le contrat ne partageaient aucune clé de
+ * feuille. Un normaliseur les réconcilie à la frontière
+ * (`services/voice-analysis-normalize.ts`).
+ *
  * `messages.ts|sender|200` RESTE, et ce n'est pas un oubli. Le balayage le
  * signale comme nu, mais la déclaration y est INERTE : le schéma de cette route
  * décrit le message quand `sendSuccess` répond `{ success, data }`, si bien que
@@ -67,13 +84,6 @@ const FROZEN_INVENTORY: readonly string[] = [
   'links/admin.ts|creator|200',
   'messages.ts|sender|200',
   'users/profile.ts|permissions|200',
-  'voice-analysis.ts|analysis|200',
-  'voice-analysis.ts|analysis|200',
-  'voice-analysis.ts|analysis|200',
-  'voice-analysis.ts|analysis|200',
-  'voice/translation.ts|attachment|200',
-  'voice/translation.ts|attachment|202',
-  'voice/translation.ts|transcription|200',
 ];
 
 describe('balayage — un schéma de réponse ne déclare jamais un objet NU', () => {

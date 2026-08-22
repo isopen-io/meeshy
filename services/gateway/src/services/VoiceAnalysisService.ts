@@ -14,6 +14,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AudioTranslateService } from './AudioTranslateService';
 import { ZmqTranslationClient } from './zmq-translation';
+import { normalizeStoredAnalysis, normalizeVoiceProsody } from './voice-analysis-normalize';
 import type {
   VoiceQualityAnalysis,
   VoiceAnalysisType,
@@ -377,11 +378,19 @@ export class VoiceAnalysisService {
       return null;
     }
 
-    return transcriptionData.voiceQualityAnalysis as unknown as VoiceQualityAnalysis;
+    return normalizeStoredAnalysis(transcriptionData.voiceQualityAnalysis);
   }
 
   /**
-   * Récupérer l'analyse d'un profil vocal
+   * Récupérer l'analyse d'un profil vocal.
+   *
+   * `UserVoiceModel.voiceCharacteristics` porte DEUX formats selon son
+   * écrivain : ce service y pose la forme déclarée, tandis que
+   * `VoiceProfileService` (`:547`, `:730`) y recopie tel quel le
+   * `voice_characteristics` du traducteur — donc le format de fil, en
+   * snake_case. Le `as any` d'origine annonçait un `VoiceQualityAnalysis` pour
+   * les deux. `normalizeStoredAnalysis` tranche sur une clé que seul l'émetteur
+   * pose, et laisse passer la forme déclarée sans y toucher.
    */
   async getVoiceProfileAnalysis(userId: string): Promise<VoiceQualityAnalysis | null> {
     const voiceModel = await this.prisma.userVoiceModel.findUnique({
@@ -393,6 +402,6 @@ export class VoiceAnalysisService {
       return null;
     }
 
-    return voiceModel.voiceCharacteristics as any;
+    return normalizeStoredAnalysis(voiceModel.voiceCharacteristics);
   }
 }

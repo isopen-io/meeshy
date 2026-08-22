@@ -157,12 +157,21 @@ export type VoiceAPIRequest =
 // RESPONSE TYPES
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * `contour`, `coefficients` et `peak` sont OPTIONNELS parce que l'émetteur ne
+ * les produit pas : `VoiceCharacteristics.to_dict()` rend un pitch résumé (pas
+ * de courbe), des MFCC en moyenne/écart-type (pas la matrice de coefficients)
+ * et une énergie moyenne + dynamique (pas de crête). Les déclarer requis était
+ * la même fiction que le reste de la forme — un champ obligatoire que rien
+ * n'écrit ne rend pas la donnée présente, il empêche seulement d'écrire la
+ * vérité sans cast.
+ */
 export interface VoicePitchAnalysis {
   mean: number;
   std: number;
   min: number;
   max: number;
-  contour: number[];
+  contour?: number[];
 }
 
 export interface VoiceTimbreAnalysis {
@@ -173,14 +182,14 @@ export interface VoiceTimbreAnalysis {
 }
 
 export interface VoiceMFCCAnalysis {
-  coefficients: number[];
+  coefficients?: number[];
   mean: number[];
   std: number[];
 }
 
 export interface VoiceEnergyAnalysis {
   rms: number;
-  peak: number;
+  peak?: number;
   dynamicRange: number;
 }
 

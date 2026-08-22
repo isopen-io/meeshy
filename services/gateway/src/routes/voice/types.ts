@@ -142,6 +142,46 @@ export const voiceAnalysisResultSchema = {
   }
 } as const;
 
+/**
+ * `VoiceQualityAnalysis` = `VoiceAnalysisResult` + prosodie + métriques de
+ * qualité. C'est la forme que `VoiceAnalysisService` construit, persiste et
+ * ressert — les routes de `voice-analysis.ts` la déclaraient
+ * `{ type: 'object' }` NU, donc `{}`.
+ *
+ * `prosody` et `qualityMetrics` sont OPTIONNELS au sens du type ; en JSON Schema
+ * ils sont simplement déclarés — une clé absente de l'objet réel n'est pas
+ * fabriquée par le sérialiseur.
+ */
+export const voiceQualityAnalysisSchema = {
+  type: 'object',
+  properties: {
+    ...voiceAnalysisResultSchema.properties,
+    prosody: {
+      type: 'object',
+      properties: {
+        energyMean: { type: 'number', description: 'Mean RMS energy' },
+        energyStd: { type: 'number', description: 'Energy standard deviation' },
+        silenceRatio: { type: 'number', description: 'Ratio of silence (0-1)' },
+        speechRateWpm: { type: 'number', description: 'Estimated words per minute' }
+      }
+    },
+    qualityMetrics: {
+      type: 'object',
+      properties: {
+        overallScore: { type: 'number', description: 'Overall voice quality score (0-1)' },
+        clarity: { type: 'number', description: 'Audio clarity (0-1)' },
+        consistency: { type: 'number', description: 'Voice consistency (0-1)' },
+        suitableForCloning: { type: 'boolean', description: 'Quality sufficient for voice cloning' },
+        trainingQuality: {
+          type: 'string',
+          enum: ['poor', 'fair', 'good', 'excellent'],
+          description: 'Qualitative training grade'
+        }
+      }
+    }
+  }
+} as const;
+
 export const voiceComparisonResultSchema = {
   type: 'object',
   properties: {
@@ -291,3 +331,68 @@ export function isAdmin(request: FastifyRequest): boolean {
   const user = request.user;
   return user?.role === 'admin';
 }
+
+/**
+ * L'attachement audio servi par les routes de voix.
+ *
+ * Ce fichier portait DÉJÀ la forme juste — `POST /voice/transcribe` la déclarait
+ * en toutes lettres — pendant que trois charges utiles du MÊME fichier, trois
+ * cents lignes plus haut, disaient `attachment: { type: 'object' }` nu, donc
+ * `{}`. Troisième fois de la session que la bonne forme se trouve à portée de
+ * regard du défaut (cycles 84, 89).
+ *
+ * Le **superset** des deux producteurs :
+ *
+ * | producteur | champs |
+ * |---|---|
+ * | `MessageTranslationService.translateAttachment` | `id`, `messageId`, `fileName`, `fileUrl`, `duration`, `mimeType` |
+ * | `…getAttachmentWithTranscription` | les six ci-dessus + `originalName`, `fileSize`, `bitrate`, `sampleRate`, `codec`, `channels`, `createdAt` |
+ *
+ * Déclarer le superset est le seul choix qui ne TRONQUE aucun des deux : une
+ * clé déclarée que l'objet ne porte pas n'est pas fabriquée par le sérialiseur,
+ * alors qu'une clé portée et non déclarée est supprimée.
+ */
+export const voiceAttachmentSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string' },
+    messageId: { type: 'string' },
+    fileName: { type: 'string' },
+    originalName: { type: 'string', nullable: true },
+    fileUrl: { type: 'string' },
+    mimeType: { type: 'string' },
+    fileSize: { type: 'number', nullable: true },
+    duration: { type: 'number', nullable: true },
+    bitrate: { type: 'number', nullable: true },
+    sampleRate: { type: 'number', nullable: true },
+    codec: { type: 'string', nullable: true },
+    channels: { type: 'number', nullable: true },
+    createdAt: { type: 'string', format: 'date-time' }
+  }
+} as const;
+
+/**
+ * La transcription servie à côté de l'attachement — même superset, mêmes
+ * raisons.
+ *
+ * `POST /voice/translate` en construit une INLINE de quatre champs
+ * (`text`, `language`, `confidence`, `durationMs`) sur son chemin base64, quand
+ * `getAttachmentWithTranscription` en rend huit. La forme large couvre les deux :
+ * les quatre champs du chemin court sortent tels quels, les autres n'apparaissent
+ * simplement pas.
+ */
+export const voiceTranscriptionSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string' },
+    text: { type: 'string' },
+    language: { type: 'string' },
+    confidence: { type: 'number' },
+    source: { type: 'string' },
+    segments: { type: 'array' },
+    durationMs: { type: 'number' },
+    createdAt: { type: 'string', format: 'date-time' }
+  }
+} as const;

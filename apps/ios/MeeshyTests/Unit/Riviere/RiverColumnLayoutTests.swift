@@ -55,4 +55,23 @@ final class RiverColumnLayoutTests: XCTestCase {
         XCTAssertEqual(layout.railX(1), 450)
         XCTAssertEqual(layout.totalWidth, 600)
     }
+
+    // MARK: - Cadrage d'un couloir : l'offset horizontal qui le centre (2026-08-22)
+
+    /// Le pane défile sur deux axes, mais `scrollTo` n'en bouge qu'un (mesuré
+    /// au simulateur : quelle que soit l'ancre, l'offset X restait la moitié
+    /// du débordement — le contenu centré d'origine). L'axe des voix se pose
+    /// donc par un OFFSET explicite : le rail du couloir au centre du pane,
+    /// borné entre la rive et le bord.
+    func test_horizontalOffset_putsTheLanesRail_atTheCenterOfThePane() {
+        let layout = RiverColumnLayout(laneWidth: 300, gutter: 28, laneCount: 6)
+        XCTAssertEqual(layout.horizontalOffset(centeringLane: 3, paneWidth: 402), 1050 - 201)
+        XCTAssertEqual(layout.horizontalOffset(centeringLane: 0, paneWidth: 402), 0, "le premier couloir ne va pas plus à gauche que la rive")
+        XCTAssertEqual(layout.horizontalOffset(centeringLane: 5, paneWidth: 402), 1800 - 402, "le dernier couloir ne va pas plus à droite que le bord")
+    }
+
+    func test_horizontalOffset_isZero_whenEverythingFitsInThePane() {
+        let layout = RiverColumnLayout(laneWidth: 300, gutter: 28, laneCount: 1)
+        XCTAssertEqual(layout.horizontalOffset(centeringLane: 0, paneWidth: 402), 0)
+    }
 }
