@@ -42,6 +42,10 @@ export interface ISignalProtocolAdapter {
    * persistante que cette clé existe pour porter. Elle est en revanche RENDUE —
    * l'initiateur doit la transmettre au répondeur, sans quoi le pair ne peut
    * dériver aucun secret et la session est morte-née.
+   *
+   * `ourRegistrationId` est rendu pour la MÊME raison que la clé éphémère : il
+   * entre dans l'`info` du HKDF, donc le pair ne peut rien dériver sans lui. Un
+   * résultat qui le tait rend un secret que personne d'autre ne retrouvera.
    */
   performX3DH(params: {
     ourIdentityPrivate: Buffer;
@@ -49,7 +53,7 @@ export interface ISignalProtocolAdapter {
     theirSignedPreKeyPublic: Buffer;
     theirSignedPreKeySignature: Buffer;
     theirPreKeyPublic?: Buffer;
-  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer }>;
+  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer; ourRegistrationId: number }>;
 
   /**
    * Encrypt a message using AES-256-GCM

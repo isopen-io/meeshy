@@ -68,7 +68,7 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     theirSignedPreKeyPublic: Buffer;
     theirSignedPreKeySignature: Buffer;
     theirPreKeyPublic?: Buffer;
-  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer }> {
+  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer; ourRegistrationId: number }> {
     // Le paquet porte désormais la SIGNATURE de la pré-clé signée, donc il a la
     // forme complète que `PreKeyBundle` déclare — le `as any` d'avant existait
     // parce que ce contrat-ci n'en transportait pas, et il masquait exactement
@@ -83,6 +83,12 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
         signature: params.theirSignedPreKeySignature
       },
       preKey: params.theirPreKeyPublic ? { id: 0, publicKey: params.theirPreKeyPublic } : undefined,
+      // Étiquette de session, PAS une entrée de dérivation : l'identifiant lié au
+      // HKDF est celui de l'initiateur, que `initiatorKeyAgreement` lit sur son
+      // propre gestionnaire de clés. Ce `0` était un mensonge de dérivation tant
+      // que le paquet décidait des clés ; il n'en est plus un. Ne pas le
+      // « réparer » en y injectant l'identifiant du pair : ce champ arrive par un
+      // canal hostile et la signature ne le couvre pas.
       registrationId: 0
     };
 
@@ -95,7 +101,11 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     // pour calculer DH2/DH3/DH4. La rendre au seul `rootKey`, comme avant, donnait
     // à l'appelant un secret que son pair ne pouvait par construction jamais
     // retrouver.
-    return { rootKey: result.rootKey, ourEphemeralPublic: result.ephemeralKeyPair.publicKey };
+    return {
+      rootKey: result.rootKey,
+      ourEphemeralPublic: result.ephemeralKeyPair.publicKey,
+      ourRegistrationId: this.keyManager.getRegistrationId()
+    };
   }
 
   async encryptMessage(
