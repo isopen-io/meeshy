@@ -6,8 +6,12 @@ import {
   communitySchema,
   createCommunityRequestSchema,
   updateCommunityRequestSchema,
-  errorResponseSchema
+  errorResponseSchema,
+  userMinimalSchema
 } from '@meeshy/shared/types/api-schemas';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import {
   CreateCommunitySchema,
   UpdateCommunitySchema,
@@ -512,17 +516,40 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
               items: {
                 type: 'object',
                 properties: {
+                  // Le web type cette réponse `Conversation[]` et n'en recevait
+                  // que l'id et deux dates : titre, type et identifiant sont
+                  // produits par le handler (`findMany` sans `select`) et
+                  // n'étaient pas déclarés, donc supprimés à la sérialisation.
                   id: { type: 'string' },
+                  identifier: { type: 'string', nullable: true },
+                  title: { type: 'string', nullable: true },
+                  type: { type: 'string', nullable: true },
+                  description: { type: 'string', nullable: true },
+                  avatar: { type: 'string', nullable: true },
+                  banner: { type: 'string', nullable: true },
+                  isActive: { type: 'boolean', nullable: true },
+                  memberCount: { type: 'number', nullable: true },
+                  lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
                   communityId: { type: 'string' },
                   createdAt: { type: 'string', format: 'date-time' },
                   updatedAt: { type: 'string', format: 'date-time' },
-                  members: {
+                  // Le handler produit `participants`, jamais `members` — ce
+                  // schéma déclarait donc un champ que rien ne pose, pendant
+                  // qu'il supprimait celui qui existe. Et son `user` était
+                  // `{ type: 'object' }` nu : vidé en `{}` par
+                  // fast-json-stringify. Renommer ne casse aucun client —
+                  // `members` n'a jamais atteint le fil.
+                  participants: {
                     type: 'array',
                     items: {
                       type: 'object',
                       properties: {
-                        userId: { type: 'string' },
-                        user: { type: 'object' }
+                        id: { type: 'string' },
+                        userId: { type: 'string', nullable: true },
+                        displayName: { type: 'string', nullable: true },
+                        role: { type: 'string', nullable: true },
+                        isActive: { type: 'boolean', nullable: true },
+                        user: { ...userMinimalSchema, nullable: true }
                       }
                     }
                   },
@@ -530,7 +557,8 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
                     type: 'object',
                     properties: {
                       messages: { type: 'number' },
-                      members: { type: 'number' }
+                      // Idem : le handler compte `participants`.
+                      participants: { type: 'number' }
                     }
                   }
                 }
@@ -623,7 +651,47 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return sendSuccess(reply, conversations);
+      // Présence des co-participants. Le régime est tranché par le `where` de
+      // la requête ci-dessus, pas par le contrôle d'accès : elle ne rend que
+      // les conversations dont l'appelant est lui-même participant
+      // (`participants: { some: { userId } }`). Toute personne listée est donc
+      // un CO-PARTICIPANT — contexte d'accès garanti des deux côtés — et seules
+      // les préférences s'appliquent. Le contrôle d'accès, lui, ne referme que
+      // les communautés PRIVÉES : s'y fier aurait conduit au critère strict, et
+      // retiré des pastilles légitimes.
+      //
+      // Gate posé dans le MÊME lot que la déclaration du schéma : `user`
+      // portait `isOnline` brut, et seul le `{ type: 'object' }` nu l'empêchait
+      // de sortir. Déclarer sans gater aurait publié la fuite.
+      const participantUserIds = [
+        ...new Set(
+          conversations.flatMap((c: { participants?: Array<{ userId?: string | null }> }) =>
+            (c.participants ?? []).map(p => p.userId).filter((uid): uid is string => !!uid),
+          ),
+        ),
+      ];
+      const participantPresence = participantUserIds.length > 0
+        ? await getPresenceVisibilityService(fastify.prisma).resolvePrefsOnly(participantUserIds)
+        : new Map<string, PresenceVisibility>();
+
+      return sendSuccess(
+        reply,
+        conversations.map((conversation: { participants?: Array<Record<string, unknown>> }) => ({
+          ...conversation,
+          participants: (conversation.participants ?? []).map(participant => {
+            const nested = participant.user as { id: string; isOnline: boolean | null } | null | undefined;
+            if (!nested?.id) return participant;
+            return {
+              ...participant,
+              // `onMissingEntry: 'reveal'` — sous prefs-only, une entrée absente
+              // est normale (participant anonyme, sans `userId`), pas suspecte.
+              user: applyPresenceVisibilityAsOffline(nested, participantPresence.get(nested.id), {
+                onMissingEntry: 'reveal',
+              }),
+            };
+          }),
+        })),
+      );
     } catch (error) {
       logger.error('Error fetching community conversations', error as Error);
       return sendInternalError(reply, 'Failed to fetch community conversations');

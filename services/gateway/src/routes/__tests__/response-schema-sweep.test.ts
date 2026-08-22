@@ -41,9 +41,19 @@ const ROUTES_DIR = join(__dirname, '..');
  * priorisé : `tasks/realtime-sync-audit-2026-08-22-cycle86-bis.md` §6 et
  * `…-cycle87.md` §2.
  *
- * Les quatre `user:` / `sender:` touchent la présence : les traiter comme le
- * cycle 84 bis a traité le sien — déclarer le schéma ET poser le gate dans le
- * MÊME lot, sans quoi la réparation publie la fuite que la panne retenait.
+ * **Les sites de PRÉSENCE sont tous traités (cycle 88).** Cinq lignes ont donc
+ * quitté cet inventaire : `communities/core.ts|user`, `magic-link.ts|user` ×2 et
+ * `magic-link.ts|session` ×2 — schéma déclaré ET gate posé dans le même lot,
+ * selon la règle du cycle 84 bis.
+ *
+ * `messages.ts|sender|200` RESTE, et ce n'est pas un oubli. Le balayage le
+ * signale comme nu, mais la déclaration y est INERTE : le schéma de cette route
+ * décrit le message quand `sendSuccess` répond `{ success, data }`, si bien que
+ * rien n'y matche et que la charge utile traverse entière. Ce site portait donc
+ * une fuite de présence ACTIVE — fermée au cycle 88 par un gate à la source.
+ * Aligner son schéma sur l'enveloppe est un lot en soi : déclarer partiellement
+ * ce qui passait entier TRONQUERAIT. Tant que ce n'est pas fait, la ligne reste
+ * ici — elle nomme une dette de FORME, plus une fuite.
  */
 const FROZEN_INVENTORY: readonly string[] = [
   'admin/roles.ts|items|400',
@@ -51,15 +61,10 @@ const FROZEN_INVENTORY: readonly string[] = [
   'anonymous.ts|items|400',
   'anonymous.ts|items|400',
   'calls.ts|details|400',
-  'communities/core.ts|user|200',
   'conversations/messages-advanced.ts|message|200',
   'conversations/messages-advanced.ts|message|200',
   'conversations/sharing.ts|link|200',
   'links/admin.ts|creator|200',
-  'magic-link.ts|session|200',
-  'magic-link.ts|session|200',
-  'magic-link.ts|user|200',
-  'magic-link.ts|user|200',
   'messages.ts|sender|200',
   'signal-protocol.ts|items|400',
   'signal-protocol.ts|items|400',
