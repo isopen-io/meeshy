@@ -1,4 +1,21 @@
-# Cycle 86 — Le gate existait. Il avait été écrit dans le fichier que Node ne charge pas.
+# Cycle 86 — Le gate existait, dans le fichier que Node ne charge pas. Et deux autres passes l'ont trouvé en même temps.
+
+> **Note de clôture, à lire d'abord.** Ce cycle a été mené en parallèle de deux
+> autres passes qui ont abouti AVANT lui sur le même terrain :
+>
+> - **#3294 (« cycle 84 bis »)** répare le schéma de `GET /communities/search`
+>   et y pose un gate — dans le module MASQUÉ, donc sans effet (§8 bis) ;
+> - **#3300 (« cycle 85-bis »)** trouve exactement le même défaut que §3, le
+>   corrige mieux (applicateur partagé doté d'une politique `onMissingEntry`
+>   explicite), documente la règle Node de façon plus complète, et pose un
+>   `module-shadowing.test.ts` GÉNÉRAL — balayage de tout `routes/`, vérification
+>   que les autres scissions portent bien une coquille de ré-export.
+>
+> Ce qui reste propre à ce cycle après réconciliation :
+> **le portage des trois corrections du cycle 84 bis sur le module réellement
+> monté** (§8 bis), sans lequel la recherche de communautés iOS restait cassée
+> après le lot qui la corrige. Le reste de mon travail a été remplacé par le
+> leur, à raison — voir §11.
 
 **Date** : 2026-08-22
 **Branche** : `claude/keen-hamilton-ftmofu`
@@ -204,6 +221,27 @@ posés ici, le témoin structurel les fige, la décision reste à prendre.
 
 **Dette d'environnement, inchangée depuis le cycle 79.** `npx eslint` échoue
 dans ce conteneur.
+
+## 11. Réconciliation avec #3300 — ce que j'ai retiré au profit du leur
+
+Trois pièces de ce cycle ont été **abandonnées** à la fusion, parce que leur
+version est meilleure :
+
+| ma pièce | leur version | pourquoi la leur |
+|---|---|---|
+| gate des membres écrit à la main dans le handler | `applyPresenceVisibilityAsOffline(..., { onMissingEntry })` | l'applicateur partagé rend le défaut de carte absente EXPLICITE, là où le mien l'enfouissait dans un ternaire |
+| `communities-module-shadowing.test.ts` (communautés seules) | `module-shadowing.test.ts` (tout `routes/`) | le leur balaye TOUTES les paires fichier/répertoire et vérifie la coquille de ré-export des autres scissions — le mien en est un sous-ensemble strict. **Supprimé.** |
+| ma section `CLAUDE.md` sur le masquage | la leur | elle nomme la règle Node (`LOAD_AS_FILE` avant `LOAD_AS_DIRECTORY`), montre le patron de coquille que `routes/users.ts` porte déjà, et chiffre la dette (~1 900 lignes injoignables) |
+
+Garder les deux exemplaires aurait été exactement la duplication contre laquelle
+les cycles 82 et 84 ont légiféré. Le témoin le dit mieux que moi : je l'ai
+supprimé.
+
+**Un témoin de ce cycle a aussi été corrigé par leur implémentation.**
+J'assertais « aucune résolution sur une page sans membre » ; leur handler appelle
+`resolvePrefsOnly([])` sans garde, et le service en sort avant toute requête. Ma
+propriété était trop littérale — ce qui compte est qu'AUCUN ID ne parte, pas la
+forme de l'appel. Le témoin dit maintenant cela.
 
 ## 10. La leçon
 

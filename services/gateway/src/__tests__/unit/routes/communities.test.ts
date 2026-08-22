@@ -662,15 +662,18 @@ describe('GET /communities/:id/members — gate de présence (module live)', () 
     expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
   });
 
-  it('n ouvre aucune résolution sur une page sans membre', async () => {
+  // Aucun ID à résoudre sur une page vide. Le résolveur peut être appelé avec
+  // une liste vide — `resolvePrefsOnly` en sort avant toute requête — ce qui
+  // compte est qu'aucun id ne parte, pas la forme de l'appel.
+  it('ne résout aucun id sur une page sans membre', async () => {
     const app = await buildApp();
     (app as any).prisma.community.findFirst.mockResolvedValue(asMember);
     (app as any).prisma.communityMember.findMany.mockResolvedValue([]);
     await app.inject({ method: 'GET', url: `/communities/${COMM_ID}/members`, headers: { authorization: 'Bearer t' } });
     await app.close();
 
-    expect(mockResolvePrefsOnly).not.toHaveBeenCalled();
-    expect(mockResolveForTargets).not.toHaveBeenCalled();
+    for (const call of mockResolvePrefsOnly.mock.calls) expect(call[0]).toEqual([]);
+    for (const call of mockResolveForTargets.mock.calls) expect(call[1]).toEqual([]);
   });
 });
 
