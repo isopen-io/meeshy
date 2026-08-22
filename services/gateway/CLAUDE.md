@@ -673,6 +673,68 @@ d'en retirer, c'est d'en tester la sortie.
 
 ### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 4
 
+### La forme 2 est OUTILLÉE — le second balayage
+
+La taxonomie ci-dessus dit que « le balayage n'en distingue aucune ». C'est vrai
+du balayage des objets NUS, qui cherche l'absence de `properties`. La **forme 2**
+— la clé déclarée n'existe pas dans la charge — est désormais outillée à son
+tour, et en cliquet :
+`routes/__tests__/response-payload-mismatch.ts`, gardé par
+`response-payload-mismatch.test.ts` (cycle 91 bis).
+
+Il apparie chaque bloc `response:` avec les `sendSuccess(reply, { … })` qui le
+SUIVENT — le gestionnaire d'une route vit entre son schéma et le schéma suivant
+— et compare les jeux de clés : `total` (aucune clé envoyée n'est déclarée ⇒
+`data` sort à `{}`) contre `partial` (les clés supprimées, nommées). Il ne
+conclut jamais au vide quand la charge porte un `...spread`, qui peut apporter
+les clés déclarées.
+
+Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
+jusqu'à la variable demanderait un typeur, pas un balayage.
+
+**Pourquoi il fallait l'outiller, et pas seulement poser la question.** Le
+cycle 88 bis a réparé trois sites de forme 2 en les cherchant à la main. Le
+`DELETE /…/messages/:messageId` — dans le MÊME fichier, entre les deux
+transports d'édition réparés — est passé au travers : son
+`message: { type: 'string' }` est irréprochable, et il décrit
+`{messageId, deleted, meta}`. Il rendait `data: {}` depuis toujours, et personne
+ne l'a vu en corrigeant ses deux voisins.
+
+Trois autres exemplaires vivaient en production, tous en forme 2, et deux
+touchaient l'AUTHENTIFICATION :
+
+| route | déclaré | envoyé | effet |
+|---|---|---|---|
+| `POST /auth/login` (branche 2FA) | `user, token, sessionToken, session, expiresIn` | `requires2FA, twoFactorToken, …` | **aucun compte 2FA ne pouvait se connecter** |
+| `POST /auth/register` (conflit de numéro) | `user, token, expiresIn` | `phoneOwnershipConflict, phoneOwnerInfo, pendingRegistration` | modale de transfert morte |
+| `DELETE /…/messages/:id` | `message` (string) | `messageId, deleted, meta` | acquittement vide |
+
+**Une route qui sert DEUX charges utiles sous le même code de statut doit
+déclarer les deux.** C'est le patron des deux routes d'auth : une branche
+nominale et une branche « il manque quelque chose », le schéma n'ayant été écrit
+que pour la première.
+
+Corollaire de méthode, et c'est ce qui a laissé ces trois-là vivre : **un témoin
+qui n'assert que `statusCode` couvre une route morte sans jamais rougir.** Pire,
+quand quelqu'un REMARQUE le retrait et l'écrit en commentaire au lieu de le
+traiter comme un défaut, il scelle la panne :
+
+```ts
+// 2FA case returns 200 (response schema strips requires2FA from serialized output)
+```
+
+Ce commentaire a tenu la connexion à deux facteurs fermée en le disant à voix
+haute. Devant toute phrase de cette forme — « le schéma retire X », « ce champ
+ne sort pas » — la question est : *et c'est bien ?*
+
+**Et réparer un schéma peut OUVRIR ce que la panne retenait.** La charge du
+conflit de numéro portait le mot de passe EN CLAIR ; il ne sortait pas, le
+schéma le retirant avec tout le reste. Déclarer la branche sans y penser aurait
+publié le secret sans faire tomber un témoin. Le retrait se fait à la SOURCE —
+compter sur une omission de schéma pour retenir un secret est un piège armé,
+pas une protection (règle du cycle 84).
+
+
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
 la main.** Le cycle 86 l'avait construit et laissé dans son JOURNAL ; deux
@@ -711,12 +773,23 @@ les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits 
 main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
 cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `voice/translation.ts`
 au cycle 91, avec la TRONCATURE que portait la forme « juste » du même fichier ;
-les trois enveloppes fantômes au cycle 88 bis. **Il ne reste que 4 sites** —
-`calls.ts|details|400`, `links/admin.ts|creator|200`, `messages.ts|sender|200`,
-`users/profile.ts|permissions|200` — triés dans
-`tasks/realtime-sync-audit-2026-08-22-cycle91.md` §8 et `…-cycle88-bis.md` §5.
-Le second pose les deux questions à instruire AVANT de réparer : que passe le
-gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le décrire ?
+les trois enveloppes fantômes au cycle 88 bis.
+
+**Les trois derniers sont partis au cycle 91 bis** — `calls.ts|details|400`
+(schéma d'erreur écrit à la main, faux sur l'enveloppe dans les trois sens),
+`links/admin.ts|creator|200` (déclaré depuis ses deux émetteurs), et
+`users/profile.ts|permissions|200`, **RETIRÉ** plutôt que déclaré : son
+gestionnaire posait `permissions: undefined` délibérément, le champ n'avait
+aucun producteur.
+
+**Il ne reste qu'UNE ligne au cliquet, et ce n'est pas une fuite** :
+`messages.ts|sender|200`, dette de FORME (forme 3 de la taxonomie ci-dessus) —
+la déclaration y est INERTE, le champ traverse entier. `FROZEN_INVENTORY` doit
+rester à une ligne. Inventaires raisonnés :
+`tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`,
+`…-cycle91.md` §8 et `…-cycle88-bis.md` §5 — ce dernier pose les deux questions
+à instruire AVANT de réparer : que passe le gestionnaire à `sendSuccess`, et à
+quel niveau le schéma prétend-il le décrire ?
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et

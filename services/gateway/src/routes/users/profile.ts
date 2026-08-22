@@ -934,7 +934,15 @@ export async function getUserById(fastify: FastifyInstance) {
                 updatedAt: { type: 'string', format: 'date-time' },
                 email: { type: 'string', description: 'Masked for security' },
                 phoneNumber: { type: 'string', nullable: true, description: 'Masked for security' },
-                permissions: { type: 'object', nullable: true },
+                // `permissions` a été RETIRÉ, du schéma comme de la charge
+                // utile. Il n'avait pas de producteur : le handler posait
+                // `permissions: undefined` DÉLIBÉRÉMENT — un profil public ne
+                // porte pas les autorisations de son sujet — si bien que la
+                // clé ne partait jamais sur le fil. Le `{ type: 'object' }` nu
+                // qui la déclarait ne vidait donc rien, mais il occupait
+                // l'inventaire du balayage en promettant un champ qui n'existe
+                // pas. Aucun changement de contrat : ce qui ne sortait pas ne
+                // sort toujours pas.
                 isAnonymous: { type: 'boolean', example: false },
                 isMeeshyer: { type: 'boolean', example: true }
               }
@@ -998,7 +1006,6 @@ export async function getUserById(fastify: FastifyInstance) {
         autoTranslateEnabled: true,
         email: '',
         phoneNumber: undefined,
-        permissions: undefined,
         isAnonymous: false,
         isMeeshyer: true,
       };

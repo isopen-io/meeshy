@@ -35,16 +35,55 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       body: registerRequestSchema,
       response: {
         200: {
-          description: 'Account created successfully - verification email sent',
+          description: 'Account created successfully - verification email sent. When the phone number already belongs to another account, NO account is created and the response carries `phoneOwnershipConflict` instead, so the client can offer a transfer.',
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
             data: {
               type: 'object',
+              // Comme `POST /login`, cette route sert DEUX charges utiles sous
+              // le même 200 et n'en déclarait qu'une. Les trois clés du conflit
+              // de numéro étaient donc retirées à la sérialisation : `data`
+              // partait vide, et le client (`use-registration-submit.ts`, qui
+              // branche sur `data.data.phoneOwnershipConflict`) retombait sur un
+              // « Registration failed » générique. La modale de transfert de
+              // numéro ne s'ouvrait jamais.
               properties: {
+                // Branche « compte créé »
                 user: userSchema,
-                token: { type: 'string', description: 'JWT access token for API authentication' },
-                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 }
+                token: { type: 'string', description: 'JWT access token for API authentication (absent on a phone-ownership conflict)' },
+                expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
+
+                // Branche « numéro déjà détenu » — aucun compte n'a été créé
+                phoneOwnershipConflict: { type: 'boolean', description: 'True when the phone number belongs to another account; no account was created', example: true },
+                phoneOwnerInfo: {
+                  type: 'object',
+                  description: 'Masked identity of the current owner, to be shown in the transfer prompt',
+                  properties: {
+                    maskedDisplayName: { type: 'string' },
+                    maskedUsername: { type: 'string' },
+                    maskedEmail: { type: 'string' },
+                    avatar: { type: 'string', nullable: true },
+                    phoneNumber: { type: 'string' },
+                    phoneCountryCode: { type: 'string' }
+                  }
+                },
+                pendingRegistration: {
+                  type: 'object',
+                  // `password` n'est PAS déclaré, et n'est plus envoyé : le
+                  // secret n'a aucune raison de faire l'aller-retour. Les deux
+                  // reprises côté client réémettent depuis leur propre
+                  // `formData`, jamais depuis cet écho.
+                  description: 'Echo of the submitted profile so the client can resume registration after resolving the conflict — never carries the password',
+                  properties: {
+                    username: { type: 'string' },
+                    email: { type: 'string' },
+                    firstName: { type: 'string' },
+                    lastName: { type: 'string' },
+                    systemLanguage: { type: 'string' },
+                    regionalLanguage: { type: 'string' }
+                  }
+                }
               }
             }
           }
@@ -108,12 +147,19 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
             phoneNumber: result.phoneOwnerInfo.phoneNumber,
             phoneCountryCode: result.phoneOwnerInfo.phoneCountryCode
           },
+          // Le mot de passe EN CLAIR figurait ici. Il ne sortait pas — le
+          // schéma 200 ne déclarait aucune de ces clés et les retirait toutes —
+          // si bien que déclarer la branche du conflit, sans plus, aurait
+          // OUVERT un aller-retour du secret. Le client n'en a pas besoin : ses
+          // deux reprises (`handleContinueWithoutPhone`, `handlePhoneTransferred`)
+          // réémettent depuis `...formData`, son propre état. Retiré à la
+          // SOURCE plutôt que laissé au sérialiseur : compter sur une omission
+          // de schéma pour retenir un secret, c'est le piège armé du cycle 84.
           pendingRegistration: {
             username: validatedData.username,
             email: validatedData.email,
             firstName: validatedData.firstName,
             lastName: validatedData.lastName,
-            password: validatedData.password,
             systemLanguage: validatedData.systemLanguage,
             regionalLanguage: validatedData.regionalLanguage
           }

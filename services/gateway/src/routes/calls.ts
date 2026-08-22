@@ -146,20 +146,18 @@ export default async function callRoutes(fastify: FastifyInstance) {
             data: callSessionSchema
           }
         },
+        // Ce bloc était écrit à la main, et se trompait sur l'enveloppe : il
+        // déclarait `error` en OBJET portant `code`/`message`/`details`, quand
+        // `sendError` (`utils/response.ts`) rend `error` en STRING à la RACINE,
+        // avec `message` et `code` à côté — et `details` ÉTALÉ, jamais comme
+        // clé. Résultat, sur le seul 400 de cette route
+        // (`sendError(reply, 400, errorCode, { message })`) : `error` sortait en
+        // `{}`, `message` et `code` étaient supprimés, et le client n'avait plus
+        // rien à afficher ni à brancher. `errorResponseSchema` déclare les
+        // champs réels — cf. § « Un schéma d'ERREUR se confronte à l'enveloppe ».
         400: {
-          description: 'Bad request - Invalid input or business logic error',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', description: 'Error code (e.g., INVALID_CONVERSATION, CALL_ALREADY_ACTIVE)' },
-                message: { type: 'string', description: 'Error message' },
-                details: { type: 'object', description: 'Additional error details' }
-              }
-            }
-          }
+          description: 'Bad request - Invalid input or business logic error (e.g. INVALID_CONVERSATION, CALL_ALREADY_ACTIVE)',
+          ...errorResponseSchema
         },
         401: {
           description: 'Unauthorized - Authentication required',

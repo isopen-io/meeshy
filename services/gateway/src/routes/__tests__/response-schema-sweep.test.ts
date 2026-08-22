@@ -96,11 +96,36 @@ const ROUTES_DIR = join(__dirname, '..');
  * ce qui passait entier TRONQUERAIT. Tant que ce n'est pas fait, la ligne reste
  * ici — elle nomme une dette de FORME, plus une fuite.
  */
+/**
+ * **Les trois derniers sites nus sont partis au cycle 91 bis**, et l'inventaire
+ * tombe à UNE ligne — celle, inerte, décrite juste au-dessus :
+ *
+ * - `calls.ts|details|400` — schéma d'erreur écrit à la main, faux sur
+ *   l'enveloppe dans les trois sens (cf. cycle 89) : `error` déclaré OBJET
+ *   quand `sendError` le rend en STRING à la racine, `message` et `code` non
+ *   déclarés donc supprimés, et `details` déclaré comme clé alors que
+ *   l'enveloppe l'ÉTALE. Remplacé par `errorResponseSchema`.
+ * - `links/admin.ts|creator|200` — déclaré depuis ses deux émetteurs ; aucun
+ *   champ de présence, donc aucune porte ouverte.
+ * - `users/profile.ts|permissions|200` — **RETIRÉ** plutôt que déclaré : le
+ *   handler posait `permissions: undefined` DÉLIBÉRÉMENT (un profil public ne
+ *   porte pas les autorisations de son sujet), le champ n'avait donc aucun
+ *   producteur et ne partait jamais. Aucun changement de contrat.
+ *
+ * **Ce cliquet ne suffit pas, et le cycle 91 bis l'a montré en le vidant.** Il
+ * cherche l'ABSENCE de `properties` ; un schéma BIEN FORMÉ décrivant une AUTRE
+ * charge utile vide tout aussi complètement et lui reste invisible. Le
+ * `DELETE /…/messages/:messageId` en était un — `message: { type: 'string' }`,
+ * irréprochable, contre `{messageId, deleted, meta}` — et il a survécu au
+ * cycle 88 bis, qui réparait ses deux siblings dans le même fichier. D'où le
+ * balayage frère : `response-payload-mismatch.test.ts`. **Les deux sont
+ * nécessaires ; aucun ne subsume l'autre.**
+ *
+ * Détail, preuves de sérialisation et inventaire raisonné :
+ * `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
+ */
 const FROZEN_INVENTORY: readonly string[] = [
-  'calls.ts|details|400',
-  'links/admin.ts|creator|200',
   'messages.ts|sender|200',
-  'users/profile.ts|permissions|200',
 ];
 
 describe('balayage — un schéma de réponse ne déclare jamais un objet NU', () => {
