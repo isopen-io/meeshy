@@ -417,6 +417,19 @@ final class ComposerIntentTests: XCTestCase {
     /// `StoryModels.swift`) : le composer ne s'invente pas un cinquième format,
     /// et ce qu'il ouvre se publie sous le type que le serveur connaît.
     func test_chaqueFormat_correspondAUnPostTypeDuSDK_etReciproquement() {
+        // Un ANCRAGE avant l'aller-retour, et il n'est pas redondant avec lui.
+        // L'aller-retour seul ne prouve PAS que le pont est correct : il prouve
+        // que ses deux sens sont inverses l'un de l'autre, ce que satisfait
+        // TOUTE permutation cohérente. Transposer .story et .post des deux
+        // côtés laisse la suite entièrement verte — mesuré — et une story
+        // partirait au serveur sous « POST ». Épingler UN sens sur le
+        // vocabulaire du serveur retire ce degré de liberté ; l'aller-retour
+        // ci-dessous épingle alors l'autre.
+        XCTAssertEqual(ComposerFormat.story.postType.rawValue, "STORY")
+        XCTAssertEqual(ComposerFormat.post.postType.rawValue, "POST")
+        XCTAssertEqual(ComposerFormat.reel.postType.rawValue, "REEL")
+        XCTAssertEqual(ComposerFormat.status.postType.rawValue, "STATUS")
+
         for type in PostType.allCases {
             XCTAssertEqual(
                 ComposerFormat(type).postType, type,
