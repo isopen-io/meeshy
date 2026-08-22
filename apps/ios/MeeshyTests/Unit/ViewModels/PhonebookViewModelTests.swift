@@ -451,3 +451,67 @@ final class DirectoryContactDisplayTests: XCTestCase {
         XCTAssertEqual(contact.subtitle, "+221771234567")
     }
 }
+
+// MARK: - Pagination complète du répertoire (2026-08-21 : au-delà de 200)
+
+/// Service paginé par `offset` : `total` contacts, servis par tranches de
+/// `limit`, avec ou sans `hasMore` côté serveur (le mock historique renvoie
+/// `pagination: nil`, comme le fait le gateway sur certaines routes).
+private final class PagedDirectoryStub: ContactDirectoryServiceProviding, @unchecked Sendable {
+    let total: Int
+    var listOffsets: [Int] = []
+    init(total: Int) { self.total = total }
+
+    func sync(_ request: DirectorySyncRequest) async throws -> DirectorySyncResult {
+        DirectorySyncResult(totalContacts: 0, processedContacts: 0, syncedCount: 0, matchedCount: 0, removedCount: 0)
+    }
+
+    func list(offset: Int, limit: Int, filter: DirectoryFilter, query: String?) async throws
+        -> OffsetPaginatedAPIResponse<[DirectoryContact]> {
+        listOffsets.append(offset)
+        let ids = Array(offset..<min(offset + limit, total))
+        let page = ids.map {
+            DirectoryContact(id: "c\($0)", contactKey: "k\($0)", displayName: "Contact \($0)", isOnMeeshy: false)
+        }
+        return OffsetPaginatedAPIResponse(success: true, data: page, pagination: nil, error: nil)
+    }
+
+    func clear() async throws -> DirectoryClearResult { DirectoryClearResult(removedCount: 0) }
+}
+
+final class DirectoryPagingTests: XCTestCase {
+
+    func test_hasMore_trustsTheServer_whenItSpeaks() {
+        XCTAssertTrue(DirectoryPaging.hasMore(received: 3, pageSize: 200, serverHasMore: true))
+        XCTAssertFalse(DirectoryPaging.hasMore(received: 200, pageSize: 200, serverHasMore: false))
+    }
+
+    func test_hasMore_withoutServerHint_aFullPageAnnouncesAnother_aShortOneCloses() {
+        XCTAssertTrue(DirectoryPaging.hasMore(received: 200, pageSize: 200, serverHasMore: nil))
+        XCTAssertFalse(DirectoryPaging.hasMore(received: 199, pageSize: 200, serverHasMore: nil))
+        XCTAssertFalse(DirectoryPaging.hasMore(received: 0, pageSize: 200, serverHasMore: true), "une page vide clôt toujours")
+    }
+
+    func test_listAll_readsEveryPage_pastTheOld200Cap() async throws {
+        let stub = PagedDirectoryStub(total: 450)
+        let all = try await stub.listAll(filter: .all, query: nil)
+        XCTAssertEqual(all.count, 450, "450 contacts ⇒ 450 lignes, plus de plafond à 200")
+        XCTAssertEqual(stub.listOffsets, [0, 200, 400])
+        XCTAssertEqual(all.first?.id, "c0")
+        XCTAssertEqual(all.last?.id, "c449")
+    }
+
+    func test_listAll_exactMultipleOfThePage_stopsOnTheEmptyPage_neverLoopsForever() async throws {
+        let stub = PagedDirectoryStub(total: 400)
+        let all = try await stub.listAll(filter: .all, query: nil)
+        XCTAssertEqual(all.count, 400)
+        XCTAssertEqual(stub.listOffsets.count, 3, "2 pages pleines + la page vide qui clôt")
+    }
+
+    func test_listAll_isCappedByMaxPages() async throws {
+        let stub = PagedDirectoryStub(total: 10_000)
+        let all = try await stub.listAll(filter: .all, query: nil, pageSize: 200, maxPages: 3)
+        XCTAssertEqual(all.count, 600)
+        XCTAssertEqual(stub.listOffsets.count, 3)
+    }
+}

@@ -23,6 +23,54 @@ import MeeshyUI
 /// persistance ne s'écrit nulle part ici (garde R15) : elle est LUE
 /// (`ScrollTimePillLaw.lingerMs`) pour savoir QUAND re-sonder, jamais pour
 /// décider.
+/// Positions GLOBALES (minY) des stickers de section MONTÉS — boîte inerte,
+/// écrite par les stickers eux-mêmes à chaque layout, jamais observée. Même
+/// patron que `LentilleFocusCandidateRegistry` : écrire n'invalide rien.
+nonisolated final class LentilleSectionPositionRegistry {
+    private(set) var minYById: [String: CGFloat] = [:]
+
+    func register(id: String, minY: CGFloat) {
+        minYById[id] = minY
+    }
+
+    func unregister(id: String) {
+        minYById.removeValue(forKey: id)
+    }
+
+    /// Ligne d'épinglage des stickers (GLOBALE), mesurée par la liste sur le
+    /// conteneur de défilement — `nil` tant qu'aucun layout ne l'a posée.
+    private(set) var pinLine: CGFloat?
+
+    func registerPinLine(_ value: CGFloat) {
+        pinLine = value
+    }
+
+    /// Fraction de point tolérée au-dessus de la ligne : un sticker épinglé
+    /// se pose à `pinLine` à l'arrondi de layout près.
+    static let pinLineTolerance: CGFloat = 1
+
+    /// La section ÉPINGLÉE = le sticker qui TIENT la ligne : le plus BAS parmi
+    /// ceux situés à la ligne ou au-dessus (un `LazyVStack(pinnedViews:)`
+    /// garde un moment le sticker poussé par le suivant AU-DESSUS de la ligne
+    /// avant de le démonter — « le plus haut à l'écran » nommait une section
+    /// déjà passée, 2026-08-21). Aucun sticker à la ligne (liste au repos en
+    /// haut, ou ligne pas encore mesurée) ⇒ le plus haut, la première section
+    /// à venir. Départage déterministe par id — un dictionnaire n'a pas d'ordre.
+    nonisolated static func pinnedSectionId(positions: [String: CGFloat], pinLine: CGFloat?) -> String? {
+        if let pinLine {
+            let holding = positions.filter { $0.value <= pinLine + pinLineTolerance }
+            if let pinned = holding.max(by: { lhs, rhs in
+                lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key > rhs.key
+            }) {
+                return pinned.key
+            }
+        }
+        return positions.min { lhs, rhs in
+            lhs.value != rhs.value ? lhs.value < rhs.value : lhs.key < rhs.key
+        }?.key
+    }
+}
+
 struct SectionScrollPillHost: View {
 
     /// Le relais EXISTANT. `@ObservedObject` : ce petit hôte se re-rend au
@@ -32,6 +80,11 @@ struct SectionScrollPillHost: View {
     /// réinitialise pas l'état ci-dessous : même type, même position dans
     /// l'arbre.
     let title: String
+    /// Les sections RENDUES, pour nommer la section épinglée (2026-08-21).
+    var sections: [ConversationSection] = []
+    /// Boîte inerte alimentée par les stickers (voir ci-dessus). `nil` ⇒ le
+    /// titre de repli seul.
+    var positions: LentilleSectionPositionRegistry? = nil
 
     @State private var activity: ScrollActivityState = ScrollTimePillLaw.initialState()
     @State private var isVisible = false
@@ -40,8 +93,19 @@ struct SectionScrollPillHost: View {
     /// effacement à venir.
     @State private var probeScheduled = false
 
+    /// Le libellé suit la section ÉPINGLÉE, relue au tick (le sticker du haut
+    /// de l'écran), jamais « la dernière rangée apparue » : en descendant, les
+    /// rangées apparaissent par le BAS et nommaient la section suivante
+    /// (retour visuel 2026-08-21).
+    private var liveTitle: String {
+        guard let positions,
+              let id = LentilleSectionPositionRegistry.pinnedSectionId(positions: positions.minYById, pinLine: positions.pinLine),
+              let section = sections.first(where: { $0.id == id }) else { return title }
+        return LentilleSticker.displayTitle(section.name)
+    }
+
     var body: some View {
-        SectionScrollPill(isVisible: isVisible, text: title)
+        SectionScrollPill(isVisible: isVisible, text: liveTitle)
             .adaptiveOnChange(of: relay.offset) { _, _ in noteScrollEvent() }
     }
 

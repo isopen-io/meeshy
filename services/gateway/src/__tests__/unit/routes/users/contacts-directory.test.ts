@@ -4,7 +4,7 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 jest.mock('../../../../utils/logger-enhanced', () => ({
@@ -15,11 +15,27 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 import {
   syncContactsDirectory,
   getContactsDirectory,
   clearContactsDirectory,
 } from '../../../../routes/users/contacts-directory';
+
+const FULL = { showOnline: true, showLastSeenTimestamp: true };
+const HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+
+beforeEach(() => {
+  mockResolveForTargets.mockReset().mockImplementation(async (_viewer: unknown, ids: string[]) =>
+    new Map(ids.map((id) => [id, FULL])),
+  );
+});
 
 const CURRENT_USER_ID = '507f1f77bcf86cd799439011';
 const AWA_ID = '507f1f77bcf86cd799439022';
@@ -72,7 +88,7 @@ async function buildApp(opts: { auth?: 'authenticated' | 'unauthenticated'; pris
   app.decorate('prisma', prisma);
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = auth === 'authenticated'
-      ? { isAuthenticated: true, userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID } }
+      ? { isAuthenticated: true, type: 'user', userId: CURRENT_USER_ID, registeredUser: { id: CURRENT_USER_ID, role: 'USER' } }
       : { isAuthenticated: false, registeredUser: null };
   });
   await syncContactsDirectory(app);
@@ -273,6 +289,40 @@ describe('GET /users/me/contacts', () => {
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: '/users/me/contacts' });
     expect(res.statusCode).toBe(500);
+    await app.close();
+  });
+
+  it('names the authenticated caller as the presence viewer', async () => {
+    const prisma = makePrisma({ entries: [STORED_ENTRY], total: 1 });
+    const { app } = await buildApp({ prisma });
+    await app.inject({ method: 'GET', url: '/users/me/contacts' });
+    expect(mockResolveForTargets).toHaveBeenCalledWith(
+      { userId: CURRENT_USER_ID, role: 'USER' },
+      [AWA_ID],
+    );
+    await app.close();
+  });
+
+  it('masks the presence the viewer may not see', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[AWA_ID, HIDDEN]]));
+    const prisma = makePrisma({ entries: [STORED_ENTRY], total: 1 });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/users/me/contacts' });
+    const matched = res.json().data[0].matchedUser;
+    expect(matched.isOnline).toBe(false);
+    expect(matched.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it('serves a contact blocked since the last sync as invitable, not as a Meeshy account', async () => {
+    const prisma = makePrisma({ entries: [STORED_ENTRY], total: 1 });
+    prisma.user.findUnique = jest.fn<any>().mockResolvedValue({ blockedUserIds: [AWA_ID] });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({ method: 'GET', url: '/users/me/contacts' });
+    const entry = res.json().data[0];
+    expect(entry.matchedUser).toBeNull();
+    expect(entry.isOnMeeshy).toBe(false);
+    expect(entry.displayName).toBe('Awa Diallo');
     await app.close();
   });
 });

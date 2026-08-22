@@ -2,6 +2,130 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-21 **Conversation stats dashboard shipped** (slice `conversation-stats-core`,
+> feature-parity §Chat — "Conversation stats rings + activity-over-time + content-type breakdown").
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the 18 open PRs at branch
+> time — #3282/#3281/#3280/#3279/#3275/#3270/#3266/#3263/#3262/#3259/#3257/#3255/#3253/#3250/#3249/#3247/
+> #3245/#3243/#3242 — are all web/shared/gateway/ios/sdk, none android-routine). Prior android iteration
+> (`story-viewer-translation-request`, #3278) already merged into main. Branched off freshly-fetched
+> `origin/main` (`1def3504`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (200). One gotcha: `compileSdk = 37` resolves to
+> platform hash `android-37`, but the platform AGP 8.13.0 accepts is `android-37.0` (Android 17,
+> `AndroidVersion.ApiLevel=37.0`). The first run failed (`Failed to find target … 'android-37'`) because it
+> raced the mid-install auto-download; once `android-37.0` finished installing, `compileDebugKotlin`
+> resolved it cleanly. Ran the full `assembleDebug testDebugUnitTest` locally this run.
+>
+> **The gap (read-only recon over iOS + Android)**: iOS reaches a full `ConversationDashboardView`
+> (`ConversationMessageStatsResponse` via `GET /conversations/{id}/stats` + `ConversationAnalysis` via
+> `/analysis`). On Android the DTOs shipped **orphaned** — `AgentAnalysis.kt` defines
+> `ConversationMessageStatsResponse`/`ContentTypeCounts`/`DailyActivityEntry`/… but nothing consumed them
+> (confirmed by grep: zero references outside the model file). This slice turns the STATS half real; the
+> AI-analysis (sentiment/health/persona) half stays a separate, still-open box.
+>
+> **`:core:model` `ConversationStatsProjection`** (new, pure SSOT): `contentTypeBreakdown` (server
+> `ContentTypeCounts` → non-zero shares, count-desc, canonical tie-break, empty on zero total — **SOTA over
+> iOS**, which re-counts the loaded message page and under-counts un-paged content), `activitySeries`
+> (trailing-window filter with an **injected `today`** — deterministic, unlike iOS's wall-clock view getter;
+> drops unparseable dates, ALL keeps everything, oldest-first), `participantShares`/`languageShares`
+> (fraction + stable ordering, zero-total safe), `hourlyBuckets` (fixed 24-slot histogram; ignores
+> non-numeric/out-of-range keys, clamps negatives, accumulates dupes).
+>
+> **`:sdk-core` `ConversationStatsRepository`**: thin dependency-light sibling of `ConversationRepository`
+> (only the API — stats is an ephemeral drill-down that neither reads nor writes Room), `fetchStats(id)` →
+> `NetworkResult` via `apiCall`. New `ConversationApi.stats(id)` (`@GET conversations/{id}/stats`).
+>
+> **`:feature:chat` `ConversationStatsViewModel`** (`StateFlow<ConversationStatsUiState>`,
+> Loading/Loaded/Empty/Error): fetches once, projects the time-independent sections at load, and exposes the
+> activity series as a pure `activity(today)` getter so a **period switch re-derives locally, no refetch**
+> (the "pass time in" doctrine the chat header already uses for presence). `load` is idempotent (re-tries only
+> a prior Error); `retry()` re-fetches; `selectPeriod` inert on no-op. **`ConversationStatsSheet`** + a new
+> header `Insights` action (any member) render it: total pills, content-type bars, an accent activity
+> mini-chart with a 7d/30d/All picker, busiest-participant list, language breakdown. Strings en/fr/es/pt.
+>
+> **Tests: +30** — `ConversationStatsProjectionTest` +20 (content: drop-zero/fractions/order/tie/empty;
+> hourly: 24-span/invalid+range/negative-clamp/padded-key; activity: window/cutoff-inclusive/ALL/sort/
+> bad-date/empty; participant: fraction/zero-total/order/name-then-id tie/empty; language:
+> fraction/order+tie/drop-zero/empty), `ConversationStatsRepositoryTest` +3 (success forwards id / envelope
+> failure / transport failure), `ConversationStatsViewModelTest` +7 (loaded projection / empty / error /
+> period re-derives without refetch / idempotent load / retry after failure / inert period). **Mutation
+> (RED proof) ×2**: (a) drop the `count > 0` filter in `contentTypeBreakdown` → 3 content tests fail
+> (zero-count/order/tie); (b) drop the activity cutoff (`date.isBefore(cutoff)`) → **exactly** `activity week
+> keeps only points within the trailing window` fails (1 of 24). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally this run.
+> Reviewer PASS. Diff is `apps/android` only (4 code + 3 test + ChatScreen/Api wiring + strings + tracking docs).
+>
+> **Next**: the **AI conversation analysis** arm (`GET /conversations/{id}/analysis` → `ConversationAnalysis`
+> health score / summary / tone / emotions) — the other half of this dashboard and its own parity box — or
+> the **AI participant persona profiles + trait bars** box (same endpoint, `ParticipantProfile`/
+> `ParticipantTraits`). Both consume the same still-orphaned `AgentAnalysis.kt` models. Re-scout read-only
+> before committing — parity notes are hypotheses.
+
+> On 2026-08-21 **Story on-demand translation shipped** (slice `story-viewer-translation-request`,
+> feature-parity's Feed §F Prisme line — the **per-story timeline flag strip** arm, the LAST item on the
+> `request-missing-languages` follow-up. The whole follow-up (feed card / post-detail / comments / story) is
+> now done).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (the open PRs at branch time are
+> all web/shared/gateway/ios/sdk — none android-routine). Prior android iteration
+> (`feed-comment-translation-request`, #3273) already merged into main. Branched off freshly-fetched
+> `origin/main` (`9233e850`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (`curl` → 200). Pristine `android-37.0` recipe worked
+> (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran the full
+> `assembleDebug testDebugUnitTest` locally.
+>
+> **The gap (read-only recon over iOS + Android)**: the story viewer's language quick bar
+> (`StoryViewerViewModel.availableLanguagesFor`) only listed languages ALREADY present in `StoryItem.translations`
+> — a configured content language the story had no translation for yet never surfaced, so a viewer could not
+> request one. iOS surfaces on-demand story translation via `StoryLanguageDetailView` (a full picker, socket-
+> completed `POST /posts/:id/translate`). Android has no story-translation socket consumer, so — exactly as the
+> feed post/comment arms did — the faithful move is **pull-translate-and-merge**, surfacing configured-but-absent
+> languages as translatable chips directly in the quick bar (no separate picker sheet needed yet).
+>
+> **`:core:model` `StoryTranslationMerge`** (new, list-keyed sibling of `PostTranslationMerge`):
+> `mergeTranslation(item: StoryItem, target, text): StoryItem?` upserts into the `List<StoryTranslation>` — blank
+> target/text guard, idempotent (same lang case-insensitive + same content → null), in-place replace preserving
+> position & original casing, else append under the trimmed target.
+>
+> **`:sdk-core` `StoryRepository`**: now injects `TranslationApi`; new stateless
+> `translateStory(item, target): StoryItem?` (story-shaped sibling of `PostRepository.translatePost`) — trims
+> target, reads `item.content` as source (empty `sourceLanguage` → translator auto-detects; stories carry no
+> `originalLanguage`), blocking-translates via `translationApi.translate`, folds via `StoryTranslationMerge`.
+> Null on blank target / no source / network failure / blank translation / idempotent.
+>
+> **`:feature:stories` `StoryViewerViewModel`**: `StoryLanguageOption` gains `isTranslatable`/`isTranslating`;
+> `availableLanguagesFor` appends each configured content language (`LanguageResolver.preferredContentLanguages`)
+> absent from the present set as a translatable chip — GATED on the story already carrying ≥1 translation (a
+> pure-original story never dumps every preferred language) and on a real logged-in viewer (an anonymous viewer
+> with no prefs sees only present translations). New `requestStoryTranslation(code)`: in-flight guard via
+> `translatingLanguages` (keyed `storyId|lang`), pull-translate-and-merge into `rawItems`, then switch the
+> "Exploration" `languageOverride` to the target so the slide re-renders in it even when a higher-priority
+> language is already present (Prisme auto-resolution would otherwise keep the primary). Cancellation-safe;
+> failure inert (strip retries); `finally` clears the key. **`:sdk-ui` `LanguageQuickStrip`**: `LanguageQuickOption`
+> gains the two flags; a translatable chip reads dimmed with a "+" affordance ("…" in flight). **`StoryViewerScreen`**
+> routes a translatable tap to `requestStoryTranslation`, a content tap to `toggleLanguageOverride`.
+>
+> **Tests: +21** — `StoryTranslationMergeTest` +8 (append no-translations / append preserving order / replace
+> in place preserving position+casing / blank target / blank text / trims target / idempotent / case-insensitive
+> replace), `StoryRepositoryTest` +7 (`translateStory`: translates+merges / forwards source & trims target /
+> inert blank target / inert no source / null on failure / null on blank / idempotent), `StoryViewerViewModelTest`
+> +6 (translatable surfaces once translated / none when no translations / present language never re-offered /
+> requests+merges+switches / failed leaves display / second in-flight no duplicate). **Mutation (RED proof) ×2**:
+> (a) drop the VM in-flight guard → **exactly** `a second in-flight request … does not fire a duplicate` fails
+> (1 of 50); (b) drop `languageOverride = storyId to target` → **exactly** `requesting a translation … switches
+> to it` fails (1 of 50) — the switch test deliberately uses a secondary language (en present, de requested) so
+> Prisme auto-resolution cannot mask the missing override. Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) → BUILD SUCCESSFUL
+> locally this run. Reviewer PASS. Diff is `apps/android` only (5 code + 3 test files + tracking docs).
+>
+> **Next**: Feed §F Prisme's `request-missing-languages` follow-up is now COMPLETE across every surface. Candidates:
+> the Chat `slow`/retry glyph tier (still waits on outbox retry-state plumbing), or the next unchecked Feed/Stories
+> parity box. Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-21 **Comment on-demand translation shipped** (slice `feed-comment-translation-request`,
 > feature-parity's Feed §F Prisme line — the **comments** arm of the `request-missing-languages` follow-up.
 > Only the per-story timeline flag strip remains on that line).

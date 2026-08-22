@@ -79,6 +79,7 @@ import type {
   CommentUpdatedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
+  CommentUnlikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
   CommentMediaUpdatedEventData,
@@ -487,6 +488,11 @@ export const SERVER_EVENTS = {
   COMMENT_UPDATED: 'comment:updated',
   COMMENT_DELETED: 'comment:deleted',
   COMMENT_LIKED: 'comment:liked',
+  // Jumelle descendante de `COMMENT_LIKED`, calque de `POST_UNLIKED`. Les deux
+  // portent le total ABSOLU (`likeCount`) : le client écrit la valeur reçue,
+  // jamais un ±1. Sans la descendante, un compteur de commentaire ne savait que
+  // monter en direct — et côté iOS la valeur gonflée était PERSISTÉE.
+  COMMENT_UNLIKED: 'comment:unliked',
   COMMENT_REACTION_ADDED: 'comment:reaction-added',
   COMMENT_REACTION_REMOVED: 'comment:reaction-removed',
   // Pas de `COMMENT_REACTION_SYNC` — même raison que `REACTION_SYNC` ci-dessus,
@@ -1983,6 +1989,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMENT_UPDATED]: (data: CommentUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_DELETED]: (data: CommentDeletedEventData) => void;
   [SERVER_EVENTS.COMMENT_LIKED]: (data: CommentLikedEventData) => void;
+  [SERVER_EVENTS.COMMENT_UNLIKED]: (data: CommentUnlikedEventData) => void;
   [SERVER_EVENTS.COMMENT_REACTION_ADDED]: (data: CommentReactionUpdateEventData) => void;
   [SERVER_EVENTS.COMMENT_REACTION_REMOVED]: (data: CommentReactionUpdateEventData) => void;
 

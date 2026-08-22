@@ -31,7 +31,7 @@ final class ClipDragGestureTests: XCTestCase {
         XCTAssertNotNil(sut.selection.activeDrag, "activeDrag must be set after beginClipDrag")
 
         // Move close enough to snap candidate (within 0.1s tolerance)
-        sut.dragClipMoved(rawTime: 2.05, snapCandidates: [candidate])
+        sut.dragClipMoved(rawTime: 2.05, snapCandidates: [candidate], geometry: TimelineGeometry(zoomScale: 1.0))
 
         // Verify snap took effect
         let clipStart = sut.project.mediaObjects.first?.startTime ?? -99

@@ -14,6 +14,15 @@ import MeeshyUI
 struct BubbleReactionsOverlay: View, Equatable {
     static let maxVisible = 4
 
+    /// Le strip est monté s'il a des réactions à montrer OU si le bouton (+)
+    /// d'ajout rapide doit l'être — sur le DERNIER message reçu, jamais sur
+    /// les miens. Règle UNIQUE, lue par la bulle (`BubbleStandardLayout`) et
+    /// par la rangée plate Script/Focal (`FocalRow`, 2026-08-21 : le (+) y
+    /// arrive enfin — `FocalRowInput.isLastReceivedMessage`).
+    nonisolated static func isMounted(hasReactions: Bool, isMe: Bool, isLastReceivedMessage: Bool) -> Bool {
+        hasReactions || (!isMe && isLastReceivedMessage)
+    }
+
     let messageId: String
     let summaries: [ReactionSummary]
     let isMe: Bool

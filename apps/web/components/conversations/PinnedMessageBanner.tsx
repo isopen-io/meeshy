@@ -70,7 +70,14 @@ function translationsByLanguage(
 
 export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: PinnedMessageBannerProps) {
   const { t } = useI18n('conversations');
-  const [dismissed, setDismissed] = useState(false);
+  // Le rejet retient l'IDENTITÉ de l'épingle masquée, jamais un booléen : un
+  // booléen ne se réarme sur rien, et `ConversationView` monte cette bannière
+  // SANS `key` — changer de conversation réutilise l'instance ET son état, donc
+  // un rejet masquait l'épingle de toutes les autres conversations jusqu'au
+  // prochain rechargement de page. Les `messageId` sont des ObjectId, donc
+  // globalement uniques : ce seul champ réarme aussi bien sur une NOUVELLE
+  // épingle que sur un changement de conversation.
+  const [dismissedMessageId, setDismissedMessageId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const currentUser = useUser();
 
@@ -91,19 +98,31 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
   });
 
   useEffect(() => {
-    const invalidate = () => {
+    // La passerelle diffuse l'épingle dans la room de SA conversation
+    // (`ROOMS.conversation`) et le web est joint à toutes les rooms de ses
+    // conversations : sans ce filtre, un épinglage n'importe où refetchait la
+    // liste de la conversation OUVERTE, dont le résultat est par construction
+    // inchangé.
+    //
+    // Lecture par la NÉGATIVE, comme le tri-état `membershipRestored` : on ne
+    // saute que sur une conversation NOMMÉE et DIFFÉRENTE. Une charge utile
+    // sans `conversationId` ne prouve pas que l'épingle est ailleurs — elle
+    // rafraîchit, comme avant.
+    const invalidateIfMine = (payload: unknown) => {
+      const named = (payload as { conversationId?: string } | null)?.conversationId;
+      if (typeof named === 'string' && named !== conversationId) return;
       queryClient.invalidateQueries({ queryKey: ['pinned-messages', conversationId] });
     };
 
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    socket.on('message:pinned' as never, invalidate);
-    socket.on('message:unpinned' as never, invalidate);
+    socket.on('message:pinned' as never, invalidateIfMine);
+    socket.on('message:unpinned' as never, invalidateIfMine);
 
     return () => {
-      socket.off('message:pinned' as never, invalidate);
-      socket.off('message:unpinned' as never, invalidate);
+      socket.off('message:pinned' as never, invalidateIfMine);
+      socket.off('message:unpinned' as never, invalidateIfMine);
     };
   }, [conversationId, queryClient]);
 
@@ -128,7 +147,7 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
     [pinnedMessage?.content, pinnedMessage?.translations, pinnedMessage?.originalLanguage, preferredLanguages]
   );
 
-  if (!pinnedMessage || dismissed) return null;
+  if (!pinnedMessage || dismissedMessageId === pinnedMessage.id) return null;
 
   const senderLabel = pinnedMessage.sender?.username ?? pinnedMessage.sender?.displayName ?? '';
 
@@ -170,7 +189,7 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
 
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={() => setDismissedMessageId(pinnedMessage.id)}
             aria-label={t('pinnedBanner.close')}
             className={cn(
               'flex-shrink-0 p-0.5 rounded',

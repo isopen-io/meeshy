@@ -351,6 +351,46 @@ Errors under `error: { code, message }`, NOT `error: "string"`.
 ALWAYS use `resolveUserLanguage()` from `@meeshy/shared` for language resolution.
 NEVER reimplement the priority order locally.
 
+## Toute porte qui sort un profil de TIERS filtre sa présence
+
+`select: { isOnline: true, lastActiveAt: true }` sur quelqu'un d'AUTRE que
+l'appelant n'a qu'une suite légitime : `PresenceVisibilityService`. Aucune route
+ne sert ces deux champs bruts — le gate porte les préférences
+(`showOnlineStatus` / `showLastSeen`), la désactivation de compte, et le blocage
+bidirectionnel, qu'aucune route ne rejoue à la main.
+
+Deux régimes, et la question qui les départage : **le lecteur a-t-il un DROIT sur
+cette donnée, ou seulement un lien qu'il a posé tout seul ?**
+
+| régime | méthode | pour |
+|---|---|---|
+| STRICT | `resolveForTargets` / `resolveForTarget` | découverte : recherche d'utilisateurs, répertoire, profil. Le lien est unilatéral et non vérifié — n'importe qui inscrit n'importe quel numéro dans son téléphone |
+| contexte acquis | `resolvePrefsOnly` | co-participants d'une conversation, co-membres d'une communauté : les DEUX parties ont posé le lien. Seules les préférences s'appliquent |
+
+Le viewer se lit par `viewerFromRequest(request)` (`routes/users/presence-gate.ts`) —
+jamais depuis `AuthenticatedRequest`, dont le champ `registeredUser` est typé
+`boolean` alors que la production y met un objet.
+
+**Un paramètre `viewer` est REQUIS, jamais optionnel** : un appelant sans viewer
+passe `null`, ce qui MASQUE. Une porte de confidentialité échoue en montrant
+moins, jamais en montrant plus.
+
+### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
+
+`ContactDirectoryService.match()` filtrait le blocage bidirectionnel, avec le
+commentaire qui l'énonce et des témoins verts — mais il ne tourne qu'à la
+synchronisation d'appareil, pendant que le blocage bouge librement entre deux.
+`list()` servait donc le lien Meeshy d'un compte bloqué APRÈS le dernier `sync`,
+bouton « Lui écrire » compris, vers un envoi que la passerelle rejette en
+`USER_BLOCKED`.
+
+Le discriminant est **la fréquence relative des deux horloges** : quand ce que la
+règle décide change plus souvent que le moment où elle s'exécute, la décision
+persistée est un état FAUX jusqu'à la prochaine écriture. Une lecture rejoue donc
+la règle, et **rend exactement ce que la prochaine écriture poserait** — ici le
+triplet `matchedUserId` / `matchedBy` / `matchedAt` à `null`, soit « à inviter »,
+ce que `sync()` écrirait pour ce contact.
+
 ## Architectural Decisions
 Voir `decisions.md` dans ce rpertoire pour l'historique des choix architecturaux (Fastify, Socket.IO, ZeroMQ, auth unifie, Prisma/MongoDB, Redis fallback, erreurs types, rate limiting, Signal Protocol, logging PII, audio pipeline, push notifications) avec contexte, alternatives rejetes et consquences.
 

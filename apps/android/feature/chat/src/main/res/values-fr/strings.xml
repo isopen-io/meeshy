@@ -155,7 +155,26 @@
     <string name="report_reason_other">Autre</string>
     <!-- Conversation settings (admin) -->
     <string name="conversation_settings_title">Paramètres de la conversation</string>
-    <string name="conversation_settings_saved">Paramètres enregistrés</string>
+<string name="conversation_stats_title">Statistiques</string>
+    <string name="conversation_stats_messages">Messages</string>
+    <string name="conversation_stats_words">Mots</string>
+    <string name="conversation_stats_content_types">Types de contenu</string>
+    <string name="conversation_stats_activity">Activité</string>
+    <string name="conversation_stats_activity_empty">Pas assez de données</string>
+    <string name="conversation_stats_participants">Participants</string>
+    <string name="conversation_stats_languages">Langues</string>
+    <string name="conversation_stats_empty">Aucun message pour l\'instant</string>
+    <string name="conversation_stats_error">Échec du chargement des statistiques</string>
+    <string name="conversation_stats_retry">Réessayer</string>
+    <string name="conversation_stats_period_week">7j</string>
+    <string name="conversation_stats_period_month">30j</string>
+    <string name="conversation_stats_period_all">Tout</string>
+    <string name="conversation_stats_type_text">Texte</string>
+    <string name="conversation_stats_type_image">Photos</string>
+    <string name="conversation_stats_type_audio">Audio</string>
+    <string name="conversation_stats_type_video">Vidéos</string>
+    <string name="conversation_stats_type_file">Fichiers</string>
+    <string name="conversation_stats_type_location">Localisation</string>    <string name="conversation_settings_saved">Paramètres enregistrés</string>
     <string name="conversation_settings_write_role">Qui peut envoyer des messages</string>
     <string name="conversation_settings_announcement">Mode annonce</string>
     <string name="conversation_settings_slow_mode">Mode lent</string>

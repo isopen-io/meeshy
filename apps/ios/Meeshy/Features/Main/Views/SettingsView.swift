@@ -649,7 +649,7 @@ struct SettingsView: View {
     /// - `reading_modes` — les modes de lecture décident de la vue à
     ///   l'ouverture d'une conversation (Script, Résumé…) ;
     /// - `lentille_list` — le classement Lentille de la liste
-    ///   (`lentilleGroupConversations`, `LentillePeekView`).
+    ///   (`lentilleGroupConversations`, carte de focus Lentille).
     ///
     /// `riviere_mode` reste EN DEHORS (R-133) : un choix séparé.
     /// Dans les deux cas, une clé de drapeau posée explicitement prime sur ce

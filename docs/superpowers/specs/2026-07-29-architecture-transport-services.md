@@ -260,6 +260,11 @@ appelé depuis REST. Conséquences mesurables :
   aucun événement, là où le socket émet `comment:reaction-removed`
   (`CommentReactionHandler.ts:261`). Les autres clients gardent un compteur
   périmé, définitivement.
+  — **CORRIGÉ le 2026-08-21** (cycle 81) : la route DELETE diffuse désormais
+  `comment:unliked`, jumelle descendante de `comment:liked` (mêmes deux
+  adresses, même total ABSOLU), et les trois clients l'écoutent. Le reste du
+  constat de ce paragraphe tient : les deux transports gardent des services et
+  des familles d'événements distincts.
 - **Deux familles d'événements et deux types de notification** pour le même
   geste : `comment:liked` + `createCommentLikeNotification` en REST
   (`comments.ts:350-356`, `:377-385`) vs `comment:reaction-added` +

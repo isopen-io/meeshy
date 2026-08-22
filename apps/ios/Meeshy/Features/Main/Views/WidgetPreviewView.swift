@@ -323,7 +323,11 @@ struct WidgetPreviewView: View {
                 ) {
                     dismiss()
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(name: .openFeedComposer, object: nil)
+                        // Drapeau du Router (2026-08-21) — la notification
+                        // `openFeedComposer` n'avait AUCUN observateur : cette
+                        // action ne faisait rien. `RootView` montre le flux,
+                        // `ThemedFeedOverlay` ouvre son composeur.
+                        router.pendingOpenFeedComposer = true
                     }
                 }
 
@@ -582,8 +586,3 @@ struct WidgetPreviewView: View {
 
 }
 
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let openFeedComposer = Notification.Name("openFeedComposer")
-}

@@ -646,6 +646,24 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
+      // Jumelle descendante de la diffusion que fait la route de pose. Elle
+      // manquait : le compteur d'un commentaire ne savait que MONTER en direct,
+      // et l'écart tenait jusqu'au prochain REST (côté iOS jusqu'au prochain
+      // REST *et* par-delà les redémarrages, la valeur reçue y étant persistée).
+      // `thread.postId` et non `:postId`, pour la même raison qu'à la pose : la
+      // garde d'audience a déjà résolu le post DEPUIS le commentaire, et c'est
+      // cette valeur qui adresse la room et sert de clé de cache aux clients.
+      const socialEvents = fastify.socialEvents;
+      if (socialEvents && result.authorId) {
+        socialEvents.broadcastCommentUnliked({
+          postId: thread.postId,
+          commentId,
+          userId: authContext.registeredUser.id,
+          emoji,
+          likeCount: result.likeCount,
+        }, result.authorId);
+      }
+
       // Le symétrique du `createCommentLikeNotification` de la route de pose :
       // la réaction défaite emporte la notification qu'elle avait produite.
       // Fire-and-forget, comme la notification jumelle — le dé-like est déjà

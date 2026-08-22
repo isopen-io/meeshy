@@ -87,8 +87,10 @@ final class LentillePerspectiveCurveTests: XCTestCase {
     /// constantes, et par les deux témoins de discrimination qui suivent.
     func test_pass_rendersExactlyWhatTheFrozenMirrorPredicts_onEveryProbedDistance() {
         for distance in Self.probeDistances {
-            let expected = FocalFocusCurve.focusCurve(distance: distance, variant: .list)
-            let actual = LentillePerspective.pass(distance: distance, reduceMotion: false)
+            // Distance ABSOLUE (bande au centre, 2026-08-21) : la passe délègue au
+            // miroir pour |d| — même loi des deux côtés, fondu court non consommé.
+            let expected = FocalFocusCurve.focusCurve(distance: abs(distance), variant: .list)
+            let actual = LentillePerspective.pass(distance: distance, level: 1, reduceMotion: false)
 
             assertClose(
                 actual.alpha, expected.alpha,
@@ -120,7 +122,7 @@ final class LentillePerspectiveCurveTests: XCTestCase {
             "sépare pas les deux mondes ne mesure pas la propriété en cause)."
         )
         XCTAssertEqual(
-            LentillePerspective.pass(distance: distance, reduceMotion: false), list,
+            LentillePerspective.pass(distance: distance, level: 1, reduceMotion: false), list,
             "La perspective de la LISTE doit consommer le variant `.list` : dans la liste " +
             "on SCANNE vingt rangs (§4.3, « une asymétrie voulue — ne pas l'unifier »), " +
             "dans le fil on LIT un message. Le variant `.thread` grossit et efface bien " +
@@ -135,7 +137,7 @@ final class LentillePerspectiveCurveTests: XCTestCase {
     /// `scale` d'à peine quelques centièmes.
     func test_pass_doesNotSwapAlphaAndScale() {
         let distance = FocalFocusCurve.listMaxDistance / 2
-        let result = LentillePerspective.pass(distance: distance, reduceMotion: false)
+        let result = LentillePerspective.pass(distance: distance, level: 1, reduceMotion: false)
 
         assertClose(
             result.alpha, 1 - FocalFocusCurve.listAlphaDecay * 0.5,
@@ -161,7 +163,7 @@ final class LentillePerspectiveCurveTests: XCTestCase {
     /// qu'on s'éloigne au-dessus de la bande.
     func test_pass_staysWithinTheMirrorsBounds_andDecaysMonotonicallyAboveTheBand() {
         for distance in Self.probeDistances {
-            let result = LentillePerspective.pass(distance: distance, reduceMotion: false)
+            let result = LentillePerspective.pass(distance: distance, level: 1, reduceMotion: false)
             XCTAssertGreaterThanOrEqual(result.alpha, 0, "Opacité négative à d=\(distance).")
             XCTAssertLessThanOrEqual(result.alpha, 1, "Opacité supérieure à 1 à d=\(distance).")
             XCTAssertGreaterThanOrEqual(
@@ -177,8 +179,8 @@ final class LentillePerspectiveCurveTests: XCTestCase {
 
         let ramp = [CGFloat(0), FocalFocusCurve.listMaxDistance / 4, FocalFocusCurve.listMaxDistance / 2, FocalFocusCurve.listMaxDistance]
         for (previous, next) in zip(ramp, ramp.dropFirst()) {
-            let before = LentillePerspective.pass(distance: previous, reduceMotion: false)
-            let after = LentillePerspective.pass(distance: next, reduceMotion: false)
+            let before = LentillePerspective.pass(distance: previous, level: 1, reduceMotion: false)
+            let after = LentillePerspective.pass(distance: next, level: 1, reduceMotion: false)
             XCTAssertGreaterThan(
                 before.alpha, after.alpha,
                 "L'opacité doit décroître strictement de d=\(previous) à d=\(next) : plus un " +
@@ -195,7 +197,7 @@ final class LentillePerspectiveCurveTests: XCTestCase {
     /// celles où la courbe normale sature.
     func test_reduceMotion_makesThePassTheIdentity_onEveryDistance() {
         for distance in Self.probeDistances {
-            let result = LentillePerspective.pass(distance: distance, reduceMotion: true)
+            let result = LentillePerspective.pass(distance: distance, level: 1, reduceMotion: true)
             assertClose(
                 result.alpha, 1,
                 "Opacité ≠ 1 à d=\(distance) sous reduce motion — critère d'acceptation " +
@@ -216,8 +218,8 @@ final class LentillePerspectiveCurveTests: XCTestCase {
     /// passerait le test ci-dessus au vert.
     func test_reduceMotion_actuallyChangesTheOutcome_whereTheCurveIsNotIdentity() {
         let distance = FocalFocusCurve.listMaxDistance
-        let moving = LentillePerspective.pass(distance: distance, reduceMotion: false)
-        let still = LentillePerspective.pass(distance: distance, reduceMotion: true)
+        let moving = LentillePerspective.pass(distance: distance, level: 1, reduceMotion: false)
+        let still = LentillePerspective.pass(distance: distance, level: 1, reduceMotion: true)
 
         XCTAssertNotEqual(
             moving, still,
@@ -232,95 +234,74 @@ final class LentillePerspectiveCurveTests: XCTestCase {
     /// La bande de focus est ancrée au BAS de la région visible, à la distance
     /// que le miroir publie (`focusBandOffset`, §4.2) — jamais un nombre écrit
     /// dans la peau.
-    func test_focusBand_isAnchoredToTheViewportBottom_byTheMirrorsOffset() {
-        for viewportBottom in [CGFloat(0), 100, 812, 1024] {
-            assertClose(
-                LentilleFocusBand.centerY(viewportBottom: viewportBottom),
-                viewportBottom - FocalFocusCurve.focusBandOffset,
-                "Le centre de la bande doit valoir `bas de la région visible − " +
-                "FocalFocusCurve.focusBandOffset` (miroir de `FOCUS_BAND_OFFSET`). " +
-                "Recopier la cote dans la peau ferait diverger la perspective de " +
-                "l'élection, qui lit la MÊME bande."
-            )
+    /// Bande au CENTRE de la région visible une fois la liste défilée d'une
+    /// demi-hauteur (directive user 2026-08-21 : « la magnificence presque
+    /// au centre de l'écran »)…
+    func test_focusBand_isTheViewportCenter_onceScrolledHalfAScreen() {
+        for (top, bottom) in [(CGFloat(0), CGFloat(812)), (100, 700), (60, 1024)] {
+            let center = (top + bottom) / 2
+            assertClose(LentilleFocusBand.centerY(viewportTop: top, viewportBottom: bottom, offsetFromTop: center - top), center, "au centre pile à une demi-hauteur de défilement")
+            assertClose(LentilleFocusBand.centerY(viewportTop: top, viewportBottom: bottom, offsetFromTop: 5_000), center, "et y reste ensuite")
         }
     }
 
-    /// Convention de signe du miroir (documentée dans `focusCurve`) : `d` est
-    /// la distance verticale AU-DESSUS de la bande. Un rang pile dans la bande
-    /// a `d = 0` ; un rang plus haut à l'écran (donc `midY` plus petit) a `d`
-    /// positif ; un rang sous la bande a `d` négatif — le seul cas qui active
-    /// le fondu court.
+    /// …qui REMONTE au bord haut au repos en haut de la liste (sinon la
+    /// première conversation ne pourrait jamais être en focus), linéairement.
+    func test_focusBand_risesToTheTopEdge_whenRestingAtTheTopOfTheList() {
+        assertClose(LentilleFocusBand.centerY(viewportTop: 100, viewportBottom: 700, offsetFromTop: 0), 100, "au repos en haut : la bande est au bord haut")
+        assertClose(LentilleFocusBand.centerY(viewportTop: 100, viewportBottom: 700, offsetFromTop: 150), 250, "à mi-chemin de la demi-hauteur : à mi-chemin du centre")
+        assertClose(LentilleFocusBand.centerY(viewportTop: 100, viewportBottom: 700, offsetFromTop: -40), 100, "rebond élastique au-dessus du haut : la bande ne sort pas de l'écran")
+    }
+
     func test_distance_followsTheMirrorsSignConvention() {
+        let viewportTop: CGFloat = 0
         let viewportBottom: CGFloat = 812
-        let bandCenter = LentilleFocusBand.centerY(viewportBottom: viewportBottom)
+        let bandCenter = LentilleFocusBand.centerY(viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: viewportBottom)
 
         assertClose(
-            LentillePerspective.distance(rowMidY: bandCenter, viewportBottom: viewportBottom), 0,
+            LentillePerspective.distance(rowMidY: bandCenter, viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: viewportBottom), 0,
             "Un rang dont le milieu tombe au centre de la bande est à distance NULLE."
         )
         XCTAssertGreaterThan(
-            LentillePerspective.distance(rowMidY: bandCenter - 200, viewportBottom: viewportBottom), 0,
-            "Un rang PLUS HAUT à l'écran (midY plus petit) est au-DESSUS de la bande : sa " +
-            "distance est positive, c'est lui que la courbe estompe."
+            LentillePerspective.distance(rowMidY: bandCenter - 200, viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: viewportBottom), 0,
+            "Un rang PLUS HAUT à l'écran (midY plus petit) est au-DESSUS de la bande : distance positive."
         )
         XCTAssertLessThan(
-            LentillePerspective.distance(rowMidY: bandCenter + 200, viewportBottom: viewportBottom), 0,
-            "Un rang SOUS la bande a une distance négative — le seul régime où le fondu " +
-            "court du miroir (`listBelowBandDistance`/`listBelowBandAlphaCap`) s'applique."
+            LentillePerspective.distance(rowMidY: bandCenter + 200, viewportTop: viewportTop, viewportBottom: viewportBottom, offsetFromTop: viewportBottom), 0,
+            "Un rang SOUS la bande a une distance négative — le signe du miroir est conservé, " +
+            "même si la passe iOS la consomme en valeur ABSOLUE (bande au centre, 2026-08-21)."
         )
     }
 
-    /// Bout à bout : un rang sous la bande doit s'estomper par le fondu COURT
-    /// du miroir, pas par la rampe longue. Le témoin compare deux distances
-    /// symétriques : sous la bande, l'opacité chute plus vite qu'au-dessus.
-    func test_belowTheBand_theShortFadeApplies_notTheLongRamp() {
+    /// Bande au CENTRE (2026-08-21) : la passe iOS consomme la loi `.list` sur
+    /// la distance ABSOLUE — un rang sous la bande se pose comme son jumeau
+    /// au-dessus. Le fondu court sous la bande du miroir (pensé pour une bande
+    /// en bas d'écran) n'est PAS consommé : il effacerait la moitié de la liste.
+    func test_pass_isSymmetricAroundTheBand_theShortBelowBandFadeIsNotConsumed() {
         let step = FocalFocusCurve.listBelowBandDistance
-        let above = LentillePerspective.pass(distance: step, reduceMotion: false)
-        let below = LentillePerspective.pass(distance: -step, reduceMotion: false)
-
-        XCTAssertLessThan(
-            below.alpha, above.alpha,
-            "À distance égale de part et d'autre de la bande, le rang du DESSOUS doit être " +
-            "plus effacé : son fondu a un rayon bien plus court que la rampe du dessus " +
-            "(§4.1). L'inverse signalerait une distance de signe inversé."
-        )
-        assertClose(
-            below.scale, 1,
-            "Sous la bande, seule l'OPACITÉ bouge : le terme d'échelle du miroir est borné " +
-            "à `[0, 1]` en `f` et ne contribue rien pour `d < 0`."
+        let above = LentillePerspective.pass(distance: step, level: 1, reduceMotion: false)
+        let below = LentillePerspective.pass(distance: -step, level: 1, reduceMotion: false)
+        assertClose(below.alpha, above.alpha, "même distance, même opacité, de part et d'autre de la bande")
+        assertClose(below.scale, above.scale, "même distance, même échelle")
+        XCTAssertGreaterThan(
+            below.alpha, FocalFocusCurve.focusCurve(distance: -step, variant: .list).alpha,
+            "le fondu court du miroir n'est pas appliqué par la passe iOS"
         )
     }
 
-    /// I-073 : le mot « plafonné » du critère (« sous-focus, fondu court sur
-    /// `d/160`, plafonné à −0.35 ») a son propre témoin, distinct de la parité
-    /// miroir ci-dessus. `clampUnit(-d/160)` sature à `1` pour tout `d ≤ -160` :
-    /// deux distances sous la bande, l'une pile au rayon du fondu court,
-    /// l'autre bien au-delà, DOIVENT rendre EXACTEMENT la même opacité — sinon
-    /// le plafond n'existe pas et le fondu continuerait de s'assombrir sans
-    /// fin à mesure qu'on descend, ce que la maquette normative exclut
-    /// explicitement (miroir : « rampe PROPORTIONNELLE plafonnée »).
-    func test_belowTheBand_theShortFade_saturatesAtItsOwnCap_neverDeepensFurther() {
-        let atTheCap = LentillePerspective.pass(
-            distance: -FocalFocusCurve.listBelowBandDistance, reduceMotion: false
-        )
-        let wellBeyondTheCap = LentillePerspective.pass(
-            distance: -4 * FocalFocusCurve.listBelowBandDistance, reduceMotion: false
-        )
-
-        assertClose(
-            atTheCap.alpha, wellBeyondTheCap.alpha,
-            "L'opacité à `d = -160` (pile le rayon du fondu court) et à `d = -640` (bien " +
-            "au-delà) doit être IDENTIQUE : au-delà de son propre rayon, le fondu court ne " +
-            "descend plus — il est PLAFONNÉ, pas juste ralenti. Une divergence ici " +
-            "signalerait la forme interdite `max(d/160, −0.35)` (BLOCAGE 1 REV-1, dont le " +
-            "commentaire du miroir documente qu'elle saturait au mauvais endroit, `d=-56` " +
-            "au lieu de `d=-160`)."
-        )
-        assertClose(
-            atTheCap.alpha, 1 - FocalFocusCurve.listBelowBandAlphaCap,
-            "La valeur de saturation elle-même doit être `1 − listBelowBandAlphaCap` — " +
-            "recomposée depuis la CONSTANTE du miroir, jamais `0.65` écrit en dur ici."
-        )
+    /// Le NIVEAU de scène fond la pose vers l'identité : 0 au repos (Script),
+    /// 1 en défilement (la loi), linéaire entre les deux.
+    func test_pass_blendsTowardsIdentity_withTheSceneLevel() {
+        let law = FocalFocusCurve.focusCurve(distance: 300, variant: .list)
+        let rest = LentillePerspective.pass(distance: 300, level: 0, reduceMotion: false)
+        assertClose(rest.alpha, 1, "au repos : identité")
+        assertClose(rest.scale, 1, "au repos : identité")
+        let full = LentillePerspective.pass(distance: 300, level: 1, reduceMotion: false)
+        assertClose(full.alpha, law.alpha, "en défilement : la loi")
+        let half = LentillePerspective.pass(distance: 300, level: 0.5, reduceMotion: false)
+        assertClose(half.alpha, 1 - (1 - law.alpha) / 2, "à mi-niveau : à mi-chemin")
+        let clamped = LentillePerspective.pass(distance: 300, level: 7, reduceMotion: false)
+        assertClose(clamped.alpha, law.alpha, "un niveau hors [0, 1] est borné")
     }
 
     // MARK: - 4. L'origine de la transformation vient de LentilleMetrics
@@ -474,15 +455,16 @@ final class LentillePerspectiveCurveTests: XCTestCase {
         let joined = try perspectiveSources().map { normalizedCode($0.code) }.joined(separator: " ")
 
         XCTAssertTrue(
-            joined.contains("FocalFocusCurve.focusCurve(distance: distance, variant: .list)"),
+            joined.contains("FocalFocusCurve.focusCurve(distance: abs(distance), variant: .list)"),
             "La passe doit appeler `FocalFocusCurve.focusCurve(distance:variant:)` avec le " +
             "variant `.list` — un appel littéral, repérable, qui rend impossible une " +
-            "réécriture silencieuse de la courbe."
+            "réécriture silencieuse de la courbe. Sur la distance ABSOLUE depuis 2026-08-21 " +
+            "(bande au centre) : même loi des deux côtés de la bande."
         )
         XCTAssertTrue(
-            joined.contains("FocalFocusCurve.focusBandOffset"),
-            "La bande doit être lue sur le miroir : la perspective et l'élection (I-070) " +
-            "partagent la MÊME bande, donc la même source."
+            joined.contains("static func centerY(viewportTop: CGFloat, viewportBottom: CGFloat, offsetFromTop: CGFloat)"),
+            "La bande (centre de la région visible, remontée vers le haut au repos) vit dans " +
+            "UN `LentilleFocusBand` : la perspective et l'élection (I-070) partagent la MÊME bande."
         )
     }
 

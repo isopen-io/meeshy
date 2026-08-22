@@ -5,7 +5,23 @@ import MeeshySDK
 
 @MainActor
 class StatusViewModel: ObservableObject {
-    @Published var statuses: [StatusEntry] = []
+    @Published var statuses: [StatusEntry] = [] {
+        didSet { statusIndexByUserId = Self.index(statuses) }
+    }
+    /// Index `userId → position` reconstruit à chaque écriture de `statuses`
+    /// (O(n), rare) pour que `statusForUser` soit O(1) — il était un balayage
+    /// linéaire appelé par cellule de message et par rangée de conversation
+    /// (audit fluidité 2026-08-21).
+    private var statusIndexByUserId: [String: Int] = [:]
+
+    private static func index(_ entries: [StatusEntry]) -> [String: Int] {
+        var index: [String: Int] = [:]
+        index.reserveCapacity(entries.count)
+        for (offset, entry) in entries.enumerated() where index[entry.userId] == nil {
+            index[entry.userId] = offset
+        }
+        return index
+    }
     @Published var myStatus: StatusEntry?
     @Published var isLoading = false
     @Published var isLoadingMore = false
@@ -285,7 +301,8 @@ class StatusViewModel: ObservableObject {
     // MARK: - Lookup Methods
 
     func statusForUser(userId: String) -> StatusEntry? {
-        statuses.first { $0.userId == userId }
+        guard let offset = statusIndexByUserId[userId], offset < statuses.count else { return nil }
+        return statuses[offset]
     }
 
     // MARK: - Mood Tap Handler
