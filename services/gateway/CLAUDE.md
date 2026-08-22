@@ -562,22 +562,43 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage a été fait : 38 sites, et il reste 36
+### Le balayage est OUTILLÉ et en cliquet : il reste 31 sites, dont 19 destructifs
 
-Le cycle 86 a outillé le balayage du gateway. Un `grep` ne suffit pas — il faut
-résoudre l'objet littéral englobant (a-t-il `properties` ?), calculer la portée
-des clés `response:` (un schéma de REQUÊTE sans `properties` est permissif, pas
-destructeur), et **dépouiller les commentaires**, sans quoi on retrouve les
+Le cycle 86 a construit le balayage et l'a laissé dans son journal ; le cycle 87
+l'a installé dans le dépôt — `routes/__tests__/response-schema-sweep.ts`, gardé
+par `response-schema-sweep.test.ts`. **Ne pas le refaire à la main.**
+
+Un `grep` ne suffit pas, et l'outil porte les trois discriminations : résoudre
+l'objet littéral englobant (déclare-t-il `properties` / `additionalProperties` /
+`patternProperties` ?), ne retenir que ce qui est sous `response:` (un schéma de
+REQUÊTE sans `properties` est permissif, pas destructeur — AJV valide, il ne
+sérialise pas), et **dépouiller les commentaires**, sans quoi on retrouve les
 commentaires des cycles précédents au lieu des défauts.
 
-Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
-**l'inventaire trié des 36 restants est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle86.md` §6.** Les plus graves sont
-les 15 `items:` — des LISTES qui sortent en tableaux de `{}`, ce qui ressemble
-à une réponse valide. Et les 4 `user:` / 1 `sender:` touchent la famille de la
-présence : **les traiter comme le cycle 84 bis a traité le sien** — déclarer le
-schéma ET poser le gate dans le même lot, sans quoi la réparation publie la
-fuite (§ Une PANNE peut tenir la porte).
+Le test gèle l'inventaire restant. **Quand il tombe :** une entrée EN TROP =
+un nouveau site nu vient d'entrer, à déclarer (`properties` si structuré,
+`additionalProperties` si carte) ; une entrée EN MOINS = un site réparé, et
+retirer sa ligne fait partie du correctif. L'inventaire est clé par fichier +
+champ + code de statut, **jamais** par numéro de ligne — une clé de ligne dérive
+à la première édition.
+
+**Le code de STATUT sépare deux familles que la forme confond** (cycle 87) : sur
+les 31 sites restants, **12 sont des `details` / `errors` sous un 400** — ils
+dégradent un diagnostic, ils ne cassent aucun décodage — et **19 sont des 2xx**
+qui vident une charge utile SERVIE. L'inventaire du cycle 86 bis §6 annonçait
+« items × 15, gravité maximale » en en agrégeant onze du premier type : **un
+inventaire trié par TEXTE trie des chaînes, pas des gravités.**
+
+Les 4 `user:` et le `sender:` touchent la famille de la présence : **les traiter
+comme le cycle 84 bis a traité le sien** — déclarer le schéma ET poser le gate
+dans le même lot, sans quoi la réparation publie la fuite (§ Une PANNE peut
+tenir la porte).
+
+**Lister un champ avec un schéma VIDE est pire que ne pas le lister du tout.**
+`messages.ts:113` : le parent porte `additionalProperties: true` (posé contre la
+troncature), mais `sender` y est déclaré explicitement `{ type: 'object' }` — et
+un parent permissif ne rattrape pas un enfant déclaré vide, puisque la clé est
+listée. Le champ sort à `{}` là où l'omettre l'aurait laissé passer entier.
 
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
