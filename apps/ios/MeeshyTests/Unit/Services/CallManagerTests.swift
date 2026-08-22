@@ -7622,7 +7622,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_switchCamera_holdGuardRevertsOptimisticMirrorAndReturns() throws {
         let body = try switchCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in switchCamera"); return
         }
@@ -7639,6 +7639,25 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
             guardBlock.contains("return"),
             "the hold/capture-interruption guard must return early, never falling through to " +
             "webRTCService.switchCamera."
+        )
+    }
+
+    // MARK: - Vague 160: switchCamera()/selectCamera(id:) checked only 2 of the
+    // 3 sibling suspension flags — `isVideoSuspended` (VideoSurvivalController's
+    // graceful network degradation to audio-only) was missing, even though
+    // `applyCameraSuspension` and `applySurvivalVideoSend` already treat it as
+    // equivalent to hold/capture-interruption ("camera stopped, isVideoEnabled
+    // left true"). A camera-flip queued while the link degraded enough to
+    // trigger the survival downgrade reacquired the physical camera exactly
+    // like the Vague 158/159 hold/interruption defect.
+
+    func test_switchCamera_guardsVideoSurvivalSuspensionBeforeActuating() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "switchCamera must also check isVideoSuspended (network-survival downgrade), not just " +
+            "the hold/capture-interruption pair — it is the third sibling flag with the same " +
+            "'camera stopped, isVideoEnabled left true' contract."
         )
     }
 
@@ -7673,7 +7692,7 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
     func test_selectCamera_holdGuardRevertsOptimisticStateAndReturns() throws {
         let body = try selectCameraBody(in: try callManagerSource())
         guard let guardRange = body.range(
-            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+            of: "if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
         ) else {
             XCTFail("hold/capture-interruption guard block not found in selectCamera"); return
         }
@@ -7693,6 +7712,18 @@ final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
             guardBlock.contains("return"),
             "the hold/capture-interruption guard must return early, never falling through to " +
             "webRTCService.switchToCamera."
+        )
+    }
+
+    // MARK: - Vague 160: same third-flag extension as switchCamera() above.
+
+    func test_selectCamera_guardsVideoSurvivalSuspensionBeforeActuating() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "selectCamera(id:) must also check isVideoSuspended (network-survival downgrade), not " +
+            "just the hold/capture-interruption pair — same capturer, same task chain as " +
+            "switchCamera()."
         )
     }
 }
