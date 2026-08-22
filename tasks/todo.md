@@ -439,3 +439,52 @@ autorisé si c'est compliqué : deux bulles distinctes.
       quand ses suites tourneront.
 - [ ] Suivi — `SignalProtocolAdapter.performX3DH` garde un `as any` : `ISignalProtocolAdapter` ne
       transporte pas la signature de la pré-clé signée que `PreKeyBundle` déclare obligatoire.
+
+## Cycle 94 bis (2026-08-22) — la dernière enveloppe inerte, et les deux défauts qu'elle couvrait
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle94-bis.md`.
+
+- [x] `GET /messages/:messageId` aligné sur son enveloppe réelle (`{success, data}`) — dernière
+      ligne de `FROZEN_INVENTORY`, seule de la **forme 3** (schéma décrivant le MESSAGE quand
+      `sendSuccess` répond `{success, data}` : déclarations inertes, charge utile traversant
+      entière et non gouvernée). 42 clés relevées MÉCANIQUEMENT depuis le `select` + les
+      surcharges du handler, passées au vrai `fast-json-stringify` : 42 entrent, 42 sortent.
+- [x] **Défaut 1 découvert par l'alignement** — `translations` servi en CARTE Mongo là où le
+      contrat déclare un TABLEAU et où les TROIS clients décodent un tableau. Les deux autres
+      transports du MÊME fichier appliquaient déjà `transformTranslationsToArray` (lignes 600,
+      950) ; ce GET étalait `...message`. Chemin d'impact : extension de notification iOS →
+      App Group → `NSEPendingMessageConsumer` → `APIMessage` (dont `translations` se décode
+      avec un `try` NON tolérant) ⇒ décodage du message ENTIER en échec, blob SUPPRIMÉ,
+      **démarrage à froid depuis une notification sans son message** pour tout message portant
+      au moins une traduction.
+- [x] **Défaut 2** — `encryptionMode` absent de `messageSchema` sur la foi d'un commentaire
+      (« only on Conversation ») que `schema.prisma` contredit. Corrigé dans le schéma PARTAGÉ :
+      la LISTE de messages le charge aussi et le servait par un `items: messageSchema` qui le
+      retirait — un client E2EE recevait `isEncrypted: true` + le chiffré sans savoir sous quel
+      régime déchiffrer. Aucune ligne du fichier de la liste n'a changé.
+- [x] `sender` déclaré LOCALEMENT (participant + `user` imbriqué + `isOnline` gaté à la source),
+      **différent** de `editedMessageSenderSchema` du cycle 93 : fusionner exigerait de porter
+      `isOnline` dans un schéma commun, ce qui désarmerait sa décision fail-closed. Raison
+      écrite sur les deux sites.
+- [x] `conversation` et `statusSummary` DÉCLARÉS tels qu'ils sont servis, pas retirés — un
+      changement de contrat se décide sur des preuves de consommation client, pas dans un lot
+      dont le but est de ne rien tronquer.
+- [x] Témoins : `message-detail-serialization.test.ts` (9), montant le VRAI module de route sur
+      une vraie instance Fastify (`app.inject()`), double Prisma rendant la CARTE comme Mongo.
+      **ROUGE prouvé isolément** : retrait du transform ⇒ 9/9 tombent (la carte ne traverse plus
+      le schéma, 500) ; retrait d'`encryptionMode` ⇒ 1/9 (`Expected "e2ee", Received undefined`).
+      Le piège du cycle 88 (`message-detail-sender-presence.test.ts`) reste VERT : preuve que
+      `sender` et son `user` ont survécu.
+- [x] `FROZEN_INVENTORY` : 1 → **0**. Les trois cliquets sont à inventaire vide en même temps.
+- [x] Gates : tsc gateway 0 · vitest shared 2428/2428 · suites ciblées 24/24.
+- [x] Jumelle instruite (8 sites `routes/` chargeant `Message.translations`) : liste, recherche,
+      threads, édition, suppression, `GET /:id/translations` transforment déjà ; `core.ts` a son
+      champ dédié `lastMessageTranslations`. **`GET /sync` porte le MÊME défaut** (carte brute,
+      et AUCUN schéma de réponse) — zéro appelant sur les trois clients ⇒ piège armé, pas panne.
+      NON corrigé ici par décision : lui donner sa forme exige de lui donner d'abord un contrat,
+      ce qui est un lot en soi et ferait perdre la mesure « 42 entrent, 42 sortent » de ce lot-ci.
+- Suivis ouverts : `GET /sync` (ci-dessus) ; `GET /messages/:messageId` n'agrège pas les réactions de pièce jointe
+  (relation `reactions` brute chargée, contrat = `reactionSummary`+`currentUserReactions`) ;
+  `APIMessage.translations` en `try` non tolérant quand ses trois voisins sont en `try?` (lot
+  iOS) ; **le quatrième balayage n'existe pas** — rien ne garde contre une déclaration présente,
+  bien formée et FAUSSE contre son producteur, ce qu'étaient les deux défauts de ce cycle.

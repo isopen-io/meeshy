@@ -873,8 +873,29 @@ export const messageSchema = {
       description: 'Array of validated user IDs mentioned in message'
     },
 
-    // Encryption (encryptionMode is only on Conversation)
+    // Encryption
+    //
+    // `encryptionMode` était annoté ici « only on Conversation ». C'est FAUX :
+    // `schema.prisma` le porte sur `Message` aussi (« Encryption mode: e2ee,
+    // server, hybrid »), deux routes le CHARGENT (`conversations/messages.ts`
+    // pour la liste, `messages.ts` pour le détail) et le SDK iOS le DÉCLARE sur
+    // son message (`APIMessage.encryptionMode`, décodé). Il manquait ici, et
+    // seulement ici — mesuré au sérialiseur sur la charge utile de la liste :
+    //
+    //   in  : { …, isEncrypted: true, encryptionMode: 'e2ee', encryptedContent }
+    //   out : { …, isEncrypted: true,                         encryptedContent }
+    //
+    // Un client E2EE recevait donc `isEncrypted: true` et le chiffré, sans
+    // jamais savoir SOUS QUEL RÉGIME déchiffrer. C'est le même défaut que le
+    // R5 des pièces jointes, une couche plus haut : `messageAttachmentSchema`
+    // a gagné son enveloppe E2EE et un cliquet
+    // (`attachmentIncludes.test.ts`), le MESSAGE porteur ne l'avait pas.
     isEncrypted: { type: 'boolean', description: 'Message is encrypted' },
+    encryptionMode: {
+      type: 'string',
+      nullable: true,
+      description: 'Encryption mode of this message: e2ee, server, hybrid (null = not encrypted)'
+    },
     encryptedContent: {
       type: 'string',
       nullable: true,

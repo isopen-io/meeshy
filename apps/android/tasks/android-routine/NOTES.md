@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — A "resolver" that does I/O + consults device state is app-side, NOT `:sdk-core`
+- Last slice's PROGRESS "Next" proposed a `:sdk-core` `ShareLinkEntryResolver`. That was a hypothesis,
+  and re-scouting iOS before committing proved it wrong — the routine's "parity notes are hypotheses"
+  warning earning its keep. iOS's `ShareLinkEntryResolver.swift` lives in
+  `apps/ios/Meeshy/Features/Main/Navigation/` (**app**, not `MeeshySDK`), and its own doc-comment says:
+  "App-side et non SDK : elle appelle un service réseau et consulte l'état de l'app."
+- The grain test decides: the resolver fetches a preview (network I/O) AND reads the guest-session store
+  (device state) → product orchestration → `:feature:*`/`:app`. Only the **pure decision**
+  (`ShareLinkEntryPolicy`: facts in, intent out, no I/O) is SDK-grade and stays in `:core:model`. Split
+  the two: a resolver that gathers facts + a pure policy that judges them. Landed the resolver in
+  `:feature:auth` (the guest-join flow already lives there).
+- Testability without the SDK penalty: give the resolver a `fun interface` seam for its one network read
+  (`ShareLinkPreviewProviding`) instead of injecting the concrete `AnonymousSessionRepository`. Fake the
+  seam with a lambda + record calls; use `InMemoryAnonymousSessionStore` for the store. Fully JVM-testable,
+  no Robolectric, no MockK-on-final-class friction. The consumer binds the seam to `repository::preview`.
+- Android store divergence to remember: the guest-session store is **single-valued** (one session per
+  device), whereas iOS keys `AnonymousSessionStore.load(linkId:)`. So "stored session for THIS link" is
+  `store.load()?.linkId == identifier`, not "any session exists". A session opened on a different link
+  must not resume here — worth an explicit test (mutation-provable).
+
 ## 2026-08-22 — A JWT endpoint on a `conversations/…` path belongs on `ConversationApi`, not `ShareLinkApi`
 - `joinAuthenticated` = `POST /conversations/join/{linkId}`, JWT-authed, empty body. Tempting to drop it
   on `ShareLinkApi` beside `joinAnonymously` (both are "share-link joins") — but `ShareLinkApi` is
