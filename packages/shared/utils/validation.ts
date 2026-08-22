@@ -1115,8 +1115,8 @@ export const SignalSchemas = {
   // Encrypted message
   encryptedMessage: z.object({
     ciphertext: z.string().min(1, 'Ciphertext is required'),
-    iv: z.string().length(24, 'IV must be 12 bytes base64'), // 12 bytes = 24 base64 chars
-    authTag: z.string().length(24, 'Auth tag must be 16 bytes base64'), // 16 bytes with padding
+    iv: z.string().length(16, 'IV must be 12 bytes base64'), // 12 bytes base64 = 16 chars (no padding)
+    authTag: z.string().length(24, 'Auth tag must be 16 bytes base64'), // 16 bytes base64 = 24 chars (padded)
     messageNumber: z.number().int().min(0).max(SignalProtocolLimits.MAX_MESSAGE_NUMBER),
   }),
 
