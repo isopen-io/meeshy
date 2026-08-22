@@ -217,6 +217,30 @@ describe("GET /messages/:messageId — l'enveloppe réelle", () => {
     expect(body.data).not.toHaveProperty('message');
   });
 
+  /**
+   * La mesure du lot — « 42 clés entrent, 42 sortent » — est une AFFIRMATION,
+   * et une affirmation se vérifie. Ce témoin la rend auto-portante plutôt que
+   * de la laisser en prose dans un journal : il compare le jeu de clés SERVI
+   * au jeu de clés que le handler compose, calculé depuis la ligne Prisme
+   * elle-même. Toute déclaration retirée du schéma le fait tomber en NOMMANT
+   * ce qui a été perdu.
+   */
+  it('sert exactement le jeu de clés que le handler compose — aucune de moins', async () => {
+    const body = await fetchDetail();
+
+    const composed = new Set([
+      ...Object.keys(messageRow()),
+      // Les surcharges que le handler ajoute APRÈS le `select`.
+      'deliveredCount', 'readCount', 'recipientCount',
+      'deliveredToAllAt', 'readByAllAt', 'statusSummary',
+      // Hissé depuis `metadata.location` par `hoistLocationOnto`.
+      'location',
+    ]);
+    const served = new Set(Object.keys(body.data));
+
+    expect([...composed].filter((k) => !served.has(k))).toEqual([]);
+  });
+
   it('ne perd aucune des colonnes que le `select` charge', async () => {
     const body = await fetchDetail();
 
