@@ -1607,7 +1607,16 @@ struct ConversationListView: View {
                                     }
                                 }
                             }
-                            .padding(.horizontal, 16)
+                            // D1 — la marge du squelette doit être celle des
+                            // rangées RÉELLES, sinon la liste saute
+                            // latéralement quand les placeholders sont
+                            // remplacés. Le padding est posé sur le CONTENEUR,
+                            // donc il porte sur les DEUX branches du mux : la
+                            // valeur doit être muxée, pas seulement le type de
+                            // rang. Peau historique : `16` inchangé.
+                            .padding(.horizontal, LentilleFeatureFlag.isLentilleListEnabled
+                                     ? LentilleMetrics.Row.marginHorizontal
+                                     : 16)
                             .transition(.opacity)
                         // behaviour-matrix:L17 — « … avec des états vides
                         // restylés plats ». Seule `.skeleton` (ci-dessus)
