@@ -11,6 +11,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { normalizeContacts, MAX_CONTACTS_PER_SYNC } from '../../utils/contact-identifiers';
 import { ContactDirectoryService, type DirectoryFilter, type SyncMode } from '../../services/ContactDirectoryService';
 import { directoryEntrySchema } from './contacts-schemas';
+import { viewerFromRequest } from './presence-gate';
 import type { AuthenticatedRequest } from './types';
 
 /**
@@ -187,6 +188,7 @@ export async function getContactsDirectory(fastify: FastifyInstance) {
       const service = new ContactDirectoryService(fastify.prisma);
       const { contacts, total } = await service.list({
         ownerId: authContext.userId,
+        viewer: viewerFromRequest(request),
         offset,
         limit,
         filter: parseFilter(query.filter),
