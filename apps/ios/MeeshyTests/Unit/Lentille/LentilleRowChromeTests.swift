@@ -104,7 +104,8 @@ final class LentilleRowChromeTests: XCTestCase {
 
     func test_rowHeight_fitsThreeLines() {
         // nom (corps) + message (sous-titre) + date (12) + rembourrage : 64 ne
-        // logeait que deux lignes.
+        // logeait que deux lignes. L'effectif ayant quitté le bord bas, la
+        // rangée n'a plus à réserver sa place — 84 loge les trois lignes.
         XCTAssertGreaterThanOrEqual(LentilleMetrics.Row.height, 72)
         XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
     }
@@ -120,17 +121,47 @@ final class LentilleRowChromeTests: XCTestCase {
 
     // MARK: - Effectif : sur la bordure, jamais dans le contenu — repos compris
 
-    func test_flatRow_memberCount_isAnchoredOnTheBottomTrailingEdge_neverInTheContent() throws {
+    /// **Décision produit du 2026-08-22 (soir)** : « enlever l'effectif sur
+    /// les rows non magnifiées, mais mettre le chip rouge si messages non
+    /// lus ». L'effectif est une information de MAGNIFICATION — la rangée au
+    /// repos dit qui parle, ce qui a été dit, et quand ; la loupe ajoute
+    /// l'effectif et la date complète.
+    ///
+    /// Ce témoin est le RENVERSEMENT assumé de celui qui, quelques heures
+    /// plus tôt, exigeait l'effectif au bord bas de la rangée.
+    func test_flatRow_hasNoMemberCount_thatBelongsToTheMagnifiedCardAlone() throws {
         let code = try rowSource()
-        XCTAssertTrue(code.contains(".overlay(alignment: .bottomTrailing) {"), "ancré au bord bas droit de la rangée")
-        XCTAssertTrue(code.contains("LentilleMetrics.Row.edgeBadgeOverhang"), "le débord sur la trace de la bordure est un jeton, pas un littéral")
-        let content = try XCTUnwrap(code.range(of: "VStack(alignment: .leading, spacing: 2) {"))
-        let contentEnd = try XCTUnwrap(code.range(of: ".frame(maxWidth: .infinity, alignment: .leading)", range: content.upperBound..<code.endIndex))
-        XCTAssertFalse(code[content.lowerBound..<contentEnd.lowerBound].contains("memberCount"), "jamais dans le contenu")
-        let badge = try viewBlock("memberCountBadge", in: code)
-        for card in ["Capsule(", "RoundedRectangle", "background(", "strokeBorder"] {
-            XCTAssertFalse(badge.contains(card), "une information NUE, pas une carte (« \(card) ») — aucune carte dans Lentille/Row/")
-        }
+        XCTAssertFalse(code.contains("memberCountBadge"), "l'effectif a quitté la rangée au repos")
+        XCTAssertFalse(code.contains("conversation.memberCount"), "… y compris sa donnée")
+        XCTAssertFalse(code.contains(".overlay(alignment: .bottomTrailing) {"), "plus d'ancrage de bord bas dans la rangée")
+        XCTAssertTrue(try cardSource().contains("typeBadge"), "il vit sur la carte, et là seulement")
+    }
+
+    /// Le chip rouge prend la place que le badge occupe DÉJÀ sur la carte : en
+    /// fin de ligne du nom. La loupe agrandit, elle ne recompose pas.
+    func test_flatRow_unreadChip_isRed_andEndsTheNameLine_likeOnTheCard() throws {
+        let code = try rowSource()
+        let header = try viewBlock("headerLine", in: code)
+        let spacer = try XCTUnwrap(header.range(of: "Spacer(minLength: 0)"))
+        let badge = try XCTUnwrap(header.range(of: "unreadBadge"))
+        XCTAssertLessThan(spacer.lowerBound, badge.lowerBound, "poussé en fin de ligne du nom")
+        XCTAssertTrue(header.contains("conversation.userState.unreadCount > 0"), "… et seulement s'il y a des non-lus")
+
+        let chip = try viewBlock("unreadBadge", in: code)
+        XCTAssertTrue(chip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"), "fond ROUGE sémantique")
+        XCTAssertFalse(chip.contains("fill(accent)"), "jamais l'accent de la conversation")
+
+        // Même composition des deux côtés de la loupe.
+        let cardChip = try viewBlock("unreadBadge", in: try cardSource())
+        XCTAssertTrue(cardChip.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"))
+    }
+
+    func test_focusCard_memberCount_isABubbleToo_sameGaugeAsTheTagChips() throws {
+        let code = try cardSource()
+        let badge = try viewBlock("typeBadge", in: code)
+        XCTAssertTrue(badge.contains("Capsule(style: .continuous)"), "même bulle qu'au repos : la loupe ne change pas la forme")
+        XCTAssertTrue(badge.contains("LentilleMetrics.Tags.chipPaddingHorizontal"), "au gabarit des chips d'étiquette")
+        XCTAssertFalse(badge.contains("strokeBorder"), "le contour d'accent reste l'exclusivité de l'anneau et de l'encoche")
     }
 
     func test_focusCard_memberCount_staysOnTheBorder_neverInTheContent() throws {
@@ -143,8 +174,4 @@ final class LentilleRowChromeTests: XCTestCase {
         XCTAssertFalse(content.contains("typeBadge"), "jamais dans le contenu")
     }
 
-    func test_edgeBadgeOverhang_isHalfALabel_notALawLiteral() {
-        XCTAssertGreaterThan(LentilleMetrics.Row.edgeBadgeOverhang, 0)
-        XCTAssertLessThan(LentilleMetrics.Row.edgeBadgeOverhang, LentilleMetrics.Row.paddingVertical, "il mord la marge, jamais la rangée suivante")
-    }
 }

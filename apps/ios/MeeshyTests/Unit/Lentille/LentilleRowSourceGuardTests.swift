@@ -89,17 +89,66 @@ final class LentilleRowSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Aucun badge chiffré (contrat §LWS-7 : « le chiffre vit dans le pont »)
+    // MARK: - Le chiffre de non-lu — SUPERSÉDÉ le 2026-08-22 (décision produit)
 
-    func test_noUnreadBadgeBackground_inAnyRowFile() throws {
+    /// **Le contrat §LWS-7 (« aucun badge chiffré nulle part ») est
+    /// superssédé**, et ce témoin atteste l'état NOUVEAU plutôt que de
+    /// disparaître en silence. Décision produit : « mettre le chip rouge si
+    /// messages non lus » sur les rangées non magnifiées.
+    ///
+    /// Ce que la règle d'origine protégeait — « le chiffre vit dans le pont ✦ »
+    /// — reposait sur une prémisse fausse en pratique : le pont n'apparaît que
+    /// si la conversation en a un (`showsBridge` exige `bridge != nil`), si
+    /// bien qu'une conversation non lue SANS pont ne disait rien du tout. Le
+    /// chip, lui, parle toujours.
+    ///
+    /// Ce que ce témoin garde encore : **la rangée de SQUELETTE et la ligne de
+    /// pont n'ont pas de badge** (un placeholder ne compte rien, et le pont
+    /// porte déjà son point accent), et le badge est PEINT AU ROUGE
+    /// SÉMANTIQUE, jamais à l'accent de la conversation — c'est ce qui le
+    /// distingue d'une décoration.
+    /// Le corps d'une déclaration, de son en-tête à la prochaine de même
+    /// niveau. Une garde de forme vise le BLOC, jamais le FICHIER.
+    private func blockOfDeclaration(_ header: String, in code: String) -> Substring? {
+        guard let start = code.range(of: header) else { return nil }
+        let rest = code[start.upperBound...]
+        let end = rest.range(of: "\n    private var ")?.lowerBound
+            ?? rest.range(of: "\n    private func ")?.lowerBound
+            ?? rest.endIndex
+        return code[start.lowerBound..<end]
+    }
+
+    func test_unreadBadge_livesOnlyInTheRow_andIsAlwaysSemanticRed() throws {
         for source in try rowSources() {
             let count = occurrences(of: "unreadBadgeBackground", in: normalizedCode(source.code))
-            XCTAssertEqual(
-                count, 0,
-                "\(source.name) contient \(count) occurrence(s) de « unreadBadgeBackground » — " +
-                "le chiffre de non-lu vit dans le pont ✦ (point accent 8 px), plus dans un " +
-                "badge chiffré (contrat §LWS-7, critère « aucun badge chiffré nulle part »)."
-            )
+            if source.name == "LentilleConversationRow.swift" {
+                XCTAssertEqual(
+                    count, 1,
+                    "La rangée doit porter UN badge de non-lus, peint par unreadBadgeBackground " +
+                    "(décision produit 2026-08-22). Observé : \(count)."
+                )
+                // Viser le BLOC du badge, jamais le fichier : la rangée porte
+                // légitimement une capsule d'accent — le bouton « Rejoindre »
+                // d'un appel en cours. Une garde de fichier l'aurait condamné.
+                let badge = try XCTUnwrap(
+                    blockOfDeclaration("private var unreadBadge: some View {", in: source.code),
+                    "unreadBadge introuvable dans \(source.name)"
+                )
+                XCTAssertTrue(
+                    badge.contains("MeeshyColors.unreadBadgeBackground(isDark: isDark)"),
+                    "Le badge est ROUGE sémantique."
+                )
+                XCTAssertFalse(
+                    badge.contains("fill(accent)"),
+                    "… jamais l'accent de la conversation : ce serait une décoration, pas un compte à rattraper."
+                )
+            } else {
+                XCTAssertEqual(
+                    count, 0,
+                    "\(source.name) n'a rien à compter : un squelette est un placeholder, et le " +
+                    "pont ✦ porte déjà son point accent 8 px."
+                )
+            }
         }
     }
 
