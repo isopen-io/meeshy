@@ -5,6 +5,23 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — A JWT endpoint on a `conversations/…` path belongs on `ConversationApi`, not `ShareLinkApi`
+- `joinAuthenticated` = `POST /conversations/join/{linkId}`, JWT-authed, empty body. Tempting to drop it
+  on `ShareLinkApi` beside `joinAnonymously` (both are "share-link joins") — but `ShareLinkApi` is
+  documented as the **no-JWT** anonymous surface, and the path is `conversations/…`. The auth regime +
+  the path resource both point at `ConversationApi`. The interceptor decides JWT-vs-session, not the
+  interface — so "it's a share-link thing" is not a reason to co-locate it with the anonymous endpoints.
+- Cost of choosing `ConversationApi`: every hand-written stub of it must gain the new override. There are
+  exactly **three** in `:sdk-core` tests (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+  `ConversationAnalysisRepositoryTest`), each with one abstract base stub (`StubConversationApi` /
+  `StubStatsApi` / `StubAnalysisApi`) — the concrete recording fakes extend the base, so it's one line +
+  one import per file, not per fake. Grep `override suspend fun banParticipant` to find the base stubs.
+- Orphaned-model tell, again: `JoinAuthenticatedResponse` was already in `ShareLink.kt` with ZERO
+  consumers (grep). A defined-but-unconsumed DTO is unbuilt — wiring API + repository around it is a clean
+  vertical slice. (Same pattern as `AgentAnalysis.kt` last week.)
+- Empty-body POST in Retrofit = `@POST("…")` with **no `@Body`** (the `markRead` precedent). Don't invent
+  an `EmptyBody` DTO like iOS does.
+
 ## 2026-08-22 — An umbrella "…-mode / …-flow" parity box is several slices; find the pure brain first
 - The `[ ]` "Anonymous-session conversation mode; guest join-via-share-link flow" box LOOKED like
   a big unstarted feature, but recon showed Android had already ported ~90% of it (permission core,

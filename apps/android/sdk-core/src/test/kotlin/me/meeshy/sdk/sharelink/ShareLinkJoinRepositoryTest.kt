@@ -1,4 +1,4 @@
-package me.meeshy.sdk.conversation
+package me.meeshy.sdk.sharelink
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
@@ -6,7 +6,6 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
-import me.meeshy.sdk.model.ConversationSummaryAnalysis
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.JoinAuthenticatedResponse
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
@@ -21,7 +20,7 @@ import java.io.IOException
 import org.junit.Test
 
 /** Every unrelated endpoint answers "not wired" so a stray call fails loudly. */
-private abstract class StubAnalysisApi : ConversationApi {
+private abstract class StubJoinApi : ConversationApi {
     override suspend fun list(offset: Int?, limit: Int?) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
@@ -47,54 +46,100 @@ private abstract class StubAnalysisApi : ConversationApi {
     override suspend fun joinViaShareLink(linkId: String) = ApiResponse<JoinAuthenticatedResponse>(success = false)
 }
 
-private class SuccessAnalysisApi(private val payload: ConversationAnalysis) : StubAnalysisApi() {
-    var requestedId: String? = null
-    override suspend fun analysis(id: String): ApiResponse<ConversationAnalysis> {
-        requestedId = id
-        return ApiResponse(success = true, data = payload)
+private class JoinApi(
+    private val response: ApiResponse<JoinAuthenticatedResponse>,
+) : StubJoinApi() {
+    var requestedLinkId: String? = null
+    var callCount: Int = 0
+
+    override suspend fun joinViaShareLink(linkId: String): ApiResponse<JoinAuthenticatedResponse> {
+        callCount += 1
+        requestedLinkId = linkId
+        return response
     }
 }
 
-private class EnvelopeFailureAnalysisApi : StubAnalysisApi() {
-    override suspend fun analysis(id: String) =
-        ApiResponse<ConversationAnalysis>(success = false, error = "boom")
-}
+private class ThrowingJoinApi : StubJoinApi() {
+    var callCount: Int = 0
 
-private class ThrowingAnalysisApi : StubAnalysisApi() {
-    override suspend fun analysis(id: String): ApiResponse<ConversationAnalysis> =
+    override suspend fun joinViaShareLink(linkId: String): ApiResponse<JoinAuthenticatedResponse> {
+        callCount += 1
         throw IOException("offline")
+    }
 }
 
-class ConversationAnalysisRepositoryTest {
+class ShareLinkJoinRepositoryTest {
 
     @Test
-    fun `fetchAnalysis returns the payload on success and forwards the id`() = runTest {
-        val api = SuccessAnalysisApi(
-            ConversationAnalysis(
-                conversationId = "c1",
-                summary = ConversationSummaryAnalysis(text = "lively", healthScore = 80),
-            ),
+    fun `joinAuthenticated returns the canonical conversationId and forwards the linkId`() = runTest {
+        val api = JoinApi(
+            ApiResponse(success = true, data = JoinAuthenticatedResponse(conversationId = "conv-1")),
         )
-        val repo = ConversationAnalysisRepository(api)
+        val repo = ShareLinkJoinRepository(api)
 
-        val result = repo.fetchAnalysis("c1")
+        val result = repo.joinAuthenticated("link-1")
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
-        assertThat((result as NetworkResult.Success).data.summary?.healthScore).isEqualTo(80)
-        assertThat(api.requestedId).isEqualTo("c1")
+        assertThat((result as NetworkResult.Success).data).isEqualTo("conv-1")
+        assertThat(api.requestedLinkId).isEqualTo("link-1")
     }
 
     @Test
-    fun `fetchAnalysis folds an unsuccessful envelope into a failure`() = runTest {
-        val result = ConversationAnalysisRepository(EnvelopeFailureAnalysisApi()).fetchAnalysis("c1")
+    fun `joinAuthenticated trims the linkId sent and the conversationId returned`() = runTest {
+        val api = JoinApi(
+            ApiResponse(success = true, data = JoinAuthenticatedResponse(conversationId = "  conv-9  ")),
+        )
+        val repo = ShareLinkJoinRepository(api)
+
+        val result = repo.joinAuthenticated("  link-9  ")
+
+        assertThat((result as NetworkResult.Success).data).isEqualTo("conv-9")
+        assertThat(api.requestedLinkId).isEqualTo("link-9")
+    }
+
+    @Test
+    fun `joinAuthenticated folds a success envelope with a blank conversationId into a failure`() = runTest {
+        val api = JoinApi(
+            ApiResponse(success = true, data = JoinAuthenticatedResponse(conversationId = "   ")),
+        )
+        val repo = ShareLinkJoinRepository(api)
+
+        val result = repo.joinAuthenticated("link-1")
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
     }
 
     @Test
-    fun `fetchAnalysis folds a transport error into a failure`() = runTest {
-        val result = ConversationAnalysisRepository(ThrowingAnalysisApi()).fetchAnalysis("c1")
+    fun `joinAuthenticated is inert on a blank linkId and never calls the network`() = runTest {
+        val api = JoinApi(
+            ApiResponse(success = true, data = JoinAuthenticatedResponse(conversationId = "conv-1")),
+        )
+        val repo = ShareLinkJoinRepository(api)
+
+        val result = repo.joinAuthenticated("   ")
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(api.callCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `joinAuthenticated folds an unsuccessful envelope into a failure`() = runTest {
+        val api = JoinApi(ApiResponse(success = false, error = "boom"))
+        val repo = ShareLinkJoinRepository(api)
+
+        val result = repo.joinAuthenticated("link-1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    @Test
+    fun `joinAuthenticated folds a transport error into a failure`() = runTest {
+        val api = ThrowingJoinApi()
+        val repo = ShareLinkJoinRepository(api)
+
+        val result = repo.joinAuthenticated("link-1")
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(api.callCount).isEqualTo(1)
     }
 }
