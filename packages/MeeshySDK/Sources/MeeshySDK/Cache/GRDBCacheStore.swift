@@ -570,7 +570,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
             let data: Data
             if encrypt {
                 guard let encryptedData = encryption.encrypt(json) else {
-                    logger.error("Encryption failed for store \(namespace, privacy: .public), refusing to persist")
+                    logger.error("Encryption failed for store \(self.namespace, privacy: .public), refusing to persist")
                     throw GRDBCacheError.encryptionFailed
                 }
                 data = encryptedData
