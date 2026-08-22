@@ -34,7 +34,7 @@ describe('enveloppe d’erreur — les constantes partagées déclarent le produ
   /**
    * La racine du défaut de ce cycle. `errorResponseSchema` déclarait `success`,
    * `error` et `code` — mais pas `message`, que `sendError` pose TOUJOURS
-   * (`message: options?.message || error`). Cent vingt-sept sites l'étalent :
+   * (`message: options?.message || error`). Trois cent cinquante-quatre déclarations l'étalent :
    * tous servaient une erreur amputée de sa phrase lisible, celle que
    * `api.service.ts:239` lit EN PREMIER (`data.message || data.error`).
    */

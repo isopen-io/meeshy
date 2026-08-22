@@ -98,7 +98,7 @@ describe('enveloppe d’erreur — `errorResponseSchema` sert `message` (cycle 9
    * Ce bloc figeait le CONTRAIRE jusqu'au cycle 92 : le schéma partagé le plus
    * utilisé du dépôt ne déclarait que `{ success, error, code }`, et le témoin
    * assertait `body.message).toBeUndefined()` — un constat, pas une correction,
-   * parce qu'ajouter la clé touchait cent vingt-sept sites.
+   * parce qu'ajouter la clé touchait trois cent cinquante-quatre déclarations.
    *
    * Ce qui a forcé la décision : réparer les schémas d'erreur écrits à la main
    * en les ramenant sur cette constante EXIGE qu'elle porte `message`. Dix de
@@ -106,7 +106,7 @@ describe('enveloppe d’erreur — `errorResponseSchema` sert `message` (cycle 9
    * phrase ; les consolider sur une constante muette sur `message` aurait
    * échangé une troncature contre une autre.
    *
-   * Le texte n'était pas décoratif : quatre-vingt-dix appels d'erreur passent un
+   * Le texte n'était pas décoratif : cent trente-huit appels d’erreur passent un
    * `message` DISTINCT de l'`error`, et `api.service.ts:239` le lit EN PREMIER
    * (`data.message || data.error`). Sur `calls.ts`, `error` porte le CODE
    * (`NOT_A_PARTICIPANT`) et `message` la phrase — le client affichait le code.

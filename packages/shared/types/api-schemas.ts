@@ -3044,10 +3044,10 @@ export const updateUserPreferenceRequestSchema = {
  *   { ...details, success: false, error, message, code, violations? }
  *
  * `message` a manqué à cette liste jusqu'au cycle 92, alors que l'enveloppe le
- * pose TOUJOURS (`message: options?.message || error`). Cent vingt-sept sites
+ * pose TOUJOURS (`message: options?.message || error`). Trois cent cinquante-quatre déclarations
  * étalent cette constante : tous servaient une erreur amputée de sa phrase
  * lisible — celle que le client web lit EN PREMIER
- * (`api.service.ts:239`, `data.message || data.error`). Quatre-vingt-dix appels
+ * (`api.service.ts:239`, `data.message || data.error`). Cent trente-huit appels
  * d'erreur passent aujourd'hui un `message` distinct de l'`error` ; c'est ce
  * texte-là qui se perdait.
  *

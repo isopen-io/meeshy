@@ -36,13 +36,24 @@ cette famille-là, et sur elle seulement.
 
 ## 2. Ce que le balayage a trouvé
 
-164 schémas de réponse d'erreur dans `routes/`. Trois populations :
+Les schémas de réponse d'erreur de `routes/`, comptés dans le FICHIER :
 
-| population | sites | état |
+| population | déclarations | état |
 |---|---|---|
-| étalent `errorResponseSchema` | **127** | la constante ne déclarait pas `message` |
+| étalent `errorResponseSchema` | **354** | la constante ne déclarait pas `message` |
 | écrits à la main, enveloppe amputée | **80** (20 fichiers) | clé absente, ou du mauvais TYPE |
-| étalent `validationErrorResponseSchema` | 6 | corrects (cycle 89) |
+
+**Ce compte a dérivé une fois avant d'être publié**, et la façon dont il a dérivé
+mérite d'être dite. La première rédaction annonçait « 127 sites » : c'était le
+nombre de triplets UNIQUES `(fichier, statut, forme)` que mon balayage de
+reconnaissance rendait après déduplication — donc cinq `404` d'un même fichier
+comptés pour un. Un chiffre juste, sur autre chose que ce qu'il prétendait
+compter.
+
+Le cycle 92 concurrent (`main`) a publié dans le même temps la règle qui l'attrape :
+**« un compte est une AFFIRMATION, comme un tri (cycle 86 bis) : il se compte,
+il ne s'hérite pas. »** Recompté contre le fichier à la base pré-correctif :
+354 étalements, tous sous un bloc `response:`.
 
 ## 3. La racine : `errorResponseSchema` ne déclarait pas `message`
 
@@ -146,7 +157,7 @@ un compteur d'accolades naïf la prend pour de la structure.
   `utils/response.ts` cite en exemple de l'étalement de `details`), le
   `nextChangeAllowedAt`, les `description` spécifiques. Dix sites y déclaraient
   `{ success, message }` sans `error` : ils gagnent `error` et `code`.
-- **Les 127 sites qui étalent la constante** : gagnent `message`.
+- **Les 354 déclarations qui étalent la constante** : gagnent `message`.
 
 **La décision.** `services/gateway/CLAUDE.md` réservait l'ajout de `message`
 comme « une décision, pas une initiative ». Ce qui la tranche ici n'est pas un
@@ -155,7 +166,7 @@ constante partagée l'exige. Dix d'entre eux servaient déjà leur phrase par un
 `message` déclaré à la main ; les consolider sur une constante muette sur
 `message` aurait échangé une troncature contre une autre.
 
-Et le texte n'était pas décoratif : **90 appels d'erreur du dépôt passent un
+Et le texte n'était pas décoratif : **138 appels d’erreur du dépôt (sur 1440) passent un
 `message` DISTINCT de l'`error`**, et `apps/web/services/api.service.ts:239` le
 lit EN PREMIER (`data.message || data.error`). Sur `calls.ts`, `error` porte le
 CODE et `message` la phrase : le client affichait le code.
@@ -163,7 +174,7 @@ CODE et `message` la phrase : le client affichait le code.
 **Ce qu'il faut regarder si on veut défaire ce choix** : le seul changement
 observable côté client est qu'un `message` distinct s'affiche désormais à la
 place de l'`error` sur les routes qui en passent un. Aucune réponse ne PERD de
-champ, sur aucun des 207 sites.
+champ, sur aucune des 434 déclarations.
 
 ## 7. Témoins
 
