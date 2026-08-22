@@ -380,7 +380,9 @@ Le collapse « visibilité résolue → champs servis » ne se réécrit pas à 
 Deux applicateurs partagés, et le schéma de la route choisit :
 `applyPresenceVisibility` (`isOnline: null`, pour un schéma nullable) et
 `applyPresenceVisibilityAsOffline` (`isOnline: false`, pour `userMinimalSchema`
-et `contacts-schemas`, qui le déclarent `type: 'boolean'`).
+et `contacts-schemas`, qui le déclarent `type: 'boolean'`). Le second prend
+`{ onMissingEntry: 'hide' | 'reveal' }` — le défaut `'hide'` sert le régime
+strict, `'reveal'` le régime prefs-only (voir les défauts opposés plus bas).
 
 **Une amitié acceptée n'est PAS un laissez-passer.** `areConnected` ouvre la
 porte, il ne dispense pas de `showOnlineStatus` — la politique pure masque quand
@@ -439,6 +441,39 @@ donnée s'est arrêtée sur une omission de schéma que rien ne nomme
 les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
 tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
 PORTE, pas un bug.
+
+**Une même route peut relever des DEUX régimes, décidés par son contrôle
+d'accès.** `GET /communities/:id/members` ne referme que les communautés
+PRIVÉES : sur une publique, elle répond à un non-membre, et devient une porte de
+découverte. Le régime s'y choisit donc par LECTEUR — `hasAccess` ⇒ prefs-only,
+sinon strict — avec le `onMissingEntry` correspondant. Lire le contrôle d'accès
+avant de choisir le régime : « c'est une route de communauté » ne suffit pas
+(cycle 85-bis).
+
+## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
+
+Le fichier. Node résout **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**, donc un import
+sans extension — `import { x } from './routes/X'`, la forme qu'emploie
+`route-registration.ts` — ne voit JAMAIS `X/index.ts` si `X.ts` existe.
+
+Après une scission de module, l'étape finale n'est pas facultative : `X.ts`
+devient une **coquille de ré-export**.
+
+```typescript
+export { userRoutes } from './users/index';
+```
+
+`routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portent.
+`routes/communities.ts` ne l'a jamais reçue : son répertoire (~1 900 lignes,
+gates de présence compris) est injoignable, et le legacy sert seul la production
+— où trois routes servaient `isOnline` brut (cycle 85-bis).
+
+**Une scission inachevée ne ressemble à rien** : le répertoire compile, ses
+suites passent, sa couverture monte, aucun avertissement ne se lève. Le seul
+symptôme est un correctif sans effet — et l'effet d'un correctif de
+confidentialité, personne ne le mesure. `module-shadowing.test.ts` garde les
+paires par deux voies (balayage des coquilles, et routes RÉELLEMENT
+enregistrées) ; toute nouvelle paire non-coquille le fait tomber.
 
 ## Cette entité a-t-elle une JUMELLE ?
 

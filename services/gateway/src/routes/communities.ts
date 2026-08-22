@@ -24,8 +24,43 @@ import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../utils/response';
 import { validatePagination } from '../utils/pagination';
+import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
+import { viewerFromRequest } from './users/presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
+
+type PresencePrisma = Parameters<typeof getPresenceVisibilityService>[0];
+
+type MemberUser = { id: string; isOnline: boolean | null; lastActiveAt?: Date | null };
+
+/**
+ * Présence d'un CO-MEMBRE servie à un membre de la même communauté.
+ *
+ * L'appartenance commune est un contexte d'accès garanti des deux côtés : la
+ * présence est montrable, et seules les préférences `showOnlineStatus` /
+ * `showLastSeen` de la cible s'appliquent. C'est le même régime que celui que
+ * `routes/conversations/participants.ts` porte pour les co-participants.
+ *
+ * `onMissingEntry: 'reveal'` parce que le régime prefs-only tient une entrée
+ * absente pour normale et non pour suspecte — le défaut inverse de celui du
+ * critère strict.
+ */
+async function gateCoMemberPresence<T extends { user?: MemberUser | null }>(
+  prisma: PresencePrisma,
+  member: T,
+): Promise<T> {
+  const user = member.user;
+  if (!user?.id) return member;
+
+  const visibility = await getPresenceVisibilityService(prisma).resolvePrefsOnly([user.id]);
+  return {
+    ...member,
+    user: applyPresenceVisibilityAsOffline(user, visibility.get(user.id), {
+      onMissingEntry: 'reveal',
+    }),
+  };
+}
 
 // Enum des roles de communaute (aligne avec shared/types/community.ts)
 enum CommunityRole {
@@ -965,7 +1000,35 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      sendPaginatedSuccess(reply, members, {
+      // Porte MIXTE. Le contrôle d'accès ci-dessus ne referme que les
+      // communautés PRIVÉES : sur une communauté publique, `hasAccess` est faux
+      // et le lecteur est un NON-MEMBRE qui parcourt une liste de tiers.
+      //
+      //  - lecteur co-membre  ⇒ contexte d'accès garanti ⇒ préférences seules,
+      //    et une entrée absente reste visible ;
+      //  - lecteur non-membre ⇒ c'est une porte de DÉCOUVERTE ⇒ critère STRICT
+      //    (blocage, amitié, co-participation), et une entrée absente masque.
+      //
+      // `userMinimalSchema` ne déclare pas `lastActiveAt` : ce champ ne sort
+      // d'aucune de ces réponses, mais le gate le couvre pour le jour où il y
+      // serait déclaré.
+      const memberUserIds = members
+        .map((m: { user?: MemberUser | null }) => m.user?.id)
+        .filter((uid: string | undefined): uid is string => !!uid);
+
+      const presenceService = getPresenceVisibilityService(fastify.prisma);
+      const presenceVis = hasAccess
+        ? await presenceService.resolvePrefsOnly(memberUserIds)
+        : await presenceService.resolveForTargets(viewerFromRequest(request), memberUserIds);
+      const onMissingEntry = hasAccess ? 'reveal' as const : 'hide' as const;
+
+      const gatedMembers = members.map((m: { user?: MemberUser | null }) =>
+        m.user
+          ? { ...m, user: applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id), { onMissingEntry }) }
+          : m
+      );
+
+      sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -1117,7 +1180,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      sendSuccess(reply, member);
+      // L'acteur est admin de la communauté et la cible vient d'en devenir
+      // membre : ils sont co-membres, donc préférences seules. La branche
+      // `existingMember` ne charge aucun `user` — le gate la laisse passer.
+      sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error adding community member', error as Error);
       sendInternalError(reply, 'Failed to add community member');
@@ -2038,7 +2104,9 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      sendSuccess(reply, member);
+      // Le profil de l'invité repart vers l'inviteur, qui est membre de la même
+      // communauté que l'invité vient de rejoindre : préférences seules.
+      sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error inviting to community', error as Error);
       sendInternalError(reply, 'Failed to invite user to community');

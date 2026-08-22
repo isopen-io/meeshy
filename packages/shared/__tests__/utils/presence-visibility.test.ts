@@ -191,4 +191,42 @@ describe('applyPresenceVisibilityAsOffline', () => {
     expect('lastActiveAt' in out).toBe(true);
     expect(out.lastActiveAt).toBeNull();
   });
+
+  // Le régime PREFS-ONLY inverse le défaut : une entrée absente y est la
+  // situation normale (un anonyme n'a pas de préférences), pas une anomalie.
+  // Les deux défauts cohabitent dans le même applicateur parce qu'une même
+  // route peut servir les deux régimes selon le lecteur —
+  // `GET /communities/:id/members` en est l'exemple.
+  describe('onMissingEntry: reveal — régime prefs-only', () => {
+    it('laisse la présence brute quand aucune entrée ne concerne le profil', () => {
+      const out = applyPresenceVisibilityAsOffline(profile, undefined, { onMissingEntry: 'reveal' });
+      expect(out.isOnline).toBe(true);
+      expect(out.lastActiveAt).toEqual(profile.lastActiveAt);
+    });
+
+    it('masque malgré tout sur une visibilité explicitement négative', () => {
+      const out = applyPresenceVisibilityAsOffline(
+        profile,
+        { showOnline: false, showLastSeenTimestamp: false },
+        { onMissingEntry: 'reveal' },
+      );
+      expect(out.isOnline).toBe(false);
+      expect(out.lastActiveAt).toBeNull();
+    });
+
+    it('normalise un isOnline null en false, sans fabriquer lastActiveAt', () => {
+      const out = applyPresenceVisibilityAsOffline({ id: 'u7', isOnline: null }, undefined, {
+        onMissingEntry: 'reveal',
+      });
+      expect(out.isOnline).toBe(false);
+      expect('lastActiveAt' in out).toBe(false);
+    });
+  });
+
+  // Le défaut reste `hide` : les six sites stricts existants passent deux
+  // arguments et ne doivent rien changer de leur comportement.
+  it('conserve le défaut masquant quand aucune option n est passée', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, undefined, {});
+    expect(out.isOnline).toBe(false);
+  });
 });
