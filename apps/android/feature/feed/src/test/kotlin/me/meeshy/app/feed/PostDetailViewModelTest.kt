@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.SocketCommentAddedData
 import me.meeshy.sdk.model.SocketCommentDeletedData
@@ -593,5 +594,204 @@ class PostDetailViewModelTest {
         vm.state.test {
             assertThat(awaitItem().post?.isAuthor).isFalse()
         }
+    }
+
+    // --- Repost / quote-repost (parity iOS `PostDetailView.toggleDetailRepost`, routed through
+    //     the tested `RepostCommand` SSOT — which SURPASSES iOS by resolving the ROOT target and
+    //     degrading a blank quote to a simple repost, neither of which iOS's post-detail does). ---
+
+    private fun loadedVm(
+        postId: String = "p1",
+        loaded: ApiPost = post(),
+        currentUser: MeeshyUser? = null,
+    ): PostDetailViewModel {
+        coEvery { repository.getPost(postId) } returns NetworkResult.Success(loaded)
+        coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
+            NetworkResult.Success(post(id = "repost-result"))
+        return viewModel(postId = postId, currentUser = currentUser)
+    }
+
+    @Test
+    fun `repost of an original post targets its own id with no content and flags it reposted`() = runTest {
+        val vm = loadedVm(loaded = post(id = "p1", content = "Hello"))
+
+        vm.repost()
+
+        coVerify(exactly = 1) { repository.repost("p1", content = null, isQuote = false) }
+        assertThat(vm.state.value.isReposted).isTrue()
+        assertThat(vm.state.value.errorMessage).isNull()
+    }
+
+    @Test
+    fun `repost of a repost targets its recorded root, never the intermediate share`() = runTest {
+        val share = post(id = "share1").copy(
+            repostOf = ApiRepostOf(id = "share1", originalRepostOfId = "root-post"),
+        )
+        val vm = loadedVm(loaded = share)
+
+        vm.repost()
+
+        coVerify(exactly = 1) { repository.repost("root-post", content = null, isQuote = false) }
+    }
+
+    @Test
+    fun `repost of a repost with no recorded root falls back to the directly-reposted id`() = runTest {
+        val share = post(id = "share1").copy(
+            repostOf = ApiRepostOf(id = "direct-parent", originalRepostOfId = null),
+        )
+        val vm = loadedVm(loaded = share)
+
+        vm.repost()
+
+        coVerify(exactly = 1) { repository.repost("direct-parent", content = null, isQuote = false) }
+    }
+
+    @Test
+    fun `a repost before the post has loaded is inert`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("p1") } coAnswers { gate.await() }
+
+        val vm = viewModel()
+        vm.repost()
+
+        coVerify(exactly = 0) { repository.repost(any(), content = any(), isQuote = any()) }
+        gate.complete(NetworkResult.Success(post()))
+    }
+
+    @Test
+    fun `a repost failure reverts the reposted flag and surfaces the error`() = runTest {
+        val vm = loadedVm()
+        coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
+            NetworkResult.Failure(ApiError("repost boom"))
+
+        vm.repost()
+
+        assertThat(vm.state.value.isReposted).isFalse()
+        assertThat(vm.state.value.errorMessage).isEqualTo("repost boom")
+    }
+
+    @Test
+    fun `a second repost while the first is in flight does not fire a duplicate`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("p1") } returns NetworkResult.Success(post())
+        coEvery { repository.repost(any(), content = any(), isQuote = any()) } coAnswers { gate.await() }
+        val vm = viewModel()
+
+        vm.repost()
+        vm.repost()
+        gate.complete(NetworkResult.Success(post()))
+
+        coVerify(exactly = 1) { repository.repost(any(), content = any(), isQuote = any()) }
+    }
+
+    @Test
+    fun `beginQuote opens the composer with the source author and a trimmed content preview`() = runTest {
+        val vm = loadedVm(
+            loaded = post(id = "p1", content = "  Bonjour le monde  ")
+                .copy(author = ApiAuthor(id = "a1", displayName = "Alice")),
+        )
+
+        vm.beginQuote()
+
+        val composer = vm.state.value.quoteComposer
+        assertThat(composer).isNotNull()
+        assertThat(composer?.postId).isEqualTo("p1")
+        assertThat(composer?.sourceAuthorName).isEqualTo("Alice")
+        assertThat(composer?.sourceContentPreview).isEqualTo("Bonjour le monde")
+    }
+
+    @Test
+    fun `beginQuote before the post has loaded is inert`() = runTest {
+        val gate = CompletableDeferred<NetworkResult<ApiPost>>()
+        coEvery { repository.getPost("p1") } coAnswers { gate.await() }
+
+        val vm = viewModel()
+        vm.beginQuote()
+
+        assertThat(vm.state.value.quoteComposer).isNull()
+        gate.complete(NetworkResult.Success(post()))
+    }
+
+    @Test
+    fun `onQuoteTextChange updates the open composer draft`() = runTest {
+        val vm = loadedVm()
+        vm.beginQuote()
+
+        vm.onQuoteTextChange("my take")
+
+        assertThat(vm.state.value.quoteComposer?.text).isEqualTo("my take")
+    }
+
+    @Test
+    fun `cancelQuote closes the composer without reposting`() = runTest {
+        val vm = loadedVm()
+        vm.beginQuote()
+
+        vm.cancelQuote()
+
+        assertThat(vm.state.value.quoteComposer).isNull()
+        coVerify(exactly = 0) { repository.repost(any(), content = any(), isQuote = any()) }
+    }
+
+    @Test
+    fun `submitQuote reposts with the trimmed commentary, flags it a quote, and closes the composer`() = runTest {
+        val vm = loadedVm(loaded = post(id = "p1"))
+        vm.beginQuote()
+        vm.onQuoteTextChange("  great post  ")
+
+        vm.submitQuote()
+
+        coVerify(exactly = 1) { repository.repost("p1", content = "great post", isQuote = true) }
+        assertThat(vm.state.value.quoteComposer).isNull()
+        assertThat(vm.state.value.isReposted).isTrue()
+    }
+
+    @Test
+    fun `submitQuote of a repost targets the root, carrying the commentary`() = runTest {
+        val share = post(id = "share1").copy(
+            repostOf = ApiRepostOf(id = "share1", originalRepostOfId = "root-post"),
+        )
+        val vm = loadedVm(loaded = share)
+        vm.beginQuote()
+        vm.onQuoteTextChange("nested quote")
+
+        vm.submitQuote()
+
+        coVerify(exactly = 1) { repository.repost("root-post", content = "nested quote", isQuote = true) }
+    }
+
+    @Test
+    fun `submitQuote with blank commentary degrades to a simple repost`() = runTest {
+        val vm = loadedVm(loaded = post(id = "p1"))
+        vm.beginQuote()
+        vm.onQuoteTextChange("   ")
+
+        vm.submitQuote()
+
+        coVerify(exactly = 1) { repository.repost("p1", content = null, isQuote = false) }
+    }
+
+    @Test
+    fun `submitQuote with no composer open is inert`() = runTest {
+        val vm = loadedVm()
+
+        vm.submitQuote()
+
+        coVerify(exactly = 0) { repository.repost(any(), content = any(), isQuote = any()) }
+    }
+
+    @Test
+    fun `a submitQuote failure reverts the reposted flag and surfaces the error`() = runTest {
+        val vm = loadedVm(loaded = post(id = "p1"))
+        coEvery { repository.repost(any(), content = any(), isQuote = any()) } returns
+            NetworkResult.Failure(ApiError("quote boom"))
+        vm.beginQuote()
+        vm.onQuoteTextChange("x")
+
+        vm.submitQuote()
+
+        assertThat(vm.state.value.isReposted).isFalse()
+        assertThat(vm.state.value.errorMessage).isEqualTo("quote boom")
+        assertThat(vm.state.value.quoteComposer).isNull()
     }
 }

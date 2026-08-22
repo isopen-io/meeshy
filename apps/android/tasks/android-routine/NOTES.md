@@ -5,6 +5,35 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — SDK bootstrap: `android-37` is now MINOR-versioned; symlink after install
+
+The routine's recipe `sdkmanager --channel=3 "platforms;android-37.0"` now installs a **minor-versioned**
+platform: the dir is `$HOME/android-sdk/platforms/android-37.0` and its `source.properties` reads
+`AndroidVersion.ApiLevel=37.0`. But AGP 8.13 with `compileSdk = 37` looks up the hash string **`android-37`**
+(no minor), so Gradle dies before compiling with:
+```
+> Failed to find target with hash string 'android-37' in: /root/android-sdk
+```
+One-line fix, then everything builds:
+```bash
+ln -sf android-37.0 "$HOME/android-sdk/platforms/android-37"
+```
+(Alternative not tried: `sdkmanager "platforms;android-37"` on the stable channel — but only `android-37.0`,
+`37.1`, `37.2-betaN` are published, all minor-versioned, so the symlink is the reliable move.) After it, the
+full `assembleDebug testDebugUnitTest` ran locally, BUILD SUCCESSFUL (973 tasks). `local.properties` stays
+`sdk.dir=$HOME/android-sdk` and gitignored. Reusable habit: **when `dl.google.com` is reachable, the local
+gate is worth the ~5 min** — it's the fastest way to prove a Compose/UI wiring change compiles before pushing.
+
+## 2026-08-22 — Reuse the feed's building blocks in post-detail, don't reinvent
+
+The post-detail repost/quote slice added ZERO new value models or strings: it routes through the existing
+`RepostCommand` SSOT, reuses `QuoteComposerState` + `QuoteComposerSheet` (widened `private → internal`), and
+the existing `feed_action_repost`/`feed_action_quote` strings. Both surfaces (feed card + full-screen detail)
+now fold their "what to send" decision through one tested pure function — so the root-target fix and the
+blank-quote degradation are guaranteed identical on both, and a future gateway change touches one SSOT. When
+a second surface needs a behaviour the first already has, widen visibility and share the value model; a
+parallel re-implementation is where the two drift.
+
 ## 2026-08-22 — One deep-link route, one entry ViewModel: unify what iOS split across views
 
 iOS routes an authenticated share-link tap (`RootView.resolveShareLinkEntry`, `isAuthenticated: true`)

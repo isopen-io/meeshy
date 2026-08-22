@@ -4302,6 +4302,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       →root, cancel, no-composer inert; `PostActionMenuTest` ×1 quote-follows-repost). Mutation RED-proof:
       `isQuote = content != null` → `= quote` fails EXACTLY the 3 degradation tests (2 pure + 1 VM), 730
       others green. EN/FR/ES/PT strings.
+      **Post-detail repost + quote shipped 2026-08-22** (slice `feed-postdetail-quote-repost`): the
+      full-screen `PostDetailScreen` now matches the feed. iOS offers both there via
+      `PostDetailView.toggleDetailRepost(quote:)` (a repost button + Repartager/Citer alert). Android:
+      the read-only repost stat becomes an interactive `DetailRepostStat` — tap opens a Repost / Quote
+      `DropdownMenu`; the quote path reuses the feed's `QuoteComposerSheet` (widened to `internal`). VM
+      gains `repost`/`beginQuote`/`onQuoteTextChange`/`cancelQuote`/`submitQuote`, both folding through the
+      SAME tested `RepostCommand` SSOT scoped to the single open post. **Two improvements over iOS's
+      post-detail**: (1) reposting a share targets its ROOT (iOS reposts the raw `postId` → empty share
+      card); (2) a blank quote degrades to a simple repost (iOS's post-detail quote is content-LESS
+      entirely — `content: nil`). Optimistic `isReposted` (fills the icon `Indigo500`) reverts on failure
+      (iOS `isPostReposted`); in-flight guard fires the network once; failures surface via `errorMessage`.
+      +15 `PostDetailViewModelTest` (root-target ×2, no-root fallback, before-load inert ×2, failure reverts
+      ×2, double-fire guard, preview, draft, cancel, submit-with/blank-commentary, submit-of-repost→root,
+      no-composer inert). Mutation RED-proof: drop `post.repostOf` → EXACTLY the 2 root tests fail. No new
+      strings (reuses `feed_action_repost`/`feed_action_quote` + quote-sheet strings).
       **Still open**: comment pin-unpin (separate surface, not investigated this slice).
 - [~] Post view + dwell-time tracking; batched impression tracking — **batched impression
       tracking shipped 2026-08-17** (slice `feed-impression-batching`). Re-proved before coding:
