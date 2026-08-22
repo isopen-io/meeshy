@@ -549,14 +549,28 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Conversation join refused by the server (banned, no longer member,
-        // never a member, conversation deleted, etc.). The ViewModel reuses
-        // the REST 403 path: purge per-conversation cache + flip the
-        // accessRevoked flag so the View dismisses with a toast.
+        // Jonction refusée par le serveur. Le MOTIF décide, et il ne le faisait
+        // pas : ce puits appelait `handleSocketAccessRevoked` sur les SEPT
+        // motifs qu'émet la passerelle — donc aussi sur `rate_limited`,
+        // `server_error`, `not_authenticated` et `invalid_payload`, qui ne
+        // disent rien de l'appartenance. Une limite de débit franchie par une
+        // tempête de reconnexion (elle rejoint toutes les rooms d'un coup)
+        // purgeait le cache du fil et le fermait sous un bandeau « accès
+        // révoqué », alors que l'utilisateur était en train de le lire.
+        //
+        // `isMembershipDenied` est le jumeau Swift de la règle partagée
+        // `isMembershipDeniedJoinError()`. Un refus transitoire ne détruit plus
+        // rien ; la room sera rejointe par le cycle de reconnexion du socket.
         socketManager.conversationJoinError
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                guard event.isMembershipDenied else {
+                    Logger.socket.notice(
+                        "conversation:join-error TRANSITOIRE — cache et vue conservés (reason=\(event.reason ?? "nil", privacy: .public))"
+                    )
+                    return
+                }
                 self?.delegate?.handleSocketAccessRevoked(reason: event.message)
             }
             .store(in: &cancellables)
