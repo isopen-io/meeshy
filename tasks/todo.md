@@ -650,3 +650,48 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle97.md`.
       cohérente avec elle-même et fausses l'une contre l'autre. Paires à instruire :
       chiffrement/déchiffrement du Double Ratchet, sérialiseur/décodeur Socket.IO,
       producteur gateway / décodeurs iOS-Android.
+
+
+## Cycle 98 (2026-08-22) — un message chiffré par un bout se déchiffre enfin à l'autre
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle98.md`.
+
+- [x] Construit le témoin que la « quatrième famille » réclamait depuis le cycle 94 :
+      `dma-session-roundtrip.test.ts` fait chiffrer un message par une PRODUCTION
+      réelle et le fait déchiffrer par une autre (deux `SignalProtocolEngine`
+      distincts). **Il est tombé du premier coup ; QUATRE défauts ont dû être
+      réparés pour le faire passer.**
+- [x] Défaut 1 — `encryptMessage` omettait la paire de clés DH au montage de la
+      session : le message partait avec `Buffer.alloc(0)` en clé éphémère, et le
+      répondeur ne pouvait calculer ni DH2, ni DH3, ni DH4. **Mot pour mot le
+      défaut corrigé au cycle 96 sur `SignalProtocolAdapter`, la JUMELLE du moteur.**
+- [x] Défaut 2 — le répondeur croisait les chaînes DEUX FOIS (X3DH les livre déjà
+      croisées, `decryptMessage` recroisait), donc pas du tout. **Ce défaut ANNULAIT
+      le cycle 97** : sa convergence des HKDF était défaite à la ligne suivante.
+- [x] Défaut 3 — l'initiateur consommait une pré-clé unique et calculait un vrai
+      DH4 pendant que le répondeur repliait sur 32 octets nuls (`undefined,
+      // preKeyId - optional`). Trou de CONTRAT : `EncryptedMessage` ne portait
+      aucun identifiant de pré-clé. Champ `preKeyId` ajouté et porté par chaque
+      message. Le symptôme sortait à la couche GCM, sous les traits d'une ATTAQUE.
+- [x] Défaut 4 — `DoubleRatchet.asymmetricRatchet` n'appliquait aucun croisement :
+      les deux bouts prenaient la même moitié du bloc dérivé dans le même rôle.
+      Sans appelant de production (piège armé, pas panne), traité dans le même lot
+      au titre de la règle de la JUMELLE.
+- [x] Débloqué `SignalProtocolEngine.initialize()`, qui ne pouvait PAS aboutir
+      (aucune identité transmise au gestionnaire de clés) — d'où, vraisemblablement,
+      l'absence de tout témoin de bout en bout jusqu'ici.
+- [x] **ROUGE prouvé séparément pour chacun des 4** : mutation appliquée, suite
+      rouge, mutation revertie. Sur le ratchet, 3/4 tombent et la clé racine reste
+      verte — la séparation localise la panne.
+- [x] Gates : `tsc --noEmit` 0 · suite complète passerelle **832 suites / 19197
+      témoins / 0 échec** · suites exclues du sous-arbre inchangées (56/114 avant
+      comme après, mesuré).
+- [x] **Fait matériel absent des journaux 95-97** : le sous-arbre
+      `dma-interoperability` n'est importé de NULLE PART — compilé, jamais exécuté.
+      La gravité de ces trois cycles est POTENTIELLE, pas subie.
+- [ ] Suivi — les 3 suites du sous-arbre sont rouges (56/114) et exclues de jest.
+- [ ] Suivi — `asymmetricRatchet` : suivi des clés distantes au-delà d'un pas.
+- [ ] Suivi — `SignalKeyManager.registrationId` tiré au hasard au CONSTRUCTEUR.
+- [ ] Suivi — préfixe `F` et sel du HKDF (conformité libsignal).
+- [ ] Suivi — quatrième famille : restent le sérialiseur/décodeur Socket.IO et le
+      couple producteur passerelle / décodeurs iOS-Android.
