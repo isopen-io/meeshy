@@ -44,8 +44,14 @@ enum StoryCanvasVisibility {
 /// Pure mute/pause policy for the inline story canvas in PostDetailView, shared by
 /// BOTH the native story canvas and the STORY-repost canvas so the two paths can't
 /// drift (RF3). The canvas pauses when scrolled fully off-screen OR while a call
-/// owns the audio session. Audio is always ON in detail (`mute: false`) — the
-/// detail viewer matches the native story experience, unlike the muted feed.
+/// owns the audio session. Audio is ON by DEFAULT in detail (`isCanvasMuted`
+/// starts `false`) — the detail viewer matches the native story experience,
+/// unlike the muted feed. A local mute toggle in the actions bar (B3.6,
+/// Task E2) lets the viewer silence it; this policy only governs PAUSE, never
+/// that mute state. The toggle itself is gated on a canvas actually being
+/// rendered (`BackgroundSoundBadge.detailCanvasIsRendered`, E2 DoD correctif
+/// rev.14) — a plain non-story post carrying its own background sound never
+/// mounts one, since no canvas plays here for it to control.
 enum StoryDetailPlaybackPolicy {
     static func isPaused(visible: Bool, callActive: Bool) -> Bool {
         !visible || callActive
