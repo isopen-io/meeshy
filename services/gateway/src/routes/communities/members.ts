@@ -12,6 +12,7 @@ import {
   sendPaginatedSuccess
 } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { gateMemberPresence } from './member-presence';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
@@ -331,7 +332,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return sendSuccess(reply, member);
+      return sendSuccess(reply, await gateMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error adding community member', error as Error);
       return sendInternalError(reply, 'Failed to add community member');

@@ -455,6 +455,52 @@ entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
 `updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
 des ids arbitraires, l'upsert seul retire cette protection.
 
+## Une scission de module n'est finie que quand l'ancien chemin est un proxy
+
+`route-registration.ts` importe `'./routes/communities'`. La passerelle est en
+CommonJS : la résolution essaie le **FICHIER avant le dossier**. Tant que
+`routes/communities.ts` portait une implémentation, il gagnait, et les 1920
+lignes de `routes/communities/` n'ont **jamais** servi une requête — dossier
+complet, compilé, couvert par huit suites vertes, et sans appelant.
+
+Coût mesuré (cycle 86) : trois cycles de correctifs y ont atterri sans jamais
+atteindre la production. Le cycle 84 a diagnostiqué, corrigé et CLOS « la
+recherche de communautés iOS était morte » dans `communities/search.ts` ; le
+fichier vivant portait encore le défaut mot pour mot. Avec lui : la présence
+des membres servie brute, les noms de communauté non assainis, et
+`POST /communities/:id/conversations/:conversationId` — qu'iOS appelle — en
+`404`.
+
+`attachments.ts` (8 lignes), `users.ts` (14) et `voice.ts` (6) sont les trois
+autres scissions du même lot : toutes se terminent par
+`export { X } from './X/index'`. **C'est la forme finie.** Un dossier complet ne
+l'est pas.
+
+> **Ne jamais laisser coexister `routes/X.ts` porteur d'implémentation et
+> `routes/X/`.** Le spécificateur d'import est identique, les deux compilent,
+> les deux ont des témoins verts, et rien dans le source ne dit lequel répond.
+> `node -e "require.resolve(...)"` tranche en une seconde ; la lecture du code,
+> jamais.
+
+### Corollaire : un témoin s'importe par le chemin de la PRODUCTION
+
+Six des huit suites communauté importaient `routes/communities/search` ou
+`routes/communities/index` — des chemins explicites vers le module mort. Une
+septième visait bien le bon spécificateur mais mockait
+`@meeshy/shared/types/api-schemas` en `{ additionalProperties: true }`, ce qui
+désarme fast-json-stringify, soit exactement la couche où vivaient deux des
+défauts.
+
+**Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
+la main** — et ne pas mocker les schémas partagés dans un témoin de
+sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
+que deux modules concurrents ne partagent pas, et tombe si l'ancien chemin
+reprend de l'implémentation.
+
+Et **poser au moins un témoin de SURFACE** : « cette route est-elle
+enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
+appelle depuis toujours n'était vu par personne.
+
 ## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
 
 `expect(res.statusCode).toBe(200)` atteste que la route RÉPOND, pas qu'elle
