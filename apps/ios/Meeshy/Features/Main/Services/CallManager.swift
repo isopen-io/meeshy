@@ -2731,15 +2731,19 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
-            // Audit finding (Vague 159): mirrors the toggleVideo() guard (Vague
-            // 158). A hold or capture-interruption has released the camera —
-            // flipping front/back here would call capturer.startCapture and
-            // silently reacquire it (camera hardware + OS indicator turn back
-            // on) even though the transceiver stays recvOnly and the peer never
-            // sees the switch. Revert the optimistic mirror flag instead of
-            // actuating; `handleHold`'s unhold branch restores the real camera
-            // state once suspension lifts.
-            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+            // Audit finding (Vague 159, extended Vague 160): mirrors the
+            // toggleVideo() guard (Vague 158). A hold, capture-interruption,
+            // OR the network-survival downgrade (`isVideoSuspended` —
+            // VideoSurvivalController graceful-degradation-to-audio-only,
+            // same "camera stopped, isVideoEnabled left true" contract) has
+            // released the camera — flipping front/back here would call
+            // capturer.startCapture and silently reacquire it (camera
+            // hardware + OS indicator turn back on) even though the
+            // transceiver stays recvOnly and the peer never sees the switch.
+            // Revert the optimistic mirror flag instead of actuating;
+            // `handleHold`'s unhold branch / the survival controller's own
+            // resume restore the real camera state once suspension lifts.
+            if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
                 self.isUsingFrontCamera = previousFrontCamera
                 return
             }
@@ -2797,9 +2801,11 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
-            // Audit finding (Vague 159): same guard as switchCamera() above —
-            // both drive the same capturer through the same suspension state.
-            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+            // Audit finding (Vague 159, extended Vague 160): same guard as
+            // switchCamera() above — both drive the same capturer through
+            // the same suspension state, including the network-survival
+            // downgrade (`isVideoSuspended`), not just hold/interruption.
+            if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
                 self.selectedCameraId = previousSelectedCameraId
                 self.isUsingFrontCamera = previousFrontCamera
                 return

@@ -413,6 +413,25 @@ export function CallManager() {
    */
   const handleParticipantJoined = useCallback(
     (event: CallParticipantJoinedEvent) => {
+      // Vague 160 — a call:ended for an unrelated callId already has this
+      // guard (see the stale-callId comment on handleCallEnded below); this
+      // event is the sibling that never got it, even though it carries the
+      // same callId field for the same reason. The call-waiting "End &
+      // Answer" swap (handleEndAndAnswerWaiting) emits call:leave for the
+      // outgoing call WITHOUT awaiting an ack, then synchronously moves
+      // currentCall to the waiting call — the left call keeps running for
+      // its other participants (group call) until the server processes the
+      // leave, so a participant-joined for the OLD call can still reach this
+      // socket after currentCall already points at the NEW one. Only skip
+      // when a DIFFERENT call is genuinely tracked — `currentCall` is still
+      // null before this client's own join ack lands, and addParticipant's
+      // pendingParticipantsByCallId buffer (call-store.ts) exists precisely
+      // to hold those pre-ack events, so this must not block that case.
+      const { currentCall: trackedCallForJoin } = useCallStore.getState();
+      if (trackedCallForJoin && trackedCallForJoin.id !== event.callId) {
+        return;
+      }
+
       logger.info('[CallManager]', 'Participant joined - callId: ' + event.callId + ', participantId: ' + event.participant.id);
 
       // Apply the per-user ICE servers (STUN + time-limited TURN) the gateway
@@ -458,6 +477,17 @@ export function CallManager() {
    */
   const handleParticipantLeft = useCallback(
     (event: CallParticipantLeftEvent) => {
+      // Vague 160 — sibling of the handleParticipantJoined guard above: a
+      // participant-left for a call this client already moved away from
+      // (currentCall now points elsewhere) must not remove an entry from
+      // the CURRENT call's roster, even on an identity collision (the same
+      // participantId can legitimately belong to a stale AND a current
+      // call's roster entry after a rejoin).
+      const { currentCall: trackedCallForLeft } = useCallStore.getState();
+      if (trackedCallForLeft && trackedCallForLeft.id !== event.callId) {
+        return;
+      }
+
       logger.info('[CallManager]', 'Participant left - callId: ' + event.callId + ', participantId: ' + event.participantId, {
         userId: event.userId,
         anonymousId: (event as unknown).anonymousId,
@@ -652,6 +682,15 @@ export function CallManager() {
       // update it by its actual `.id`.
       const identity = event.userId || event.participantId;
       const { currentCall } = useCallStore.getState();
+      // Vague 160 — same stale-callId guard as handleParticipantJoined/Left
+      // above: without it, a media-toggle for a call this client already
+      // left (currentCall now points at a different, newer call) can still
+      // flip a roster entry's mute/camera flag on the CURRENT call whenever
+      // the identity happens to resolve to one of its participants (e.g.
+      // redialing the same peer).
+      if (currentCall && currentCall.id !== event.callId) {
+        return;
+      }
       const participant = currentCall?.participants.find(
         (p) => (p.userId || p.participantId) === identity
       );

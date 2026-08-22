@@ -10787,3 +10787,117 @@ défaut 1 ci-dessus, pas régularisé). Aucun autre défaut de confiance équiva
 autres surfaces auditées (gateway signal relay, TURN credentials, rate-limiter, `use-webrtc-p2p.ts`
 et hooks call-quality/captions côté web ; `PiPCallController.swift`/`CallEventsHandler.ts`/
 `CallService.ts` côté hold/lifecycle).
+
+## Vague 160 — stale-callId roster mutation (web) et 3ᵉ drapeau de suspension oublié sur switchCamera/selectCamera (iOS) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Deux audits
+dédiés en tâche de fond, l'un sur `services/gateway`/`apps/web` (signalisation, listeners), l'autre
+sur `CallManager.swift`/`PiPCallController.swift`/WebRTC iOS — après vérification que les Vagues
+158-159 sont bien closes (merge confirmé sur `main`, aucune branche `claude/upbeat-dirac-*`
+antérieure en avance). Les deux défauts trouvés reconduisent la même FAMILLE que les vagues
+précédentes : un événement/site sœur d'un garde-fou déjà posé ailleurs n'en avait pas reçu
+l'équivalent.
+
+### Défaut 1 (web) — `handleParticipantJoined`/`handleParticipantLeft`/`handleMediaToggle` n'avaient aucune garde `callId`, contrairement à `handleCallEnded` et à tout le reste du fichier
+
+**Root cause** : `CallParticipantJoinedEvent`/`CallParticipantLeftEvent`/`CallMediaToggleEvent`
+(`packages/shared/types/video-call.ts`) portent chacun un `callId` précisément pour ça, et
+`handleCallEnded` (même fichier) applique déjà `if (trackedCall && trackedCall.id !== event.callId)
+return;`. Les trois autres handlers n'avaient pas cette garde et mutaient
+`useCallStore.getState().currentCall` sans jamais vérifier que `event.callId` correspond. Le swap
+« End & Answer » du call-waiting (`handleEndAndAnswerWaiting`) émet `call:leave` pour l'appel sortant
+SANS attendre l'ack, puis bascule `currentCall` de manière synchrone vers l'appel en attente — l'appel
+quitté continue de tourner pour ses autres participants (appel de groupe) jusqu'à ce que le serveur
+traite le leave. Une course ordinaire entre deux messages socket indépendants laisse alors un
+`call:participant-joined`/`-left`/`-toggled` pour l'ANCIEN appel atteindre ce socket après que
+`currentCall` pointe déjà vers le NOUVEL appel — l'effectif ou l'état média de l'ancien appel se
+retrouve silencieusement appliqué au nouveau.
+
+**Fix** — même garde que `handleCallEnded`, ajoutée en tête des trois handlers :
+```ts
+const { currentCall } = useCallStore.getState();
+if (currentCall && currentCall.id !== event.callId) return;
+```
+`currentCall` null (avant que l'ack du propre join de ce client arrive) ne déclenche PAS la garde —
+`addParticipant`'s `pendingParticipantsByCallId` buffer (`call-store.ts`) existe justement pour tenir
+ces événements pré-ack, il ne fallait pas le casser.
+
+**Tests (TDD, RED confirmé)** : nouveau fichier
+`CallManager.staleCallIdParticipantEvents.test.tsx` — 4 tests : (a) un `participant-joined` d'un
+callId étranger n'ajoute pas son participant au roster courant ; (b) un `participant-left` d'un
+callId étranger avec un `participantId` qui COLLISIONNE avec une entrée du roster courant ne la
+retire pas (prouve que la garde teste le callId, pas seulement l'identité) ; (c) même collision
+d'identité pour `media-toggled` — n'applique pas le toggle ; (d) témoin négatif — les trois
+s'appliquent toujours normalement quand le callId correspond. RED confirmé (3/4 échouaient) avant
+fix, GREEN après. Sweep `--testPathPatterns="CallManager|video-call"` : **41 suites / 277 tests**
+verts, 0 régression (inclut les tests existants qui posent déjà `currentCall` avec le bon callId
+avant de tirer l'événement — `CallManager.answeredAt.test.tsx`,
+`CallManager.noAnswerEarlyJoin.test.tsx`, `CallManager.mediaToggleIdentity.test.tsx`,
+`CallManager.participantLeftOwnership.test.tsx`).
+
+**`tsc --noEmit`** : 1834 erreurs avant et après (diff `git stash`/`stash pop`) — **aucune nouvelle
+erreur**.
+
+**Risk assessment** : minimal — garde additive, copiée à l'identique de `handleCallEnded` dans le
+même fichier ; aucun changement de comportement pour le flux nominal (callId correspondant, le cas
+immense majorité).
+
+### Défaut 2 (iOS) — `switchCamera()`/`selectCamera(id:)` ne vérifiaient que 2 des 3 drapeaux de suspension sœurs, `isVideoSuspended` manquait
+
+**Root cause** : trois drapeaux indépendants signifient tous « le capteur caméra local est arrêté et
+le transceiver forcé en `recvOnly`/`sender.track = nil`, alors que `isVideoEnabled` reste
+délibérément `true` pour préserver l'intention utilisateur » : `isVideoSuspendedByHold` (hold
+CallKit), `isVideoSuspendedByCaptureInterruption` (interruption AVCaptureSession), et
+`isVideoSuspended` (`VideoSurvivalController`, dégradation réseau gracieuse vers audio-seul — même
+contrat, même fichier, ligne 317). `applyCameraSuspension` (ligne 3591) et `applySurvivalVideoSend`
+vérifient déjà les trois selon le site ; les gardes ajoutées aux Vagues 158/159 sur `toggleVideo()`,
+`switchCamera()`, `selectCamera(id:)` ne testaient que les deux premiers — `isVideoSuspended` n'était
+vérifié par aucun des trois actionneurs caméra manuels.
+
+Conséquence : quand le lien se dégrade assez pour que `VideoSurvivalController` suspende la vidéo
+sortante (`isVideoSuspended = true`, caméra réellement arrêtée via
+`P2PWebRTCClient.disableLocalVideo()` → `videoCapturer?.stopCapture()`), un tap sur le bouton de flip
+caméra (ou une sélection de caméra externe) pendant cette fenêtre ne déclenchait aucune garde :
+l'exécution tombait jusqu'à `webRTCService.switchCamera`/`switchToCamera`, qui rallume
+inconditionnellement le matériel (`stopCapture` puis `startCapture`) alors que le transceiver reste
+`recvOnly` — exactement le même faux signal « caméra active » que les Vagues 158/159 ont fermé pour
+le hold/l'interruption, cette fois via le 3ᵉ drapeau resté non couvert.
+
+**Fix** — étendu la condition des deux fonctions au 3ᵉ drapeau, même convention (revert de l'état
+optimiste + `return`) :
+```swift
+if self.isVideoSuspended || self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+    self.isUsingFrontCamera = previousFrontCamera   // + self.selectedCameraId pour selectCamera
+    return
+}
+```
+`toggleVideo()` n'est pas concerné par cette vague — son propre guard couvrait déjà les trois flux via
+`applySurvivalVideoSend`, seuls les deux actionneurs caméra manuels avaient l'omission.
+
+**Tests** : 2 nouveaux tests structurels ajoutés à `CallManagerCameraActuationHoldSuspensionGuardTests`
+(`CallManagerTests.swift`, même convention source-based que le reste du fichier — pas de host XCTest
+disponible dans ce container) : présence de `isVideoSuspended` dans la garde de chaque fonction. Les
+2 tests existants qui cherchaient la sous-chaîne exacte `"if self.isVideoSuspendedByHold || ..."`
+(revert-and-return) ont été mis à jour pour la nouvelle forme du texte de garde — les autres tests
+existants (recherche par `contains`/sous-chaîne partielle) continuaient de matcher sans modification.
+CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — extension d'une condition déjà additive dans une chaîne de tâches
+déjà sérialisée, aucun changement pour le flux nominal (hors les trois suspensions). Pas de
+changement de signature, pas de nouvel état.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer
+côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre
+calling) ; typage `unknown` de `s`/`socket` dans l'effet de `CallManager.tsx` (web, révélé Vague 159,
+toujours pas régularisé). Candidats identifiés par les audits mais non retenus pour cette vague (bas
+risque/impact ou confiance moindre, à réévaluer à une prochaine vague) : `rejoinActiveCallAfterReconnect`
+hardcode `reason: 'completed'` sur son `CallEndedEvent` synthétique au lieu de forwarder le vrai
+`endReason` serveur (web, défaite la fonctionnalité de retry sur `connectionLost` — confiance haute
+mais fix nécessite un changement de contrat serveur, hors scope d'une vague à un seul commit) ;
+`call:check-active` réarme le timer 45s du callee à chaque reconnexion même pour le même call déjà
+sonnant (web, confiance modérée — fréquence réelle en prod non confirmée) ; `handleHold`'s branche
+`catch` générique omet `videoSurvivalController.reset()` que sa branche sœur `cameraPermissionDenied`
+a (iOS, actuellement inerte derrière une garde extérieure) ; `handleAudioRouteChange`'s branche
+`.newDeviceAvailable` ignore le résultat fallible d'`applySpeakerRoute()` que `toggleSpeaker()`
+exploite (iOS, fenêtre étroite et auto-corrigée par `CXProviderDelegate.didActivate`).
