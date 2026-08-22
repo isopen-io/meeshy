@@ -500,6 +500,43 @@ l'événement émis. Et quand on change la méthode Prisma qu'un handler appelle
 la route n'appelle plus passe au vert par le chemin nominal en croyant tenir le
 chemin d'erreur.
 
+**Une PANNE peut tenir la porte, et la réparer l'ouvre.**
+`GET /communities/search` chargeait `isOnline` sur ses membres sans le gater ;
+rien ne fuyait, parce que son schéma déclarait `creator: { type: 'object' }` et
+`members: { items: { type: 'object' } }` — sans `properties`, donc `{}` (§ Un
+schéma de réponse sans `properties`). Rien n'était protégé non plus. Réparer le
+schéma pour une raison parfaitement légitime — les clients ne recevaient pas
+leurs données — publie la fuite le jour même, sans qu'un témoin tombe puisqu'il
+n'y en avait aucun. **Quand on répare ce qui rendait une donnée invisible, on
+pose dans le MÊME lot la règle qui décide si elle a le droit d'être vue.**
+L'ordre inverse n'existe pas (cycle 84).
+
+## Un schéma de réponse sans `properties` EFFACE
+
+`fast-json-stringify` applique `additionalProperties: false` **par défaut**.
+Dans un schéma de réponse, `{ type: 'object' }` sans `properties` ne se lit donc
+pas « ici un objet, tel quel » mais « ici un objet dont je ne connais aucune
+clé » — et le sérialiseur rend `{}`. Idem pour `{ type: 'array', items: { type:
+'object' } }`, dont chaque élément sort vide.
+
+**Un `type: 'object'` sans `properties` dans un schéma de réponse est un bug,
+jamais un choix.** Coût mesuré sur `GET /communities/search` (cycle 84) : `creator`
+et `members[]` sortaient vides ; `APICommunityUser.id`/`.username` étant
+non-optionnels côté iOS, le `{}` faisait échouer le décodage de la réponse
+ENTIÈRE — la recherche de communautés iOS ne rendait qu'une erreur, jamais un
+résultat dégradé. Le web, permissif, affichait des créateurs vides sans rien
+signaler.
+
+Réutiliser les schémas partagés qui décrivent déjà les types clients plutôt que
+d'en réécrire un : `userMinimalSchema` ↔ `APICommunityUser`,
+`communityMemberSchema` ↔ `APICommunityMember`, `conversationParticipantSchema`
+↔ le participant iOS/web.
+
+Corollaire : **un champ que le schéma déclare et que la requête ne charge pas
+est la même dérive, dans l'autre sens.** `PATCH /conversations/:id` déclarait
+`participants[].userId` sans jamais le `select` — la réponse sortait sans, et
+sans lui aucune carte de visibilité de présence n'est adressable.
+
 ### Une règle appliquée à l'ÉCRITURE n'est pas appliquée
 
 `ContactDirectoryService.match()` filtrait le blocage bidirectionnel, avec le
