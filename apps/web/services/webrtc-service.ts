@@ -500,7 +500,9 @@ export class WebRTCService {
         // afterwards a direction change (A/V switch) lands here and must
         // produce a fresh offer through the perfect-negotiation path.
         if (this.autoNegotiate) {
-          void this.negotiate();
+          void this.negotiate().catch((error) => {
+            logger.error('[WebRTCService] Auto-renegotiation (onnegotiationneeded) failed', { error });
+          });
         }
       };
 
