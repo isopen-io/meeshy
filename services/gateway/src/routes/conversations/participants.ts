@@ -33,6 +33,7 @@ import {
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { sliceByIdCursor } from '../../utils/pagination';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
 
 const participantListUserSelect = {
@@ -135,14 +136,11 @@ async function loadMostActiveParticipants(options: {
       (!searchTerm || (p.displayName ?? '').toLowerCase().includes(searchTerm))
   );
 
-  const startIndex = cursor ? filtered.findIndex((p) => p.id === cursor) + 1 : 0;
-  const page = filtered.slice(startIndex, startIndex + pageLimit);
-  const hasMore = startIndex + page.length < filtered.length;
-  return {
-    participants: page,
-    hasMore,
-    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null
-  };
+  // `filtered` is recomputed on every request from live ranking + presence, so a
+  // stale cursor (a member who left the top-N or went offline) must terminate
+  // pagination rather than silently restart from page 1. See `sliceByIdCursor`.
+  const { page, hasMore, nextCursor } = sliceByIdCursor(filtered, cursor, pageLimit);
+  return { participants: page, hasMore, nextCursor };
 }
 
 /**
