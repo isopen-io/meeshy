@@ -2,14 +2,63 @@
 
 **Date** : 2026-08-22
 **Branche** : `claude/keen-hamilton-inwn81`
-**Périmètre** : passerelle — `routes/conversations/stats.ts`, `routes/affiliate.ts`,
-et l'inventaire complet de la famille
+**Périmètre** : passerelle — `routes/communities.ts` (le module SERVI),
+`routes/conversations/stats.ts`, `routes/affiliate.ts`, et l'inventaire complet
+de la famille
 
 **Clients touchés** : aucun changement de code client. Aucun nom d'événement
 ajouté ni retiré, aucune charge utile temps réel modifiée, aucune ligne de
-Socket.IO touchée. Deux réponses REST cessent d'être vides — voir §4.
+Socket.IO touchée. Trois réponses REST cessent d'être vides — voir §4 — dont
+une qui était réputée corrigée depuis le cycle 84 bis et ne l'était pas (§0).
 
 ---
+
+## 0. Correction : le correctif du cycle 84 bis n'avait JAMAIS atteint la production
+
+À l'intégration de `main`, le cycle 85-bis a livré un fait qui invalide une
+partie de ce que le cycle 84 bis (PR #3294) a annoncé :
+
+> `route-registration.ts` importe `'./routes/communities'`, et Node résout
+> **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**. C'est donc `routes/communities.ts`
+> qui sert, et le répertoire voisin est injoignable.
+
+**`GET /communities/search` est défini DEUX fois** : dans le legacy
+`routes/communities.ts:357` — celui que Fastify enregistre — et dans
+`routes/communities/search.ts`, que rien ne charge. Le cycle 84 bis a corrigé
+**le second**. Vérifié sur `main` avant ce lot : la route servie portait encore,
+mot pour mot, `creator: { type: 'object' }`, `members: { items: { type:
+'object' } }`, `isOnline: true` sans gate, et aucun `where: { isActive: true }`.
+
+Donc, pour être exact sur ce que #3294 a réellement livré :
+
+| ce que #3294 annonçait | statut réel |
+|---|---|
+| schéma déclaré ⇒ le décodage iOS refonctionne | **non livré** — le module est ombré |
+| gate de présence à deux régimes | **non livré** — idem |
+| `isActive: true` sur l'aperçu | **non livré** — idem |
+| `PATCH /conversations/:id` (repris du cycle 84) | livré — autre fichier, non ombré |
+| retenue `isOnline` sur l'invitation | livré — `routes/conversations/sharing.ts`, non ombré |
+| la règle dans `CLAUDE.md`, le journal | livrés |
+
+**La recherche de communautés iOS est donc restée cassée** entre #3294 et ce
+lot. Ce cycle porte le correctif sur la route RÉELLEMENT enregistrée, avec des
+témoins qui montent le module servi (`communityRoutes` depuis
+`routes/communities`) et traversent les VRAIS schémas — **9 des 10 tombent sur
+`main`**, ce qui est la preuve que la production était bien restée en l'état.
+
+La leçon est celle que le cycle 85-bis a inscrite, et je l'ai apprise en la
+subissant : **une scission de module inachevée ne ressemble à rien.** Le
+répertoire compile, ses suites passent, sa couverture monte, aucun
+avertissement ne se lève — et le seul symptôme est un correctif sans effet.
+`module-shadowing.test.ts` garde désormais les paires ; il n'existait pas quand
+#3294 a été écrit.
+
+Corollaire pour cette routine : **avant de corriger une route, vérifier quel
+fichier l'enregistre.** `grep` sur le CHEMIN de la route (`'/communities/search'`)
+plutôt que sur le fichier qu'on croit être le sien — deux définitions du même
+chemin est le signal, et la première passe du balayage §6 en portait déjà la
+trace sans que je la lise : `communities.ts:370,371` ET `communities/search.ts`
+figuraient tous deux dans l'inventaire.
 
 ## 1. D'où vient ce cycle
 
