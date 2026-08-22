@@ -1,4 +1,4 @@
-# Cycle 88 — Déclarer une clé que la charge ne porte pas ne dégrade pas la réponse : ça l'EMPORTE
+# Cycle 88 bis — Déclarer une clé que la charge ne porte pas ne dégrade pas la réponse : ça l'EMPORTE
 
 **Date** : 2026-08-22
 **Branche** : `claude/keen-hamilton-ampdvb`
@@ -22,25 +22,32 @@ une charge utile SERVIE ».
 
 Cette phrase était vraie, et elle sous-estimait la moitié de l'inventaire.
 
-## 1. La famille a deux gravités, pas une
+## 1. La famille a plusieurs formes, pas une
 
 Tous ces sites déclarent un objet sans `properties` ni `additionalProperties`.
 `fast-json-stringify` applique `additionalProperties: false` par défaut, donc
-le champ sort `{}`. C'est la gravité que le cycle 86 a nommée et balayée.
+le champ sort `{}`. C'est la forme que le cycle 86 a nommée et balayée.
 
 Mais un schéma de réponse ne décrit pas seulement le CONTENU d'un champ. Il
 décrit aussi **la présence de ce champ**. Et quand la clé déclarée n'existe pas
 dans la charge que le gestionnaire passe à `sendSuccess`, l'objet parent n'a
 plus aucune propriété déclarée qui corresponde à quoi que ce soit :
 
-| gravité | forme | effet |
+| forme | exemple | effet |
 |---|---|---|
-| **1** — le champ existe | `sender: { type: 'object' }` sur une charge qui porte `sender` | `sender` sort `{}`, **le reste survit** |
-| **2** — le champ n'existe pas | `data: { properties: { message } }` sur une charge qui n'a pas de `message` | **`data` ENTIER sort `{}`** |
+| **1** — la clé déclarée existe | `creator: { type: 'object' }` sur une charge qui porte `creator` | ce champ sort `{}`, **le reste survit** |
+| **2** — la clé déclarée n'existe pas | `data: { properties: { message } }` sur une charge sans `message` | **`data` ENTIER sort `{}`** |
 
 Deux entrées de l'inventaire gelé étaient de la seconde espèce, et rien ne les
 distinguait des autres — l'outil de balayage ne voit que la forme du schéma, pas
 la charge d'en face.
+
+**Il en existe une TROISIÈME, que ce lot n'a pas vue et qu'un cycle concurrent a
+trouvée le même jour** : un schéma qui décrit la mauvaise ENVELOPPE, dont toutes
+les déclarations sont alors inertes et laissent la charge traverser entière. Le
+balayage y rend un faux positif — et c'est la forme la plus dangereuse, parce
+qu'elle fait croire à un vidage là où il y a une fuite. Elle est instruite en
+§5, avec l'erreur de méthode qui me l'avait cachée.
 
 Vérifié en isolant le compilateur :
 
