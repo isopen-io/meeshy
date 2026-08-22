@@ -14,6 +14,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { NormalizedContact } from '../utils/contact-identifiers.js';
@@ -88,25 +89,6 @@ const PUBLIC_USER_SELECT = {
   isOnline: true,
   lastActiveAt: true,
 } as const;
-
-/**
- * Applique la visibilité résolue sur un profil rapproché.
- *
- * `false` / `null` plutôt que le `applyPresenceVisibility` partagé, qui rend
- * `isOnline: null` : le schéma de sérialisation du répertoire déclare
- * `isOnline` NON nullable (`contacts-schemas.ts`), et `MatchedUserProfile` le
- * type `boolean`. Même forme que le gate de `/users/search`.
- */
-export function applyMatchedPresence(
-  profile: MatchedUserProfile,
-  visibility: PresenceVisibility | undefined,
-): MatchedUserProfile {
-  return {
-    ...profile,
-    isOnline: visibility?.showOnline ? profile.isOnline : false,
-    lastActiveAt: visibility?.showLastSeenTimestamp ? profile.lastActiveAt : null,
-  };
-}
 
 function toPublicProfile(user: Record<string, unknown> | null): MatchedUserProfile | null {
   if (!user) return null;
@@ -347,7 +329,7 @@ export class ContactDirectoryService {
         const severed = profile !== null && blocked.has(profile.id);
         const matchedUser = profile === null || severed
           ? null
-          : applyMatchedPresence(profile, visibility.get(profile.id));
+          : applyPresenceVisibilityAsOffline(profile, visibility.get(profile.id));
         return {
           id: row.id,
           contactKey: row.contactKey,

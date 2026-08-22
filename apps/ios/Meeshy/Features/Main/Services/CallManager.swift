@@ -955,7 +955,15 @@ final class CallManager: ObservableObject {
         // the engine is live again.
         configureAudioSession()
         audioSessionQueue.async { [weak self] in
-            guard self != nil else { return }
+            // Re-check INSIDE the queue, not just via the `callState.isActive`
+            // guard above: a hangup can race this async dispatch from a
+            // different thread (MainActor teardown, or CallKit's own
+            // `didDeactivate`/`providerDidReset` on its private delegate
+            // queue) — mirrors handleAudioInterruption's reactivation guard.
+            guard self != nil, CallManager.isAudioSessionExpectedActive else {
+                Logger.calls.info("Skipping media-services-reset reactivation — audio session already torn down")
+                return
+            }
             do {
                 try AVAudioSession.sharedInstance().setActive(true, options: [])
             } catch {
@@ -1361,13 +1369,6 @@ final class CallManager: ObservableObject {
     // MARK: - VoIP Push Incoming Call
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
-        resetEndedStateForNewCall()
-        lastCallWasOutgoing = false
-        // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
-        // reportNewIncomingCall from the push handler. Reset the flag (a prior
-        // foreground in-app call may have left it false).
-        callUsesCallKit = true
-        ringbackPlayer.shouldSelfActivateSession = false
         let uuid = UUID()
         let update = CXCallUpdate()
         // Use the callerUserId as the CXHandle.value so Recents stays stable
@@ -1378,6 +1379,31 @@ final class CallManager: ObservableObject {
         update.hasVideo = isVideo
         update.supportsGrouping = false
         update.supportsHolding = false
+
+        // Audit finding — the socket path (`call:offer`) and this VoIP-push
+        // path can both deliver the SAME callId (e.g. the socket wins the
+        // race while foreground, then the push for the identical call lands
+        // moments later). Guarded BEFORE any state mutation below (resetEnded/
+        // callUsesCallKit/etc.) so a duplicate push never disturbs the call
+        // already active. Without this guard the push fell into the busy
+        // branch below for a call the user is CURRENTLY being rung for:
+        // a phantom second CXCallUpdate/UUID retired as "Missed" in Recents,
+        // plus a call-waiting banner offering Answer/Reject over the very
+        // ring already on screen. Mirrors the guard the socket path already
+        // has in handleIncomingCallNotification / call:offer handling.
+        if currentCallId == callId, callState.isActive {
+            Logger.calls.info("VoIP push for callId \(callId) already active — phantom-acking, no duplicate UI")
+            reportPhantomVoIPCall(uuid: uuid, update: update, callId: callId)
+            return
+        }
+
+        resetEndedStateForNewCall()
+        lastCallWasOutgoing = false
+        // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
+        // reportNewIncomingCall from the push handler. Reset the flag (a prior
+        // foreground in-app call may have left it false).
+        callUsesCallKit = true
+        ringbackPlayer.shouldSelfActivateSession = false
 
         guard callState == .idle else {
             // Busy: report + immediately end the secondary call. Mirror the
@@ -3711,9 +3737,14 @@ final class CallManager: ObservableObject {
                 self.lastNetworkPath = path.status
                 self.lastNetworkInterfaceType = currentInterfaceType
 
+                // FSM §3.2 — mirrors CallReliabilityPolicy.reconnectingAllowed(from:):
+                // .connecting (answer received, ICE negotiating) is reconnect-eligible
+                // just like .connected/.reconnecting. Excluding it here left a WiFi↔
+                // cellular handoff mid-answer unhandled until the connectingRestartSeconds
+                // watchdog escalated, instead of triggering an immediate reconnect.
                 let isInActiveCall: Bool
                 switch self.callState {
-                case .connected, .reconnecting: isInActiveCall = true
+                case .connected, .reconnecting, .connecting: isInActiveCall = true
                 default: isInActiveCall = false
                 }
                 if interfaceChanged && isInActiveCall {
@@ -4330,7 +4361,15 @@ final class CallManager: ObservableObject {
             Logger.calls.fault("[AUDIO_FALLBACK] CallKit didActivate never fired \(Int(QualityThresholds.stuckMutedFallbackDelaySeconds))s after connect — forcing RTCAudioSession activation")
             self.audioSessionQueue.async {
                 // Mirror of the interruption-end recovery: activate the system
-                // session first, then bridge it to libwebrtc.
+                // session first, then bridge it to libwebrtc. Re-check the
+                // flag INSIDE the queue — the outer checks above (armedForCallId,
+                // shouldForceAudioSessionActivation) were read before this
+                // deferred dispatch, and a hangup can race it from CallKit's
+                // own private delegate queue.
+                guard CallManager.isAudioSessionExpectedActive else {
+                    Logger.calls.info("Skipping stuck-muted fallback reactivation — audio session already torn down")
+                    return
+                }
                 do {
                     try AVAudioSession.sharedInstance().setActive(true, options: [])
                 } catch {

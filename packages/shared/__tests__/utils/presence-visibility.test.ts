@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolvePresenceVisibility,
   applyPresenceVisibility,
+  applyPresenceVisibilityAsOffline,
   type PresenceVisibilityInput,
 } from '../../utils/presence-visibility.js';
 
@@ -123,5 +124,109 @@ describe('applyPresenceVisibility', () => {
     applyPresenceVisibility(input, { showOnline: false, showLastSeenTimestamp: false });
     expect(input.isOnline).toBe(true);
     expect(input.lastActiveAt).toEqual(new Date(2000));
+  });
+});
+
+// Variante non nullable : les schémas de sérialisation REST de la passerelle
+// déclarent `isOnline` en `type: 'boolean'` (userMinimalSchema,
+// contacts-schemas) et les clients le typent `boolean`. Masqué s'y présente
+// donc comme HORS LIGNE, pas comme `null`.
+describe('applyPresenceVisibilityAsOffline', () => {
+  const profile = { id: 'u1', isOnline: true, lastActiveAt: new Date(1000) as Date | null };
+
+  it('keeps both fields when both flags are on', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: true });
+    expect(out.isOnline).toBe(true);
+    expect(out.lastActiveAt).toEqual(new Date(1000));
+  });
+
+  it('collapses a hidden presence to offline rather than null', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: false, showLastSeenTimestamp: false });
+    expect(out.isOnline).toBe(false);
+    expect(out.lastActiveAt).toBeNull();
+    expect(out.id).toBe('u1');
+  });
+
+  it('keeps isOnline but nulls the timestamp when only showLastSeenTimestamp is off', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, { showOnline: true, showLastSeenTimestamp: false });
+    expect(out.isOnline).toBe(true);
+    expect(out.lastActiveAt).toBeNull();
+  });
+
+  // Une visibilité ABSENTE de la carte résolue n'est pas une autorisation :
+  // un id que le résolveur n'a pas rendu doit sortir masqué, jamais brut.
+  it('treats an undefined visibility as hidden', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, undefined);
+    expect(out.isOnline).toBe(false);
+    expect(out.lastActiveAt).toBeNull();
+  });
+
+  it('normalises a null isOnline to false when visible', () => {
+    const out = applyPresenceVisibilityAsOffline(
+      { id: 'u3', isOnline: null, lastActiveAt: null },
+      { showOnline: true, showLastSeenTimestamp: true },
+    );
+    expect(out.isOnline).toBe(false);
+  });
+
+  it('does not mutate the input object', () => {
+    const input = { id: 'u2', isOnline: true, lastActiveAt: new Date(2000) as Date | null };
+    applyPresenceVisibilityAsOffline(input, undefined);
+    expect(input.isOnline).toBe(true);
+    expect(input.lastActiveAt).toEqual(new Date(2000));
+  });
+
+  // Certaines portes ne chargent QUE `isOnline` (aperçu de membres d'une
+  // communauté). Le gate ne doit pas leur fabriquer un `lastActiveAt` qu'elles
+  // n'ont jamais servi — sinon la clé apparaît, à `null`, dans une réponse dont
+  // le contrat ne la mentionne pas.
+  it('n invente pas lastActiveAt sur un profil qui n en porte pas', () => {
+    const out = applyPresenceVisibilityAsOffline({ id: 'u5', isOnline: true }, undefined);
+    expect(out.isOnline).toBe(false);
+    expect('lastActiveAt' in out).toBe(false);
+  });
+
+  it('masque lastActiveAt quand le profil en porte un, même absent de la visibilité', () => {
+    const out = applyPresenceVisibilityAsOffline({ id: 'u6', isOnline: true, lastActiveAt: new Date(3000) }, undefined);
+    expect('lastActiveAt' in out).toBe(true);
+    expect(out.lastActiveAt).toBeNull();
+  });
+
+  // Le régime PREFS-ONLY inverse le défaut : une entrée absente y est la
+  // situation normale (un anonyme n'a pas de préférences), pas une anomalie.
+  // Les deux défauts cohabitent dans le même applicateur parce qu'une même
+  // route peut servir les deux régimes selon le lecteur —
+  // `GET /communities/:id/members` en est l'exemple.
+  describe('onMissingEntry: reveal — régime prefs-only', () => {
+    it('laisse la présence brute quand aucune entrée ne concerne le profil', () => {
+      const out = applyPresenceVisibilityAsOffline(profile, undefined, { onMissingEntry: 'reveal' });
+      expect(out.isOnline).toBe(true);
+      expect(out.lastActiveAt).toEqual(profile.lastActiveAt);
+    });
+
+    it('masque malgré tout sur une visibilité explicitement négative', () => {
+      const out = applyPresenceVisibilityAsOffline(
+        profile,
+        { showOnline: false, showLastSeenTimestamp: false },
+        { onMissingEntry: 'reveal' },
+      );
+      expect(out.isOnline).toBe(false);
+      expect(out.lastActiveAt).toBeNull();
+    });
+
+    it('normalise un isOnline null en false, sans fabriquer lastActiveAt', () => {
+      const out = applyPresenceVisibilityAsOffline({ id: 'u7', isOnline: null }, undefined, {
+        onMissingEntry: 'reveal',
+      });
+      expect(out.isOnline).toBe(false);
+      expect('lastActiveAt' in out).toBe(false);
+    });
+  });
+
+  // Le défaut reste `hide` : les six sites stricts existants passent deux
+  // arguments et ne doivent rien changer de leur comportement.
+  it('conserve le défaut masquant quand aucune option n est passée', () => {
+    const out = applyPresenceVisibilityAsOffline(profile, undefined, {});
+    expect(out.isOnline).toBe(false);
   });
 });

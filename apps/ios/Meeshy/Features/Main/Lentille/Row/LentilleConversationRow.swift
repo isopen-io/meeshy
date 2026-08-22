@@ -134,10 +134,12 @@ struct LentilleConversationRow: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+        // Idem `ThemedConversationRow` — dont ce libellé est justement dérivé
+        // (`accessibilityLabel` réutilise `conversationAccessibilityLabel`) :
+        // le compte de non-lus y figure déjà, pluralisé. La valeur rendait
+        // `accessibility.unread_messages` sans `String(format:)` et laissait
+        // fuir son `%lld` dans l'annonce VoiceOver.
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(conversation.userState.unreadCount > 0
-            ? String(localized: "accessibility.unread_messages", bundle: .main)
-            : "")
         .accessibilityHint(String(localized: "accessibility.opens_conversation", bundle: .main))
         .accessibilityAddTraits(.isButton)
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])

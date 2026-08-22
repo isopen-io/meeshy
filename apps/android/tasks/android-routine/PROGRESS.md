@@ -2,6 +2,136 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **AI participant persona profiles + trait bars shipped** (slice
+> `conversation-analysis-personas`, feature-parity §Chat — "AI participant persona profiles + trait
+> bars", now `[x]`). This closes the second half of the `/analysis` dashboard begun by
+> `conversation-analysis-summary`; only the stats sheet's sentiment three-way bar remains on that area.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 20 open PRs at
+> branch time (#3292/#3289/#3288/#3281/#3280/#3279/#3275/#3270/#3266/#3263/#3262/#3259/#3257/#3255/
+> #3253/#3250/#3249/#3247/#3245/#3243) are all web/shared/gateway/ios/sdk, none android-routine. Prior
+> android iteration (`conversation-analysis-summary`, #3287) already merged into main. Branched off
+> freshly-fetched `origin/main` (`bf1367e4`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `android-37.0` recipe worked
+> (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran the
+> full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally, BUILD SUCCESSFUL.
+>
+> **The gap (read-only recon over iOS + Android)**: iOS's `ConversationDashboardView`
+> `agentParticipantProfilesSection` + `traitBarsView` render `ConversationAnalysis.participantProfiles`
+> (persona summary, tone, vocabulary, confidence badge, 4 trait axes as score bars, catchphrases,
+> topics, emojis) from `GET /conversations/{id}/analysis`. On Android the whole
+> `ParticipantProfile`/`ParticipantTraits`/`CommunicationTraits`/… tree in `AgentAnalysis.kt` shipped
+> **orphaned** — grep confirmed zero consumers outside the model file. The summary half went real last
+> iteration; this slice turns the **persona half** real.
+>
+> **`:core:model` `ParticipantProfileProjection`** (new, pure SSOT): `traitTier` (≥70 GOOD / ≥40 MID /
+> else LOW — faithful port of iOS `traitScoreColor`, which uses `>=` UNLIKE `healthScoreColor`'s `>`),
+> `bars(axis)` (present-traits-only, score **clamped 0..100**, **stable** desc sort, top 4 — SOTA over
+> iOS's raw-score bar width + unstable Swift sort + `Mirror` reflection extraction), `categories(tree)`
+> (the 4 axes in canonical order, empty ones dropped, null tree ⇒ none), `profile()` →
+> `ParticipantProfileView` (name = displayName › username › userId as a **single** seed for label AND
+> colour — SOTA over iOS's `"?"`-for-label vs userId-for-colour fork; confidence **clamped 0..1** then
+> `>0`-gated percent — SOTA over iOS's raw `Int(confidence*100)`; trimmed persona/tone/vocabulary;
+> deduped topics/emojis + de-blanked catchphrases capped 3/6/3).
+>
+> **`:feature:chat` `ConversationAnalysisViewModel`** now projects BOTH halves of the same `/analysis`
+> response (added `profiles: List<ParticipantProfileView>`); phase is **Empty only when the summary AND
+> the personas are both empty** (backward-compatible — the existing Empty tests carry no profiles).
+> **`ConversationAnalysisSheet`** renders the personas **under the summary in the same sheet** (no third
+> header button — matches iOS's single dashboard): a per-persona card with an accent stripe, coloured
+> seed dot, name, confidence pill, italic persona, tone/vocabulary chips, the trait-bar categories
+> (label + fraction bar + tier-coloured score), catchphrases, topics + emojis. Strings en/fr/es/pt.
+>
+> **Tests: +25** — `ParticipantProfileProjectionTest` +22 (traitTier: ≥70/69/≥40/<40 boundaries;
+> bars: present-only / desc / stable-tie / top-4-cap / clamp-out-of-range / empty-axis; categories:
+> canonical-order / drop-empty-axis / null-tree; confidence: zero-or-neg-null / floor / clamp>1; name:
+> displayName / username-fallback / userId-fallback; text: blank→null / trimmed; lists: catchphrases
+> drop-blank+cap3 / topics dedupe+cap3 / emojis dedupe+cap6; profiles: maps-all-incl-empty / empty),
+> `ConversationAnalysisViewModelTest` +3 (personas-without-summary Loaded / both-present / — the
+> existing 6 still green under the new Empty rule). **Mutation (RED proof) ×2**: (a) `traitTier`
+> `>=`→`>` at the GOOD threshold → **exactly** `traitTier at or above seventy is good` fails (1 of 26);
+> (b) drop `bars`' `.take(4)` → **exactly** `bars cap at four even when more are present` fails (1 of
+> 26). Both restored.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally this
+> run, BUILD SUCCESSFUL. Reviewer PASS. Diff is `apps/android` only (2 new code+test + ViewModel/Sheet
+> wiring + strings×4 + tracking docs).
+>
+> **Next**: the stats dashboard's **sentiment three-way bar**
+> (`ConversationDashboardView.sentimentAnalysis` — positive/neutral/negative segmented bar). Note iOS
+> computes sentiment on-device via `NLTagger`; the Android equivalent has no bundled NL sentiment
+> engine, so re-scout whether the gateway serves a sentiment field or whether this needs an on-device
+> model decision before committing. If that's too heavy for one slice, pick the next-highest §Chat or
+> §Feed parity box. Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **AI conversation-analysis summary card shipped** (slice `conversation-analysis-summary`,
+> feature-parity §Chat — "AI conversation analysis (health score, summary, topics, tone, emotions)",
+> now `[x]`; only the participant-persona/trait-bars arm of the same endpoint remains).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 18 open PRs at
+> branch time (#3281/#3280/#3279/#3275/#3270/#3266/#3263/#3262/#3259/#3257/#3255/#3253/#3250/#3249/
+> #3247/#3245/#3243/#3242) are all web/shared/gateway/ios/sdk, none android-routine. Prior android
+> iteration (`conversation-stats-core`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`99d0ba1d`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Pristine `android-37.0` recipe
+> worked (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`);
+> ran the full `assembleDebug testDebugUnitTest` locally.
+>
+> **The gap (read-only recon over iOS + Android)**: iOS's `ConversationDashboardView.heroHealthCard`
+> renders `ConversationAnalysis.summary` (health score / tone / topics / dominant emotions /
+> engagement / conflict / dynamique) fetched from `GET /conversations/{id}/analysis`. On Android the
+> whole `ConversationAnalysis` model tree in `AgentAnalysis.kt` shipped **orphaned** — grep confirmed
+> zero references outside the model file (no repository, no consumer). The stats half (sibling
+> `ConversationMessageStatsResponse`) was turned real last iteration; this slice turns the **AI-summary
+> half** real. The AI-persona/trait-bars arm stays a separate open box on the same endpoint.
+>
+> **`:core:model` `ConversationAnalysisProjection`** (new, pure SSOT): `healthTier` (>70 good / >40
+> fair / else poor — faithful port of iOS `healthScoreColor` cut-offs), `conflictTier`
+> (case-insensitive high|eleve|fort / medium|moyen|modere keyword match, high wins — parity
+> `conflictLevelColor`), `cleanLabels` (trim / drop-blank / case-insensitive dedupe preserving first
+> casing + order — **SOTA over iOS**, which renders the raw list so `["Joy","joy"]` doubles),
+> `summary()` → a render-ready `AnalysisSummaryView` or **null** (the Empty state) when the summary is
+> absent or projects to no content (`hasContent` excludes messageCount as metadata). The health score
+> is **clamped 0..100** before the tier derives (SOTA — iOS trusts the raw value); messageCount clamps
+> ≥0.
+>
+> **`:sdk-core` `ConversationAnalysisRepository`**: thin dependency-light sibling of
+> `ConversationStatsRepository` (only the API — analysis is an ephemeral drill-down that neither reads
+> nor writes Room), `fetchAnalysis(id)` → `NetworkResult` via `apiCall`. New
+> `ConversationApi.analysis(id)` (`@GET conversations/{id}/analysis`) — the two existing stub-based
+> repo tests (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`) gained the new override.
+>
+> **`:feature:chat` `ConversationAnalysisViewModel`** (`StateFlow<ConversationAnalysisUiState>`,
+> Loading/Loaded/Empty/Error): fetches once, projects at load; `load` idempotent (re-tries only a
+> prior Error), `retry()` re-fetches. **`ConversationAnalysisSheet`** + a new header `AutoAwesome`
+> action (any member) render it: health badge (tier-tinted), engagement/conflict chips (tier-tinted),
+> tone, topics + emotions chip rows, summary narrative, dynamic. Strings en/fr/es/pt.
+>
+> **Tests: +23** — `ConversationAnalysisProjectionTest` +17 (healthTier: >70/=70/41..70/=40/≤40;
+> conflictTier: high×3-lang / medium×3-lang / low-fallback / high-wins-over-medium; cleanLabels:
+> trim+drop-blank / case-insensitive-dedupe-order / empty; summary: null-no-summary / null-all-blank /
+> full-projection / clamp-out-of-range-score / no-tier-when-text-only / health-only-surfaces /
+> clamp-negative-count), `ConversationAnalysisRepositoryTest` +3 (success forwards id / envelope
+> failure / transport failure), `ConversationAnalysisViewModelTest` +6 (loaded projection / no-summary
+> Empty / blank-summary Empty / failure Error / idempotent load / retry after failure). **Mutation
+> (RED proof) ×2**: (a) drop `summary()`'s `takeIf { it.hasContent }` → **exactly** `summary is null
+> when every renderable field is blank or empty` fails (1 of 19); (b) `healthTier` `>`→`>=` at the good
+> threshold → **exactly** the two boundary tests asserting 70 is FAIR fail (2 of 19). Both restored.
+> Genuine RED was also captured up-front: the first projection-test run BUILD FAILED on `Unresolved
+> reference 'HealthTier'/'ConversationAnalysisProjection'` before the impl existed.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally this
+> run. Reviewer PASS. Diff is `apps/android` only (3 code + 3 test + ChatScreen/Api wiring + strings×4 +
+> tracking docs).
+>
+> **Next**: the **AI participant persona profiles + trait bars** box (same endpoint, still-orphaned
+> `ParticipantProfile`/`ParticipantTraits`/`CommunicationTraits`/… in `AgentAnalysis.kt`) — the other
+> half of this dashboard; or the stats dashboard's own **sentiment three-way bar**
+> (`ConversationDashboardView.sentimentAnalysis`). Re-scout read-only before committing — parity notes
+> are hypotheses.
+
 > On 2026-08-21 **Conversation stats dashboard shipped** (slice `conversation-stats-core`,
 > feature-parity §Chat — "Conversation stats rings + activity-over-time + content-type breakdown").
 >
