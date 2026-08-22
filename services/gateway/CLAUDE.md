@@ -380,7 +380,9 @@ Le collapse « visibilité résolue → champs servis » ne se réécrit pas à 
 Deux applicateurs partagés, et le schéma de la route choisit :
 `applyPresenceVisibility` (`isOnline: null`, pour un schéma nullable) et
 `applyPresenceVisibilityAsOffline` (`isOnline: false`, pour `userMinimalSchema`
-et `contacts-schemas`, qui le déclarent `type: 'boolean'`).
+et `contacts-schemas`, qui le déclarent `type: 'boolean'`). Le second prend
+`{ onMissingEntry: 'hide' | 'reveal' }` — le défaut `'hide'` sert le régime
+strict, `'reveal'` le régime prefs-only (voir les défauts opposés plus bas).
 
 **Une amitié acceptée n'est PAS un laissez-passer.** `areConnected` ouvre la
 porte, il ne dispense pas de `showOnlineStatus` — la politique pure masque quand
@@ -440,6 +442,74 @@ les noms pour faire vivre la charge utile ouvre la fuite sans qu'un témoin
 tombe. Poser le témoin qui la forcera à voir ce qu'elle ouvre — il garde une
 PORTE, pas un bug.
 
+**Une même route peut relever des DEUX régimes, décidés par son contrôle
+d'accès.** `GET /communities/:id/members` ne referme que les communautés
+PRIVÉES : sur une publique, elle répond à un non-membre, et devient une porte de
+découverte. Le régime s'y choisit donc par LECTEUR — `hasAccess` ⇒ prefs-only,
+sinon strict — avec le `onMissingEntry` correspondant. Lire le contrôle d'accès
+avant de choisir le régime : « c'est une route de communauté » ne suffit pas
+(cycle 85-bis).
+
+## Un fichier `X.ts` à côté d'un répertoire `X/` : lequel est chargé ?
+
+Le fichier. Node résout **LOAD_AS_FILE avant LOAD_AS_DIRECTORY**, donc un import
+sans extension — `import { x } from './routes/X'`, la forme qu'emploie
+`route-registration.ts` — ne voit JAMAIS `X/index.ts` si `X.ts` existe.
+
+Après une scission de module, l'étape finale n'est pas facultative : `X.ts`
+devient une **coquille de ré-export**.
+
+```typescript
+export { userRoutes } from './users/index';
+```
+
+`routes/users.ts`, `routes/voice.ts` et `routes/attachments.ts` la portaient.
+`routes/communities.ts` ne l'a jamais reçue, et son répertoire (~1 900 lignes,
+gates de présence compris) est resté injoignable de sa création au cycle 86, qui
+l'a consolidé — les quatre routes que seul le legacy portait (`/mine`,
+`/:id/join`, `/:id/leave`, `/:id/invite`) portées dans le répertoire, puis le
+fichier basculé en coquille. **Les quatre scissions du dépôt sont désormais
+branchées, et `KNOWN_UNREACHABLE` doit rester vide.**
+
+**Une scission inachevée ne ressemble à rien** : le répertoire compile, ses
+suites passent, sa couverture monte, aucun avertissement ne se lève. Le seul
+symptôme est un correctif sans effet — et l'effet d'un correctif de
+confidentialité, personne ne le mesure. `module-shadowing.test.ts` garde les
+paires par deux voies (balayage des coquilles, et routes RÉELLEMENT
+enregistrées) ; toute nouvelle paire non-coquille le fait tomber.
+
+Coût mesuré avant consolidation (cycle 86) : **trois cycles de correctifs
+atterris dans le répertoire sans jamais atteindre la production**. Le cycle 84 y
+a diagnostiqué, corrigé et CLOS « la recherche de communautés iOS était morte » ;
+le fichier vivant portait encore le défaut mot pour mot. Avec lui, en
+production : les noms de communauté non assainis, `memberCount` correct mais
+`creator`/`members[]` vidés en `{}`, et `POST /communities/:id/conversations/:conversationId`
+— qu'iOS appelle — en `404`.
+
+### Corollaire : un témoin s'importe par le chemin de la PRODUCTION
+
+Six des huit suites communauté importaient `routes/communities/search` ou
+`routes/communities/index` — des chemins explicites vers le module mort. Une
+septième visait bien le spécificateur de production mais mockait
+`@meeshy/shared/types/api-schemas` en `{ additionalProperties: true }`, ce qui
+désarme fast-json-stringify, soit exactement la couche où vivaient deux des
+défauts.
+
+**Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
+la main** — et ne pas mocker les schémas partagés dans un témoin de
+sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
+que deux modules concurrents ne partagent pas.
+
+Et **poser au moins un témoin de SURFACE** : « cette route est-elle
+enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
+appelle depuis toujours n'était vu par personne.
+
+Corollaire de manœuvre : **basculer vers la jumelle exige de porter d'abord ce
+que l'exemplaire VIVANT avait de plus.** Le répertoire ignorait
+`flattenCommunityCounts` et quatre routes ; basculer sans les porter aurait
+servi `memberCount: 0` partout. Les témoins qui PASSENT déjà avant la bascule
+valent autant que ceux qui échouent — on les écrit dans le même lot.
+
 ## Cette entité a-t-elle une JUMELLE ?
 
 À poser au moment où l'on corrige, pas des cycles plus tard. Le dépôt est plein
@@ -454,52 +524,6 @@ Corollaire quand on reprend le correctif d'une jumelle : **on le prend en
 entier.** Passer d'`updateMany` à `upsert` EXIGE le filtre d'appartenance —
 `updateMany` empêchait par accident qu'un appelant fabrique des lignes contre
 des ids arbitraires, l'upsert seul retire cette protection.
-
-## Une scission de module n'est finie que quand l'ancien chemin est un proxy
-
-`route-registration.ts` importe `'./routes/communities'`. La passerelle est en
-CommonJS : la résolution essaie le **FICHIER avant le dossier**. Tant que
-`routes/communities.ts` portait une implémentation, il gagnait, et les 1920
-lignes de `routes/communities/` n'ont **jamais** servi une requête — dossier
-complet, compilé, couvert par huit suites vertes, et sans appelant.
-
-Coût mesuré (cycle 86) : trois cycles de correctifs y ont atterri sans jamais
-atteindre la production. Le cycle 84 a diagnostiqué, corrigé et CLOS « la
-recherche de communautés iOS était morte » dans `communities/search.ts` ; le
-fichier vivant portait encore le défaut mot pour mot. Avec lui : la présence
-des membres servie brute, les noms de communauté non assainis, et
-`POST /communities/:id/conversations/:conversationId` — qu'iOS appelle — en
-`404`.
-
-`attachments.ts` (8 lignes), `users.ts` (14) et `voice.ts` (6) sont les trois
-autres scissions du même lot : toutes se terminent par
-`export { X } from './X/index'`. **C'est la forme finie.** Un dossier complet ne
-l'est pas.
-
-> **Ne jamais laisser coexister `routes/X.ts` porteur d'implémentation et
-> `routes/X/`.** Le spécificateur d'import est identique, les deux compilent,
-> les deux ont des témoins verts, et rien dans le source ne dit lequel répond.
-> `node -e "require.resolve(...)"` tranche en une seconde ; la lecture du code,
-> jamais.
-
-### Corollaire : un témoin s'importe par le chemin de la PRODUCTION
-
-Six des huit suites communauté importaient `routes/communities/search` ou
-`routes/communities/index` — des chemins explicites vers le module mort. Une
-septième visait bien le bon spécificateur mais mockait
-`@meeshy/shared/types/api-schemas` en `{ additionalProperties: true }`, ce qui
-désarme fast-json-stringify, soit exactement la couche où vivaient deux des
-défauts.
-
-**Copier le spécificateur depuis `route-registration.ts`, ne pas le composer à
-la main** — et ne pas mocker les schémas partagés dans un témoin de
-sérialisation. Patron : `communities-live-wiring.test.ts`, qui n'assert que ce
-que deux modules concurrents ne partagent pas, et tombe si l'ancien chemin
-reprend de l'implémentation.
-
-Et **poser au moins un témoin de SURFACE** : « cette route est-elle
-enregistrée ? ». Aucun ne le demandait, et un `404` sur une route qu'un client
-appelle depuis toujours n'était vu par personne.
 
 ## Un témoin d'écriture assert sur l'EFFET, jamais sur le statut
 

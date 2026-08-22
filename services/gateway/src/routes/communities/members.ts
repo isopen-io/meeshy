@@ -12,7 +12,9 @@ import {
   sendPaginatedSuccess
 } from '../../utils/response.js';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { gateMemberPresence } from './member-presence';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { viewerFromRequest } from '../users/presence-gate';
+import { gateCoMemberPresence, type MemberUser } from './member-presence';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
@@ -160,24 +162,33 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      // Présence des co-membres : montrable (appartenance commune = accès déjà
-      // garanti), soumise aux préférences showOnlineStatus/showLastSeen.
-      const memberPresence = await getPresenceVisibilityService(fastify.prisma).resolvePrefsOnly(
-        members.map(m => m.user?.id).filter((uid): uid is string => !!uid),
+      // Porte MIXTE. Le contrôle d'accès ci-dessus ne referme que les
+      // communautés PRIVÉES : sur une communauté publique, `hasAccess` est faux
+      // et le lecteur est un NON-MEMBRE qui parcourt une liste de tiers.
+      //
+      //  - lecteur co-membre  ⇒ contexte d'accès garanti ⇒ préférences seules,
+      //    et une entrée absente reste visible ;
+      //  - lecteur non-membre ⇒ c'est une porte de DÉCOUVERTE ⇒ critère STRICT
+      //    (blocage, amitié, co-participation), et une entrée absente masque.
+      //
+      // `userMinimalSchema` ne déclare pas `lastActiveAt` : ce champ ne sort
+      // d'aucune de ces réponses, mais le gate le couvre pour le jour où il y
+      // serait déclaré.
+      const memberUserIds = members
+        .map((m: { user?: MemberUser | null }) => m.user?.id)
+        .filter((uid: string | undefined): uid is string => !!uid);
+
+      const presenceService = getPresenceVisibilityService(fastify.prisma);
+      const presenceVis = hasAccess
+        ? await presenceService.resolvePrefsOnly(memberUserIds)
+        : await presenceService.resolveForTargets(viewerFromRequest(request), memberUserIds);
+      const onMissingEntry = hasAccess ? 'reveal' as const : 'hide' as const;
+
+      const gatedMembers = members.map((m: { user?: MemberUser | null }) =>
+        m.user
+          ? { ...m, user: applyPresenceVisibilityAsOffline(m.user, presenceVis.get(m.user.id), { onMissingEntry }) }
+          : m
       );
-      const gatedMembers = members.map(m => {
-        const vis = m.user?.id ? memberPresence.get(m.user.id) : undefined;
-        if (!m.user || !vis) return m;
-        return {
-          ...m,
-          user: {
-            ...m.user,
-            isOnline: vis.showOnline ? m.user.isOnline : false,
-            /* istanbul ignore next -- lastActiveAt is absent from userMinimalSchema (community-member response schema), so this ternary's effect never reaches the public API; both outcomes are unobservable through app.inject() */
-            lastActiveAt: vis.showLastSeenTimestamp ? m.user.lastActiveAt : null,
-          },
-        };
-      });
 
       return sendPaginatedSuccess(reply, gatedMembers, {
         total: totalCount,
@@ -332,7 +343,10 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return sendSuccess(reply, await gateMemberPresence(fastify.prisma, member));
+      // L'acteur est admin de la communauté et la cible vient d'en devenir
+      // membre : ils sont co-membres, donc préférences seules. La branche
+      // `existingMember` ne charge aucun `user` — le gate la laisse passer.
+      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error adding community member', error as Error);
       return sendInternalError(reply, 'Failed to add community member');

@@ -160,6 +160,38 @@ exactement les deux témoins qui les nomment, et aucun autre.
 Couverture `routes/communities` : **98.8 %** lignes / 95.65 % branches.
 Globale passerelle : 95.39 %.
 
+## 7-bis. La passe parallèle, et ce que la fusion garde
+
+Pendant ce cycle, une passe parallèle (**cycle 85-bis**, PR #3300) a trouvé le
+MÊME ombrage et l'a documenté sur `main`. Les deux passes ont divergé sur la
+suite, et la fusion garde le meilleur des deux :
+
+| | cycle 85-bis (sur `main`) | cycle 86 (ici) |
+|---|---|---|
+| diagnostic de l'ombrage | identique | identique |
+| geste | gater le LEGACY, laisser l'ombrage en place | **consolider** : porter puis basculer en coquille |
+| `module-shadowing.test.ts` | posé, avec `KNOWN_UNREACHABLE = ['communities']` | **repointé**, liste vide |
+| gate de présence | `applyPresenceVisibilityAsOffline` + `onMissingEntry` | idiome recopié à la main |
+| `GET /:id/members` | porte **MIXTE** (co-membre ⇒ prefs-only, non-membre ⇒ strict) | prefs-only seul |
+
+**Le gate de 85-bis est strictement meilleur que celui écrit ici, et c'est le
+sien qui est retenu.** Sa porte mixte est un correctif de confidentialité que ce
+cycle n'avait pas vu : le contrôle d'accès de `GET /communities/:id/members` ne
+referme que les communautés PRIVÉES, donc sur une publique le lecteur peut être
+un non-membre qui parcourt des tiers — régime strict, entrée absente masquée.
+Fusionner en gardant la version d'ici aurait **rouvert** cette porte.
+
+Le geste de 85-bis prévoyait explicitement le sien : son témoin porte en
+commentaire « la consolidation de `communities` le fait tomber aussi, et oblige
+alors à constater ce qu'on branche et ce qu'on retire ». Il est tombé, et le
+constat est celui du §6 : rien n'est retiré (les quatre routes du legacy sont
+portées), une route est branchée (`POST /:id/conversations/:conversationId`).
+
+Preuve de non-régression de la fusion : les 10 témoins de
+`communities-presence-gate.test.ts`, écrits par 85-bis contre le legacy et
+importés par le spécificateur de production, passent **sans modification** contre
+le répertoire consolidé.
+
 ## 8. Pistes laissées ouvertes
 
 **Les trois autres paires fichier/dossier sont SAINES** — vérifié, pas supposé :

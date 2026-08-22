@@ -1,38 +1,39 @@
 /**
  * Filtrage de la présence sur un membre rendu SEUL par une écriture
- * (adhésion, invitation, ajout par un admin).
+ * (invitation, ajout par un admin).
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
-type MemberUser = { id: string; isOnline?: boolean | null } & Record<string, unknown>;
-type MemberRow = { user?: MemberUser | null } & Record<string, unknown>;
+type PresencePrisma = Parameters<typeof getPresenceVisibilityService>[0];
+
+export type MemberUser = { id: string; isOnline: boolean | null; lastActiveAt?: Date | null };
 
 /**
- * Applique le régime « contexte acquis » à la présence du membre rendu.
+ * Présence d'un CO-MEMBRE servie à un membre de la même communauté.
  *
- * Ces routes rendent le profil d'un TIERS — l'invité pour `POST /invite`,
- * l'ajouté pour `POST /members` — et `userMinimalSchema` déclare `isOnline`.
- * Le lien est posé des DEUX côtés au moment où la réponse part (l'appelant et
- * le sujet sont co-membres), donc seules les préférences s'appliquent :
- * `resolvePrefsOnly`, jamais `resolveForTargets`.
+ * L'appartenance commune est un contexte d'accès garanti des deux côtés : la
+ * présence est montrable, et seules les préférences `showOnlineStatus` /
+ * `showLastSeen` de la cible s'appliquent. C'est le même régime que celui que
+ * `routes/conversations/participants.ts` porte pour les co-participants.
  *
- * Le défaut de carte incomplète est celui du régime prefs-only, et il est
- * l'INVERSE du régime strict : un id absent est NORMAL et vaut VISIBLE — d'où
- * la comparaison à `false` explicite plutôt qu'un `!vis?.showOnline`, qui
- * masquerait sur simple absence. Voir § « Les deux régimes ont des défauts
- * OPPOSÉS sur une carte incomplète » dans le CLAUDE.md de la passerelle.
+ * `onMissingEntry: 'reveal'` parce que le régime prefs-only tient une entrée
+ * absente pour normale et non pour suspecte — le défaut inverse de celui du
+ * critère strict. Le collapse lui-même passe par l'applicateur PARTAGÉ : c'est
+ * la dette de recopie manuelle que le cycle 84 avait nommée.
  */
-export async function gateMemberPresence<T extends MemberRow>(
-  prisma: PrismaClient,
+export async function gateCoMemberPresence<T extends { user?: MemberUser | null }>(
+  prisma: PresencePrisma,
   member: T,
 ): Promise<T> {
   const user = member.user;
-  if (!user) return member;
+  if (!user?.id) return member;
 
   const visibility = await getPresenceVisibilityService(prisma).resolvePrefsOnly([user.id]);
-  if (visibility.get(user.id)?.showOnline === false) {
-    return { ...member, user: { ...user, isOnline: false } };
-  }
-  return member;
+  return {
+    ...member,
+    user: applyPresenceVisibilityAsOffline(user, visibility.get(user.id), {
+      onMissingEntry: 'reveal',
+    }),
+  };
 }

@@ -21,7 +21,7 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { CommunityRole } from './types';
-import { gateMemberPresence } from './member-presence';
+import { gateCoMemberPresence } from './member-presence';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
@@ -442,7 +442,9 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return sendSuccess(reply, await gateMemberPresence(fastify.prisma, member));
+      // Le profil de l'invité repart vers l'inviteur, qui est membre de la même
+      // communauté que l'invité vient de rejoindre : préférences seules.
+      return sendSuccess(reply, await gateCoMemberPresence(fastify.prisma, member));
     } catch (error) {
       logger.error('Error inviting to community', error as Error);
       return sendInternalError(reply, 'Failed to invite user to community');
