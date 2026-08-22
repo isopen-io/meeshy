@@ -291,7 +291,7 @@ struct ThemedConversationRow: View {
         }
         parts.append(RelativeTimeFormatter.shortString(for: conversation.lastMessageAt))
         if conversation.userState.unreadCount > 0 {
-            parts.append(String(format: String(localized: "accessibility.unread_count", bundle: .main), conversation.userState.unreadCount))
+            parts.append(UnreadCountLabel.messages(conversation.userState.unreadCount))
         }
         if conversation.userState.isMuted {
             parts.append(String(localized: "accessibility.muted", bundle: .main))

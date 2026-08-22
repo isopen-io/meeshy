@@ -661,7 +661,6 @@ struct GlobalSearchView: View {
     }
 
     private func conversationResultAccessibilityLabel(_ result: GlobalSearchConversationResult) -> String {
-        let unreadUnit = String(localized: "unit.unread", defaultValue: "non lus")
         let lastMessageLabel = String(localized: "accessibility.last_message", defaultValue: "dernier message")
 
         var parts = [result.name, conversationTypeLabel(result.type)]
@@ -669,7 +668,7 @@ struct GlobalSearchView: View {
             parts.append(MembersCountLabel.text(result.memberCount))
         }
         if result.unreadCount > 0 {
-            parts.append("\(result.unreadCount) \(unreadUnit)")
+            parts.append(UnreadCountLabel.messages(result.unreadCount))
         }
         switch result.conversation.lastMessageSummaryKind() {
         case .hidden:
