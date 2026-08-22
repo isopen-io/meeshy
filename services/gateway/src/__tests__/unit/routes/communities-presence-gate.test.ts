@@ -438,6 +438,12 @@ const convoParticipant = (userId: string | null, isOnline: boolean) => ({
   displayName: userId ?? 'Invité',
   role: 'member',
   isActive: true,
+  // Le handler fait `include`, pas `select` : TOUTES les colonnes scalaires de
+  // `Participant` arrivent, dont celle-ci — le SHA-256 du jeton de session
+  // anonyme, dénormalisé pour la recherche indexée. Elle est portée par la
+  // fixture de TOUS les témoins de cette route, et le témoin de liste fermée
+  // ci-dessous atteste qu'elle n'en sort jamais.
+  sessionTokenHash: 'sha256-jeton-de-session-anonyme',
   user: userId ? { id: userId, username: userId, displayName: userId, avatar: null, isOnline } : null,
 });
 
@@ -450,6 +456,24 @@ describe('GET /communities/:id/conversations — la conversation atteint le fil'
     expect(convo).toMatchObject({
       id: CONVO_ID, identifier: 'mshy_general', title: 'Général', type: 'group', isActive: true,
     });
+  });
+
+  // Ce que la réparation de la dérive de noms aurait pu coûter. Le réflexe
+  // devant une clé déclarée qui ne correspond à aucune clé posée est d'ouvrir
+  // le sérialiseur — `additionalProperties: true` répare les trois dérives de
+  // cette route en une ligne. Il aurait aussi publié le `sessionTokenHash` de
+  // chaque participant anonyme à tout membre de la communauté, puisque le
+  // handler fait `include`. La liste du schéma est FERMÉE ; ce témoin garde ce
+  // choix, et tombe sur la ligne qui l'ouvrirait.
+  it('ne laisse JAMAIS sortir le `sessionTokenHash` de la ligne Participant', async () => {
+    mockResolvePrefsOnly.mockResolvedValue(new Map([[SHY_ID, VISIBLE]]));
+
+    const convo = await fetchCommunityConversations([convoParticipant(SHY_ID, true)]);
+    const serialised = JSON.stringify(convo);
+
+    expect(convo.participants[0].sessionTokenHash).toBeUndefined();
+    expect(serialised).not.toContain('sessionTokenHash');
+    expect(serialised).not.toContain('sha256-jeton-de-session-anonyme');
   });
 
   it('sert `participants` — le schéma déclarait `members`, que rien ne produit', async () => {

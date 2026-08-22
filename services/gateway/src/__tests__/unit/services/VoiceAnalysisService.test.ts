@@ -34,6 +34,7 @@ jest.mock('../../../services/AudioTranslateService');
 
 import { VoiceAnalysisService } from '../../../services/VoiceAnalysisService';
 import { AudioTranslateService } from '../../../services/AudioTranslateService';
+import { normalizeVoiceAnalysis } from '../../../services/voice-analysis-normalize';
 
 // ── Helpers / Factories ─────────────────────────────────────────────────────
 
@@ -903,6 +904,112 @@ describe('VoiceAnalysisService', () => {
 
       const result = await service.getVoiceProfileAnalysis('user-1');
       expect(result).toBeNull();
+    });
+  });
+
+  // ════════════════════════════════════════════════════════════════════════
+  // Les métriques de qualité, confrontées à ce que l'émetteur ÉMET (cycle 90)
+  // ════════════════════════════════════════════════════════════════════════
+
+  /**
+   * `makeAnalysisResult` ci-dessus FABRIQUE la forme déclarée. C'est légitime
+   * pour parcourir les seuils de `trainingQuality`, et c'est aussi ce qui a
+   * laissé le défaut vivre : la production ne recevait PAS cette forme.
+   *
+   * Ces témoins partent de la charge utile réelle du traducteur et la font
+   * passer par le VRAI normaliseur — le chemin de production exact.
+   */
+  describe('qualityMetrics — depuis la charge utile réelle du traducteur', () => {
+    const RAW_FROM_TRANSLATOR = {
+      pitch: { mean_hz: 150, std_hz: 30, min_hz: 90, max_hz: 240, range_hz: 150 },
+      classification: {
+        voice_type: 'medium_male',
+        estimated_gender: 'male',
+        estimated_age_range: 'adult'
+      },
+      spectral: { centroid_hz: 1800, bandwidth_hz: 1600, rolloff_hz: 3400, flatness: 0.04 },
+      energy: { mean: 0.08, std: 0.02, dynamic_range_db: 48, silence_ratio: 0.2 },
+      quality: { harmonics_to_noise: 14, jitter: 0.01, shimmer: 0.03 },
+      prosody: { speech_rate_wpm: 140 },
+      mfcc: { mean: [-280], std: [40] },
+      metadata: {
+        sample_rate: 22050,
+        bit_depth: 16,
+        channels: 1,
+        codec: 'wav',
+        duration_seconds: 8,
+        analysis_time_ms: 300,
+        confidence: 0.9
+      }
+    };
+
+    it('dérive clarity, consistency et le score de l’audio une fois la charge utile normalisée', async () => {
+      mockAnalyzeVoice.mockResolvedValue(normalizeVoiceAnalysis(RAW_FROM_TRANSLATOR));
+
+      const { analysis } = await service.analyzeAttachment({
+        attachmentId: 'att-1',
+        messageId: 'msg-1',
+        userId: 'user-1',
+        persist: false
+      });
+
+      // clarity = dynamicRange / 60 = 48 / 60
+      expect(analysis.qualityMetrics?.clarity).toBeCloseTo(0.8, 5);
+      // consistency = 1 - (std / mean) = 1 - 30 / 150
+      expect(analysis.qualityMetrics?.consistency).toBeCloseTo(0.8, 5);
+      // overall = 0.8*0.4 + 0.8*0.3 + confidence(0.9)*0.3
+      expect(analysis.qualityMetrics?.overallScore).toBeCloseTo(0.83, 5);
+      expect(analysis.qualityMetrics?.trainingQuality).toBe('excellent');
+      expect(analysis.qualityMetrics?.suitableForCloning).toBe(true);
+    });
+
+    it('varie avec l’audio — une prise pauvre ne rend pas le même score qu’une bonne', async () => {
+      const poor = {
+        ...RAW_FROM_TRANSLATOR,
+        energy: { ...RAW_FROM_TRANSLATOR.energy, dynamic_range_db: 6 },
+        pitch: { ...RAW_FROM_TRANSLATOR.pitch, std_hz: 120 },
+        metadata: { ...RAW_FROM_TRANSLATOR.metadata, confidence: 0.2 }
+      };
+      mockAnalyzeVoice.mockResolvedValue(normalizeVoiceAnalysis(poor));
+
+      const { analysis } = await service.analyzeAttachment({
+        attachmentId: 'att-1',
+        messageId: 'msg-1',
+        userId: 'user-1',
+        persist: false
+      });
+
+      expect(analysis.qualityMetrics?.clarity).toBeCloseTo(0.1, 5);
+      expect(analysis.qualityMetrics?.suitableForCloning).toBe(false);
+      expect(analysis.qualityMetrics?.trainingQuality).toBe('poor');
+    });
+
+    /**
+     * CONSTAT, pas correction — et il ne tombera pas tout seul.
+     *
+     * Il fige la signature du défaut : servie SANS normalisation, la charge
+     * utile du traducteur donne `clarity = 0` (`energy.dynamicRange` absent),
+     * `consistency = 1` (`pitch.std / pitch.mean` → `0 / 1`) et le défaut
+     * `confidence = 0.5` — soit `0.45`, « fair », « pas bon pour le clonage »,
+     * **pour toute voix, toujours**. Le témoin existe pour que quiconque
+     * réintroduirait un chemin brut voie tout de suite la constante qu'il
+     * rallume.
+     */
+    it('CONSTAT : sans normalisation, le score est la constante 0,45 quelle que soit la voix', async () => {
+      mockAnalyzeVoice.mockResolvedValue(RAW_FROM_TRANSLATOR as never);
+
+      const { analysis } = await service.analyzeAttachment({
+        attachmentId: 'att-1',
+        messageId: 'msg-1',
+        userId: 'user-1',
+        persist: false
+      });
+
+      expect(analysis.qualityMetrics?.clarity).toBe(0);
+      expect(analysis.qualityMetrics?.consistency).toBe(1);
+      expect(analysis.qualityMetrics?.overallScore).toBeCloseTo(0.45, 5);
+      expect(analysis.qualityMetrics?.trainingQuality).toBe('fair');
+      expect(analysis.qualityMetrics?.suitableForCloning).toBe(false);
     });
   });
 });

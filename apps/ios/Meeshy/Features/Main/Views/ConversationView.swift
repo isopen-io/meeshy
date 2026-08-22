@@ -1389,6 +1389,47 @@ struct ConversationView: View {
                     // commencer SOUS l'en-tête — contrairement au fil, dont les
                     // bulles ont le droit de défiler dessous.
                     topInset: previewMode ? 0 : DeviceLayout.safeAreaTop + Self.riverHeaderClearance,
+                    // R-7 : la même réserve basse que le fil — le composeur
+                    // n'est jamais une zone où une bulle reste prise.
+                    bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    // R-5 : identité vivante — les MÊMES sources que le Fil
+                    // (`MessageListViewController` : présence par expéditeur,
+                    // anneau de story sauf pour soi, fiche par le routeur).
+                    presence: { message in PresenceManager.shared.presenceState(for: message.senderId) },
+                    storyRing: { message in
+                        message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId)
+                    },
+                    onOpenProfile: { user in
+                        if user.isAnonymous, let participantId = user.participantId, let conversationId = conversation?.id {
+                            router.participantProfileTarget = ParticipantProfileTarget(
+                                conversationId: conversationId,
+                                participantId: participantId
+                            )
+                        } else {
+                            router.deepLinkProfileUser = user
+                        }
+                    },
+                    onViewStory: { userId in
+                        overlayState.storyViewerUserId = userId
+                        overlayState.storyViewerSlideIndex = 0
+                        overlayState.storyViewerStartAtFirstUnviewed = true
+                        overlayState.showStoryViewer = true
+                    },
+                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
+                    // puis atterrissage sur le message (et le composeur en
+                    // mode réponse pour « Répondre »).
+                    onOpenInThread: { messageId in
+                        readingModeController.select(.script)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
+                    onReply: { messageId in
+                        readingModeController.select(.script)
+                        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                        triggerReply(for: msg)
+                        scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
+                    },
                     text: { message in
                         viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
                     }
@@ -1834,7 +1875,11 @@ struct ConversationView: View {
                     }
                 )
             }
-            .zIndex(50)
+            // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
+            // pane (80) — le pane lui réserve sa hauteur (`bottomInset`) et
+            // c'est lui qui est recouvert sinon (mesuré au simulateur :
+            // champ « Message… » présent à y = 797, invisible).
+            .zIndex(readingModeController.mode == .river ? 85 : 50)
             // Chrome escamoté pendant le défilement Focal : glissement vers le
             // bord BAS + fondu (`EdgeHiddenChrome`) — le composeur garde sa
             // hauteur mesurée (aucun inset ne bouge, donc aucun re-scaling du

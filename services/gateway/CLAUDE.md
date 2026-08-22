@@ -653,7 +653,7 @@ d'édition de message, le seul qui servait la charge entière est
 schéma faux est strictement pire que pas de schéma ; la conclusion n'est pas
 d'en retirer, c'est d'en tester la sortie.
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 11
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 7
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -690,12 +690,13 @@ au cliquet comme dette de FORME, plus comme fuite.
 
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
-main sont repris au cycle 89 (voir plus bas) ; les trois enveloppes fantômes le
-sont au cycle 88 bis. **Il reste 11 sites, tous sur des charges utiles
-`200`/`202`**, triés dans `tasks/realtime-sync-audit-2026-08-22-cycle89.md` §7
-et `…-cycle88-bis.md` §5 — le second pose les deux questions à instruire AVANT
-de réparer (que passe le gestionnaire à `sendSuccess`, et à quel niveau le
-schéma prétend-il le décrire).
+main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
+cycle 90, avec la PANNE qu'ils recouvraient ; les trois enveloppes fantômes au
+cycle 88 bis. **Il reste 7 sites, tous sur des charges utiles `200`/`202`**,
+triés dans `tasks/realtime-sync-audit-2026-08-22-cycle90.md` §9 et
+`…-cycle88-bis.md` §5 — le second pose les deux questions à instruire AVANT de
+réparer (que passe le gestionnaire à `sendSuccess`, et à quel niveau le schéma
+prétend-il le décrire).
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent.
@@ -757,6 +758,86 @@ Constat non corrigé : **`errorResponseSchema` ne déclare pas `message`.** Rien
 ne casse tant que les clients lisent les deux clés, mais l'ajouter est un
 changement de contrat sur des centaines de routes — une décision, pas une
 initiative. Figé par `error-envelope-serialization.test.ts`.
+
+### Un tableau sans `items` est PERMISSIF ; un objet sans `properties` EFFACE
+
+L'asymétrie n'est pas une intuition, elle est mesurée au compilateur :
+
+```
+schéma : { success: { type: 'array' } }
+in     : { success: [ { a: 1, b: { c: 2 } } ] }
+out    : {"success":[{"a":1,"b":{"c":2}}]}      ← intact
+```
+
+C'est ce qui justifie que le balayage ne signale QUE les objets nus : un
+tableau non décrit laisse passer, il ne vide pas. Déclarer ses `items` reste un
+gain de contrat — jamais une réparation de fuite, et il ne faut pas le compter
+comme telle (cycle 90).
+
+### Avant de déclarer un champ, remonter jusqu'à l'ÉMETTEUR
+
+Le type TypeScript n'est PAS une source de vérité tant qu'il n'a pas été
+confronté à ce que l'émetteur émet. Sur l'analyse vocale (cycle 90),
+`VoiceCharacteristics.to_dict()` (Python) et `VoiceAnalysisResult`
+(`@meeshy/shared`) **ne partagent aucune clé de feuille** — `pitch.mean_hz`
+contre `pitch.mean`, `spectral.*` contre `timbre.*`, `metadata.confidence`
+contre `classification.confidence`. Quatre familles portaient le même nom au
+premier niveau, ce qui suffisait à rendre les deux formes crédibles.
+
+Trois conséquences, toutes vérifiées sur ce cas :
+
+- **Écrire le schéma depuis le type aurait servi `{ pitch: {}, mfcc: {}, … }`** :
+  les bons noms de famille, rien dedans, et `spectral` / `quality` / `prosody` /
+  `metadata` supprimés. Une réponse d'apparence correcte est pire qu'une réponse
+  vide.
+- **Un cast à la frontière est un vœu.** `_sendRequest<VoiceAnalysisResult>(…)`
+  ne vérifiait rien. Un adaptateur explicite est le seul endroit honnête où la
+  traduction de forme a lieu (`services/voice-analysis-normalize.ts`).
+- **Le calcul qui lit ces champs peut être une CONSTANTE sans que rien ne le
+  dise.** `calculateQualityMetrics` rendait `0,45` / « fair » / « pas bon pour le
+  clonage » pour toute voix — `clarity = 0` (clé absente), `consistency = 1`
+  (`0 / 1`), `confidence` au défaut. Des chiffres plausibles, jamais nuls, donc
+  jamais signalés. Ses témoins étaient verts : ils FABRIQUAIENT la forme déclarée
+  avant de la passer au service.
+
+Corollaire de couches : **un défaut de forme peut être la troisième d'une pile.**
+Ici la route ne rendait même jamais `200` (§ doubles de test ci-dessous), et
+réparer une seule couche n'aurait rien montré. Remonter jusqu'à l'émetteur est la
+seule façon de savoir combien de couches on répare.
+
+### Un `MagicMock` nu n'est pas un double, c'est un oui-oui
+
+Il accepte n'importe quel argument nommé et FABRIQUE n'importe quel attribut
+demandé. Il rend donc vertes les deux formes exactes de panne d'intégration :
+
+```python
+self.voice_analyzer.analyze(audio_path=…, analysis_types=…)  # TypeError réel
+self.voice_analyzer.compare_voices(…)                        # AttributeError réel
+```
+
+Les deux opérations de voix étaient MORTES en production — avalées par un
+`except Exception` large, servies en `INTERNAL_ERROR` — avec des témoins verts
+au-dessus (cycle 90).
+
+**Le correctif est `create_autospec`, pas `spec=`.** `MagicMock(spec=X)` ne
+contrôle que l'EXISTENCE des attributs, jamais les signatures ; et réassigner
+`service.analyze = AsyncMock(...)` efface de toute façon ce que le `spec` y avait
+posé. Vérifié : sous `spec=`, la production revertie laissait le témoin PASSER.
+
+```python
+service = create_autospec(VoiceAnalyzerService, instance=True)
+service.analyze.return_value = …          # jamais `service.analyze = AsyncMock(…)`
+```
+
+Et un double qui rend une charge utile INVENTÉE propage la fiction : celui-ci
+rendait du camelCase qu'aucun émetteur du dépôt ne produit. **Un double se
+construit depuis la sortie réelle du collaborateur, capturée, pas depuis le type
+qu'on aimerait qu'il ait.**
+
+Enfin, le témoin voisin assertait
+`result['type'] in ['voice_api_success', 'voice_api_error']` — il ne pouvait pas
+tomber. **Un témoin qui accepte les deux issues n'atteste rien** (§ Tests — un
+témoin qui ne peut pas tomber n'est pas un témoin).
 
 ### « Sans producteur » ne veut pas dire « à supprimer »
 

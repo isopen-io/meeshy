@@ -487,8 +487,8 @@ describe('voiceAnalysisRoutes', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.success).toBe(true);
-      // Route wraps non-null analysis in { analysis: ... }; Fastify serializes
-      // the nested object according to its schema (additionalProperties not set).
+      // `toHaveProperty` seul a laissé vivre le défaut : `{}` porte la clé.
+      // Les témoins de VALEUR sont plus bas (§ « le sérialiseur sert enfin »).
       expect(body.data).toHaveProperty('analysis');
     });
 
@@ -639,8 +639,8 @@ describe('voiceAnalysisRoutes', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.success).toBe(true);
-      // Route wraps non-null analysis in { analysis: ... }; Fastify serializes
-      // the nested object according to its schema (additionalProperties not set).
+      // `toHaveProperty` seul a laissé vivre le défaut : `{}` porte la clé.
+      // Les témoins de VALEUR sont plus bas (§ « le sérialiseur sert enfin »).
       expect(body.data).toHaveProperty('analysis');
     });
 
@@ -828,6 +828,156 @@ describe('voiceAnalysisRoutes', () => {
       expect(mockAnalyzeVoiceProfile).toHaveBeenCalledWith(
         expect.objectContaining({ persist: true })
       );
+    });
+  });
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Le sérialiseur sert enfin ce que le handler produit (cycle 90)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Les quatre charges utiles `analysis` étaient déclarées `{ type: 'object' }`
+   * NU. fast-json-stringify applique `additionalProperties: false` par défaut :
+   * elles sortaient toutes en `{}`. Les témoins historiques ne le voyaient pas —
+   * ils demandaient la CLÉ (`toHaveProperty('analysis')`), que `{}` porte.
+   *
+   * Ceux-ci traversent le sérialiseur et assertent sur des VALEURS.
+   */
+  describe('les charges utiles `analysis` traversent le sérialiseur', () => {
+    const ANALYSIS = {
+      pitch: { mean: 152.5, std: 24.5, min: 98.25, max: 233.75 },
+      timbre: {
+        spectralCentroid: 1820.5,
+        spectralBandwidth: 1640.25,
+        spectralRolloff: 3480.75,
+        spectralFlatness: 0.0421
+      },
+      mfcc: { mean: [-282.4], std: [41.7] },
+      energy: { rms: 0.0834, dynamicRange: 42.5 },
+      classification: {
+        voiceType: 'medium_male',
+        gender: 'male',
+        ageRange: 'adult',
+        confidence: 0.82
+      },
+      prosody: { energyMean: 0.0834, energyStd: 0.0217, silenceRatio: 0.235, speechRateWpm: 142.5 },
+      qualityMetrics: {
+        overallScore: 0.83,
+        clarity: 0.708,
+        consistency: 0.84,
+        suitableForCloning: true,
+        trainingQuality: 'excellent'
+      }
+    };
+
+    it('POST /attachments/:id/analysis sert les familles, pas `{}`', async () => {
+      mockAnalyzeAttachment.mockResolvedValueOnce({
+        attachmentId: ATTACHMENT_ID,
+        messageId: MESSAGE_ID,
+        analysis: ANALYSIS,
+        persisted: true
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/attachments/${ATTACHMENT_ID}/analysis`,
+        headers: { Authorization: AUTH_HEADER },
+        payload: { audioBase64: 'AAA' }
+      });
+
+      const { analysis } = response.json().data;
+      expect(analysis.pitch).toEqual({ mean: 152.5, std: 24.5, min: 98.25, max: 233.75 });
+      expect(analysis.timbre.spectralCentroid).toBe(1820.5);
+      expect(analysis.energy.dynamicRange).toBe(42.5);
+      expect(analysis.classification.voiceType).toBe('medium_male');
+      expect(analysis.mfcc.mean).toEqual([-282.4]);
+    });
+
+    it('POST /attachments/:id/analysis sert la prosodie et les métriques de qualité', async () => {
+      mockAnalyzeAttachment.mockResolvedValueOnce({
+        attachmentId: ATTACHMENT_ID,
+        messageId: MESSAGE_ID,
+        analysis: ANALYSIS,
+        persisted: true
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: `/attachments/${ATTACHMENT_ID}/analysis`,
+        headers: { Authorization: AUTH_HEADER },
+        payload: { audioBase64: 'AAA' }
+      });
+
+      const { analysis } = response.json().data;
+      expect(analysis.prosody.speechRateWpm).toBe(142.5);
+      expect(analysis.qualityMetrics.trainingQuality).toBe('excellent');
+      expect(analysis.qualityMetrics.suitableForCloning).toBe(true);
+    });
+
+    it('GET /attachments/:id/analysis sert l’analyse persistée', async () => {
+      mockGetAttachmentAnalysis.mockResolvedValueOnce(ANALYSIS);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: `/attachments/${ATTACHMENT_ID}/analysis`,
+        headers: { Authorization: AUTH_HEADER }
+      });
+
+      expect(response.json().data.analysis.timbre.spectralRolloff).toBe(3480.75);
+    });
+
+    it('POST /voice/analysis sert l’analyse du profil vocal', async () => {
+      mockAnalyzeVoiceProfile.mockResolvedValueOnce({
+        userId: USER_ID,
+        analysis: ANALYSIS,
+        persisted: true
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/voice/analysis',
+        headers: { Authorization: AUTH_HEADER },
+        payload: { audioBase64: 'AAA' }
+      });
+
+      expect(response.json().data.analysis.classification.confidence).toBe(0.82);
+    });
+
+    it('GET /voice/analysis sert l’analyse persistée du profil', async () => {
+      mockGetVoiceProfileAnalysis.mockResolvedValueOnce(ANALYSIS);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/voice/analysis',
+        headers: { Authorization: AUTH_HEADER }
+      });
+
+      expect(response.json().data.analysis.pitch.mean).toBe(152.5);
+    });
+
+    it('le lot sert chaque ligne entière — la liste de la bonne longueur remplie de `{}` est le piège', async () => {
+      mockAnalyzeAttachmentsBatch.mockResolvedValueOnce({
+        success: [
+          { attachmentId: ATTACHMENT_ID, messageId: MESSAGE_ID, analysis: ANALYSIS, persisted: true }
+        ],
+        failures: [{ id: 'att-2', error: 'boom' }]
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/attachments/batch/analysis',
+        headers: { Authorization: AUTH_HEADER },
+        payload: {
+          attachments: [
+            { attachmentId: ATTACHMENT_ID, messageId: MESSAGE_ID, audioBase64: 'AAA' }
+          ]
+        }
+      });
+
+      const body = response.json().data;
+      expect(body.success[0].attachmentId).toBe(ATTACHMENT_ID);
+      expect(body.success[0].analysis.energy.rms).toBe(0.0834);
+      expect(body.failures[0]).toEqual({ id: 'att-2', error: 'boom' });
     });
   });
 });

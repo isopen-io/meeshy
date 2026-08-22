@@ -19,6 +19,7 @@ import { VoiceAnalysisService } from '../services/VoiceAnalysisService';
 import { createUnifiedAuthMiddleware, UnifiedAuthContext } from '../middleware/auth';
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { voiceQualityAnalysisSchema } from './voice/types';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
@@ -144,7 +145,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
               properties: {
                 attachmentId: { type: 'string' },
                 messageId: { type: 'string' },
-                analysis: { type: 'object' },
+                analysis: voiceQualityAnalysisSchema,
                 persisted: { type: 'boolean' }
               }
             }
@@ -251,8 +252,28 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
             data: {
               type: 'object',
               properties: {
-                success: { type: 'array' },
-                failures: { type: 'array' },
+                success: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      attachmentId: { type: 'string' },
+                      messageId: { type: 'string' },
+                      analysis: voiceQualityAnalysisSchema,
+                      persisted: { type: 'boolean' }
+                    }
+                  }
+                },
+                failures: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      error: { type: 'string' }
+                    }
+                  }
+                },
                 total: { type: 'number' },
                 successCount: { type: 'number' },
                 failureCount: { type: 'number' }
@@ -338,7 +359,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
               type: 'object',
               nullable: true,
               properties: {
-                analysis: { type: 'object' }
+                analysis: voiceQualityAnalysisSchema
               }
             }
           }
@@ -408,7 +429,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
               type: 'object',
               properties: {
                 userId: { type: 'string' },
-                analysis: { type: 'object' },
+                analysis: voiceQualityAnalysisSchema,
                 persisted: { type: 'boolean' }
               }
             }
@@ -465,7 +486,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
               type: 'object',
               nullable: true,
               properties: {
-                analysis: { type: 'object' }
+                analysis: voiceQualityAnalysisSchema
               }
             }
           }

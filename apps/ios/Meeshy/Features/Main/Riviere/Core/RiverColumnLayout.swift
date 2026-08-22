@@ -51,4 +51,19 @@ nonisolated public struct RiverColumnLayout: Sendable, Equatable {
     public var bubbleContentWidth: CGFloat {
         max(0, laneWidth - gutter * 2)
     }
+
+    /// Offset horizontal qui amène le rail du couloir `laneIndex` au centre
+    /// d'un pane de largeur `paneWidth` — borné entre la rive (0) et le bord
+    /// (`totalWidth − paneWidth`) ; zéro si tout tient dans le pane.
+    ///
+    /// Pourquoi un OFFSET et pas une ancre : le pane défile sur deux axes,
+    /// mais `ScrollViewProxy.scrollTo` n'en bouge qu'un (mesuré au simulateur
+    /// le 2026-08-22 : quelle que soit l'ancre, X restait la moitié du
+    /// débordement — le contenu centré d'origine). L'axe des voix se pose
+    /// donc explicitement, par cette cote, et la peau l'écrit au défilement.
+    public func horizontalOffset(centeringLane laneIndex: Int, paneWidth: CGFloat) -> CGFloat {
+        let overflow = totalWidth - paneWidth
+        guard overflow > 0 else { return 0 }
+        return min(overflow, max(0, railX(laneIndex) - paneWidth / 2))
+    }
 }
