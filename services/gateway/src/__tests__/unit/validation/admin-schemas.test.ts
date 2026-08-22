@@ -52,6 +52,19 @@ describe('AnalyticsLanguageDistQuerySchema', () => {
     const result = AnalyticsLanguageDistQuerySchema.parse({});
     expect(result.limit).toBe(5);
   });
+
+  it('rejects non-positive limit (Prisma take must stay >= 1)', () => {
+    expect(() => AnalyticsLanguageDistQuerySchema.parse({ limit: '0' })).toThrow();
+    expect(() => AnalyticsLanguageDistQuerySchema.parse({ limit: '-5' })).toThrow();
+  });
+
+  it('rejects limit > 100', () => {
+    expect(() => AnalyticsLanguageDistQuerySchema.parse({ limit: '200' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => AnalyticsLanguageDistQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
 });
 
 describe('AnalyticsKpisQuerySchema', () => {
@@ -202,6 +215,15 @@ describe('InvitationsListQuerySchema', () => {
     expect(() => InvitationsListQuerySchema.parse({ limit: '200' })).toThrow();
   });
 
+  it('rejects non-positive limit (sibling BroadcastsListQuery bounds it 1..100)', () => {
+    expect(() => InvitationsListQuerySchema.parse({ limit: '0' })).toThrow();
+    expect(() => InvitationsListQuerySchema.parse({ limit: '-5' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => InvitationsListQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
+
   it('rejects invalid mongo id for communityId', () => {
     expect(() => InvitationsListQuerySchema.parse({ communityId: 'bad' })).toThrow();
   });
@@ -252,6 +274,19 @@ describe('LanguageStatsQuerySchema', () => {
   it('rejects invalid period', () => {
     expect(() => LanguageStatsQuerySchema.parse({ period: '1d' })).toThrow();
   });
+
+  it('rejects non-positive limit (Prisma take must stay >= 1)', () => {
+    expect(() => LanguageStatsQuerySchema.parse({ limit: '0' })).toThrow();
+    expect(() => LanguageStatsQuerySchema.parse({ limit: '-5' })).toThrow();
+  });
+
+  it('rejects limit > 100', () => {
+    expect(() => LanguageStatsQuerySchema.parse({ limit: '200' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => LanguageStatsQuerySchema.parse({ limit: '2.5' })).toThrow();
+  });
 });
 
 describe('LanguageTimelineQuerySchema', () => {
@@ -278,6 +313,19 @@ describe('TranslationAccuracyQuerySchema', () => {
 
   it('defaults limit to 10', () => {
     expect(TranslationAccuracyQuerySchema.parse({})).toMatchObject({ limit: 10 });
+  });
+
+  it('rejects non-positive limit (MongoDB $limit must be positive)', () => {
+    expect(() => TranslationAccuracyQuerySchema.parse({ limit: '0' })).toThrow();
+    expect(() => TranslationAccuracyQuerySchema.parse({ limit: '-5' })).toThrow();
+  });
+
+  it('rejects limit > 100', () => {
+    expect(() => TranslationAccuracyQuerySchema.parse({ limit: '200' })).toThrow();
+  });
+
+  it('rejects non-integer limit', () => {
+    expect(() => TranslationAccuracyQuerySchema.parse({ limit: '2.5' })).toThrow();
   });
 });
 
