@@ -11,7 +11,7 @@ import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { messageValidationHook } from '../../middleware/rate-limiter';
 import {
-  messageSchema,
+  messageResponseSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
@@ -70,35 +70,42 @@ const logger = enhancedLogger.child({ module: 'messages-advanced' });
 const CONVERSATION_STATUS_PAGE_SIZE = 50;
 
 /**
- * L'expéditeur tel que les DEUX routes d'édition le chargent — un
- * `Participant`, pas un `User`.
+ * L'expéditeur tel que les DEUX routes d'édition le CHARGENT — un `Participant`,
+ * pas un `User`.
+ *
+ * Deux défauts se sont empilés sur ce champ, et l'ordre compte : tant que le
+ * cycle 88 bis n'avait pas corrigé l'enveloppe fantôme (`data.message` sur une
+ * charge qui n'a jamais porté cette clé), `data` sortait `{}` et rien de ceci
+ * n'était observable. **Réparer une enveloppe rend lisibles les défauts de ce
+ * qu'elle contenait.**
  *
  * `messageSchema.sender` est `userMinimalSchema`, qui couvre bien le cas
- * participant (il déclare `userId` et `type` pour lui). Mais il est
- * délibérément MINIMAL, et ces deux routes chargent trois champs qu'il ne
- * déclare pas. Mesuré au compilateur sur la charge utile réelle :
+ * participant — il déclare `userId` et `type` pour lui. Mais il est
+ * délibérément MINIMAL, et ces deux routes chargent trois champs de plus.
+ * Mesuré au compilateur sur la charge utile réelle, une fois l'enveloppe
+ * réparée :
  *
  * ```
  * in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
- * out : { id, userId, displayName, avatar, type }        ← role, language, user PERDUS
+ * out : { id, userId, displayName, avatar, type }     ← role, language, user PERDUS
  * ```
  *
  * Élargir `userMinimalSchema` pousserait `role`, `language` et un objet `user`
- * imbriqué sur les dizaines de réponses qui l'emploient — dont beaucoup
- * décrivent un vrai `User`, pour qui `type` est déjà noté « absent ». La
- * déclaration locale est le bon grain : ce sont ces deux routes qui chargent
- * plus, ce sont elles qui déclarent plus.
+ * imbriqué sur les dizaines de réponses qui l'emploient, dont beaucoup décrivent
+ * un vrai `User`. Le grain juste est celui qui CHARGE : ce sont ces deux routes
+ * qui chargent plus, ce sont elles qui déclarent plus.
  *
- * **`isOnline` est délibérément ABSENT.** `userMinimalSchema` le déclare ;
- * aucune des deux routes ne le charge (vérifié dans les deux `select`), et
- * jusqu'ici la question ne se posait pas — la charge utile entière sortait
- * `{}`. En rendant la déclaration vivante, la reprendre telle quelle armerait
- * le piège que le cycle 84 a nommé : le jour où quelqu'un ajoute `isOnline` au
- * `select`, il atteindrait le fil sans gate et sans qu'un témoin tombe.
- * L'omettre est fail-closed — le sérialiseur le retirerait — et vaut mieux que
- * gater un champ que personne ne charge.
+ * **`isOnline` est délibérément ABSENT, et c'est la décision du lot.**
+ * `userMinimalSchema` le déclare, et la réparation de l'enveloppe a rendu cette
+ * déclaration VIVANTE : vérifié au compilateur, un `isOnline: true` posé sur
+ * l'objet est désormais SERVI. Rien ne fuit aujourd'hui — aucun des deux
+ * `select` ne le charge — mais le piège du cycle 84 est armé pour de bon, et le
+ * prochain `select` qui l'ajoute le mettrait sur le fil sans gate et sans qu'un
+ * témoin tombe. L'omettre est fail-closed : si le champ apparaît, le sérialiseur
+ * le retire. Cela vaut mieux qu'un gate sur une donnée que personne ne charge,
+ * lequel est du code mort qui se périme.
  */
-export const editedMessageSenderSchema = {
+const editedMessageSenderSchema = {
   type: 'object',
   nullable: true,
   properties: {
@@ -126,28 +133,21 @@ export const editedMessageSenderSchema = {
 } as const;
 
 /**
- * L'enveloppe des deux réponses d'édition.
+ * `messageResponseSchema` avec ce seul `sender` remplacé.
  *
- * `messageResponseSchema` (`@meeshy/shared`) décrit exactement cette forme —
- * `{ success, data: { message } }` — et c'est bien lui qu'il fallait reprendre :
- * seul son `sender` demandait à être remplacé, pour la raison ci-dessus.
- * `messageSchema` était d'ailleurs DÉJÀ importé dans ce fichier, et n'y servait
- * à rien.
+ * L'enveloppe vient du schéma partagé — corrigée au cycle 88 bis, elle est
+ * juste, et la recopier ici rouvrirait la porte que ce cycle-là a fermée. Seul
+ * le `sender` est surchargé, pour la raison ci-dessus.
  */
 export const editedMessageResponseSchema = {
-  type: 'object',
+  ...messageResponseSchema,
   properties: {
-    success: { type: 'boolean', example: true },
+    ...messageResponseSchema.properties,
     data: {
-      type: 'object',
+      ...messageResponseSchema.properties.data,
       properties: {
-        message: {
-          ...messageSchema,
-          properties: {
-            ...messageSchema.properties,
-            sender: editedMessageSenderSchema
-          }
-        }
+        ...messageResponseSchema.properties.data.properties,
+        sender: editedMessageSenderSchema
       }
     }
   }
@@ -193,6 +193,12 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
+        // La charge est le message édité LUI-MÊME (`sendSuccess(reply,
+        // messageResponse)`), pas un objet qui le contiendrait. Un
+        // enveloppement `data.message` a vécu ici, copié d'un
+        // `messageResponseSchema` mort : la clé déclarée étant absente de la
+        // charge, `fast-json-stringify` — `additionalProperties: false` par
+        // défaut — ne servait pas un message dégradé, il servait `data: {}`.
         200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
@@ -778,6 +784,11 @@ export function registerMessagesAdvancedRoutes(
         }
       },
       response: {
+        // Même enveloppe, même défaut, même correctif que le sibling `PUT` —
+        // et c'est CE transport qu'Android emprunte (`@PATCH("messages/{id}")`,
+        // `ApiResponse<ApiMessage>`). `data: {}` y levait `MissingFieldException`
+        // sur `id`/`conversationId`, que la file d'outbox lisait comme une
+        // panne réseau : l'édition, pourtant appliquée, était rejouée sans fin.
         200: editedMessageResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,

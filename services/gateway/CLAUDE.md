@@ -561,18 +561,26 @@ Les deux moitiés tiennent en une phrase : **`statusCode` n'est pas une
 observation de la charge utile**, et seul un témoin qui traverse le sérialiseur
 (`app.inject()`, jamais un double du handler) peut voir ce qui en sort.
 
-**Rendre une déclaration VIVANTE repose la question de la visibilité, même
-quand rien ne fuit.** Sur les deux routes d'édition (cycle 92), `isOnline` était
-déclaré par `userMinimalSchema` et chargé par aucune des deux — tant que la
-charge utile sortait `{}`, la question ne se posait pas. Le reprendre en
-déclarant la charge utile n'aurait rien fait fuir (le sérialiseur ne fabrique pas
-un champ absent) et aurait ARMÉ le piège : le jour où quelqu'un l'ajoute au
-`select`, il atteint le fil sans gate et sans qu'un témoin tombe. **L'OMETTRE est
-fail-closed**, et vaut mieux qu'un gate sur une donnée que personne ne charge —
-lequel est du code mort qui se périme. La règle du cycle 84 ne dit pas seulement
-« poser le gate dans le même lot » : elle dit que rendre une donnée visible
-oblige à DÉCIDER, dans le même lot, si elle a le droit de l'être. Ici la décision
-est une omission, gardée par un témoin.
+**Réparer une ENVELOPPE arme les déclarations qu'elle contenait.** Tant que
+`data` sortait `{}`, `messageSchema.sender` ne servait rien, et le fait qu'il
+DÉCLARE `isOnline` était sans conséquence. La correction de l'enveloppe
+(cycle 88 bis) l'a rendue vivante : mesuré au compilateur, `isOnline: true`
+posé sur l'objet **est désormais servi**. Rien ne fuit aujourd'hui — les deux
+`select` ne le chargent pas — mais le piège du cycle 84 est ARMÉ pour de bon :
+le prochain `select` qui l'ajoute le met sur le fil, sans gate, sans qu'un
+témoin tombe.
+
+L'expéditeur de ces routes est donc déclaré LOCALEMENT **sans `isOnline`**
+(cycle 93) : c'est fail-closed — si le champ apparaît un jour dans l'objet, le
+sérialiseur le retire — et cela vaut mieux qu'un gate sur une donnée que
+personne ne charge, lequel est du code mort qui se périme. Un témoin garde
+l'omission.
+
+> **La règle du cycle 84 ne dit pas seulement « poser le gate dans le même
+> lot ».** Elle dit que rendre une donnée visible oblige à DÉCIDER, dans le même
+> lot, si elle a le droit de l'être. Et « rendre visible » inclut **réparer
+> l'enveloppe au-dessus** : le lot qui débouche un parent hérite des décisions
+> de visibilité de tous ses enfants.
 
 **Une PANNE peut tenir la porte, et la réparer l'ouvre.**
 `GET /communities/search` chargeait `isOnline` sur ses membres sans le gater ;
@@ -628,7 +636,63 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
-### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 5
+### Cette famille a TROIS formes, et le balayage n'en distingue aucune
+
+Un schéma de réponse ne décrit pas seulement le CONTENU d'un champ : il décrit
+aussi **sa présence**, et à quel NIVEAU d'enveloppe il prétend la décrire. Les
+trois cas ont la même signature dans le code et des conséquences sans commune
+mesure :
+
+| forme | exemple | effet |
+|---|---|---|
+| **1** — la clé déclarée EXISTE dans la charge | `creator: { type: 'object' }` sur une charge qui porte `creator` | ce champ sort `{}`, **le reste survit** |
+| **2** — la clé déclarée N'EXISTE PAS | `data: { properties: { message } }` sur une charge sans `message` | **le parent ENTIER sort `{}`** |
+| **3** — le schéma décrit la MAUVAISE enveloppe | `GET /messages/:messageId` (voir plus bas) | **rien ne sort vide** — le balayage rend un FAUX POSITIF |
+
+Le balayage ne voit que le schéma, jamais la charge d'en face. **Avant de
+réparer un site de l'inventaire, poser les deux questions : que passe le
+gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le
+décrire ?**
+
+La forme 3 est la plus dangereuse, parce que l'outil s'y trompe **dans le sens
+rassurant** : un champ signalé « vidé » peut être servi brut, en fuite. C'est
+exactement ce qui s'est passé sur `messages.ts` (cycle 88) — détail dans
+§ *Une déclaration n'agit que si le schéma décrit la bonne ENVELOPPE*.
+
+Trois sites de forme 2 corrigés au cycle 88 bis, tous du même patron : une
+enveloppe `data.message` / `data.link` qu'aucun gestionnaire n'a jamais produite.
+Les deux transports REST d'édition de message rendaient `{"success":true,
+"data":{}}` ; `POST /conversations/:id/new-link` rendait
+`{"success":true,"data":{"link":{}}}` — ni lien, ni code, ni réglages.
+
+**Un défaut de sérialisation, seul, produit une boucle de réémission temps
+réel.** Sur `PATCH /messages/:messageId`, `data: {}` fait échouer le décodage
+Android (`ApiMessage.id`/`.conversationId` n'ont pas de défaut) ; `apiCall` rend
+`Failure(PARSE)` ; `OutboxFlushWorker` traduit tout `Failure` d'une
+`EDIT_MESSAGE` en `TransientFailure`, donc en RÉESSAI. La ligne d'outbox ne
+draine jamais, et chaque vidange rejoue l'édition que le serveur rediffuse en
+`message:edited` à toute la room. Chaque maillon est correct ; c'est la réponse
+vide qui les compose en boucle. **Chercher la cause d'une boucle de réessai dans
+la file d'attente, c'est chercher là où la lumière est meilleure.**
+
+### Une forme écrite dans du CODE MORT n'est pas maintenue, et se propage
+
+`messageResponseSchema` portait l'enveloppe fantôme `data.message` et n'était
+**utilisé nulle part** — ce qui l'a mis hors de portée de toute correction, et
+n'a rien empêché : ses deux copies inline vivaient dans les routes servies. Un
+schéma mort n'est pas neutre, il est un **patron**.
+
+Le correctif n'est pas de le supprimer, c'est de le rendre VIVANT : corrigé en
+`data: messageSchema` et CONSOMMÉ par les deux routes, il n'y a plus de forme à
+copier, il y a un import.
+
+Corollaire : **un contrat déclaré doit être EXERCÉ.** Des trois transports
+d'édition de message, le seul qui servait la charge entière est
+`PUT /messages/:messageId` — celui qui ne déclare AUCUN schéma de réponse. Un
+schéma faux est strictement pire que pas de schéma ; la conclusion n'est pas
+d'en retirer, c'est d'en tester la sortie.
+
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 4
 
 **L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
 gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
@@ -665,20 +729,25 @@ au cliquet comme dette de FORME, plus comme fuite.
 
 **État de l'inventaire** : les sites de niveau `data:` (charge utile ENTIÈRE) et
 les cinq sites de PRÉSENCE sont corrigés ; les onze schémas d'ERREUR écrits à la
-main sont repris au cycle 89 (voir plus bas) ; les quatre `analysis` de
-`voice-analysis.ts` au cycle 90, avec la PANNE qu'ils recouvraient ; les trois
-de `voice/translation.ts` au cycle 91, avec la TRONCATURE que portait la forme
-« juste » du même fichier.
-**L'inventaire trié des 5 restants est dans
-`tasks/realtime-sync-audit-2026-08-22-cycle92.md` §8.**
+main sont repris au cycle 89 ; les quatre `analysis` de `voice-analysis.ts` au
+cycle 90, avec la PANNE qu'ils recouvraient ; les trois de `voice/translation.ts`
+au cycle 91, avec la TRONCATURE que portait la forme « juste » du même fichier ;
+les trois enveloppes fantômes au cycle 88 bis. **Il ne reste que 4 sites** —
+`calls.ts|details|400`, `links/admin.ts|creator|200`, `messages.ts|sender|200`,
+`users/profile.ts|permissions|200` — triés dans
+`tasks/realtime-sync-audit-2026-08-22-cycle91.md` §8 et `…-cycle88-bis.md` §5.
+Le second pose les deux questions à instruire AVANT de réparer : que passe le
+gestionnaire à `sendSuccess`, et à quel niveau le schéma prétend-il le décrire ?
 
 **Le compte se lit dans le FICHIER, jamais dans le journal précédent.** Les
-cycles 89 à 92 ont publié 15, 11, 8 puis 6 restants, quand `FROZEN_INVENTORY`
-en portait 14, 10, 7 puis 5 — et leurs tableaux nommaient un champ `user` qui
-n'y a jamais figuré. L'erreur est entrée en recopiant la prose du cycle
-précédent au lieu de compter les lignes, puis s'est propagée par soustraction.
-Corrigé au cycle 92. **Le cliquet est la source ; un journal qui le cite se
-vérifie contre lui.**
+cycles 89 à 92 ont publié 15, 11, 8 puis 6 restants quand `FROZEN_INVENTORY` en
+portait 14, 10, 7 puis 5, et leurs tableaux nommaient un champ `user` qui n'y a
+jamais figuré : il vient d'un tableau en prose du cycle 88, recopié de journal
+en journal sans être confronté au fichier, pendant que le compte se propageait
+par soustraction depuis un premier chiffre déjà faux. Le cliquet était vert à
+chaque cycle — le FICHIER a toujours été juste, c'est la prose qui a dérivé.
+**Un compte est une AFFIRMATION, comme un tri (cycle 86 bis) : il se compte,
+il ne s'hérite pas.**
 
 **Le balayage ne lit que `services/gateway/src/routes`** : les schémas de
 `packages/shared`, dont un défaut se propage le plus loin, lui échappent. **Et
@@ -770,19 +839,22 @@ déclaré, donc supprimé sur les trois.
 > forme se trouvait à portée de regard du défaut ; la troisième fois, elle était
 > fausse aussi.
 
-**Un schéma partagé peut décrire la bonne ENVELOPPE et le mauvais
-PRODUCTEUR** (cycle 92). `messageResponseSchema` décrit exactement
-`{ success, data: { message } }` — l'enveloppe des deux routes d'édition de
-`messages-advanced.ts` — et son `sender` est `userMinimalSchema`, écrit pour un
-`User` là où ces routes chargent un `Participant` élargi :
+**Un schéma partagé peut décrire la bonne enveloppe et le mauvais PRODUCTEUR**
+(cycle 93). Une fois l'enveloppe fantôme de `messageResponseSchema` corrigée
+(cycle 88 bis, `data: messageSchema`), les deux routes d'édition servent enfin
+leur message — et leur `sender` sort TRONQUÉ. `messageSchema.sender` est
+`userMinimalSchema`, écrit pour un `User`, quand ces routes chargent un
+`Participant` :
 
 ```
 in  : { id, userId, displayName, avatar, type, role, language, user: {…} }
 out : { id, userId, displayName, avatar, type }     ← role, language, user PERDUS
 ```
 
-**La bonne enveloppe est le piège** : elle rend la substitution évidente, et
-c'est quand elle est évidente qu'il faut mesurer.
+Deux défauts empilés sur le même champ, réparés dans cet ordre : tant que le
+parent sortait `{}`, le second était invisible. **Réparer une enveloppe rend
+lisibles les défauts de ce qu'elle contenait** — la deuxième passe n'est pas
+facultative.
 
 **Le grain juste est celui qui CHARGE.** Deux routes qui chargent plus qu'un
 schéma partagé MINIMAL ne déclare, déclarent plus LOCALEMENT — élargir

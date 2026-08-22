@@ -29,6 +29,55 @@ import { getPresenceVisibilityService } from '../../services/PresenceVisibilityS
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
+ * L'enveloppe rendue par `POST /conversations/:id/new-link`.
+ *
+ * Exportée pour être exerçable : un test de route mocke `sendSuccess` et
+ * n'exerce donc JAMAIS le schéma de réponse — or c'est là que vivait le défaut.
+ *
+ * Ce schéma déclarait `data: { properties: { link: { type: 'object' } } }`,
+ * ce qui se trompait deux fois sur la seule clé nommée : `link` est la chaîne
+ * de l'URL d'invitation (sérialisée contre un schéma d'objet, elle sortait
+ * `{}`), et `code` / `shareLink` n'étaient pas déclarés du tout, donc retirés.
+ * La création rendait `{"success":true,"data":{"link":{}}}` — ni lien, ni code,
+ * ni réglages.
+ *
+ * Les trois clients créent aujourd'hui leurs liens par `POST /links`, ce qui a
+ * laissé le défaut vivre sans victime. La porte reste servie : elle doit rendre
+ * ce qu'elle produit.
+ */
+export const conversationShareLinkResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      type: 'object',
+      properties: {
+        link: { type: 'string', description: "URL d'invitation complète (`${FRONTEND_URL}/chat/:code`)" },
+        code: { type: 'string', description: "Code d'invitation — la part rejouable du lien" },
+        shareLink: {
+          type: 'object',
+          description: 'Le lien de partage créé, avec les réglages retenus',
+          properties: {
+            id: { type: 'string' },
+            linkId: { type: 'string' },
+            name: { type: 'string', nullable: true },
+            description: { type: 'string', nullable: true },
+            maxUses: { type: 'number', nullable: true },
+            expiresAt: { type: 'string', format: 'date-time', nullable: true },
+            allowAnonymousMessages: { type: 'boolean' },
+            allowAnonymousFiles: { type: 'boolean' },
+            allowAnonymousImages: { type: 'boolean' },
+            allowViewHistory: { type: 'boolean' },
+            requireNickname: { type: 'boolean' },
+            requireEmail: { type: 'boolean' }
+          }
+        }
+      }
+    }
+  }
+} as const;
+
+/**
  * Enregistre les routes de partage et d'invitation
  */
 export function registerSharingRoutes(
@@ -89,18 +138,7 @@ export function registerSharingRoutes(
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                link: { type: 'object', description: 'Created share link object' }
-              }
-            }
-          }
-        },
+        200: conversationShareLinkResponseSchema,
         400: errorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
