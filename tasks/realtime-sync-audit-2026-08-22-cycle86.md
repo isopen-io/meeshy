@@ -154,6 +154,36 @@ l'un des deux. Autant de moments où l'on VEUT être arrêté.
 Suites rejouées : `routes/communities*` — 12 suites, 272 témoins verts.
 `tsc --noEmit` propre.
 
+## 8 bis. Le défaut s'est reproduit PENDANT la rédaction de ce cycle
+
+Au moment d'intégrer `main`, dix commits étaient arrivés, dont **#3294
+(« cycle 84 bis »)**. Ce lot répare `GET /communities/search` : le
+`{ type: 'object' }` NU sérialisait en `{}`, ce qui faisait échouer le décodage
+iOS de la réponse **entière** (`APICommunityUser.id` non-optionnel) — la
+recherche de communautés iOS ne rendait qu'une erreur. Il pose aussi le gate de
+présence dans le même lot, honorant mot pour mot la condition de péremption que
+le témoin du cycle 84 portait.
+
+**Il l'a fait dans `src/routes/communities/search.ts` — le module masqué.**
+
+Sa réparation ne tourne donc pas. La recherche de communautés iOS est restée
+cassée après un lot qui la corrige, et son gate ne protège personne. Deux
+sessions, indépendamment, ont écrit un correctif dans le fichier que Node ne
+charge pas — la première pour les membres (§3), la seconde pour la recherche,
+le même jour.
+
+Ce cycle porte donc les **trois** corrections du cycle 84 bis sur le module
+monté : schémas partagés à la place du `type: 'object'` nu,
+`where: { isActive: true }` sur l'include des membres (sans quoi réparer le
+schéma présenterait comme membre quelqu'un ayant QUITTÉ la communauté), et le
+gate à régime tranché par ligne. Le conflit sur le fichier de témoins est résolu
+en gardant les DEUX vérités : le bloc du cycle 84 bis tel qu'il l'a écrit,
+précédé de l'avertissement sur le masquage.
+
+C'est la meilleure démonstration possible de l'urgence de la décision laissée
+au §9 : tant que les deux arbres coexistent, **le prochain correctif a une
+chance sur deux d'être inerte**.
+
 ## 9. Ce que ce cycle ne tranche pas
 
 **Le sort du répertoire masqué appartient à un humain.** Les deux
