@@ -15,98 +15,104 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 
-// Schémas d'ÉLÉMENT des listes de modération.
-//
-// `items: { type: 'object' }` — sans `properties` ni `additionalProperties` —
-// n'est pas permissif : fast-json-stringify supprime toute clé de chaque
-// élément. La liste garde son cardinal et perd tout son contenu.
-//
-// Ces schémas nomment les champs que la console consomme ET portent
-// `additionalProperties: true`, pour qu'un champ ajouté au `select` du handler
-// ne redevienne pas muet en silence. C'est l'idiome déjà retenu par
-// `routes/messages.ts` pour la même raison.
-const adminMessageItemSchema = {
+/**
+ * Lignes des deux listes d'administration de ce fichier.
+ *
+ * Elles étaient déclarées `data: { type: 'array', items: { type: 'object' } }`.
+ * Sans `properties`, fast-json-stringify applique `additionalProperties: false`
+ * par défaut et sérialise CHAQUE élément en `{}` — la liste sortait donc de la
+ * bonne longueur, avec sa pagination juste, et toutes ses lignes vides. C'est
+ * la forme la plus trompeuse de ce défaut : une réponse valide en apparence.
+ *
+ * Les deux tableaux de bord web qui les lisent (`admin.service.ts`) rendaient
+ * donc des rangées sans contenu.
+ *
+ * Source de vérité de la forme : le `select` Prisma de chaque handler, dont la
+ * valeur part telle quelle dans `sendPaginatedSuccess`.
+ */
+const adminMessageRowSchema = {
   type: 'object',
-  additionalProperties: true,
   properties: {
     id: { type: 'string' },
-    content: { type: 'string' },
-    messageType: { type: 'string' },
-    originalLanguage: { type: 'string' },
-    isEdited: { type: 'boolean' },
+    content: { type: 'string', nullable: true },
+    messageType: { type: 'string', nullable: true },
+    originalLanguage: { type: 'string', nullable: true },
+    isEdited: { type: 'boolean', nullable: true },
     createdAt: { type: 'string', format: 'date-time' },
     sender: {
       type: 'object',
-      additionalProperties: true,
+      nullable: true,
       properties: {
         id: { type: 'string' },
-        userId: { type: 'string' },
-        displayName: { type: 'string' },
-        avatar: { type: 'string' },
-        type: { type: 'string' },
-        language: { type: 'string' },
+        userId: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        type: { type: 'string', nullable: true },
+        language: { type: 'string', nullable: true },
         user: {
           type: 'object',
-          additionalProperties: true,
+          nullable: true,
           properties: {
             id: { type: 'string' },
-            username: { type: 'string' },
-            displayName: { type: 'string' },
-            firstName: { type: 'string' },
-            lastName: { type: 'string' },
-            avatar: { type: 'string' }
+            username: { type: 'string', nullable: true },
+            displayName: { type: 'string', nullable: true },
+            firstName: { type: 'string', nullable: true },
+            lastName: { type: 'string', nullable: true },
+            avatar: { type: 'string', nullable: true }
           }
         }
       }
     },
     conversation: {
       type: 'object',
-      additionalProperties: true,
+      nullable: true,
       properties: {
         id: { type: 'string' },
-        identifier: { type: 'string' },
-        title: { type: 'string' },
-        type: { type: 'string' }
+        identifier: { type: 'string', nullable: true },
+        title: { type: 'string', nullable: true },
+        type: { type: 'string', nullable: true }
       }
     },
     attachments: {
       type: 'array',
-      items: { type: 'object', additionalProperties: true }
+      items: {
+        type: 'object',
+        // `attachmentMediaSelect` porte une quinzaine de champs et évolue avec
+        // le pipeline média. Une pièce jointe est ici une donnée d'inspection,
+        // pas un contrat client : `additionalProperties: true` la laisse
+        // passer entière plutôt que de figer une copie qui dériverait.
+        additionalProperties: true
+      }
     },
     _count: {
       type: 'object',
-      additionalProperties: true,
-      properties: {
-        replies: { type: 'number' }
-      }
+      properties: { replies: { type: 'number' } }
     }
   }
 } as const;
 
-const adminCommunityItemSchema = {
+const adminCommunityRowSchema = {
   type: 'object',
-  additionalProperties: true,
   properties: {
     id: { type: 'string' },
-    identifier: { type: 'string' },
-    name: { type: 'string' },
-    description: { type: 'string' },
-    avatar: { type: 'string' },
-    isPrivate: { type: 'boolean' },
+    identifier: { type: 'string', nullable: true },
+    name: { type: 'string', nullable: true },
+    description: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    isPrivate: { type: 'boolean', nullable: true },
     createdAt: { type: 'string', format: 'date-time' },
     creator: {
       type: 'object',
-      additionalProperties: true,
+      nullable: true,
       properties: {
         id: { type: 'string' },
-        username: { type: 'string' },
-        displayName: { type: 'string' },
-        avatar: { type: 'string' }
+        username: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true }
       }
     },
     _count: {
       type: 'object',
-      additionalProperties: true,
       properties: {
         members: { type: 'number' },
         Conversation: { type: 'number' }
@@ -153,7 +159,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: adminMessageItemSchema },
+            data: { type: 'array', items: adminMessageRowSchema },
             pagination: {
               type: 'object',
               properties: {
@@ -303,7 +309,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: adminCommunityItemSchema },
+            data: { type: 'array', items: adminCommunityRowSchema },
             pagination: {
               type: 'object',
               properties: {

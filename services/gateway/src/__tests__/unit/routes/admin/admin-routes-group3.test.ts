@@ -1399,3 +1399,85 @@ describe('adminPostRoutes', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /posts — la ligne atteint-elle le fil ?
+//
+// `data: { type: 'array', items: { type: 'object' } }` : sans `properties`,
+// fast-json-stringify (`additionalProperties: false` par défaut) sérialisait
+// CHAQUE post en `{}`. La liste gardait sa longueur et sa pagination, et
+// perdait toutes ses données — la forme la plus trompeuse de ce défaut, parce
+// que rien ne ressemble autant à une liste valide qu'une liste de la bonne
+// taille. `UserPostsSection.tsx` la lit.
+// ---------------------------------------------------------------------------
+
+describe('adminPostRoutes — GET /posts sert ses lignes', () => {
+  const POST_ROW = {
+    id: 'post-1',
+    type: 'text',
+    visibility: 'PUBLIC',
+    content: 'Bonjour le monde',
+    originalLanguage: 'fr',
+    communityId: null,
+    moodEmoji: null,
+    isPinned: false,
+    isEdited: false,
+    deletedAt: null,
+    expiresAt: null,
+    likeCount: 5,
+    commentCount: 2,
+    repostCount: 0,
+    viewCount: 40,
+    bookmarkCount: 1,
+    shareCount: 0,
+    createdAt: new Date('2026-08-22T10:00:00.000Z'),
+    updatedAt: new Date('2026-08-22T11:00:00.000Z'),
+    author: { id: 'usr-1', username: 'alice', displayName: 'Alice', avatar: null },
+    media: [{ id: 'med-1', fileName: 'p.png', mimeType: 'image/png', fileUrl: '/x.png' }],
+    _count: { comments: 2, views: 40, bookmarks: 1 },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma.post.findMany.mockResolvedValue([POST_ROW]);
+    mockPrisma.post.count.mockResolvedValue(1);
+  });
+
+  it('sert le contenu, les compteurs et l’auteur de chaque post', async () => {
+    const app = buildPostApp('ADMIN');
+    await app.ready();
+
+    const body = JSON.parse((await app.inject({ method: 'GET', url: '/posts' })).body);
+    await app.close();
+
+    const row = body.data[0];
+    expect(row).toMatchObject({
+      id: 'post-1', type: 'text', visibility: 'PUBLIC',
+      content: 'Bonjour le monde', originalLanguage: 'fr',
+      likeCount: 5, commentCount: 2, viewCount: 40,
+    });
+    expect(row.author).toMatchObject({ id: 'usr-1', username: 'alice' });
+    expect(row._count).toEqual({ comments: 2, views: 40, bookmarks: 1 });
+  });
+
+  it('laisse passer le média entier — donnée d’inspection, pas contrat client', async () => {
+    const app = buildPostApp('ADMIN');
+    await app.ready();
+
+    const body = JSON.parse((await app.inject({ method: 'GET', url: '/posts' })).body);
+    await app.close();
+
+    expect(body.data[0].media[0]).toMatchObject({ id: 'med-1', fileName: 'p.png', fileUrl: '/x.png' });
+  });
+
+  it('garde une pagination juste — c’est ce qui rendait la liste vide crédible', async () => {
+    const app = buildPostApp('ADMIN');
+    await app.ready();
+
+    const body = JSON.parse((await app.inject({ method: 'GET', url: '/posts' })).body);
+    await app.close();
+
+    expect(body.data).toHaveLength(1);
+    expect(body.pagination).toMatchObject({ total: 1, hasMore: false });
+  });
+});

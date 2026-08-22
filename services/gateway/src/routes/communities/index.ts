@@ -13,6 +13,7 @@
 import { FastifyInstance } from 'fastify';
 import { registerCoreRoutes } from './core';
 import { registerMemberRoutes } from './members';
+import { registerMembershipRoutes } from './membership';
 import { registerSettingsRoutes } from './settings';
 import { registerSearchRoutes } from './search';
 
@@ -25,6 +26,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
   await Promise.all([
     registerCoreRoutes(fastify),
     registerMemberRoutes(fastify),
+    registerMembershipRoutes(fastify),
     registerSettingsRoutes(fastify),
     registerSearchRoutes(fastify)
   ]);

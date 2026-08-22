@@ -19,6 +19,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
+import { flattenCommunityCounts } from './serialization';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -217,7 +218,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      sendPaginatedSuccess(reply, communities, {
+      sendPaginatedSuccess(reply, communities.map(flattenCommunityCounts), {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -367,7 +368,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      sendSuccess(reply, community);
+      sendSuccess(reply, flattenCommunityCounts(community));
     } catch (error) {
       logger.error('Error fetching community', error as Error);
       sendInternalError(reply, 'Failed to fetch community');
@@ -476,7 +477,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return sendSuccess(reply, community, { statusCode: 201 });
+      return sendSuccess(reply, flattenCommunityCounts(community), { statusCode: 201 });
     } catch (error) {
       logger.error('Error creating community', error as Error);
       return sendInternalError(reply, 'Failed to create community');

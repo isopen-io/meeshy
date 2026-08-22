@@ -31,7 +31,9 @@ import { scanFile, stripComments, sweepRoutes } from './response-schema-sweep';
 const ROUTES_DIR = join(__dirname, '..');
 
 /**
- * Les sites nus qui subsistent, gelés au cycle 87.
+ * Les sites nus qui subsistent, gelés au cycle 87 bis, après la consolidation de
+ * `routes/communities.ts` en coquille (cycle 86-ter) et la réparation des trois
+ * listes d'administration (cycle 87).
  *
  * Les `400` sont des `details` / `errors` de schémas d'ERREUR : ils dégradent
  * un diagnostic, ils ne cassent aucun décodage client. Les `200` / `202` sont
@@ -49,7 +51,6 @@ const FROZEN_INVENTORY: readonly string[] = [
   'anonymous.ts|items|400',
   'anonymous.ts|items|400',
   'calls.ts|details|400',
-  'communities.ts|user|200',
   'communities/core.ts|user|200',
   'conversations/messages-advanced.ts|message|200',
   'conversations/messages-advanced.ts|message|200',
