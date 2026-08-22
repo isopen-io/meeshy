@@ -1,4 +1,5 @@
 import type { Message } from '@meeshy/shared/types/index';
+import { resolveWireSenderId } from './messageEditedPayload';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -121,18 +122,16 @@ export function buildMessageNewPayload(
   message: Message,
   inputs: MessageNewPayloadInputs
 ) {
-  const participant = message.sender;
   const raw = message as unknown as Record<string, unknown>;
 
   return {
     id: message.id,
     conversationId: inputs.conversationId,
-    // `message.senderId` est un `Participant.id`, alors que les clients
-    // comparent le `senderId` du fil à leur propre `User.id` pour reconnaître
-    // leurs messages et réconcilier la bulle optimiste entre appareils. On
-    // expose donc le `User.id` de l'expéditeur, et on ne replie sur le
-    // `Participant.id` que pour un expéditeur anonyme, qui n'en a pas d'autre.
-    senderId: participant?.userId ?? participant?.user?.id ?? message.senderId ?? undefined,
+    // Résolution PARTAGÉE avec `message:edited` — la même bulle doit être
+    // « la mienne » quel que soit l'événement qui l'a touchée en dernier. La
+    // règle (et le repli sur le `Participant.id` d'un expéditeur anonyme) est
+    // écrite une seule fois, sur `resolveWireSenderId`.
+    senderId: resolveWireSenderId(message),
     content: message.content,
     originalLanguage: message.originalLanguage || 'fr',
     messageType: message.messageType || 'text',

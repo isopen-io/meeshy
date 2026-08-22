@@ -835,3 +835,57 @@ section ci-dessus. Les deux sont indépendants.)
 - [ ] Suivi — `attachments` normalisés d'un côté, bruts de l'autre : unifier est
       un CHANGEMENT de forme, à instruire contre les trois clients.
 - [ ] Suivi — quatrième famille : reste le couple passerelle / décodeurs Android.
+
+## Cycle 101 (2026-08-22) — le transport d'édition PRIMAIRE servait une charge que le décodeur iOS REJETTE
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle101.md`.
+
+- [x] Instruit le suivi nommé du cycle 100 — les QUATRE handlers restés sur le
+      `Socket` nu. Flip tenté et MESURÉ : `tsc` nomme douze émissions.
+- [x] **Onze relevaient de dettes connues ; la douzième était une panne.**
+      `message:edited` a TROIS producteurs, et celui du transport socket — celui
+      qu'emploie le WEB, que son propre commentaire nomme « le transport
+      d'édition PRIMAIRE » — omettait `senderId`, `messageType` et `createdAt`,
+      trois des SEPT champs que `SocketIOMessage` déclare requis.
+- [x] **Ce n'était pas un piège armé.** `APIMessage.init(from:)` lit `senderId`
+      et `createdAt` en `try c.decode` (NON tolérant, contrairement à ses
+      voisins) : la clé absente fait échouer le décodage du message ENTIER, et
+      `MessageSocketManager.decode` abandonne en silence. **Toute édition faite
+      depuis le web n'apparaissait jamais en direct sur aucun client iOS du
+      salon.** Web → web marchait (écouteur `any`), Android aussi
+      (`senderId`/`createdAt` optionnels) — seul le client le plus strict
+      tombait. Signature exacte du cycle 99 bis, un événement plus loin.
+- [x] RED prouvé : `MessageHandlerEditedContract.test.ts`, 5 témoins, **4
+      tombent** contre la production d'avant. Le 5e — « ne perd RIEN » — passe
+      AVANT comme APRÈS : c'est le témoin d'ADDITIVITÉ, et c'est lui qui rend la
+      mesure vérifiable.
+- [x] Correctif : `socketio/messageEditedPayload.ts` — `buildMessageEditedCore`,
+      source UNIQUE des champs requis, appelée par les deux producteurs
+      en-process. `sender` / `translations` / `attachments` / `metadata` restent
+      hors contrat PAR DÉCISION écrite (formes propres au transport).
+      **Le lot entier est ADDITIF** — le manager passe à l'unité sans qu'une
+      seule clé de sa charge change.
+- [x] `resolveWireSenderId` : une seule résolution `User.id` pour `message:new`
+      ET `message:edited` — sinon la MÊME bulle est « la mienne » puis « celle
+      d'un autre » selon l'événement qui l'a touchée en dernier.
+- [x] Deux seams `unknown` de plus fermés (`ReactionHandler`,
+      `PostReactionHandler`) ; `AuthenticatedEventData` cesse de déclarer un
+      `SocketIOUser` que ses deux seuls émetteurs n'ont jamais servi. **Trois
+      handlers de plus sur `MeeshySocket`** — il n'en reste qu'un.
+- [x] Cliquet à la COMPILATION dans `messageEditedPayload.ts`. **Sa première
+      formulation était VACANTE** (`undefined extends T` est vrai partout sous
+      `strictNullChecks: false`) et ne tombait sous aucune mutation ; reformulée
+      sur le modificateur `?`. **ROUGE prouvé séparément pour les trois champs.**
+      Leçon 246.
+- [x] Gates : `tsc --noEmit` passerelle **0 erreur** · `src/socketio` **49
+      suites / 1605 tests verts** · suite complète passerelle.
+- [ ] Suivi — **le flip du `MessageHandler` reste ouvert, et son blocage est
+      mesuré** : au-delà de `_buildMessagePayload: unknown`, le seul reste est
+      `messageType` servi en `string` quand le contrat déclare l'union
+      `MessageType`. Le caster blanchirait ce que la garde existe pour voir.
+- [ ] Suivi — `broadcastMessageMutation` prend `payload: Record<string, unknown>` :
+      le 3e producteur sert le contrat par ACCIDENT (`include` large), pas par
+      construction.
+- [ ] Suivi — `senderId` : le chemin REST sert le `Participant.id` brut là où les
+      deux autres servent le `User.id`. Non destructeur côté iOS (vérifié :
+      `markEdited` n'écrit jamais `senderId`) ; à instruire côté web.
