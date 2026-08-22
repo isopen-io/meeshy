@@ -5,6 +5,28 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — One deep-link route, one entry ViewModel: unify what iOS split across views
+
+iOS routes an authenticated share-link tap (`RootView.resolveShareLinkEntry`, `isAuthenticated: true`)
+and an unauthenticated one through **two separate views**. Android's `GUEST_JOIN` nav destination is a
+single composable reached in both states, so the SOTA move is to unify the whole decision behind ONE
+`ShareLinkEntryViewModel` that reads the auth flag itself (a `fun interface` seam over
+`AuthRepository.isAuthenticated`) and branches internally — no duplicated presentation to drift.
+
+Two reusable habits confirmed this run:
+- **Gate the expensive fact behind the flag that needs it.** `knownConversationIds` only matters when
+  authenticated (the `isAlreadyMember` check), so read the conversation cache ONLY in that branch. A guest
+  never pays a needless cache read — and a test asserting the known-ids seam's call count is `0` for a
+  guest locks that in behaviourally (not an implementation-detail assertion: it's observable work avoided).
+- **A prompt state must be actionable or it is a dead end.** `ChooseIdentity` shipped with `chooseAccount()`
+  / `chooseAnonymous()` intents in the same slice; a "which identity?" screen with no way to answer would
+  have been orphan UI. Test the actions, not just the prompt.
+
+Testing shape that paid off: drive the VM with the **real** `ShareLinkEntryResolver` over faked LEAF seams
+(preview / store / join / auth / known-ids). The whole resolve→policy→navigation reduction is exercised end
+to end through the public `state`, and no test mocks the resolver's own output — so a policy regression would
+surface here too, not hide behind a canned mock.
+
 ## 2026-08-22 — A "resolver" that does I/O + consults device state is app-side, NOT `:sdk-core`
 - Last slice's PROGRESS "Next" proposed a `:sdk-core` `ShareLinkEntryResolver`. That was a hypothesis,
   and re-scouting iOS before committing proved it wrong — the routine's "parity notes are hypotheses"

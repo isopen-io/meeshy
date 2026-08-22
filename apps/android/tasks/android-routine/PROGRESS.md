@@ -2,6 +2,70 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-22 **guest-join deep-link route rewired — the umbrella box is now `[x]`** (slice
+> `guest-join-entry-navigation`, feature-parity §Chat — "Anonymous-session conversation mode; guest
+> join-via-share-link flow"). This lands the last named follow-up: the `MeeshyApp.kt` deep-link route no
+> longer jumps straight to the anonymous guest form; it now consults the entry brain and branches the
+> navigation on the resolved intent.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the
+> single open PR repo-wide is #3337, a `packages/shared` + iOS Rivière fix, not android-routine). Prior
+> android iteration (`sharelink-entry-resolver`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`0cec829f`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `--channel=3 platforms;android-37.0`
+> recipe worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`)
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **`:feature:auth` `ShareLinkEntryViewModel`** (new, app-side): the brain the guest-join route now
+> consults on entry. `@HiltViewModel`, exposes `state: StateFlow<ShareLinkEntryUiState>`. On init it reads
+> the auth flag (`ShareLinkAuthStateProviding` seam over `AuthRepository.isAuthenticated`), gathers known
+> conversation ids ONLY when authenticated (`KnownConversationIdsProviding` seam over
+> `ConversationRepository.cachedConversations` — a guest never pays a needless cache read, proven by a
+> test), runs the app-side `ShareLinkEntryResolver`, and reduces the six-way `ShareLinkEntryIntent` to one
+> `ShareLinkEntryUiState`: `OpenConversation` / `ChooseIdentity(conversationId, title, resumesGuestSession)`
+> / `RequiresAccount` / `GuestForm` / `Failed(message)` / `Resolving`. Two intents drive a network join the
+> VM performs itself (`JoinWithAccount`, and the null-resolution fallback while authenticated — iOS's
+> `joinViaShareLink`) via an `AuthenticatedShareLinkJoining` seam over
+> `ShareLinkJoinRepository.joinAuthenticated`: success → `OpenConversation(canonicalId)`, failure →
+> `Failed`. `ChooseIdentity` is actionable (no dead end): `chooseAccount()` joins + opens, `chooseAnonymous()`
+> resumes the stored guest session (or opens the form when there is none / a blank stored conversationId).
+> SOTA over iOS, which routes authenticated vs unauthenticated entry through TWO separate views: Android
+> unifies both behind one VM; a blank stored `conversationId` degrades to the form instead of navigating to
+> an empty id.
+>
+> **`:feature:auth` `ShareLinkEntryScreen`** (new, Compose glue): hosts the VM and renders each state —
+> `GuestForm` delegates to the existing `GuestJoinScreen`; `OpenConversation`/`RequiresAccount` fire the
+> nav callback under a spinner; `ChooseIdentity` shows an accent-coherent two-button choice (Continue with
+> my account / Join·Resume anonymously); `Failed` offers retry. `MeeshyApp.kt`'s `GUEST_JOIN` composable now
+> hosts `ShareLinkEntryScreen(onOpenConversation, onJoined, onBack, onSignIn)` instead of `GuestJoinScreen`.
+> `ShareLinkEntryModule` (Hilt) binds the resolver + three `fun interface` seams to their SDK sources
+> (boilerplate, coverage-exempt). New strings in all 4 locales (en/fr/es/pt).
+>
+> **Tests: +19** — `ShareLinkEntryViewModelTest` drives the public `state` with a REAL `ShareLinkEntryResolver`
+> over faked leaf seams (preview / `InMemoryAnonymousSessionStore` / join / auth / known-ids): guest open→form /
+> guest never-consults-account-list / guest requires-account→sign-in / guest stored-session→resume /
+> guest preview-failure→form / account member→open-straight-away (join not called) / account non-member-open→
+> choose-identity / choose-identity flags-resumable-guest / account require-account→join→open / account
+> join-failure→Failed / account unresolvable→authenticated-join fallback / unresolvable+join-failure→Failed /
+> resume blank-conversationId→form / retry-after-Failed→succeeds / initial-state Resolving / chooseAccount→open /
+> chooseAccount-failure→Failed / chooseAnonymous stored→resume / chooseAnonymous none→form. **Mutation (RED
+> proof) ×1**: neuter the resume blank-conversationId guard → **exactly** `resume ... degradesToTheAnonymousForm`
+> fails (1 of 15 at that point). Restored via the Edit tool; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (2 new code files + 1 Hilt module + 1 new test in `:feature:auth`, 1 route
+> rewire in `:app`, strings in 4 locales, tracking docs). Verdict: **PASS** — app-side orchestration + Compose
+> glue, behavioural tests through the public API, pure decision left in the SDK model, no production logic
+> outside apps/android.
+>
+> **Next**: the guest-join feature is complete end to end. Pick the next-highest-value unchecked box in
+> `feature-parity.md` for the current build-order area (Auth → Conversations → Chat → Feed → Stories → Calls
+> → the rest). Candidate seen while here: the `ChooseIdentity` "resume anonymously" path currently resumes
+> only when a stored session exists for the exact link; a future refinement could also re-preview + open the
+> guest form pre-filled from the dormant session. Re-scout read-only before committing — parity notes are
+> hypotheses.
+
 > On 2026-08-22 **share-link entry-fact resolver shipped** (slice `sharelink-entry-resolver`,
 > feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
 > umbrella box stays `[~]` — the `MeeshyApp.kt` deep-link rewire is now the single named follow-up).
