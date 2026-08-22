@@ -1823,6 +1823,16 @@ describe('close', () => {
 // ===========================================================================
 
 describe('createPeerConnection — reused without close (participant rejoin)', () => {
+  it('closes the previous RTCPeerConnection before overwriting it with a new one', () => {
+    const { service, pc } = setup();
+
+    const pc2 = service.createPeerConnection('p2') as unknown as FakeRTCPeerConnection;
+
+    expect(pc.close).toHaveBeenCalledTimes(1);
+    expect(pc2).not.toBe(pc);
+    expect(pc2.close).not.toHaveBeenCalled();
+  });
+
   it('resets autoNegotiate and other perfect-negotiation flags on reuse, even without close() first', async () => {
     const { service } = setup();
     service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });

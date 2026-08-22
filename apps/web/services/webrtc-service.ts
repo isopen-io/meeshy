@@ -365,6 +365,19 @@ export class WebRTCService {
       this.ignoreOffer = false;
       this.pendingIceRestart = false;
 
+      // A service instance can be reused across a participant leave→rejoin
+      // without an intervening close() (see the perfect-negotiation reset
+      // above, and use-webrtc-p2p.ts's per-participant service cache) — if a
+      // prior RTCPeerConnection is still hanging off this instance, overwriting
+      // it below without closing it first orphans it: it stays registered
+      // with the browser, its transports and DTLS/ICE state alive, forever.
+      if (this.peerConnection) {
+        logger.debug('[WebRTCService] Closing previous peer connection before reuse', {
+          participantId,
+        });
+        this.peerConnection.close();
+      }
+
       // Create RTCPeerConnection (prefer server-provided TURN servers over config defaults)
       this.peerConnection = new RTCPeerConnection({
         iceServers: this.serverIceServers ?? this.config.iceServers,
