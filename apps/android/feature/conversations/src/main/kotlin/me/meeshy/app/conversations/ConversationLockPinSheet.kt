@@ -48,6 +48,10 @@ internal fun LockPinCopy.titleRes(): Int = when (this) {
     LockPinCopy.UNLOCK -> R.string.conversations_lock_title_unlock
     LockPinCopy.OPEN -> R.string.conversations_lock_title_open
     LockPinCopy.UNLOCK_ALL -> R.string.conversations_lock_title_unlock_all
+    LockPinCopy.CHANGE_VERIFY_MASTER_PIN -> R.string.conversations_lock_title_verify_master
+    LockPinCopy.NEW_MASTER_PIN -> R.string.conversations_lock_title_new_master
+    LockPinCopy.CONFIRM_NEW_MASTER_PIN -> R.string.conversations_lock_title_confirm_new
+    LockPinCopy.REMOVE_MASTER_PIN -> R.string.conversations_lock_title_remove_master
 }
 
 /** Whether a [LockPinCopy]'s subtitle interpolates the conversation name. */
@@ -66,6 +70,10 @@ private fun LockPinCopy.subtitleRes(): Int = when (this) {
     LockPinCopy.UNLOCK -> R.string.conversations_lock_subtitle_unlock
     LockPinCopy.OPEN -> R.string.conversations_lock_subtitle_open
     LockPinCopy.UNLOCK_ALL -> R.string.conversations_lock_subtitle_unlock_all
+    LockPinCopy.CHANGE_VERIFY_MASTER_PIN -> R.string.conversations_lock_subtitle_change_verify
+    LockPinCopy.NEW_MASTER_PIN -> R.string.conversations_lock_subtitle_new_master
+    LockPinCopy.CONFIRM_NEW_MASTER_PIN -> R.string.conversations_lock_subtitle_confirm_new
+    LockPinCopy.REMOVE_MASTER_PIN -> R.string.conversations_lock_subtitle_remove_master
 }
 
 @StringRes
@@ -105,10 +113,9 @@ internal fun ConversationLockPinSheet(
             verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             Icon(
-                imageVector = if (prompt.copy == LockPinCopy.UNLOCK || prompt.copy == LockPinCopy.UNLOCK_ALL) {
-                    Icons.Filled.LockOpen
-                } else {
-                    Icons.Filled.Lock
+                imageVector = when (prompt.copy) {
+                    LockPinCopy.UNLOCK, LockPinCopy.UNLOCK_ALL, LockPinCopy.REMOVE_MASTER_PIN -> Icons.Filled.LockOpen
+                    else -> Icons.Filled.Lock
                 },
                 contentDescription = null,
                 tint = MeeshyPalette.Indigo500,
