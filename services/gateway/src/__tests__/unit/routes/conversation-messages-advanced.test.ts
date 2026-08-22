@@ -136,10 +136,21 @@ jest.mock('@meeshy/shared/utils/errors', () => ({
   sendErrorResponse: jest.fn(),
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  messageSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
+// `api-schemas` n'est plus REMPLACÉ, il est PROLONGÉ.
+//
+// Ce double listait deux schémas à la main. Un double PARTIEL d'un module perd
+// en silence tout ce que le module GAGNE : quand `routes/conversations/
+// messages-advanced.ts` s'est mis à composer `messageResponseSchema` au
+// chargement (cycle 93), celui-ci est revenu `undefined` et la suite entière —
+// 152 témoins — a cessé de se CHARGER (`Cannot read properties of undefined`).
+//
+// C'est la deuxième fois en deux cycles (voir `voice-translation.test.ts`,
+// cycle 91). Le remède est le même : `requireActual`. Les vrais schémas ne
+// coûtent rien ici — ce fichier mocke `sendSuccess`, donc rien n'y traverse le
+// sérialiseur de toute façon (dette nommée au journal du cycle 93 §6).
+jest.mock('@meeshy/shared/types/api-schemas', () =>
+  jest.requireActual('@meeshy/shared/types/api-schemas')
+);
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
