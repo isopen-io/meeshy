@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Chantier Rivière iOS — le pont PUR fil → loi (`RiverConversationMapping`),
@@ -203,5 +204,145 @@ final class RiverConversationMappingTests: XCTestCase {
         let laneSeed = geometry.lanes.first { $0.laneId == "u1" }?.colorSeed
         XCTAssertEqual(laneSeed, "ano_zoe")
         XCTAssertEqual(contents.first { $0.bubble.messageId == "m1" }?.colorSeed, laneSeed)
+    }
+
+    // MARK: - Lot G (22/08) : deux bulles d'un même groupe partagent une bordure JOINTE
+
+    /// La loi ne dit que `isFirstInGroup` ; la position COMPLÈTE (tête, milieu,
+    /// queue, seule) se déduit du rang SUIVANT — purement, ici, jamais dans la
+    /// vue. C'est elle qui décide quels bords sont fermés et lequel est partagé
+    /// en pointillé (directive produit 2026-08-22 : « bordure jointe en
+    /// pointillé et partagée, non pas des bordures fermées puis des pointillés
+    /// en plus »).
+    func test_contents_groupPosition_isHeadMiddleTailOrSolo_followingTheLawsGrouping() {
+        let messages = [
+            message("a1", sender: "alice", name: "Alice", minutes: 0),
+            message("a2", sender: "alice", name: "Alice", minutes: 1),
+            message("a3", sender: "alice", name: "Alice", minutes: 2),
+            message("b1", sender: "bob", name: "Bob", minutes: 3),
+            message("a4", sender: "alice", name: "Alice", minutes: 4),
+        ]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "10:00" }
+        )
+        let positions = Dictionary(uniqueKeysWithValues: contents.map { ($0.bubble.messageId, $0.groupPosition) })
+
+        XCTAssertEqual(positions["a1"], .head)
+        XCTAssertEqual(positions["a2"], .middle)
+        XCTAssertEqual(positions["a3"], .tail)
+        XCTAssertEqual(positions["b1"], .solo, "une voix seule entre deux autres n'a ni tête ni queue à joindre")
+        XCTAssertEqual(positions["a4"], .solo, "Alice reparle APRÈS Bob : nouveau groupe, d'une seule bulle")
+    }
+
+    /// Un avis système coupe le groupe des DEUX côtés (la loi ne le rattache à
+    /// personne) : la bulle d'avant redevient une queue/seule, celle d'après
+    /// une tête/seule — jamais une bordure jointe à travers un avis.
+    func test_contents_groupPosition_aSystemNoticeBreaksTheGroup_onBothSides() {
+        let messages = [
+            message("a1", sender: "alice", name: "Alice", minutes: 0),
+            message("sys", sender: "newcomer", name: "Nouveau", minutes: 1, source: .system),
+            message("a2", sender: "alice", name: "Alice", minutes: 2),
+            message("a3", sender: "alice", name: "Alice", minutes: 3),
+        ]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "10:00" }
+        )
+        let positions = Dictionary(uniqueKeysWithValues: contents.map { ($0.bubble.messageId, $0.groupPosition) })
+
+        XCTAssertEqual(positions["a1"], .solo)
+        XCTAssertEqual(positions["sys"], .solo, "un avis n'est jamais joint à quoi que ce soit")
+        XCTAssertEqual(positions["a2"], .head)
+        XCTAssertEqual(positions["a3"], .tail)
+    }
+
+    // MARK: - R-6 : la citation mène à sa cible
+
+    /// Un tap sur la citation d'une réponse doit poser le curseur SUR le
+    /// message cité — couloir ET rang — tels que la loi les a servis. Un
+    /// identifiant inconnu (message hors fenêtre) ne fabrique aucun curseur,
+    /// et un avis système n'est la cible de personne (la loi ne lui donne pas
+    /// de couloir).
+    func test_cursorForMessageId_isTheCitedBubblesLaneAndRank_orNilWhenUnknownOrSystem() {
+        let messages = [
+            message("a1", sender: "alice", name: "Alice", minutes: 0),
+            message("b1", sender: "bob", name: "Bob", minutes: 1),
+            message("sys", sender: "newcomer", name: "Nouveau", minutes: 2, source: .system),
+            message("c1", sender: "carol", name: "Carol", minutes: 3, replyTo: "a1"),
+        ]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let target = try? XCTUnwrap(geometry.bubbles.first { $0.messageId == "a1" })
+        let cursor = RiverConversationMapping.cursor(forMessageId: "a1", geometry: geometry)
+
+        XCTAssertEqual(cursor?.laneIndex, target?.laneIndex)
+        XCTAssertEqual(cursor?.rank, target?.rank)
+        XCTAssertNil(RiverConversationMapping.cursor(forMessageId: "hors-fenêtre", geometry: geometry))
+        XCTAssertNil(RiverConversationMapping.cursor(forMessageId: "sys", geometry: geometry), "un avis n'est la cible de personne")
+    }
+
+    // MARK: - La citation tient sur UNE ligne, quoi qu'en dise le message cité
+
+    /// `previewText` est une chaîne brute : des retours à la ligne y font
+    /// gonfler le bloc de citation (mesuré au simulateur : un rail de 245 pt
+    /// pour une ligne de texte). La citation est une RÉFÉRENCE (§7ter A4) —
+    /// une seule ligne, espaces repliés.
+    func test_singleLine_collapsesNewlinesAndRepeatedWhitespace() {
+        XCTAssertEqual(RiverConversationMapping.singleLine("Bonjour\n\n  à   tous\n"), "Bonjour à tous")
+        XCTAssertEqual(RiverConversationMapping.singleLine("   "), "")
+        XCTAssertEqual(RiverConversationMapping.singleLine("déjà une ligne"), "déjà une ligne")
+    }
+
+    // MARK: - R-5 : identité vivante — présence, story et fiche, INJECTÉES
+
+    /// La bulle porte de quoi rendre une identité VIVANTE (présence, cercle
+    /// de story, fiche à ouvrir) — résolue par l'appelant et injectée, jamais
+    /// lue ici (aucun singleton dans le mapping). Un avis système n'a pas
+    /// d'identité : il n'est la voix de personne.
+    func test_contents_identity_isInjected_andAbsentForSystemNotices() {
+        var spoken = message("a1", sender: "alice", name: "Alice", minutes: 0)
+        spoken.senderUsername = "alice_w"
+        spoken.senderAvatarURL = "https://cdn/alice.png"
+        let messages = [spoken, message("sys", sender: "newcomer", name: "Nouveau", minutes: 1, source: .system)]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me",
+            text: { $0.content }, time: { _ in "10:00" },
+            presence: { $0.senderId == "alice" ? .online : nil },
+            storyRing: { $0.senderId == "alice" ? .unread : .none }
+        )
+        let alice = try? XCTUnwrap(contents.first { $0.bubble.messageId == "a1" }?.identity)
+        XCTAssertEqual(alice?.presence, .online)
+        XCTAssertEqual(alice?.storyRing, .unread)
+        XCTAssertEqual(alice?.avatarURL, "https://cdn/alice.png")
+        XCTAssertEqual(alice?.profileUser.participantId, "alice")
+        XCTAssertEqual(alice?.profileUser.username, "alice_w")
+        XCTAssertNil(contents.first { $0.bubble.messageId == "sys" }?.identity, "un avis n'est la voix de personne")
+    }
+
+    /// Sans résolveurs injectés, la bulle garde une identité MUETTE (fiche
+    /// ouvrable, ni présence ni story) — les sites antérieurs à R-5 ne
+    /// changent pas de comportement.
+    func test_contents_identity_defaultsToSilentPresenceAndNoStory() {
+        let messages = [message("a1", sender: "alice", name: "Alice", minutes: 0)]
+        let geometry = RiverLaneResolver.resolveRiverLanes(
+            RiverConversationMapping.lanesInput(messages: messages, viewerId: "me")
+        )
+        let contents = RiverConversationMapping.contents(
+            geometry: geometry, messages: messages, viewerId: "me", text: { $0.content }, time: { _ in "10:00" }
+        )
+        XCTAssertNil(contents.first?.identity?.presence)
+        XCTAssertEqual(contents.first?.identity?.storyRing, StoryRingState.none)
+        XCTAssertEqual(contents.first?.identity?.profileUser.participantId, "alice")
     }
 }

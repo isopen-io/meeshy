@@ -120,12 +120,30 @@ nonisolated public enum RiverMetrics {
     nonisolated public enum Row {
         public static let gap: CGFloat = 14
         /// Hauteur de la couture entre deux bulles CONSÉCUTIVES du même
-        /// auteur : elles se TOUCHENT (arbitrage produit 2026-08-21 — « ce
-        /// n'est pas la LIGNE qui doit être en pointillé mais la SÉPARATION
-        /// entre les deux bulles, qui devraient être collées »).
+        /// auteur (arbitrage produit 2026-08-21). **Depuis le lot G
+        /// (2026-08-22), iOS ne la consomme plus** : la jointure n'est plus
+        /// une couture posée ENTRE deux contours fermés, c'est le bord haut
+        /// PARTAGÉ de la bulle qui continue (`RiverBubbleOutline`,
+        /// `RiverBubbleView.sharedEdge`), dessiné avec `continuationDash*`.
+        /// La cote reste ici pour la parité avec le JSON partagé, que la peau
+        /// web lit encore.
         public static let continuationSeam: CGFloat = 3
         public static let continuationDashLength: CGFloat = 3
         public static let continuationDashGap: CGFloat = 4
+    }
+
+    // MARK: - Mouvement (cotes iOS, hors JSON partagé)
+
+    /// Durées de PEAU propres à iOS — aucune cote de mouvement dans le JSON
+    /// partagé à ce jour (même précédent que `FocalMetrics.FocusChip` : nommé
+    /// en `Core` sans revendiquer de token). Nommées ici parce que la garde
+    /// R15 bannit leurs littéraux de `Riviere/View/` (`0.35` est un jeton de
+    /// loi surveillé).
+    nonisolated public enum Motion {
+        /// Glissade d'un cadrage demandé (citation, poignée du temps).
+        public static let landingDuration: TimeInterval = 0.35
+        /// Apparition/effacement de la poignée du temps.
+        public static let handleFadeDuration: TimeInterval = 0.2
     }
 
     // MARK: - En-tête de couloir
