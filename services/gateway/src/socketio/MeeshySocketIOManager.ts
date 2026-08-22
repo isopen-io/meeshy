@@ -79,6 +79,8 @@ import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socket
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from './messageNewPayload';
+import { buildMessageEditedCore } from './messageEditedPayload';
+import { resolveWireSenderId } from './wireSenderId';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
@@ -2964,20 +2966,18 @@ export class MeeshySocketIOManager {
       }
 
       const senderParticipant = message.sender;
-      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      const resolvedSenderId = resolveWireSenderId(message);
       const updatedAt = message.updatedAt || new Date();
       const editedPayload = {
-        id: message.id,
-        conversationId: normalizedId,
-        senderId: resolvedSenderId,
+        // Noyau requis par `SocketIOMessage` — même unité que les deux autres
+        // producteurs de `message:edited` (cf. `messageEditedPayload.ts`).
+        ...buildMessageEditedCore(message, { conversationId: normalizedId }),
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
-        messageType: (message.messageType || 'text') as MessageType,
         messageSource: message.messageSource || undefined,
         metadata: message.metadata ?? {},
         isEdited: Boolean(message.isEdited),
         editedAt: updatedAt,
-        createdAt: message.createdAt || new Date(),
         updatedAt,
         translations: messageTranslations,
         sender: senderParticipant ? {

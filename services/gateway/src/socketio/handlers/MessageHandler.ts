@@ -7,8 +7,7 @@
  */
 
 import * as path from 'path';
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -56,9 +55,10 @@ import type {
   MessageRequest,
   MessageResponse
 } from '@meeshy/shared/types/messaging';
-import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { SocketIOMessage, SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import type { Message } from '@meeshy/shared/types/index';
 import { buildMessageNewPayload } from '../messageNewPayload';
+import { buildMessageEditedCore } from '../messageEditedPayload';
 import { ErrorCode, ErrorMessages } from '@meeshy/shared/types';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
@@ -104,7 +104,7 @@ const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
 
 export interface MessageHandlerDependencies {
-  io: SocketIOServer;
+  io: MeeshyIOServer;
   prisma: PrismaClient;
   messagingService: MessagingService;
   translationService: MessageTranslationService;
@@ -136,7 +136,7 @@ export interface MessageHandlerDependencies {
 }
 
 export class MessageHandler {
-  private io: SocketIOServer;
+  private io: MeeshyIOServer;
   private prisma: PrismaClient;
   private messagingService: MessagingService;
   private translationService: MessageTranslationService;
@@ -212,7 +212,7 @@ export class MessageHandler {
    * Gère l'envoi d'un nouveau message (texte simple)
    */
   async handleMessageSend(
-    socket: Socket,
+    socket: MeeshySocket,
     data: {
       conversationId: string;
       content: string;
@@ -438,7 +438,7 @@ export class MessageHandler {
    * Gère l'envoi d'un message avec attachments
    */
   async handleMessageSendWithAttachments(
-    socket: Socket,
+    socket: MeeshySocket,
     data: {
       conversationId: string;
       content: string;
@@ -672,7 +672,7 @@ export class MessageHandler {
    * Anonymous users cannot edit (no stable identity → no ownership proof).
    */
   async handleMessageEdit(
-    socket: Socket,
+    socket: MeeshySocket,
     data: { messageId: string; content: string },
     callback?: (response: SocketIOResponse) => void
   ): Promise<void> {
@@ -719,6 +719,10 @@ export class MessageHandler {
           senderId: true,
           content: true,
           originalLanguage: true,
+          // Exigé par `SocketIOMessage`, donc par le décodeur de `message:edited`
+          // sur les trois clients. Une colonne de plus sur un `select` déjà là :
+          // aucun aller-retour supplémentaire.
+          messageType: true,
           createdAt: true,
           // Lu pour la réconciliation des mentions : une mention ajoutée en
           // éditant un message éphémère ne doit pas survivre à ce message.
@@ -871,9 +875,12 @@ export class MessageHandler {
         onError: (err) => handlerLogger.warn('mention reconciliation failed after socket edit', { messageId: validated.messageId, error: err }),
       });
 
+      // Le NOYAU que `SocketIOMessage` EXIGE vient de l'unité partagée : ce
+      // littéral en avait perdu `senderId`, `messageType` et `createdAt`, et
+      // le décodeur iOS de `message:edited` rejette la charge utile ENTIÈRE
+      // quand l'un d'eux manque (cf. `messageEditedPayload.ts`).
       const updatedMessage = {
-        id: message.id,
-        conversationId: message.conversationId,
+        ...buildMessageEditedCore(message, { conversationId: message.conversationId }),
         content: editedContent,
         isEdited: true,
         editedAt,
@@ -976,7 +983,7 @@ export class MessageHandler {
    * chose. Les utilisateurs anonymes ne peuvent pas supprimer.
    */
   async handleMessageDelete(
-    socket: Socket,
+    socket: MeeshySocket,
     data: { messageId: string },
     callback?: (response: SocketIOResponse) => void
   ): Promise<void> {
@@ -1152,7 +1159,7 @@ export class MessageHandler {
   /**
    * Broadcaster un nouveau message vers tous les participants
    */
-  async broadcastNewMessage(message: Message, conversationId: string, senderSocket?: Socket): Promise<void> {
+  async broadcastNewMessage(message: Message, conversationId: string, senderSocket?: MeeshySocket): Promise<void> {
     try {
       const normalizedId = await normalizeConversationId(
         conversationId,
@@ -1175,7 +1182,7 @@ export class MessageHandler {
       // message.translations is already on the object; DB fallback otherwise).
       const messageTranslations = await this._getMessageTranslations(message).catch(() => []);
 
-      const messagePayload: unknown = this._buildMessagePayload(
+      const basePayload = this._buildMessagePayload(
         message,
         normalizedId,
         messageTranslations
@@ -1186,7 +1193,8 @@ export class MessageHandler {
       // sinon un message déjà persisté ET ACKé « envoyé » ne serait délivré à
       // personne (ni emit live, ni offline queue), sans retry. Parité avec
       // `_getMessageTranslations().catch(() => [])` ci-dessus.
-      if (message.forwardedFromId) {
+      const forwardParts = await (async () => {
+        if (!message.forwardedFromId) return {};
         const [originalMsg, originalConv] = await Promise.all([
           this.prisma.message.findUnique({
             where: { id: message.forwardedFromId },
@@ -1207,51 +1215,49 @@ export class MessageHandler {
               })
             : Promise.resolve(null)
         ]).catch(() => [null, null] as const);
-        if (originalMsg) (messagePayload as Record<string, unknown>).forwardedFrom = hoistLocationOnto(originalMsg as unknown as Record<string, unknown>);
-        if (originalConv) (messagePayload as Record<string, unknown>).forwardedFromConversation = originalConv;
-      }
+        return {
+          ...(originalMsg
+            ? { forwardedFrom: hoistLocationOnto(originalMsg as unknown as Record<string, unknown>) }
+            : {}),
+          ...(originalConv ? { forwardedFromConversation: originalConv } : {}),
+        };
+      })();
 
       // Réponse à un post (status/story/reel/post) : servir le SNAPSHOT figé
       // (rangé dans `metadata.postReplyTo` à la création) pour que le
       // destinataire voie la citation immédiatement et qu'elle survive à
       // l'expiration du post. Hissé en `postReplyTo` top-level. Fallback live
       // legacy via lookup du post.
-      if (message.storyReplyToId) {
+      const postReplyParts = await (async () => {
+        if (!message.storyReplyToId) return {};
         const fromSnapshot = postReplyToFromMetadata(message.metadata);
-        if (fromSnapshot) {
-          (messagePayload as Record<string, unknown>).postReplyTo = fromSnapshot;
-        } else {
-          // Best-effort : le fallback live ne doit pas gater la délivrance.
-          const post = await this.prisma.post.findUnique({
-            where: { id: message.storyReplyToId },
-            select: POST_REPLY_SNAPSHOT_SELECT,
-          }).catch(() => null);
-          if (post) {
-            (messagePayload as Record<string, unknown>).postReplyTo = buildPostReplyTo(post);
-          }
-        }
-      }
+        if (fromSnapshot) return { postReplyTo: fromSnapshot };
+        // Best-effort : le fallback live ne doit pas gater la délivrance.
+        const post = await this.prisma.post.findUnique({
+          where: { id: message.storyReplyToId },
+          select: POST_REPLY_SNAPSHOT_SELECT,
+        }).catch(() => null);
+        return post ? { postReplyTo: buildPostReplyTo(post) } : {};
+      })();
 
-      if (message.content) {
+      const mentionParts = await (async () => {
+        if (!message.content) return {};
         // Best-effort : une résolution de mention en échec ne doit pas avorter
         // le broadcast (cf. `_resolveMentionUserIds` plus bas, même contrat).
         const mentionedUsers = await resolveMentionedUsers(this.prisma, [message.content]).catch(() => []);
-        if (mentionedUsers.length > 0) {
-          (messagePayload as Record<string, unknown>).mentionedUsers = mentionedUsers;
-        }
-      }
+        return mentionedUsers.length > 0 ? { mentionedUsers } : {};
+      })();
 
       // Tracking des URLs brutes : hisser `metadata.trackingLinks` ([{url, token}])
       // en top-level (miroir de `postReplyTo`) — `_buildMessagePayload` n'embarque
       // pas `metadata`. Le destinataire rend le lien (texte + façade vidéo) vers
       // `/l/<token>` (capture + redirection) en gardant l'URL/aperçu.
-      const rawMetadata = message.metadata;
-      if (rawMetadata && typeof rawMetadata === 'object') {
+      const trackingParts = ((): { trackingLinks?: unknown[] } => {
+        const rawMetadata = message.metadata;
+        if (!rawMetadata || typeof rawMetadata !== 'object') return {};
         const tl = (rawMetadata as Record<string, unknown>).trackingLinks;
-        if (Array.isArray(tl) && tl.length > 0) {
-          (messagePayload as Record<string, unknown>).trackingLinks = tl;
-        }
-      }
+        return Array.isArray(tl) && tl.length > 0 ? { trackingLinks: tl } : {};
+      })();
 
       // Lieu partagé : hisser `metadata.location` en top-level `location` —
       // même miroir que `postReplyTo`/`trackingLinks` ci-dessus.
@@ -1259,9 +1265,24 @@ export class MessageHandler {
       // le destinataire ne voit la position qu'après rechargement (relecture
       // REST, qui hisse aussi `location` — cf. routes/conversations/messages.ts).
       const place = sharedPlaceFromMetadata(message.metadata);
-      if (place) {
-        (messagePayload as Record<string, unknown>).location = place;
-      }
+      const locationParts = place ? { location: place } : {};
+
+      // Composition IMMUABLE des enrichissements, là où six blocs mutaient le
+      // payload à travers un cast `Record<string, unknown>`. Ce cast était le
+      // seam qui annulait le contrat : une fois le payload dégradé en sac de
+      // clés, `io.emit(MESSAGE_NEW, …)` n'avait plus rien à vérifier — c'est
+      // pour cela que ce handler restait, seul, rendu au `Socket` NU de
+      // socket.io (suivi du cycle 100). Le composer par étalement préserve le
+      // type INFÉRÉ de `buildMessageNewPayload`, donc l'émission redevient
+      // vérifiée contre `ServerToClientEvents`.
+      const messagePayload = {
+        ...basePayload,
+        ...forwardParts,
+        ...postReplyParts,
+        ...mentionParts,
+        ...trackingParts,
+        ...locationParts,
+      };
 
       const room = ROOMS.conversation(normalizedId);
 
@@ -1273,8 +1294,11 @@ export class MessageHandler {
       //     `clientMessageId` so the iOS / web reconciliation by-cid path
       //     can promote the optimistic row to `.sent` even after a crash
       //     that lost the ACK.
-      const senderPayload = messagePayload as Record<string, unknown>;
-      const broadcastPayload: Record<string, unknown> = stripClientMessageId(senderPayload);
+      // Pas de cast : `stripClientMessageId` est générique et préservant, donc
+      // les deux payloads gardent le type du littéral composé ci-dessus et les
+      // cinq émissions `message:new` de cette méthode restent vérifiées.
+      const senderPayload = messagePayload;
+      const broadcastPayload = stripClientMessageId(messagePayload);
 
       // Resolve the sender's USER id (not the participant id) so we can
       // address every device session via `ROOMS.user(userId)`. The sender
@@ -1484,9 +1508,9 @@ export class MessageHandler {
    * The sender's own sockets are excluded here; their cid-aware payload is sent
    * separately by the caller.
    */
-  private _emitMessageNewByLanguage(
+  private _emitMessageNewByLanguage<P extends SocketIOMessage>(
     room: string,
-    payload: Record<string, unknown>,
+    payload: P,
     opts: { excludeUserId?: string; excludeSocketId?: string }
   ): void {
     // `adapter.rooms` and the `connectedUsers`/`socketToUser` maps only ever see
@@ -1512,7 +1536,7 @@ export class MessageHandler {
 
     if (!localSocketIds || localSocketIds.size === 0) return;
 
-    const originalLanguage = String((payload as { originalLanguage?: unknown }).originalLanguage || 'fr');
+    const originalLanguage = payload.originalLanguage || 'fr';
     const groups = groupSocketsByLanguage({
       socketIds: localSocketIds,
       originalLanguage,
@@ -1542,7 +1566,7 @@ export class MessageHandler {
       // Chain `.to(socketId)` so a single emit fans out to exactly this group's
       // sockets (mirrors the manager's per-language emit).
       const [firstSid, ...restSids] = group.socketIds;
-      let emitter: ReturnType<SocketIOServer['to']> = this.io.to(firstSid);
+      let emitter: ReturnType<MeeshyIOServer['to']> = this.io.to(firstSid);
       for (const sid of restSids) emitter = emitter.to(sid);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
@@ -1750,7 +1774,7 @@ export class MessageHandler {
   /**
    * Récupère le contexte utilisateur depuis le socket
    */
-  private _getUserContext(socket: Socket): {
+  private _getUserContext(socket: MeeshySocket): {
     participantId: string;
     userId?: string;
     isAnonymous: boolean;
@@ -1913,11 +1937,19 @@ export class MessageHandler {
    * `broadcastNewMessage` après ce build, comme les autres enrichissements qui
    * demandent une lecture en base.
    */
+  /**
+   * Type de retour INFÉRÉ, jamais annoté — même raison que
+   * `buildMessageNewPayload` et `buildSenderPayload` dans `messageNewPayload.ts`.
+   * Il a porté `: unknown` pendant toute la vie de ce handler, et c'était LA
+   * source du fait que le contrat ne contraignait pas le producteur WebSocket de
+   * `message:new` : annoter large rend au compilateur un payload sans forme, et
+   * l'émission cesse d'être vérifiée.
+   */
   private _buildMessagePayload(
     message: Message,
     conversationId: string,
     translations: unknown[]
-  ): unknown {
+  ) {
     return buildMessageNewPayload(message, {
       conversationId,
       translations,
@@ -2024,7 +2056,7 @@ export class MessageHandler {
   private _sendError(
     callback: ((response: SocketIOResponse<{ messageId: string }>) => void) | undefined,
     error: string,
-    socket: Socket,
+    socket: MeeshySocket,
     code?: string
   ): void {
     const errorResponse: SocketIOResponse<{ messageId: string }> = {
@@ -2039,7 +2071,7 @@ export class MessageHandler {
   private _sendGenericError(
     callback: ((response: SocketIOResponse) => void) | undefined,
     error: string,
-    socket: Socket,
+    socket: MeeshySocket,
     code?: string
   ): void {
     const errorResponse: SocketIOResponse = {

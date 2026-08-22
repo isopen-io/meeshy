@@ -1,4 +1,5 @@
 import type { Message } from '@meeshy/shared/types/index';
+import { resolveWireSenderId } from './wireSenderId';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -121,18 +122,14 @@ export function buildMessageNewPayload(
   message: Message,
   inputs: MessageNewPayloadInputs
 ) {
-  const participant = message.sender;
   const raw = message as unknown as Record<string, unknown>;
 
   return {
     id: message.id,
     conversationId: inputs.conversationId,
-    // `message.senderId` est un `Participant.id`, alors que les clients
-    // comparent le `senderId` du fil à leur propre `User.id` pour reconnaître
-    // leurs messages et réconcilier la bulle optimiste entre appareils. On
-    // expose donc le `User.id` de l'expéditeur, et on ne replie sur le
-    // `Participant.id` que pour un expéditeur anonyme, qui n'en a pas d'autre.
-    senderId: participant?.userId ?? participant?.user?.id ?? message.senderId ?? undefined,
+    // `Participant.id` vs `User.id` — la règle, et sa raison, vivent dans
+    // `wireSenderId.ts`, partagées avec les producteurs de `message:edited`.
+    senderId: resolveWireSenderId(message),
     content: message.content,
     originalLanguage: message.originalLanguage || 'fr',
     messageType: message.messageType || 'text',
