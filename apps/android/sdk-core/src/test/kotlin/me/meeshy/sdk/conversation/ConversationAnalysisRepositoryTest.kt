@@ -5,8 +5,8 @@ import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ConversationAnalysis
-import me.meeshy.sdk.model.ContentTypeCounts
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
+import me.meeshy.sdk.model.ConversationSummaryAnalysis
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
@@ -20,7 +20,7 @@ import java.io.IOException
 import org.junit.Test
 
 /** Every unrelated endpoint answers "not wired" so a stray call fails loudly. */
-private abstract class StubStatsApi : ConversationApi {
+private abstract class StubAnalysisApi : ConversationApi {
     override suspend fun list(offset: Int?, limit: Int?) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)
@@ -45,50 +45,53 @@ private abstract class StubStatsApi : ConversationApi {
     override suspend fun banParticipant(id: String, userId: String) = ApiResponse<Unit>(success = false)
 }
 
-private class SuccessStatsApi(private val payload: ConversationMessageStatsResponse) : StubStatsApi() {
+private class SuccessAnalysisApi(private val payload: ConversationAnalysis) : StubAnalysisApi() {
     var requestedId: String? = null
-    override suspend fun stats(id: String): ApiResponse<ConversationMessageStatsResponse> {
+    override suspend fun analysis(id: String): ApiResponse<ConversationAnalysis> {
         requestedId = id
         return ApiResponse(success = true, data = payload)
     }
 }
 
-private class EnvelopeFailureApi : StubStatsApi() {
-    override suspend fun stats(id: String) =
-        ApiResponse<ConversationMessageStatsResponse>(success = false, error = "boom")
+private class EnvelopeFailureAnalysisApi : StubAnalysisApi() {
+    override suspend fun analysis(id: String) =
+        ApiResponse<ConversationAnalysis>(success = false, error = "boom")
 }
 
-private class ThrowingStatsApi : StubStatsApi() {
-    override suspend fun stats(id: String): ApiResponse<ConversationMessageStatsResponse> =
+private class ThrowingAnalysisApi : StubAnalysisApi() {
+    override suspend fun analysis(id: String): ApiResponse<ConversationAnalysis> =
         throw IOException("offline")
 }
 
-class ConversationStatsRepositoryTest {
+class ConversationAnalysisRepositoryTest {
 
     @Test
-    fun `fetchStats returns the payload on success and forwards the id`() = runTest {
-        val api = SuccessStatsApi(
-            ConversationMessageStatsResponse(conversationId = "c1", totalMessages = 12, contentTypes = ContentTypeCounts(text = 12)),
+    fun `fetchAnalysis returns the payload on success and forwards the id`() = runTest {
+        val api = SuccessAnalysisApi(
+            ConversationAnalysis(
+                conversationId = "c1",
+                summary = ConversationSummaryAnalysis(text = "lively", healthScore = 80),
+            ),
         )
-        val repo = ConversationStatsRepository(api)
+        val repo = ConversationAnalysisRepository(api)
 
-        val result = repo.fetchStats("c1")
+        val result = repo.fetchAnalysis("c1")
 
         assertThat(result).isInstanceOf(NetworkResult.Success::class.java)
-        assertThat((result as NetworkResult.Success).data.totalMessages).isEqualTo(12)
+        assertThat((result as NetworkResult.Success).data.summary?.healthScore).isEqualTo(80)
         assertThat(api.requestedId).isEqualTo("c1")
     }
 
     @Test
-    fun `fetchStats folds an unsuccessful envelope into a failure`() = runTest {
-        val result = ConversationStatsRepository(EnvelopeFailureApi()).fetchStats("c1")
+    fun `fetchAnalysis folds an unsuccessful envelope into a failure`() = runTest {
+        val result = ConversationAnalysisRepository(EnvelopeFailureAnalysisApi()).fetchAnalysis("c1")
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
     }
 
     @Test
-    fun `fetchStats folds a transport error into a failure`() = runTest {
-        val result = ConversationStatsRepository(ThrowingStatsApi()).fetchStats("c1")
+    fun `fetchAnalysis folds a transport error into a failure`() = runTest {
+        val result = ConversationAnalysisRepository(ThrowingAnalysisApi()).fetchAnalysis("c1")
 
         assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
     }

@@ -169,6 +169,17 @@
     <string name="conversation_stats_period_week">7d</string>
     <string name="conversation_stats_period_month">30d</string>
     <string name="conversation_stats_period_all">Tudo</string>
+    <string name="conversation_analysis_title">Análise IA</string>
+    <string name="conversation_analysis_empty">Ainda sem análise</string>
+    <string name="conversation_analysis_error">Não foi possível carregar a análise</string>
+    <string name="conversation_analysis_health">Pontuação de saúde</string>
+    <string name="conversation_analysis_engagement">Envolvimento: %1$s</string>
+    <string name="conversation_analysis_conflict">Conflito: %1$s</string>
+    <string name="conversation_analysis_tone">Tom</string>
+    <string name="conversation_analysis_topics">Tópicos</string>
+    <string name="conversation_analysis_emotions">Emoções</string>
+    <string name="conversation_analysis_summary">Resumo</string>
+    <string name="conversation_analysis_dynamic">Dinâmica</string>
     <string name="conversation_stats_type_text">Texto</string>
     <string name="conversation_stats_type_image">Fotos</string>
     <string name="conversation_stats_type_audio">Áudio</string>

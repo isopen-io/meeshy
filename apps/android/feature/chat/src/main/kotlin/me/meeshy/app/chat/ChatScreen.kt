@@ -353,6 +353,7 @@ fun ChatScreen(
     var showConversationSettings by remember { mutableStateOf(false) }
     var showMembers by remember { mutableStateOf(false) }
     var showStats by remember { mutableStateOf(false) }
+    var showAnalysis by remember { mutableStateOf(false) }
     // Window-space frame of each rendered message row, captured during layout for
     // the long-press preview hero (see MessageOverlayPreviewHero). A plain map, not
     // snapshot state: written from onGloballyPositioned without forcing recomposition,
@@ -471,6 +472,12 @@ fun ChatScreen(
                             Icon(
                                 Icons.Filled.Insights,
                                 contentDescription = stringResource(R.string.conversation_stats_title),
+                            )
+                        }
+                        IconButton(onClick = { showAnalysis = true }) {
+                            Icon(
+                                Icons.Filled.AutoAwesome,
+                                contentDescription = stringResource(R.string.conversation_analysis_title),
                             )
                         }
                         if (state.isGroup) {
@@ -851,6 +858,14 @@ fun ChatScreen(
             conversationId = state.conversationId,
             accentColor = accentColor,
             onDismiss = { showStats = false },
+        )
+    }
+
+    if (showAnalysis) {
+        ConversationAnalysisSheet(
+            conversationId = state.conversationId,
+            accentColor = accentColor,
+            onDismiss = { showAnalysis = false },
         )
     }
 

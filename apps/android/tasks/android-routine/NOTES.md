@@ -5,6 +5,20 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-22 — Two test files in one package can't both declare the same `private class` name
+- When adding a new sibling repository test (`ConversationAnalysisRepositoryTest`) modelled on an
+  existing one (`ConversationStatsRepositoryTest`) in the SAME package
+  (`me.meeshy.sdk.conversation`), a `private class EnvelopeFailureApi` in each file collided:
+  Kotlin reported `Redeclaration` + a cascading `Cannot access '…': it is private in file` on the
+  OTHER file. File-private top-level classes still share the package's file-facade namespace for
+  this name check. Fix: give reused test-double names a per-slice prefix
+  (`EnvelopeFailureAnalysisApi`, `StubAnalysisApi`, …) rather than copying the stats test's names
+  verbatim. The unique names (`Stub…Api`, `Success…Api`, `Throwing…Api`) were already fine; only the
+  generic `EnvelopeFailureApi` clashed.
+- Also: when `ConversationApi` gains a method, EVERY hand-written stub of it must implement it — there
+  are three in `:sdk-core` tests (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+  and the new one). Grep `override suspend fun stats(` to find them all.
+
 ## 2026-08-21 — SDK platform: `compileSdk = 37` wants `android-37.0`, install ordering matters
 - The repo is on `compileSdk = 37` = **Android 17**, whose platform package is `platforms;android-37.0`
   (`AndroidVersion.ApiLevel=37.0`), NOT `android-37`. The ROUTINE §Environment recipe still installs
