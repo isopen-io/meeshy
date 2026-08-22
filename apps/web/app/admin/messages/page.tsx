@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MessageSquare, ArrowLeft, Search, Filter, Calendar, User, Globe, FileText, Image, Video, Music, MapPin } from 'lucide-react';
 import { adminService } from '@/services/admin.service';
+import { readPaginatedList } from '@/services/paginated-list';
 import { formatFileSize } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
@@ -106,15 +107,11 @@ export default function AdminMessagesPage() {
         period || undefined
       );
 
-      if (response.data) {
-        setMessages(response.data.messages || []);
-        setTotalCount(response.data.pagination?.total || 0);
-        setTotalPages(Math.ceil((response.data.pagination?.total || 0) / pageSize));
-      } else {
-        setMessages([]);
-        setTotalCount(0);
-        setTotalPages(1);
-      }
+      const { items, pagination } = readPaginatedList<Message>(response);
+      const total = pagination?.total ?? 0;
+      setMessages(items);
+      setTotalCount(total);
+      setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
     } catch (error) {
       console.error('Erreur lors du chargement des messages:', error);
       toast.error(t('messages.loadError'));

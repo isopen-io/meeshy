@@ -597,13 +597,35 @@ jamais la réponse. (`GET /conversations/:id/stats` porte les trois formes côte
 côte : `contentTypes` fermé, `hourlyDistribution` carte, les trois autres en
 tableaux — cycle 86.)
 
+### Le balayage est OUTILLÉ et en CLIQUET : 38 sites, et il reste 31
+
 ### Le balayage a été fait : 38 sites, et il reste 26
 
-Le cycle 86 a outillé le balayage du gateway. Un `grep` ne suffit pas — il faut
-résoudre l'objet littéral englobant (a-t-il `properties` ?), calculer la portée
-des clés `response:` (un schéma de REQUÊTE sans `properties` est permissif, pas
-destructeur), et **dépouiller les commentaires**, sans quoi on retrouve les
-commentaires des cycles précédents au lieu des défauts.
+**L'outil vit dans le dépôt** — `routes/__tests__/response-schema-sweep.ts`,
+gardé par `response-schema-sweep.test.ts` (cycle 87 bis). **Ne pas le refaire à
+la main.** Le cycle 86 l'avait construit et laissé dans son JOURNAL ; deux
+cycles plus tard, deux agents ont retrouvé les mêmes trois sites séparément, à
+la main, le même jour. Le coût d'un outil hors du dépôt ne se paie pas en
+mémoire, mais en travail fait deux fois.
+
+Un `grep` ne suffit pas — il faut résoudre l'objet littéral englobant (a-t-il
+`properties` ?), calculer la portée des clés `response:` (un schéma de REQUÊTE
+sans `properties` est permissif, pas destructeur), et **dépouiller les
+commentaires**, sans quoi on retrouve les commentaires des cycles précédents au
+lieu des défauts.
+
+Le test **gèle** l'inventaire restant. **Quand il tombe :** une entrée EN TROP =
+un nouveau site nu vient d'entrer, à déclarer (`properties` si structuré,
+`additionalProperties` si carte) ; une entrée EN MOINS = un site réparé, et
+retirer sa ligne fait partie du correctif. L'inventaire est clé par fichier +
+champ + code de statut, **jamais** par numéro de ligne — une clé de ligne dérive
+à la première édition et transforme le cliquet en bruit.
+
+**Lister un champ avec un schéma VIDE est pire que ne pas le lister du tout.**
+`messages.ts:113` : le parent porte `additionalProperties: true` (posé contre la
+troncature), mais `sender` y est déclaré explicitement `{ type: 'object' }` — et
+un parent permissif ne rattrape pas un enfant déclaré vide, puisque la clé est
+LISTÉE. Le champ sort à `{}` là où l'omettre l'aurait laissé passer entier.
 
 Les deux sites de niveau `data:` (charge utile ENTIÈRE) sont corrigés ;
 **l'inventaire trié des 26 restants est dans

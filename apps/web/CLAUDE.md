@@ -69,6 +69,39 @@ Key stores: `auth-store`, `conversation-store`, `app-store`, `language-store`, `
 - Token refresh queue prevents race conditions on 401
 - Path aliases: `@/*` (root), `@meeshy/shared`, `@shared/*`
 
+### Une liste paginée se lit par `readPaginatedList()`, jamais à la main
+
+Deux enveloppes s'empilent sur ce chemin, et la combinaison n'est devinable
+depuis aucun des deux bouts :
+
+1. La passerelle sert `{ success, data: T[], pagination }` — le tableau est à
+   `data`, et `pagination` est son **FRÈRE**, pas son enfant.
+2. `apiService.request` enveloppe le corps **ENTIER** dans `.data` et rend
+   `{ success, data: <corps>, message }`.
+
+La lecture juste est donc `response.data.data` — et c'est ce que fait
+`readPaginatedList()` (`services/paginated-list.ts`), **seul endroit du dépôt
+qui connaît cette forme**.
+
+Quatre pages de la console lisaient une clé NOMMÉE qui n'a jamais existé
+(`data.messages`, `data.communities`, `data.translations`, `data.shareLinks`) :
+liste vide, sans erreur, sans trace (cycle 87). **Le compteur, lui, était
+juste** — `response.data.pagination?.total` vise la seule clé que les deux
+enveloppes laissent au même endroit. Un total exact au-dessus d'une table vide
+ne se lit pas comme une panne de chargement mais comme un filtre trop strict :
+**une panne partiellement cohérente survit plus longtemps qu'une panne
+franche.**
+
+La forme était pourtant documentée depuis toujours, en commentaire, dans
+`app/admin/users/page.tsx` — à l'endroit exact où elle était appliquée
+correctement. **Une connaissance écrite dans un commentaire n'est pas
+partagée** : une forme qui se redécouvre à chaque site d'appel finira par se
+tromper ; elle appartient à une fonction.
+
+Exception à ne PAS faire passer par ce lecteur : les routes qui nichent
+délibérément leur liste sous une clé nommée — `sendSuccess(reply, {
+anonymousUsers, pagination })` — dont la forme est différente et légitime.
+
 ## Component Patterns
 ```typescript
 'use client';
