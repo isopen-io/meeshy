@@ -209,7 +209,13 @@ final class UnreadCountLabelTests: XCTestCase {
             ("Meeshy/Features/Main/Views/ThemedConversationRow.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift", "UnreadCountLabel.messages("),
             ("Meeshy/Features/Main/Views/GlobalSearchView.swift", "UnreadCountLabel.messages("),
-            ("Meeshy/Features/Main/Views/RootView.swift", "UnreadCountLabel.notifications(")
+            ("Meeshy/Features/Main/Views/RootView.swift", "UnreadCountLabel.notifications("),
+            // Cinquième site, découvert par la CI de cette PR : 235i avait retiré
+            // `accessibility.unread_messages` du catalogue en ne corrigeant que
+            // DEUX de ses trois porteurs. Sa CI est passée parce qu'elle tournait
+            // sur une base antérieure ; l'orpheline n'est apparue qu'une fois la
+            // branche confrontée à `main`.
+            ("Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift", "UnreadCountLabel.messages(")
         ]
         for site in sites {
             let source = try iosSource(at: site.path)
@@ -217,7 +223,11 @@ final class UnreadCountLabelTests: XCTestCase {
                 source.contains(site.call),
                 "\(site.path) doit composer son compteur de non-lus via \(site.call)"
             )
-            for removed in ["\"conversation.scroll-to-bottom.a11y-unread\"", "\"unit.unread\""] {
+            for removed in [
+                "\"conversation.scroll-to-bottom.a11y-unread\"",
+                "\"unit.unread\"",
+                "\"accessibility.unread_messages\""
+            ] {
                 XCTAssertFalse(
                     source.contains(removed),
                     "\(site.path) : clé retirée du catalogue, elle ne doit plus être référencée en code"

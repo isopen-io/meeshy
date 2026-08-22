@@ -257,7 +257,12 @@ struct LentilleFocusCard: View, Equatable {
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background(Capsule(style: .continuous).fill(accent))
-            .accessibilityLabel(String(localized: "accessibility.unread_messages", bundle: .main))
+            // Le libellé annonce l'effectif RÉEL, pas le « 99+ » affiché : le
+            // plafond est une contrainte de largeur du badge, pas une donnée.
+            // Ce site était le TROISIÈME porteur de `accessibility.unread_messages`
+            // — 235i n'en avait corrigé que deux, et la clé qu'elle a retirée du
+            // catalogue est restée référencée ici.
+            .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
     }
 
     @ViewBuilder

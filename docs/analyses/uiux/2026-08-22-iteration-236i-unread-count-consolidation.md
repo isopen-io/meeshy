@@ -202,6 +202,60 @@ structurellement correctes ; une relecture par un locuteur natif reste
 souhaitable et est nommée en suites — l'alternative était de laisser une seule
 forme servir les six catégories, ce qui est faux par construction.
 
+## Le cinquième site — découvert par la CI, et il rendait `main` ROUGE
+
+Le premier run de cette PR a échoué sur **1 test / 7309** (7303 passés) :
+
+```
+LocalizationConsistencyTests/test_everyUsedIdentifierKeyResolvesInDevelopmentLanguage()
+  [APP] accessibility.unread_messages  (LentilleFocusCard.swift)
+```
+
+La clé incriminée n'est pas des miennes : c'est celle que **235i a retirée du
+catalogue**. Elle avait **trois** porteurs, 235i n'en a corrigé que deux
+(`ThemedConversationRow`, `LentilleConversationRow`). Le troisième —
+`LentilleFocusCard.unreadBadge:260` — est resté à référencer une clé qui
+n'existe plus.
+
+### Pourquoi la CI de 235i était verte
+
+Elle a tourné le 2026-08-21 à 10:20 contre la base `c886b8b5`. Entre ce run et
+son merge (2026-08-22, 04:2x), `main` a avancé et `LentilleFocusCard` est entrée
+dans le périmètre. GitHub n'a pas re-testé la branche contre la base neuve : les
+deux côtés étaient verts **séparément**, faux **ensemble**. Conflit sémantique
+de merge — invisible à `git`, qui ne voit aucun conflit textuel.
+
+**Conséquence directe : `main` est rouge.** Le run iOS de `5d1d85b1` (le merge de
+235i) conclut `failure` sur exactement cette assertion. Ce n'est donc pas
+« l'échec d'une PR », c'est la ligne principale cassée — et cette PR la répare.
+
+### Le correctif, et pourquoi il tombe dans ce périmètre
+
+`unreadBadge` portait `.accessibilityLabel(String(localized:
+"accessibility.unread_messages"))` — **le défaut exact de 235i** (un `%lld`
+jamais substitué, énoncé tel quel par VoiceOver) sur une troisième surface. Le
+site rejoint donc le helper comme les quatre autres :
+
+```swift
+.accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
+```
+
+Le libellé annonce l'effectif **réel** et non le « 99+ » affiché : le plafond est
+une contrainte de largeur du badge, pas une donnée. C'est aussi ce que fait déjà
+`ThemedConversationRow`.
+
+`test_everyUnreadCounterGoesThroughTheLabel` gagne ce cinquième site **et** la
+clé de 235i dans sa liste de formes citées interdites — c'est la garde qui aurait
+attrapé l'orpheline.
+
+### La leçon
+
+Une clé retirée du catalogue doit être grepée sur **tout** `apps/ios`, pas sur
+les fichiers que l'itération a ouverts. 235i a corrigé deux rangées de
+conversation et raisonné « les deux rangées » ; le badge d'une carte de focus
+n'est pas une rangée, et il portait la même clé. Le grep de fermeture doit
+partir de la CLÉ, jamais de la surface.
+
 ## Bilan
 
 **4 fichiers prod modifiés + 1 neuf**, **1 suite neuve** (23 assertions),
