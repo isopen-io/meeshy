@@ -10691,3 +10691,99 @@ sans toucher au reste du fichier).
 single-peer côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts`
 (hors périmètre calling). L'audit n'a pas trouvé de second défaut de confiance équivalente dans
 les autres surfaces lues (gateway, web) au-delà de ce qui est déjà documenté.
+
+## Vague 159 — deux fuites d'oubli sœurs : `call:force-leave` (web, unmount) et `switchCamera`/`selectCamera` (iOS, hold) (2026-08-22)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Deux audits
+dédiés en tâche de fond, l'un sur `services/gateway`/`apps/web` (signalisation, listeners), l'autre
+sur `CallManager.swift`/`PiPCallController.swift`/WebRTC iOS — après vérification que les Vagues
+157-158 sont bien closes (aucun commit en avance sur `main` sur les branches `claude/upbeat-dirac-*`
+antérieures, log `main` confirmant le merge de la Vague 158). Les deux défauts trouvés sont de la
+même FAMILLE : un site sœur d'un correctif déjà posé ailleurs dans le même fichier n'avait pas reçu
+le même traitement.
+
+### Défaut 1 (web) — le nettoyage au DÉMONTAGE de `CallManager` omettait `call:force-leave`
+
+**Root cause** : l'effet `useEffect` de `CallManager.tsx` gère 8 écouteurs Socket.IO nommés dans
+`attachedListeners`. Le nettoyage de RÉ-ATTACHE (ligne ~1056-1064, tourne à chaque reconnect) retire
+bien les 8 — `CALL_FORCE_LEAVE` inclus (ligne 1064). Le nettoyage de DÉMONTAGE de l'effet
+(le `return () => {...}`, ligne ~1194-1211) n'en retirait que 7 : `CALL_FORCE_LEAVE` manquait, seul
+des 8 dans ce bloc précis. Une pure asymétrie entre deux blocs de nettoyage frères du même fichier —
+le commentaire voisin (« `socket.off(EVENT)` sans handler retire TOUS les écouteurs de cet event, pas
+seulement les nôtres ») explique pourquoi les cleanups sont scopés par fonction, pas pourquoi celui-ci
+en oublie un.
+
+Conséquence : tout démontage de `CallManager` (changement de route, remount React, teardown de test)
+laisse l'écouteur `call:force-leave` accroché à une closure PÉRIMÉE sur le socket. Un remount ultérieur
+en attache un second à côté du fantôme — le `call:force-leave` suivant déclenche alors
+`handleCallEndedRef.current(...)` DEUX FOIS pour un seul événement (double `reset()`, double
+toast/log potentiels). Trou de couverture confirmé : le test existant
+(`CallManager.forceLeave.test.tsx`) vérifiait `listenerCount === 1` après montage, jamais après
+démontage/remontage — exactement l'angle mort qui a laissé passer l'asymétrie.
+
+**Fix** — une ligne, copiée du nettoyage de ré-attache juste au-dessus dans le même fichier :
+```ts
+s.off(SERVER_EVENTS.CALL_FORCE_LEAVE, attachedListeners[SERVER_EVENTS.CALL_FORCE_LEAVE]);
+```
+ajoutée en fin du bloc de nettoyage au démontage (`apps/web/components/video-call/CallManager.tsx`).
+
+**Tests (TDD, RED confirmé)** : 2 nouveaux tests dans `CallManager.forceLeave.test.tsx` — (a) monte,
+démonte, vérifie `listenerCount(CALL_FORCE_LEAVE) === 0` ; (b) monte, démonte, remonte, vérifie que le
+compte reste à `1` (pas `2`). RED confirmé avant fix (`0` reçu comme `1`, `1` reçu comme `2`) ; GREEN
+après. Sweep `--testPathPatterns="CallManager|video-call"` : **40 suites / 273 tests** verts, 0
+régression.
+
+**`tsc --noEmit` (diff `git stash`/`stash pop`)** : 1836 erreurs après vs 1835 avant — **+1**, sur la
+ligne ajoutée elle-même (`s` est typé `unknown` dans toute la fonction, jamais régularisé — les 7
+lignes sœurs du même bloc de nettoyage portent déjà exactement la même erreur `Property 'off' does not
+exist on type '{}'`). Pas un nouveau défaut de typage distinct : la 8ᵉ occurrence d'un motif déjà
+présent 7 fois dans le même bloc, pas introduit par ce diff. Régularisation du typage de `s`/`socket`
+dans cet effet non faite ici (hors périmètre du fix, chantier séparé).
+
+**Risk assessment** : minimal — ajoute exactement l'appel `off()` déjà fait pour ce même event ailleurs
+dans le même fichier (ligne 1064), zéro changement de comportement nominal.
+
+### Défaut 2 (iOS) — `switchCamera()`/`selectCamera(id:)` pouvaient ré-acquérir la caméra pendant un hold, comme `toggleVideo()` avant la Vague 158
+
+**Root cause** : la Vague 158 a fermé exactement ce défaut sur `toggleVideo()`. `switchCamera()` et
+`selectCamera(id:)` sont les deux actionneurs caméra SŒURS — mêmes commentaires du fichier
+(« Serialize with every other in-flight video-transition path »), même chaîne de `Task` sérialisée
+(`previousHold`, `previousSurvival`, `previousICERestart`, …) — mais n'avaient reçu aucune garde
+équivalente. `handleHold(true)` suspend l'envoi vidéo via `downgradeFromVideo()` (`capturer.stopCapture()`)
+sans libérer `videoCapturer` (le capteur reste vivant, juste en pause). Un tap sur le bouton de flip
+caméra pendant le hold est mis en file sur `cameraSwitchTask`, qui attend `previousHold?.value` avant
+de s'exécuter — donc GARANTI de tourner APRÈS que la suspension du hold soit pleinement effective.
+`switchCamera()`/`selectCamera(id:)` appelaient alors sans condition `capturer.stopCapture()` puis
+`capturer.startCapture(...)` — rallumant le matériel caméra (et l'indicateur OS) alors que le
+transceiver reste `recvOnly`/`sender.track = nil` : exactement le faux signal « caméra active » que la
+garde de la Vague 158 existe pour empêcher, sur un site sœur qu'elle ne couvrait pas.
+
+**Fix** — garde identique à celle de `toggleVideo()`, ajoutée dans les deux fonctions juste après le
+`guard let self, !Task.isCancelled else { return }`, avant l'appel qui ré-acquiert la caméra :
+```swift
+if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+    self.isUsingFrontCamera = previousFrontCamera   // + self.selectedCameraId pour selectCamera
+    return
+}
+```
+Revert de l'état optimiste (mirroring / sélection picker) au lieu d'un no-op silencieux, même
+convention que le revert-sur-échec déjà présent dans les deux fonctions.
+
+**Tests** : 6 nouveaux tests structurels dans `CallManagerCameraActuationHoldSuspensionGuardTests`
+(`CallManagerTests.swift`, même convention source-based que `CallManagerToggleVideoHoldSuspensionGuardTests`
+— pas de host XCTest dans ce container) : présence de la garde dans chaque fonction, ordre garde
+< appel `webRTCService.switchCamera`/`switchToCamera`, et revert + `return` effectif sans fallthrough.
+CI iOS (macOS runner) valide la compile + le run réel.
+
+**Risk assessment** : minimal — garde additive supplémentaire dans une chaîne déjà sérialisée, aucun
+changement pour le flux nominal (hors hold/interruption). Pas de changement de signature, pas de
+nouvel état.
+
+**Non fait volontairement / reste ouvert** (reconduits, inchangés) : dead code / god-object
+`CallManager.swift` (~6300 lignes, iOS) ; ADR `actor CallEventQueue` non implémenté ; iOS single-peer
+côté groupe ; même gap de hiérarchie de rôle sur `conversations/participants.ts` (hors périmètre
+calling) ; typage `unknown` de `s`/`socket` dans l'effet de `CallManager.tsx` (web, révélé par le
+défaut 1 ci-dessus, pas régularisé). Aucun autre défaut de confiance équivalente trouvé dans les
+autres surfaces auditées (gateway signal relay, TURN credentials, rate-limiter, `use-webrtc-p2p.ts`
+et hooks call-quality/captions côté web ; `PiPCallController.swift`/`CallEventsHandler.ts`/
+`CallService.ts` côté hold/lifecycle).

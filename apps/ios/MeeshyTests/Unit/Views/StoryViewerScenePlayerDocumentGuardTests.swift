@@ -106,15 +106,25 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
     ///
     /// Un montage inconditionnel du lecteur ferait donc passer TOUTE l'archive
     /// par `CanvasV3(migrating:)` → `StoryEffects(rendering:)`. Cet aller-retour
-    /// est LOSSY et le dépôt le sait déjà : la migration remappe les ancres
-    /// libres dans l'espace de scène FIXE 9:16 (`remapFreeAnchor`, piloté par
-    /// `effects.canvasAspectRatio`), et le retour ne réassigne JAMAIS
-    /// `canvasAspectRatio` ni n'applique le remap inverse — `StoryDraftStore`
-    /// contourne la même perte hors-bande pour les brouillons. Pendant ce temps
-    /// `readerCanvasRatio` encadre toujours au ratio RÉEL de la story. Sur un
-    /// fond 16:9 — le cas COURANT, le composer stampant un ratio CONTINU dès
-    /// qu'un fond est importé — un texte écrit à y = 0,90 se peindrait à
-    /// y ≈ 0,63.
+    /// était LOSSY : la migration remappe les ancres libres dans l'espace de
+    /// scène FIXE 9:16 (`remapFreeAnchor`, piloté par
+    /// `effects.canvasAspectRatio`), et le retour ne réassignait ni le ratio ni
+    /// le remap inverse. Sur un fond 16:9 — le cas COURANT, le composer
+    /// stampant un ratio CONTINU dès qu'un fond est importé — un texte écrit à
+    /// y = 0,90 se peignait à y ≈ 0,63.
+    ///
+    /// **DEUX PRÉMISSES DE CETTE PORTE SONT TOMBÉES depuis (2026-08-22).**
+    /// D'abord, `X-Canvas-Caps: 3` est POSÉ (`ClientInfoProvider.swift`) : le
+    /// gateway sert désormais du v3 natif à iOS, donc `canvasV3` n'est plus
+    /// `nil` pour cent pour cent des stories. Ensuite, l'aller-retour n'est plus
+    /// lossy : la scène loge son `carrierAspect` et le retour applique le remap
+    /// inverse (`CanvasV3MigrationTests`
+    /// `.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`).
+    ///
+    /// La porte reste néanmoins EN PLACE et cette garde avec elle : la retirer
+    /// change ce que le lecteur PEINT pour toute l'archive, ce qui se mesure et
+    /// se livre pour soi — pas en effet de bord. Cette garde ne défend donc plus
+    /// une perte, elle défend un changement de rendu non encore mesuré.
     ///
     /// La porte rend les deux branches SELF-COHÉRENTES : l'archive v1 se peint
     /// dans son propre cadre comme avant le swap, et une story v3-native se
@@ -128,11 +138,11 @@ final class StoryViewerScenePlayerDocumentGuardTests: XCTestCase {
         XCTAssertEqual(
             migrations, 0,
             "Le viewer story dérive un document par migration \(migrations) fois. Il ne doit " +
-            "JAMAIS le faire : canvasV3 étant nil pour 100 % des stories servies, cette " +
-            "dérivation est le chemin de TOUTE l'archive, et l'aller-retour v1→v3→v1 letterboxe " +
-            "les ancres libres sans jamais les rendre au cadre réel. Voir la perte gravée par " +
-            "CanvasV3MigrationTests." +
-            "v1RoundTripThroughV3_letterboxesFreeAnchors_andDropsTheCarrierAspect."
+            "JAMAIS le faire : pour toute story v1 servie as-is, cette dérivation est le " +
+            "chemin de l'archive, et l'aller-retour v1→v3→v1 letterboxe " +
+            "les ancres libres. Cette perte est RÉPARÉE depuis 2026-08-22 " +
+            "(CanvasV3MigrationTests.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect), " +
+            "mais retirer la porte change le rendu de TOUTE l'archive : ça se mesure à part."
         )
     }
 

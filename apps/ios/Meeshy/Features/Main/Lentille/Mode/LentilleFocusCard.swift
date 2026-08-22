@@ -199,6 +199,7 @@ struct LentilleFocusCard: View, Equatable {
             VStack(alignment: .leading, spacing: 3) {
                 headerLine
                 line2
+                dateLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -240,16 +241,6 @@ struct LentilleFocusCard: View, Equatable {
                     .font(MeeshyFont.relative(LentilleMetrics.Tags.emojiSize))
                     .accessibilityHidden(true)
             }
-            Text("·")
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(textMuted)
-            Text(Self.fullTimestamp(lastMessageAt: conversation.lastMessageAt, now: now, calendar: .current, locale: .current))
-                .font(LentilleMetrics.Time.font)
-                .foregroundColor(textMuted)
-                .lineLimit(1)
-                // La date complète reste — c'est une vraie valeur ajoutée de
-                // la magnification — mais elle cède la place la première.
-                .layoutPriority(0)
             Spacer(minLength: 0)
             if conversation.userState.unreadCount > 0 {
                 // Jamais comprimé : c'est le NOM qui tronque, pas le badge.
@@ -260,13 +251,26 @@ struct LentilleFocusCard: View, Equatable {
         }
     }
 
+    /// Fond ROUGE sémantique, magnificence comprise (retour produit
+    /// 2026-08-22 : « la pile du nombre de message non lu sera toujours sur
+    /// fond rouge même en magnificence »). Il était peint à l'accent de la
+    /// conversation : sur une conversation à l'accent clair, la pile se lisait
+    /// comme une décoration, pas comme un compte à rattraper.
+    ///
+    /// **Supersession assumée** du contrat §LWS-7 (« aucun badge chiffré
+    /// nulle part ») et du vol.5 (« badge rouge 99+ supprimé) : ces deux
+    /// textes visent la RANGÉE PLATE, où le non-lu se dit toujours par le
+    /// point accent 8 px du pont ✦ — la garde source qui l'interdit
+    /// (`LentilleRowSourceGuardTests`) ne scanne que `Lentille/Row/` et reste
+    /// verte. La carte de magnification, elle, existe pour dire ce que la
+    /// rangée ne dit pas.
     private var unreadBadge: some View {
         Text(conversation.userState.unreadCount > 99 ? "99+" : "\(conversation.userState.unreadCount)")
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
             .foregroundColor(.white)
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
-            .background(Capsule(style: .continuous).fill(accent))
+            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
             // Le libellé annonce l'effectif RÉEL, pas le « 99+ » affiché : le
             // plafond est une contrainte de largeur du badge, pas une donnée.
             // Ce site était le TROISIÈME porteur de `accessibility.unread_messages`
@@ -320,11 +324,29 @@ struct LentilleFocusCard: View, Equatable {
         }
     }
 
+    /// MÊME règle « auteur : » que la rangée plate — une seule loi pour les
+    /// deux vues, sinon la magnification renommerait l'expéditeur.
     private var senderPrefix: Text {
-        guard let sender = conversation.lastMessageSenderName, !sender.isEmpty else { return Text("") }
-        return Text("\(sender) : ")
+        guard let prefix = LentilleConversationRow.authorPrefix(name: conversation.lastMessageSenderName) else { return Text("") }
+        return Text(prefix)
             .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
             .foregroundColor(accent)
+    }
+
+    /// Troisième ligne — la date COMPLÈTE, seule, à droite. « La date gardera
+    /// cette place même en magnificence » (retour produit 2026-08-22) : elle
+    /// occupe exactement la place qu'elle tient au repos, si bien que la
+    /// loupe ne la déplace pas — seule sa précision change (relatif court au
+    /// repos, « Aujourd'hui à 5:49 » sous la loupe).
+    private var dateLine: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Text(Self.fullTimestamp(lastMessageAt: conversation.lastMessageAt, now: now, calendar: .current, locale: .current))
+                .font(LentilleMetrics.Time.font)
+                .foregroundColor(textMuted)
+                .lineLimit(1)
+        }
+        .accessibilityHidden(true)
     }
 
     // MARK: - Chip de type + memberCount (behaviour-matrix:L08) — sur la ligne
@@ -341,6 +363,11 @@ struct LentilleFocusCard: View, Equatable {
     /// capsule bordée d'accent de plus sur un bord déjà chargé. Ce qu'il
     /// apportait vraiment, c'est le NOMBRE, qui n'existe nulle part ailleurs
     /// dans la liste : il reste, en label nu et muet.
+    /// Dans une BULLE, au gabarit des chips d'étiquette voisines (retour
+    /// produit 2026-08-22 : « les effectifs doivent être dans une bulle comme
+    /// les autres éléments au niveau des bordures ») — même forme qu'au repos,
+    /// pour que la loupe agrandisse sans transformer. Pas de contour d'accent :
+    /// il reste l'exclusivité de l'anneau de la carte et de l'encoche de mode.
     private var typeBadge: some View {
         HStack(spacing: 3) {
             Image(systemName: Self.typeBadgeIcon(for: conversation.type))
@@ -351,7 +378,10 @@ struct LentilleFocusCard: View, Equatable {
                     .font(MeeshyFont.relative(LentilleMetrics.ModeNotch.size, weight: LentilleMetrics.ModeNotch.weight))
             }
         }
-        .foregroundColor(textMuted)
+        .foregroundColor(accent)
+        .padding(.horizontal, LentilleMetrics.Tags.chipPaddingHorizontal)
+        .padding(.vertical, LentilleMetrics.Tags.chipPaddingVertical)
+        .background(Capsule(style: .continuous).fill(accent.opacity(LentilleMetrics.Tags.bubbleFillOpacity)))
         .accessibilityElement(children: .combine)
         .accessibilityValue(conversation.memberCountDisplay)
     }

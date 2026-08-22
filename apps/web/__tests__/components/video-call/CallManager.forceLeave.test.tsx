@@ -195,4 +195,27 @@ describe('CallManager — call:force-leave', () => {
 
     expect(useCallStore.getState().isInCall).toBe(true);
   });
+
+  it("se désabonne de call:force-leave au démontage — sans quoi la fermeture d'un onglet laisse un écouteur orphelin sur une closure périmée", () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    const { unmount } = render(<CallManager />);
+    expect(socket.listenerCount(SERVER_EVENTS.CALL_FORCE_LEAVE)).toBe(1);
+
+    unmount();
+
+    expect(socket.listenerCount(SERVER_EVENTS.CALL_FORCE_LEAVE)).toBe(0);
+  });
+
+  it("un remontage ne double pas l'écouteur — un seul call:force-leave traité par cycle", () => {
+    const socket = makeFakeSocket();
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    const { unmount } = render(<CallManager />);
+    unmount();
+    render(<CallManager />);
+
+    expect(socket.listenerCount(SERVER_EVENTS.CALL_FORCE_LEAVE)).toBe(1);
+  });
 });

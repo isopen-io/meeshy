@@ -25,8 +25,15 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        public static let height: CGFloat = 64
-        public static let paddingVertical: CGFloat = 10
+        /// 64 → 84 le 2026-08-22 : la rangée porte TROIS lignes — nom (avec
+        /// la pile de non-lus en fin de ligne), « auteur : message », puis la
+        /// date seule à droite. Le contenu mesure ~78,6 pt à la taille de
+        /// texte par défaut : 64 n'en logeait que deux. Un essai à 92 a réservé
+        /// la place d'un badge d'effectif de bord, retiré depuis (l'effectif
+        /// est une information de MAGNIFICATION, pas de repos) — la rangée a
+        /// rendu cette hauteur.
+        public static let height: CGFloat = 84
+        public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
         public static let radius: CGFloat = 16
@@ -102,7 +109,9 @@ nonisolated public enum LentilleMetrics {
         /// importante et un padding suffisant en haut et en bas ») : déborde
         /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
         /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
-        public static let height: CGFloat = 104
+        /// 104 → 124 le 2026-08-22 : la carte loge les mêmes trois lignes que
+        /// la rangée, avec un aperçu qui coule sur deux lignes.
+        public static let height: CGFloat = 124
         public static let paddingVertical: CGFloat = 14
         /// Avatar de la carte = le contexte « liste » historique (52), un cran
         /// au-dessus de la rangée plate (44) : c'est la magnification.
@@ -191,6 +200,10 @@ nonisolated public enum LentilleMetrics {
         /// Chips d'étiquettes de la carte de focus (2026-08-22 : « plus
         /// petites ») — un cran sous l'encoche de mode.
         public static let chipFontSize: CGFloat = 8
+        /// Fond d'une bulle de bord TEINTÉE (effectif) — la chip d'étiquette,
+        /// elle, est pleine de la couleur du tag. Assez pour détacher la bulle
+        /// du fond, assez peu pour qu'une information ne crie pas.
+        public static let bubbleFillOpacity: Double = 0.16
         public static let chipPaddingHorizontal: CGFloat = 6
         public static let chipPaddingVertical: CGFloat = 2
     }

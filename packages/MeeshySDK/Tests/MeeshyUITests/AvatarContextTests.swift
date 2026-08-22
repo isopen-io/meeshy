@@ -15,9 +15,12 @@ final class AvatarContextTests: XCTestCase {
         XCTAssertEqual(AvatarContext.storyViewer.size, 44)
     }
 
-    func test_size_storyTrayCompact_returns44() {
-        // Mini-trail épinglée dans le header collapsé : moitié de storyTray (88).
-        XCTAssertEqual(AvatarContext.storyTrayCompact.size, 44)
+    func test_size_storyTrayCompact_returns36() {
+        // Mini-trail épinglée dans le header collapsé. 44 pt + anneau de 6
+        // débordaient la barre de 60 pt : le sticker de section opaque rognait
+        // le bas des cercles (directive 2026-08-22 : « réduire la taille des
+        // cercles pour que ce ne soit pas coupé »). 36 + 6 = 42 laisse 14 pt.
+        XCTAssertEqual(AvatarContext.storyTrayCompact.size, 36)
     }
 
     func test_size_feedComposer_returns36() {
@@ -267,11 +270,19 @@ final class AvatarContextTests: XCTestCase {
 
     func test_storyTrayCompact_keepsStoryStyling() {
         // La variante compacte garde l'anneau story + le mood badge, juste plus
-        // fin et à taille 44 (badge proportionnel, pas le 32 fixe du grand trail).
+        // fin et à taille 36 (badge PROPORTIONNEL, pas le 32 fixe du grand
+        // trail). Le repère est passé de 44 à 36 le 2026-08-22 avec le
+        // rétrécissement des anneaux : c'est la PROPORTION qui est la règle —
+        // le badge suit la taille du contexte, il ne la fige pas.
         XCTAssertTrue(AvatarContext.storyTrayCompact.showsStoryRing)
         XCTAssertTrue(AvatarContext.storyTrayCompact.showsMoodBadge)
         XCTAssertEqual(AvatarContext.storyTrayCompact.ringWidth, 1.5)
-        XCTAssertEqual(AvatarContext.storyTrayCompact.badgeSize, 44 * 0.42, accuracy: 0.01)
+        XCTAssertEqual(AvatarContext.storyTrayCompact.badgeSize, 36 * 0.42, accuracy: 0.01)
+        XCTAssertNotEqual(
+            AvatarContext.storyTrayCompact.badgeSize,
+            AvatarContext.storyTray.badgeSize,
+            "le grand trail fige son badge à 32 ; le compact reste proportionnel"
+        )
     }
 
     func test_ringWidth_nonStoryTray_useSizeThreshold() {

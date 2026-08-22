@@ -115,6 +115,7 @@ struct LentilleConversationRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 headerLine
                 line2
+                dateLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -286,25 +287,67 @@ struct LentilleConversationRow: View {
                     joinLiveCallButton
                 }
             } else {
-                Text("·")
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(textMuted)
-
-                LentilleRowTimestamp(date: conversation.lastMessageAt)
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
-                    .layoutPriority(1)
-
+                // La date a QUITTÉ cette ligne le 2026-08-22 : elle vit seule,
+                // en bas à droite (`dateLine`). Le nom possède donc toute la
+                // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
 
-                if conversation.userState.hasPendingSync {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(accent.opacity(0.7))
-                        .accessibilityHidden(true)
+                if conversation.userState.unreadCount > 0 {
+                    unreadBadge
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
             }
         }
+    }
+
+    /// Pile de non-lus — MÊME place et MÊME rouge qu'en magnification (retour
+    /// produit 2026-08-22, soir : « enlever l'effectif sur les rows non
+    /// magnifiées, mais mettre le chip rouge si messages non lus »). La loupe
+    /// n'ajoute donc que l'effectif et la précision de la date : elle
+    /// agrandit, elle ne recompose pas.
+    ///
+    /// **Supersession assumée du contrat §LWS-7** (« aucun badge chiffré
+    /// nulle part », vol.5 « badge rouge 99+ supprimé ») : cette règle datait
+    /// d'un rang où le non-lu se disait par le seul point accent du pont ✦.
+    /// Le pont n'apparaît QUE si la conversation en a un (`showsBridge` exige
+    /// `bridge != nil`) — une conversation non lue SANS pont ne disait donc
+    /// rien du tout. Le chip, lui, parle toujours.
+    private var unreadBadge: some View {
+        Text(conversation.userState.unreadCount > 99 ? "99+" : "\(conversation.userState.unreadCount)")
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
+            .foregroundColor(.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(Capsule(style: .continuous).fill(MeeshyColors.unreadBadgeBackground(isDark: isDark)))
+            .accessibilityLabel(UnreadCountLabel.messages(conversation.userState.unreadCount))
+    }
+
+    /// Troisième ligne — la date SEULE, poussée à droite (retour produit
+    /// 2026-08-22 : « en bas sur une nouvelle ligne à droite mettre la date ;
+    /// la date gardera cette place même en magnificence »). Le glyphe d'outbox
+    /// la précède : il parle du même envoi.
+    ///
+    /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
+    /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
+    /// aucune composante temporelle.
+    private var dateLine: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Spacer(minLength: 0)
+
+            if conversation.userState.hasPendingSync {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
+                    .foregroundColor(accent.opacity(0.7))
+                    .accessibilityHidden(true)
+            }
+
+            LentilleRowTimestamp(date: conversation.lastMessageAt)
+                .font(LentilleMetrics.Time.font)
+                .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
+                .lineLimit(1)
+        }
+        .accessibilityHidden(true)
     }
 
     /// Tags — « pastilles 6 (≤ 3) » (contrat §4.3), après le nom. Adaptation
@@ -504,16 +547,20 @@ struct LentilleConversationRow: View {
         let totalCount = conversation.lastMessageAttachmentCount
 
         if hasText {
+            // « Auteur : message » en UN SEUL texte (retour produit
+            // 2026-08-22 : « juste mettre l'auteur : message »), même
+            // grammaire que la carte de magnification — deux `Text` côte à
+            // côte dans un `HStack` laissaient l'auteur occuper sa propre
+            // colonne et tronquaient le message avant le bord.
             HStack(spacing: 4) {
                 if showEphemeralIcon {
                     Image(systemName: "timer")
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                 }
-                senderLabel
-                Text(resolvedPreviewText)
+                (senderPrefix + Text(resolvedPreviewText)
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
+                    .foregroundColor(textSecondary))
                     .lineLimit(1)
             }
         } else if let first = attachments.first {
@@ -555,6 +602,26 @@ struct LentilleConversationRow: View {
         }
     }
 
+    /// « Auteur : » — la règle, pure et partagée avec la carte de
+    /// magnification (`LentilleFocusCard.senderPrefix`), pour que les deux
+    /// vues ne puissent pas dériver l'une de l'autre. `nil` quand il n'y a
+    /// personne à nommer : le message commence alors la ligne.
+    nonisolated static func authorPrefix(name: String?) -> String? {
+        guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return "\(trimmed) : "
+    }
+
+    /// Le préfixe, en `Text` concaténable — teinté accent, comme la carte.
+    private var senderPrefix: Text {
+        guard let prefix = Self.authorPrefix(name: conversation.lastMessageSenderName) else { return Text("") }
+        return Text(prefix)
+            .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
+            .foregroundColor(accent)
+    }
+
+    /// Conservé pour les branches qui INTERCALENT un glyphe entre l'auteur et
+    /// le libellé (pièce jointe, localisation, masqué, vue unique) : là, la
+    /// concaténation en un seul `Text` est impossible.
     private var senderLabel: some View {
         Group {
             if let name = conversation.lastMessageSenderName, !name.isEmpty {

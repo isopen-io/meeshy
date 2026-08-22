@@ -70,6 +70,54 @@ describe('buildLastMessagePreviewTranslations', () => {
     expect(result).toEqual({ fr: 'Bonjour' });
   });
 
+  it('apparie une clé de traduction TAGUÉE RÉGION à un prisme région-strippé', () => {
+    // `viewerLanguages` sort déjà région-strippé de `resolveUserLanguagesOrdered`
+    // (`'fr'`), mais la clé de la colonne `Message.translations` d'un message
+    // écrit AVANT la canonicalisation au write-boundary reste taguée région
+    // (`'fr-FR'`). Comparée en `.toLowerCase()` seule, `'fr-fr' !== 'fr'` : la
+    // traduction française était DROPPÉE ici, avant même d'atteindre le résolveur
+    // client — le lecteur francophone retombait sur l'original anglais. Violation
+    // directe du Prisme, exactement la classe que le résolveur client durci
+    // (`resolveLastMessagePreview`) combat mais ne peut réparer, la donnée
+    // n'arrivant jamais.
+    const result = buildLastMessagePreviewTranslations({
+      translations: { 'fr-FR': translationJson('Bonjour') },
+      originalLanguage: 'en',
+      viewerLanguages: ['fr'],
+    });
+
+    expect(result).toEqual({ fr: 'Bonjour' });
+  });
+
+  it('réduit une clé de traduction 3-lettres héritée vers son code canonique', () => {
+    // Même défaut, autre forme : une clé héritée ISO 639-2 (`'fra'`) doit
+    // réduire vers `'fr'` via la SSOT `normalizeLanguageForDedup`, jamais par
+    // troncature aveugle. `.toLowerCase()` seule laissait `'fra' !== 'fr'`.
+    const result = buildLastMessagePreviewTranslations({
+      translations: { fra: translationJson('Bonjour') },
+      originalLanguage: 'en',
+      viewerLanguages: ['fr'],
+    });
+
+    expect(result).toEqual({ fr: 'Bonjour' });
+  });
+
+  it("omet la langue d'origine même quand elle arrive TAGUÉE RÉGION du fil", () => {
+    // `Message.originalLanguage` d'un message legacy porte `'en-US'`. La garde #2
+    // (« ne pas re-servir la langue d'origine, elle EST déjà `content` ») la
+    // comparait au rang région-strippé `'en'` du prisme en `.toLowerCase()` :
+    // `'en-us' !== 'en'`, la garde ne se déclenchait pas, et une éventuelle
+    // auto-traduction `en` redondante était servie. Canonicalisées par la même
+    // SSOT, les deux valent `'en'` et la garde fait son office.
+    const result = buildLastMessagePreviewTranslations({
+      translations: { en: translationJson('Hello (redondant)'), fr: translationJson('Bonjour') },
+      originalLanguage: 'en-US',
+      viewerLanguages: ['en', 'fr'],
+    });
+
+    expect(result).toEqual({ fr: 'Bonjour' });
+  });
+
   it("omet la langue d'origine : elle EST déjà `lastMessage.content`", () => {
     const result = buildLastMessagePreviewTranslations({
       translations: { fr: translationJson('Bonjour'), en: translationJson('Hello') },

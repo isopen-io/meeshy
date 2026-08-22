@@ -8,6 +8,7 @@ enum class PostAction {
     Share,
     CopyLink,
     Repost,
+    Quote,
     Bookmark,
     Unbookmark,
     Pin,
@@ -25,7 +26,8 @@ data class PostActionContext(
  * Composition pure du menu d'options d'un post — source de verite unique de
  * « quelle action, dans quel ordre ». La card n'est qu'un rendu de cette liste.
  *
- * Regles : partager/copier/reposter valent pour tout post ; le signalement ne
+ * Regles : partager/copier/reposter/citer valent pour tout post (citer = un
+ * repost accompagne d'un commentaire) ; le signalement ne
  * vise que le contenu D'AUTRUI ; l'epinglage et la suppression ne visent que
  * le SIEN — port fidele d'iOS (`ProfileUserPostsList.swift`/
  * `PostDetailViewModel.swift`, `onPin` gate sur `isOwnPost` exactement comme
@@ -36,6 +38,7 @@ object PostActionMenu {
         add(PostAction.Share)
         add(PostAction.CopyLink)
         add(PostAction.Repost)
+        add(PostAction.Quote)
         add(if (ctx.isBookmarked) PostAction.Unbookmark else PostAction.Bookmark)
         if (!ctx.isOwn) {
             add(PostAction.Report)

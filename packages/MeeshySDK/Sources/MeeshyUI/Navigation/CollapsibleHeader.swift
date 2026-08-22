@@ -77,10 +77,15 @@ public enum CollapsibleHeaderMetrics {
     nonisolated public static var inlineAccessoryRevealEnd: CGFloat { 148 }
 
     /// Height of the accessory content itself once fully revealed — one row of
-    /// `.storyTrayCompact` rings (44pt avatar + 6pt story ring) plus breathing
+    /// `.storyTrayCompact` rings (36pt avatar + 6pt story ring) plus breathing
     /// room. Shared with the app-side band so the bar and its content can never
     /// drift apart.
-    nonisolated public static var inlineAccessoryHeight: CGFloat { 56 }
+    ///
+    /// 56 → 48 le 2026-08-22, avec le passage des anneaux de 44 à 36 : la
+    /// bande réservait plus de hauteur que son contenu n'en occupait, et ce
+    /// surplus poussait les cercles contre le bord bas de la barre, là où le
+    /// sticker de section les rognait.
+    nonisolated public static var inlineAccessoryHeight: CGFloat { 48 }
 
     /// Dégagement de FIN DE PISTE de l'accessoire pleine largeur.
     ///

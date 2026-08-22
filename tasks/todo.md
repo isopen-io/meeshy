@@ -755,3 +755,33 @@ Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle99.md`.
       rouges et exclues (56/114) ; clés distantes d'`asymmetricRatchet` ; pré-clé
       unique non consommée par le répondeur ; `SignalKeyManager.registrationId`
       tiré au hasard au constructeur ; préfixe `F` et sel du HKDF.
+
+## Chrome de la rangée Lentille (2026-08-22 soir, branche feat/lentille-row-chrome)
+
+Directive produit (4 points) : « le trail a des cercles coupés, il faut réduire la taille des cercles » ·
+« dans les rows de conversation normales, enlever le contour sur le dernier message, juste mettre
+l'auteur : message, et puis en bas sur une nouvelle ligne à droite mettre la date (la date gardera
+cette place même en magnificence) » · « la pile du nombre de message non lu sera toujours sur fond
+rouge même en magnificence » · « la pile avec le nombre de membre s'affiche en bas à droite sur les
+traces de la bordure et jamais dans le contenu, même au repos ».
+
+- [x] RED : `LentilleRowChromeTests` (12 témoins) — prouvé à la COMPILATION (`authorPrefix` absent).
+      **Piège payé** : le premier run rendait 29/30 verts — le fichier neuf n'était pas dans le bundle
+      (`xcodebuild` direct ne régénère pas le projet). `xcodegen generate` d'abord, delta pbxproj vérifié
+      (+4 réf. du seul fichier neuf, aucun enregistrement amont retiré).
+- [x] Trail : `AvatarContext.storyTrayCompact` 44 → 36, `inlineAccessoryHeight` 56 → 48.
+- [x] Rangée : aperçu en UN texte « Auteur : message » (`authorPrefix`, règle pure partagée), date
+      sortie de la ligne du nom vers `dateLine` (Spacer + horodatage + glyphe outbox), effectif en
+      `.overlay(alignment: .bottomTrailing)` avec `Row.edgeBadgeOverhang`.
+- [x] Carte : même `dateLine`, même `authorPrefix`, badge de non-lus en `unreadBadgeBackground`.
+- [x] Jetons : `list.row.height` 64 → 78, `list.row.edgeBadgeOverhang` = 6, `list.focusCard.height`
+      104 → 124 — miroir CSS + portage web (rangée, squelette, test de grammaire de ligne 1).
+- [x] Gates : Lentille iOS 112/112 · **iOS complet 7510/7510 (0 échec, 7 ignorés)** · web 202/202
+      (28 suites) · `check-law-literals` vert · parité CSS verte · tsc web sans régression (4 erreurs
+      « lentille » identiques sur main).
+- [ ] SDK complet (`MeeshySDK-Package`) — `AvatarContextTests` et `CollapsibleHeaderRevealTests` touchés.
+- [ ] Constatation visuelle sur `Meeshy-iOS26`, puis merge via `main` local + push + CI.
+
+**Leçon** : une garde de forme vise le BLOC, jamais le FICHIER. Mes deux premières assertions
+interdisaient `strokeBorder` et `Capsule(` dans tout `LentilleConversationRow.swift` et condamnaient
+l'anneau d'avatar et le bouton « Rejoindre » d'un appel en cours (2 rouges sur 112).
