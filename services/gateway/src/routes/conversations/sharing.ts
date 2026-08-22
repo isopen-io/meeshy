@@ -25,6 +25,7 @@ import {
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
@@ -848,7 +849,11 @@ export function registerSharingRoutes(
               type: 'object',
               properties: {
                 message: { type: 'string', example: 'User invited successfully' },
-                membership: conversationParticipantSchema
+                // `membership` déclaré / `member` envoyé : le nouvel adhérent
+                // n'a JAMAIS atteint le fil. Aligné sur le nom que portent ses
+                // deux voisines (`PATCH …/role`, la liste) — on ne casse pas un
+                // contrat qui n'a jamais été honoré.
+                participant: conversationParticipantSchema
               }
             }
           }
@@ -973,12 +978,12 @@ export function registerSharingRoutes(
         }
       };
 
-      // `isOnline` était chargé ici et n'a jamais eu de destinataire : le
-      // schéma de réponse déclare `data.membership` quand le handler renvoie
-      // `data.member`, que fast-json-stringify supprime donc en entier. Ne rien
-      // charger qu'aucune surface ne sert — sinon le jour où la dérive
-      // `member`/`membership` est corrigée, la présence brute d'un invité part
-      // sur le fil sans qu'un seul témoin ne tombe.
+      // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne
+      // sert, sinon le jour où la dérive `member`/`membership` est corrigée, la
+      // présence brute d'un invité part sur le fil » — est LEVÉE, parce que le
+      // jour est arrivé et que le gate arrive avec. Le rang ne part plus jamais
+      // brut : `serializeConversationParticipant` est le seul chemin vers le fil,
+      // et il exige qu'on lui passe la visibilité.
       const invitedMemberInclude = {
         user: {
           select: {
@@ -987,7 +992,13 @@ export function registerSharingRoutes(
             displayName: true,
             firstName: true,
             lastName: true,
-            avatar: true
+            avatar: true,
+            role: true,
+            systemLanguage: true,
+            regionalLanguage: true,
+            customDestinationLanguage: true,
+            createdAt: true,
+            updatedAt: true
           }
         }
       };
@@ -1084,8 +1095,15 @@ export function registerSharingRoutes(
         }
       }
 
+      // Régime `resolvePrefsOnly` : l'inviteur et l'invité partagent désormais
+      // une conversation — le contexte d'accès est acquis des deux côtés, seules
+      // les préférences de l'invité décident.
+      const invitePresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly([userId]);
+
       return sendSuccess(reply, {
-        member: newMember,
+        participant: serializeConversationParticipant(newMember, {
+          presence: invitePresenceVis.get(userId)
+        }),
         message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
       });
 

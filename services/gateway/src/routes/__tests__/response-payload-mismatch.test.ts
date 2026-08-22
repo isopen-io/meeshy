@@ -32,23 +32,26 @@ import { scanFileForMismatches, sweepPayloadMismatches, topLevelKeys } from './r
 const ROUTES_DIR = join(__dirname, '..');
 
 /**
- * Le seul désaccord qui subsiste, et il est DÉLIBÉRÉ.
+ * **VIDE — et c'est un état à défendre, pas un état atteint.**
  *
- * `POST /conversations/:id/invite` renvoie `member` quand son schéma déclare
- * `membership` : le profil du nouvel adhérent — présence comprise — n'atteint
- * pas le fil. C'est aujourd'hui ce qui tient la porte fermée, et
- * `conversation-invite-serialization.test.ts` garde cette propriété
- * explicitement.
- *
- * **Aligner les deux noms sans poser le gate `resolvePrefsOnly` dans le MÊME
- * lot publierait la présence de l'invité** — la règle du cycle 84 : « quand on
+ * Le dernier désaccord était `POST /conversations/:id/invite`, qui renvoyait
+ * `member` quand son schéma déclarait `membership` : le profil du nouvel
+ * adhérent n'atteignait pas le fil. Il est resté gelé ici DÉLIBÉRÉMENT le temps
+ * d'un cycle, parce que l'aligner sans poser le gate `resolvePrefsOnly` dans le
+ * MÊME lot aurait publié la présence de l'invité (règle du cycle 84 : « quand on
  * répare ce qui rendait une donnée invisible, on pose dans le même lot la règle
- * qui décide si elle a le droit d'être vue ». Ce site reste donc ici jusqu'à ce
- * que ce lot soit fait, et non parce qu'il aurait été oublié.
+ * qui décide si elle a le droit d'être vue »).
+ *
+ * Le lot est fait au cycle 92 bis : les deux routes de MUTATION de participant
+ * passent par `serializeConversationParticipant`, qui exige qu'on lui donne la
+ * visibilité de présence.
+ *
+ * **Quand ce témoin tombe :** un nouveau site vient d'être écrit dont le schéma
+ * déclare des clés que son handler n'envoie pas. Ne pas le geler ici par
+ * réflexe — ouvrir l'ÉMETTEUR, qui est le seul discriminant (cycle 91 bis §10),
+ * et ne geler que ce qu'une raison écrite justifie de laisser ouvert.
  */
-const FROZEN_MISMATCHES: readonly string[] = [
-  'conversations/sharing.ts|partial|member',
-];
+const FROZEN_MISMATCHES: readonly string[] = [];
 
 describe('balayage — un schéma de réponse décrit la charge utile que le handler ENVOIE', () => {
   it("n'introduit aucun désaccord que l'inventaire gelé ne nomme pas", () => {

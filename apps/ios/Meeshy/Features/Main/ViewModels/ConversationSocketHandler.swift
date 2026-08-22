@@ -913,8 +913,12 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
+                // `participant` est optionnel : ce bloc n'est ici qu'informatif
+                // (le délégué le journalise, puis invalide le cache). Renoncer à
+                // l'invalidation parce qu'il manque coûterait un trombinoscope
+                // périmé pour un nom absent.
                 delegate.handleParticipantRoleUpdated(
-                    participantId: event.participant.id,
+                    participantId: event.participant?.id ?? event.userId,
                     newRole: event.newRole
                 )
             }
