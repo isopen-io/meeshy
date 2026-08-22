@@ -701,19 +701,58 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     public func image(for urlString: String) async -> UIImage? {
-        await image(for: urlString, maxPixelSize: 1200)
+        await image(for: urlString, maxPixelSize: Self.fullFormatPixelCap)
+    }
+
+    // MARK: - Sized decode buckets
+
+    /// The canonical full-format decode cap. Requests at or above this share
+    /// the bare (unsuffixed) NSCache slot — the one `cachedImage(for:)` and
+    /// `warmedImage(for:)` have always used.
+    public static let fullFormatPixelCap: CGFloat = 1200
+
+    /// Quantized decode ceilings for below-full-format requests. Decoding at
+    /// the bucket ceiling (never the exact requested size) bounds the number
+    /// of resident variants per URL while never serving an under-resolved
+    /// bitmap: the bucket is always >= the request.
+    private static let pixelSizeBuckets: [CGFloat] = [128, 256, 512, 768, 1024]
+
+    /// Bucket ceiling for a requested pixel size — `nil` when the request
+    /// belongs to the canonical full-format slot.
+    private static func pixelBucket(for maxPixelSize: CGFloat) -> CGFloat? {
+        pixelSizeBuckets.first { $0 >= maxPixelSize }
+    }
+
+    /// NSCache key of a decoded variant. Sized variants are suffixed so a
+    /// 128 px avatar decode can never occupy — nor be served from — the slot
+    /// a full-screen surface reads. The bare key remains reserved for the
+    /// full-format decode.
+    private static func imageCacheKey(fileKey: String, bucket: CGFloat?) -> NSString {
+        guard let bucket else { return fileKey as NSString }
+        return "\(fileKey)#px\(Int(bucket))" as NSString
+    }
+
+    /// Sized-slot probe mirroring `cachedImage(for:)` — same bucketing as
+    /// `image(for:maxPixelSize:)`, so a view that loads with a `targetSize`
+    /// can find its own variant synchronously at init.
+    nonisolated public static func cachedImage(for urlString: String, maxPixelSize: CGFloat) -> UIImage? {
+        let key = imageCacheKey(fileKey: fileKey(for: urlString), bucket: pixelBucket(for: maxPixelSize))
+        return _imageCache.object(forKey: key)
     }
 
     public func image(for urlString: String, maxPixelSize: CGFloat) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
+        let bucket = Self.pixelBucket(for: maxPixelSize)
+        let cacheKey = Self.imageCacheKey(fileKey: fileKey, bucket: bucket)
+        let decodePixelSize = bucket ?? Self.fullFormatPixelCap
 
-        if let cached = Self._imageCache.object(forKey: fileKey as NSString) {
+        if let cached = Self._imageCache.object(forKey: cacheKey) {
             return cached
         }
 
         let result = await load(for: urlString)
-        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
-            Self.cacheIfWithinBudget(image, key: fileKey)
+        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+            Self.cacheIfWithinBudget(image, key: cacheKey as String)
             return image
         }
 
@@ -723,8 +762,8 @@ public actor DiskCacheStore: ReadableCacheStore {
         if url.scheme == "file" {
             do {
                 let data = try Data(contentsOf: url)
-                if let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
-                    Self.cacheIfWithinBudget(image, key: fileKey)
+                if let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+                    Self.cacheIfWithinBudget(image, key: cacheKey as String)
                     return image
                 }
             } catch {
@@ -739,8 +778,8 @@ public actor DiskCacheStore: ReadableCacheStore {
             // the same key (prefetcher, CachedAsyncImage, another cell) and
             // persists to disk inside the task.
             let data = try await networkData(for: urlString, url: url)
-            guard let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) else { return nil }
-            Self.cacheIfWithinBudget(image, key: fileKey)
+            guard let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
+            Self.cacheIfWithinBudget(image, key: cacheKey as String)
             return image
         } catch {
             return nil

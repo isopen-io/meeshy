@@ -46,6 +46,10 @@ struct MyStoryCardModel: Equatable {
 }
 
 struct MyStoryCard: View {
+    /// Taille de rendu d'une cellule de grille (adaptive 150pt, ratio 9:16) —
+    /// borne le décodage de la vignette à la taille affichée.
+    static let thumbnailTargetSize = CGSize(width: 180, height: 320)
+
     let model: MyStoryCardModel
     let now: Date
     let accentColor: Color
@@ -199,12 +203,14 @@ struct MyStoryCard: View {
                     if let image = UIImage.fromThumbHash(hash) {
                         Image(uiImage: image).resizable().scaledToFill()
                     } else if let url = model.thumbnailURL, !url.isEmpty {
-                        CachedAsyncImage(url: url) { emptyOrPlaceholder }
+                        // targetSize ≈ cellule de grille 9:16 (adaptive 150pt) —
+                        // décode downsamplé au lieu du plafond 1200 px plein format.
+                        CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
                     } else {
                         emptyOrPlaceholder
                     }
                 case .remoteURL(let url):
-                    CachedAsyncImage(url: url) { emptyOrPlaceholder }
+                    CachedAsyncImage(url: url, targetSize: Self.thumbnailTargetSize) { emptyOrPlaceholder }
                 case .placeholder:
                     emptyOrPlaceholder
                 }

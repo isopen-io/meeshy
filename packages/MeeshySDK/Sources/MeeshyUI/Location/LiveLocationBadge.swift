@@ -8,6 +8,8 @@ public struct LiveLocationBadge: View {
     let onStop: (() -> Void)?
 
     @State private var isPulsing = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
 
     public init(username: String, remainingTime: TimeInterval, accentColor: String = MeeshyColors.brandPrimaryHex, onStop: (() -> Void)? = nil) {
         self.username = username; self.remainingTime = remainingTime
@@ -65,7 +67,11 @@ public struct LiveLocationBadge: View {
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 0.5)
                 )
         )
-        .onAppear { isPulsing = true }
+        .onAppear {
+            // Reduce Motion (system or in-app): the live dot stays static.
+            guard !MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) else { return }
+            isPulsing = true
+        }
         .onDisappear {
             withTransaction(Transaction(animation: nil)) {
                 isPulsing = false

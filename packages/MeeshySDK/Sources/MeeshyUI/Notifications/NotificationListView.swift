@@ -275,6 +275,7 @@ public struct NotificationListView: View {
                                     Task { await viewModel.deleteNotification(notification) }
                                 }
                             )
+                            .equatable()
                         }
 
                         if viewModel.hasMore && viewModel.selectedCategory == .all {
